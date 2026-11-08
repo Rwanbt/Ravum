@@ -1,0 +1,1758 @@
+{
+  "schema_version": 1,
+  "benchmark": "S8 — worktrees vs workspace partagé vs séquentiel",
+  "generated_at": "2026-11-08T13:47:06.539Z",
+  "environment": {
+    "generated_at": "2026-11-08T13:44:37.045Z",
+    "host": {
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "physical_cores": 10,
+      "logical_cores": 16,
+      "total_ram_bytes": 16868962304,
+      "os_caption": "Microsoft Windows 11 Professionnel",
+      "os_version": "10.0.26100",
+      "os_build": "26100",
+      "hostname": "MSI",
+      "power_plan": "GUID du mode de gestion de l'alimentation�: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Haute performance)",
+      "logical_cpus_os": 16,
+      "versions": {
+        "node": "v26.13.0",
+        "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+        "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "git": "git version 2.51.1.windows.1"
+      },
+      "disk": {
+        "free_bytes": 212357992448,
+        "available_bytes": 212357992448,
+        "total_bytes": 2794898583552
+      },
+      "node_platform": "win32",
+      "node_arch": "x64"
+    },
+    "versions": {
+      "node": "v26.13.0",
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "git": "git version 2.51.1.windows.1"
+    },
+    "node": {
+      "version": "v26.13.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "toolchain": {
+      "node": "v26.13.0",
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "git": "git version 2.51.1.windows.1"
+    },
+    "root_repo": {
+      "head": "25d985663c7beb6211500815148f6151d7bbc410",
+      "branch": "feat/mvp0b-hardening",
+      "dirty_entries": 38,
+      "note": "état au démarrage du run ; d’autres agents travaillent en parallèle sur cette machine et ce dépôt"
+    },
+    "coordinator_source": {
+      "pinned_ref": "7026f21",
+      "commit": "7026f21554c1a5313c69514c90c2b00322dedb1e",
+      "binary_sha256": "2b845149cdac6896f6e72a9b68cc98e2543c04553bf014851a13e452fe1fd0d6",
+      "binary_size_bytes": 1721856,
+      "exe_display": "<coord-cache>\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+      "build": {
+        "ms": 370.463,
+        "exit_code": 0,
+        "stdout_tail": "",
+        "stderr_tail": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s\n",
+        "offline": true
+      },
+      "archive_command": "git archive --format=tar -o <tmp>/src.tar 7026f21",
+      "build_command_template": "cargo build -p ravum-workspace-coordinator --bins --target-dir <tmp>/target",
+      "reason": "référence épinglée : le crate est modifié/compilé en parallèle par d’autres agents sur la machine partagée"
+    },
+    "fixture": {
+      "path": "benchmarks/s8/fixture",
+      "files": [
+        ".gitignore",
+        "Cargo.toml",
+        "README.md",
+        "src/alpha.rs",
+        "src/beta.rs",
+        "src/delta.rs",
+        "src/gamma.rs",
+        "src/lib.rs",
+        "tests/behavior.rs"
+      ],
+      "manifest": {
+        ".gitignore": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247",
+        "Cargo.toml": "2dcc78c5c4e2eb073ad4a75c8fe41634e5523b9b0c9cbe7aafa190c0cd9011f9",
+        "README.md": "c3c67d1c075a0b2659adf0026e5b13769dcaa80f93e12b5efc824598fbf2740e",
+        "src/alpha.rs": "0b7d3af6ead1f578b2b1d1a24b9bc288e46610aa07cd316fa345e58b30d1234f",
+        "src/beta.rs": "9954dec633d7242803e83083103b6551b36cd3ca5983c2f3763c5afbf46c51da",
+        "src/delta.rs": "da331c9d9ff276b7433bacd89383410e4c27cad4ed896330a5e4553f9ffa5f9d",
+        "src/gamma.rs": "dd3765be9e44d1ca7027732fbfae8f193008c240d3beef4bf185abd14198d081",
+        "src/lib.rs": "6a4ed0b95f7230923cf0f0ac76dcd83128b36416a6566011e13b0ee31a681f7c",
+        "tests/behavior.rs": "d1c02c2b9265d3c6796e9372a4cea302c921c17b243ed65339d72f7b52930d9e"
+      }
+    },
+    "corpus": [
+      {
+        "id": "t1",
+        "agent": "agent-1",
+        "title": "alpha_add: addition saturante",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "alpha_add"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/alpha.rs",
+            "fn": "alpha_add",
+            "newLine": "    a.saturating_add(b)"
+          }
+        ]
+      },
+      {
+        "id": "t2",
+        "agent": "agent-1",
+        "title": "gamma_prefix: borne minimale explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "gamma_prefix"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/gamma.rs",
+            "fn": "gamma_prefix",
+            "newLine": "    s.chars().take(n.min(s.chars().count())).collect()"
+          }
+        ]
+      },
+      {
+        "id": "t3",
+        "agent": "agent-2",
+        "title": "beta_pad: changement de signature (+2 sites d’appel)",
+        "kind": "signature",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "beta_pad"
+        ],
+        "ops": [
+          {
+            "kind": "replace_line",
+            "path": "src/beta.rs",
+            "oldLine": "pub fn beta_pad(text: &str, width: usize) -> String {",
+            "newLine": "pub fn beta_pad(text: &str, width: usize, fill: char) -> String {"
+          },
+          {
+            "kind": "fn_body",
+            "path": "src/beta.rs",
+            "fn": "beta_pad",
+            "newLine": "    format!(\"{text:<width$}\").replace(' ', &fill.to_string())"
+          },
+          {
+            "kind": "replace_line",
+            "path": "tests/behavior.rs",
+            "oldLine": "    assert_eq!(beta::beta_pad(\"ab\", 5), \"ab   \");",
+            "newLine": "    assert_eq!(beta::beta_pad(\"ab\", 5, ' '), \"ab   \");"
+          },
+          {
+            "kind": "replace_line",
+            "path": "tests/behavior.rs",
+            "oldLine": "    assert_eq!(beta::beta_pad(\"abcdef\", 3), \"abcdef\");",
+            "newLine": "    assert_eq!(beta::beta_pad(\"abcdef\", 3, '-'), \"abcdef\");"
+          }
+        ]
+      },
+      {
+        "id": "t4",
+        "agent": "agent-2",
+        "title": "delta_count: itération explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": "t6",
+        "symbols": [
+          "delta_count"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/delta.rs",
+            "fn": "delta_count",
+            "newLine": "    items.iter().count()"
+          }
+        ]
+      },
+      {
+        "id": "t5",
+        "agent": "agent-3",
+        "title": "gamma_join: cas vide explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "gamma_join"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/gamma.rs",
+            "fn": "gamma_join",
+            "newLine": "    if items.is_empty() { String::new() } else { items.join(sep) }"
+          }
+        ]
+      },
+      {
+        "id": "t6",
+        "agent": "agent-3",
+        "title": "delta_count: variante concurrente (conflit contrôlé avec t4)",
+        "kind": "implementation",
+        "independent": false,
+        "competing_with": "t4",
+        "symbols": [
+          "delta_count"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/delta.rs",
+            "fn": "delta_count",
+            "newLine": "    items.len().max(0)"
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      {
+        "scenario": "A",
+        "rep": 1
+      },
+      {
+        "scenario": "B",
+        "rep": 1
+      },
+      {
+        "scenario": "C",
+        "rep": 1
+      },
+      {
+        "scenario": "C",
+        "rep": 2
+      },
+      {
+        "scenario": "B",
+        "rep": 2
+      },
+      {
+        "scenario": "A",
+        "rep": 2
+      },
+      {
+        "scenario": "A",
+        "rep": 3
+      },
+      {
+        "scenario": "B",
+        "rep": 3
+      },
+      {
+        "scenario": "C",
+        "rep": 3
+      },
+      {
+        "scenario": "C",
+        "rep": 4
+      },
+      {
+        "scenario": "B",
+        "rep": 4
+      },
+      {
+        "scenario": "A",
+        "rep": 4
+      },
+      {
+        "scenario": "A",
+        "rep": 5
+      },
+      {
+        "scenario": "B",
+        "rep": 5
+      },
+      {
+        "scenario": "C",
+        "rep": 5
+      }
+    ],
+    "protocol": {
+      "scenarios": [
+        "A",
+        "B",
+        "C"
+      ],
+      "agents": 3,
+      "tasks": 6,
+      "reps": 5,
+      "order": "alterné : bloc A,B,C puis bloc C,B,A, etc.",
+      "success_criteria": [
+        "cargo test de la fixture vert après intégration (A, B, C)",
+        "0 édition indépendante perdue (A, B, C)",
+        "0 changement accepté perdu (A, B) ; C exposé au contraire comme mesure",
+        "conflit t4/t6 détecté et arbitré (A par git merge, B par décision CONFLICT)",
+        "publication B réellement effectuée par le GitWriter transactionnel en 1 commit",
+        "A utilise de vrais worktrees Git (3) et de vrais merges (3)"
+      ],
+      "synthetic_limits": [
+        "agents = éditeurs scriptés déterministes, PAS des LLM",
+        "tokens IA non mesurés (aucun LLM impliqué)",
+        "temps de supervision humaine non mesuré",
+        "échantillon restreint (répétitions demandées : 5)",
+        "fixture locale et petite ; pas de réseau, pas de dépendances externes",
+        "machine partagée avec d’autres agents : charge documentée, pas contrôlée"
+      ]
+    }
+  },
+  "coordinator_build": {
+    "pinned_ref": "7026f21",
+    "archive_command": "git archive --format=tar -o <tmp>/src.tar 7026f21",
+    "build_command_template": "cargo build -p ravum-workspace-coordinator --bins --target-dir <tmp>/target",
+    "reason": "référence épinglée : le crate est modifié/compilé en parallèle par d’autres agents sur la machine partagée",
+    "commit": "7026f21554c1a5313c69514c90c2b00322dedb1e",
+    "build": {
+      "ms": 370.463,
+      "exit_code": 0,
+      "stdout_tail": "",
+      "stderr_tail": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s\n",
+      "offline": true
+    },
+    "exe": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-coordinator-cache\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+    "exe_display": "<coord-cache>\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+    "sha256": "2b845149cdac6896f6e72a9b68cc98e2543c04553bf014851a13e452fe1fd0d6",
+    "size_bytes": 1721856
+  },
+  "schedule": [
+    {
+      "scenario": "A",
+      "rep": 1
+    },
+    {
+      "scenario": "B",
+      "rep": 1
+    },
+    {
+      "scenario": "C",
+      "rep": 1
+    },
+    {
+      "scenario": "C",
+      "rep": 2
+    },
+    {
+      "scenario": "B",
+      "rep": 2
+    },
+    {
+      "scenario": "A",
+      "rep": 2
+    },
+    {
+      "scenario": "A",
+      "rep": 3
+    },
+    {
+      "scenario": "B",
+      "rep": 3
+    },
+    {
+      "scenario": "C",
+      "rep": 3
+    },
+    {
+      "scenario": "C",
+      "rep": 4
+    },
+    {
+      "scenario": "B",
+      "rep": 4
+    },
+    {
+      "scenario": "A",
+      "rep": 4
+    },
+    {
+      "scenario": "A",
+      "rep": 5
+    },
+    {
+      "scenario": "B",
+      "rep": 5
+    },
+    {
+      "scenario": "C",
+      "rep": 5
+    }
+  ],
+  "load_probes": [
+    {
+      "label": "début de campagne",
+      "ok": true,
+      "ms": 3314.159,
+      "epoch_ms": 1794145484039,
+      "free_ram_bytes": 3436449792,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 49,
+      "process_count": 303,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10009.4,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6730.7,
+          "ws_mb": 628.3
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 5921.8,
+          "ws_mb": 899
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4421.4,
+          "ws_mb": 218.4
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3537.6,
+          "ws_mb": 86.1
+        }
+      ]
+    },
+    {
+      "label": "mi-campagne",
+      "ok": true,
+      "ms": 3668.014,
+      "epoch_ms": 1794145546493,
+      "free_ram_bytes": 3280384000,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 43,
+      "process_count": 305,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10069.2,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6742.2,
+          "ws_mb": 631.1
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 5994.5,
+          "ws_mb": 894.7
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4475.9,
+          "ws_mb": 215
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3565.3,
+          "ws_mb": 98.1
+        }
+      ]
+    },
+    {
+      "label": "fin de campagne",
+      "ok": true,
+      "ms": 3676.181,
+      "epoch_ms": 1794145626378,
+      "free_ram_bytes": 2959323136,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 46,
+      "process_count": 318,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10142.8,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6758.4,
+          "ws_mb": 624
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 6081,
+          "ws_mb": 840.3
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4535.6,
+          "ws_mb": 209.6
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3602.6,
+          "ws_mb": 86.7
+        }
+      ]
+    }
+  ],
+  "scenario_summaries": {
+    "A": {
+      "reps": 5,
+      "metrics": {
+        "t_total_ms": {
+          "label": "Temps total jusqu’à tests verts (ms)",
+          "n": 5,
+          "median": 5660.557,
+          "min": 4453.302,
+          "max": 6260.462,
+          "p25": 4652.292,
+          "p75": 6200.087,
+          "iqr": 1547.795,
+          "mad": 599.905,
+          "samples": [
+            4652,
+            4453.3,
+            5660.56,
+            6260.462,
+            6200.087
+          ]
+        },
+        "edit_phase_ms": {
+          "label": "Phase d’édition des agents (ms)",
+          "n": 5,
+          "median": 957.072,
+          "min": 815.01,
+          "max": 1036.335,
+          "p25": 851.496,
+          "p75": 966.382,
+          "iqr": 114.886,
+          "mad": 79.263,
+          "samples": [
+            815,
+            851.5,
+            1036.34,
+            957.072,
+            966.382
+          ]
+        },
+        "integration_phase_ms": {
+          "label": "Phase d’intégration/publication (ms)",
+          "n": 5,
+          "median": 1243.347,
+          "min": 1080.924,
+          "max": 1797.955,
+          "p25": 1194.522,
+          "p75": 1760.082,
+          "iqr": 565.56,
+          "mad": 162.423,
+          "samples": [
+            1243,
+            1080.9,
+            1194.52,
+            1760.082,
+            1797.955
+          ]
+        },
+        "test_ms": {
+          "label": "cargo test final (ms)",
+          "n": 5,
+          "median": 3284.517,
+          "min": 2425.131,
+          "max": 3397.593,
+          "p25": 2485.482,
+          "p75": 3285.951,
+          "iqr": 800.469,
+          "mad": 113.076,
+          "samples": [
+            2485,
+            2425.1,
+            3284.52,
+            3397.593,
+            3285.951
+          ]
+        },
+        "agent_wait_total_ms": {
+          "label": "Attente cumulée des agents (ms)",
+          "n": 5,
+          "median": 2053.522,
+          "min": 1877.17,
+          "max": 2844.639,
+          "p25": 2052.822,
+          "p75": 2745.913,
+          "iqr": 693.091,
+          "mad": 176.352,
+          "samples": [
+            2054,
+            1877.2,
+            2052.82,
+            2745.913,
+            2844.639
+          ]
+        },
+        "conflicts": {
+          "label": "Conflits détectés",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "conflict_resolution_ms": {
+          "label": "Temps de résolution des conflits (ms)",
+          "n": 5,
+          "median": 433.613,
+          "min": 338.748,
+          "max": 659.209,
+          "p25": 428.551,
+          "p75": 601.435,
+          "iqr": 172.884,
+          "mad": 94.865,
+          "samples": [
+            434,
+            338.7,
+            428.55,
+            659.209,
+            601.435
+          ]
+        },
+        "writes": {
+          "label": "Merges / publications / commits",
+          "n": 5,
+          "median": 3,
+          "min": 3,
+          "max": 3,
+          "p25": 3,
+          "p75": 3,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            3,
+            3,
+            3,
+            3,
+            3
+          ]
+        },
+        "rebuilds": {
+          "label": "Rebuilds (invocations cargo)",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "tests_passed": {
+          "label": "Tests verts (sur 10)",
+          "n": 5,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "p25": 10,
+          "p75": 10,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "lost_accepted": {
+          "label": "Changements acceptés perdus",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "lost_independent": {
+          "label": "Éditions indépendantes perdues",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "silent_overwrites": {
+          "label": "Écrasements silencieux",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "ram_peak_mb": {
+          "label": "RAM pic suivie totale (Mo WorkingSet)",
+          "n": 5,
+          "median": 145.8,
+          "min": 84,
+          "max": 161.1,
+          "p25": 109,
+          "p75": 154.6,
+          "iqr": 45.6,
+          "mad": 15.3,
+          "samples": [
+            84,
+            109,
+            154.6,
+            145.8,
+            161.1
+          ]
+        },
+        "ram_coordinator_mb": {
+          "label": "RAM pic coordinateur ravum-collab (Mo)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "ram_testers_mb": {
+          "label": "RAM pic testeurs cargo/rustc/test (Mo)",
+          "n": 5,
+          "median": 138.8,
+          "min": 77,
+          "max": 154.1,
+          "p25": 102,
+          "p75": 147.5,
+          "iqr": 45.5,
+          "mad": 15.3,
+          "samples": [
+            77,
+            102,
+            147.5,
+            138.8,
+            154.1
+          ]
+        },
+        "cpu_seconds": {
+          "label": "CPU consommé par la campagne (s)",
+          "n": 5,
+          "median": 2.109,
+          "min": 1.484,
+          "max": 2.531,
+          "p25": 2.094,
+          "p75": 2.312,
+          "iqr": 0.218,
+          "mad": 0.203,
+          "samples": [
+            1,
+            2.1,
+            2.53,
+            2.312,
+            2.109
+          ]
+        },
+        "cpu_busy_pct": {
+          "label": "Charge CPU machine pendant la répétition (%)",
+          "n": 5,
+          "median": 73.6,
+          "min": 56.1,
+          "max": 80.1,
+          "p25": 57.8,
+          "p75": 77.7,
+          "iqr": 19.9,
+          "mad": 6.5,
+          "samples": [
+            58,
+            56.1,
+            73.6,
+            80.1,
+            77.7
+          ]
+        },
+        "cache_target_mb": {
+          "label": "Cache target/ de la réplique (Mo)",
+          "n": 5,
+          "median": 12.52,
+          "min": 12.52,
+          "max": 12.52,
+          "p25": 12.52,
+          "p75": 12.52,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.5,
+            12.52,
+            12.52,
+            12.52
+          ]
+        },
+        "cache_git_mb": {
+          "label": "Objets .git/ de la réplique (Mo)",
+          "n": 5,
+          "median": 0.04,
+          "min": 0.04,
+          "max": 0.04,
+          "p25": 0.04,
+          "p75": 0.04,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0.04,
+            0.04,
+            0.04
+          ]
+        },
+        "disk_repo_mb": {
+          "label": "Espace disque de la réplique (Mo)",
+          "n": 5,
+          "median": 12.57,
+          "min": 12.57,
+          "max": 12.57,
+          "p25": 12.57,
+          "p75": 12.57,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.6,
+            12.57,
+            12.57,
+            12.57
+          ]
+        },
+        "functional_success": {
+          "label": "Réussite fonctionnelle stricte (0/1)",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "all_success": true,
+      "all_tests_green": true,
+      "all_content_ok": true
+    },
+    "B": {
+      "reps": 5,
+      "metrics": {
+        "t_total_ms": {
+          "label": "Temps total jusqu’à tests verts (ms)",
+          "n": 5,
+          "median": 6677.62,
+          "min": 5428.69,
+          "max": 7637.819,
+          "p25": 5796.144,
+          "p75": 7042.593,
+          "iqr": 1246.449,
+          "mad": 881.476,
+          "samples": [
+            6678,
+            5796.1,
+            7042.59,
+            5428.69,
+            7637.819
+          ]
+        },
+        "edit_phase_ms": {
+          "label": "Phase d’édition des agents (ms)",
+          "n": 5,
+          "median": 17.506,
+          "min": 15.234,
+          "max": 24.104,
+          "p25": 16.853,
+          "p75": 18.359,
+          "iqr": 1.506,
+          "mad": 0.853,
+          "samples": [
+            15,
+            18.4,
+            16.85,
+            17.506,
+            24.104
+          ]
+        },
+        "integration_phase_ms": {
+          "label": "Phase d’intégration/publication (ms)",
+          "n": 5,
+          "median": 2467.688,
+          "min": 2082.814,
+          "max": 3092.264,
+          "p25": 2205.882,
+          "p75": 2648.411,
+          "iqr": 442.529,
+          "mad": 261.806,
+          "samples": [
+            2648,
+            2467.7,
+            2205.88,
+            2082.814,
+            3092.264
+          ]
+        },
+        "test_ms": {
+          "label": "cargo test final (ms)",
+          "n": 5,
+          "median": 2702.448,
+          "min": 2373.789,
+          "max": 3671.359,
+          "p25": 2437.023,
+          "p75": 3063.066,
+          "iqr": 626.043,
+          "mad": 328.659,
+          "samples": [
+            2702,
+            2373.8,
+            3671.36,
+            2437.023,
+            3063.066
+          ]
+        },
+        "agent_wait_total_ms": {
+          "label": "Attente cumulée des agents (ms)",
+          "n": 5,
+          "median": 7750.816,
+          "min": 6549.632,
+          "max": 9762.996,
+          "p25": 6934.038,
+          "p75": 8228.321,
+          "iqr": 1294.283,
+          "mad": 816.778,
+          "samples": [
+            8228,
+            7750.8,
+            6934.04,
+            6549.632,
+            9762.996
+          ]
+        },
+        "conflicts": {
+          "label": "Conflits détectés",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "conflict_resolution_ms": {
+          "label": "Temps de résolution des conflits (ms)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "writes": {
+          "label": "Merges / publications / commits",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "rebuilds": {
+          "label": "Rebuilds (invocations cargo)",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "tests_passed": {
+          "label": "Tests verts (sur 10)",
+          "n": 5,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "p25": 10,
+          "p75": 10,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "lost_accepted": {
+          "label": "Changements acceptés perdus",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "lost_independent": {
+          "label": "Éditions indépendantes perdues",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "silent_overwrites": {
+          "label": "Écrasements silencieux",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "ram_peak_mb": {
+          "label": "RAM pic suivie totale (Mo WorkingSet)",
+          "n": 5,
+          "median": 100.5,
+          "min": 85.8,
+          "max": 221.9,
+          "p25": 86,
+          "p75": 168,
+          "iqr": 82,
+          "mad": 14.7,
+          "samples": [
+            86,
+            221.9,
+            100.5,
+            168,
+            86
+          ]
+        },
+        "ram_coordinator_mb": {
+          "label": "RAM pic coordinateur ravum-collab (Mo)",
+          "n": 5,
+          "median": 5.5,
+          "min": 5.5,
+          "max": 5.5,
+          "p25": 5.5,
+          "p75": 5.5,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            6,
+            5.5,
+            5.5,
+            5.5,
+            5.5
+          ]
+        },
+        "ram_testers_mb": {
+          "label": "RAM pic testeurs cargo/rustc/test (Mo)",
+          "n": 5,
+          "median": 93.5,
+          "min": 78.8,
+          "max": 214.9,
+          "p25": 78.9,
+          "p75": 160.9,
+          "iqr": 82,
+          "mad": 14.7,
+          "samples": [
+            79,
+            214.9,
+            93.5,
+            160.9,
+            78.9
+          ]
+        },
+        "cpu_seconds": {
+          "label": "CPU consommé par la campagne (s)",
+          "n": 5,
+          "median": 2.062,
+          "min": 1.797,
+          "max": 2.641,
+          "p25": 2,
+          "p75": 2.266,
+          "iqr": 0.266,
+          "mad": 0.204,
+          "samples": [
+            2,
+            2.6,
+            2.27,
+            2,
+            1.797
+          ]
+        },
+        "cpu_busy_pct": {
+          "label": "Charge CPU machine pendant la répétition (%)",
+          "n": 5,
+          "median": 61.6,
+          "min": 49.5,
+          "max": 72.7,
+          "p25": 55.9,
+          "p75": 70.1,
+          "iqr": 14.2,
+          "mad": 8.5,
+          "samples": [
+            62,
+            55.9,
+            70.1,
+            49.5,
+            72.7
+          ]
+        },
+        "cache_target_mb": {
+          "label": "Cache target/ de la réplique (Mo)",
+          "n": 5,
+          "median": 12.52,
+          "min": 12.52,
+          "max": 12.52,
+          "p25": 12.52,
+          "p75": 12.52,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.5,
+            12.52,
+            12.52,
+            12.52
+          ]
+        },
+        "cache_git_mb": {
+          "label": "Objets .git/ de la réplique (Mo)",
+          "n": 5,
+          "median": 0.03,
+          "min": 0.03,
+          "max": 0.03,
+          "p25": 0.03,
+          "p75": 0.03,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0.03,
+            0.03,
+            0.03
+          ]
+        },
+        "disk_repo_mb": {
+          "label": "Espace disque de la réplique (Mo)",
+          "n": 5,
+          "median": 12.56,
+          "min": 12.56,
+          "max": 12.56,
+          "p25": 12.56,
+          "p75": 12.56,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.6,
+            12.56,
+            12.56,
+            12.56
+          ]
+        },
+        "functional_success": {
+          "label": "Réussite fonctionnelle stricte (0/1)",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "all_success": true,
+      "all_tests_green": true,
+      "all_content_ok": true
+    },
+    "C": {
+      "reps": 5,
+      "metrics": {
+        "t_total_ms": {
+          "label": "Temps total jusqu’à tests verts (ms)",
+          "n": 5,
+          "median": 4785.636,
+          "min": 4256.087,
+          "max": 6221.689,
+          "p25": 4483.601,
+          "p75": 5801.905,
+          "iqr": 1318.304,
+          "mad": 529.549,
+          "samples": [
+            4786,
+            4483.6,
+            6221.69,
+            4256.087,
+            5801.905
+          ]
+        },
+        "edit_phase_ms": {
+          "label": "Phase d’édition des agents (ms)",
+          "n": 5,
+          "median": 2067.975,
+          "min": 1617.097,
+          "max": 2938.41,
+          "p25": 1843.9,
+          "p75": 2171.38,
+          "iqr": 327.48,
+          "mad": 224.075,
+          "samples": [
+            2068,
+            1617.1,
+            2938.41,
+            1843.9,
+            2171.38
+          ]
+        },
+        "integration_phase_ms": {
+          "label": "Phase d’intégration/publication (ms)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "test_ms": {
+          "label": "cargo test final (ms)",
+          "n": 5,
+          "median": 2767.093,
+          "min": 2298.959,
+          "max": 3488.536,
+          "p25": 2556.713,
+          "p75": 3137.197,
+          "iqr": 580.484,
+          "mad": 370.104,
+          "samples": [
+            2557,
+            2767.1,
+            3137.2,
+            2298.959,
+            3488.536
+          ]
+        },
+        "agent_wait_total_ms": {
+          "label": "Attente cumulée des agents (ms)",
+          "n": 5,
+          "median": 0.141,
+          "min": 0.104,
+          "max": 0.187,
+          "p25": 0.139,
+          "p75": 0.144,
+          "iqr": 0.005,
+          "mad": 0.003,
+          "samples": [
+            0,
+            0.1,
+            0.14,
+            0.141,
+            0.139
+          ]
+        },
+        "conflicts": {
+          "label": "Conflits détectés",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "conflict_resolution_ms": {
+          "label": "Temps de résolution des conflits (ms)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "writes": {
+          "label": "Merges / publications / commits",
+          "n": 5,
+          "median": 6,
+          "min": 6,
+          "max": 6,
+          "p25": 6,
+          "p75": 6,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            6,
+            6,
+            6,
+            6,
+            6
+          ]
+        },
+        "rebuilds": {
+          "label": "Rebuilds (invocations cargo)",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "tests_passed": {
+          "label": "Tests verts (sur 10)",
+          "n": 5,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "p25": 10,
+          "p75": 10,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ]
+        },
+        "lost_accepted": {
+          "label": "Changements acceptés perdus",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "lost_independent": {
+          "label": "Éditions indépendantes perdues",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "silent_overwrites": {
+          "label": "Écrasements silencieux",
+          "n": 5,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "p25": 1,
+          "p75": 1,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "ram_peak_mb": {
+          "label": "RAM pic suivie totale (Mo WorkingSet)",
+          "n": 5,
+          "median": 149.3,
+          "min": 83.3,
+          "max": 162.8,
+          "p25": 85.1,
+          "p75": 161.8,
+          "iqr": 76.7,
+          "mad": 13.5,
+          "samples": [
+            149,
+            162.8,
+            85.1,
+            83.3,
+            161.8
+          ]
+        },
+        "ram_coordinator_mb": {
+          "label": "RAM pic coordinateur ravum-collab (Mo)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "ram_testers_mb": {
+          "label": "RAM pic testeurs cargo/rustc/test (Mo)",
+          "n": 5,
+          "median": 142.3,
+          "min": 76.3,
+          "max": 155.9,
+          "p25": 78.1,
+          "p75": 154.8,
+          "iqr": 76.7,
+          "mad": 13.6,
+          "samples": [
+            142,
+            155.9,
+            78.1,
+            76.3,
+            154.8
+          ]
+        },
+        "cpu_seconds": {
+          "label": "CPU consommé par la campagne (s)",
+          "n": 5,
+          "median": 2.219,
+          "min": 1.266,
+          "max": 2.844,
+          "p25": 2,
+          "p75": 2.578,
+          "iqr": 0.578,
+          "mad": 0.359,
+          "samples": [
+            3,
+            2,
+            2.22,
+            1.266,
+            2.578
+          ]
+        },
+        "cpu_busy_pct": {
+          "label": "Charge CPU machine pendant la répétition (%)",
+          "n": 5,
+          "median": 60.6,
+          "min": 49.3,
+          "max": 80.5,
+          "p25": 57.6,
+          "p75": 78.3,
+          "iqr": 20.7,
+          "mad": 11.3,
+          "samples": [
+            61,
+            57.6,
+            78.3,
+            49.3,
+            80.5
+          ]
+        },
+        "cache_target_mb": {
+          "label": "Cache target/ de la réplique (Mo)",
+          "n": 5,
+          "median": 12.52,
+          "min": 12.52,
+          "max": 12.52,
+          "p25": 12.52,
+          "p75": 12.52,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.5,
+            12.52,
+            12.52,
+            12.52
+          ]
+        },
+        "cache_git_mb": {
+          "label": "Objets .git/ de la réplique (Mo)",
+          "n": 5,
+          "median": 0.04,
+          "min": 0.04,
+          "max": 0.04,
+          "p25": 0.04,
+          "p75": 0.04,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0.04,
+            0.04,
+            0.04
+          ]
+        },
+        "disk_repo_mb": {
+          "label": "Espace disque de la réplique (Mo)",
+          "n": 5,
+          "median": 12.56,
+          "min": 12.56,
+          "max": 12.56,
+          "p25": 12.56,
+          "p75": 12.56,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            13,
+            12.6,
+            12.56,
+            12.56,
+            12.56
+          ]
+        },
+        "functional_success": {
+          "label": "Réussite fonctionnelle stricte (0/1)",
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "p25": 0,
+          "p75": 0,
+          "iqr": 0,
+          "mad": 0,
+          "samples": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "all_success": false,
+      "all_tests_green": true,
+      "all_content_ok": true
+    }
+  },
+  "validation": {
+    "ok": true,
+    "problems": [],
+    "protocol_ok": true
+  },
+  "markdown": "| Métrique | A worktrees | B coordinateur | C séquentiel |\n|---|---|---|---|\n| Temps total jusqu’à tests verts (ms) | 5660.56 [4453.3–6260.46] (IQR 1547.8) | 6677.62 [5428.69–7637.82] (IQR 1246.45) | 4785.64 [4256.09–6221.69] (IQR 1318.3) |\n| Phase d’édition des agents (ms) | 957.07 [815.01–1036.34] (IQR 114.89) | 17.51 [15.23–24.1] (IQR 1.51) | 2067.98 [1617.1–2938.41] (IQR 327.48) |\n| Phase d’intégration/publication (ms) | 1243.35 [1080.92–1797.96] (IQR 565.56) | 2467.69 [2082.81–3092.26] (IQR 442.53) | 0 [0–0] (IQR 0) |\n| cargo test final (ms) | 3284.52 [2425.13–3397.59] (IQR 800.47) | 2702.45 [2373.79–3671.36] (IQR 626.04) | 2767.09 [2298.96–3488.54] (IQR 580.48) |\n| Attente cumulée des agents (ms) | 2053.52 [1877.17–2844.64] (IQR 693.09) | 7750.82 [6549.63–9763] (IQR 1294.28) | 0.14 [0.1–0.19] (IQR 0.01) |\n| Conflits détectés | 1 [1–1] (IQR 0) | 1 [1–1] (IQR 0) | 0 [0–0] (IQR 0) |\n| Temps de résolution des conflits (ms) | 433.61 [338.75–659.21] (IQR 172.88) | 0 [0–0] (IQR 0) | 0 [0–0] (IQR 0) |\n| Merges / publications / commits | 3 [3–3] (IQR 0) | 1 [1–1] (IQR 0) | 6 [6–6] (IQR 0) |\n| Rebuilds (invocations cargo) | 1 [1–1] (IQR 0) | 1 [1–1] (IQR 0) | 1 [1–1] (IQR 0) |\n| Tests verts (sur 10) | 10 [10–10] (IQR 0) | 10 [10–10] (IQR 0) | 10 [10–10] (IQR 0) |\n| Changements acceptés perdus | 0 [0–0] (IQR 0) | 0 [0–0] (IQR 0) | 1 [1–1] (IQR 0) |\n| Éditions indépendantes perdues | 0 [0–0] (IQR 0) | 0 [0–0] (IQR 0) | 0 [0–0] (IQR 0) |\n| Écrasements silencieux | 0 [0–0] (IQR 0) | 0 [0–0] (IQR 0) | 1 [1–1] (IQR 0) |\n| RAM pic suivie totale (Mo WorkingSet) | 145.8 [84–161.1] (IQR 45.6) | 100.5 [85.8–221.9] (IQR 82) | 149.3 [83.3–162.8] (IQR 76.7) |\n| RAM pic coordinateur ravum-collab (Mo) | 0 [0–0] (IQR 0) | 5.5 [5.5–5.5] (IQR 0) | 0 [0–0] (IQR 0) |\n| RAM pic testeurs cargo/rustc/test (Mo) | 138.8 [77–154.1] (IQR 45.5) | 93.5 [78.8–214.9] (IQR 82) | 142.3 [76.3–155.9] (IQR 76.7) |\n| CPU consommé par la campagne (s) | 2.11 [1.48–2.53] (IQR 0.22) | 2.06 [1.8–2.64] (IQR 0.27) | 2.22 [1.27–2.84] (IQR 0.58) |\n| Charge CPU machine pendant la répétition (%) | 73.6 [56.1–80.1] (IQR 19.9) | 61.6 [49.5–72.7] (IQR 14.2) | 60.6 [49.3–80.5] (IQR 20.7) |\n| Cache target/ de la réplique (Mo) | 12.52 [12.52–12.52] (IQR 0) | 12.52 [12.52–12.52] (IQR 0) | 12.52 [12.52–12.52] (IQR 0) |\n| Objets .git/ de la réplique (Mo) | 0.04 [0.04–0.04] (IQR 0) | 0.03 [0.03–0.03] (IQR 0) | 0.04 [0.04–0.04] (IQR 0) |\n| Espace disque de la réplique (Mo) | 12.57 [12.57–12.57] (IQR 0) | 12.56 [12.56–12.56] (IQR 0) | 12.56 [12.56–12.56] (IQR 0) |\n| Réussite fonctionnelle stricte (0/1) | 1 [1–1] (IQR 0) | 1 [1–1] (IQR 0) | 0 [0–0] (IQR 0) |",
+  "raw_markdown": "| rep_id | ordre | t_total_ms | edit_ms | integration_ms | test_ms | attente_agents_ms | conflits | writes | tests | perdus | écrasés | RAM_totale_Mo | RAM_testeurs_Mo | RAM_coord_Mo | CPU_s | target_Mo | succès |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| A1 | 1 | 4652.292 | 815.01 | 1243.347 | 2485.482 | 2053.522 | 1 | 3 | 10/10 | 0 | 0 | 84 | 77 | 0 | 1.484 | 12.52 | 1 |\n| B1 | 2 | 6677.62 | 15.234 | 2648.411 | 2702.448 | 8228.321 | 1 | 1 | 10/10 | 0 | 0 | 85.8 | 78.8 | 5.5 | 2.062 | 12.52 | 1 |\n| C1 | 3 | 4785.636 | 2067.975 | 0 | 2556.713 | 0.187 | 0 | 6 | 10/10 | 1 | 1 | 149.3 | 142.3 | 0 | 2.844 | 12.52 | 0 |\n| C2 | 4 | 4483.601 | 1617.097 | 0 | 2767.093 | 0.104 | 0 | 6 | 10/10 | 1 | 1 | 162.8 | 155.9 | 0 | 2 | 12.52 | 0 |\n| B2 | 5 | 5796.144 | 18.359 | 2467.688 | 2373.789 | 7750.816 | 1 | 1 | 10/10 | 0 | 0 | 221.9 | 214.9 | 5.5 | 2.641 | 12.52 | 1 |\n| A2 | 6 | 4453.302 | 851.496 | 1080.924 | 2425.131 | 1877.17 | 1 | 3 | 10/10 | 0 | 0 | 109 | 102 | 0 | 2.094 | 12.52 | 1 |\n| A3 | 7 | 5660.557 | 1036.335 | 1194.522 | 3284.517 | 2052.822 | 1 | 3 | 10/10 | 0 | 0 | 154.6 | 147.5 | 0 | 2.531 | 12.52 | 1 |\n| B3 | 8 | 7042.593 | 16.853 | 2205.882 | 3671.359 | 6934.038 | 1 | 1 | 10/10 | 0 | 0 | 100.5 | 93.5 | 5.5 | 2.266 | 12.52 | 1 |\n| C3 | 9 | 6221.689 | 2938.41 | 0 | 3137.197 | 0.144 | 0 | 6 | 10/10 | 1 | 1 | 85.1 | 78.1 | 0 | 2.219 | 12.52 | 0 |\n| C4 | 10 | 4256.087 | 1843.9 | 0 | 2298.959 | 0.141 | 0 | 6 | 10/10 | 1 | 1 | 83.3 | 76.3 | 0 | 1.266 | 12.52 | 0 |\n| B4 | 11 | 5428.69 | 17.506 | 2082.814 | 2437.023 | 6549.632 | 1 | 1 | 10/10 | 0 | 0 | 168 | 160.9 | 5.5 | 2 | 12.52 | 1 |\n| A4 | 12 | 6260.462 | 957.072 | 1760.082 | 3397.593 | 2745.913 | 1 | 3 | 10/10 | 0 | 0 | 145.8 | 138.8 | 0 | 2.312 | 12.52 | 1 |\n| A5 | 13 | 6200.087 | 966.382 | 1797.955 | 3285.951 | 2844.639 | 1 | 3 | 10/10 | 0 | 0 | 161.1 | 154.1 | 0 | 2.109 | 12.52 | 1 |\n| B5 | 14 | 7637.819 | 24.104 | 3092.264 | 3063.066 | 9762.996 | 1 | 1 | 10/10 | 0 | 0 | 86 | 78.9 | 5.5 | 1.797 | 12.52 | 1 |\n| C5 | 15 | 5801.905 | 2171.38 | 0 | 3488.536 | 0.139 | 0 | 6 | 10/10 | 1 | 1 | 161.8 | 154.8 | 0 | 2.578 | 12.52 | 0 |",
+  "evidence_files": {
+    "A": "D:\\App\\Ravum\\evidence\\mvp0b-s8-A-2026-11-08.json",
+    "B": "D:\\App\\Ravum\\evidence\\mvp0b-s8-B-2026-11-08.json",
+    "C": "D:\\App\\Ravum\\evidence\\mvp0b-s8-C-2026-11-08.json"
+  }
+}

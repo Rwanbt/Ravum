@@ -1,0 +1,12 @@
+[package]
+name = "s8-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Déclaration de workspace vide VOLONTAIRE : la fixture ne doit jamais devenir
+# membre du workspace Rust de Ravum. Les campagnes S8 compilent des copies
+# éphémères de ce crate, pas le workspace racine.
+[workspace]
+
+[dependencies]
