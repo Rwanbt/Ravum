@@ -1,0 +1,12 @@
+[package]
+name = "crate_a"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Déclaration de workspace vide VOLONTAIRE : la fixture COLLAB-4 ne doit jamais
+# devenir membre du workspace Rust de Ravum. Chaque crate est autonome et se
+# vérifie avec `cargo check --manifest-path`.
+[workspace]
+
+[dependencies]

@@ -49,6 +49,8 @@ tests), plutôt que de se fier aux rapports.
 | `collab-2-3` (Worker G) | L3 COLLAB-2/3 | verifier injecté, `semantics.rs`, `records.rs`, 4 corpus de tests, démo COLLAB-2 | 87 tests re-exécutés, démo re-exécutée |
 | `s8-bench` (Worker E) | S8 benchmark | harnais `benchmarks/s8`, 15 campagnes, preuves JSON | protocole `ok`, verdict relu |
 | `impact-ci` (Worker I) | L4-E CI sélective | `tools/impact`, workflow `mvp-impact.yml`, selftest 48 cas | selftest re-exécuté, correction du FULL légitime |
+| `collab-4` (Worker J) | L3.4 collaboration ↔ daemon | `ravum collab-cycle`, graphe d'unités fail-closed, 36 tests CLI, preuve JSON | 36 tests re-exécutés, démo re-jouée |
+| `audio-probe` (Worker K) | L4-C audio réel | sonde `waveOut` silencieuse + mesures device | à intégrer (round 2) |
 
 Le Lead a réalisé lui-même : L0 (audit/baseline), L1-A (cycle de vie temps réel DSP),
 L4-B (crossfade), L4-C/L4-D (statuts honnêtes), L5.3 (licence), l'intégration CLI du
@@ -236,7 +238,7 @@ agents IA (tokens et supervision **non mesurés ici**).
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
 | `ravum-daemon` | 50 (32 unit, 3 chaînes d'édition, 15 intégration) |
-| `ravum-cli` | 22 (5 unitaires du binaire dont les 3 nouveaux de `cycle-bench` + intégrations) |
+| `ravum-cli` | 36 (15 unitaires du binaire dont 3 `cycle-bench` + 10 `collab-cycle`, 4 intégration COLLAB-4, 17 intégrations existantes préservées) |
 | `ravum-proof` | 28 (19 unit, 9 proof_cache) |
 | `ravum-rust-adapter` | 8 (dont le nouveau cas rustc-direct) |
 | `ravum-todo` | 14 (4 unit + 10 E2E HTTP) |

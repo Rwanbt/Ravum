@@ -48,6 +48,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | MVP-0b : daemon persistant (L2) | **Implémenté et mesuré** : cache de verdicts (contenu identique ≈ 0 ms), rejet des résultats périmés, annulation réelle ; gain incrémental seulement au-delà de ~1 000 lignes |
 | MVP-0b : Git transactionnel (L1) | **Implémenté** : index isolé, `commit-tree`, `update-ref` CAS, hooks honorés, journal durable ; 16 tests négatifs |
+| MVP-0b : COLLAB-4 (collaboration ↔ daemon) | **Implémenté et mesuré** : une modification acceptée n'analyse que son unité + ses dépendants ; unité indépendante jamais analysée ; rejeu servi par cache (0 `rustc`) |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
 Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
@@ -68,6 +69,7 @@ ravum watch  <fichier.rs>    # boucle complète : édition -> activation
 ravum status                 # dernier état enregistré
 ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
 ravum cycle-bench <f.rs>      # édition -> diagnostic -> build -> verify -> load -> activation, MVP-0a vs MVP-0b
+ravum collab-cycle <ws>       # changements acceptés -> analyses daemon ciblées (unités affectées + dépendants)
 ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
 ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
 ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next) et crossfade (--crossfade-frames)
@@ -178,6 +180,7 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 - [Audit L0 et baseline reproductible](docs/mvp/MVP-0b-audit.md)
 - [L1-A — cycle de vie temps réel des modules DSP](docs/mvp/MVP-0b-rt-lifecycle.md)
 - [L1-B / L3 — collaboration multi-agents et publication Git transactionnelle](docs/mvp/MVP-0b-collab-2-3.md)
+- [L3.4 / COLLAB-4 — analyse ciblée des changements acceptés par le daemon](docs/mvp/MVP-0b-collab-4.md)
 - [L4-B — crossfade de remplacement DSP](docs/mvp/MVP-0b-dsp-crossfade.md)
 - [L2 — daemon persistant d'analyse incrémentale](docs/mvp/MVP-0b-incremental.md)
 - [P0-A/P0-I — mesure de bout en bout édition → activation](docs/mvp/MVP-0b-cycle.md)
