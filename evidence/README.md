@@ -8,8 +8,11 @@
 
 | Fichier | Origine | Ce qu'il prouve |
 |---|---|---|
-| `m1-bench.json` | `ravum bench` | p50/p95/p99 par étape (check, build, verify, load, activate), mémoire du processus CLI |
-| `m1-demo.txt` | `scripts/demo-m1.ps1` | le processus hôte change de comportement sans redémarrage |
+| `m1-bench.json` | `ravum bench` | min/p50/p95/p99 par étape, mémoire, **calibration de charge**, artefacts froids |
+| `m1-demo.jsonl` | `scripts/demo-m1.ps1` | le processus hôte change de comportement sans redémarrage |
+| `m2-proof.json` | `ravum prove` | un `proved` borné et un `tested` avec contre-exemple précis |
+| `m2-ledger.jsonl` | `ravum prove` | ledger append-only des deux verdicts (2 lignes, séquencées) |
+| `m2-build-cache.json` | `ravum build` ×2 | build froid 2 286 ms vs chaud 3 ms, **même `artifactId`**, aucun relink |
 | `collab-demo.txt` | `scripts/demo-collab.ps1` | décisions AUTO_SAFE / CONFLICT / REJECT / MANUAL_REQUIRED / REBASE_REVALIDATE et commit unique |
 | `collab-demo/proposals/*.json.tmpl` | auteurs humains/agents | propositions rejouables (base et hashes injectés au moment de l'exécution) |
 | `multi-agent-live/` | deux subagents réels | propositions produites indépendamment sur la branche partagée, puis intégrées par le coordinateur |
@@ -27,6 +30,8 @@ powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1
 powershell -ExecutionPolicy Bypass -File scripts/demo-m1.ps1
 powershell -ExecutionPolicy Bypass -File scripts/demo-collab.ps1 -Commit
 cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 20 --out evidence/m1-bench.json
+cargo run -q --bin ravum -- prove fixtures/proof/positive.rs --claim finite --inputs 0,1,2.5,1000000 --json
+cargo run -q --bin ravum -- prove fixtures/proof/negative.rs --claim non-negative --inputs 0,1,2,3 --json
 ```
 
 ## Règles de lecture

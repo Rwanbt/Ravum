@@ -22,6 +22,11 @@ Commande : `cargo test --workspace --offline -- --test-threads=1`
 
 Résultat observé : **51 tests, 51 réussis, 0 échec, 0 ignoré.**
 
+> Depuis l'ajout de M2 (commit `e0a7114`), la suite compte **94 tests** (19 unitaires
+> `ravum-proof`, 9 tests d'invalidation par mutation, 4 tests de gate M2, 6 tests de
+> rétention, 3 tests de durabilité du journal, 4 tests de cache d'artefacts).
+> Détail : [M2-evidence.md](M2-evidence.md).
+
 | Groupe | Nombre | Ce qu'il couvre |
 |---|---|---|
 | `ravum-protocol` (unitaires) | 10 | identités, statuts, sérialisation, absence de `PROVED` synthétique |
@@ -73,22 +78,27 @@ Source : `evidence/m1-bench.json`. Commande :
   reclamation comprise). Aucune fuite observée sur cette fenêtre ; ce n'est pas une
   preuve d'absence de fuite à long terme.
 
-### 4.1 Confrontation aux cibles exploratoires
+### 4.1 Confrontation aux cibles exploratoires — **corrigée après M2**
 
-| Cible (MVP.md) | Mesure | Verdict |
+> **Correction.** Ce document affirmait initialement que la cible « petit patch
+> p95 < 500 ms » était « atteinte de justesse » (481 ms). Cette conclusion est
+> **retirée** : ce run n'avait pas de calibration de charge, et six mesures
+> instrumentées ultérieures ne le reproduisent pas, même en valeur minimale.
+> Détail complet et tableau des runs : [M2-evidence.md](M2-evidence.md) §6.
+
+| Cible (MVP.md) | Mesure instrumentée | Verdict |
 |---|---|---|
-| diagnostic local p95 < 50 ms | **136 ms** | **NON ATTEINTE** |
-| petit patch local p95 < 500 ms | **481 ms** | atteinte de justesse |
+| diagnostic local p95 < 50 ms | min 132 ms, p50 145 ms | **NON ATTEINTE** (~3×) |
+| petit patch local p95 < 500 ms | min 502 ms, p95 746 ms | **NON ATTEINTE** |
 
-La cible de diagnostic n'est pas atteinte et ne sera pas maquillée. Cause identifiée :
-chaque analyse lance un `rustc --emit=metadata` **à froid**, sans daemon ni cache de
-requêtes. Le coût est dominé par le démarrage du compilateur, pas par l'unité
-analysée. Deux conséquences honnêtes :
+Cause structurelle : chaque édition lance un `rustc` **à froid**. Le plancher est le
+démarrage du compilateur (calibration `rustc -vV` : 80–136 ms sur cette machine
+chargée), pas le coût de l'unité analysée. Il n'existe ni daemon, ni cache de
+requêtes, ni frontend incrémental.
 
-1. un daemon avec cache de requêtes est le levier évident (ADR-012/ADR-019), mais il
-   n'existe pas encore ;
-2. le chiffre de 481 ms pour le patch complet reste sous la cible uniquement parce
-   que l'unité est minuscule (un seul fichier, une seule fonction).
+Conséquence pour M5 : l'option A (Rust + outillage) ne peut pas atteindre P0-A par
+simple optimisation de configuration. C'est un résultat négatif explicite, pas un
+seuil ajusté.
 
 ## 5. Démonstration COLLAB-1 (scénario scripté, 6 propositions)
 

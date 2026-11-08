@@ -56,6 +56,21 @@ jobs:
       - name: Demo COLLAB-1 - multi-agent proposals and single Git writer
         run: powershell -ExecutionPolicy Bypass -File scripts/demo-collab.ps1 -Commit
 
+      - name: Prove a bounded obligation (M2)
+        run: cargo run -q --bin ravum -- prove fixtures/proof/positive.rs --claim finite --inputs 0,1,2.5,1000000 --ledger evidence/local/ci-ledger.jsonl
+
+      # The violated obligation must exit 1: a green step here would mean the gate
+      # accepts a counterexample, which is the one failure mode that matters.
+      - name: Refuse a violated obligation (M2)
+        shell: pwsh
+        run: |
+          cargo run -q --bin ravum -- prove fixtures/proof/negative.rs --claim non-negative --inputs 0,1,2,3 --ledger evidence/local/ci-ledger.jsonl --json
+          if ($LASTEXITCODE -ne 1) {
+            Write-Error "expected exit code 1 for a violated obligation, got $LASTEXITCODE"
+            exit 1
+          }
+          Write-Host "violated obligation correctly refused (exit 1)"
+
       - name: Measure the loop (informational, not a performance gate)
         run: |
           cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json

@@ -147,7 +147,6 @@ jamais ; il publie les ticks calculés par le module actif et accepte des comman
 cru sur parole.
 
 ### 2.8 `ravum-workspace-coordinator` (COLLAB-1)
-
 - `ChangeProposal` : base explicite, chemins et symboles cibles, hashes attendus,
   dépendances déclarées, contrats impactés, diff unifié.
 - Décisions : `AUTO_SAFE`, `REBASE_REVALIDATE`, `CONFLICT`, `REJECT`,
@@ -163,8 +162,25 @@ Application de patch : hunks exacts, sans correspondance floue. Une application
 « tolérante » est précisément le mécanisme qui transforme un conflit sémantique en
 code corrompu.
 
-## 3. Flux complet d'une itération
+### 2.9 `ravum-proof` (M2)
 
+- `Obligation` : un claim (`finite`, `deterministic`, `non_negative`, `equals`,
+  `monotonic_non_decreasing`) sur un **domaine fini explicite**.
+- `verification_key` : SHA-256 de (identifiant, claim, entrées en bits, hypothèses
+  triées, ABI, snapshot, contexte de build, artefact, outil, version, schéma).
+  Toute mutation change la clé — c'est ce qui rend l'invalidation mécanique.
+- `ExhaustiveVerifier` : énumère le domaine sur l'artefact réel ; ne renvoie `Proved`
+  que si tout le domaine est couvert **dans le budget de temps**.
+- `KaniVerifier` : détecte un prouveur externe et refuse de conclure sans harness.
+- `EvidenceLedger` : une ligne JSON par verdict, écrite et flushée immédiatement ;
+  lecture *fail-closed* (une ligne corrompue invalide le ledger).
+- `ProofBroker` : `Fresh` seulement si la clé, le contexte et l'outil correspondent ;
+  sinon re-exécution. Un échec est mis en cache : un contre-exemple connu n'est pas
+  re-testé et ne devient jamais un succès.
+- Gate : `Pipeline::with_obligations` refuse l'activation si une obligation n'est pas
+  satisfaite, et **erreur** si un broker est absent. Rien n'est sauté silencieusement.
+
+## 3. Flux complet d'une itération
 ```text
 fichier modifié
    │

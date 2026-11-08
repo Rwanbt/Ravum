@@ -55,23 +55,35 @@
 Le MVP-0a fournit des mesures réelles, mais **elles ne comparent pas A/B/C** : elles
 caractérisent le chemin A sur une seule fonction `f64 -> f64`.
 
-| Mesure (20 itérations) | p50 | p95 | p99 |
+Sept runs de 10 à 20 itérations ont été enregistrés. Ils montrent une dispersion
+importante due à la charge machine, mesurée par la calibration (`rustc -vV`).
+
+| Run | Calibration | `total` p50 | `total` p95 |
 |---|---|---|---|
-| analyse (`check`) | 103 ms | 136 ms | 171 ms |
-| build + link | 269 ms | 356 ms | 366 ms |
-| vérification smoke | 3 ms | 4 ms | 4 ms |
-| chargement natif | 2 ms | 4 ms | 4 ms |
-| activation | 0 ms | 0 ms | 0 ms |
-| **total** | **380 ms** | **481 ms** | **544 ms** |
+| A (sans calibration) | inconnue | 380 ms | 481 ms |
+| B | 83 ms | 576 ms | 778 ms |
+| D | 91 ms | 716 ms | 796 ms |
+| E | 99 ms | 766 ms | 908 ms |
+| F | 136 ms | 902 ms | 1 218 ms |
+| G (versionné) | 96 ms | 525 ms | 746 ms |
 
-Détail et limites : `evidence/m1-bench.json`, `docs/mvp/M1-evidence.md`.
+`min` observé sur le run G : **502 ms**. Détail : `evidence/m1-bench.json`,
+`docs/mvp/M2-evidence.md` §6.
 
-**Constat honnête :** la cible exploratoire « diagnostic local p95 < 50 ms » n'est
-**pas** atteinte (139 ms). L'analyse invoque `rustc` depuis zéro à chaque édition,
-sans daemon ni cache de requêtes. C'est un argument *pour* un frontend à requêtes
-persistantes (option C), mais un seul chiffre ne décide pas : il manque le coût de
+**Constat honnête :** ni la cible « diagnostic p95 < 50 ms » (min 132 ms) ni la cible
+« petit patch p95 < 500 ms » (min 502 ms) ne sont atteintes de façon reproductible.
+Le run A qui semblait passer n'est pas reproduit par les six runs instrumentés.
+
+L'analyse invoque `rustc` depuis zéro à chaque édition : le plancher est le démarrage
+du compilateur, pas l'unité analysée. C'est un argument *pour* un frontend à requêtes
+persistantes (option C), mais un chiffre ne décide pas : il manque le coût de
 maintenance, la précision des diagnostics et le comportement des agents sur une
 syntaxe nouvelle.
+
+**Apport de M2 à la comparaison :** le broker de preuve montre qu'un verdict borné
+coûte **3 à 6 ms** (`verify_ms`, `evidence/m2-proof.json`), c'est-à-dire l'ordre de
+grandeur sous lequel une analyse incrémentale native devrait se situer. Le coût de
+l'outillage Rust actuel est donc intégralement dans le lancement du compilateur.
 
 ## 6. Ce qui manque pour ouvrir le gate
 
