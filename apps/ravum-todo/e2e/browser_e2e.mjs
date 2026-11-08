@@ -181,7 +181,12 @@ class TestContext {
   async newPage(url, { waitReady = true, label = 'page' } = {}) {
     const page = await this.browser.newPage({ url, label });
     this.resources.pages.push(page);
-    if (waitReady) await page.waitForBanner();
+    if (waitReady) {
+      await page.waitForBanner();
+      // The banner appears when the contract check finishes; the first list render can
+      // still be in flight, which made scenario 5 flaky on the slower CI runner.
+      await page.waitForReady();
+    }
     return page;
   }
 

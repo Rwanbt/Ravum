@@ -210,6 +210,16 @@ export class Page {
     );
   }
 
+  /// The UI sets `data-ravum-ready="1"` once its initial contract check and list
+  /// refresh finished. Waiting for it removes the race that made scenario 5 flaky on a
+  /// slow full-Chrome CI runner (asserting on a half-initialised list).
+  async waitForReady({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+    return await this.waitFor(
+      `document.documentElement.dataset.ravumReady === '1'`,
+      'l’initialisation de l’interface (data-ravum-ready)',
+      { timeoutMs },
+    );
+  }
   async waitForElement(selector, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return await this.waitFor(
       `Boolean(document.querySelector(${JSON.stringify(selector)}))`,

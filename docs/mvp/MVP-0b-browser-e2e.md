@@ -8,8 +8,9 @@
 > qu'il a révélés et les limites qui restent.
 >
 > **Statut des preuves** : `TESTED` en local (Windows 11, Chromium 156 headless) ;
-> **`PENDING` en CI** (l'étape existe dans `mvp.yml` mais n'a pas encore tourné sur
-> GitHub Actions). Aucun résultat n'est `PROVED`, aucune qualification navigateur large
+> **`TESTED` en CI** (l'étape a tourné sur `windows-latest` : première exécution verte,
+> puis un échec intermittent de scénario 5 causé par une course de rendu, corrigé — voir
+> §6.1). Aucun résultat n'est `PROVED`, aucune qualification navigateur large
 > n'est revendiquée.
 >
 > Machine : Windows 11 Pro 26100, i7-13620H (10 cœurs / 16 threads), 15,71 Go RAM,
@@ -191,9 +192,13 @@ Ajout dans `.github/workflows/mvp.yml` après la démo M4 :
 - publication de l'artefact `browser-e2e-evidence` (rapport JSON + captures) même en cas
   d'échec.
 
-Statut : étape **non encore exécutée en CI** (`PENDING`). Localement, les trois codes de
-sortie ont été vérifiés : `0` succès, `1` échec explicite (`--require-browser` sans
-navigateur), `2` SKIP explicite sans navigateur (message listant les chemins essayés).
+Statut : étape **exécutée en CI**. Première exécution verte (run
+[42487917654](https://github.com/Rwanbt/Ravum/actions/runs/42487917654), navigateur
+`Chrome/156` détecté sur `windows-latest`). Une exécution ultérieure a échoué sur le
+scénario 5 (run [42491318211](https://github.com/Rwanbt/Ravum/actions/runs/42491318211)) :
+voir §6.1, cause identifiée et corrigée. Localement, les trois codes de sortie sont
+vérifiés : `0` succès, `1` échec explicite (`--require-browser` sans navigateur),
+`2` SKIP explicite sans navigateur (message listant les chemins essayés).
 
 ## 7. Limites honnêtes (ce que ce harnais ne couvre pas)
 
@@ -205,7 +210,25 @@ navigateur), `2` SKIP explicite sans navigateur (message listant les chemins ess
   connexion SQLite derrière un mutex ; aucune course multi-clients, aucun test de charge.
 - **Navigateurs** : un seul moteur testé (Chromium 156 headless shell local). Firefox,
   WebKit/Safari, Chrome/Edge complets, mobile et vieilles versions ne sont **pas** testés.
-  La CI utilisera Edge (moteur Chromium) ; le comportement Edge n'est pas encore établi.
+  La CI détecte le navigateur disponible sur le runner (`Chrome` system ou Edge) ; les deux
+utilisent le même protocole CDP. Le comportement d'un Firefox/WebKit réel reste non testé.
+
+### 6.1 Échec intermittent en CI et correctif (scénario 5)
+
+Sur le runner (Chrome complet, plus lent que le headless shell local), le scénario 5
+(« erreur de validation ») a échoué une fois : au moment de l'assertion « la liste doit
+rester vide », le premier rendu de la liste n'était pas encore terminé — la bannière de
+contrat était prête, mais le `refresh()` initial était encore en vol. Ce n'était pas une
+erreur du produit ni une assertion trop stricte : le test lisait un DOM à moitié initialisé.
+
+Correctif (produit + harnais, pas de relâchement d'assertion) :
+1. `static/app.js` expose une **signal de disponibilité** explicite :
+   `document.documentElement.dataset.ravumReady = "1"` une fois la vérification de contrat
+   et le premier `refresh()` terminés (y compris en cas d'erreur, affichée séparément).
+2. `e2e/lib/page.mjs` ajoute `waitForReady()` et `browser_e2e.mjs` l'appelle après
+   `waitForBanner()` dans `newPage(waitReady: true)`, sauf pour le scénario 7 qui attend
+   volontairement le bandeau d'incompatibilité (`waitReady: false`).
+3. Vérification locale : **3 exécutions consécutives 10/10**, 9,8–11,2 s ; puis CI verte.
 - **Rendu visuel** : les captures sont des preuves d'exécution, pas une baseline de
   régression visuelle (pas de comparaison pixel, pas de CSS/layout asserté).
 - **Performance** : aucune mesure de temps de chargement, de Web Vitals ou de budget.
@@ -216,7 +239,7 @@ navigateur), `2` SKIP explicite sans navigateur (message listant les chemins ess
 - **Arrêt du serveur** : le redémarrage du scénario 8 tue le processus (pas d'arrêt
   gracieux ni de checkpoint WAL explicite) ; SQLite récupère le WAL, mais ce n'est pas un
   test de durabilité en cas de crash.
-- **État des preuves** : `TESTED` local uniquement, `PENDING` CI. Ce document ne prouve pas
+- **État des preuves** : `TESTED` localement **et en CI** (première exécution verte, échec intermittent corrigé §6.1). Ce document ne prouve pas
   que l'application est prête pour la production ; c'est une validation de la boucle
   UI→API→SQLite dans un navigateur réel.
 
