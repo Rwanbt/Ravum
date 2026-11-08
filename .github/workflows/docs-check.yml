@@ -1,0 +1,22 @@
+name: Documentation integrity (not product qualification)
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check ADR inventory and README links
+        run: python3 tools/validate_repo_docs.py
+      - name: Scope notice
+        run: echo "This verifies documentation only; no compiler or runtime has been tested."

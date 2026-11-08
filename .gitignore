@@ -1,0 +1,25 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+!.env.example
+
+# Rust prototypes and test harnesses
+target/
+**/target/
+.cache/
+**/.cache/
+
+# Python docs tooling
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Measurements and local machine state
+bench-local/
+evidence/local/
