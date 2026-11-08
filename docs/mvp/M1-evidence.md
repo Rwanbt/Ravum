@@ -27,9 +27,9 @@ Résultat observé : **51 tests, 51 réussis, 0 échec, 0 ignoré.**
 | `ravum-protocol` (unitaires) | 10 | identités, statuts, sérialisation, absence de `PROVED` synthétique |
 | `ravum-snapshot` (unitaires) | 5 | canonicalisation, immuabilité, overlay, staleness |
 | `ravum-rust-adapter` (unitaires) | 3 | parsing des diagnostics JSON de rustc |
-| `ravum-patch-host` (unitaires) | 3 | reclamation hors thread appelant |
-| `ravum-coordinator` (unitaires) | 12 | file coalescente, verdict `Stale`, ordre des étapes |
-| `ravum-workspace-coordinator` (unitaires) | 11 | parseur de diff, décisions, journal |
+| `ravum-patch-host` (unitaires) | 1 | reclamation hors thread appelant |
+| `ravum-coordinator` (unitaires) | 3 | file coalescente, verdict `Stale` |
+| `ravum-workspace-coordinator` (unitaires) | 12 | parseur de diff, décisions, journal |
 | `collab_flow` (intégration) | 3 | COLLAB-1 → compilation → activation réelle |
 | `m1_patch_loop` (intégration) | 10 | activation compatible + 7 refus + appel en vol + STALE |
 | `git_writer` (intégration) | 2 | commit des seuls chemins intégrés, refus du vide |
