@@ -65,6 +65,10 @@ pub struct BuildOutput {
     pub target: String,
     pub flags: Vec<String>,
     pub build_ms: u64,
+    /// True when the artifact was reused from the on-disk build cache instead of
+    /// invoking `rustc` again. Never implies that analysis was skipped.
+    #[serde(default)]
+    pub cached_build: bool,
     pub diagnostics: DiagnosticSet,
 }
 
@@ -124,6 +128,9 @@ pub struct StageTimings {
     pub activate_ms: u64,
     /// Contract smoke test executed on the candidate artifact.
     pub verify_ms: u64,
+    /// Obligation checking through the proof broker (may be served from cache).
+    #[serde(default)]
+    pub proof_ms: u64,
     /// Sum of every stage above.
     pub total_ms: u64,
 }
@@ -193,6 +200,7 @@ mod tests {
             target: "x86_64-pc-windows-msvc".into(),
             flags: vec![],
             build_ms: 1,
+            cached_build: false,
             diagnostics: diags,
         };
         assert!(out.is_current_for(&SnapshotId::new("s1")));

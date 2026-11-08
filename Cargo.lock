@@ -108,6 +108,7 @@ version = "0.1.0"
 dependencies = [
  "ravum-coordinator",
  "ravum-patch-host",
+ "ravum-proof",
  "ravum-protocol",
  "ravum-rust-adapter",
  "ravum-snapshot",
@@ -121,6 +122,7 @@ name = "ravum-coordinator"
 version = "0.1.0"
 dependencies = [
  "ravum-patch-host",
+ "ravum-proof",
  "ravum-protocol",
  "ravum-rust-adapter",
  "ravum-snapshot",
@@ -147,6 +149,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-proof"
+version = "0.1.0"
+dependencies = [
+ "ravum-patch-host",
+ "ravum-protocol",
+ "ravum-rust-adapter",
+ "ravum-snapshot",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ravum-protocol"
 version = "0.1.0"
 dependencies = [
@@ -161,6 +175,7 @@ version = "0.1.0"
 dependencies = [
  "ravum-protocol",
  "ravum-snapshot",
+ "serde",
  "serde_json",
 ]
 

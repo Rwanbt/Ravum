@@ -82,7 +82,13 @@ fn integrate(args: &[String]) -> i32 {
             return 2;
         }
     };
-    let mut coordinator = Coordinator::new(base);
+    let mut coordinator = match Coordinator::new(base).with_journal(journal_path.clone()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("cannot open journal {}: {e}", journal_path.display());
+            return 2;
+        }
+    };
     let initial = coordinator.current_id();
 
     let mut decisions: Vec<ProposalDecision> = Vec::new();
@@ -96,6 +102,11 @@ fn integrate(args: &[String]) -> i32 {
             }
         };
         let decision = coordinator.submit(&proposal);
+        if let Some(err) = coordinator.journal_error() {
+            eprintln!("journal write failed: {err}");
+            eprintln!("aborting: a decision that cannot be recorded must not be acted upon further");
+            return 2;
+        }
         summary.record(&decision);
         if !json {
             println!(
@@ -119,8 +130,6 @@ fn integrate(args: &[String]) -> i32 {
         );
         println!("snapshot {} -> {}", initial.short(), coordinator.current_id().short());
     }
-
-    write_journal(&journal_path, &coordinator);
 
     if args.iter().any(|a| a == "--commit") {
         if let Err(e) = commit(&workspace, &coordinator, args) {
@@ -205,22 +214,6 @@ fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Resul
         .map_err(|e| e.to_string())?;
     println!("committed {} (parent {})", &result.sha[..12.min(result.sha.len())], &result.parent[..12.min(result.parent.len())]);
     Ok(())
-}
-
-fn write_journal(path: &Path, coordinator: &Coordinator) {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut text = String::new();
-    for entry in coordinator.journal() {
-        if let Ok(line) = serde_json::to_string(entry) {
-            text.push_str(&line);
-            text.push('\n');
-        }
-    }
-    if let Err(e) = std::fs::write(path, text) {
-        eprintln!("cannot write journal {}: {e}", path.display());
-    }
 }
 
 fn read_workspace(root: &Path) -> std::io::Result<SourceSnapshot> {

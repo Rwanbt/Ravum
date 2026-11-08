@@ -126,6 +126,22 @@ pub fn watch(args: &[String]) -> u8 {
         }
 
         record(&report, pid, activations, refusals, stale, json_out);
+        if report.activated() {
+            if let Some(active) = report.artifact_path() {
+                match ravum_coordinator::prune_artifacts(
+                    &work_dir().join("artifacts"),
+                    8,
+                    Some(Path::new(active)),
+                ) {
+                    Ok(retention) if !retention.removed.is_empty() => eprintln!(
+                        "retention: {} old artifact(s) removed, active kept",
+                        retention.removed.len()
+                    ),
+                    Ok(_) => {}
+                    Err(e) => eprintln!("retention skipped: {e}"),
+                }
+            }
+        }
         if activations >= max_activations {
             // Keep the demonstration honest and legible: show a few ticks produced
             // by the newly activated version before stopping.

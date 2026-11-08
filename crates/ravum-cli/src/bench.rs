@@ -1,7 +1,6 @@
 //! `ravum bench` — measure every stage of the loop separately, honestly labelled.
 
-use crate::commands::{flag, flag_u64, load_snapshot, pipeline, positional, work_dir};
-use crate::metrics::{env_info, stats, working_set_bytes};
+use crate::commands::{flag, flag_u64, load_snapshot, pipeline, positional, work_dir};use crate::metrics::{env_info, stats, working_set_bytes};
 use ravum_coordinator::{LoopOutcome, LoopReport, Pipeline};
 use ravum_patch_host::{ExpectedAbi, PatchHost};
 use ravum_snapshot::SourceSnapshot;
@@ -21,7 +20,7 @@ pub fn bench(args: &[String]) -> u8 {
         eprintln!("cannot read both benchmark sources");
         return 2;
     };
-    let pipeline = pipeline();
+    let pipeline = pipeline().without_artifact_cache();
     let rustc = pipeline
         .adapter()
         .toolchain()
@@ -42,6 +41,8 @@ pub fn bench(args: &[String]) -> u8 {
     }
 
     let memory_after = working_set_bytes();
+    // Measured after the loop: representative of the conditions the loop ran in.
+    let calibration = rustc_spawn_calibration(&pipeline, 5);
     let activated = samples.iter().filter(|s| s.activated).count() as u64;
     let refused = iterations - activated;
     let payload = json!({
@@ -73,6 +74,11 @@ pub fn bench(args: &[String]) -> u8 {
                 _ => None,
             },
         },
+        "calibration": {
+            "rustc_spawn_ms": stats(&calibration),
+            "note": "median wall time of a bare `rustc -vV` spawn, measured in the same run: it characterises machine load, not rustc's analysis cost"
+        },
+        "artifact_cache": "disabled for this run: every build is a real rustc invocation",
         "samples": samples.iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "limits": [
             "caller-side and OBSERVED numbers on the machine described in env/machine; not portable guarantees",
@@ -105,6 +111,14 @@ pub fn bench(args: &[String]) -> u8 {
     if let (Some(before), Some(after)) = (memory_before, memory_after) {
         println!("  memory    before={}KiB after={}KiB", before / 1024, after / 1024);
     }
+    if !calibration.is_empty() {
+        let mut sorted = calibration.clone();
+        sorted.sort_unstable();
+        println!(
+            "  calibration rustc spawn: p50={}ms (machine load indicator)",
+            sorted[sorted.len() / 2]
+        );
+    }
     if refused == 0 {
         0
     } else {
@@ -112,8 +126,20 @@ pub fn bench(args: &[String]) -> u8 {
     }
 }
 
-fn bootstrap(pipeline: &Pipeline, source: &SourceSnapshot) -> Option<PatchHost> {
-    let warm = pipeline.prepare_candidate(source, &|| source.id().clone());
+/// Machine-load calibration: how long a bare `rustc` process takes to start and
+/// answer. This is the floor any "check" measurement is built on.
+fn rustc_spawn_calibration(_pipeline: &Pipeline, samples: usize) -> Vec<u64> {
+    let rustc = std::env::var("RAVUM_RUSTC").unwrap_or_else(|_| "rustc".to_owned());
+    let mut out = Vec::with_capacity(samples);
+    for _ in 0..samples {
+        let started = std::time::Instant::now();
+        let _ = std::process::Command::new(&rustc).arg("-vV").output();
+        out.push(started.elapsed().as_millis() as u64);
+    }
+    out
+}
+
+fn bootstrap(pipeline: &Pipeline, source: &SourceSnapshot) -> Option<PatchHost> {    let warm = pipeline.prepare_candidate(source, &|| source.id().clone());
     if !matches!(warm.outcome, LoopOutcome::CandidateReady) {
         eprintln!("bootstrap refused: {:?}", warm.outcome);
         return None;

@@ -3,6 +3,7 @@
 use crate::hostproc::HostProc;
 use ravum_coordinator::Pipeline;
 use ravum_patch_host::{inspect_artifact, ExpectedAbi};
+use ravum_proof::{Claim, EvidenceLedger, ExhaustiveVerifier, Obligation, ProofBroker};
 use ravum_protocol::DiagnosticSet;
 use ravum_snapshot::SourceSnapshot;
 use std::path::{Path, PathBuf};
@@ -287,9 +288,194 @@ pub fn run(args: &[String]) -> u8 {
     0
 }
 
+/// `ravum prove` — check one obligation on a freshly built artifact and record
+/// the verdict in the append-only ledger.
+pub fn prove(args: &[String]) -> u8 {
+    let Some(file) = positional(args, 0) else {
+        eprintln!(
+            "usage: ravum prove <file.rs> [--claim finite|deterministic|non-negative|monotonic|equals] [--equals V] [--inputs a,b,c] [--timeout-ms N] [--ledger PATH] [--json]"
+        );
+        return 2;
+    };
+    let Some(claim) = parse_claim(args) else {
+        eprintln!("invalid --claim or missing --equals value");
+        return 2;
+    };
+    let inputs = match parse_inputs(args) {
+        Some(v) if !v.is_empty() => v,
+        _ => {
+            eprintln!("invalid --inputs: expected a comma-separated list of finite numbers");
+            return 2;
+        }
+    };
+    let timeout = Duration::from_millis(flag_u64(args, "--timeout-ms", 30_000));
+    let ledger_path = flag(args, "--ledger")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| work_dir().join("evidence-ledger.jsonl"));
+
+    let snapshot = match load_snapshot(&file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{e}");
+            return 2;
+        }
+    };
+    let pipeline = pipeline();
+    match pipeline.analyze(&snapshot) {
+        Ok(check) if check.diagnostics.has_errors() => {
+            eprintln!("{}", render_diagnostics(&check.diagnostics));
+            eprintln!("refused: analysis reported errors, nothing was built");
+            return 1;
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("adapter error: {e}");
+            return 2;
+        }
+    }
+    let built = match pipeline.build(&snapshot) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("adapter error: {e}");
+            return 2;
+        }
+    };
+    if !built.success {
+        eprintln!("refused: build failed");
+        return 1;
+    }
+
+    let ledger = match EvidenceLedger::open(&ledger_path) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("{}", e);
+            return 2;
+        }
+    };
+    let mut broker = ProofBroker::new(Box::new(ExhaustiveVerifier::with_timeout(timeout)), ledger);
+    let ctx = broker.context_for(&built.build);
+    let obligation = Obligation::new("cli.obligation", claim, inputs);
+    let result = match broker.prove(Path::new(&built.build.artifact_path), &obligation, &ctx) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{}", e);
+            return 2;
+        }
+    };
+    let record = &result.record;
+
+    if has(args, "--json") {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "status": record.status.as_str(),
+                "passed": record.passed,
+                "authorizes_activation": record.authorizes_activation(),
+                "from_cache": result.from_cache,
+                "verification_key": result.key,
+                "property": record.property,
+                "counterexample": record.counterexample,
+                "assumptions": record.assumptions,
+                "artifact_id": record.artifact_id,
+                "ledger": ledger_path,
+            }))
+            .unwrap()
+        );
+    } else {
+        println!("property      {}", record.property);
+        println!("status        {}", record.status.as_str());
+        println!("passed        {}", record.passed);
+        println!("from_cache    {}", result.from_cache);
+        println!("artifact_id   {}", record.artifact_id.short());
+        println!("ledger        {}", ledger_path.display());
+        if let Some(ce) = &record.counterexample {
+            println!("counterexample {ce}");
+        }
+        println!(
+            "note          a bounded domain proves only that domain; this is not a general proof"
+        );
+    }
+    if record.authorizes_activation() {
+        0
+    } else {
+        1
+    }
+}
+
+fn parse_claim(args: &[String]) -> Option<Claim> {
+    match flag(args, "--claim").as_deref().unwrap_or("finite") {
+        "finite" => Some(Claim::Finite),
+        "deterministic" => Some(Claim::Deterministic),
+        "non-negative" | "non_negative" => Some(Claim::NonNegative),
+        "monotonic" | "monotonic-non-decreasing" => Some(Claim::MonotonicNonDecreasing),
+        "equals" | "equal" => flag(args, "--equals")
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|expected| Claim::Equals { expected }),
+        _ => None,
+    }
+}
+
+fn parse_inputs(args: &[String]) -> Option<Vec<f64>> {
+    match flag(args, "--inputs") {
+        None => Some(vec![0.0, 1.0, -1.0, 2.5]),
+        Some(raw) => raw
+            .split(',')
+            .map(|part| part.trim().parse::<f64>().ok().filter(|v| v.is_finite()))
+            .collect(),
+    }
+}
+
+/// `ravum artifacts` — list or prune built artifacts. Legacy files are removed,
+/// the newest survive; the caller can name the active artifact to protect it.
+pub fn artifacts(args: &[String]) -> u8 {
+    let dir = work_dir().join("artifacts");
+    if !dir.is_dir() {
+        eprintln!("no artifacts directory at {}", dir.display());
+        return 1;
+    }
+    let keep = flag_u64(args, "--keep", 5) as usize;
+    let active = flag(args, "--active").map(PathBuf::from);
+
+    if has(args, "--prune") {
+        match ravum_coordinator::prune_artifacts(&dir, keep, active.as_deref()) {
+            Ok(report) => {
+                if has(args, "--json") {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "kept": report.kept,
+                            "removed": report.removed,
+                            "cache_entries_removed": report.cache_entries_removed,
+                        }))
+                        .unwrap()
+                    );
+                } else {
+                    println!("kept    {}", report.kept.len());
+                    println!("removed {}", report.removed.len());
+                    println!("cache entries removed {}", report.cache_entries_removed);
+                }
+                0
+            }
+            Err(e) => {
+                eprintln!("prune failed: {e}");
+                2
+            }
+        }
+    } else {
+        let mut entries: Vec<_> = std::fs::read_dir(&dir)
+            .map(|rd| rd.filter_map(Result::ok).map(|e| e.path()).collect())
+            .unwrap_or_default();
+        entries.sort();
+        for path in entries {
+            let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            println!("{:>10}  {}", size, path.display());
+        }
+        0
+    }
+}
+
 pub fn status(args: &[String]) -> u8 {
-    let path = state_path();
-    let Ok(text) = std::fs::read_to_string(&path) else {
+    let path = state_path();    let Ok(text) = std::fs::read_to_string(&path) else {
         eprintln!("no recorded state at {}", path.display());
         return 1;
     };
