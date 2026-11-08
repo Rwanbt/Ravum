@@ -73,6 +73,18 @@ pub enum ParseError {
     Malformed(String),
 }
 
+/// Diagnostic aid, disabled by default. `RAVUM_TODO_HTTP_DEBUG=1` prints the raw
+/// request bytes whenever parsing fails; the browser E2E harness uses it to explain
+/// intermittent malformed requests instead of guessing.
+fn debug_raw(tag: &str, bytes: &[u8]) {
+    if std::env::var_os("RAVUM_TODO_HTTP_DEBUG").is_some() {
+        eprintln!(
+            "ravum-todo http debug [{tag}]: {:?}",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+}
+
 /// Read one request. Returns `Ok(None)` on a clean EOF before any byte.
 pub fn read_request(stream: &TcpStream) -> Result<Option<Request>, ParseError> {
     let mut reader = BufReader::new(stream);
@@ -81,17 +93,26 @@ pub fn read_request(stream: &TcpStream) -> Result<Option<Request>, ParseError> {
 
     loop {
         let mut line = String::new();
-        let read = reader
-            .read_line(&mut line)
-            .map_err(|e| ParseError::Malformed(e.to_string()))?;
+        let read = reader.read_line(&mut line).map_err(|e| {
+            if std::env::var_os("RAVUM_TODO_HTTP_DEBUG").is_some() {
+                eprintln!(
+                    "ravum-todo http debug [read_line-error] peer={:?} error={e} raw={:?}",
+                    stream.peer_addr(),
+                    String::from_utf8_lossy(&header_block)
+                );
+            }
+            ParseError::Malformed(e.to_string())
+        })?;
         if read == 0 {
             if header_block.is_empty() {
                 return Ok(None);
             }
+            debug_raw("incomplete-headers", &header_block);
             return Err(ParseError::Incomplete);
         }
         total += read;
         if total > MAX_HEADER_BYTES {
+            debug_raw("headers-too-large", &header_block);
             return Err(ParseError::TooLarge);
         }
         if line == "\r\n" || line == "\n" {
@@ -100,27 +121,37 @@ pub fn read_request(stream: &TcpStream) -> Result<Option<Request>, ParseError> {
         header_block.extend_from_slice(line.as_bytes());
     }
 
-    let text = String::from_utf8(header_block)
-        .map_err(|_| ParseError::Malformed("headers are not UTF-8".to_owned()))?;
+    let text = String::from_utf8(header_block.clone()).map_err(|_| {
+        debug_raw("non-utf8-headers", &header_block);
+        ParseError::Malformed("headers are not UTF-8".to_owned())
+    })?;
     let mut lines = text.lines();
-    let request_line = lines
-        .next()
-        .ok_or_else(|| ParseError::Malformed("missing request line".to_owned()))?;
+    let request_line = lines.next().ok_or_else(|| {
+        debug_raw("missing-request-line", text.as_bytes());
+        ParseError::Malformed("missing request line".to_owned())
+    })?;
     let mut parts = request_line.split_whitespace();
     let method = parts
         .next()
-        .ok_or_else(|| ParseError::Malformed("missing method".to_owned()))?
+        .ok_or_else(|| {
+            debug_raw("missing-method", text.as_bytes());
+            ParseError::Malformed("missing method".to_owned())
+        })?
         .to_uppercase();
     let path = parts
         .next()
-        .ok_or_else(|| ParseError::Malformed("missing path".to_owned()))?
+        .ok_or_else(|| {
+            debug_raw("missing-path", text.as_bytes());
+            ParseError::Malformed("missing path".to_owned())
+        })?
         .to_owned();
 
     let mut headers = Vec::new();
     for line in lines {
-        let (name, value) = line
-            .split_once(':')
-            .ok_or_else(|| ParseError::Malformed(format!("bad header line: {line:?}")))?;
+        let (name, value) = line.split_once(':').ok_or_else(|| {
+            debug_raw("bad-header-line", text.as_bytes());
+            ParseError::Malformed(format!("bad header line: {line:?}"))
+        })?;
         headers.push((name.trim().to_owned(), value.trim().to_owned()));
     }
 
@@ -136,13 +167,15 @@ pub fn read_request(stream: &TcpStream) -> Result<Option<Request>, ParseError> {
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(0);
     if length > MAX_BODY_BYTES {
+        debug_raw("body-too-large", text.as_bytes());
         return Err(ParseError::TooLarge);
     }
     if length > 0 {
         let mut body = vec![0u8; length];
-        reader
-            .read_exact(&mut body)
-            .map_err(|e| ParseError::Malformed(e.to_string()))?;
+        reader.read_exact(&mut body).map_err(|e| {
+            debug_raw("short-body", text.as_bytes());
+            ParseError::Malformed(e.to_string())
+        })?;
         request.body = body;
     }
     Ok(Some(request))
@@ -162,14 +195,26 @@ pub fn write_response(stream: &mut TcpStream, response: &Response) -> std::io::R
         500 => "Internal Server Error",
         _ => "Unknown",
     };
-    let mut head = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        response.status,
-        reason,
-        response.content_type,
-        response.body.len()
-    )
-    .into_bytes();
+    // RFC 7230 §3.3.2: a 204 response MUST NOT carry Content-Length (nor a body).
+    // Sending `Content-Length: 0` made Chromium report the completed DELETE as
+    // `net::ERR_ABORTED` (canceled=true) in the CDP browser harness; omitting the
+    // entity headers makes the 204 spec-compliant and the request clean.
+    let mut head = if response.status == 204 {
+        format!(
+            "HTTP/1.1 {} {}\r\nConnection: close\r\n\r\n",
+            response.status, reason
+        )
+        .into_bytes()
+    } else {
+        format!(
+            "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            response.status,
+            reason,
+            response.content_type,
+            response.body.len()
+        )
+        .into_bytes()
+    };
     head.extend_from_slice(&response.body);
     stream.write_all(&head)?;
     stream.flush()
