@@ -52,7 +52,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | MVP-0b : daemon persistant (L2) | **Implémenté et mesuré** : cache de verdicts (contenu identique ≈ 0 ms), rejet des résultats périmés, annulation réelle ; gain incrémental seulement au-delà de ~1 000 lignes |
 | MVP-0b : Git transactionnel (L1) | **Implémenté** : index isolé, `commit-tree`, `update-ref` CAS, hooks honorés, journal durable ; 16 tests négatifs |
 | MVP-0b : COLLAB-4 (collaboration ↔ daemon) | **Implémenté et mesuré** : une modification acceptée n'analyse que son unité + ses dépendants ; unité indépendante jamais analysée ; rejeu servi par cache (0 `rustc`) |
-| MVP-0b : P0-H — rétention du daemon | **GC borné** : politique explicite (`keep_recent`, plafonds, `dry_run`), protections du contenu vivant, −66 % de disque sur 40 éditions réelles, aucun résultat valide invalidé |
+| MVP-0b : P0-H — rétention du daemon | **GC borné** : politique explicite (`keep_recent`, plafonds, `dry_run`), protections du contenu vivant, −66 % de disque sur 40 éditions réelles, aucun résultat valide invalidé ; **GC automatique opt-in** (12 collectes, disque borné à ~70 Ko contre 210 Ko sans collecte) |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
 Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
