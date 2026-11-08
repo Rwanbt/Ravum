@@ -17,6 +17,7 @@ mod gc;
 mod harness;
 mod invariants;
 mod scale;
+mod soak;
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,16 @@ struct Args {
     out_invariants: PathBuf,
     out_gc: PathBuf,
     gc_edits: usize,
+    out_soak: PathBuf,
+    soak_requests: usize,
+    soak_seconds: u64,
+    soak_pace_ms: u64,
+    soak_sample_every: usize,
+    soak_control_requests: usize,
+    soak_control_seconds: u64,
+    soak_control_pace_ms: u64,
+    soak_min_total_bytes: u64,
+    soak_max_total_bytes: u64,
     clean: bool,
 }
 
@@ -94,6 +105,16 @@ fn main() {
             Ok(valid) => invalid |= !valid,
             Err(error) => {
                 eprintln!("gc suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "soak" | "all" => match soak_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("soak suite failed: {error}");
                 std::process::exit(1);
             }
         },
@@ -227,6 +248,58 @@ fn gc_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     Ok(ok)
 }
 
+fn soak_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "soak: auto campaign {} requests / {} s (pace {} ms) + control campaign {} requests / {} s (pace {} ms)",
+        args.soak_requests,
+        args.soak_seconds,
+        args.soak_pace_ms,
+        args.soak_control_requests,
+        args.soak_control_seconds,
+        args.soak_control_pace_ms
+    );
+    let value = soak::run(&soak::SoakOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("soak-suite"),
+        requests: args.soak_requests,
+        seconds: args.soak_seconds,
+        pace_ms: args.soak_pace_ms,
+        sample_every: args.soak_sample_every,
+        control_requests: args.soak_control_requests,
+        control_seconds: args.soak_control_seconds,
+        control_pace_ms: args.soak_control_pace_ms,
+        min_total_bytes: args.soak_min_total_bytes,
+        max_total_bytes: args.soak_max_total_bytes,
+    })?;
+    soak::write(&args.out_soak, &value)?;
+    let auto = &value["auto"];
+    let control = &value["control"];
+    println!(
+        "  auto: requests={} duration={}s failures={} latency p50={}ms p95={}ms auto_runs={} auto_failures={} disk {}->{}B (max {}) rss drift={}B journal={}",
+        auto["requests"], auto["duration_s"], auto["failures"],
+        auto["latency_ms"]["p50"], auto["latency_ms"]["p95"],
+        auto["auto_gc"]["runs"], auto["auto_gc"]["failures"],
+        auto["disk_bytes"]["start"], auto["disk_bytes"]["end"], auto["disk_bytes"]["max"],
+        auto["rss_bytes"]["drift"], auto["journal_lines"]
+    );
+    println!(
+        "  control: requests={} duration={}s failures={} latency p50={}ms p95={}ms disk {}->{}B (max {}) rss drift={}B",
+        control["requests"], control["duration_s"], control["failures"],
+        control["latency_ms"]["p50"], control["latency_ms"]["p95"],
+        control["disk_bytes"]["start"], control["disk_bytes"]["end"], control["disk_bytes"]["max"],
+        control["rss_bytes"]["drift"]
+    );
+    println!(
+        "  verification: recent_hit={} old_success={} settled={} valid={}",
+        auto["verification"]["recent"]["hit_without_compiler"],
+        auto["verification"]["old"]["success"],
+        auto["settled"],
+        value["valid"]
+    );
+    println!("written: {}", args.out_soak.display());
+    Ok(value["valid"].as_bool().unwrap_or(false))
+}
+
 fn invariants_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     println!("invariants: negative/boundary checks");
     let value = invariants::run(&invariants::InvariantOptions {
@@ -336,6 +409,18 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             .join("evidence")
             .join("mvp0b-daemon-gc-2026-11-08.json"),
         gc_edits: 40,
+        out_soak: repo_root
+            .join("evidence")
+            .join("mvp0b-daemon-gc-auto-2026-11-08.json"),
+        soak_requests: 150,
+        soak_seconds: 480,
+        soak_pace_ms: 1900,
+        soak_sample_every: 5,
+        soak_control_requests: 40,
+        soak_control_seconds: 120,
+        soak_control_pace_ms: 800,
+        soak_min_total_bytes: 180_000,
+        soak_max_total_bytes: 120_000,
         clean: true,
     };
     let mut index = 1;
@@ -372,6 +457,52 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
                     .parse()
                     .map_err(|_| "--gc-edits must be an integer".to_owned())?
             }
+            "--out-soak" => args.out_soak = PathBuf::from(take("--out-soak")?),
+            "--soak-requests" => {
+                args.soak_requests = take("--soak-requests")?
+                    .parse()
+                    .map_err(|_| "--soak-requests must be an integer".to_owned())?
+            }
+            "--soak-seconds" => {
+                args.soak_seconds = take("--soak-seconds")?
+                    .parse()
+                    .map_err(|_| "--soak-seconds must be an integer".to_owned())?
+            }
+            "--soak-pace-ms" => {
+                args.soak_pace_ms = take("--soak-pace-ms")?
+                    .parse()
+                    .map_err(|_| "--soak-pace-ms must be an integer".to_owned())?
+            }
+            "--soak-sample-every" => {
+                args.soak_sample_every = take("--soak-sample-every")?
+                    .parse()
+                    .map_err(|_| "--soak-sample-every must be an integer".to_owned())?
+            }
+            "--soak-control-requests" => {
+                args.soak_control_requests = take("--soak-control-requests")?
+                    .parse()
+                    .map_err(|_| "--soak-control-requests must be an integer".to_owned())?
+            }
+            "--soak-control-seconds" => {
+                args.soak_control_seconds = take("--soak-control-seconds")?
+                    .parse()
+                    .map_err(|_| "--soak-control-seconds must be an integer".to_owned())?
+            }
+            "--soak-control-pace-ms" => {
+                args.soak_control_pace_ms = take("--soak-control-pace-ms")?
+                    .parse()
+                    .map_err(|_| "--soak-control-pace-ms must be an integer".to_owned())?
+            }
+            "--soak-min-total-bytes" => {
+                args.soak_min_total_bytes = take("--soak-min-total-bytes")?
+                    .parse()
+                    .map_err(|_| "--soak-min-total-bytes must be an integer".to_owned())?
+            }
+            "--soak-max-total-bytes" => {
+                args.soak_max_total_bytes = take("--soak-max-total-bytes")?
+                    .parse()
+                    .map_err(|_| "--soak-max-total-bytes must be an integer".to_owned())?
+            }
             "--no-clean" => args.clean = false,
             "--help" | "-h" => {
                 return Err("help requested".to_owned());
@@ -382,7 +513,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
     }
     if !matches!(
         args.suite.as_str(),
-        "all" | "campaign" | "scale" | "invariants" | "gc" | "validate"
+        "all" | "campaign" | "scale" | "invariants" | "gc" | "soak" | "validate"
     ) {
         return Err(format!("unknown suite {:?}", args.suite));
     }

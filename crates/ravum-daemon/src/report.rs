@@ -4,6 +4,7 @@
 //! guard: only `fresh` reports carry diagnostics that the caller may treat as
 //! current.
 
+use crate::auto_gc::AutoGcStats;
 use crate::cache::CacheReport;
 use crate::config::{ToolchainInfo, DAEMON_SCHEMA_VERSION};
 use crate::diagnostics::Diagnostic;
@@ -122,6 +123,19 @@ impl AnalysisReport {
     }
 }
 
+/// Result of the last automatic background GC attempt.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutoGcLast {
+    pub at_unix: u64,
+    pub duration_ms: u64,
+    pub freed_bytes: u64,
+    pub total_before_bytes: u64,
+    pub total_after_bytes: u64,
+    pub deleted_entries: u64,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
 /// Cumulative daemon counters. Only observed facts: no estimated savings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DaemonStats {
@@ -146,6 +160,9 @@ pub struct DaemonStats {
     pub gc_freed_bytes: u64,
     /// Cache entries / snapshots / build contexts removed by GC.
     pub gc_deleted_entries: u64,
+    /// Automatic background GC counters and last attempt. Disabled by default.
+    #[serde(default)]
+    pub auto_gc: AutoGcStats,
 }
 
 impl DaemonStats {

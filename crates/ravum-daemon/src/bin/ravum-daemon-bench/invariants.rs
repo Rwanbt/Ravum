@@ -264,6 +264,7 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
             poll_interval_ms: 2,
             analysis_timeout_ms: 60_000,
             toolchain_override: Some(simulated),
+            auto_gc: ravum_daemon::AutoGcPolicy::default(),
         })
         .map_err(|error| format!("cannot open toolchain daemon: {error}"))?;
         let first = suite.daemon_analyze(&other, "toolchain-a", &base)?;
@@ -575,6 +576,7 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
             poll_interval_ms: 2,
             analysis_timeout_ms: 60_000,
             toolchain_override: None,
+            auto_gc: ravum_daemon::AutoGcPolicy::default(),
         })
         .map_err(|error| format!("cannot open memory daemon: {error}"))?;
         let mut state = base.clone();
@@ -618,6 +620,7 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
             poll_interval_ms: 1,
             analysis_timeout_ms: 1,
             toolchain_override: None,
+            auto_gc: ravum_daemon::AutoGcPolicy::default(),
         })
         .map_err(|error| format!("cannot open timeout daemon: {error}"))?;
         let report = suite.daemon_analyze(&daemon_timeout, "timeout", &base)?;

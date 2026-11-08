@@ -77,6 +77,43 @@ fn main() {
                 Some(value) => config.poll_interval_ms = value,
                 None => usage_exit("--poll-interval-ms needs an integer"),
             },
+            // --- automatic background GC (opt-in, disabled by default) ---
+            "--auto-gc" => config.auto_gc.enabled = true,
+            "--auto-gc-check-every" => match args.next().and_then(|value| value.parse().ok()) {
+                Some(value) => config.auto_gc.check_every_requests = value,
+                None => usage_exit("--auto-gc-check-every needs an integer >= 1"),
+            },
+            "--auto-gc-min-total-bytes" => match args.next().and_then(|value| value.parse().ok()) {
+                Some(value) => config.auto_gc.min_total_bytes = Some(value),
+                None => usage_exit("--auto-gc-min-total-bytes needs an integer"),
+            },
+            "--auto-gc-max-total-bytes" => match args.next().and_then(|value| value.parse().ok()) {
+                Some(value) => config.auto_gc.max_total_bytes = Some(value),
+                None => usage_exit("--auto-gc-max-total-bytes needs an integer"),
+            },
+            "--auto-gc-keep-recent" => match args.next().and_then(|value| value.parse().ok()) {
+                Some(value) => config.auto_gc.keep_recent = value,
+                None => usage_exit("--auto-gc-keep-recent needs an integer >= 1"),
+            },
+            "--auto-gc-idle-only" => config.auto_gc.idle_only = true,
+            "--auto-gc-max-cache-bytes" => {
+                match args.next().and_then(|value| value.parse().ok()) {
+                    Some(value) => config.auto_gc.max_cache_bytes = Some(value),
+                    None => usage_exit("--auto-gc-max-cache-bytes needs an integer"),
+                }
+            }
+            "--auto-gc-max-snapshot-bytes" => {
+                match args.next().and_then(|value| value.parse().ok()) {
+                    Some(value) => config.auto_gc.max_snapshot_bytes = Some(value),
+                    None => usage_exit("--auto-gc-max-snapshot-bytes needs an integer"),
+                }
+            }
+            "--auto-gc-max-incremental-bytes" => {
+                match args.next().and_then(|value| value.parse().ok()) {
+                    Some(value) => config.auto_gc.max_incremental_bytes = Some(value),
+                    None => usage_exit("--auto-gc-max-incremental-bytes needs an integer"),
+                }
+            }
             // --- one-shot GC options ---
             "--gc" => gc_mode = true,
             "--policy" => match args.next() {
@@ -166,6 +203,10 @@ fn main() {
             break;
         }
     }
+    // Clean shutdown: stop the automatic-GC maintenance thread and let a pending
+    // collection finish before the process exits (bounded wait).
+    daemon.shutdown_auto_gc();
+    let _ = daemon.wait_auto_gc_idle(5000);
 }
 
 fn policy_flags_empty(overrides: &PolicyFlags) -> bool {
@@ -508,6 +549,16 @@ fn print_help_exit_ok() -> ! {
          \x20 --max-cache-entries N         in-memory verdict cache size (default 256)\n\
          \x20 --analysis-timeout-ms N       hard cap for one compiler run (default 30000)\n\
          \x20 --poll-interval-ms N          cancellation polling interval (default 2)\n\
+         \n\
+         Automatic background GC (opt-in; one maintenance thread, never on the analysis path):\n\
+         \x20 --auto-gc                     enable automatic retention GC\n\
+         \x20 --auto-gc-check-every N       evaluate the threshold every N analyses (default 20)\n\
+         \x20 --auto-gc-min-total-bytes N   trigger when the collected state reaches N bytes\n\
+         \x20 --auto-gc-max-total-bytes N   target cap passed to the bounded GC (< trigger)\n\
+         \x20 --auto-gc-keep-recent N       recent served contents never deleted (default 8)\n\
+         \x20 --auto-gc-idle-only           collect only while no analysis is in flight\n\
+         \x20 --auto-gc-max-cache-bytes N / --auto-gc-max-snapshot-bytes N /\n\
+         \x20 --auto-gc-max-incremental-bytes N   category caps for the automatic pass\n\
          \n\
          One-shot retention GC (explicit; exits after writing one JSON report):\n\
          \x20 --gc                          run one GC pass instead of starting the server\n\

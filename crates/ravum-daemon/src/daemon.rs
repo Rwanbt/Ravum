@@ -14,10 +14,13 @@
 //!
 //! The daemon owns its working directory; it never writes a user file.
 
+use crate::auto_gc::{
+    AutoGcDecision, AutoGcPolicy, AutoGcRuntime, AutoGcStats,
+};
 use crate::cache::{CacheKind, CacheLookupKey, CacheReport, CachedVerdict, LookupOutcome, ResultCache};
 use crate::config::{BuildContext, DaemonConfig, Priority, ToolchainInfo};
 use crate::diagnostics::parse_rustc_json;
-use crate::error::Result;
+use crate::error::{DaemonError, Result};
 use crate::fsutil::safe_join;
 use crate::gate::JobGate;
 use crate::gc::{
@@ -29,7 +32,8 @@ use crate::rustc_driver::{incremental_dir, out_dir, unit_dir, DriverOptions, Rus
 use crate::snapshot::{sync_unit_dir, AnalysisRequest, SnapshotIdentity, SnapshotStore};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock, TryLockError};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock, TryLockError, Weak};
 use std::time::{Duration, Instant};
 
 /// Short form of a build-context identity, used in directory names and GC reports.
@@ -42,6 +46,24 @@ fn context_short(context_id: &str) -> String {
 #[derive(Clone)]
 pub struct Daemon {
     inner: Arc<Inner>,
+}
+
+/// RAII counter of in-flight analyses (used by the `idle_only` auto-GC decision).
+struct ActiveAnalysisGuard<'a> {
+    counter: &'a AtomicUsize,
+}
+
+impl<'a> ActiveAnalysisGuard<'a> {
+    fn new(counter: &'a AtomicUsize) -> Self {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Self { counter }
+    }
+}
+
+impl Drop for ActiveAnalysisGuard<'_> {
+    fn drop(&mut self) {
+        self.counter.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 struct Inner {
@@ -62,6 +84,11 @@ struct Inner {
     /// Recently served analyses (in memory + persisted hints). Used by GC to
     /// protect live content, including from a one-shot process after shutdown.
     retention: Mutex<RetentionState>,
+    /// Opt-in automatic background GC runtime (maintenance thread). `None` when
+    /// disabled, so the default configuration has no thread and no background cost.
+    auto_gc: Option<Arc<AutoGcRuntime>>,
+    /// Analyses currently in flight (used by `idle_only` decision).
+    active_analyses: AtomicUsize,
 }
 
 impl Daemon {
@@ -81,22 +108,45 @@ impl Daemon {
         let gate = JobGate::new(config.max_concurrent_jobs);
         let driver = RustcDriver::new(config.rustc.clone());
         let retention = RetentionState::load(&work_dir);
-        Ok(Self {
-            inner: Arc::new(Inner {
-                config,
-                toolchain,
-                driver,
-                snapshots,
-                cache,
-                revisions: RevisionTracker::default(),
-                running: RunningJobs::new(),
-                gate,
-                unit_locks: Mutex::new(HashMap::new()),
-                stats: Mutex::new(DaemonStats::default()),
-                io_lock: RwLock::new(()),
-                retention: Mutex::new(retention),
-            }),
-        })
+        // Fail-closed: an invalid automatic GC policy prevents opening the daemon
+        // instead of silently running without the expected retention guarantees.
+        config.auto_gc.validate()?;
+        let auto_gc = if config.auto_gc.enabled {
+            Some(AutoGcRuntime::new(config.auto_gc.clone(), &work_dir)?)
+        } else {
+            None
+        };
+        let inner = Arc::new(Inner {
+            config,
+            toolchain,
+            driver,
+            snapshots,
+            cache,
+            revisions: RevisionTracker::default(),
+            running: RunningJobs::new(),
+            gate,
+            unit_locks: Mutex::new(HashMap::new()),
+            stats: Mutex::new(DaemonStats::default()),
+            io_lock: RwLock::new(()),
+            retention: Mutex::new(retention),
+            auto_gc: auto_gc.clone(),
+            active_analyses: AtomicUsize::new(0),
+        });
+        if let Some(runtime) = auto_gc {
+            // The thread only holds a `Weak` daemon handle: when every `Daemon`
+            // handle is dropped, the upgrade fails and the thread exits, so it
+            // never keeps the daemon (or its files) alive on its own.
+            let weak: Weak<Inner> = Arc::downgrade(&inner);
+            std::thread::Builder::new()
+                .name("ravum-daemon-auto-gc".to_owned())
+                .spawn(move || auto_gc_maintenance(weak, runtime))
+                .map_err(|error| {
+                    DaemonError::internal(format!(
+                        "cannot start automatic GC maintenance thread: {error}"
+                    ))
+                })?;
+        }
+        Ok(Self { inner })
     }
 
     pub fn toolchain(&self) -> &ToolchainInfo {
@@ -135,6 +185,9 @@ impl Daemon {
             .map(|stats| stats.clone())
             .unwrap_or_default();
         stats.peak_active_jobs = stats.peak_active_jobs.max(self.inner.gate.peak() as u64);
+        if let Some(runtime) = &self.inner.auto_gc {
+            stats.auto_gc = runtime.snapshot();
+        }
         stats
     }
 
@@ -155,6 +208,23 @@ impl Daemon {
     pub fn gc(&self, policy: &GcPolicy) -> Result<GcReport> {
         policy.validate()?;
         let started = Instant::now();
+        let mut report = self.gc_locked(policy, GcMode::Daemon)?;
+        report.duration_ms = started.elapsed().as_millis() as u64;
+        let freed = report.freed_bytes;
+        let entries = report.deleted.entry_count() as u64;
+        self.bump(|stats| {
+            stats.gc_runs = stats.gc_runs.saturating_add(1);
+            stats.gc_freed_bytes = stats.gc_freed_bytes.saturating_add(freed);
+            stats.gc_deleted_entries = stats.gc_deleted_entries.saturating_add(entries);
+        });
+        Ok(report)
+    }
+
+    /// One bounded GC pass under the exclusive I/O lock, shared by the manual GC
+    /// and the automatic maintenance thread. Does not update manual GC counters:
+    /// the caller decides which counters belong to its path.
+    fn gc_locked(&self, policy: &GcPolicy, mode: GcMode) -> Result<GcReport> {
+        let started = Instant::now();
         // Same lock as analyses, exclusive side: all in-flight analyses complete
         // before any file is collected, and new ones wait until GC is done.
         let _io_guard = self
@@ -170,12 +240,8 @@ impl Daemon {
             .unwrap_or_default();
         let protection =
             GcProtection::from_retention(&retention, self.inner.revisions.current());
-        let mut report = crate::gc::run_gc(
-            &self.inner.config.work_dir,
-            policy,
-            &protection,
-            GcMode::Daemon,
-        )?;
+        let mut report =
+            crate::gc::run_gc(&self.inner.config.work_dir, policy, &protection, mode)?;
         if !policy.dry_run {
             let evicted = self.inner.cache.remove_keys(&report.deleted.cache_keys);
             if evicted > 0 {
@@ -192,14 +258,127 @@ impl Daemon {
             }
         }
         report.duration_ms = started.elapsed().as_millis() as u64;
-        let freed = report.freed_bytes;
-        let entries = report.deleted.entry_count() as u64;
-        self.bump(|stats| {
-            stats.gc_runs = stats.gc_runs.saturating_add(1);
-            stats.gc_freed_bytes = stats.gc_freed_bytes.saturating_add(freed);
-            stats.gc_deleted_entries = stats.gc_deleted_entries.saturating_add(entries);
-        });
         Ok(report)
+    }
+
+    // ------------------------------------------------------------------
+    // Automatic background GC (P0-H suite)
+    // ------------------------------------------------------------------
+
+    /// Current automatic GC counters and last attempt (disabled daemons report
+    /// `enabled: false` and zeros).
+    pub fn auto_gc_stats(&self) -> AutoGcStats {
+        self.inner
+            .auto_gc
+            .as_ref()
+            .map(|runtime| runtime.snapshot())
+            .unwrap_or_default()
+    }
+
+    /// Effective automatic GC policy of this daemon.
+    pub fn auto_gc_policy(&self) -> AutoGcPolicy {
+        self.inner
+            .auto_gc
+            .as_ref()
+            .map(|runtime| runtime.policy().clone())
+            .unwrap_or_default()
+    }
+
+    /// JSONL journal receiving one line per automatic GC attempt (bounded).
+    pub fn auto_gc_journal_path(&self) -> Option<PathBuf> {
+        self.inner
+            .auto_gc
+            .as_ref()
+            .map(|runtime| runtime.journal_path().to_path_buf())
+    }
+
+    /// Waits until no automatic check is pending or running. Returns `false` on
+    /// timeout. Tests and maintenance tooling use this to observe a settled state;
+    /// analyses never need it (the whole point is that it runs in background).
+    pub fn wait_auto_gc_idle(&self, timeout_ms: u64) -> bool {
+        let Some(runtime) = &self.inner.auto_gc else {
+            return true;
+        };
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(1));
+        loop {
+            if !runtime.is_busy_or_pending() {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            if let Ok(guard) = runtime.signal_lock.lock() {
+                let _ = runtime
+                    .signal
+                    .wait_timeout(guard, Duration::from_millis(5));
+            } else {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+    }
+
+    /// Stops the maintenance thread on its next wake-up (at most ~200 ms).
+    /// Does not wait: callers that need a settled state use `wait_auto_gc_idle`.
+    pub fn shutdown_auto_gc(&self) {
+        if let Some(runtime) = &self.inner.auto_gc {
+            runtime.request_shutdown();
+        }
+    }
+
+    /// Test seam: the next automatic attempt fails with this message instead of
+    /// touching the filesystem. Proves that an auto-GC failure is recorded and
+    /// never fails the next analysis. Passing `None` clears the injection.
+    pub fn inject_auto_gc_failure(&self, message: Option<String>) {
+        if let Some(runtime) = &self.inner.auto_gc {
+            runtime.inject_failure(message);
+        }
+    }
+
+    fn run_auto_gc_once(&self, runtime: &Arc<AutoGcRuntime>) -> std::result::Result<(), String> {
+        runtime.set_busy(true);
+        let result = self.auto_gc_step(runtime);
+        runtime.set_busy(false);
+        runtime.signal.notify_all();
+        result
+    }
+
+    /// One threshold evaluation + (optional) collection. Runs only in the
+    /// maintenance thread; never on the analysis path, never under a read lock.
+    fn auto_gc_step(&self, runtime: &Arc<AutoGcRuntime>) -> std::result::Result<(), String> {
+        let requests_analyzed = self.stats().requests;
+        if let Some(message) = runtime.take_injected_failure() {
+            runtime.record_failure(message.clone(), 0, requests_analyzed);
+            return Err(format!("injected auto-GC failure: {message}"));
+        }
+        let total_before = crate::gc::measure_total_bytes(&self.inner.config.work_dir)
+            .map_err(|error| format!("auto-GC size measurement failed: {error}"))?;
+        let active = self.inner.active_analyses.load(Ordering::SeqCst);
+        match runtime.decision(total_before, active) {
+            AutoGcDecision::BelowThreshold { .. } => Ok(()),
+            AutoGcDecision::Busy { .. } => {
+                // `idle_only`: retry after the next completed analysis.
+                runtime.reschedule_retry();
+                Ok(())
+            }
+            AutoGcDecision::Run { .. } => {
+                let policy = runtime.policy().gc_policy();
+                match self.gc_locked(&policy, GcMode::Auto) {
+                    Ok(report) => {
+                        runtime.record_success(&report, total_before, requests_analyzed);
+                        Ok(())
+                    }
+                    Err(error) => {
+                        let message = format!("{error}");
+                        runtime.record_failure(
+                            message.clone(),
+                            total_before,
+                            requests_analyzed,
+                        );
+                        Err(message)
+                    }
+                }
+            }
+        }
     }
 
     /// Snapshot of the persisted recency hints (newest served analyses). Exposed
@@ -257,8 +436,27 @@ impl Daemon {
         Ok(template)
     }
 
-    /// Analyses one request.
+    /// Analyses one request: the public entry point.
+    ///
+    /// Automatic-GC bookkeeping happens **after** the answer is computed: one
+    /// atomic increment per request (and a condition-variable signal once every
+    /// `check_every_requests`); the threshold scan and collection run in the
+    /// maintenance thread, never inside this call.
     pub fn analyze(&self, request: &AnalysisRequest) -> Result<AnalysisReport> {
+        let result = {
+            // Count the in-flight analysis only for its duration, so `idle_only`
+            // sees a genuinely idle daemon after the answer is produced.
+            let _active = ActiveAnalysisGuard::new(&self.inner.active_analyses);
+            self.analyze_impl(request)
+        };
+        if let Some(runtime) = &self.inner.auto_gc {
+            let _ = runtime.note_request();
+        }
+        result
+    }
+
+    /// Analyses one request (inner implementation, see [`Daemon::analyze`]).
+    fn analyze_impl(&self, request: &AnalysisRequest) -> Result<AnalysisReport> {
         let started = Instant::now();
         // Shared side of the retention lock: analyses run concurrently with each
         // other but never with an explicit GC pass.
@@ -799,4 +997,34 @@ pub fn single_file_request(
 /// Default private work directory below `base`.
 pub fn work_dir_below(base: impl AsRef<Path>) -> PathBuf {
     base.as_ref().join("ravum-daemon")
+}
+
+/// Maintenance thread of the automatic background GC.
+///
+/// Holds only a `Weak` daemon handle: when the last `Daemon` handle is dropped,
+/// `upgrade` fails and the thread exits, so it never keeps the daemon alive on
+/// its own. It waits on a condition variable with a bounded timeout, evaluates
+/// the threshold at most once per check interval, and runs the collection through
+/// the same exclusive I/O lock as the manual GC.
+fn auto_gc_maintenance(weak: Weak<Inner>, runtime: Arc<AutoGcRuntime>) {
+    let poll = Duration::from_millis(200);
+    loop {
+        if runtime.is_shutdown() {
+            break;
+        }
+        let _ = runtime.wait_for_work(poll);
+        if runtime.is_shutdown() {
+            break;
+        }
+        let Some(inner) = weak.upgrade() else {
+            break;
+        };
+        let daemon = Daemon { inner };
+        if runtime.take_due() {
+            // A failure is recorded in stats/journal by `run_auto_gc_once`; the
+            // maintenance loop deliberately keeps running and no analysis fails.
+            let _ = daemon.run_auto_gc_once(&runtime);
+        }
+        drop(daemon);
+    }
 }

@@ -8,6 +8,7 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/soak-daemon.ps1 [-Seconds 120] [-Requests 40] [-Out evidence/...]
+#   powershell -ExecutionPolicy Bypass -File scripts/soak-daemon.ps1 -AutoGc   # long soak, automatic GC + control
 #
 # Exit code: 0 when every request succeeded and the daemon shut down cleanly, 1 otherwise.
 
@@ -19,13 +20,39 @@ param(
     [int]$Requests = 40,
     [string]$WorkDir = '',
     [string]$Out = '',
-    [string]$DaemonBinary = ''
+    [string]$DaemonBinary = '',
+    # Long soak with automatic background GC: delegates to the measured suite
+    # `ravum-daemon-bench --suite soak` (evidence: evidence/mvp0b-daemon-gc-auto-*.json).
+    [switch]$AutoGc,
+    [ValidateRange(20, 1800)]
+    [int]$AutoGcSeconds = 480,
+    [ValidateRange(8, 500)]
+    [int]$AutoGcRequests = 150,
+    [ValidateRange(0, 60000)]
+    [int]$AutoGcPaceMs = 1900,
+    [string]$AutoGcOut = ''
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 Push-Location $Root
 try {
+    if ($AutoGc) {
+        # Long soak with automatic background GC (bounded, minutes): the measured
+        # Rust suite runs both the auto-GC campaign and the shorter control campaign
+        # and writes one evidence file. Exit code is propagated.
+        if (-not $AutoGcOut) { $AutoGcOut = Join-Path $Root 'evidence/mvp0b-daemon-gc-auto-2026-11-08.json' }
+        Write-Host "[soak] automatic-GC long soak: requests=$AutoGcRequests seconds=$AutoGcSeconds pace=${AutoGcPaceMs}ms"
+        cargo build -q -p ravum-daemon --offline
+        if ($LASTEXITCODE -ne 0) { Write-Host "cargo build failed (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+        cargo run -q -p ravum-daemon --bin ravum-daemon-bench --offline -- `
+            --suite soak `
+            --soak-requests $AutoGcRequests `
+            --soak-seconds $AutoGcSeconds `
+            --soak-pace-ms $AutoGcPaceMs `
+            --out-soak $AutoGcOut
+        exit $LASTEXITCODE
+    }
     if (-not $DaemonBinary) { $DaemonBinary = Join-Path $Root 'target\debug\ravum-daemon.exe' }
     if (-not (Test-Path $DaemonBinary)) {
         Write-Host "daemon binary not found: $DaemonBinary (run: cargo build -p ravum-daemon --bin ravum-daemon)"
@@ -76,6 +103,7 @@ try {
         $free = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1024
         return @{ cpu_percent = [int]$cpu; free_bytes = [int64]$free }
     }
+$loadStart = Get-Load
 
     $started = Get-Date
     $deadline = $started.AddSeconds($Seconds)
@@ -113,10 +141,12 @@ try {
         $response = Read-JsonLine 60000
         $sw.Stop()
         $process.Refresh()
+        $report = $response.report
         if (-not $response.ok -or -not $report.success) { $failures++; [void]$failureDetails.Add([pscustomobject]@{ index = $index; revision = $revision; ok = $response.ok; success = $report.success; status = $report.status; error = $response.error; raw = ($response | ConvertTo-Json -Depth 3 -Compress) }) }
         $disk = Get-DiskBytes $WorkDir
-        $load = Get-Load
-        $report = $response.report
+        # No WMI query per request: under load it can block for tens of seconds and make
+        # a bounded soak look hung. Load is sampled once at the start and once at the end.
+        $load = @{ cpu_percent = $null; free_bytes = $null }
         $sample = [ordered]@{
             index = $index
             revision = $revision
@@ -160,6 +190,8 @@ try {
         date = (Get-Date).ToString('yyyy-MM-dd')
         started_at = $started.ToString('o')
         duration_s = [math]::Round(((Get-Date) - $started).TotalSeconds, 1)
+        load_start = $loadStart
+        load_end = (Get-Load)
         requests = $samples.Count
         requested_requests = $Requests
         failures = $failures
