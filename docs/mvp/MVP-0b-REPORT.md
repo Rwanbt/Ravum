@@ -33,7 +33,7 @@
 | CI du dernier commit poussé | run [42489568590](https://github.com/Rwanbt/Ravum/actions/runs/42489568590) — **succès** (18 étapes dont l'E2E navigateur) ; le workflow d'impact est aussi vert ([42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677)) |
 | Tests workspace | **292 réussis, 0 échec**, 78 binaires de test, 67,3 s (arbre incluant COLLAB-4 et la sonde audio) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
-| Vault | 2 sessions publiées et vérifiées (voir §25) |
+| Vault | 3 sessions publiées et vérifiées (voir §25) |
 
 ## 3. Subagents réellement utilisés
 
@@ -482,6 +482,8 @@ relues sur le dépôt distant :
    — commit vault `f50795a` (lecture distante vérifiée).
 2. [Session MVP-0b L2–L4 — incrémentalité, collaboration, E2E et qualification](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-incremental-collab-e2e-qualification.md)
    — commit vault `37b22b0` (lecture distante vérifiée ; sommet de `master` au moment de la publication).
+3. [Session MVP-0b second lot — P0-A/P0-I, COLLAB-4 et audio réel](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-cycle-collab4-audio-real.md)
+   — commit vault `3e607da` (lecture distante vérifiée).
 
 ## Renvois
 
