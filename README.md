@@ -64,8 +64,8 @@ dans un **processus déjà en cours d'exécution**, sans redémarrage. Toute ét
 ravum check  <fichier.rs>    # analyse seule ; --daemon = moteur persistant (cache de verdicts)
 ravum build  <fichier.rs>    # cdylib après une analyse propre
 ravum patch  <artefact>      # validation ABI / manifeste / symboles
-ravum run    <fichier.rs>    # application de démonstration
-ravum watch  <fichier.rs>    # boucle complète : édition -> activation
+ravum run    <fichier.rs>    # application de démonstration ; --concurrent = analyse ∥ build
+ravum watch  <fichier.rs>    # boucle complète : édition -> activation ; --concurrent = analyse ∥ build
 ravum status                 # dernier état enregistré
 ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
 ravum cycle-bench <f.rs>      # édition -> diagnostic -> build -> verify -> load -> activation, MVP-0a vs MVP-0b
@@ -93,8 +93,10 @@ bout (`ravum cycle-bench`) : pour un contenu inchangé le **cycle complet** (dia
 build → vérification → chargement → activation) passe de 85–177 ms à **8–13 ms** (×10 à
 ×13) ; pour une **édition réelle** il reste dominé par le build à froid (230–435 ms) et
 MVP-0b n'est pas plus rapide (316–339 ms petite unité, 524–600 ms unité de 2 313 lignes).
-La cible « petit patch p95 < 500 ms » est atteinte sur petite unité (335–362 ms) et
-manquée sur l'unité de 2 313 lignes (702–743 ms). Preuves :
+Avec le **scheduling chevauché** (analyse ∥ build, `--concurrent`, productisé dans
+`watch`/`run`) : 390 → **303 ms** p50 (petite unité) et 593 → **412 ms** p50 (2 313 lignes),
+soit **p95 316 ms et 428 ms** — la cible « petit patch p95 < 500 ms » est alors tenue sur
+les deux tailles, le build restant le chemin critique. Preuves :
 [docs/mvp/MVP-0b-cycle.md](docs/mvp/MVP-0b-cycle.md),
 [docs/mvp/MVP-0b-incremental.md](docs/mvp/MVP-0b-incremental.md),
 [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).

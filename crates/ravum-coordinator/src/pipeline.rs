@@ -171,7 +171,7 @@ impl Pipeline {
         &self,
         snapshot: &SourceSnapshot,
         current: &dyn Fn() -> SnapshotId,
-        mut broker: Option<&mut ProofBroker>,
+        broker: Option<&mut ProofBroker>,
     ) -> LoopReport {
         let mut report = LoopReport {
             snapshot_id: snapshot.id().clone(),
@@ -220,6 +220,20 @@ impl Pipeline {
             return report;
         }
 
+        self.finish_candidate(report, timings, build, current, broker)
+    }
+
+    /// Shared tail of both scheduling paths: smoke verification, declared obligations,
+    /// freshness re-check (INV-07) and the ready verdict. Callers decide how `check`
+    /// and `build` were produced; this function never publishes.
+    fn finish_candidate(
+        &self,
+        mut report: LoopReport,
+        mut timings: StageTimings,
+        build: BuildOutcome,
+        current: &dyn Fn() -> SnapshotId,
+        mut broker: Option<&mut ProofBroker>,
+    ) -> LoopReport {
         let verify_started = Instant::now();
         let evidence = match smoke_verify(&build.build) {
             Ok(e) => e,
@@ -315,7 +329,123 @@ impl Pipeline {
         current: &dyn Fn() -> SnapshotId,
         broker: Option<&mut ProofBroker>,
     ) -> LoopReport {
-        let mut report = self.prepare_candidate_with_proofs(snapshot, current, broker);
+        let report = self.prepare_candidate_with_proofs(snapshot, current, broker);
+        self.publish_ready(host, report, current)
+    }
+
+    /// Same contract as [`Pipeline::prepare_candidate`], but analysis and codegen+link
+    /// run on two threads. Safety is unchanged: the result is only ready when the
+    /// analysis is clean AND the build is verified; a build that ran in parallel with
+    /// failing diagnostics is discarded, never published. This is the two-track
+    /// scheduling: diagnostics become available as soon as analysis finishes, and the
+    /// patch is not serialised behind it.
+    pub fn prepare_candidate_concurrent(
+        &self,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+    ) -> LoopReport {
+        self.prepare_candidate_concurrent_with_proofs(snapshot, current, None)
+    }
+
+    /// Same, with an optional proof broker for the declared obligations.
+    pub fn prepare_candidate_concurrent_with_proofs(
+        &self,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+        broker: Option<&mut ProofBroker>,
+    ) -> LoopReport {
+        let mut report = LoopReport {
+            snapshot_id: snapshot.id().clone(),
+            outcome: LoopOutcome::Error {
+                detail: "unstarted".to_owned(),
+            },
+            check: None,
+            build: None,
+            evidence: None,
+            proofs: Vec::new(),
+            activation: None,
+            timings: StageTimings::default(),
+        };
+        let mut timings = StageTimings::default();
+
+        let (check_result, build_result) = std::thread::scope(|scope| {
+            let check = scope.spawn(|| self.analyze(snapshot));
+            let build = scope.spawn(|| self.build(snapshot));
+            (
+                check.join().unwrap_or_else(|_| {
+                    Err(AdapterError("check thread panicked".to_owned()))
+                }),
+                build.join().unwrap_or_else(|_| {
+                    Err(AdapterError("build thread panicked".to_owned()))
+                }),
+            )
+        });
+
+        let check = match self.stage(check_result) {
+            Stage::Ok(c) => c,
+            Stage::Adapter(e) => {
+                report.outcome = LoopOutcome::Error { detail: e.0 };
+                return report;
+            }
+        };
+        timings.check_ms = check.check_ms;
+        report.check = Some(check.clone());
+        if check.diagnostics.has_errors() {
+            report.outcome = LoopOutcome::RefusedByCheck {
+                errors: check.diagnostics.error_count(),
+            };
+            report.timings = timings;
+            return report;
+        }
+
+        let build = match self.stage(build_result) {
+            Stage::Ok(b) => b,
+            Stage::Adapter(e) => {
+                report.outcome = LoopOutcome::Error { detail: e.0 };
+                report.timings = timings;
+                return report;
+            }
+        };
+        timings.build_ms = build.build.build_ms;
+        report.build = Some(build.build.clone());
+        if !build.success {
+            report.outcome = LoopOutcome::RefusedByBuild;
+            report.timings = timings;
+            return report;
+        }
+        self.finish_candidate(report, timings, build, current, broker)
+    }
+
+    /// Full in-process iteration with overlapped analysis and build.
+    pub fn run_once_concurrent(
+        &self,
+        host: &PatchHost,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+    ) -> LoopReport {
+        self.run_once_concurrent_with_proofs(host, snapshot, current, None)
+    }
+
+    /// Full in-process iteration with overlapped analysis and build, with proofs.
+    pub fn run_once_concurrent_with_proofs(
+        &self,
+        host: &PatchHost,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+        broker: Option<&mut ProofBroker>,
+    ) -> LoopReport {
+        let report = self.prepare_candidate_concurrent_with_proofs(snapshot, current, broker);
+        self.publish_ready(host, report, current)
+    }
+
+    /// Publish a candidate that reached `CandidateReady`; every other outcome is
+    /// returned unchanged. Shared by the sequential and concurrent one-shot paths.
+    fn publish_ready(
+        &self,
+        host: &PatchHost,
+        mut report: LoopReport,
+        current: &dyn Fn() -> SnapshotId,
+    ) -> LoopReport {
         if !matches!(report.outcome, LoopOutcome::CandidateReady) {
             return report;
         }
@@ -344,7 +474,6 @@ impl Pipeline {
         }
         report
     }
-
     fn stage<T>(&self, result: Result<T, AdapterError>) -> Stage<T> {
         match result {
             Ok(v) => Stage::Ok(v),
@@ -427,4 +556,85 @@ pub fn smoke_verify(build: &BuildOutput) -> Result<EvidenceRecord, RejectReason>
     };
     evidence.assumptions.extend(failures);
     Ok(evidence)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ravum_rust_adapter::RustAdapter;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static UNIQUE: AtomicU64 = AtomicU64::new(0);
+
+    fn fixture() -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("calculator")
+            .join("v1.rs");
+        std::fs::read_to_string(&path).expect("fixture calculator/v1.rs")
+    }
+
+    fn pipeline(tag: &str) -> Pipeline {
+        let n = UNIQUE.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "ravum-coordinator-concurrent-{}-{}-{}",
+            std::process::id(),
+            tag,
+            n
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let rustc = std::env::var("RAVUM_RUSTC").unwrap_or_else(|_| "rustc".to_owned());
+        Pipeline::new(rustc, &dir)
+    }
+
+    fn snapshot(content: &str) -> SourceSnapshot {
+        SourceSnapshot::new([("unit.rs".to_owned(), content.to_owned())])
+    }
+
+    /// The overlapped path must reach the same verdicts as the sequential path for the
+    /// same snapshot: a clean candidate is ready in both, an invalid one is refused by the
+    /// check in both, and a stale candidate is refused as stale in both. Skips if the
+    /// toolchain cannot build the fixture (the coordinator is not a compiler test).
+    #[test]
+    fn concurrent_and_sequential_paths_reach_the_same_verdicts() {
+        let pipeline = pipeline("verdicts");
+        let clean = snapshot(&fixture());
+        let current = || clean.id().clone();
+
+        let sequential = pipeline.prepare_candidate(&clean, &current);
+        assert_eq!(sequential.outcome, LoopOutcome::CandidateReady, "{sequential:?}");
+        let concurrent = pipeline.prepare_candidate_concurrent(&clean, &current);
+        assert_eq!(concurrent.outcome, LoopOutcome::CandidateReady, "{concurrent:?}");
+        assert!(concurrent.check.is_some(), "the concurrent path keeps the diagnostics");
+        assert!(concurrent.evidence.is_some(), "the concurrent path keeps the evidence");
+        assert!(
+            concurrent.timings.check_ms > 0 && concurrent.timings.build_ms > 0,
+            "both overlapped stages must be measured: {:?}",
+            concurrent.timings
+        );
+
+        let broken = snapshot(&format!("{}\nfn broken( {{\n", fixture()));
+        let broken_current = || broken.id().clone();
+        let sequential_broken = pipeline.prepare_candidate(&broken, &broken_current);
+        let concurrent_broken = pipeline.prepare_candidate_concurrent(&broken, &broken_current);
+        let errors = |outcome: &LoopOutcome| match outcome {
+            LoopOutcome::RefusedByCheck { errors } => *errors,
+            other => panic!("expected RefusedByCheck, got {other:?}"),
+        };
+        assert_eq!(
+            errors(&sequential_broken.outcome),
+            errors(&concurrent_broken.outcome),
+            "both paths must report the same number of analysis errors"
+        );
+
+        let other = snapshot("pub extern \"C\" fn other() {}\n");
+        let stale_current = || other.id().clone();
+        let sequential_stale = pipeline.prepare_candidate(&clean, &stale_current);
+        let concurrent_stale = pipeline.prepare_candidate_concurrent(&clean, &stale_current);
+        assert!(matches!(sequential_stale.outcome, LoopOutcome::RefusedAsStale { .. }));
+        assert!(matches!(concurrent_stale.outcome, LoopOutcome::RefusedAsStale { .. }));
+    }
 }

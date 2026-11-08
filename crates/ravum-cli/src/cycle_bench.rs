@@ -230,7 +230,10 @@ pub fn cycle_bench(args: &[String]) -> u8 {
     }
 
     if print_json {
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).unwrap_or_default()
+        );
     } else {
         print_summary(&payload);
     }
@@ -519,8 +522,7 @@ fn run_submission(
         BuildStage::Built { build, wall_ms } => (build, wall_ms),
     };
     let cached_build = build.cached_build;
-    let (critical_path_ms, sequential_estimate_ms) =
-        schedule_effect(analysis_ms, build_ms);
+    let (critical_path_ms, sequential_estimate_ms) = schedule_effect(analysis_ms, build_ms);
 
     // 3. smoke verification (the same TESTED evidence the loop uses)
     let begin = Instant::now();
@@ -577,7 +579,9 @@ fn schedule_effect(analysis_ms: u64, build_ms: u64) -> (u64, u64) {
 }
 
 fn env_u64(name: &str) -> Option<u64> {
-    std::env::var(name).ok().and_then(|value| value.trim().parse().ok())
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
 }
 
 fn short(value: &str) -> &str {
@@ -667,7 +671,8 @@ fn scenario_stats(samples: &[Sample], variant: Variant) -> serde_json::Value {
             .iter()
             .filter(|s| s.variant == variant && s.phase == phase)
             .collect();
-        let column = |f: &dyn Fn(&Sample) -> u64| -> Vec<u64> { selected.iter().map(|s| f(s)).collect() };
+        let column =
+            |f: &dyn Fn(&Sample) -> u64| -> Vec<u64> { selected.iter().map(|s| f(s)).collect() };
         out.insert(
             phase.label().to_owned(),
             json!({
@@ -696,7 +701,13 @@ fn outcome_counts(samples: &[&Sample]) -> serde_json::Value {
         let key = if sample.activated {
             "activated".to_owned()
         } else {
-            sample.outcome.split(':').next().unwrap_or("refused").trim().to_owned()
+            sample
+                .outcome
+                .split(':')
+                .next()
+                .unwrap_or("refused")
+                .trim()
+                .to_owned()
         };
         let entry = counts.entry(key).or_insert_with(|| json!(0));
         if let Some(value) = entry.as_u64() {

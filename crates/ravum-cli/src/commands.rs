@@ -311,7 +311,7 @@ pub fn patch(args: &[String]) -> u8 {
 
 pub fn run(args: &[String]) -> u8 {
     let Some(file) = positional(args, 0) else {
-        eprintln!("usage: ravum run <file.rs> [--tick-ms N] [--max-ticks N]");
+        eprintln!("usage: ravum run <file.rs> [--tick-ms N] [--max-ticks N] [--concurrent]");
         return 2;
     };
     let tick_ms = flag_u64(args, "--tick-ms", 100);
@@ -324,7 +324,11 @@ pub fn run(args: &[String]) -> u8 {
         }
     };
     let pipeline = pipeline();
-    let report = pipeline.prepare_candidate(&snapshot, &|| snapshot.id().clone());
+    let report = if args.iter().any(|a| a == "--concurrent") {
+        pipeline.prepare_candidate_concurrent(&snapshot, &|| snapshot.id().clone())
+    } else {
+        pipeline.prepare_candidate(&snapshot, &|| snapshot.id().clone())
+    };
     if !matches!(report.outcome, ravum_coordinator::LoopOutcome::CandidateReady) {
         eprintln!("cannot start the demo host: {:?}", report.outcome);
         return 1;
