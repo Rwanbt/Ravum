@@ -16,26 +16,10 @@
 //!   current content, and nothing overlaps.
 
 use crate::patch::{self, touched_ranges};
+use crate::path_policy;
 use ravum_protocol::{ChangeProposal, DecisionKind, JournalEntry, ProposalDecision, SnapshotId};
 use ravum_snapshot::SourceSnapshot;
 use std::collections::{BTreeMap, BTreeSet};
-
-/// Paths whose content is generated or externally owned: never auto-integrated.
-const GENERATED_PATTERNS: [&str; 6] = [
-    "Cargo.lock",
-    "package-lock.json",
-    "pnpm-lock.yaml",
-    "yarn.lock",
-    ".generated.",
-    ".min.",
-];
-
-fn is_generated_path(path: &str) -> bool {
-    let name = path.rsplit('/').next().unwrap_or(path);
-    GENERATED_PATTERNS
-        .iter()
-        .any(|p| name == *p || name.contains(p) || name.ends_with(".lock"))
-}
 
 #[derive(Debug, Clone)]
 struct Integrated {
@@ -177,6 +161,29 @@ impl Coordinator {
         if proposal.target_paths.is_empty() {
             return decide(Reject, "proposal declares no target path".to_owned());
         }
+        // Path safety comes first: a proposal that names repository metadata, an
+        // absolute path or a `..` traversal is refused before any content is read,
+        // so "an agent tried to write into .git" is a recorded refusal.
+        if let Some((path, reason)) = proposal
+            .target_paths
+            .iter()
+            .find_map(|path| path_policy::unsafe_path_reason(path).map(|reason| (path, reason)))
+        {
+            return decide(
+                Reject,
+                format!("refuses an unsafe target path {path:?}: {reason}"),
+            );
+        }
+        if let Some((path, _)) = proposal
+            .expected_hashes
+            .iter()
+            .find(|(path, _)| path_policy::unsafe_path_reason(path).is_some())
+        {
+            return decide(
+                Reject,
+                format!("refuses an unsafe precondition path: {path:?}"),
+            );
+        }
         if proposal
             .impacted_contracts
             .iter()
@@ -188,7 +195,11 @@ impl Coordinator {
                     .to_owned(),
             );
         }
-        if let Some(path) = proposal.target_paths.iter().find(|p| is_generated_path(p)) {
+        if let Some(path) = proposal
+            .target_paths
+            .iter()
+            .find(|p| path_policy::is_generated_path(&path_policy::canonical_relative_path(p)))
+        {
             return decide(
                 ManualRequired,
                 format!("target path {path:?} is generated or a lockfile: never auto-integrated"),
@@ -456,6 +467,50 @@ mod tests {
         let mut c = base();
         let a = proposal(&c, "agent-a", &[], PATCH_ALPHA, &[("lib.rs", "deadbeef")]);
         assert_eq!(c.submit(&a).decision, DecisionKind::Reject);
+    }
+
+    #[test]
+    fn git_metadata_paths_are_refused_before_any_state_change() {
+        let mut c = base();
+        let base_id = c.base().id().clone();
+
+        let mut metadata_target = proposal(&c, "agent-a", &["alpha"], PATCH_ALPHA, &[]);
+        metadata_target.target_paths = vec![".git/config".to_owned()];
+        let decision = c.submit(&metadata_target);
+        assert_eq!(decision.decision, DecisionKind::Reject);
+        assert!(
+            decision
+                .reasons
+                .iter()
+                .any(|reason| reason.contains(".git")),
+            "refusal must name the metadata path: {:?}",
+            decision.reasons
+        );
+
+        let mut traversal = proposal(&c, "agent-b", &["alpha"], PATCH_ALPHA, &[]);
+        traversal.target_paths = vec!["../outside.rs".to_owned()];
+        assert_eq!(c.submit(&traversal).decision, DecisionKind::Reject);
+
+        let mut unsafe_precondition = proposal(&c, "agent-c", &["alpha"], PATCH_ALPHA, &[]);
+        unsafe_precondition
+            .expected_hashes
+            .insert(".git/HEAD".to_owned(), "0".repeat(64));
+        let decision = c.submit(&unsafe_precondition);
+        assert_eq!(decision.decision, DecisionKind::Reject);
+        assert!(
+            decision
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("unsafe precondition")),
+            "refusal must name the unsafe precondition: {:?}",
+            decision.reasons
+        );
+
+        assert_eq!(
+            c.current_id(),
+            base_id,
+            "refusals must not change the snapshot"
+        );
     }
 
     #[test]

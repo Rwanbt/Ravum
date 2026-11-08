@@ -2,15 +2,20 @@
 //!
 //! Usage:
 //!   ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>]
+//!                          [--publication-journal <path>]
 //!                          [--commit] [--author NAME] [--email MAIL] [--json]
 //!
 //! The workspace is read into an immutable snapshot. Proposals are applied to an
 //! in-memory overlay; nothing is written back unless `--commit` is passed, and
-//! even then only through the single `GitWriter`.
+//! even then only through the single `GitWriter`, as one transactional publication
+//! (isolated index, unpublished commit, compare-and-swap, then reconciliation of
+//! the published paths only).
 
 use ravum_protocol::{ChangeProposal, DecisionKind, ProposalDecision};
 use ravum_snapshot::SourceSnapshot;
-use ravum_workspace_coordinator::{Coordinator, GitWriter, IntegrationSummary};
+use ravum_workspace_coordinator::{
+    Coordinator, GitWriter, IntegrationSummary, PathUpdate, PublishRequest,
+};
 use std::path::{Path, PathBuf};
 
 fn main() {
@@ -162,27 +167,57 @@ fn integrate(args: &[String]) -> i32 {
 }
 
 fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Result<(), String> {
-    let mut integrated: Vec<String> = coordinator
+    let integrated: Vec<String> = coordinator
         .journal()
         .iter()
         .filter(|entry| entry.decision.decision == DecisionKind::AutoSafe)
         .flat_map(|entry| entry.decision.integrated_paths.clone())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect();
-    integrated.sort();
-    integrated.dedup();
     if integrated.is_empty() {
         return Err("no integrated proposal to commit".to_owned());
     }
-    coordinator
-        .current()
-        .materialize_to(workspace)
-        .map_err(|e| format!("cannot materialize snapshot: {e}"))?;
+    // Content comes from the coordinator's overlay, never from a blind rewrite of
+    // the whole workspace: the writer validates each path against the base snapshot
+    // hash before publishing, and writes only what it actually publishes.
+    let mut changes = Vec::with_capacity(integrated.len());
+    for path in &integrated {
+        let Some(content) = coordinator.current().content_of(path) else {
+            return Err(format!(
+                "integrated path {path} has no content in the coordinator snapshot"
+            ));
+        };
+        // An empty expected hash means "the path must be absent from the base".
+        let expected_old = coordinator
+            .base()
+            .file_hash(path)
+            .map(ToOwned::to_owned)
+            .unwrap_or_default();
+        changes.push(
+            PathUpdate::write(path.clone(), content.to_owned())
+                .with_expected_old_sha256(expected_old),
+        );
+    }
 
+    let publication_journal = flag(args, "--publication-journal")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let mut path = coordinator
+                .journal_path()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("target/ravum/collab-journal.jsonl"));
+            path.set_extension("publications.jsonl");
+            path
+        });
     let writer = GitWriter::new(
         workspace,
         flag(args, "--author").unwrap_or_else(|| "ravum-coordinator".to_owned()),
         flag(args, "--email").unwrap_or_else(|| "coordinator@ravum.invalid".to_owned()),
-    );
+    )
+    .with_publication_journal(&publication_journal)
+    .map_err(|e| format!("cannot open publication journal: {e}"))?;
+
     let trailers = coordinator
         .journal()
         .iter()
@@ -197,22 +232,36 @@ fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Resul
             ]
         })
         .collect::<Vec<_>>();
+    let proposal_ids = coordinator
+        .journal()
+        .iter()
+        .filter(|entry| entry.decision.decision == DecisionKind::AutoSafe)
+        .map(|entry| entry.decision.proposal_id.clone())
+        .collect::<Vec<_>>();
+    // Stable across a restart: the same integrated proposal set maps to the same
+    // publication id, so recovery refuses a second publication instead of redoing it.
+    let request = PublishRequest::new(format!(
+        "chore(collab): integrate {} proposal(s) touching {} path(s)",
+        proposal_ids.len(),
+        integrated.len()
+    ))
+    .with_changes(changes)
+    .with_publication_id(format!("collab:{}", proposal_ids.join(",")))
+    .with_trailers(trailers);
+
     let result = writer
-        .commit_paths(
-            &integrated,
-            &format!(
-                "chore(collab): integrate {} proposal(s) touching {} path(s)",
-                coordinator
-                    .journal()
-                    .iter()
-                    .filter(|e| e.decision.decision == DecisionKind::AutoSafe)
-                    .count(),
-                integrated.len()
-            ),
-            &trailers,
-        )
+        .publish_request(&request)
         .map_err(|e| e.to_string())?;
-    println!("committed {} (parent {})", &result.sha[..12.min(result.sha.len())], &result.parent[..12.min(result.parent.len())]);
+    println!(
+        "committed {} (parent {}) paths={} warnings={}",
+        &result.sha[..12.min(result.sha.len())],
+        &result.parent[..12.min(result.parent.len())],
+        result.paths.len(),
+        result.warnings.len()
+    );
+    for warning in &result.warnings {
+        eprintln!("warning: {warning}");
+    }
     Ok(())
 }
 
