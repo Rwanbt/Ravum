@@ -1,0 +1,1 @@
+{"agent_id":"agent-a","task_id":"refine-helper-offset","file":"two_functions.rs","target_symbols":["helper"],"declared_dependencies":[],"impacted_contracts":[],"summary":"helper offset 1.0 -> 20.0"}

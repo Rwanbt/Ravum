@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "agent_id": "agent-d",
+  "task_id": "tune-window",
+  "base_snapshot_id": "0000000000000000-vieux-snapshot",
+  "target_paths": ["notes.rs"],
+  "target_symbols": ["TUNING"],
+  "expected_hashes": {},
+  "declared_dependencies": [],
+  "impacted_contracts": [],
+  "unified_patch": "+++ b/notes.rs\n@@ -2,3 +2,3 @@\n \n pub const TUNING: u32 = 440;\n-pub const WINDOW: u32 = 64;\n+pub const WINDOW: u32 = 128;\n",
+  "note": "Agent D : base périmée et aucune precondition. Rejouable, mais REBASE_REVALIDATE : rien n'est intégré."
+}
