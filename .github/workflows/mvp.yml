@@ -70,6 +70,7 @@ jobs:
             exit 1
           }
           Write-Host "violated obligation correctly refused (exit 1)"
+          exit 0
 
       - name: Measure the loop (informational, not a performance gate)
         run: |
