@@ -111,4 +111,4 @@ Les propositions IA sont les bienvenues, mais **aucun agent n'accepte un ADR ou 
 
 La **licence du futur code** doit être choisie avant une contribution externe de code ; **aucune licence n'est actuellement déclarée**, donc n'assumez pas que le contenu soit librement réutilisable. Les analyses de licences font partie de M0. Les outils tiers étudiés ne sont pas vendus comme composants déjà intégrés.
 
-Le projet est ouvert à la discussion sur les [issues](../../issues). Consultez la roadmap avant de commencer un ticket.
+Le projet est ouvert à la discussion sur les [issues](https://github.com/Rwanbt/Ravum/issues). Consultez la roadmap avant de commencer un ticket.
