@@ -9,11 +9,14 @@
 > Windows (MMCSS) mesurée sous charge CPU contrôlée, (5) la liste explicite de ce qui
 > n'a pas été exécuté et pourquoi.
 >
-> **Ce qui n'est toujours pas qualifié** : pas de WASAPI/ASIO, pas d'hôte CLAP/VST3/DAW,
-> pas de XRUN mesurable via `waveOut`, **aucune** qualification hard-réaliste. La priorité
-> temps réel Windows (MMCSS « Pro Audio » + `AVRT_PRIORITY_CRITICAL`) a été **mesurée**
-> sous charge CPU contrôlée (§5), mais c'est une demande de classe d'ordonnancement, pas
-> une garantie d'échéance. Une sonde `waveOut` legacy n'est pas un pilote audio certifié.
+> **Ce qui n'est toujours pas qualifié** : ASIO (SDK Steinberg propriétaire, non
+> disponible sans décision de licence) et hôte CLAP/VST3/DAW ; **aucune** qualification
+> hard-réaliste. WASAPI partagé (§6), WASAPI exclusif (§6.5) et un **détecteur de
+> périodes manquées** (§10) ont été mesurés, mais ce dernier est une borne inférieure
+> mesurée, pas un compteur XRUN constructeur. La priorité temps réel Windows
+> (MMCSS « Pro Audio » + `AVRT_PRIORITY_CRITICAL`) a été **mesurée** sous charge CPU
+> contrôlée (§5), mais c'est une demande de classe d'ordonnancement, pas une garantie
+> d'échéance. Une sonde `waveOut` legacy n'est pas un pilote audio certifié.
 
 ## 1. Ce qui est réellement implémenté et mesuré aujourd'hui
 
@@ -31,7 +34,7 @@
 | **Chemin DSP réel sur WASAPI mode exclusif (silence)** | **mesuré (§6.5) sur l'endpoint NVIDIA HDMI** : PCM16 48 kHz, période applicative 10 ms, 5 runs, ratio 1,0000, 0 événement en retard, 0 starvations, 0 alloc/free, 11/11 swaps. Le périphérique par défaut (MOTU) **refuse** tous les formats exclusifs balayés (`AUDCLNT_E_UNSUPPORTED_FORMAT`). |
 | ASIO, priorité temps réel WASAPI exclusive sur le périphérique par défaut | **aucun** |
 | Hôte CLAP/VST3/ASIO branché sur le module | **aucun** |
-| XRUN mesurés, glitches de pilote comptés | **aucun** (ni `waveOut` ni WASAPI partagé ne les exposent ; seules des starvations définies et des lateness mesurées) |
+| XRUN mesurés, glitches de pilote comptés | **aucun compteur officiel** ; **proxy mesuré (§10)** : `missed_periods` dérivé de la position de lecture (`IAudioClock` / `waveOutGetPosition`) vs temps écoulé et trames fournies, granularité d'une période ; validé par injection (12/11/14 périodes détectées) |
 
 ## 2. Inventaire matériel observé (Windows 11 26100)
 
@@ -601,7 +604,8 @@ cadence attendue de 100 Hz sur 3 s.
 | Périphérique réel via **WASAPI mode exclusif** | **partiellement exécuté** (§6.5) : refus explicite (`AUDCLNT_E_UNSUPPORTED_FORMAT`) du périphérique par défaut MOTU pour les 12 formats balayés ; mesure réelle sur l'endpoint NVIDIA HDMI (PCM16 48 kHz, période 10 ms, 5 runs, 0 événement en retard, 11/11 swaps). Aucune mesure exclusive sur le MOTU ; le périphérique par défaut du système n'a pas été changé. | — |
 | Périphérique réel via **ASIO** | **non exécuté** | ASIO exige un SDK tiers et un pilote ASIO dédié ; lot suivant. C'est pourtant le chemin nécessaire pour utiliser l'interface MOTU en latence minimale, puisque son endpoint WDM refuse l'exclusif. |
 | Identification OS / pilote / sample rate / buffer size | **partiel** : OS et périphériques identifiés (§2), format/période/taille de tampon et quantum de service observés (§4, §6, §6.5), mais le pilote interne et l'endpoint physique résolu par `WAVE_MAPPER` restent inconnus (`waveOutGetID` renvoie `0xFFFFFFFF`). | — |
-| Mesure des XRUN | **toujours non exécutée** | Un XRUN est un événement de pilote ; ni waveOut ni WASAPI partagé ne l''exposent. On mesure des tampons soumis en retard, des réveils tardifs, une marge de file dérivée et des **starvations définies** (buffer plein au moment d''écrire), nommés comme tels. |
+| Mesure des XRUN | **proxy mesuré, compteur officiel non** | Ni waveOut ni WASAPI n'exposent un compteur XRUN constructeur. La sonde mesure désormais missed_periods à partir de la position de lecture (IAudioClock / waveOutGetPosition) comparée au temps écoulé et aux trames fournies, granularité d'une période ; validé par injection d'underrun (§10). Le reste (tampons en retard, réveils tardifs, marge de file, starvations définies) est conservé et nommé comme tel. |
+| Mesure des XRUN sur fenêtre longue (minutes) | **toujours non exécutée** | Fenêtres de 3 s, 5 répétitions par backend (§10) ; aucune fenêtre longue. |
 | Durée de callback sur périphérique réel | **mesurée** (§4.3) : travail `process_rt` p50 7 µs / p95 14 µs / max 83 µs ; callback complet (réveil → re-soumission) p50 275 µs / p95 503 µs / max 756 µs | — |
 | Swaps répétés dans un callback réel | **mesurés** (§4.3, §4.5) : 11 activations par run sous pilote, 0 refus, avec et sans fondu | — |
 | Continuation d'état à travers un swap en conditions réelles | **mesurée** (§4.5) : `\|delta\|` aux swaps 0,0291 avec fondu (0,1260 sans), état possédé par l'hôte | — |
@@ -683,6 +687,23 @@ powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exc
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Load 12 -Variant load-r1
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Load 12 -Variant load-r2
 
+# 2quater) Campagne XRUN / periodes manquees : 3 backends x 5 runs (repos/charge alternes).
+$backends = @(
+    @{ name = 'wasapi-exclusive'; args = @('-Api', 'wasapi-exclusive', '-ExclusiveEndpoint', '1', '-Frames', '480') },
+    @{ name = 'wasapi-shared';    args = @('-Api', 'wasapi', '-Frames', '512') },
+    @{ name = 'waveout';          args = @('-Frames', '512') }
+)
+foreach ($b in $backends) {
+    foreach ($v in @('rest-r1', 'load-r1', 'rest-r2', 'load-r2', 'rest-r3')) {
+        $load = if ($v -like 'load-*') { @('-Load', '12') } else { @() }
+        powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Out "evidence/mvp0b-audio-xrun-$($b.name)-$v-2026-11-08.json" @b.args @load
+    }
+}
+
+# Validation du detecteur par injection volontaire d'underrun (diagnostic seulement) :
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Seconds 2 -InjectUnderrunMs 120 -Out evidence/mvp0b-audio-xrun-injected-wasapi-exclusive-2026-11-08.json
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Frames 512 -Seconds 2 -InjectUnderrunMs 120 -Out evidence/mvp0b-audio-xrun-injected-wasapi-shared-2026-11-08.json
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Frames 512 -Seconds 2 -InjectUnderrunMs 150 -Out evidence/mvp0b-audio-xrun-injected-waveout-2026-11-08.json
 # Commande directe de la sonde (module précompilé par ravum build) :
 cargo run -q -p ravum-dsp-harness --bin ravum-audio-probe -- --seconds 3 --frames 512 `
   --module target/ravum/artifacts/<iir_v1>.dll `
@@ -715,4 +736,135 @@ Preuves JSON de ce document :
 | `evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json` | exclusif sur le périphérique par défaut MOTU | **refusé** : `AUDCLNT_E_UNSUPPORTED_FORMAT` sur 12/12 formats, endpoint_support 4 endpoints |
 | `evidence/mvp0b-audio-wasapi-exclusive-rest-r{1,2,3}-2026-11-08.json` | exclusif NVIDIA HDMI, repos | ratio 1,0000, 0 événement en retard, lateness max 0,25–0,71 ms, 0 alloc, 11/11 swaps |
 | `evidence/mvp0b-audio-wasapi-exclusive-load-r{1,2}-2026-11-08.json` | exclusif NVIDIA HDMI, charge CPU 100 % | ratio 1,0000, 0 événement en retard, lateness max 3,5 ms, 0 alloc, 11/11 swaps |
-| `evidence/mvp0b-audio-wasapi-exclusive-campaign-2026-11-08.json` | récapitulatif **dérivé** des 5 runs + refus (pas une mesure) | agrégats + support exclusif par endpoint |
+| `evidence/mvp0b-audio-wasapi-exclusive-campaign-2026-11-08.json` | récapitulatif **dérivé** des 5 runs + refus (pas une mesure) | agrégats + support exclusif par endpoint || `evidence/mvp0b-audio-xrun-{wasapi-exclusive,wasapi-shared,waveout}-{rest-r1,load-r1,rest-r2,load-r2,rest-r3}-2026-11-08.json` | campagnes XRUN, 5 runs par backend (repos/charge alternés), 3 s, module + swaps | `missed_periods` 0–2 au repos, jusqu'à 14 sous charge 100 % (waveOut) ; voir §10 |
+| `evidence/mvp0b-audio-xrun-injected-{wasapi-exclusive,wasapi-shared,waveout}-2026-11-08.json` | validation du détecteur par underrun injecté (sommeil 120/120/150 ms) | `missed_periods` **12 / 11 / 14** — le détecteur voit bien une underrun réelle |
+| `evidence/mvp0b-audio-xrun-campaign-2026-11-08.json` | récapitulatif **dérivé** des 18 preuves brutes (pas une mesure) | agrégats, validation par injection, note de contention machine |
+
+## 10. XRUN / périodes manquées : méthode, mesures, limites, non-claims
+
+Les sections précédentes parlaient de « tampons en retard », de starvations définies et de
+cadence ; aucune ne mesurait les **périodes non servies** (la définition usuelle d'un
+XRUN côté application). Cette section ajoute un détecteur honnête, borné et validé par
+injection. Ce n'est **pas** un compteur XRUN constructeur : aucun backend utilisé ici
+n'en expose.
+
+### 10.1 Méthode
+
+Deux horloges de lecture sont disponibles :
+
+- **WASAPI** : `IAudioClient::GetService(IID_IAudioClock)` puis `IAudioClock::GetPosition`
+  (et `GetFrequency`). Si le service échoue, le rapport dit explicitement
+  `realtime.xrun_clock.available = false`, avec le HRESULT, et **`missed_periods` vaut
+  `null`** — jamais un faux zéro silencieux ;
+- **waveOut** : `waveOutGetPosition(TIME_SAMPLES)` à chaque réveil (traité comme des
+  trames ; validé par la dérive observée, toujours inférieure à une période, donc pas
+  d'interprétation « échantillons stéréo »).
+
+À chaque réveil mesuré, la sonde compare trois grandeurs :
+
+- `wall_expected_frames = temps_monotone_écoulé × sample_rate` : ce que l'horloge de la
+  machine dit qui aurait dû être joué ;
+- `position_frames` : la position de lecture rapportée par le pilote (convertie en
+  trames : `position × rate / frequency`, car la fréquence observée vaut 48 000 en
+  exclusif PCM16 mais **384 000** en partagé float32, soit un facteur 8 = block align) ;
+- `supplied_frames` : le nombre de trames réellement écrites dans le endpoint.
+
+Deux déficits en découlent :
+
+- `stall_deficit = wall_expected - position` : le temps avance alors que la position
+  piétine → le périphérique a arrêté de consommer (observé en mode exclusif : certains
+  pilotes gèlent l'horloge pendant une underrun au lieu de jouer du silence) ;
+- `played_deficit = position - supplied` : le périphérique a joué des trames que
+  l'application n'a jamais fournies (le moteur partagé continue son horloge et rend du
+  silence pendant une underrun).
+
+Le **déficit de période** est le maximum des deux ; la sonde retient son **maximum**
+depuis une ligne de base prise au premier réveil mesuré (latence constante du périphérique,
+pré-roll exclusif, chauffe du moteur exclus : pas de faux positif de démarrage). Seuls des
+déficits d'au moins **une période** deviennent `missed_periods` ; le jitter de phase de
+l'échantillonnage d'horloge (quelques trames, jamais une période) ne compte pas. Le calcul
+est fait par une fonction pure, couverte par **9 tests unitaires** (`cargo test
+-p ravum-dsp-harness`) : flux sain, période manquée, déficits partiels, tolérance, période
+inconnue, horloge qui recule, jitter sous-période, ligne de base, horloge gelée.
+
+**Validation par injection** (option de diagnostic `--inject-underrun-ms`, désactivée par
+défaut) : la sonde cesse volontairement de servir le flux une fois pendant la fenêtre
+mesurée, ce qui crée une underrun réelle. Résultat mesuré :
+
+| Backend | Sommeil injecté | `missed_periods` détectées | période |
+|---|---:|---:|---:|
+| WASAPI exclusif (NVIDIA HDMI, PCM16 48 kHz) | 120 ms | **12** | 10 ms |
+| WASAPI partagé (MOTU, float32 48 kHz) | 120 ms | **11** | 10 ms (buffer endpoint 22 ms) |
+| waveOut (512 frames) | 150 ms | **14** | 10,67 ms |
+
+Ces chiffres confirment à la fois la sensibilité et l'ordre de grandeur du détecteur ; sans
+injection, toutes les cellules de repos mesurées restent à 0–2 périodes.
+
+### 10.2 Résultats mesurés (15 runs, 3 s, module réel + swaps, repos/charge alternés)
+
+Machine partagée avec deux autres agents : la colonne CPU est la charge **système**
+mesurée dans chaque preuve, pas la charge du seul processus. Les cellules « repos » ont
+donc été mesurées entre 31 % et 94 % de CPU ambiant — c'est une limite de contexte, pas un
+résultat propre. `implied` = `(1 − ratio) × événements`, proxy indépendant donné par la
+cadence d'événements.
+
+| Backend | Cellule | CPU mesuré | ratio cadence | `missed_periods` | frames manquées | `implied` | évén. en retard | starvations | alloc/free | swaps |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| WASAPI exclusif | repos r1 | 93,7 % | 0,9966 | **2** | 972 | 1,0 | 92 | 0 | 0/0 | 11/11 |
+| WASAPI exclusif | charge r1 | 100 % | 0,9729 | **8** | 3 844 | 7,9 | 21 | 0 | 0/0 | 11/11 |
+| WASAPI exclusif | repos r2 | 70,6 % | 1,0000 | 0 | 256 | 0 | 0 | 0 | 0/0 | 11/11 |
+| WASAPI exclusif | charge r2 | 100 % | 0,9974 | **1** | 580 | 0,8 | 8 | 0 | 0/0 | 11/11 |
+| WASAPI exclusif | repos r3 | 43,7 % | 1,0000 | 0 | 37 | 0 | 0 | 0 | 0/0 | 11/11 |
+| WASAPI partagé | repos r1 | 75,4 % | 1,0005 | **1** | 908 | −0,1 | 0 | 18 | 0/0 | 11/11 |
+| WASAPI partagé | charge r1 | 100 % | 1,0001 | **1** | 767 | −0,0 | 0 | 3 | 0/0 | 10/10 |
+| WASAPI partagé | repos r2 | 55,7 % | 0,9999 | **1** | 511 | 0,0 | 0 | 0 | 0/0 | 11/11 |
+| WASAPI partagé | charge r2 | 100 % | 0,9997 | 0 | 359 | 0,1 | 0 | 0 | 0/0 | 10/10 |
+| WASAPI partagé | repos r3 | 31,4 % | 0,9995 | 0 | 423 | 0,1 | 0 | 0 | 0/0 | 11/11 |
+| waveOut | repos r1 | 39,8 % | 1,0004 | **1** | 521 | −0,1 | 0 | — | 0/0 | 11/11 |
+| waveOut | charge r1 | 100 % | 0,9823 | **5** | 2 714 | 4,7 | **190** | — | 0/0 | 11/11 |
+| waveOut | repos r2 | 52,0 % | 0,9971 | 0 | 495 | 0,8 | 0 | — | 0/0 | 11/11 |
+| waveOut | charge r2 | 100 % | 0,9474 | **14** | 7 323 | 13,6 | **185** | — | 0/0 | 11/11 |
+| waveOut | repos r3 | 45,9 % | 1,0002 | **1** | 513 | 0,1 | 0 | — | 0/0 | 11/11 |
+
+Tous les runs : 0 allocation / 0 désallocation sur le thread de rendu, swaps 10/11 sur 11
+(l'unique 10/10 tombe sur les runs sous charge les plus longs).
+
+### 10.3 Lecture honnête
+
+1. **Sous charge CPU 100 %**, les trois backends montrent des périodes manquées réelles :
+   waveOut 5 et 14 périodes (avec 190 et 185 tampons soumis en retard et une cadence
+   tombée à 0,982 / 0,947), exclusif 8 et 1, partagé 0 et 1. Le proxy est **cohérent avec
+   deux mesures indépendantes** : la cadence d'événements (`implied`) donne 7,9 / 4,7 /
+   13,6 pour 8 / 5 / 14 mesurées.
+2. **Au repos**, les cellules donnent 0–2 périodes manquées. Les runs à 1–2 périodes
+   coïncident avec un CPU ambiant élevé (75–94 %) dû aux autres agents : une fenêtre de
+   3 s peut contenir un hoquet transitoire. Ces chiffres ne sont pas des « XRUN au
+   repos » ; ils décrivent une machine partagée sollicitée, et la colonne CPU le montre.
+   Les deux cellules à 31 % et 43 % de CPU donnent 0.
+3. **La sensibilité minimale est une période** (10 ms en WASAPI 48 kHz, 10,67 ms en
+   waveOut 512). Un zéro signifie « aucune période manquée détectable à cette
+   résolution », **pas** « aucun glitch ». Un déficit inférieur à une période peut
+   exister sans être compté (`missed_frames` le montre : 37–972 trames sur les runs à
+   0 période).
+4. Les starvations définies du mode partagé (18 événements au repos, 3 sous charge)
+   restent un signal distinct, plus fin qu'une période : elles mesurent un réveil où
+   `GetCurrentPadding == bufferFrames`, pas une période non servie. Le croisement
+   « padding 0 + déficit qui grandit » est enregistré
+   (`clock_deficit_with_zero_padding_events`).
+
+### 10.4 Non-claims
+
+- **Ce n'est pas un compteur XRUN officiel** : ni WASAPI ni waveOut n'en exposent. La
+  valeur est une **borne inférieure mesurée** par la position de lecture, avec la
+  granularité d'une période.
+- Un `missed_periods = 0` **ne prouve pas** l'absence de glitches sous-période ; un
+  `missed_periods > 0` **prouve** au moins ce nombre de périodes non servies dans la
+  fenêtre mesurée.
+- La détection dépend du pilote : certains pilotes exclusifs gèlent l'horloge pendant une
+  underrun (détectée par le déficit temporel), d'autres non ; les deux voies sont
+  couvertes mais leur comportement n'est pas certifié.
+- Une seule machine, un OS, des fenêtres de 3 s, 5 répétitions par backend, machine
+  partagée avec contention : pas de qualification long terme, pas de hard-RT.
+- **ASIO n'est pas implémenté** : le SDK Steinberg est propriétaire et n'est pas
+  disponible sans décision de licence explicite ; c'est pourtant le chemin nécessaire
+  pour l'interface MOTU, dont l'endpoint WDM refuse le mode exclusif (§6.5).
