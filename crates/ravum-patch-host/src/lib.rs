@@ -23,6 +23,7 @@ pub use host::{
     PreparedPatch,
 };
 pub use reclaimer::{
-    live_modules, pending_reclamations, unloaded_modules, wait_until_idle, DeferredLibrary,
+    init_reclaimer, live_modules, pending_reclamations, unloaded_modules, wait_until_idle,
+    DeferredLibrary,
 };
-pub use slot::ArcSlot;
+pub use slot::{ArcSlot, ReadGuard};

@@ -109,7 +109,7 @@ pub fn dsp(args: &[String]) -> u8 {
             "session_after": report_after,
             "limits": [
                 "simulated cadence: no audio device, no driver, no real-time priority",
-                "the allocations counter instruments this whole process, not only the callback",
+                "the allocations and deallocations counters instrument this whole process, per thread; a zero means the instrumented allocator saw no call on that thread, not a hard-RT proof",
                 "a level change without crossfade is expected to produce a discontinuity and it is measured",
             ],
         });
@@ -130,7 +130,7 @@ pub fn dsp(args: &[String]) -> u8 {
 
     let ok = report_after
         .as_ref()
-        .map(|r| r.allocations_on_audio_thread == 0)
+        .map(|r| r.allocations_on_audio_thread == 0 && r.deallocations_on_audio_thread == 0)
         .unwrap_or(true);
     if ok {
         0
@@ -153,8 +153,11 @@ fn print_session(label: &str, report: &ravum_protocol::DspSessionReport) {
         report.block_timings.max_us
     );
     println!(
-        "  dépassements={} allocations_thread_audio={} swap={}",
-        report.overruns, report.allocations_on_audio_thread, report.swaps
+        "  dépassements={} allocations_thread_audio={} désallocations_thread_audio={} swap={}",
+        report.overruns,
+        report.allocations_on_audio_thread,
+        report.deallocations_on_audio_thread,
+        report.swaps
     );
     println!(
         "  |delta| max={:.4} (référence sinusoïdale={:.4})",

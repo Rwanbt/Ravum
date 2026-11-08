@@ -1,0 +1,76 @@
+{
+  "config": {
+    "blocks": 400,
+    "frames": 256,
+    "period_sleep_us": 0,
+    "period_us": 5333,
+    "sample_rate": 48000
+  },
+  "first_artifact": "babc8230af2358360c42e05e37730ff3ba5e502cb8a618718a7b86f13b371787",
+  "first_source": "fixtures/dsp/iir_v1.rs",
+  "limits": [
+    "simulated cadence: no audio device, no driver, no real-time priority",
+    "the allocations and deallocations counters instrument this whole process, per thread; a zero means the instrumented allocator saw no call on that thread, not a hard-RT proof",
+    "a level change without crossfade is expected to produce a discontinuity and it is measured"
+  ],
+  "schema_version": 1,
+  "session_after": {
+    "active_patch_id": "session-after",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 13,
+      "p50_us": 1,
+      "p95_us": 1,
+      "p99_us": 2
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.10794299840927124,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 1,
+    "unloaded_modules": 2
+  },
+  "session_before": {
+    "active_patch_id": "session-before",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 4,
+      "p50_us": 1,
+      "p95_us": 1,
+      "p99_us": 1
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.025295425206422806,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 0,
+    "unloaded_modules": 2
+  },
+  "swap": {
+    "active_version": 2,
+    "artifact_id": "26c008eda796b111778948cfe9be22a398bc73f1cd29462edd4fecee7dbb574a",
+    "patch_id": "dsp-iir-v2",
+    "previous_version": 1,
+    "schema_version": 1,
+    "status": "activated",
+    "timings": {
+      "activate_ms": 0,
+      "build_ms": 2,
+      "check_ms": 0,
+      "load_ms": 3,
+      "proof_ms": 0,
+      "total_ms": 5,
+      "verify_ms": 0
+    }
+  }
+}
