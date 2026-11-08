@@ -83,6 +83,7 @@ Crate `crates/ravum-daemon` (lib + 2 binaires), ajouté à `members` du
 | `daemon.rs` | orchestration : validation → identité → cache → gate → snapshot/unité → `rustc` → verdict → rapport ; péremption et annulation |
 | `report.rs` | `AnalysisReport` JSON (statut, diagnostics, timings par étape, cache) et `DaemonStats` |
 | `sysinfo.rs` | observabilité de charge (Win32 `GlobalMemoryStatusEx`, `GetSystemTimes`, Toolhelp32, `GetProcessMemoryInfo`) — best-effort, `None` si non observé |
+| `gc.rs` | GC de rétention **explicite** (P0-H) : `GcPolicy` sérialisable, inventaire cache/snapshots/état incrémental, protections du contenu vivant, suppression sûre sous verrou, `GcReport` JSON (§12) |
 | `fsutil.rs` | écriture atomique, `safe_join` anti-traversée |
 
 ### 3.2 Identités (toutes SHA-256)
@@ -388,8 +389,12 @@ disque est le coût principal, pas la mémoire résidente. Aucun test de fuite l
   différents peuvent tourner jusqu'à `max_concurrent_jobs` (non benchmarké).
 - **Révisions non persistées** : un daemon redémarré repart à la révision 0 ; la
   persistance couvre les verdicts de contenu et le répertoire incrémental.
-- **Cache disque non borné** : adressé par contenu, aucun LRU disque. Les
-  snapshots et `rmeta` s'accumulent (9 Mo pour la campagne) ; aucun GC.
+- **Cache disque non borné (état L2 historique)** : adressé par contenu, aucun LRU
+  disque automatique. Dans la campagne L2, les snapshots et `rmeta` s'accumulaient
+  (9 Mo pour 87 requêtes) sans GC. Un GC de rétention **explicite** a depuis été
+  ajouté et mesuré (§12) : plafonds, protections du contenu vivant, rapport JSON ;
+  il reste **manuel** (pas de GC automatique en tâche de fond) et ne compacte pas
+  l'état interne de rustc.
 - **Sondes machine Windows uniquement** : sur une autre plateforme, la charge
   n'est pas observée (`None` explicite), le code compile mais n'est pas mesuré.
 - **Éditeur/overlay réel non intégré** : la sémantique « buffer non sauvegardé »
@@ -413,14 +418,21 @@ Ajouts (non commités, le Lead committe) :
 - `evidence/mvp0b-incremental-bench.json`,
   `evidence/mvp0b-incremental-scale.json`,
   `evidence/mvp0b-incremental-invariants.json` ;
+- `evidence/mvp0b-daemon-gc-2026-11-08.json` (GC P0-H, §12),
+  `scripts/demo-daemon-gc.ps1` (démonstration, propage le code de sortie) ;
+- `crates/ravum-daemon/src/gc.rs`, `crates/ravum-daemon/tests/gc_integration.rs`,
+  `crates/ravum-daemon/src/bin/ravum-daemon-bench/gc.rs` (mesure GC) ;
 - ce document.
 
 Vérifications finales exécutées :
 
 ```powershell
 cargo build -p ravum-daemon --offline          # OK
-cargo test  -p ravum-daemon --offline -- --test-threads=1   # 50/50 tests OK
+cargo test  -p ravum-daemon --offline -- --test-threads=1   # 68/68 tests OK
 ```
+
+Le total est passé de 50 à **68 tests** (50 historiques inchangés + 9 tests
+unitaires GC + 9 tests d'intégration GC réels).
 
 ## 10. Intégration dans la CLI (ajoutée après la campagne, 2026-11-08)
 
@@ -461,10 +473,160 @@ d'analyse ci-dessus et cela déplace le goulot identifié vers le build/link.
 3. **Réduire l'overhead miss** : réutiliser l'unité stable sans recopier le
    snapshot quand seul un fichier change, écrire la cache L2 en asynchrone,
    polling d'annulation 1 ms — puis remesurer.
-4. **GC/compaction** : borner l'état incrémental (par contexte et par taille),
-   borner le cache disque, mesurer le coût de session en fonction de la taille du
-   répertoire (goulot n° 2).
+4. **GC/compaction** : **fait pour le GC explicite** (§12) — plafonds
+   cache/snapshots/état incrémental, `keep_recent`, dry-run, mesure réelle.
+   Restent ouverts : GC automatique en tâche de fond, compaction interne de
+   l'état rustc, soak test de plusieurs heures.
 5. **Robustesse** : deux daemons sur un même `work_dir`, crash en cours
    d'écriture, redémarrage avec état incrémental partiel — tester et documenter.
 6. **Étendre la mesure d'échelle** à un vrai crate multi-crates et à du code
    macro/traits lourd, pour vérifier que le seuil de rentabilité tient.
+
+## 12. GC de rétention borné et budget disque (P0-H, 2026-11-08)
+
+> **Statut : implémenté, testé, mesuré.** Le GC est **explicite uniquement** : une
+> analyse ne déclenche jamais de collecte. Il protège le contenu vivant (révisions
+> récentes, dernier contenu servi, dernier contexte de build) et rapporte
+> honnêtement un plafond qu'il ne peut pas atteindre plutôt que de supprimer des
+> données encore servies. Preuve brute :
+> [`evidence/mvp0b-daemon-gc-2026-11-08.json`](../../evidence/mvp0b-daemon-gc-2026-11-08.json).
+
+### 12.1 Politique (`GcPolicy`, sérialisable, `deny_unknown_fields`)
+
+| Champ | Défaut | Rôle |
+|---|---|---|
+| `max_cache_bytes` | `null` | plafond du cache de verdicts (`<work>/cache/*.json`) |
+| `max_snapshot_bytes` | `null` | plafond du store de snapshots immuables |
+| `max_incremental_bytes` | `null` | plafond de l'état incrémental par contexte (`incremental/` + `out/` + `units/`) |
+| `max_total_bytes` | `null` | plafond global des trois catégories |
+| `keep_recent` | `8` | nombre de contenus récents **toujours conservés** (≥ 1) |
+| `dry_run` | `false` | calcule le plan et le rapporte, ne supprime rien |
+
+Validation fail-closed : `keep_recent = 0` est refusé (il autoriserait la
+suppression du contenu courant), un plafond à `0` est refusé, un champ inconnu
+est refusé. Une politique sans aucun plafond est légale : elle ne supprime rien
+(elle protège seulement), et le rapport l'indique.
+
+Contenu jamais supprimé : les `keep_recent` verdicts les plus récents, le dernier
+verdict servi (`last_cache_key`), le dernier snapshot analysé
+(`last_snapshot_id`), tout snapshot référencé par un verdict conservé, le dernier
+contexte de build utilisé, et — uniquement en l'absence d'indice de récence — le
+contexte le plus récemment modifié. Les raisons sont dans
+`report.kept.reasons` (ex. `keep_recent`, `last_snapshot_id`,
+`referenced_by_kept_verdict`, `last_used_context`).
+
+### 12.2 API et accès
+
+```rust
+// lib : même verrou que les analyses (lecture = analyse, écriture = GC)
+let report = daemon.gc(&GcPolicy { max_cache_bytes: Some(16 * 1024), keep_recent: 4, ..Default::default() })?;
+```
+
+```powershell
+# serveur JSON-lines (réponse par ligne, comme analyze/stats)
+{"cmd":"gc","policy":{"max_cache_bytes":16384,"max_snapshot_bytes":131072,"keep_recent":4}}
+
+# one-shot (aucun daemon ne doit écrire le même work_dir en parallèle)
+ravum-daemon --gc --work-dir target/ravum-daemon --policy '{"max_cache_bytes":16384,"keep_recent":4,"dry_run":true}'
+ravum-daemon --gc --work-dir target/ravum-daemon --max-cache-bytes 16384 --keep-recent 4
+ravum-daemon --help          # documente --gc/--policy/--max-*-bytes/--keep-recent/--dry-run
+```
+
+Codes de sortie du mode one-shot : `0` succès (un rapport JSON sur stdout),
+`1` politique invalide ou erreur GC, `2` erreur d'usage. Les indices de récence
+sont persistés dans `<work>/retention.json` après chaque analyse servie : un GC
+one-shot lancé après l'arrêt du daemon protège donc encore le contenu récent. Le
+`GcReport` contient : `before`/`after` par catégorie (octets + entrées),
+`planned`/`deleted` (clés, snapshots, contextes, fichiers, répertoires),
+`kept.recent` (révision + `snapshot_id` conservés), `kept.reasons`,
+`budgets.{cache,snapshots,incremental,total}` (`cap`, avant, après projeté,
+`met`), `freed_bytes`, `planned_freed_bytes`, `duration_ms`, `dry_run`, `mode`,
+`errors`, `notes`.
+
+Sûreté : le GC prend le verrou I/O en **écriture** (les analyses le prennent en
+lecture pendant toute leur durée) ; suppression en deux temps (renommage
+`.gc-trash-*` puis suppression) ; répertoires absents/partiels tolérés ; une
+entrée de cache illisible est traitée comme la plus ancienne candidate ; l'état
+incrémental n'est collecté que **par contexte entier** (les fichiers internes de
+rustc ne sont jamais compactés).
+
+### 12.3 Mesure réelle (40 éditions, 3 contextes, machine de référence)
+
+Campagne : `cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite gc`
+(charge : début CPU 26,0 %, 3 310 Mo libres, 284 processus, calibration
+`rustc -vV` p50 = 78 ms ; fin CPU 31,1 %, 3 295 Mo libres, 284 processus,
+calibration p50 = 72 ms). Fixture `unit` (230 lignes). Accumulation : **40
+éditions réelles distinctes** (40 `rustc`, tous misses) + **10 compilations sous
+2 contextes supplémentaires** = 50 `rustc` en **8 048 ms** (dont 7 728 ms de
+`rustc`) ; 54 requêtes au total, aucune erreur.
+
+| Étape | Durée | Avant | Après | Libéré |
+|---|---|---|---|---|
+| Audit sans plafond (`dry_run`) | — | cache 39 916 B/50 · snapshots 364 555 B/50 · incrémental 5 021 563 B/3 ctx · **5 426 034 B** | idem | 0 |
+| **GC #1** `max_cache_bytes=16 384`, `max_snapshot_bytes=131 072`, `keep_recent=4` | **86 ms** | cache 39 916 B/50 · snapshots 364 555 B/50 | cache **15 829 B/16** · snapshots **130 653 B/18** | **257 989 B** (34 verdicts + 32 snapshots, 194 fichiers/32 répertoires) |
+| **GC #2** `max_incremental_bytes=1`, `keep_recent=4` | **26 ms** | incrémental 5 005 765 B/3 ctx | incrémental **1 667 805 B/1 ctx** | **3 337 960 B** (2 contextes âgés collectés, contexte courant conservé) |
+| Dry-run final (plafonds 1 B partout) | **8 ms** | plan 1 798 206 B | disque inchangé, `freed_bytes=0` | — |
+
+Bilan disque mesuré sur le répertoire complet : **5 440 609 → 1 827 109 B
+(−66,4 %)** après les deux GC (112 ms cumulés). Après les vérifications qui
+réécrivent légitimement de l'état (cache + contexte reconstruit), le répertoire
+finit à 2 674 389 B, soit **−50,8 %** par rapport à l'état pré-GC (le second
+chiffre est le plus conservateur). L'écart de ~9,7 Ko entre `freed_bytes` du
+rapport et la baisse du répertoire sur GC #1 vient du fichier `retention.json`
+(indices de récence, réécrit après chaque analyse) et des métadonnées : les deux
+mesures sont reportées, aucune n'est masquée.
+
+Budgets observés : GC #1 satisfait ses deux plafonds (`cache.met=true`,
+`snapshots.met=true`) tout en gardant 4 contenus récents ; GC #2 **ne peut pas**
+satisfaire `max_incremental_bytes=1` parce que le contexte actif (1 667 805 B)
+est protégé → `incremental.met=false`, explicitement rapporté.
+
+Vérifications après GC (le point critique : aucun gain obtenu par invalidation) :
+
+| Vérification | Résultat mesuré |
+|---|---|
+| Contenu récent (dernier servi) analysé après GC #1 | **cache hit**, `analysis_ms = 0`, **aucun `rustc`** (1–2 ms) |
+| Contenu le plus ancien (verdict collecté) analysé après GC #1 | **miss**, reconstruction par un vrai `rustc` : 185–194 ms, `rustc_runs` 50 → 51 |
+| Nouveau contenu sous un contexte collecté par GC #2 | **miss**, compilé en 173 ms, répertoire incrémental du contexte recréé |
+| Dry-run final | plan non vide, **0 octet libéré**, disque inchangé |
+| Stats cohérentes | `gc_runs=4`, `gc_freed_bytes=3 595 949` (= somme des GC réels), `gc_deleted_entries=68` (34 + 32 + 2) |
+
+### 12.4 Tests
+
+`cargo test -p ravum-daemon --offline -- --test-threads=1` → **68 tests, 68
+réussis, 0 échec** : les **50 tests historiques restent verts**, +9 tests
+unitaires GC (politique, round-trip JSON, protections, dry-run, idempotence,
+répertoires partiels, plafond global, contenu dernier) et +9 tests d'intégration
+GC réels (cache hit récent / reconstruction ancienne, contenu courant jamais
+supprimé, idempotence, dry-run sans suppression, liste vide/partielle, politiques
+invalides, budget mémoire/processus, cohérence stats↔disque, **CLI one-shot avec
+codes 0/1**, **commande serveur `gc`**). Démonstration reproductible :
+`powershell -ExecutionPolicy Bypass -File scripts/demo-daemon-gc.ps1` (sortie 0
+observée : dry-run planifie 2 victimes, GC réel 3→2 entrées / 1 042 B libérés,
+redémarrage : récent = hit disque 0 ms, ancien = miss reconstruit 171 ms).
+
+### 12.5 Limites (spécifiques au GC)
+
+- **Pas de GC automatique** : aucune collecte en tâche de fond ni pendant une
+  analyse ; un client ou un opérateur doit l'appeler (serveur ou one-shot).
+- **Pas de compaction de l'état incrémental de rustc lui-même** : seule la
+  suppression d'un contexte entier est implémentée. Avec un seul contexte actif,
+  ses octets ne peuvent pas baisser ; le plafond est alors rapporté non satisfait
+  (`met=false`), jamais contourné en supprimant le contexte courant.
+- **One-shot et daemon vivant** : le GC one-shot suppose qu'aucun daemon n'écrit
+  le même `work_dir` ; le GC concurrent multi-processus n'est pas testé.
+- **Récence** : en mode one-shot, la protection repose sur `retention.json`
+  persisté et, à défaut, sur les horodatages de fichiers (granularité seconde,
+  ordre plus grossier). Aucun cas de fichier d'indices corrompu n'est mesuré
+  au-delà de « fichier ignoré ».
+- **Pas de soak test** : la mesure couvre 40 éditions (~5,4 Mo) et non plusieurs
+  heures de croissance ; le coût du GC est dominé par les scans de répertoires
+  (86 ms pour 50 verdicts + 50 snapshots + 3 contextes ; 26 ms pour 3 contextes),
+  donc il croît avec le nombre de fichiers, pas avec la taille d'unité.
+- **Pas de mesure multi-crates** : les contextes multiples sont simulés par des
+  `crate_name` distincts sur la même fixture. L'état incrémental d'un vrai crate
+  large (24,6 Mo mesurés en §5) n'a pas été collecté dans cette campagne.
+- **Pas de GC dans la CI** : la démonstration n'est pas branchée au workflow
+  GitHub (hors périmètre de cette tâche) ; elle est reproductible localement.
+- **Windows uniquement** pour la campagne (métadonnées de fichiers) ; le code
+  compile et les chemins sont portables, mais aucun autre OS n'est mesuré.

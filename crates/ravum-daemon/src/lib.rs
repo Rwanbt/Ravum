@@ -50,6 +50,7 @@ pub mod diagnostics;
 pub mod error;
 pub mod fsutil;
 pub mod gate;
+pub mod gc;
 pub mod hash;
 pub mod report;
 pub mod revision;
@@ -65,6 +66,10 @@ pub use config::{
 pub use daemon::{single_file_request, work_dir_below, Daemon};
 pub use diagnostics::{parse_rustc_json, signature_set, Diagnostic, ParsedOutput, Severity};
 pub use error::{DaemonError, ErrorKind, Result};
+pub use gc::{
+    run_gc, BudgetStatus, CategorySizes, GcBudgets, GcDeleted, GcKept, GcMode, GcPolicy,
+    GcProtection, GcReport, RecentAnalysis, RetentionState,
+};
 pub use report::{AnalysisReport, DaemonStats, ReportStatus, SnapshotReport, Timings};
 pub use snapshot::{
     sync_unit_dir, AnalysisRequest, MaterializedSnapshot, SnapshotIdentity, SnapshotStore,
