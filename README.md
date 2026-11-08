@@ -46,6 +46,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Moteur de preuve Ravum / qualification RT / full-stack | **Non implémentés** (M2–M4 non commencés) |
 | Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
 | Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
+| DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, **0 allocation** mesurée sur 400 blocs ; aucun périphérique audio, aucun crossfade |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
@@ -68,6 +69,7 @@ ravum status                 # dernier état enregistré
 ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
 ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
 ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
+ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next)
 ```
 
 Démonstrations exécutables : `scripts/demo-m1.ps1` (hot patch d'un processus vivant)
@@ -83,6 +85,11 @@ l'absence de prouveur externe produit `Unsupported`, pas un succès.
 **Cibles de latence non atteintes** : ni le diagnostic (< 50 ms) ni le patch
 complet (< 500 ms) ne passent de façon reproductible, parce que `rustc` est lancé à
 froid à chaque édition. Mesures et verdict : [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
+
+**DSP** : le chemin audio est sans verrou et sans allocation (mesuré), mais il n'y a
+**aucun périphérique audio, aucune priorité temps réel et aucun crossfade** — un
+changement de gain ou de coefficient produit un clic, mesuré et publié. Détail :
+[docs/mvp/M3-evidence.md](docs/mvp/M3-evidence.md).
 
 ## Stratégie d'implémentation : apprendre avant de figer
 
