@@ -1,0 +1,64 @@
+name: MVP product checks (build, tests, demos)
+
+# This workflow qualifies the MVP-0a code: it builds, runs the test suite and
+# executes the two demonstrations. It does NOT qualify a compiler, a proof, an
+# ABI stability guarantee, audio real-time behaviour, or any release.
+
+on:
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  mvp:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Show toolchain
+        run: |
+          rustc -vV
+          cargo --version
+          git --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-mvp-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mvp-
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      # Serialized on purpose: the M1 tests build real native libraries and the
+      # reference machine has little memory headroom. Parallelism here would
+      # measure the runner's RAM, not the code.
+      - name: Test workspace
+        run: cargo test --workspace -- --test-threads=1
+
+      - name: Demo M1 - hot patch in a living process
+        run: powershell -ExecutionPolicy Bypass -File scripts/demo-m1.ps1
+
+      - name: Demo COLLAB-1 - multi-agent proposals and single Git writer
+        run: powershell -ExecutionPolicy Bypass -File scripts/demo-collab.ps1 -Commit
+
+      - name: Measure the loop (informational, not a performance gate)
+        run: |
+          cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json
+
+      - name: Scope notice
+        run: echo "Product checks only: no proof, no release, no real-time qualification, no ABI stability claim."
