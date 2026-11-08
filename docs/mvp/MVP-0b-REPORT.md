@@ -327,6 +327,8 @@ d'un autre worker (WIP), jamais présents dans un commit.
 | Cycle complet, contenu **inchangé** (édition→activation) | 85–177 ms (p50) | **8–13 ms** (p50), p95 9–18 ms | ×10 à ×13, cache de verdicts + cache d'artefacts |
 | Cycle complet, **édition réelle**, petite unité | 316 ms p50 / 335 ms p95 | 339 ms p50 / 362 ms p95 | MVP-0b ≈ +7 %, build à froid dominant |
 | Cycle complet, **édition réelle**, unité 2 313 lignes | 524 ms p50 / 702 ms p95 | 600 ms p50 / 743 ms p95 | cible p95 < 500 ms **manquée** à cette taille |
+| **Scheduling chevauché** (analyse ∥ build), petite unité | 366 ms p50 / 407 ms p95 | **303 ms p50 / 316 ms p95** | −17/−22 % ; cible p95 < 500 ms tenue |
+| **Scheduling chevauché**, unité 2 313 lignes | 581 ms p50 / 670 ms p95 | **412 ms p50 / 428 ms p95** | −29/−31 % ; cible p95 < 500 ms **atteinte** par le scheduling, pas par un build plus rapide |
 
 ## 16. CPU et RAM
 
@@ -457,10 +459,13 @@ swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
 
 ## 24. Prochaines étapes proposées
 
-1. Réduire le coût d'une modification réelle, désormais identifié comme le **build+link à
-   froid** (230–435 ms) : cache de builds par contenu étendu, `-C incremental` sur la
-   compilation cdylib, lien incrémental mesuré, puis re-mesurer le cycle complet avec
-   `ravum cycle-bench`.
+1. Réduire le coût d'une modification réelle : le **build+link à froid** (230–435 ms)
+   reste le chemin critique (`-C incremental` cdylib et `lld-link` ont été mesurés et
+   rejetés). Deux leviers validés par la mesure : (a) **chevaucher analyse et build**
+   (`--concurrent`) : p50 −15/−31 %, p95 −18/−38 %, cible p95 < 500 ms atteinte sur les
+   deux tailles — à productiser dans `ravum watch` avec rejet du build si le diagnostic
+   échoue ; (b) réduire le nombre de builds (cache de builds par contenu, patchs
+   multi-fonctions).
 2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
    features), vérification sémantique des changements acceptés, historique d'activation
    natif partagé avec le daemon.

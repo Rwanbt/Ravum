@@ -38,7 +38,7 @@ pub fn cycle_bench(args: &[String]) -> u8 {
     let Some(file) = positional(args, 0) else {
         eprintln!(
             "usage: ravum cycle-bench <fixture.rs> [--iterations N] [--out PATH] \
-             [--daemon-work DIR] [--reuse-daemon] [--json]"
+             [--daemon-work DIR] [--reuse-daemon] [--concurrent] [--json]"
         );
         return 2;
     };
@@ -53,6 +53,7 @@ pub fn cycle_bench(args: &[String]) -> u8 {
         .map(PathBuf::from)
         .unwrap_or_else(|| work_dir().join("cycle-daemon"));
     let reuse_daemon = args.iter().any(|a| a == "--reuse-daemon");
+    let concurrent = args.iter().any(|a| a == "--concurrent");
     let print_json = args.iter().any(|a| a == "--json");
 
     // Optional load probes, injected by the caller (PowerShell) so the evidence file
@@ -140,6 +141,7 @@ pub fn cycle_bench(args: &[String]) -> u8 {
                     &cold_pipeline,
                     &warm_pipeline,
                     &mut daemon,
+                    concurrent,
                 );
                 if phase == Phase::Edit && !sample.activated {
                     failed_edits += 1;
@@ -199,6 +201,7 @@ pub fn cycle_bench(args: &[String]) -> u8 {
             "rustc_spawn_ms": stats(&calibration),
             "note": "median wall time of a bare `rustc -vV` spawn in this run: machine-load floor, not analysis cost",
         },
+        "scheduling": if concurrent { "concurrent" } else { "sequential" },
         "artifact_cache": "enabled in both variants, but each variant has its own work directory: an edit is a real build in both, a resubmit is a cache hit in both",
         "samples": samples.iter().map(Sample::to_json).collect::<Vec<_>>(),
         "limits": [
@@ -208,6 +211,7 @@ pub fn cycle_bench(args: &[String]) -> u8 {
             "the daemon covers analysis only: build, verify and load stay cold and unchanged",
             "p95/p99 over a small sample is a coarse nearest-rank estimate, not a stable tail",
             "a resubmit is refused AlreadyActive by design: it measures the cache path, not a new activation",
+            "with --concurrent, the analysis and build share the machine: each stage wall time includes contention, while total_ms is the real overlapped wall clock",
         ],
     });
 
@@ -306,6 +310,122 @@ fn edited_content(base: &str, iteration: u64) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Result of the analysis stage, shared by the sequential and concurrent paths.
+enum AnalysisStage {
+    Clean {
+        wall_ms: u64,
+        engine_ms: u64,
+        cache_kind: String,
+    },
+    Diagnostics {
+        wall_ms: u64,
+        engine_ms: u64,
+        cache_kind: String,
+    },
+    Failed {
+        stage: &'static str,
+        detail: String,
+    },
+}
+
+/// Result of the codegen+link stage.
+enum BuildStage {
+    Built { build: BuildOutput, wall_ms: u64 },
+    Failed { stage: &'static str, detail: String },
+}
+
+#[allow(clippy::too_many_arguments)]
+fn analyze_stage(
+    variant: Variant,
+    phase: Phase,
+    iteration: u64,
+    revision: u64,
+    content: &str,
+    pipeline: &Pipeline,
+    daemon: &Daemon,
+) -> AnalysisStage {
+    match variant {
+        Variant::Cold => {
+            let snapshot = SourceSnapshot::new([(LOGICAL_PATH.to_owned(), content.to_owned())]);
+            let begin = Instant::now();
+            match pipeline.analyze(&snapshot) {
+                Ok(outcome) => {
+                    let wall_ms = begin.elapsed().as_millis() as u64;
+                    if outcome.diagnostics.has_errors() {
+                        AnalysisStage::Diagnostics {
+                            wall_ms,
+                            engine_ms: wall_ms,
+                            cache_kind: "cold".to_owned(),
+                        }
+                    } else {
+                        AnalysisStage::Clean {
+                            wall_ms,
+                            engine_ms: wall_ms,
+                            cache_kind: "cold".to_owned(),
+                        }
+                    }
+                }
+                Err(error) => AnalysisStage::Failed {
+                    stage: "adapter error",
+                    detail: error.0,
+                },
+            }
+        }
+        Variant::Daemon => {
+            let request = single_file_request(
+                revision,
+                format!("cycle-bench-{iteration}-{}", phase.label()),
+                LOGICAL_PATH,
+                content.to_owned(),
+                BuildContext::default(),
+            );
+            let begin = Instant::now();
+            match daemon.analyze(&request) {
+                Ok(report) => {
+                    let wall_ms = begin.elapsed().as_millis() as u64;
+                    let cache_kind = format!("{:?}", report.cache.kind);
+                    if report.error_count() > 0 {
+                        AnalysisStage::Diagnostics {
+                            wall_ms,
+                            engine_ms: report.timings.analysis_ms,
+                            cache_kind,
+                        }
+                    } else {
+                        AnalysisStage::Clean {
+                            wall_ms,
+                            engine_ms: report.timings.analysis_ms,
+                            cache_kind,
+                        }
+                    }
+                }
+                Err(error) => AnalysisStage::Failed {
+                    stage: "daemon error",
+                    detail: error.to_string(),
+                },
+            }
+        }
+    }
+}
+
+fn build_stage(pipeline: &Pipeline, snapshot: &SourceSnapshot) -> BuildStage {
+    let begin = Instant::now();
+    match pipeline.build(snapshot) {
+        Ok(outcome) if outcome.success => BuildStage::Built {
+            build: outcome.build,
+            wall_ms: begin.elapsed().as_millis() as u64,
+        },
+        Ok(_) => BuildStage::Failed {
+            stage: "build refused",
+            detail: "build failed".to_owned(),
+        },
+        Err(error) => BuildStage::Failed {
+            stage: "adapter error",
+            detail: error.0,
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_submission(
     variant: Variant,
     phase: Phase,
@@ -317,6 +437,7 @@ fn run_submission(
     cold_pipeline: &Pipeline,
     warm_pipeline: &Pipeline,
     daemon: &mut Daemon,
+    concurrent: bool,
 ) -> Sample {
     let base = Sample {
         iteration,
@@ -329,6 +450,8 @@ fn run_submission(
         load_ms: 0,
         activate_ms: 0,
         total_ms: 0,
+        critical_path_ms: 0,
+        sequential_estimate_ms: 0,
         activated: false,
         outcome: "unstarted".to_owned(),
         cache_kind: "none".to_owned(),
@@ -342,62 +465,66 @@ fn run_submission(
         Variant::Daemon => (warm_pipeline, warm_host),
     };
 
-    // 1. analysis / diagnostics
-    let (analysis_ms, engine_ms, cache_kind, has_errors) = match variant {
-        Variant::Cold => {
-            let begin = Instant::now();
-            let outcome = match pipeline.analyze(&snapshot) {
-                Ok(outcome) => outcome,
-                Err(error) => {
-                    return base.failed("adapter error", error.0, started);
-                }
-            };
-            let elapsed = begin.elapsed().as_millis() as u64;
+    // 1 + 2. analysis and codegen+link: sequential by default, or overlapped on two
+    // threads when `--concurrent`. Overlapping is the two-track architecture the mandate
+    // asks for (interactive diagnostics as soon as possible, heavy build in parallel);
+    // the measurement keeps the two durations and the real wall clock separately so the
+    // contention effect is visible instead of hidden.
+    let (analysis, build) = if concurrent {
+        std::thread::scope(|scope| {
+            let analysis = scope.spawn(|| {
+                analyze_stage(
+                    variant, phase, iteration, revision, content, pipeline, daemon,
+                )
+            });
+            let build = scope.spawn(|| build_stage(pipeline, &snapshot));
             (
-                elapsed,
-                elapsed,
-                "cold".to_owned(),
-                outcome.diagnostics.has_errors(),
+                analysis.join().unwrap_or(AnalysisStage::Failed {
+                    stage: "analysis panicked",
+                    detail: "analysis thread panicked".to_owned(),
+                }),
+                build.join().unwrap_or(BuildStage::Failed {
+                    stage: "build panicked",
+                    detail: "build thread panicked".to_owned(),
+                }),
             )
-        }
-        Variant::Daemon => {
-            let request = single_file_request(
-                revision,
-                format!("cycle-bench-{iteration}-{}", phase.label()),
-                LOGICAL_PATH,
-                content.to_owned(),
-                BuildContext::default(),
-            );
-            let begin = Instant::now();
-            let report = match daemon.analyze(&request) {
-                Ok(report) => report,
-                Err(error) => return base.failed("daemon error", error.to_string(), started),
-            };
-            (
-                begin.elapsed().as_millis() as u64,
-                report.timings.analysis_ms,
-                format!("{:?}", report.cache.kind),
-                report.error_count() > 0,
-            )
-        }
+        })
+    } else {
+        (
+            analyze_stage(
+                variant, phase, iteration, revision, content, pipeline, daemon,
+            ),
+            build_stage(pipeline, &snapshot),
+        )
     };
-    if has_errors {
-        return base.analysis_failed(analysis_ms, engine_ms, cache_kind, started);
-    }
 
-    // 2. codegen + link
-    let begin = Instant::now();
-    let build = match pipeline.build(&snapshot) {
-        Ok(outcome) if outcome.success => outcome,
-        Ok(_) => return base.failed("build refused", "build failed".to_owned(), started),
-        Err(error) => return base.failed("adapter error", error.0, started),
+    let (analysis_ms, engine_ms, cache_kind) = match analysis {
+        AnalysisStage::Failed { stage, detail } => return base.failed(stage, detail, started),
+        AnalysisStage::Diagnostics {
+            wall_ms,
+            engine_ms,
+            cache_kind,
+        } => {
+            return base.analysis_failed(wall_ms, engine_ms, cache_kind, started);
+        }
+        AnalysisStage::Clean {
+            wall_ms,
+            engine_ms,
+            cache_kind,
+        } => (wall_ms, engine_ms, cache_kind),
     };
-    let build_ms = begin.elapsed().as_millis() as u64;
-    let cached_build = build.build.cached_build;
+
+    let (build, build_ms) = match build {
+        BuildStage::Failed { stage, detail } => return base.failed(stage, detail, started),
+        BuildStage::Built { build, wall_ms } => (build, wall_ms),
+    };
+    let cached_build = build.cached_build;
+    let (critical_path_ms, sequential_estimate_ms) =
+        schedule_effect(analysis_ms, build_ms);
 
     // 3. smoke verification (the same TESTED evidence the loop uses)
     let begin = Instant::now();
-    let evidence: EvidenceRecord = match smoke_verify(&build.build) {
+    let evidence: EvidenceRecord = match smoke_verify(&build) {
         Ok(evidence) => evidence,
         Err(reason) => return base.failed("verify refused", format!("{reason:?}"), started),
     };
@@ -405,10 +532,7 @@ fn run_submission(
 
     // 4. native load + ABI/manifest validation
     let begin = Instant::now();
-    let prepared = match prepare(
-        Path::new(&build.build.artifact_path),
-        host.expected_abi(),
-    ) {
+    let prepared = match prepare(Path::new(&build.artifact_path), host.expected_abi()) {
         Ok(prepared) => prepared,
         Err(reason) => return base.failed("load refused", format!("{reason:?}"), started),
     };
@@ -417,7 +541,7 @@ fn run_submission(
     // 5. activation
     let begin = Instant::now();
     let current: SnapshotId = snapshot.id().clone();
-    let report = host.apply(prepared, &build.build, Some(&evidence), &current);
+    let report = host.apply(prepared, &build, Some(&evidence), &current);
     let activate_ms = begin.elapsed().as_millis() as u64;
     let activated = report.status == ActivationStatus::Activated;
     let outcome = if activated {
@@ -437,11 +561,19 @@ fn run_submission(
         load_ms,
         activate_ms,
         total_ms: started.elapsed().as_millis() as u64,
+        critical_path_ms,
+        sequential_estimate_ms,
         activated,
         outcome,
         cache_kind,
         cached_build,
     }
+}
+
+/// Two overlapping stages: the slowest one is the critical path, their sum is what a
+/// strictly sequential loop would spend inside them (before the shared tail stages).
+fn schedule_effect(analysis_ms: u64, build_ms: u64) -> (u64, u64) {
+    (analysis_ms.max(build_ms), analysis_ms + build_ms)
 }
 
 fn env_u64(name: &str) -> Option<u64> {
@@ -474,6 +606,10 @@ struct Sample {
     load_ms: u64,
     activate_ms: u64,
     total_ms: u64,
+    /// Wall time of the slowest of the two overlapped stages (analysis vs build).
+    critical_path_ms: u64,
+    /// Sum of the two stages: what a strictly sequential loop would have spent inside them.
+    sequential_estimate_ms: u64,
     activated: bool,
     outcome: String,
     cache_kind: String,
@@ -514,6 +650,8 @@ impl Sample {
             "load_ms": self.load_ms,
             "activate_ms": self.activate_ms,
             "total_ms": self.total_ms,
+            "critical_path_ms": self.critical_path_ms,
+            "sequential_estimate_ms": self.sequential_estimate_ms,
             "activated": self.activated,
             "outcome": self.outcome,
             "analysis_cache": self.cache_kind,
@@ -542,6 +680,8 @@ fn scenario_stats(samples: &[Sample], variant: Variant) -> serde_json::Value {
                 "load_ms": stats(&column(&|s| s.load_ms)),
                 "activate_ms": stats(&column(&|s| s.activate_ms)),
                 "total_ms": stats(&column(&|s| s.total_ms)),
+                "critical_path_ms": stats(&column(&|s| s.critical_path_ms)),
+                "sequential_estimate_ms": stats(&column(&|s| s.sequential_estimate_ms)),
                 "cached_builds": selected.iter().filter(|s| s.cached_build).count(),
                 "outcomes": outcome_counts(&selected),
             }),
@@ -575,8 +715,9 @@ fn print_summary(payload: &serde_json::Value) {
         for phase in ["edit", "resubmit"] {
             let block = &payload["scenarios"][variant][phase];
             println!(
-                "  {variant:<6} {phase:<8} analysis p50={:>4}ms total p50={:>4}ms p95={:>4}ms activated={} cached_builds={}",
+                "  {variant:<6} {phase:<8} analysis p50={:>4}ms build p50={:>4}ms total p50={:>4}ms p95={:>4}ms activated={} cached_builds={}",
                 block["analysis_ms"]["p50"],
+                block["build_ms"]["p50"],
                 block["total_ms"]["p50"],
                 block["total_ms"]["p95"],
                 block["activated"],
@@ -625,6 +766,8 @@ mod tests {
             load_ms: 1,
             activate_ms: 1,
             total_ms: 8,
+            critical_path_ms: 8,
+            sequential_estimate_ms: 8,
             activated: false,
             outcome: "Some(AlreadyActive { artifact_id: ArtifactId(\"x\") })".to_owned(),
             cache_kind: "Memory".to_owned(),
@@ -636,6 +779,13 @@ mod tests {
             Some(1),
             "one outcome group: {counts}"
         );
+    }
+
+    #[test]
+    fn overlapping_stages_use_the_slowest_as_critical_path() {
+        assert_eq!(schedule_effect(100, 250), (250, 350));
+        assert_eq!(schedule_effect(300, 120), (300, 420));
+        assert_eq!(schedule_effect(0, 0), (0, 0));
     }
 
     #[test]
