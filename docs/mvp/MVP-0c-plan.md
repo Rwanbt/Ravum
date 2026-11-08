@@ -263,6 +263,18 @@ Cibles mesurées, pas déclarées :
   réels si des statistiques fiables existent ; sinon agents scriptés + rapport
   explicite « pas de tokens mesurés ». Ne jamais inventer de consommation.
 
+  **Statistiques d'usage vérifiées dans l'environnement (2026-11-09)** : le harnais
+  multi-agents local journalise, pour chaque message assistant, un objet
+  `data.usage {inputTokens, outputTokens, totalTokens, cacheReadTokens}` dans
+  `%DSH_HOME%/sessions/<workspace>/<session>/session.v4.jsonl.zstd` (zstd, lisible
+  par Node 26 `zlib.zstdDecompressSync`). Chaque agent durable (Lead et teammates)
+  possède son propre fichier de session, mis à jour pendant l'exécution. Les tokens
+  et la durée par agent sont donc **mesurables sans clé API**, ce qui autorise une
+  campagne S8 réelle à petite échelle avec les subagents du harnais. Limites : pas de
+  ventilation par tâche, `cacheReadTokens` inclus dans les totaux, pas de coût
+  monétaire exposé, et une campagne concurrente consomme réellement du budget LLM —
+  elle doit rester bornée et pré-enregistrée.
+
 ## 7. L4 — tests, CI, DSP, vérification (conception)
 
 - Suite complète `cargo test --workspace`, démos M1–M4, E2E navigateur (10
