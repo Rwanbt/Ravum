@@ -30,8 +30,8 @@
 //! binary is a thin transport, not a second implementation.
 
 use ravum_daemon::{
-    AnalysisRequest, BuildContext, Daemon, DaemonConfig, GcMode, GcPolicy, GcProtection,
-    GcReport, Priority, RetentionState, SourceFile,
+    AnalysisRequest, BuildContext, Daemon, DaemonConfig, GcMode, GcPolicy, GcProtection, GcReport,
+    Priority, RetentionState, SourceFile,
 };
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
@@ -46,12 +46,15 @@ struct PolicyFlags {
     max_incremental_bytes: Option<u64>,
     max_total_bytes: Option<u64>,
     keep_recent: Option<usize>,
+    compact_incremental: Option<bool>,
+    keep_incremental_sessions: Option<usize>,
     dry_run: Option<bool>,
 }
 
 fn main() {
     let mut config = DaemonConfig::default();
     let mut gc_mode = false;
+    let mut listen: Option<String> = None;
     let mut policy_json: Option<String> = None;
     let mut overrides = PolicyFlags::default();
     let mut args = std::env::args().skip(1);
@@ -96,12 +99,10 @@ fn main() {
                 None => usage_exit("--auto-gc-keep-recent needs an integer >= 1"),
             },
             "--auto-gc-idle-only" => config.auto_gc.idle_only = true,
-            "--auto-gc-max-cache-bytes" => {
-                match args.next().and_then(|value| value.parse().ok()) {
-                    Some(value) => config.auto_gc.max_cache_bytes = Some(value),
-                    None => usage_exit("--auto-gc-max-cache-bytes needs an integer"),
-                }
-            }
+            "--auto-gc-max-cache-bytes" => match args.next().and_then(|value| value.parse().ok()) {
+                Some(value) => config.auto_gc.max_cache_bytes = Some(value),
+                None => usage_exit("--auto-gc-max-cache-bytes needs an integer"),
+            },
             "--auto-gc-max-snapshot-bytes" => {
                 match args.next().and_then(|value| value.parse().ok()) {
                     Some(value) => config.auto_gc.max_snapshot_bytes = Some(value),
@@ -116,6 +117,10 @@ fn main() {
             }
             // --- one-shot GC options ---
             "--gc" => gc_mode = true,
+            "--listen" => match args.next() {
+                Some(value) => listen = Some(value),
+                None => usage_exit("--listen needs ADDR (e.g. 127.0.0.1:0)"),
+            },
             "--policy" => match args.next() {
                 Some(value) => policy_json = Some(value),
                 None => usage_exit("--policy needs inline JSON or a path to a JSON file"),
@@ -140,12 +145,24 @@ fn main() {
                 Some(value) => overrides.keep_recent = Some(value),
                 None => usage_exit("--keep-recent needs an integer >= 1"),
             },
+            "--compact-incremental" => overrides.compact_incremental = Some(true),
+            "--keep-incremental-sessions" => match args.next().and_then(|value| value.parse().ok())
+            {
+                Some(value) => overrides.keep_incremental_sessions = Some(value),
+                None => usage_exit("--keep-incremental-sessions needs an integer >= 1"),
+            },
             "--dry-run" => overrides.dry_run = Some(true),
             "--help" | "-h" => print_help_exit_ok(),
             other => usage_exit(&format!("unknown argument {other:?}")),
         }
     }
 
+    if listen.is_some() && gc_mode {
+        usage_exit("--listen cannot be combined with --gc (choose the TCP server or one-shot GC)");
+    }
+    if let Some(address) = listen {
+        run_tcp_server(config, &address);
+    }
     if gc_mode {
         run_one_shot_gc(&config.work_dir, policy_json.as_deref(), &overrides);
     }
@@ -177,6 +194,7 @@ fn main() {
     }));
 
     let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(line) => line,
@@ -199,7 +217,7 @@ fn main() {
                 continue;
             }
         };
-        if handle(&daemon, &value) {
+        if handle(&daemon, &value, &mut stdout) {
             break;
         }
     }
@@ -215,20 +233,24 @@ fn policy_flags_empty(overrides: &PolicyFlags) -> bool {
         && overrides.max_incremental_bytes.is_none()
         && overrides.max_total_bytes.is_none()
         && overrides.keep_recent.is_none()
+        && overrides.compact_incremental.is_none()
+        && overrides.keep_incremental_sessions.is_none()
         && overrides.dry_run.is_none()
 }
 
 /// Builds the effective policy: `--policy` (inline JSON or file), then explicit
 /// per-field flags override it. Errors are reported with exit code 1.
-fn effective_policy(policy_json: Option<&str>, overrides: &PolicyFlags) -> Result<GcPolicy, String> {
+fn effective_policy(
+    policy_json: Option<&str>,
+    overrides: &PolicyFlags,
+) -> Result<GcPolicy, String> {
     let mut policy = match policy_json {
         Some(raw) => {
             let text = if raw.trim_start().starts_with('{') {
                 raw.to_owned()
             } else {
-                std::fs::read_to_string(raw).map_err(|error| {
-                    format!("cannot read policy file {raw:?}: {error}")
-                })?
+                std::fs::read_to_string(raw)
+                    .map_err(|error| format!("cannot read policy file {raw:?}: {error}"))?
             };
             serde_json::from_str::<GcPolicy>(&text)
                 .map_err(|error| format!("invalid --policy JSON: {error}"))?
@@ -249,6 +271,12 @@ fn effective_policy(policy_json: Option<&str>, overrides: &PolicyFlags) -> Resul
     }
     if let Some(value) = overrides.keep_recent {
         policy.keep_recent = value;
+    }
+    if let Some(value) = overrides.compact_incremental {
+        policy.compact_incremental = value;
+    }
+    if let Some(value) = overrides.keep_incremental_sessions {
+        policy.keep_incremental_sessions = value;
     }
     if let Some(value) = overrides.dry_run {
         policy.dry_run = value;
@@ -319,23 +347,26 @@ fn emit_gc_report(report: &GcReport) {
 }
 
 /// Handles one command. Returns `true` when the daemon must shut down.
-fn handle(daemon: &Daemon, value: &Value) -> bool {
+fn handle<W: Write>(daemon: &Daemon, value: &Value, out: &mut W) -> bool {
     let id = value.get("id").cloned().unwrap_or(Value::Null);
     let command = value.get("cmd").and_then(Value::as_str).unwrap_or_default();
     match command {
         "ping" => {
-            emit(&json!({"id": id, "ok": true, "pong": true}));
+            write_json(out, &json!({"id": id, "ok": true, "pong": true}));
             false
         }
         "analyze" => {
             let request = match parse_request(value) {
                 Ok(request) => request,
                 Err(message) => {
-                    emit(&json!({
-                        "id": id,
-                        "ok": false,
-                        "error": {"kind": "invalid_request", "message": message},
-                    }));
+                    write_json(
+                        out,
+                        &json!({
+                            "id": id,
+                            "ok": false,
+                            "error": {"kind": "invalid_request", "message": message},
+                        }),
+                    );
                     return false;
                 }
             };
@@ -343,47 +374,64 @@ fn handle(daemon: &Daemon, value: &Value) -> bool {
             match daemon.analyze(&request) {
                 Ok(report) => {
                     let wall_ms = started.elapsed().as_millis() as u64;
-                    emit(&json!({
-                        "id": id,
-                        "ok": true,
-                        "wall_ms": wall_ms,
-                        "report": report.to_json(),
-                    }));
+                    write_json(
+                        out,
+                        &json!({
+                            "id": id,
+                            "ok": true,
+                            "wall_ms": wall_ms,
+                            "report": report.to_json(),
+                        }),
+                    );
                 }
-                Err(error) => emit(&json!({
-                    "id": id,
-                    "ok": false,
-                    "error": {"kind": error.kind.as_str(), "message": error.message},
-                })),
+                Err(error) => write_json(
+                    out,
+                    &json!({
+                        "id": id,
+                        "ok": false,
+                        "error": {"kind": error.kind.as_str(), "message": error.message},
+                    }),
+                ),
             }
             false
         }
         "gc" => {
             let policy = match value.get("policy") {
-                Some(policy_value) => match serde_json::from_value::<GcPolicy>(policy_value.clone()) {
-                    Ok(policy) => policy,
-                    Err(error) => {
-                        emit(&json!({
-                            "id": id,
-                            "ok": false,
-                            "error": {"kind": "invalid_request", "message": format!("invalid gc policy: {error}")},
-                        }));
-                        return false;
+                Some(policy_value) => {
+                    match serde_json::from_value::<GcPolicy>(policy_value.clone()) {
+                        Ok(policy) => policy,
+                        Err(error) => {
+                            write_json(
+                                out,
+                                &json!({
+                                    "id": id,
+                                    "ok": false,
+                                    "error": {"kind": "invalid_request", "message": format!("invalid gc policy: {error}")},
+                                }),
+                            );
+                            return false;
+                        }
                     }
-                },
+                }
                 None => GcPolicy::default(),
             };
             match daemon.gc(&policy) {
-                Ok(report) => emit(&json!({
-                    "id": id,
-                    "ok": true,
-                    "report": report,
-                })),
-                Err(error) => emit(&json!({
-                    "id": id,
-                    "ok": false,
-                    "error": {"kind": error.kind.as_str(), "message": error.message},
-                })),
+                Ok(report) => write_json(
+                    out,
+                    &json!({
+                        "id": id,
+                        "ok": true,
+                        "report": report,
+                    }),
+                ),
+                Err(error) => write_json(
+                    out,
+                    &json!({
+                        "id": id,
+                        "ok": false,
+                        "error": {"kind": error.kind.as_str(), "message": error.message},
+                    }),
+                ),
             }
             false
         }
@@ -393,24 +441,30 @@ fn handle(daemon: &Daemon, value: &Value) -> bool {
                 .and_then(Value::as_u64)
                 .unwrap_or_else(|| daemon.current_revision());
             let current = daemon.advance_revision(revision);
-            emit(&json!({"id": id, "ok": true, "current_revision": current}));
+            write_json(
+                out,
+                &json!({"id": id, "ok": true, "current_revision": current}),
+            );
             false
         }
         "stats" => {
-            emit(&json!({"id": id, "ok": true, "stats": daemon.stats()}));
+            write_json(out, &json!({"id": id, "ok": true, "stats": daemon.stats()}));
             false
         }
         "clear_cache" => match daemon.clear_caches() {
             Ok(()) => {
-                emit(&json!({"id": id, "ok": true, "cleared": true}));
+                write_json(out, &json!({"id": id, "ok": true, "cleared": true}));
                 false
             }
             Err(error) => {
-                emit(&json!({
-                    "id": id,
-                    "ok": false,
-                    "error": {"kind": error.kind.as_str(), "message": error.message},
-                }));
+                write_json(
+                    out,
+                    &json!({
+                        "id": id,
+                        "ok": false,
+                        "error": {"kind": error.kind.as_str(), "message": error.message},
+                    }),
+                );
                 false
             }
         },
@@ -418,34 +472,46 @@ fn handle(daemon: &Daemon, value: &Value) -> bool {
             let request = match parse_request(value) {
                 Ok(request) => request,
                 Err(message) => {
-                    emit(&json!({
-                        "id": id,
-                        "ok": false,
-                        "error": {"kind": "invalid_request", "message": message},
-                    }));
+                    write_json(
+                        out,
+                        &json!({
+                            "id": id,
+                            "ok": false,
+                            "error": {"kind": "invalid_request", "message": message},
+                        }),
+                    );
                     return false;
                 }
             };
             match daemon.command_template(&request) {
-                Ok(template) => emit(&json!({"id": id, "ok": true, "command_template": template})),
-                Err(error) => emit(&json!({
-                    "id": id,
-                    "ok": false,
-                    "error": {"kind": error.kind.as_str(), "message": error.message},
-                })),
+                Ok(template) => write_json(
+                    out,
+                    &json!({"id": id, "ok": true, "command_template": template}),
+                ),
+                Err(error) => write_json(
+                    out,
+                    &json!({
+                        "id": id,
+                        "ok": false,
+                        "error": {"kind": error.kind.as_str(), "message": error.message},
+                    }),
+                ),
             }
             false
         }
         "shutdown" => {
-            emit(&json!({"id": id, "ok": true, "shutdown": true}));
+            write_json(out, &json!({"id": id, "ok": true, "shutdown": true}));
             true
         }
         other => {
-            emit(&json!({
-                "id": id,
-                "ok": false,
-                "error": {"kind": "protocol", "message": format!("unknown command {other:?}")},
-            }));
+            write_json(
+                out,
+                &json!({
+                    "id": id,
+                    "ok": false,
+                    "error": {"kind": "protocol", "message": format!("unknown command {other:?}")},
+                }),
+            );
             false
         }
     }
@@ -539,6 +605,176 @@ fn emit(value: &Value) {
     let _ = stdout.flush();
 }
 
+/// Writes one JSON line to any sink (stdio or a TCP connection).
+fn write_json<W: Write>(out: &mut W, value: &Value) {
+    let text = serde_json::to_string(value).unwrap_or_else(|_| {
+        "{\"ok\":false,\"error\":{\"kind\":\"internal\",\"message\":\"cannot serialize response\"}}"
+            .to_owned()
+    });
+    let _ = writeln!(out, "{text}");
+    let _ = out.flush();
+}
+
+/// Opt-in loopback TCP transport (`--listen ADDR`), JSON-lines protocol identical
+/// to stdio. Multiple connections are accepted; each connection is served by its
+/// own thread calling the shared, thread-safe `Daemon` (the internal job gate
+/// still bounds concurrent `rustc` processes). `shutdown` from any client stops
+/// the listener, closes every connection and exits cleanly.
+fn run_tcp_server(config: DaemonConfig, address: &str) -> ! {
+    use std::net::{SocketAddr, TcpListener};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let parsed: SocketAddr = match address.parse() {
+        Ok(address) => address,
+        Err(error) => {
+            let line = json!({
+                "event": "error",
+                "phase": "listen",
+                "error": {"kind": "invalid_address", "message": format!("invalid --listen address {address:?}: {error}")},
+            });
+            eprintln!("ravum-daemon: invalid --listen address {address:?}: {error}");
+            println!("{line}");
+            std::process::exit(1);
+        }
+    };
+    let listener = match TcpListener::bind(parsed) {
+        Ok(listener) => listener,
+        Err(error) => {
+            let line = json!({
+                "event": "error",
+                "phase": "listen",
+                "error": {"kind": "bind", "message": format!("cannot listen on {parsed}: {error}")},
+            });
+            eprintln!("ravum-daemon: cannot listen on {parsed}: {error}");
+            println!("{line}");
+            std::process::exit(1);
+        }
+    };
+    let local = match listener.local_addr() {
+        Ok(address) => address,
+        Err(error) => {
+            eprintln!("ravum-daemon: cannot resolve bound address: {error}");
+            std::process::exit(1);
+        }
+    };
+    let started = Instant::now();
+    let daemon = match Daemon::open(config) {
+        Ok(daemon) => daemon,
+        Err(error) => {
+            let line = json!({
+                "event": "error",
+                "phase": "startup",
+                "error": {"kind": error.kind.as_str(), "message": error.message},
+            });
+            println!("{line}");
+            std::process::exit(1);
+        }
+    };
+    println!(
+        "{}",
+        json!({
+            "listening": local.to_string(),
+            "daemon_version": env!("CARGO_PKG_VERSION"),
+            "work_dir": daemon.work_dir().display().to_string(),
+            "toolchain": daemon.toolchain(),
+            "startup_ms": started.elapsed().as_millis() as u64,
+            "protocol": "ravum-daemon-jsonl-v1",
+            "transport": "tcp",
+        })
+    );
+    let _ = std::io::stdout().flush();
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut connections: Vec<std::thread::JoinHandle<()>> = Vec::new();
+    let _ = listener.set_nonblocking(true);
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            break;
+        }
+        match listener.accept() {
+            Ok((stream, _peer)) => {
+                // On Windows an accepted socket can inherit the listener's
+                // non-blocking flag: force blocking for the per-connection reader.
+                let _ = stream.set_nonblocking(false);
+                let daemon = daemon.clone();
+                let stop = Arc::clone(&stop);
+                connections.push(std::thread::spawn(move || {
+                    handle_connection(daemon, stream, stop);
+                }));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(error) => {
+                eprintln!("ravum-daemon: accept failed: {error}");
+                stop.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+    drop(listener);
+    // Bounded join: idle clients may still hold a connection blocked on read;
+    // they are deterministically closed by the process exit below instead of
+    // delaying the clean shutdown indefinitely.
+    let join_deadline = Instant::now() + std::time::Duration::from_secs(2);
+    while connections
+        .iter()
+        .any(|connection| !connection.is_finished())
+        && Instant::now() < join_deadline
+    {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    daemon.shutdown_auto_gc();
+    let _ = daemon.wait_auto_gc_idle(5000);
+    std::process::exit(0);
+}
+
+fn handle_connection(
+    daemon: Daemon,
+    stream: std::net::TcpStream,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) {
+    use std::io::{BufRead, BufReader, Write};
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(120)));
+    let reader_stream = match stream.try_clone() {
+        Ok(stream) => stream,
+        Err(_) => return,
+    };
+    let mut reader = BufReader::new(reader_stream);
+    let mut writer = stream;
+    let mut line = String::new();
+    loop {
+        if stop.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let value: Value = match serde_json::from_str(trimmed) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        write_json(
+                            &mut writer,
+                            &json!({"ok": false, "error": {"kind": "protocol", "message": format!("invalid JSON: {error}")}}),
+                        );
+                        continue;
+                    }
+                };
+                let shutdown = handle(&daemon, &value, &mut writer);
+                if shutdown {
+                    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let _ = writer.flush();
+}
+
 fn print_help_exit_ok() -> ! {
     println!(
         "usage: ravum-daemon [server options]\n\
@@ -549,6 +785,8 @@ fn print_help_exit_ok() -> ! {
          \x20 --max-cache-entries N         in-memory verdict cache size (default 256)\n\
          \x20 --analysis-timeout-ms N       hard cap for one compiler run (default 30000)\n\
          \x20 --poll-interval-ms N          cancellation polling interval (default 2)\n\
+         \x20 --listen ADDR                 serve the JSON-lines protocol over loopback TCP\n\
+         \x20                              (e.g. 127.0.0.1:0; prints a \"listening\" JSON line)\n\
          \n\
          Automatic background GC (opt-in; one maintenance thread, never on the analysis path):\n\
          \x20 --auto-gc                     enable automatic retention GC\n\
@@ -568,13 +806,15 @@ fn print_help_exit_ok() -> ! {
          \x20 --max-incremental-bytes N     cap for incremental/out/units build state\n\
          \x20 --max-total-bytes N           global cap for all collected state\n\
          \x20 --keep-recent N               most recent served contents never deleted (>=1)\n\
+         \x20 --compact-incremental         remove old rustc sessions inside build contexts\n\
+         \x20 --keep-incremental-sessions N sessions kept per context (default 1, >=1)\n\
          \x20 --dry-run                     report the plan, delete nothing\n\
          \n\
          Policy JSON fields: max_cache_bytes, max_snapshot_bytes, max_incremental_bytes,\n\
          max_total_bytes, keep_recent, dry_run (unknown fields are rejected).\n\
          Server GC command: {{\"cmd\":\"gc\",\"policy\":{{...}}}}\n\
          \n\
-         Exit codes: 0 success, 1 invalid policy or GC error, 2 usage error."
+         Exit codes: 0 success/clean shutdown, 1 invalid policy, bind or GC error, 2 usage error."
     );
     std::process::exit(0);
 }
@@ -588,7 +828,8 @@ fn usage_exit(message: &str) -> ! {
          [--analysis-timeout-ms N] [--poll-interval-ms N]\n       \
          ravum-daemon --gc --work-dir PATH [--policy JSON|PATH] \
          [--max-cache-bytes N] [--max-snapshot-bytes N] [--max-incremental-bytes N] \
-         [--max-total-bytes N] [--keep-recent N] [--dry-run]\n       \
+         [--max-total-bytes N] [--keep-recent N] [--compact-incremental]\n       \
+         [--keep-incremental-sessions N] [--dry-run]\n       \
          ravum-daemon --help"
     );
     std::process::exit(2);

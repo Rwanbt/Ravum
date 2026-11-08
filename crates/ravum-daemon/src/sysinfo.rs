@@ -192,7 +192,13 @@ mod platform {
 
     pub(super) fn capture(
         cpu_sample_ms: u64,
-    ) -> (Option<f64>, Option<u64>, Option<u64>, Option<u32>, Option<u64>) {
+    ) -> (
+        Option<f64>,
+        Option<u64>,
+        Option<u64>,
+        Option<u32>,
+        Option<u64>,
+    ) {
         // SAFETY: the struct is `repr(C)`, fully initialized and its `length`
         // field is set to its own size, as the API requires.
         let mut memory = MemoryStatusEx {
@@ -209,16 +215,22 @@ mod platform {
         // SAFETY: all three pointers reference valid, writable, correctly-sized
         // `FileTime` values for the duration of the call.
         let first = {
-            let (mut idle, mut kernel, mut user) =
-                (FileTime::default(), FileTime::default(), FileTime::default());
+            let (mut idle, mut kernel, mut user) = (
+                FileTime::default(),
+                FileTime::default(),
+                FileTime::default(),
+            );
             let ok = unsafe { GetSystemTimes(&mut idle, &mut kernel, &mut user) } != 0;
             ok.then(|| (idle.as_u64(), kernel.as_u64(), user.as_u64()))
         };
         std::thread::sleep(std::time::Duration::from_millis(cpu_sample_ms.max(20)));
         // SAFETY: same invariant as the first sample.
         let second = {
-            let (mut idle, mut kernel, mut user) =
-                (FileTime::default(), FileTime::default(), FileTime::default());
+            let (mut idle, mut kernel, mut user) = (
+                FileTime::default(),
+                FileTime::default(),
+                FileTime::default(),
+            );
             let ok = unsafe { GetSystemTimes(&mut idle, &mut kernel, &mut user) } != 0;
             ok.then(|| (idle.as_u64(), kernel.as_u64(), user.as_u64()))
         };
@@ -250,7 +262,13 @@ mod platform {
             unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) } != 0;
         let working_set = memory_info_ok.then_some(counters.working_set_size as u64);
 
-        (cpu_busy_percent, memory_total, memory_available, process_count, working_set)
+        (
+            cpu_busy_percent,
+            memory_total,
+            memory_available,
+            process_count,
+            working_set,
+        )
     }
 }
 
@@ -258,7 +276,13 @@ mod platform {
 mod platform {
     pub(super) fn capture(
         _cpu_sample_ms: u64,
-    ) -> (Option<f64>, Option<u64>, Option<u64>, Option<u32>, Option<u64>) {
+    ) -> (
+        Option<f64>,
+        Option<u64>,
+        Option<u64>,
+        Option<u32>,
+        Option<u64>,
+    ) {
         // Portable build: the Windows reference machine is where load is
         // measured; elsewhere the fields stay explicitly unobserved.
         (None, None, None, None, None)
@@ -280,7 +304,10 @@ mod tests {
     fn windows_capture_observes_memory_and_processes() {
         let snapshot = capture(20);
         assert!(snapshot.memory_total_bytes.unwrap_or(0) > 0);
-        assert!(snapshot.process_count.unwrap_or(0) > 0, "snapshot: {snapshot:?}");
+        assert!(
+            snapshot.process_count.unwrap_or(0) > 0,
+            "snapshot: {snapshot:?}"
+        );
         assert!(snapshot.daemon_working_set_bytes.unwrap_or(0) > 0);
     }
 
@@ -292,4 +319,56 @@ mod tests {
         let samples = spawn_calibration(&rustc, 2);
         assert_eq!(samples.len(), 2);
     }
+}
+/// Working set (RSS) of an arbitrary process, for external soak harnesses that
+/// spawn the daemon binary. Windows only; `None` when the process is gone or the
+/// query is refused.
+#[cfg(windows)]
+pub fn process_working_set(pid: u32) -> Option<u64> {
+    #[repr(C)]
+    #[derive(Default)]
+    struct Counters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+        fn CloseHandle(handle: isize) -> i32;
+    }
+    #[link(name = "psapi")]
+    extern "system" {
+        fn GetProcessMemoryInfo(process: isize, counters: *mut Counters, cb: u32) -> i32;
+    }
+    const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+    const PROCESS_VM_READ: u32 = 0x0010;
+    // SAFETY: the handle is checked against 0 and closed on every path; the
+    // counters struct is `repr(C)`, zeroed and its `cb` carries its own size.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if handle == 0 {
+            return None;
+        }
+        let mut counters = Counters {
+            cb: std::mem::size_of::<Counters>() as u32,
+            ..Default::default()
+        };
+        let ok = GetProcessMemoryInfo(handle, &mut counters, counters.cb) != 0;
+        CloseHandle(handle);
+        ok.then_some(counters.working_set_size as u64)
+    }
+}
+
+/// Non-Windows builds do not observe foreign-process memory.
+#[cfg(not(windows))]
+pub fn process_working_set(_pid: u32) -> Option<u64> {
+    None
 }

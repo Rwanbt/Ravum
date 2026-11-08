@@ -12,10 +12,12 @@
 //! content. Nothing here is a mock: every measurement spawns a real compiler.
 
 mod campaign;
+mod compaction;
 mod edits;
 mod gc;
 mod harness;
 mod invariants;
+mod multi_soak;
 mod scale;
 mod soak;
 
@@ -32,6 +34,14 @@ struct Args {
     out_gc: PathBuf,
     gc_edits: usize,
     out_soak: PathBuf,
+    out_compaction: PathBuf,
+    compaction_edits: usize,
+    out_multi: PathBuf,
+    multi_clients: usize,
+    multi_seconds: u64,
+    multi_pace_ms: u64,
+    multi_control_seconds: u64,
+    multi_control_pace_ms: u64,
     soak_requests: usize,
     soak_seconds: u64,
     soak_pace_ms: u64,
@@ -111,6 +121,26 @@ fn main() {
         _ => {}
     }
     match args.suite.as_str() {
+        "multi-soak" | "all" => match multi_soak_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("multi-soak suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "compaction" | "all" => match compaction_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("compaction suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
         "soak" | "all" => match soak_run(&repo_root, &args) {
             Ok(valid) => invalid |= !valid,
             Err(error) => {
@@ -154,7 +184,10 @@ fn campaign_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
 }
 
 fn scale_run(repo_root: &Path, args: &Args) -> Result<(), String> {
-    println!("scale: 3 generated unit sizes x 2 cases x {} reps", args.scale_reps);
+    println!(
+        "scale: 3 generated unit sizes x 2 cases x {} reps",
+        args.scale_reps
+    );
     let value = scale::run(&scale::ScaleOptions {
         repo_root: repo_root.to_path_buf(),
         work_root: args.work_dir.join("scale-suite"),
@@ -246,6 +279,78 @@ fn gc_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
         && dry["plan_non_empty"].as_bool() == Some(true)
         && dry["filesystem_unchanged"].as_bool() == Some(true);
     Ok(ok)
+}
+
+fn multi_soak_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "multi-soak: {} clients x {} s over loopback TCP + mono-client control x {} s",
+        args.multi_clients, args.multi_seconds, args.multi_control_seconds
+    );
+    let value = multi_soak::run(&multi_soak::MultiSoakOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("multi-soak-suite"),
+        clients: args.multi_clients,
+        seconds: args.multi_seconds,
+        pace_ms: args.multi_pace_ms,
+        control_seconds: args.multi_control_seconds,
+        control_pace_ms: args.multi_control_pace_ms,
+    })?;
+    multi_soak::write(&args.out_multi, &value)?;
+    let multi = &value["multi"];
+    let control = &value["control"];
+    println!(
+        "  multi: clients={} requests={} errors={} timeouts={} latency p50={}ms p95={}ms p99={}ms rss drift={}B disk end={}B exit={}",
+        multi["clients"], multi["requests_total"], multi["errors"], multi["timeouts"],
+        multi["latency_ms"]["p50"], multi["latency_ms"]["p95"], multi["latency_ms"]["p99"],
+        multi["server"]["rss_drift_bytes"], multi["server"]["disk_end_bytes"], multi["server"]["daemon_exit_code"]
+    );
+    println!(
+        "  control: requests={} errors={} timeouts={} latency p50={}ms p95={}ms rss drift={}B disk end={}B exit={}",
+        control["requests_total"], control["errors"], control["timeouts"],
+        control["latency_ms"]["p50"], control["latency_ms"]["p95"],
+        control["server"]["rss_drift_bytes"], control["server"]["disk_end_bytes"], control["server"]["daemon_exit_code"]
+    );
+    println!(
+        "  verification (multi): recent_hit={} valid={}",
+        multi["verification"]["recent_hit_without_compiler"], value["valid"]
+    );
+    println!("written: {}", args.out_multi.display());
+    Ok(value["valid"].as_bool().unwrap_or(false))
+}
+
+fn compaction_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "compaction: {} real edits, then compact_incremental keep=1 and measure reuse",
+        args.compaction_edits
+    );
+    let value = compaction::run(&compaction::CompactionOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("compaction-suite"),
+        edits: args.compaction_edits,
+    })?;
+    compaction::write(&args.out_compaction, &value)?;
+    let before = &value["before"];
+    let after = &value["after"];
+    let gc = &value["gc"];
+    let verification = &value["verification"];
+    println!(
+        "  sessions {}->{}, disk {}->{} B (freed {} B), gc={} ms, compaction deleted={} kept={} freed={} B",
+        before["sessions"], after["sessions"],
+        before["disk_bytes"], after["disk_bytes"], after["disk_freed_bytes"],
+        gc["duration_ms"], gc["compaction"]["sessions_deleted"],
+        gc["compaction"]["sessions_kept"], gc["compaction"]["bytes_freed"]
+    );
+    println!(
+        "  analysis before={}ms after-compaction={}ms cold={}ms reuse_retained={} cache_intact={} valid={}",
+        verification["baseline_before_compaction"]["analysis_ms"],
+        verification["after_compaction"]["analysis_ms"],
+        verification["cold_reference_no_state"]["analysis_ms"],
+        verification["reuse_retained"],
+        verification["cache_intact_after_compaction"],
+        value["valid"]
+    );
+    println!("written: {}", args.out_compaction.display());
+    Ok(value["valid"].as_bool().unwrap_or(false))
 }
 
 fn soak_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
@@ -375,9 +480,7 @@ fn print_campaign_table(value: &serde_json::Value) {
     }
     println!(
         "valid={} consistency_failures={} unexpected_failures={}",
-        value["valid"],
-        value["consistency_failures"],
-        value["unexpected_failures"]
+        value["valid"], value["consistency_failures"], value["unexpected_failures"]
     );
 }
 
@@ -412,6 +515,18 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
         out_soak: repo_root
             .join("evidence")
             .join("mvp0b-daemon-gc-auto-2026-11-08.json"),
+        out_compaction: repo_root
+            .join("evidence")
+            .join("mvp0b-daemon-compaction-2026-11-08.json"),
+        compaction_edits: 20,
+        out_multi: repo_root
+            .join("evidence")
+            .join("mvp0b-daemon-soak-multi-2026-11-08.json"),
+        multi_clients: 3,
+        multi_seconds: 120,
+        multi_pace_ms: 300,
+        multi_control_seconds: 120,
+        multi_control_pace_ms: 300,
         soak_requests: 150,
         soak_seconds: 480,
         soak_pace_ms: 1900,
@@ -448,9 +563,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             "--work-dir" => args.work_dir = PathBuf::from(take("--work-dir")?),
             "--out" => args.out_campaign = PathBuf::from(take("--out")?),
             "--out-scale" => args.out_scale = PathBuf::from(take("--out-scale")?),
-            "--out-invariants" => {
-                args.out_invariants = PathBuf::from(take("--out-invariants")?)
-            }
+            "--out-invariants" => args.out_invariants = PathBuf::from(take("--out-invariants")?),
             "--out-gc" => args.out_gc = PathBuf::from(take("--out-gc")?),
             "--gc-edits" => {
                 args.gc_edits = take("--gc-edits")?
@@ -458,6 +571,38 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
                     .map_err(|_| "--gc-edits must be an integer".to_owned())?
             }
             "--out-soak" => args.out_soak = PathBuf::from(take("--out-soak")?),
+            "--out-compaction" => args.out_compaction = PathBuf::from(take("--out-compaction")?),
+            "--clients" => {
+                args.multi_clients = take("--clients")?
+                    .parse()
+                    .map_err(|_| "--clients must be an integer".to_owned())?
+            }
+            "--multi-seconds" => {
+                args.multi_seconds = take("--multi-seconds")?
+                    .parse()
+                    .map_err(|_| "--multi-seconds must be an integer".to_owned())?
+            }
+            "--multi-pace-ms" => {
+                args.multi_pace_ms = take("--multi-pace-ms")?
+                    .parse()
+                    .map_err(|_| "--multi-pace-ms must be an integer".to_owned())?
+            }
+            "--multi-control-seconds" => {
+                args.multi_control_seconds = take("--multi-control-seconds")?
+                    .parse()
+                    .map_err(|_| "--multi-control-seconds must be an integer".to_owned())?
+            }
+            "--multi-control-pace-ms" => {
+                args.multi_control_pace_ms = take("--multi-control-pace-ms")?
+                    .parse()
+                    .map_err(|_| "--multi-control-pace-ms must be an integer".to_owned())?
+            }
+            "--out-multi" => args.out_multi = PathBuf::from(take("--out-multi")?),
+            "--compaction-edits" => {
+                args.compaction_edits = take("--compaction-edits")?
+                    .parse()
+                    .map_err(|_| "--compaction-edits must be an integer".to_owned())?
+            }
             "--soak-requests" => {
                 args.soak_requests = take("--soak-requests")?
                     .parse()
@@ -513,7 +658,15 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
     }
     if !matches!(
         args.suite.as_str(),
-        "all" | "campaign" | "scale" | "invariants" | "gc" | "soak" | "validate"
+        "all"
+            | "campaign"
+            | "scale"
+            | "invariants"
+            | "gc"
+            | "soak"
+            | "compaction"
+            | "multi-soak"
+            | "validate"
     ) {
         return Err(format!("unknown suite {:?}", args.suite));
     }
