@@ -269,9 +269,14 @@ mod tests {
             start_sample: config.blocks * config.frames as u64,
             ..config
         };
-        let second = measure_from(continued, first.final_state, first.last_sample, |input, output, _state| {
-            output.copy_from_slice(input);
-        });
+        let second = measure_from(
+            continued,
+            first.final_state,
+            first.last_sample,
+            |input, output, _state| {
+                output.copy_from_slice(input);
+            },
+        );
         // The same signal continues, so the boundary is not a discontinuity.
         assert!(
             second.measurement.max_sample_delta <= second.measurement.baseline_sample_delta * 1.01
