@@ -14,6 +14,7 @@ ravum-patch-host = { workspace = true }
 ravum-coordinator = { workspace = true }
 ravum-proof = { workspace = true }
 ravum-dsp-harness = { workspace = true }
+ravum-daemon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

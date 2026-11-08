@@ -404,7 +404,29 @@ cargo build -p ravum-daemon --offline          # OK
 cargo test  -p ravum-daemon --offline -- --test-threads=1   # 50/50 tests OK
 ```
 
-## 10. Prochaines étapes proposées
+## 10. Intégration dans la CLI (ajoutée après la campagne, 2026-11-08)
+
+`ravum check <fichier> --daemon` route l'analyse par le daemon persistant au lieu du
+`rustc` à froid du pipeline MVP-0a. État persistant sous `target/ravum/daemon` ; la
+sortie JSON ou humaine inclut `status`, `cache` (`miss` / `memory` / `disk`), et les
+latences par étape. Le chemin à froid reste disponible (`ravum check` sans `--daemon`).
+
+Mesuré sur la machine de référence (branche `feat/mvp0b-hardening`, après l'ajout) :
+
+| Commande | Résultat |
+|---|---|
+| `ravum check fixtures/dsp/iir_v1.rs --daemon` (1ʳᵉ fois) | `status=fresh cache=miss analysis=182 ms total=187 ms` |
+| même commande (2ᵉ fois) | `status=fresh cache=disk analysis=0 ms total=1 ms` |
+| `ravum check target/ravum-tests/daemoncli-broken.rs --daemon` | 2 diagnostics `error`, **exit 1** |
+| `ravum check fixtures/dsp/iir_v1.rs` (chemin à froid, non régressé) | `check 201 ms`, aucun diagnostic |
+
+Ce que cela démontre : le moteur persistant réduit réellement à ~1 ms l'analyse d'un
+contenu déjà vu, et l'échec d'analyse est correctement remonté (exit 1). Ce que cela ne
+démontre **pas** : la cible « diagnostic p95 < 50 ms sur une modification réelle » reste
+non atteinte (voir §6), et le temps total édition→diagnostic→patch→activation n'est pas
+encore mesuré de bout en bout par la CLI.
+
+## 11. Prochaines étapes proposées
 
 1. **Brancher le daemon dans la boucle Ravum** (CLI/overlay) pour mesurer le
    temps total d'édition→diagnostic→patch, seule métrique qui compte (P0-A), et
