@@ -245,5 +245,12 @@ refreshButton.addEventListener("click", () => {
     await refresh();
   } catch (error) {
     showError(`démarrage impossible : ${error.message}`);
+  } finally {
+    // Explicit readiness signal for the browser E2E harness. Without it, a test can
+    // interact before the first list render finishes and read a half-initialised DOM;
+    // that was a real intermittent failure of scenario 5 in CI (full Chrome, slower
+    // runner). Readiness means "the initial contract check and list refresh completed",
+    // not that the app is healthy: an error is displayed and asserted separately.
+    document.documentElement.dataset.ravumReady = "1";
   }
 })();
