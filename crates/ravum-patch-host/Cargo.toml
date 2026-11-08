@@ -1,0 +1,12 @@
+[package]
+name = "ravum-patch-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Versioned native module host: ABI validation, atomic activation, in-flight safety, deferred reclamation."
+
+[dependencies]
+ravum-protocol = { workspace = true }
+libloading = { workspace = true }
+serde_json = { workspace = true }
