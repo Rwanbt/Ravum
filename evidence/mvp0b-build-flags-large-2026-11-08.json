@@ -1,0 +1,1240 @@
+{
+  "schema": "ravum-build-flags/1",
+  "generated_at": "2026-11-08T22:55:32.6800569+01:00",
+  "generated_by": "scripts/build-flags.ps1",
+  "machine": {
+    "computer": "MSI",
+    "os": "Microsoft Windows NT 10.0.26100.0",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "processors": 16
+  },
+  "rustc": {
+    "command": "rustc",
+    "version_line": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "host_line": "binary: rustc"
+  },
+  "experiment": {
+    "fixture": "fixtures/calculator/v1.rs + fonctions ajoutées (édition simulée)",
+    "appended_functions": 400,
+    "source_bytes": 35654,
+    "source_lines": 1619,
+    "rounds": 16,
+    "variants": {
+      "baseline": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort"
+      ],
+      "baseline-b": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort"
+      ],
+      "cgu1": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "codegen-units=1"
+      ],
+      "cgu64": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "codegen-units=64"
+      ],
+      "cgu256": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "codegen-units=256"
+      ],
+      "embed-no": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "embed-bitcode=no"
+      ],
+      "strip": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "strip=symbols"
+      ],
+      "cgu1-strip": [
+        "-C",
+        "opt-level=1",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "strip=symbols"
+      ],
+      "opt0": [
+        "-C",
+        "opt-level=0",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort"
+      ]
+    },
+    "ordering": "entrelacé, ordre décalé à chaque tour (dérive machine annulée)",
+    "incremental_state": "aucun : chaque invocation est un build à froid réel",
+    "artifact_cache": "aucun (rustc direct, pas de cache ravum)"
+  },
+  "notes": [
+    "les temps incluent le spawn de rustc ; comparer les variantes entre elles, pas au produits",
+    "opt-level=0 et codegen-units changent le code généré : adoption = décision, pas appliqué ici",
+    "machine partagée avec d'autres agents : la calibration donne le plancher de spawn, pas la charge",
+    "aucune conclusion sur la qualité du code produit ni sur le temps réel"
+  ],
+  "calibration_ms": {
+    "count": 5,
+    "min": 59.6,
+    "median": 60.5,
+    "p95": 79.1,
+    "max": 79.1,
+    "mean": 64.1
+  },
+  "failures": 0,
+  "summary": {
+    "baseline": {
+      "timing": {
+        "count": 16,
+        "min": 430.8,
+        "median": 494.4,
+        "p95": 570.8,
+        "max": 570.8,
+        "mean": 494.3
+      },
+      "artifact_bytes": 128512.0
+    },
+    "baseline-b": {
+      "timing": {
+        "count": 16,
+        "min": 424.3,
+        "median": 476.0,
+        "p95": 675.6,
+        "max": 675.6,
+        "mean": 504.2
+      },
+      "artifact_bytes": 128512.0
+    },
+    "cgu1": {
+      "timing": {
+        "count": 16,
+        "min": 408.0,
+        "median": 456.4,
+        "p95": 560.8,
+        "max": 560.8,
+        "mean": 469.8
+      },
+      "artifact_bytes": 128512.0
+    },
+    "cgu64": {
+      "timing": {
+        "count": 16,
+        "min": 456.0,
+        "median": 501.2,
+        "p95": 625.9,
+        "max": 625.9,
+        "mean": 512.3
+      },
+      "artifact_bytes": 128512.0
+    },
+    "cgu256": {
+      "timing": {
+        "count": 16,
+        "min": 438.2,
+        "median": 491.6,
+        "p95": 633.4,
+        "max": 633.4,
+        "mean": 507.3
+      },
+      "artifact_bytes": 128512.0
+    },
+    "embed-no": {
+      "timing": {
+        "count": 16,
+        "min": 445.5,
+        "median": 499.4,
+        "p95": 582.1,
+        "max": 582.1,
+        "mean": 501.0
+      },
+      "artifact_bytes": 128512.0
+    },
+    "strip": {
+      "timing": {
+        "count": 16,
+        "min": 423.3,
+        "median": 486.6,
+        "p95": 557.3,
+        "max": 557.3,
+        "mean": 483.5
+      },
+      "artifact_bytes": 128512.0
+    },
+    "cgu1-strip": {
+      "timing": {
+        "count": 16,
+        "min": 405.2,
+        "median": 449.8,
+        "p95": 535.5,
+        "max": 535.5,
+        "mean": 462.1
+      },
+      "artifact_bytes": 128512.0
+    },
+    "opt0": {
+      "timing": {
+        "count": 16,
+        "min": 279.1,
+        "median": 307.4,
+        "p95": 364.5,
+        "max": 364.5,
+        "mean": 306.3
+      },
+      "artifact_bytes": 131072.0
+    }
+  },
+  "raw": [
+    {
+      "variant": "baseline",
+      "round": 0,
+      "ms": 513.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 0,
+      "ms": 544.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 0,
+      "ms": 533.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 0,
+      "ms": 587.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 0,
+      "ms": 502.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 0,
+      "ms": 501.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 0,
+      "ms": 496.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 0,
+      "ms": 440.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 0,
+      "ms": 279.1,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline-b",
+      "round": 1,
+      "ms": 472.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 1,
+      "ms": 503.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 1,
+      "ms": 492.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 1,
+      "ms": 612.7,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 1,
+      "ms": 445.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 1,
+      "ms": 423.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 1,
+      "ms": 444.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 1,
+      "ms": 297.2,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 1,
+      "ms": 454.7,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 2,
+      "ms": 452.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 2,
+      "ms": 459.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 2,
+      "ms": 512.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 2,
+      "ms": 466.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 2,
+      "ms": 483.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 2,
+      "ms": 455.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 2,
+      "ms": 307.9,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 2,
+      "ms": 511.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 2,
+      "ms": 566.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 3,
+      "ms": 534.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 3,
+      "ms": 495.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 3,
+      "ms": 479.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 3,
+      "ms": 472.7,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 3,
+      "ms": 435.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 3,
+      "ms": 280.9,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 3,
+      "ms": 443.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 3,
+      "ms": 424.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 3,
+      "ms": 408.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 4,
+      "ms": 441.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 4,
+      "ms": 449.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 4,
+      "ms": 446.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 4,
+      "ms": 424.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 4,
+      "ms": 286.4,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 4,
+      "ms": 430.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 4,
+      "ms": 465.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 4,
+      "ms": 517.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 4,
+      "ms": 498.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 5,
+      "ms": 456.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 5,
+      "ms": 511.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 5,
+      "ms": 476.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 5,
+      "ms": 309.2,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 5,
+      "ms": 492.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 5,
+      "ms": 501.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 5,
+      "ms": 460.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 5,
+      "ms": 500.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 5,
+      "ms": 490.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 6,
+      "ms": 471.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 6,
+      "ms": 456.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 6,
+      "ms": 303.5,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 6,
+      "ms": 558.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 6,
+      "ms": 589.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 6,
+      "ms": 560.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 6,
+      "ms": 625.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 6,
+      "ms": 633.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 6,
+      "ms": 550.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 7,
+      "ms": 530.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 7,
+      "ms": 364.5,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 7,
+      "ms": 513.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 7,
+      "ms": 477.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 7,
+      "ms": 508.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 7,
+      "ms": 557.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 7,
+      "ms": 536.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 7,
+      "ms": 574.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 7,
+      "ms": 504.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 8,
+      "ms": 308.0,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 8,
+      "ms": 570.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 8,
+      "ms": 675.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 8,
+      "ms": 507.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 8,
+      "ms": 562.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 8,
+      "ms": 492.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 8,
+      "ms": 529.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 8,
+      "ms": 557.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 8,
+      "ms": 535.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline",
+      "round": 9,
+      "ms": 560.7,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 9,
+      "ms": 463.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 9,
+      "ms": 408.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 9,
+      "ms": 465.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 9,
+      "ms": 478.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 9,
+      "ms": 502.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 9,
+      "ms": 502.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 9,
+      "ms": 528.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 9,
+      "ms": 329.3,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline-b",
+      "round": 10,
+      "ms": 551.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 10,
+      "ms": 461.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 10,
+      "ms": 501.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 10,
+      "ms": 489.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 10,
+      "ms": 497.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 10,
+      "ms": 445.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 10,
+      "ms": 438.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 10,
+      "ms": 291.3,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 10,
+      "ms": 512.7,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 11,
+      "ms": 442.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 11,
+      "ms": 462.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 11,
+      "ms": 490.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 11,
+      "ms": 507.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 11,
+      "ms": 468.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 11,
+      "ms": 503.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 11,
+      "ms": 317.4,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 11,
+      "ms": 462.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 11,
+      "ms": 462.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 12,
+      "ms": 456.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 12,
+      "ms": 438.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 12,
+      "ms": 472.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 12,
+      "ms": 490.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 12,
+      "ms": 437.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 12,
+      "ms": 313.4,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 12,
+      "ms": 496.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 12,
+      "ms": 449.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 12,
+      "ms": 431.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 13,
+      "ms": 548.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 13,
+      "ms": 582.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 13,
+      "ms": 510.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 13,
+      "ms": 457.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 13,
+      "ms": 281.9,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 13,
+      "ms": 442.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 13,
+      "ms": 481.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 13,
+      "ms": 435.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 13,
+      "ms": 515.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 14,
+      "ms": 464.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 14,
+      "ms": 501.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 14,
+      "ms": 405.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 14,
+      "ms": 306.9,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 14,
+      "ms": 475.3,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 14,
+      "ms": 474.2,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 14,
+      "ms": 440.9,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 14,
+      "ms": 507.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 14,
+      "ms": 472.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "strip",
+      "round": 15,
+      "ms": 450.0,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1-strip",
+      "round": 15,
+      "ms": 422.8,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "opt0",
+      "round": 15,
+      "ms": 323.3,
+      "exit_code": 0,
+      "artifact_bytes": 131072
+    },
+    {
+      "variant": "baseline",
+      "round": 15,
+      "ms": 470.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "baseline-b",
+      "round": 15,
+      "ms": 467.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu1",
+      "round": 15,
+      "ms": 446.1,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu64",
+      "round": 15,
+      "ms": 470.5,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "cgu256",
+      "round": 15,
+      "ms": 482.6,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    },
+    {
+      "variant": "embed-no",
+      "round": 15,
+      "ms": 536.4,
+      "exit_code": 0,
+      "artifact_bytes": 128512
+    }
+  ]
+}
