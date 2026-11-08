@@ -340,6 +340,24 @@ pas sur un rapport exact.
 4. **Aucun `rustc` en processus** : le daemon reste un orchestrateur de CLI
    publique ; il ne peut donc pas passer sous le plancher de démarrage pour un
    contenu modifié. Les 0 ms viennent du cache, pas du moteur.
+
+### 7.5 Empreinte du daemon au repos (mesurée, 2026-11-08)
+
+Le binaire `ravum-daemon` a été lancé sur un `work_dir` vide, sans aucune requête, et
+observé pendant 6 secondes (processus mesuré par `Get-Process` : WorkingSet et temps CPU) :
+
+| Métrique au repos | Valeur |
+|---|---|
+| RAM (WorkingSet) | **4,78 Mo** (stable sur 6 s) |
+| CPU consommé | **0,016 s** cumulées sur 6 s (≈ 0 %) |
+| Threads | 4 |
+| État disque initial | 0 fichier (les sous-répertoires sont créés, vides) |
+
+Ordres de grandeur comparables pour la même machine : la campagne L2 a produit 9,05 Mo
+d'état pour 87 requêtes / 59 compilations, et 3,8–24,6 Mo de répertoires incrémentaux selon
+la taille d'unité. Ces chiffres restent **locaux et non bornés par un GC** : la croissance
+disque est le coût principal, pas la mémoire résidente. Aucun test de fuite longue
+(soak) n'a été exécuté.
 5. **Croissance disque** : 9,05 Mo pour 87 requêtes / 59 compilations (dont
    8,57 Mo d'état incrémental) ; 24,58 Mo pour l'unité de 7 629 lignes
    après 6 compilations incrémentales. Aucun GC ni compaction n'est implémenté.

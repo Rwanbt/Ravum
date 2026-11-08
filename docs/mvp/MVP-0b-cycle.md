@@ -120,6 +120,27 @@ l'ordre du rapport coût/bénéfice :
 
 Aucune de ces pistes n'est implémentée à ce stade ; ce document ne fait que mesurer.
 
+### 5.1 Deux accélérations de build testées et **rejetées par la mesure**
+
+Avant d'intégrer quoi que ce soit, deux pistes ont été mesurées sur la même machine
+(fenêtre calme) avec les flags exacts de l'adaptateur (`--crate-type cdylib`,
+`-C opt-level=1 -C debuginfo=0 -C panic=abort`) et une édition réelle par itération :
+
+| Piste | Petite unité (p50) | Unité 2 313 lignes (p50) | État incrémental | Verdict |
+|---|---:|---:|---:|---|
+| Build froid standard (`link.exe`) | 285 ms | 406 ms | — | référence |
+| `-C incremental=<dir>` persistant | **321 ms** | **458 ms** | 0,17 Mo / 4,26 Mo | **plus lent** : le chargement/sauvegarde de session et le relink dépassent le gain de codegen |
+| Lien par `lld-link` (rust-lld du toolchain) | non mesuré (petite unité dominée par le front-end) | **413 ms** | — | **aucun gain** (un outlier à 1 531 ms) |
+
+Ces deux options ne sont **pas** intégrées au produit : les chiffres ne soutiennent pas le
+changement, et le gain d'analyse observé en L2 ne se transpose pas au build. Le goulot
+n'est donc ni le choix du linker ni l'absence de state incrémental à ces tailles : il est
+dans le travail de compilation+relink lui-même. Les prochaines pistes crédibles sont de
+**réduire le nombre de builds** (cache de builds par contenu plus agressif, patchs
+multi-fonctions regroupés) ou d'isoler la **preview** du cycle de build complet, plutôt que
+d'espérer un lien incrémental magique.
+
+
 ## 6. Limites
 
 - Une seule petite unité + une fixture synthétique générée ; **aucun vrai crate
