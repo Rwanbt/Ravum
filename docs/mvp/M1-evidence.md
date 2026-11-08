@@ -140,7 +140,7 @@ modifiées. Ce cas est conservé dans `evidence/multi-agent-live/README.md` §4.
 | DSP / temps réel | M3, non commencé |
 | Full-stack UI+API+SQLite | M4, non commencé |
 | Comparaison worktrees vs COLLAB-1 | S8-A/S8-B, non exécuté : aucune mesure de gain de temps total |
-| CI GitHub réellement exécutée | workflow ajouté ; le résultat du run est vérifiable dans l'onglet Actions, pas dans ce fichier |
+| CI GitHub réellement exécutée | **exécutée et verte** : run `42433928079`, workflow « MVP product checks », toutes les étapes `success` (voir §9) |
 
 ## 8. Reproductibilité
 
@@ -155,3 +155,22 @@ cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/
 Les valeurs varient avec la charge machine (observé : 249 ms à 520 ms pour une même
 activation). Toute comparaison ultérieure doit citer le commit, la config et la
 charge, comme le demande INV-08.
+
+## 9. Exécution CI externe
+
+| Champ | Valeur |
+|---|---|
+| Workflow | `.github/workflows/mvp.yml` — « MVP product checks (build, tests, demos) » |
+| Runner | `windows-latest` (machine GitHub, pas la machine de référence) |
+| Run | [42433928079](https://github.com/Rwanbt/Ravum/actions/runs/42433928079) |
+| Durée | 1 min 14 s |
+| Étapes | build `success`, test `success`, demo M1 `success`, demo COLLAB-1 `success`, bench `success` |
+
+**Ce que cela prouve** : le workspace se construit, les 51 tests passent, les deux
+démonstrations s'exécutent et le harnais de mesure fonctionne sur un environnement
+propre, sans état local préexistant.
+
+**Ce que cela ne prouve pas** : aucune garantie de performance (le runner n'est pas
+la machine de référence), aucune preuve formelle, aucun comportement temps réel,
+aucune stabilité d'ABI. Le workflow l'écrit lui-même dans son étape de portée.
+
