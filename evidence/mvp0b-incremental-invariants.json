@@ -1,0 +1,304 @@
+{
+  "base_cold_reference": {
+    "ms": 148,
+    "success": true,
+    "warmup_daemon_status": "fresh"
+  },
+  "checks": [
+    {
+      "details": {
+        "caller_error_in_pipeline_rs": true,
+        "cold_broken_diagnostics": [
+          "error|-|-|-|-|-|aborting due to 1 previous error",
+          "error|E0061|src/pipeline.rs|11|42|11|this function takes 2 arguments but 1 argument was supplied",
+          "failure_note|-|-|-|-|-|For more information about this error, try `rustc --explain E0061`."
+        ],
+        "daemon_broken_diagnostics": [
+          "error|-|-|-|-|-|aborting due to 1 previous error",
+          "error|E0061|src/pipeline.rs|11|42|11|this function takes 2 arguments but 1 argument was supplied",
+          "failure_note|-|-|-|-|-|For more information about this error, try `rustc --explain E0061`."
+        ],
+        "diagnostics_consistent": true,
+        "fixed_compiles_in_both_modes": true
+      },
+      "name": "cross_module_signature_invalidation",
+      "passed": true
+    },
+    {
+      "details": {
+        "cold_ms": 153,
+        "diagnostics_consistent": true,
+        "first_analysis_ms": 170,
+        "first_cache": "miss",
+        "first_status": "fresh",
+        "second_analysis_ms": 0,
+        "second_cache": "memory"
+      },
+      "name": "local_body_edit_then_cache_hit",
+      "passed": true
+    },
+    {
+      "details": {
+        "default_again": "memory",
+        "default_first": "memory",
+        "flags_change_was_real_compile": true,
+        "flags_changed": "miss"
+      },
+      "name": "context_flags_invalidate_cache",
+      "passed": true
+    },
+    {
+      "details": {
+        "first": "miss",
+        "note": "toolchain identity is simulated through the documented test seam; no second toolchain was installed or benchmarked",
+        "second": "memory",
+        "toolchain_release": "1.98.1-simulated"
+      },
+      "name": "toolchain_identity_invalidates_cache",
+      "passed": true
+    },
+    {
+      "details": {
+        "current_revision": 18,
+        "diagnostics_returned": 0,
+        "requested_revision": 13,
+        "status": "superseded"
+      },
+      "name": "stale_revision_never_current",
+      "passed": true
+    },
+    {
+      "details": {
+        "elapsed_ms": 350,
+        "in_flight_analysis_ms": 39,
+        "later_analysis_consistent_with_cold": true,
+        "later_analysis_status": "fresh",
+        "later_analysis_success": true,
+        "note": "if status is cancelled the compiler process was actually killed; if superseded the answer completed or was rejected before the kill window",
+        "outcome_message": "compiler process killed: revision 2 superseded by 3",
+        "outcome_status": "cancelled"
+      },
+      "name": "superseded_during_compilation",
+      "passed": true
+    },
+    {
+      "details": {
+        "corrupted_files": 1,
+        "daemon_stats": {
+          "cache_corrupt": 1,
+          "cache_hits_disk": 0,
+          "cache_hits_memory": 0,
+          "cache_misses": 1,
+          "cancelled": 0,
+          "fresh": 1,
+          "peak_active_jobs": 1,
+          "requests": 1,
+          "rustc_ms_total": 138,
+          "rustc_runs": 1,
+          "snapshots_created": 0,
+          "snapshots_verified": 1,
+          "superseded": 0,
+          "timed_out": 0,
+          "unit_files_written": 0
+        },
+        "recovered_cache_kind": "miss",
+        "recovered_diagnostics_consistent_with_cold": true,
+        "recovered_success": true,
+        "seed_verdict_present": true
+      },
+      "name": "cache_corruption_degrades_to_miss",
+      "passed": true
+    },
+    {
+      "details": {
+        "incremental_entries_after_restart": 1,
+        "incremental_entries_before_restart": 1,
+        "new_content_analysis_ms": 158,
+        "new_content_cache": "miss",
+        "new_content_matches_cold": true,
+        "note": "the revision counter is session-scoped; persistence covers content verdicts and the incremental directory",
+        "replay_a_cache": "disk",
+        "replay_b_cache": "disk"
+      },
+      "name": "restart_reuses_persistent_state",
+      "passed": true
+    },
+    {
+      "details": {
+        "all_fresh": true,
+        "max_concurrent_jobs": 1,
+        "peak_active_jobs": 1,
+        "rustc_runs": 3
+      },
+      "name": "process_budget_enforced",
+      "passed": true
+    },
+    {
+      "details": {
+        "disk_entries": 2,
+        "max_cache_entries": 1,
+        "memory_entries": 1
+      },
+      "name": "memory_cache_budget",
+      "passed": true
+    },
+    {
+      "details": {
+        "analysis_ms": 11,
+        "status": "timed_out",
+        "timeout_ms": 1
+      },
+      "name": "analysis_timeout_reported",
+      "passed": true
+    },
+    {
+      "details": {
+        "json_bytes": 760,
+        "missing_fields": [],
+        "missing_timing_fields": []
+      },
+      "name": "json_report_contract",
+      "passed": true
+    },
+    {
+      "details": {
+        "unchanged": true,
+        "user_file": "D:\\App\\Ravum\\target\\ravum-daemon-bench\\invariants-suite\\invariants\\user-files\\src\\lib.rs"
+      },
+      "name": "user_files_untouched",
+      "passed": true
+    },
+    {
+      "details": {
+        "caveat": "timing differences are a proxy for invalidation granularity, not query-level proof: rustc's public CLI does not expose per-query reuse. The correctness side (callers re-checked after a signature change) is proven by cross_module_signature_invalidation.",
+        "incremental_root_entries": 2,
+        "local_body_edit_cold_ms": 152,
+        "local_body_edit_daemon_analysis_ms": 147,
+        "local_body_edit_daemon_ms": 151
+      },
+      "name": "granularity_observable_proxy",
+      "passed": true
+    }
+  ],
+  "command": "cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite invariants",
+  "daemon_stats": {
+    "cache_corrupt": 0,
+    "cache_hits_disk": 0,
+    "cache_hits_memory": 5,
+    "cache_misses": 6,
+    "cancelled": 0,
+    "fresh": 11,
+    "peak_active_jobs": 1,
+    "requests": 12,
+    "rustc_ms_total": 916,
+    "rustc_runs": 6,
+    "snapshots_created": 6,
+    "snapshots_verified": 0,
+    "superseded": 1,
+    "timed_out": 0,
+    "unit_files_written": 13
+  },
+  "generated_unix": 1794143774,
+  "git": {
+    "branch": "feat/mvp0b-hardening",
+    "dirty_files": 11,
+    "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+    "head": "245db0b844de6c93de5044b43f03b0d654e4c537"
+  },
+  "kind": "mvp0b-incremental-invariants",
+  "limits": [
+    "these checks prove the daemon's own contracts; they are not a proof of rustc's internal invalidation granularity",
+    "the toolchain-change check uses the documented test seam (forced toolchain identity); no second toolchain was installed",
+    "cancellation timing depends on host load; the recorded status shows whether the kill path or the post-completion stale path was taken",
+    "revision numbers are session-scoped: a restarted daemon starts at revision 0, persistence covers content verdicts and the incremental directory"
+  ],
+  "load_end": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        58,
+        64,
+        65
+      ],
+      "stats": {
+        "count": 3,
+        "max": 65,
+        "mean": 62.333333333333336,
+        "min": 58,
+        "p50": 64,
+        "p95": 65
+      }
+    },
+    "system": {
+      "captured_unix": 1794143774,
+      "cpu_busy_percent": 16.796875,
+      "daemon_working_set_bytes": 6713344,
+      "memory_available_bytes": 3859853312,
+      "memory_total_bytes": 16868962304,
+      "process_count": 328
+    }
+  },
+  "load_start": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        62,
+        70,
+        61
+      ],
+      "stats": {
+        "count": 3,
+        "max": 70,
+        "mean": 64.33333333333333,
+        "min": 61,
+        "p50": 62,
+        "p95": 70
+      }
+    },
+    "system": {
+      "captured_unix": 1794143769,
+      "cpu_busy_percent": 24.481327800829877,
+      "daemon_working_set_bytes": 5488640,
+      "memory_available_bytes": 3868762112,
+      "memory_total_bytes": 16868962304,
+      "process_count": 328
+    }
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows",
+    "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+  },
+  "schema_version": 1,
+  "summary": {
+    "failed": 0,
+    "passed": 14,
+    "total": 14,
+    "valid": true
+  },
+  "toolchain": {
+    "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "host": "x86_64-pc-windows-msvc",
+    "release": "1.95.0"
+  },
+  "toolchain_evidence": {
+    "repo_root": "D:\\App\\Ravum",
+    "rustc_path": "rustc",
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  }
+}
