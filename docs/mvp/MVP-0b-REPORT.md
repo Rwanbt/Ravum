@@ -26,14 +26,14 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **29 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
-| Dernier commit de code | `c83746c` |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **31 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
+| Dernier commit de code | `715bd75` |
 | PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 246 fichiers, +81 881/−297 au moment de la rédaction |
 | PR #78 | inchangée, non fusionnée, non réécrite |
 | CI du dernier commit poussé | run [42498344011](https://github.com/Rwanbt/Ravum/actions/runs/42498344011) — **succès** (18 étapes dont l'E2E navigateur) ; workflow d'impact aussi vert ([42498344027](https://github.com/Rwanbt/Ravum/actions/runs/42498344027)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
-| Tests workspace | **294 réussis, 0 échec**, 78 binaires, 127,6 s (machine chargée) |
+| Tests workspace | **312 réussis, 0 échec**, 78 binaires, 65,1 s (après ajout du GC daemon et du backend WASAPI) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
-| Vault | 4 sessions publiées et vérifiées (voir §25) |
+| Vault | 5 sessions publiées et vérifiées (voir §25) |
 
 ## 3. Subagents réellement utilisés
 
@@ -44,13 +44,13 @@ tests), plutôt que de se fier aux rapports.
 | Agent | Mission | Livrable principal | Vérification Lead |
 |---|---|---|---|
 | `git-txn` (Worker C) | L1-B Git transactionnel | `git_writer.rs` réécrit, `path_policy.rs`, `publication_journal.rs`, 16 tests | 47 tests re-exécutés, revue du CAS et des hooks |
-| `incremental` (Worker D) | L2 daemon persistant | crate `ravum-daemon`, 3 campagnes de mesures, docs | 50 tests, ré-exécution de la suite invariants 14/14 |
+| `incremental` (Worker D) | L2 daemon persistant puis GC (P0-H) | crate `ravum-daemon`, 3 campagnes L2, **GC de rétention borné + campagne 40 éditions** | 68 tests daemon re-exécutés, démo GC re-jouée (hit/miss, dry-run, politique invalide) |
 | `browser-e2e` (Worker F) | L4-A E2E navigateur | harnais CDP 10 scénarios, `demo-m4-browser.ps1`, étape CI, 3 bugs produit corrigés | 10/10 re-exécuté par le Lead, **vert en CI** |
 | `collab-2-3` (Worker G) | L3 COLLAB-2/3 | verifier injecté, `semantics.rs`, `records.rs`, 4 corpus de tests, démo COLLAB-2 | 87 tests re-exécutés, démo re-exécutée |
 | `s8-bench` (Worker E) | S8 benchmark | harnais `benchmarks/s8`, 15 campagnes, preuves JSON | protocole `ok`, verdict relu |
 | `impact-ci` (Worker I) | L4-E CI sélective | `tools/impact`, workflow `mvp-impact.yml`, selftest 48 cas | selftest re-exécuté, correction du FULL légitime |
 | `collab-4` (Worker J) | L3.4 collaboration ↔ daemon | `ravum collab-cycle`, graphe d'unités fail-closed, 36 tests CLI, preuve JSON | 36 tests re-exécutés, démo re-jouée |
-| `audio-probe` (Worker K puis L) | L4-C audio réel + priorité | sonde `waveOut` silencieuse (5 preuves) puis MMCSS/priorité Win32 et campagne sous charge (9 preuves brutes + récapitulatif) | 6 tests harnais re-exécutés, sonde MMCSS relancée par le Lead (mmcss_acquired=true, 0 alloc), campagne vérifiée |
+| `audio-probe` (Worker K, L, M) | L4-C audio réel, priorité et WASAPI | sonde `waveOut` silencieuse (5 preuves), MMCSS/priorité (9 preuves), **backend WASAPI partagé + campagne 8 runs** | 6 tests harnais re-exécutés, cellule WASAPI relancée par le Lead (ratio 1,00, 0 alloc/free, 7/7 swaps) |
 
 Le Lead a réalisé lui-même : L0 (audit/baseline), L1-A (cycle de vie temps réel DSP),
 L4-B (crossfade), L4-C/L4-D (statuts honnêtes), L5.3 (licence), l'intégration CLI du
@@ -70,7 +70,7 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (29 de code, sur `feat/mvp0b-hardening`)
+## 5. Commits (31 de code, sur `feat/mvp0b-hardening`)
 
 1. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
 2. `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
@@ -101,6 +101,9 @@ sauvegardes Obsidian.
 27. `573cb48` — feat(dsp): measure MMCSS real-time priority under controlled CPU load
 28. `c848396` — fix(patch-host): serialize the reclaimer tests that read process-wide counters
 29. `c83746c` — fix(coordination): make the concurrent-equivalence test independent of the artifact cache
+30. `3b7b3a1` — docs(mvp0b): audit the full diff for hidden regressions, and soak the daemon briefly
+31. `9ee76b6` — feat(daemon): bounded retention GC, measured on a real 40-edit campaign
+32. `715bd75` — feat(dsp): add a real WASAPI shared-mode backend and measure it under load
 
 ## 6. PR créées ou mises à jour
 
@@ -248,11 +251,11 @@ agents IA (tokens et supervision **non mesurés ici**).
 
 | Commande | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **294 réussis / 0 échec**, 78 binaires, 127,6 s (machine chargée, builds réels du test concurrent) |
+| `cargo test --workspace --all-targets` | **312 réussis / 0 échec**, 78 binaires, 65,1 s (arbre incluant GC daemon et WASAPI) |
 | Baseline L0 avant modifications | 139 réussis / 0 échec, 46,52 s |
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
-| `ravum-daemon` | 50 (32 unit, 3 chaînes d'édition, 15 intégration) |
+| `ravum-daemon` | 68 (41 unit dont 9 GC, 3 chaînes d'édition, 15 intégration, 9 intégration GC) |
 | `ravum-cli` | 36 (15 unitaires du binaire dont 3 `cycle-bench` + 10 `collab-cycle`, 4 intégration COLLAB-4, 17 intégrations existantes préservées) |
 | `ravum-proof` | 28 (19 unit, 9 proof_cache) |
 | `ravum-rust-adapter` | 8 (dont le nouveau cas rustc-direct) |
@@ -301,17 +304,19 @@ d'un autre worker (WIP), jamais présents dans un commit.
 
 ## 14. Tests non exécutés
 
-- **Chemin audio réel** : **exécuté** via `waveOut` (silence) — 512 frames tient la cadence
-  (ratio 1,001), 0 alloc/free, 11/11 swaps ; 256 frames sur la voie par défaut décroche
-  (ratio 0,53) ; **MMCSS + priorité Win32 mesurés** sous charge CPU contrôlée (9 runs).
-  Restent non exécutés : **WASAPI/ASIO**, **XRUN réels** (non observables via `waveOut`),
-  hôte CLAP/VST3/DAW, fenêtres longues (minutes) et autres machines/pilotes.
+- **Chemin audio réel** : **exécuté** via `waveOut` (silence) et **WASAPI mode partagé**
+  (endpoint MOTU, float32 48 kHz, buffer 22 ms) — cadence tenue, 0 alloc/free, 11/11 swaps,
+  MMCSS/priorité mesurés sous charge (9 runs) et WASAPI stable sous charge sans MMCSS
+  (8 runs). Restent non exécutés : **WASAPI exclusif/ASIO**, **XRUN réels** (non
+  observables dans ces deux API), hôte CLAP/VST3/DAW, fenêtres longues et autres
+  machines/pilotes.
 - **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` — plan
   proposé dans `MVP-0b-verification.md`.
 - **Soak test RSS / fuite longue** du daemon : seul un soak court (30 requêtes, 38,8 s)
   est fait ; un soak de plusieurs heures, deux daemons partageant un même `work_dir` et
   un crash pendant écriture de cache restent non exécutés. Une anomalie de 1re analyse
-  sous charge est consignée (§16) et reste à investiguer.
+  sous charge est consignée (§16) et reste à investiguer. Le **GC** est mesuré sur 40
+  éditions (5,4 Mo) mais pas en automatique ni sur un état de plusieurs centaines de Mo.
 - **S8 avec de vrais agents LLM** : agents scriptés seulement, tokens et supervision non
   mesurés.
 - **S8 sur un vrai projet multi-crates** ; **fixtures macro-lourdes**.
@@ -348,6 +353,9 @@ d'un autre worker (WIP), jamais présents dans un commit.
 | Swaps à chaud sur périphérique (avec/sans fondu) | — | 11/11 activés, delta **0,0291** avec fondu vs **0,1260** sans | clic reproduit et supprimé sur le chemin réel |
 | MMCSS « Pro Audio » + critical, charge CPU 100 % | non mesuré | **0 tampon en retard**, lateness max **2,5–2,7 ms**, marge +29 ms, ratio 1,0004–1,0009 | l'ordonnanceur protège le thread de rendu sous charge concurrente |
 | Sans MMCSS, même charge | non mesuré | run dégradé (3 tampons, max 15,7 ms) et run décroché (**255 tampons, max 134,4 ms, marge −111,9 ms**) | sans priorité, la charge désordonnance le thread ; aucune garantie hard-RT pour autant |
+| **WASAPI partagé**, repos (4 runs) | non mesuré | ratio 1,0001–1,0009, lateness max 0,7–1,2 ms, **0 événement en retard**, 0 alloc/free, 11/11 swaps | chemin moderne réel, buffer moteur 22 ms |
+| **WASAPI partagé**, charge CPU 100 % (4 runs) | non mesuré | ratio 1,0003–1,0007, lateness max **0,7–1,4 ms**, **0 événement en retard**, starvations 0/4/18 selon run | robuste à la charge concurrente **sans** MMCSS, contrairement à `waveOut` |
+| **GC de rétention du daemon** (40 éditions) | aucun GC | **5,44 Mo → 1,83 Mo** après deux GC (−66,4 %), 258 Ko + 3,34 Mo libérés en 86/26 ms, récent = hit, ancien = reconstruction | disque borné sans invalidation incorrecte ; état incrémental collecté par contexte entier |
 | Cycle complet, contenu **inchangé** (édition→activation) | 85–177 ms (p50) | **8–13 ms** (p50), p95 9–18 ms | ×10 à ×13, cache de verdicts + cache d'artefacts |
 | Cycle complet, **édition réelle**, petite unité | 316 ms p50 / 335 ms p95 | 339 ms p50 / 362 ms p95 | MVP-0b ≈ +7 %, build à froid dominant |
 | Cycle complet, **édition réelle**, unité 2 313 lignes | 524 ms p50 / 702 ms p95 | 600 ms p50 / 743 ms p95 | cible p95 < 500 ms **manquée** à cette taille |
@@ -367,6 +375,12 @@ d'un autre worker (WIP), jamais présents dans un commit.
 - S8 : RAM pic coordinateur 5,5 Mo ; testeurs 93–142 Mo ; CPU 1,8–2,6 s par campagne ;
   disque ~12,6 Mo par réplique.
 - Sonde de jigue : lateness max 2,6 ms sous 52 % de charge — aucune extrapolation hard-RT.
+- GC du daemon : mémoire non re-mesurée pendant le GC (pas d'instrumentation dédiée) ; durées
+  86 ms (cache+snapshots) et 26 ms (contextes incrémentaux), scans de répertoires dominants ;
+  disque de travail ramené de 5,44 Mo à 1,83 Mo.
+- WASAPI partagé : 0,28–0,55 s d'activation du moteur audio (mesurée séparément), thread de
+  rendu sans allocation, 100 événements/s, buffer endpoint 22 ms (mode partagé imposé par le
+  moteur), CPU mesuré 24–44 % au repos et 99–100 % sous charge contrôlée.
 - **Soak court du daemon** (`scripts/soak-daemon.ps1`, 30 requêtes séquentielles, 38,8 s,
   contenu neuf toutes les 4 requêtes puis resoumission) : WorkingSet 5,93 → **6,10 Mo**
   (max 6,13 Mo, **+0,17 Mo** sur la campagne), état disque +46,5 Kio (23 snapshots d'une
@@ -417,9 +431,19 @@ marge +29 ms, ratio 1,0004–1,0009), alors que sans MMCSS le même protocole do
 dégradé (3 tampons, max 15,7 ms) et un run décroché (255 tampons, max 134,4 ms, marge
 −111,9 ms). Au repos, MMCSS n'apporte rien de mesurable ; la priorité Win32 brute
 (`SetThreadPriority`) est aussi mesurée (normal/above/high/time-critical = 0/1/2/15) et
-appliquée après MMCSS. **Aucun WASAPI/ASIO, aucun XRUN observable via `waveOut`, aucune
-qualification hard-RT** : MMCSS est une classe d'ordonnancement, pas une garantie
-d'échéance, et la charge est artificielle.
+appliquée après MMCSS.
+
+**Backend WASAPI mode partagé (nouveau)** : endpoint par défaut MOTU, mix format float32
+2 canaux 48 kHz, buffer moteur 1 056 frames (22 ms), période device 10 ms, boucle
+événementielle (~100 Hz). 8 runs : cadence tenue (ratio 1,0001–1,0009), **0 événement en
+retard de plus d'une période**, lateness max 0,7–1,4 ms, travail DSP p50 5–8 µs, callback
+p95 46–62 µs, **0 allocation/désallocation**, 11/11 swaps, delta de swap 0,0290–0,0293.
+Sous charge CPU 100 %, ce chemin tient **sans MMCSS** (contrairement à `waveOut`), avec 0 à
+18 « starvations » définies (buffer plein) selon le run, sans conséquence mesurable.
+
+**Aucun WASAPI exclusif/ASIO, aucun XRUN observable (ni `waveOut` ni WASAPI partagé), aucune
+qualification hard-RT** : MMCSS et WASAPI sont des mécanismes d'ordonnancement/chemin, pas
+des garanties d'échéance, et la charge est artificielle.
 
 ## 19. Résultats de vérification
 
@@ -480,13 +504,14 @@ d'échéance, et la charge est artificielle.
 
 | Risque | Sévérité | Mitigation actuelle | Reste à faire |
 |---|---|---|---|
-| Pas de qualification audio temps réel | haute | chemin `waveOut` + MMCSS mesurés (silence) + limites publiées | WASAPI/ASIO, XRUN, hôte CLAP/VST3, fenêtres longues, plateforme qualifiée |
+| Pas de qualification audio temps réel | haute | chemins `waveOut` + **WASAPI partagé** mesurés (silence), MMCSS/priorité, limites publiées | WASAPI exclusif/ASIO, XRUN, hôte CLAP/VST3, fenêtres longues, plateforme qualifiée |
 | P0-A toujours manquée sur code modifié | haute | daemon + mesure | réduire le plancher de démarrage `rustc` (processus persistant, stratégie adaptative) |
 | S8 défavorable sans mesure LLM | moyenne | verdict publié | campagne avec vrais agents, tokens mesurés |
 | Faux conflits COLLAB (2/10) | moyenne | fail-closed + documentation | hybride ancres+symboles |
-| Croissance disque du daemon | moyenne | bornes mémoire, mesures | GC/compaction |
+| Croissance disque du daemon | moyenne | **GC borné mesuré** (−66 % sur 40 éditions, protections vérifiées) | GC automatique en fond, compaction de l'état incrémental, soak long |
 | Hooks Git = code local de confiance | moyenne | exécution explicite | isolation/timeout si usage non fiable |
 | Prouveur absent | moyenne | statuts honnêtes | installer Kani + harness |
+| Anomalie de 1re analyse daemon (metadata stub `core`) | moyenne | consignée, non reproduite sur 3 probes frais | reproduire sous charge, vérifier `-C incremental`/sysroot, soak long |
 | CI impact : chemin sélectif non exercé sur runner GitHub | faible | selftest 48 cas + runs FULL réels en CI | exercer le chemin sélectif sur une PR vers `dev` |
 | `enforce_admins=false` | faible | assumé mainteneur solo | revoir si second mainteneur |
 
@@ -498,8 +523,9 @@ d'échéance, et la charge est artificielle.
    documentaire séparée à décider, DCO à instaurer ; **rien n'est publié**.
 3. **Statut de la RFC #79** (shared workspace) : nourrie par COLLAB-2/3 et S8, toujours
    `PROPOSED` ; aucun numéro ADR attribué.
-4. **Priorité suivante** : (a) réduire le coût du build+link à froid ; (b) WASAPI/ASIO
-   + priorité RT et XRUN sur le chemin audio ; (c) campagne S8 avec vrais agents IA.
+4. **Priorité suivante** : (a) réduire encore le coût du build+link à froid (nombre de
+   builds, cache de builds) ; (b) WASAPI exclusif/ASIO + XRUN + hôte CLAP/VST3 ; (c) campagne
+   S8 avec vrais agents IA et comptage de tokens.
 5. **Durcissement de `dev`** avec checks requis, une fois la CI sélective éprouvée.
 6. Acceptation éventuelle des ADR touchés (aucun ne l'a été par un agent).
 
@@ -515,8 +541,12 @@ d'échéance, et la charge est artificielle.
 2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
    features), vérification sémantique des changements acceptés, historique d'activation
    natif partagé avec le daemon.
-3. Harnais WASAPI/ASIO (MMCSS et priorité déjà mesurés sur `waveOut`), plugin CLAP
-   minimal, mesures XRUN sur fenêtres longues et plusieurs machines/pilotes.
+3. Audio : ajouter **WASAPI exclusif** et **ASIO** (le partagé et MMCSS sont mesurés), un
+   hôte **CLAP/VST3** minimal, et des mesures de XRUN sur fenêtres longues et plusieurs
+   machines/pilotes.
+4. Daemon : **GC automatique en fond** avec politiques par budget, compaction de l'état
+   incrémental (ou documentation de son impossibilité sans `rustc` privé), et soak de
+   plusieurs heures avec plusieurs clients.
 4. Installer Kani dans un environnement dédié et écrire un harness borné versionné.
 5. GC/compaction de l'état incrémental ; soak test mémoire ; deux daemons sur un `work_dir`.
 6. Hybride ancres syntaxiques + symboles pour supprimer les 2 faux conflits ; campagne S8
@@ -537,6 +567,8 @@ relues sur le dépôt distant :
    — commit vault `3e607da` (lecture distante vérifiée).
 4. [Session MVP-0b troisième lot — scheduling chevauché et MMCSS](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-scheduling-concurrent-mmsc.md)
    — publiée en `b23d38e`, corrigée après CI en `3f1346b` (lecture distante vérifiée des deux états).
+5. [Session MVP-0b quatrième lot — GC du daemon et WASAPI réel](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-daemon-gc-wasapi.md)
+   — commit vault `8ffb805` (lecture distante vérifiée).
 
 ## Renvois
 
