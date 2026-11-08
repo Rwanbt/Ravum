@@ -140,6 +140,12 @@ pub struct DaemonStats {
     pub snapshots_created: u64,
     pub snapshots_verified: u64,
     pub unit_files_written: u64,
+    /// Explicit GC runs performed (P0-H retention).
+    pub gc_runs: u64,
+    /// Bytes actually reclaimed by successful GC runs.
+    pub gc_freed_bytes: u64,
+    /// Cache entries / snapshots / build contexts removed by GC.
+    pub gc_deleted_entries: u64,
 }
 
 impl DaemonStats {

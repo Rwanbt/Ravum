@@ -257,6 +257,23 @@ impl ResultCache {
             .unwrap_or(0)
     }
 
+    /// Drops the given keys from the in-memory level only (used by GC after the
+    /// on-disk verdicts were collected). Returns how many memory entries were
+    /// evicted. Disk files are removed by the GC pass itself.
+    pub fn remove_keys(&self, keys: &[String]) -> usize {
+        let Ok(mut inner) = self.inner.lock() else {
+            return 0;
+        };
+        let mut removed = 0usize;
+        for key in keys {
+            if inner.map.remove(key).is_some() {
+                removed += 1;
+            }
+            inner.order.retain(|existing| existing != key);
+        }
+        removed
+    }
+
     pub fn lookup(&self, expected: &CacheLookupKey) -> LookupOutcome {
         // L1: memory.
         {

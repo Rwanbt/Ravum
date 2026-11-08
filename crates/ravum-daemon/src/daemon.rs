@@ -20,14 +20,22 @@ use crate::diagnostics::parse_rustc_json;
 use crate::error::Result;
 use crate::fsutil::safe_join;
 use crate::gate::JobGate;
+use crate::gc::{
+    GcMode, GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState,
+};
 use crate::report::{AnalysisReport, DaemonStats, ReportStatus, SnapshotReport, Timings};
 use crate::revision::{CancelToken, RevisionTracker, RunningJobs};
 use crate::rustc_driver::{incremental_dir, out_dir, unit_dir, DriverOptions, RustcDriver};
 use crate::snapshot::{sync_unit_dir, AnalysisRequest, SnapshotIdentity, SnapshotStore};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::{Arc, Mutex, RwLock, TryLockError};
 use std::time::{Duration, Instant};
+
+/// Short form of a build-context identity, used in directory names and GC reports.
+fn context_short(context_id: &str) -> String {
+    context_id[..12.min(context_id.len())].to_owned()
+}
 
 /// Handle to a daemon. Cloning a handle shares the same daemon state, which is
 /// what the integration tests use to drive concurrent requests.
@@ -47,6 +55,13 @@ struct Inner {
     gate: JobGate,
     unit_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     stats: Mutex<DaemonStats>,
+    /// Shared (analyses) / exclusive (GC) lock over the on-disk state. An
+    /// analysis holds it in read mode for its whole duration; GC takes it in
+    /// write mode, so collection never races a snapshot/verdict/unit write.
+    io_lock: RwLock<()>,
+    /// Recently served analyses (in memory + persisted hints). Used by GC to
+    /// protect live content, including from a one-shot process after shutdown.
+    retention: Mutex<RetentionState>,
 }
 
 impl Daemon {
@@ -65,6 +80,7 @@ impl Daemon {
         let cache = ResultCache::new(work_dir.join("cache"), config.max_cache_entries)?;
         let gate = JobGate::new(config.max_concurrent_jobs);
         let driver = RustcDriver::new(config.rustc.clone());
+        let retention = RetentionState::load(&work_dir);
         Ok(Self {
             inner: Arc::new(Inner {
                 config,
@@ -77,6 +93,8 @@ impl Daemon {
                 gate,
                 unit_locks: Mutex::new(HashMap::new()),
                 stats: Mutex::new(DaemonStats::default()),
+                io_lock: RwLock::new(()),
+                retention: Mutex::new(retention),
             }),
         })
     }
@@ -126,6 +144,91 @@ impl Daemon {
         self.inner.cache.clear()
     }
 
+    /// Runs one **explicit** bounded GC pass over the daemon's private state.
+    ///
+    /// Must be explicitly requested: nothing is ever collected automatically
+    /// during an analysis. The pass holds the exclusive I/O lock, so no analysis
+    /// can write a snapshot, verdict or compile unit while objects are removed.
+    /// Live content (recent verdicts, last served content, last used build
+    /// context, snapshots referenced by kept verdicts) is never deleted; a byte
+    /// cap that cannot be met while protecting it is reported as `met: false`.
+    pub fn gc(&self, policy: &GcPolicy) -> Result<GcReport> {
+        policy.validate()?;
+        let started = Instant::now();
+        // Same lock as analyses, exclusive side: all in-flight analyses complete
+        // before any file is collected, and new ones wait until GC is done.
+        let _io_guard = self
+            .inner
+            .io_lock
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let retention = self
+            .inner
+            .retention
+            .lock()
+            .map(|state| state.clone())
+            .unwrap_or_default();
+        let protection =
+            GcProtection::from_retention(&retention, self.inner.revisions.current());
+        let mut report = crate::gc::run_gc(
+            &self.inner.config.work_dir,
+            policy,
+            &protection,
+            GcMode::Daemon,
+        )?;
+        if !policy.dry_run {
+            let evicted = self.inner.cache.remove_keys(&report.deleted.cache_keys);
+            if evicted > 0 {
+                report.notes.push(format!(
+                    "{evicted} in-memory cache entr{} evicted after collection",
+                    if evicted == 1 { "y" } else { "ies" }
+                ));
+            }
+            if let Ok(mut retention) = self.inner.retention.lock() {
+                for cache_key in &report.deleted.cache_keys {
+                    retention.forget_cache_key(cache_key);
+                }
+                let _ = retention.save(&self.inner.config.work_dir);
+            }
+        }
+        report.duration_ms = started.elapsed().as_millis() as u64;
+        let freed = report.freed_bytes;
+        let entries = report.deleted.entry_count() as u64;
+        self.bump(|stats| {
+            stats.gc_runs = stats.gc_runs.saturating_add(1);
+            stats.gc_freed_bytes = stats.gc_freed_bytes.saturating_add(freed);
+            stats.gc_deleted_entries = stats.gc_deleted_entries.saturating_add(entries);
+        });
+        Ok(report)
+    }
+
+    /// Snapshot of the persisted recency hints (newest served analyses). Exposed
+    /// so maintenance tooling and tests can inspect what GC will protect.
+    pub fn retention_state(&self) -> RetentionState {
+        self.inner
+            .retention
+            .lock()
+            .map(|state| state.clone())
+            .unwrap_or_default()
+    }
+
+    /// Records one served analysis as live content for retention/GC. Persisted
+    /// best-effort: a failed write only degrades one-shot protection to
+    /// timestamps, it never invalidates the analysis result.
+    fn record_served(&self, revision: u64, cache_key: &str, snapshot_id: &str, context_id: &str) {
+        let entry = RecentAnalysis {
+            revision,
+            cache_key: cache_key.to_owned(),
+            snapshot_id: snapshot_id.to_owned(),
+            context_short: context_short(context_id),
+            created_at_unix: crate::cache::now_unix(),
+        };
+        if let Ok(mut state) = self.inner.retention.lock() {
+            state.record(entry);
+            let _ = state.save(&self.inner.config.work_dir);
+        }
+    }
+
     pub fn cache_entries(&self) -> (usize, usize) {
         (self.inner.cache.entries(), self.inner.cache.disk_entries())
     }
@@ -157,6 +260,13 @@ impl Daemon {
     /// Analyses one request.
     pub fn analyze(&self, request: &AnalysisRequest) -> Result<AnalysisReport> {
         let started = Instant::now();
+        // Shared side of the retention lock: analyses run concurrently with each
+        // other but never with an explicit GC pass.
+        let _io_guard = self
+            .inner
+            .io_lock
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         request.validate()?;
         self.bump(|stats| stats.requests += 1);
         let context_id = request.context.id(&self.inner.toolchain);
@@ -245,6 +355,12 @@ impl Daemon {
                     },
                 );
                 self.bump(|stats| stats.fresh += 1);
+                self.record_served(
+                    request.revision,
+                    &key.key,
+                    &identity.snapshot_id,
+                    &context_id,
+                );
                 return Ok(report);
             }
             LookupOutcome::Miss => {
@@ -480,6 +596,12 @@ impl Daemon {
             dir: materialized.dir.display().to_string(),
         });
         self.bump(|stats| stats.fresh += 1);
+        self.record_served(
+            request.revision,
+            &key.key,
+            &identity.snapshot_id,
+            &context_id,
+        );
         Ok(report)
     }
 

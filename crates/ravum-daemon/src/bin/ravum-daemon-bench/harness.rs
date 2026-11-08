@@ -39,6 +39,7 @@ pub fn measurement_definitions() -> Value {
 }
 
 /// The fixture unit used by every category.
+#[derive(Clone)]
 pub struct Fixture {
     pub root: String,
     pub files: Vec<SourceFile>,

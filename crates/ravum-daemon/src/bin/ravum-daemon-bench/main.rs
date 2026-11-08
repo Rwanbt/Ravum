@@ -13,6 +13,7 @@
 
 mod campaign;
 mod edits;
+mod gc;
 mod harness;
 mod invariants;
 mod scale;
@@ -27,6 +28,8 @@ struct Args {
     out_campaign: PathBuf,
     out_scale: PathBuf,
     out_invariants: PathBuf,
+    out_gc: PathBuf,
+    gc_edits: usize,
     clean: bool,
 }
 
@@ -37,7 +40,7 @@ fn main() {
         Err(message) => {
             eprintln!("ravum-daemon-bench: {message}");
             eprintln!(
-                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|validate] \
+                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate] \
                  [--samples N] [--scale-reps N] [--work-dir PATH] [--out PATH] \
                  [--out-scale PATH] [--out-invariants PATH] [--no-clean]"
             );
@@ -81,6 +84,16 @@ fn main() {
             Ok(()) => {}
             Err(error) => {
                 eprintln!("scale suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "gc" | "all" => match gc_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("gc suite failed: {error}");
                 std::process::exit(1);
             }
         },
@@ -140,6 +153,78 @@ fn scale_run(repo_root: &Path, args: &Args) -> Result<(), String> {
     }
     println!("written: {}", args.out_scale.display());
     Ok(())
+}
+
+fn gc_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "gc: {} real edits, then explicit retention GC (cache+snapshots, incremental, dry-run)",
+        args.gc_edits
+    );
+    let value = gc::run(&gc::GcOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("gc-suite"),
+        edits: args.gc_edits,
+    })?;
+    gc::write(&args.out_gc, &value)?;
+    let audit = &value["audit_before"]["sizes"];
+    let gc1 = &value["gc1_cache_snapshots"];
+    let gc2 = &value["gc2_incremental"];
+    let dry = &value["dry_run_audit"];
+    println!(
+        "  accumulated: edits={} rustc_runs={} work_dir={}KB cache={}B snapshots={}B incremental={}B contexts={}",
+        value["accumulation"]["distinct_edits_analysed"],
+        value["accumulation"]["rustc_runs"],
+        value["audit_before"]["work_dir_bytes"].as_u64().unwrap_or(0) / 1024,
+        audit["cache_bytes"].as_u64().unwrap_or(0),
+        audit["snapshots_bytes"].as_u64().unwrap_or(0),
+        audit["incremental_bytes"].as_u64().unwrap_or(0),
+        audit["incremental_contexts"].as_u64().unwrap_or(0),
+    );
+    println!(
+        "  gc1 cache+snapshots: duration={}ms freed={}B disk {}KB->{}KB cache_entries {}->{} snapshots {}->{}",
+        gc1["duration_ms"].as_u64().unwrap_or(0),
+        gc1["report"]["freed_bytes"].as_u64().unwrap_or(0),
+        gc1["disk_bytes_before"].as_u64().unwrap_or(0) / 1024,
+        gc1["disk_bytes_after"].as_u64().unwrap_or(0) / 1024,
+        gc1["report"]["before"]["cache_entries"].as_u64().unwrap_or(0),
+        gc1["report"]["after"]["cache_entries"].as_u64().unwrap_or(0),
+        gc1["report"]["before"]["snapshots"].as_u64().unwrap_or(0),
+        gc1["report"]["after"]["snapshots"].as_u64().unwrap_or(0),
+    );
+    println!(
+        "  gc1 verification: recent_hit={} ({}ms, analysis={}ms) old_miss={} rebuild={}ms rustc_runs {}->{}",
+        gc1["verification"]["recent_cache_hit"],
+        gc1["verification"]["recent_wall_ms"],
+        gc1["verification"]["recent_analysis_ms"],
+        gc1["verification"]["old_cache_miss"],
+        gc1["verification"]["old_wall_ms"],
+        gc1["verification"]["rustc_runs_before"],
+        gc1["verification"]["rustc_runs_after"],
+    );
+    println!(
+        "  gc2 incremental: duration={}ms contexts deleted={:?} contexts kept={:?} disk {}KB->{}KB",
+        gc2["duration_ms"].as_u64().unwrap_or(0),
+        gc2["verification"]["collected_contexts"],
+        gc2["verification"]["kept_contexts"],
+        gc2["disk_bytes_before"].as_u64().unwrap_or(0) / 1024,
+        gc2["disk_bytes_after"].as_u64().unwrap_or(0) / 1024,
+    );
+    println!(
+        "  dry-run: plan_non_empty={} planned_freed={}B filesystem_unchanged={}",
+        dry["plan_non_empty"],
+        dry["planned_freed_bytes"].as_u64().unwrap_or(0),
+        dry["filesystem_unchanged"],
+    );
+    println!("written: {}", args.out_gc.display());
+    let ok = gc1["verification"]["recent_cache_hit"].as_bool() == Some(true)
+        && gc1["verification"]["old_cache_miss"].as_bool()
+            == gc1["verification"]["old_cache_miss_expected"].as_bool()
+        && gc1["verification"]["no_compiler_for_recent"].as_bool() == Some(true)
+        && gc2["verification"]["new_content_in_collected_context_compiled"].as_bool() == Some(true)
+        && gc2["verification"]["incremental_context_recreated"].as_bool() == Some(true)
+        && dry["plan_non_empty"].as_bool() == Some(true)
+        && dry["filesystem_unchanged"].as_bool() == Some(true);
+    Ok(ok)
 }
 
 fn invariants_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
@@ -247,6 +332,10 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
         out_invariants: repo_root
             .join("evidence")
             .join("mvp0b-incremental-invariants.json"),
+        out_gc: repo_root
+            .join("evidence")
+            .join("mvp0b-daemon-gc-2026-11-08.json"),
+        gc_edits: 40,
         clean: true,
     };
     let mut index = 1;
@@ -277,6 +366,12 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             "--out-invariants" => {
                 args.out_invariants = PathBuf::from(take("--out-invariants")?)
             }
+            "--out-gc" => args.out_gc = PathBuf::from(take("--out-gc")?),
+            "--gc-edits" => {
+                args.gc_edits = take("--gc-edits")?
+                    .parse()
+                    .map_err(|_| "--gc-edits must be an integer".to_owned())?
+            }
             "--no-clean" => args.clean = false,
             "--help" | "-h" => {
                 return Err("help requested".to_owned());
@@ -287,7 +382,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
     }
     if !matches!(
         args.suite.as_str(),
-        "all" | "campaign" | "scale" | "invariants" | "validate"
+        "all" | "campaign" | "scale" | "invariants" | "gc" | "validate"
     ) {
         return Err(format!("unknown suite {:?}", args.suite));
     }
