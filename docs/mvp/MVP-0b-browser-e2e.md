@@ -98,8 +98,11 @@ DevTools lue sur stderr.
 | 9 | Migration v1 → v2 | base v1 créée hors serveur ; `/health` = `schema_version=2`, `contract_version=1` ; ligne « tâche v1 héritée » visible ; nouvelle tâche avec échéance `2026-12-01` créée et affichée ; `due_date` persistée ; ligne v1 conservée (`due_date` absente = NULL) | **PASS** | 498 ms |
 | 10 | Erreur réseau | serveur arrêté, clic Rafraîchir → « Failed to fetch » dans `#error` ; soumission → même erreur ; page vivante ; **0** `Runtime.exceptionThrown` ; seuls deux `ERR_CONNECTION_REFUSED` whitelistés | **PASS** | 1375 ms |
 
-Total : **10/10 PASS, 0 échec, 0 skip, 44 vérifications décrites, 12,7 s** (rapport JSON
-`target/ravum/browser-e2e/report.json`, `durationMs=12668`).
+Total de la campagne de référence : **10/10 PASS, 0 échec, 0 skip, 44 vérifications
+décrites, 12,7 s** (`durationMs=12668`). Le rapport JSON
+`target/ravum/browser-e2e/report.json` est régénéré à chaque exécution ; les durées
+varient de 10,0 à 13,1 s selon la charge machine (d'autres agents compilaient pendant les
+campagnes).
 
 Captures (locales, `target/` n'est pas versionné) :
 

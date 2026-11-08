@@ -174,10 +174,14 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 
 - [Audit L0 et baseline reproductible](docs/mvp/MVP-0b-audit.md)
 - [L1-A — cycle de vie temps réel des modules DSP](docs/mvp/MVP-0b-rt-lifecycle.md)
+- [L1-B / L3 — collaboration multi-agents et publication Git transactionnelle](docs/mvp/MVP-0b-collab-2-3.md)
 - [L4-B — crossfade de remplacement DSP](docs/mvp/MVP-0b-dsp-crossfade.md)
 - [L2 — daemon persistant d'analyse incrémentale](docs/mvp/MVP-0b-incremental.md)
+- [L3/S8 — worktrees vs workspace partagé vs séquentiel](docs/mvp/MVP-0b-s8.md)
+- [L4-A — E2E navigateur réel (CDP, sans dépendance npm)](docs/mvp/MVP-0b-browser-e2e.md)
 - [L4-C — chemin audio réel : ce qui est mesuré et ce qui ne l'est pas](docs/mvp/MVP-0b-audio-host.md)
 - [L4-D — vérification bornée et prouveur externe](docs/mvp/MVP-0b-verification.md)
+- [L4-E — CI sélective par impact](docs/mvp/MVP-0b-ci.md)
 - [L5.3 — analyse de licence et inventaire tiers](docs/mvp/MVP-0b-licence-analysis.md)
 
 ## Branches et contributions
