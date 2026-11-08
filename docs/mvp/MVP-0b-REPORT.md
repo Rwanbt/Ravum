@@ -278,6 +278,13 @@ la racine, **pas masquées** :
    l'instantané `live_modules()` et l'assertion. Les 3 tests du module sont maintenant
    sérialisés par un verrou de test (assertion inchangée) ; **10 exécutions consécutives
    8/8**, puis suite complète verte.
+6. **CI rouge (run 42497769963) — défaut dans un test que j'ai écrit** : le nouveau test
+   d'équivalence séquentiel/concurrent du coordinateur affirmait `build_ms > 0` sans
+   désactiver le cache d'artefacts ; la 2e exécution du même contenu était un hit de cache
+   légitime et `build_ms = 0`. La CI l'a révélé, le test local passait par chance de timing.
+   Correctif : `without_artifact_cache()` dans ce test (les deux builds sont réels) et
+   assertion séparée par étape ; **3 exécutions 7/7**, puis suite complète et CI vertes.
+   L'échec CI a été conservé tel quel dans l'historique des runs, pas masqué.
 
 Défaillances transitoires d'environnement, documentées sans les compter comme régressions :
 `STATUS_DLL_INIT_FAILED` lors d'un link concurrent, un `link.exe exit 1104` (fichier en
