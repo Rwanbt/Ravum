@@ -26,12 +26,12 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **15 commits** au-dessus de `6b37ad3` |
-| Dernier commit de code | `6d5b1b7` (ce rapport est ajouté par le commit suivant de la même branche) |
-| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE`, 15 commits, 208 fichiers, +60 333/−282 |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **22 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
+| Dernier commit de code | `5cb821a` |
+| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 232 fichiers, +72 705/−285 au moment de la rédaction |
 | PR #78 | inchangée, non fusionnée, non réécrite |
-| CI du dernier commit | [run 42487917654](https://github.com/Rwanbt/Ravum/actions/runs/42487917654) — **succès**, 18 étapes dont l'E2E navigateur |
-| Tests workspace | **275 réussis, 0 échec**, 74 binaires de test, 109,3 s |
+| CI du dernier commit poussé | run [42489568590](https://github.com/Rwanbt/Ravum/actions/runs/42489568590) — **succès** (18 étapes dont l'E2E navigateur) ; le workflow d'impact est aussi vert ([42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677)) |
+| Tests workspace | **292 réussis, 0 échec**, 78 binaires de test, 67,3 s (arbre incluant COLLAB-4 et la sonde audio) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
 | Vault | 2 sessions publiées et vérifiées (voir §25) |
 
@@ -50,7 +50,7 @@ tests), plutôt que de se fier aux rapports.
 | `s8-bench` (Worker E) | S8 benchmark | harnais `benchmarks/s8`, 15 campagnes, preuves JSON | protocole `ok`, verdict relu |
 | `impact-ci` (Worker I) | L4-E CI sélective | `tools/impact`, workflow `mvp-impact.yml`, selftest 48 cas | selftest re-exécuté, correction du FULL légitime |
 | `collab-4` (Worker J) | L3.4 collaboration ↔ daemon | `ravum collab-cycle`, graphe d'unités fail-closed, 36 tests CLI, preuve JSON | 36 tests re-exécutés, démo re-jouée |
-| `audio-probe` (Worker K) | L4-C audio réel | sonde `waveOut` silencieuse + mesures device | à intégrer (round 2) |
+| `audio-probe` (Worker K) | L4-C audio réel | sonde `waveOut` silencieuse, 5 preuves réelles, doc audio-host refondue | 6 tests du harnais re-exécutés, sonde relancée par le Lead (ratio 1,001, 11/11 swaps) |
 
 Le Lead a réalisé lui-même : L0 (audit/baseline), L1-A (cycle de vie temps réel DSP),
 L4-B (crossfade), L4-C/L4-D (statuts honnêtes), L5.3 (licence), l'intégration CLI du
@@ -70,7 +70,7 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (15, sur `feat/mvp0b-hardening`)
+## 5. Commits (22 de code, sur `feat/mvp0b-hardening`)
 
 1. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
 2. `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
@@ -87,6 +87,13 @@ sauvegardes Obsidian.
 13. `902b912` — fix(daemon): isolate cache test directories for parallel tests
 14. `167281b` — feat(collab): COLLAB-2/3 with symbol-aware merges and real verification
 15. `6d5b1b7` — docs(mvp0b): consolidate the verified state, status and roadmap
+16. `bf4ab6d` — docs(mvp0b): add the cycle report and link the published Obsidian sessions
+17. `78b3420` — ci(impact): trigger on feature-branch pushes and diff against the integration branch
+18. `a44b371` — feat(cli): measure the full edit->activation cycle, MVP-0a vs MVP-0b
+19. `2687ec9` — docs(mvp0b): record two rejected build accelerations and the daemon idle footprint
+20. `7bc128a` — fix(m4): make the browser E2E deterministic with an explicit UI readiness signal
+21. `cba70f1` — feat(collab): COLLAB-4 -- an accepted change analyses only its affected units
+22. `5cb821a` — feat(dsp): probe the real Windows audio path with silence, and measure what it shows
 
 ## 6. PR créées ou mises à jour
 
@@ -233,7 +240,7 @@ agents IA (tokens et supervision **non mesurés ici**).
 
 | Commande | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **275 réussis / 0 échec**, 74 binaires, 109,3 s |
+| `cargo test --workspace --all-targets` | **292 réussis / 0 échec**, 78 binaires, 67,3 s |
 | Baseline L0 avant modifications | 139 réussis / 0 échec, 46,52 s |
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
@@ -261,6 +268,11 @@ la racine, **pas masquées** :
    trouvait un journal de publication persistant et refusait avec `AlreadyPublished` —
    l'idempotence du writer était correcte, la démo ne l'était pas. Journal scopé dans
    l'espace jetable ; 3 runs consécutifs verts, puis CI verte.
+4. **E2E navigateur instable en CI (run 42491318211)** : le scénario 5 échouait une fois
+   car le test lisait la liste avant la fin du premier rendu (bannière prête, `refresh()`
+   initial encore en vol sur le runner Chrome complet, plus lent). Ni l'assertion ni le
+   produit n'étaient faux. Correctif : l'UI expose `data-ravum-ready="1"` après le premier
+   rendu, le harnais attend ce signal ; **3 exécutions locales 10/10** puis CI verte.
 
 Défaillances transitoires d'environnement, documentées sans les compter comme régressions :
 `STATUS_DLL_INIT_FAILED` lors d'un link concurrent, un `link.exe exit 1104` (fichier en
@@ -269,8 +281,11 @@ d'un autre worker (WIP), jamais présents dans un commit.
 
 ## 14. Tests non exécutés
 
-- **Hôte audio réel** (CLAP/VST3/WASAPI/ASIO), XRUN, buffer size, priorité RT — non
-  exécuté, raisons et plan dans `MVP-0b-audio-host.md`.
+- **Chemin audio réel** : désormais **exécuté** via `waveOut` (silence) — 512 frames tient
+  la cadence (ratio 1,001), 0 alloc/free, 11/11 swaps ; 256 frames sur la voie par défaut
+  décroche (ratio 0,53). Restent non exécutés : **WASAPI/ASIO/MMCSS**, priorité temps réel,
+  **XRUN réels** (non observables via `waveOut`), hôte CLAP/VST3/DAW, fenêtres longues
+  (minutes) et autres machines/pilotes.
 - **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` — plan
   proposé dans `MVP-0b-verification.md`.
 - **Soak test RSS / fuite longue** du daemon ; **deux daemons partageant un même
@@ -280,9 +295,12 @@ d'un autre worker (WIP), jamais présents dans un commit.
 - **S8 sur un vrai projet multi-crates** ; **fixtures macro-lourdes**.
 - **Firefox/WebKit**, mobile, a11y complète, TLS/HTTPS pour l'E2E navigateur.
 - **MSRV 1.74** déclarée dans les manifestes : compilée/testée avec `rustc 1.95` seulement.
-- **Workflow `mvp-impact.yml`** : validé localement (selftest, PyYAML, simulation) mais
-  **pas encore exécuté sur GitHub Actions** (le déclencheur est `pull_request` vers
-  `main`/`dev` ; il s'exécutera à la première PR vers `dev`).
+- **Workflow `mvp-impact.yml`** : désormais **exécuté sur GitHub Actions** (runs
+  [42489068304](https://github.com/Rwanbt/Ravum/actions/runs/42489068304) et
+  [42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677), déclenchés par
+  des pushs de branche) : décision FULL légitime, suite complète verte, garde documentaire
+  exécutée. Restent non exercés : le chemin **sélectif** sur un runner GitHub (couvert
+  localement par 3 diffs) et la configuration de checks requis de `dev`.
 - **Benchmark de bout en bout** : désormais **mesuré** (`ravum cycle-bench`, voir
   `MVP-0b-cycle.md`) pour une petite unité et une unité synthétique de 2 313 lignes ;
   restent non mesurés : un vrai crate multi-crates, les macros procédurales, le coût du
@@ -302,6 +320,10 @@ d'un autre worker (WIP), jamais présents dans un commit.
 | RAM daemon (WorkingSet) | — | 5,6–7,4 Mo pendant la campagne | sobriété du moteur |
 | Temps total jusqu'à tests verts, 3 agents | — | A 5 661 ms / B 6 678 ms / C 4 786 ms | S8, voir §11 |
 | Jigue OS (période 5,33 ms) | non mesurée | lateness p50 0,37 ms / p95 0,65 ms / max **2,6 ms** | borne les prétentions RT |
+| Périphérique réel `waveOut`, 512 frames | non mesuré | cadence ratio **1,001**, travail DSP p50 **7 µs** / p95 14 µs, callback p95 503 µs, **0 alloc/0 free** thread de rendu | chemin ABI réel exercé sur un pilote |
+| Périphérique réel `waveOut`, 256 frames (défaut) | non mesuré | ratio **0,53**, ~25,6 kéch/s, 292 tampons en retard | le pilote par défaut ne tient pas 5,33 ms ; limite du chemin, pas du DSP |
+| Même chemin sous charge CPU 100 % | — | ratio 0,93, lateness max **≈208 ms**, **0 alloc**, 11/11 swaps | aucune revendication hard-RT possible |
+| Swaps à chaud sur périphérique (avec/sans fondu) | — | 11/11 activés, delta **0,0291** avec fondu vs **0,1260** sans | clic reproduit et supprimé sur le chemin réel |
 | Cycle complet, contenu **inchangé** (édition→activation) | 85–177 ms (p50) | **8–13 ms** (p50), p95 9–18 ms | ×10 à ×13, cache de verdicts + cache d'artefacts |
 | Cycle complet, **édition réelle**, petite unité | 316 ms p50 / 335 ms p95 | 339 ms p50 / 362 ms p95 | MVP-0b ≈ +7 %, build à froid dominant |
 | Cycle complet, **édition réelle**, unité 2 313 lignes | 524 ms p50 / 702 ms p95 | 600 ms p50 / 743 ms p95 | cible p95 < 500 ms **manquée** à cette taille |
@@ -326,7 +348,7 @@ Harnais CDP sans dépendance npm, vrai Chromium headless, vrai serveur, vraie ba
 **validation du DOM affiché** (pas seulement du HTTP).
 
 - Local : **10/10 scénarios PASS**, 44 vérifications, 9,4–13,1 s, HeadlessChrome/156.
-- CI GitHub windows-latest : **étape verte** (Edge détecté, `-RequireBrowser`).
+- CI GitHub windows-latest : **étape verte** (Chrome 156 puis Edge détecté, `-RequireBrowser`), après correction d'un échec intermittent de scénario 5 dû à une course de rendu (signal `data-ravum-ready` ; 3 runs locaux 10/10 puis CI verte).
 - Défauts produit réels trouvés **par le navigateur** et corrigés :
   1. la suppression depuis l'UI était **impossible** (DELETE sans `Authorization` → 401) ;
   2. serveur Windows : socket accepté en mode non bloquant → `400 malformed_request`
@@ -338,10 +360,23 @@ Harnais CDP sans dépendance npm, vrai Chromium headless, vrai serveur, vraie ba
 
 ## 18. Résultats DSP
 
-Voir §7. Résumé : garde non possédante (0 destruction sur callback), crossfade
+Voir §7. Résumé simulateur : garde non possédante (0 destruction sur callback), crossfade
 0,108→0,029 (IIR) et 0,657→0,058 (gain), 0 allocation/désallocation sur 199 517 blocs et
-400 blocs de session, 0 dépassement de période simulée. **Aucun périphérique audio, aucune
-priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
+400 blocs de session, 0 dépassement de période simulée.
+
+**Chemin réel (nouveau, L4-C)** : sonde `waveOut` sur le périphérique par défaut, rendu de
+silence uniquement (le signal DSP est calculé, mesuré, jeté). En 512 frames (10,67 ms,
+4 tampons) : 282 tampons traités, cadence livrée 93,8/s pour 93,75 attendus (ratio
+**1,001**), travail `process_rt` p50 **7 µs** / p95 14 µs / max 83 µs, callback complet
+p95 503 µs, **0 allocation et 0 désallocation sur le thread de rendu**, 11 swaps activés
+sur 11, marge de file min ≈27 ms, 0 tampon en retard de plus d'une période, delta de swap
+**0,0291** avec fondu (référence 0,0288) contre **0,1260 sans fondu**. En 256 frames sur la
+voie MOTU par défaut, la cadence s'effondre (ratio 0,53) ; le même 256 frames sur
+l'endpoint Realtek tient (ratio 1,001) : c'est une propriété de la voie/pilote, pas du DSP.
+Sous charge CPU 100 % : ratio 0,93, lateness max ≈208 ms, toujours 0 allocation et 11/11
+swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
+**Aucun WASAPI/ASIO/MMCSS, aucune priorité temps réel, aucun XRUN observable via
+`waveOut`, aucune qualification hard-RT.**
 
 ## 19. Résultats de vérification
 
@@ -381,8 +416,10 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
 - COLLAB-2/3 : pas d'AST complète (heuristiques), pas de CRDT, vérification limitée à une
   racine de crate inférée, 2 faux conflits assumés, `--verify-tests` exécute du code du
   snapshot (opt-in, pas de bac à sable).
-- Audio : simulateur seulement ; pas de device, pilote, XRUN, priorité RT ; jigue OS
-  mesurée mais non représentative du pire cas.
+- Audio : chemin `waveOut` réel exercé (silence) mais API legacy émulée, sans
+  WASAPI/ASIO/MMCSS ni priorité temps réel ; XRUN non observables ; un seul OS, un seul
+  jeu de pilotes, fenêtres de 3 s ; 256 frames décroche sur la voie par défaut ; la charge
+  CPU a montré ≈208 ms de lateness sans allocation, donc aucune prétention hard-RT.
 - Vérification : aucun prouveur externe, aucun `PROVED` général, aucune preuve de sûreté
   mémoire du code natif.
 - E2E navigateur : Chromium/Edge uniquement, pas d'a11y, pas de TLS, un onglet.
@@ -395,14 +432,14 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
 
 | Risque | Sévérité | Mitigation actuelle | Reste à faire |
 |---|---|---|---|
-| Aucune qualification audio réelle | haute | simulateur + mesure de jigue honnête | harnais WASAPI/CLAP, XRUN, plateforme qualifiée |
+| Pas de qualification audio temps réel | haute | chemin `waveOut` réel mesuré (silence) + limites publiées | WASAPI/ASIO/MMCSS + priorité RT, XRUN, hôte CLAP/VST3, plateforme qualifiée |
 | P0-A toujours manquée sur code modifié | haute | daemon + mesure | réduire le plancher de démarrage `rustc` (processus persistant, stratégie adaptative) |
 | S8 défavorable sans mesure LLM | moyenne | verdict publié | campagne avec vrais agents, tokens mesurés |
 | Faux conflits COLLAB (2/10) | moyenne | fail-closed + documentation | hybride ancres+symboles |
 | Croissance disque du daemon | moyenne | bornes mémoire, mesures | GC/compaction |
 | Hooks Git = code local de confiance | moyenne | exécution explicite | isolation/timeout si usage non fiable |
 | Prouveur absent | moyenne | statuts honnêtes | installer Kani + harness |
-| CI impact non éprouvée en CI | faible | selftest 48 cas | première PR vers `dev` |
+| CI impact : chemin sélectif non exercé sur runner GitHub | faible | selftest 48 cas + runs FULL réels en CI | exercer le chemin sélectif sur une PR vers `dev` |
 | `enforce_admins=false` | faible | assumé mainteneur solo | revoir si second mainteneur |
 
 ## 23. Décisions nécessitant approbation du responsable
@@ -413,8 +450,8 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
    documentaire séparée à décider, DCO à instaurer ; **rien n'est publié**.
 3. **Statut de la RFC #79** (shared workspace) : nourrie par COLLAB-2/3 et S8, toujours
    `PROPOSED` ; aucun numéro ADR attribué.
-4. **Priorité suivante** : (a) intégration L2/COLLAB-4 et mesure de bout en bout
-   édition→preview ; (b) harnais audio réel ; (c) campagne S8 avec vrais agents.
+4. **Priorité suivante** : (a) réduire le coût du build+link à froid ; (b) WASAPI/ASIO
+   + priorité RT et XRUN sur le chemin audio ; (c) campagne S8 avec vrais agents IA.
 5. **Durcissement de `dev`** avec checks requis, une fois la CI sélective éprouvée.
 6. Acceptation éventuelle des ADR touchés (aucun ne l'a été par un agent).
 
@@ -424,9 +461,11 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
    froid** (230–435 ms) : cache de builds par contenu étendu, `-C incremental` sur la
    compilation cdylib, lien incrémental mesuré, puis re-mesurer le cycle complet avec
    `ravum cycle-bench`.
-2. Intégrer `AcceptedChange` (COLLAB) au daemon : invalidation ciblée par chemins/symboles,
-   journal d'activations partagé, identifiants de snapshots communs (COLLAB-4).
-3. Harnais audio WASAPI shared-mode silencieux + plugin CLAP minimal, mesures XRUN.
+2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
+   features), vérification sémantique des changements acceptés, historique d'activation
+   natif partagé avec le daemon.
+3. Harnais WASAPI/ASIO + MMCSS et priorité temps réel, plugin CLAP minimal, mesures XRUN
+   sur fenêtres longues et plusieurs machines/pilotes.
 4. Installer Kani dans un environnement dédié et écrire un harness borné versionné.
 5. GC/compaction de l'état incrémental ; soak test mémoire ; deux daemons sur un `work_dir`.
 6. Hybride ancres syntaxiques + symboles pour supprimer les 2 faux conflits ; campagne S8
