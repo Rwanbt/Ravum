@@ -96,6 +96,8 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 - [Architecture et statut des décisions](docs/architecture/STATUS.md)
 - [Backlog et user stories](docs/roadmap/BACKLOG.md)
 - [Contribuer](CONTRIBUTING.md)
+- [Instructions pour les agents IA](AGENTS.md)
+- [Premières tâches à réaliser](docs/roadmap/START_HERE.md)
 
 ## Branches et contributions
 
