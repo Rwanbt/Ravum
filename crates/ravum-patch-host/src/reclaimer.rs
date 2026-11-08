@@ -145,7 +145,22 @@ impl Drop for DeferredLibrary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::time::{Duration, Instant};
+
+    /// These tests read and assert on process-wide counters (live/unloaded/pending). Cargo
+    /// runs tests in one binary on several threads, so a concurrent reclaimer test can
+    /// unload a module between a snapshot and its assertion (observed once as a false
+    /// failure of `live_modules() > loaded_before`). Serialize the module instead of
+    /// weakening the assertion; a poisoned lock still lets the remaining tests run and
+    /// report their own result.
+    static RECLAIMER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn serialize() -> std::sync::MutexGuard<'static, ()> {
+        RECLAIMER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     fn wait_for_unload(before: u64) -> bool {
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -160,6 +175,7 @@ mod tests {
 
     #[test]
     fn unloading_happens_off_the_dropping_thread() {
+        let _serial = serialize();
         // The test binary itself is a valid module handle to open.
         let exe = std::env::current_exe().expect("current exe");
         let before = unloaded_modules();
@@ -176,6 +192,7 @@ mod tests {
     /// modules (or a long campaign) may leave a backlog, never a leak.
     #[test]
     fn a_burst_of_retired_libraries_is_drained_and_accounted_for() {
+        let _serial = serialize();
         let exe = std::env::current_exe().expect("current exe");
         init_reclaimer();
         let unloaded_before = unloaded_modules();
@@ -207,6 +224,7 @@ mod tests {
     /// `init_reclaimer` is idempotent and safe to call from any control thread.
     #[test]
     fn init_reclaimer_is_idempotent() {
+        let _serial = serialize();
         init_reclaimer();
         init_reclaimer();
         assert!(wait_until_idle(Duration::from_secs(5)));
