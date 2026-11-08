@@ -1,0 +1,77 @@
+{
+  "config": {
+    "blocks": 400,
+    "crossfade_frames": 256,
+    "frames": 256,
+    "period_sleep_us": 0,
+    "period_us": 5333,
+    "sample_rate": 48000
+  },
+  "first_artifact": "1c995521ea1b4008367567f134e696ed8463842724395e12fa750cd1f4b4b990",
+  "first_source": "fixtures/dsp/iir_v1.rs",
+  "limits": [
+    "simulated cadence: no audio device, no driver, no real-time priority",
+    "the allocations and deallocations counters instrument this whole process, per thread; a zero means the instrumented allocator saw no call on that thread, not a hard-RT proof",
+    "a level change without crossfade is expected to produce a discontinuity and it is measured"
+  ],
+  "schema_version": 1,
+  "session_after": {
+    "active_patch_id": "session-after",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 12,
+      "p50_us": 1,
+      "p95_us": 2,
+      "p99_us": 2
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.02938794530928135,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 1,
+    "unloaded_modules": 1
+  },
+  "session_before": {
+    "active_patch_id": "session-before",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 46,
+      "p50_us": 1,
+      "p95_us": 1,
+      "p99_us": 3
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.025295425206422806,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 0,
+    "unloaded_modules": 1
+  },
+  "swap": {
+    "active_version": 2,
+    "artifact_id": "746699394f340709aeca90d5b48fa63813d5cc5dad2a9e843b4e7968803278e8",
+    "patch_id": "dsp-iir-v2",
+    "previous_version": 1,
+    "schema_version": 1,
+    "status": "activated",
+    "timings": {
+      "activate_ms": 0,
+      "build_ms": 386,
+      "check_ms": 0,
+      "load_ms": 3,
+      "proof_ms": 0,
+      "total_ms": 389,
+      "verify_ms": 0
+    }
+  }
+}

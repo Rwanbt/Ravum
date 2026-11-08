@@ -30,10 +30,13 @@ pub fn dsp(args: &[String]) -> u8 {
         start_sample: 0,
         period_sleep_us: flag_u64(args, "--period-sleep-us", 0),
     };
+    // Crossfade length for the swap, in frames. `0` keeps the MVP-0a immediate-switch
+    // semantics; L4-B measures the click removal with a non-zero value.
+    let crossfade_frames = flag_u64(args, "--crossfade-frames", 0).min(u32::MAX as u64) as u32;
     let json_out = has(args, "--json");
     let pipeline = pipeline();
 
-    let Some((host, first_build)) = build_and_bootstrap(&pipeline, &first) else {
+    let Some((host, first_build)) = build_and_bootstrap(&pipeline, &first, crossfade_frames) else {
         return 1;
     };
 
@@ -103,6 +106,7 @@ pub fn dsp(args: &[String]) -> u8 {
                 "sample_rate": config.sample_rate,
                 "period_us": config.period_us(),
                 "period_sleep_us": config.period_sleep_us,
+                "crossfade_frames": crossfade_frames,
             },
             "session_before": report_before,
             "swap": swap_report,
@@ -116,6 +120,7 @@ pub fn dsp(args: &[String]) -> u8 {
         println!("{}", serde_json::to_string_pretty(&payload).unwrap());
     } else {
         print_session("avant remplacement", &report_before);
+        println!("  crossfade      {} frames", crossfade_frames);
         if let Some(after) = &report_after {
             println!(
                 "remplacement   activé en {} ms (chargement {} ms)",
@@ -168,9 +173,14 @@ fn print_session(label: &str, report: &ravum_protocol::DspSessionReport) {
 fn build_and_bootstrap(
     pipeline: &ravum_coordinator::Pipeline,
     file: &str,
+    crossfade_frames: u32,
 ) -> Option<(BlockHost, ravum_protocol::BuildOutput)> {
     let build = build_candidate(pipeline, file)?;
-    match BlockHost::bootstrap(ExpectedAbi::dsp(), Path::new(&build.artifact_path)) {
+    match BlockHost::bootstrap_with_crossfade(
+        ExpectedAbi::dsp(),
+        Path::new(&build.artifact_path),
+        crossfade_frames,
+    ) {
         Ok(host) => Some((host, build)),
         Err(reason) => {
             eprintln!("module refused at bootstrap: {reason:?}");
