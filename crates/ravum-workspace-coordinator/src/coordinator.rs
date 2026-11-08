@@ -54,6 +54,8 @@ pub struct Coordinator {
     integrated: Vec<Integrated>,
     explained_paths: BTreeSet<String>,
     journal: Vec<JournalEntry>,
+    journal_path: Option<std::path::PathBuf>,
+    journal_error: Option<String>,
     seq: u64,
 }
 
@@ -65,8 +67,32 @@ impl Coordinator {
             integrated: Vec::new(),
             explained_paths: BTreeSet::new(),
             journal: Vec::new(),
+            journal_path: None,
+            journal_error: None,
             seq: 0,
         }
+    }
+
+    /// Write every decision to disk as it is taken, instead of flushing at the end.
+    ///
+    /// A crash then loses at most the decision in progress, never the history.
+    pub fn with_journal(mut self, path: impl Into<std::path::PathBuf>) -> std::io::Result<Self> {
+        let path = path.into();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::File::create(&path)?;
+        self.journal_path = Some(path);
+        Ok(self)
+    }
+
+    pub fn journal_path(&self) -> Option<&std::path::Path> {
+        self.journal_path.as_deref()
+    }
+
+    /// First persistence failure, if any. A caller must treat it as fatal.
+    pub fn journal_error(&self) -> Option<&str> {
+        self.journal_error.as_deref()
     }
 
     pub fn current(&self) -> &SourceSnapshot {
@@ -114,13 +140,32 @@ impl Coordinator {
         decision.resulting_snapshot_id = if integrate { Some(after.clone()) } else { None };
         decision.decided_at_unix = ravum_protocol::now_unix();
         self.seq += 1;
-        self.journal.push(JournalEntry {
+        let entry = JournalEntry {
             seq: self.seq,
             decision: decision.clone(),
             snapshot_before: before,
             snapshot_after: after,
-        });
+        };
+        self.persist(&entry);
+        self.journal.push(entry);
         decision
+    }
+
+    fn persist(&mut self, entry: &JournalEntry) {
+        let Some(path) = self.journal_path.clone() else {
+            return;
+        };
+        let result = (|| -> std::io::Result<()> {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new().create(true).append(true).open(&path)?;
+            writeln!(file, "{}", serde_json::to_string(entry).unwrap_or_default())?;
+            file.flush()
+        })();
+        if let Err(e) = result {
+            if self.journal_error.is_none() {
+                self.journal_error = Some(format!("{}: {e}", path.display()));
+            }
+        }
     }
 
     fn evaluate(&self, proposal: &ChangeProposal) -> (ProposalDecision, bool) {

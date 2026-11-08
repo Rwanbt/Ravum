@@ -9,13 +9,14 @@
 //! duplicating the stage logic.
 
 use ravum_patch_host::{prepare, ExpectedAbi, PatchHost};
+use ravum_proof::{Obligation, ProofBroker};
 use ravum_protocol::{
     ActivationReport, ActivationStatus, ArtifactId, BuildOutput, EvidenceRecord, RejectReason,
     SnapshotId, StageTimings, VerificationKey, VerificationStatus, EVIDENCE_SCHEMA_VERSION,
 };
 use ravum_rust_adapter::{AdapterError, BuildOutcome, CheckOutcome, RustAdapter};
 use ravum_snapshot::SourceSnapshot;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 /// Inputs used by the M1 smoke contract. They are *not* a functional oracle.
@@ -39,6 +40,8 @@ pub enum LoopOutcome {
     RefusedByBuild,
     /// The artifact loaded but the smoke contract did not hold.
     RefusedByVerification { detail: String },
+    /// A declared obligation was not satisfied (failed, unknown, timeout, unsupported).
+    RefusedByProof { obligation: String, status: String },
     /// The snapshot changed while the pipeline was running.
     RefusedAsStale { built_from: SnapshotId, current: SnapshotId },
     /// The host refused the candidate (ABI, manifest, verification, ...).
@@ -54,6 +57,7 @@ impl LoopOutcome {
             LoopOutcome::RefusedByCheck { .. }
                 | LoopOutcome::RefusedByBuild
                 | LoopOutcome::RefusedByVerification { .. }
+                | LoopOutcome::RefusedByProof { .. }
                 | LoopOutcome::RefusedAsStale { .. }
                 | LoopOutcome::RefusedByHost { .. }
                 | LoopOutcome::Error { .. }
@@ -67,6 +71,7 @@ impl LoopOutcome {
             LoopOutcome::RefusedByCheck { .. } => "refused_check",
             LoopOutcome::RefusedByBuild => "refused_build",
             LoopOutcome::RefusedByVerification { .. } => "refused_verification",
+            LoopOutcome::RefusedByProof { .. } => "refused_proof",
             LoopOutcome::RefusedAsStale { .. } => "refused_stale",
             LoopOutcome::RefusedByHost { .. } => "refused_host",
             LoopOutcome::Error { .. } => "error",
@@ -81,6 +86,8 @@ pub struct LoopReport {
     pub check: Option<CheckOutcome>,
     pub build: Option<BuildOutput>,
     pub evidence: Option<EvidenceRecord>,
+    /// Verdicts for the pipeline's declared obligations, in declaration order.
+    pub proofs: Vec<EvidenceRecord>,
     pub activation: Option<ActivationReport>,
     pub timings: StageTimings,
 }
@@ -101,6 +108,7 @@ impl LoopReport {
 
 pub struct Pipeline {
     adapter: RustAdapter,
+    obligations: Vec<Obligation>,
 }
 
 enum Stage<T> {
@@ -112,7 +120,28 @@ impl Pipeline {
     pub fn new(rustc: impl Into<PathBuf>, work_dir: impl Into<PathBuf>) -> Self {
         Self {
             adapter: RustAdapter::new(rustc, work_dir),
+            obligations: Vec::new(),
         }
+    }
+
+    /// Declare the obligations every candidate must satisfy before publication.
+    ///
+    /// Declaring obligations without providing a `ProofBroker` at run time is an
+    /// error, never a silent skip.
+    pub fn with_obligations(mut self, obligations: Vec<Obligation>) -> Self {
+        self.obligations = obligations;
+        self
+    }
+
+    pub fn obligations(&self) -> &[Obligation] {
+        &self.obligations
+    }
+
+    /// Turn off artifact reuse. Used by the measurement harness so that every
+    /// measured build is a real `rustc` invocation.
+    pub fn without_artifact_cache(mut self) -> Self {
+        self.adapter.set_artifact_cache(false);
+        self
     }
 
     pub fn adapter(&self) -> &RustAdapter {
@@ -134,6 +163,16 @@ impl Pipeline {
         snapshot: &SourceSnapshot,
         current: &dyn Fn() -> SnapshotId,
     ) -> LoopReport {
+        self.prepare_candidate_with_proofs(snapshot, current, None)
+    }
+
+    /// Same, with an optional proof broker for the declared obligations.
+    pub fn prepare_candidate_with_proofs(
+        &self,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+        mut broker: Option<&mut ProofBroker>,
+    ) -> LoopReport {
         let mut report = LoopReport {
             snapshot_id: snapshot.id().clone(),
             outcome: LoopOutcome::Error {
@@ -142,6 +181,7 @@ impl Pipeline {
             check: None,
             build: None,
             evidence: None,
+            proofs: Vec::new(),
             activation: None,
             timings: StageTimings::default(),
         };
@@ -200,6 +240,47 @@ impl Pipeline {
             return report;
         }
 
+        // Declared obligations must be satisfied by the same artifact. The verdicts
+        // are evidence, not decoration: an unsatisfied one blocks publication.
+        if !self.obligations.is_empty() {
+            let Some(broker) = broker.as_deref_mut() else {
+                report.outcome = LoopOutcome::Error {
+                    detail: "obligations are declared but no proof broker was provided; refusing to skip verification"
+                        .to_owned(),
+                };
+                report.timings = timings;
+                return report;
+            };
+            let proof_started = Instant::now();
+            let ctx = broker.context_for(&build.build);
+            let mut failing: Option<(String, String)> = None;
+            for obligation in &self.obligations {
+                match broker.prove(Path::new(&build.build.artifact_path), obligation, &ctx) {
+                    Ok(result) => {
+                        if failing.is_none() && !result.record.authorizes_activation() {
+                            failing =
+                                Some((obligation.id.clone(), result.record.status.as_str().to_owned()));
+                        }
+                        report.proofs.push(result.record);
+                    }
+                    Err(e) => {
+                        timings.proof_ms = proof_started.elapsed().as_millis() as u64;
+                        report.outcome = LoopOutcome::Error {
+                            detail: format!("evidence ledger failure: {e}"),
+                        };
+                        report.timings = timings;
+                        return report;
+                    }
+                }
+            }
+            timings.proof_ms = proof_started.elapsed().as_millis() as u64;
+            if let Some((obligation, status)) = failing {
+                report.outcome = LoopOutcome::RefusedByProof { obligation, status };
+                report.timings = timings;
+                return report;
+            }
+        }
+
         // Re-check freshness after the expensive stages (INV-07).
         let now = current();
         if !build.build.is_current_for(&now) {
@@ -223,7 +304,18 @@ impl Pipeline {
         snapshot: &SourceSnapshot,
         current: &dyn Fn() -> SnapshotId,
     ) -> LoopReport {
-        let mut report = self.prepare_candidate(snapshot, current);
+        self.run_once_with_proofs(host, snapshot, current, None)
+    }
+
+    /// Full in-process iteration with obligation checking before publication.
+    pub fn run_once_with_proofs(
+        &self,
+        host: &PatchHost,
+        snapshot: &SourceSnapshot,
+        current: &dyn Fn() -> SnapshotId,
+        broker: Option<&mut ProofBroker>,
+    ) -> LoopReport {
+        let mut report = self.prepare_candidate_with_proofs(snapshot, current, broker);
         if !matches!(report.outcome, LoopOutcome::CandidateReady) {
             return report;
         }
@@ -270,6 +362,7 @@ pub fn merge_activation(report: &mut LoopReport, activation: ActivationReport) {
         .check_ms
         .saturating_add(report.timings.build_ms)
         .saturating_add(report.timings.verify_ms)
+        .saturating_add(report.timings.proof_ms)
         .saturating_add(report.timings.load_ms)
         .saturating_add(report.timings.activate_ms);
     report.outcome = match (&activation.status, &activation.reject_reason) {
@@ -329,6 +422,7 @@ pub fn smoke_verify(build: &BuildOutput) -> Result<EvidenceRecord, RejectReason>
         build_context_id: build.build_context_id.clone(),
         artifact_id: build.artifact_id.clone(),
         passed: failures.is_empty(),
+        counterexample: None,
         recorded_at_unix: ravum_protocol::now_unix(),
     };
     evidence.assumptions.extend(failures);

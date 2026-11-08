@@ -56,6 +56,9 @@ pub struct EvidenceRecord {
     pub build_context_id: BuildContextId,
     pub artifact_id: ArtifactId,
     pub passed: bool,
+    /// Concrete input/result that violates the property, when the verifier found one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub counterexample: Option<String>,
     pub recorded_at_unix: u64,
 }
 
@@ -96,6 +99,7 @@ mod tests {
             build_context_id: BuildContextId::new("b"),
             artifact_id: ArtifactId::new("a"),
             passed: true,
+            counterexample: None,
             recorded_at_unix: 0,
         }
     }
