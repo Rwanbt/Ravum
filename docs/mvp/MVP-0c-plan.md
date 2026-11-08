@@ -17,7 +17,7 @@ Aucune branche existante n'a été réécrite ; les PR #78 et #80 restent ouvert
 |---|---|---|
 | Branche courante (audit) | `feat/mvp0b-hardening` @ `ea7200c` = `origin/feat/mvp0b-hardening` | `git status`, `git log` |
 | `origin/dev` | `78411024e2665dafce31b029786ef56d400bdab2` | `gh api branches/dev` |
-| Contenu de `dev` | `.github`, `.gitignore`, `AGENTS.md`, `CONTRIBUTING.md`, `README.md`, `SECURITY.md`, `docs`, `tools` — **aucun crate, aucun workflow** | `gh api contents?ref=dev` |
+| Contenu de `dev` | `.github`, `.gitignore`, `AGENTS.md`, `CONTRIBUTING.md`, `README.md`, `SECURITY.md`, `docs`, `tools` — **aucun crate** ; un seul workflow, documentaire (`.github/workflows/docs-check.yml`, 570 o) | `gh api contents?ref=dev` |
 | `origin/main` | `16b1ff2` (`main` local = `origin/main` + 1 commit local `chore: install ai-native dev-stack (verified profile)`, non poussé by design) | `git branch -vv` |
 | Branches distantes | `main`, `dev`, `feat/3-mvp0a-continuous-loop`, `feat/mvp0b-hardening` | `git branch -a` |
 | Modifications non commitées | aucune (`stash` vide) | `git status`, `git stash list` |
@@ -75,9 +75,10 @@ mesures, les décisions réservées et les non-claims du cycle précédent.
 ### 2.1 Périmètre et dépendances
 
 - **#78 → `dev`** : 186 fichiers, +25 528/−6, 22 commits. C'est la PR
-  d'intégration de MVP-0a ; sa base `dev` ne contient encore ni `crates/` ni
-  `.github/workflows/mvp*.yml`. La fusion de #78 apporte donc l'ensemble de la
-  plateforme Rust et les workflows ; elle doit être vérifiée par un humain.
+  d'intégration de MVP-0a ; sa base `dev` ne contient encore ni `crates/` ni les
+  workflows produit/impact (`docs-check.yml` documentaire existe seul). La fusion
+  de #78 apporte donc l'ensemble de la plateforme Rust et les workflows ; elle
+  doit être vérifiée par un humain.
 - **#80 → branche de #78** : 304 fichiers, +128 220/−304, 54 commits. Empilée :
   si #78 change de tête, #80 doit être rebasée (aucune réécriture automatique
   n'est autorisée). Le diff réel de #80 par rapport à `dev` n'est pas la somme
@@ -109,6 +110,14 @@ unilatéral).
 Tant que #78 et #80 sont ouvertes, la branche `feat/mvp0c-hardening` est créée
 depuis `ea7200c` : elle n'écrase ni ne réécrit les travaux existants. Si `dev`
 reçoit #78, un rebase explicite de MVP-0c sera nécessaire et sera annoncé.
+
+L'audit détaillé demandé par le mandat (inventaire fichier par fichier, tailles,
+secrets, licences, outillage IA, séquence de fusion et arbres attendus) est
+publié séparément : [`MVP-0c-pr-audit.md`](MVP-0c-pr-audit.md) avec sa preuve
+machine [`evidence/mvp0c-pr-audit.json`](../../evidence/mvp0c-pr-audit.json).
+Constat corrigé par cet audit : `dev` contient un workflow documentaire
+(`docs-check.yml`), mais **aucun crate** — contrairement à une formulation
+initiale trop large de ce plan, rectifiée en §1.1.
 
 ## 3. Plan des six lots MVP-0c et gates
 
