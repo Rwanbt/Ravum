@@ -70,6 +70,14 @@
     creer une charge CPU controlee (0 = aucune charge, defaut). La charge est arretee
     en fin de run, quoi qu'il arrive. La charge mesuree est dans le JSON.
 
+.PARAMETER Api
+    Backend audio sous test : waveout (defaut) ou wasapi (mode partage, endpoint de
+    rendu par defaut, evenementiel, COM MTA sur le thread de rendu). En wasapi :
+    -Device ne s'applique pas (endpoint par defaut uniquement) et -Buffers est ignore
+    (le moteur audio possede la periode et le buffer) ; -Frames ne fait que proposer
+    une duree de buffer, que Initialize peut arrondir. La periode reelle et le format
+    sont reportes dans le JSON (mix_format, engine).
+
 .PARAMETER LoadSeconds
     Duree maximale de la boucle de chaque processus de charge, en secondes (defaut 10,
     borne volontairement courte pour ne pas bloquer les autres agents).
@@ -86,11 +94,14 @@
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Frames 256 -Device 1
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Variant rest-mmcss-r1
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Load 12 -Variant load-nommscss-r1
-    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Load 12 -Variant load-mmcss-r1
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Variant rest-nommscss-r1
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mmcss -Load 12 -Variant load-mmcss-r1
 #>
 [CmdletBinding()]
 param(
     [string]$Root = '',
+    [ValidateSet('waveout', 'wasapi')]
+    [string]$Api = 'waveout',
     [ValidateRange(1, 10)]
     [int]$Seconds = 3,
     [ValidateRange(32, 4096)]
@@ -149,7 +160,11 @@ try {
     if (-not $Out) {
         $date = Get-Date -Format 'yyyy-MM-dd'
         if ($Variant) {
-            $Out = Join-Path $Root "evidence/mvp0b-audio-mmsc-$Variant-$date.json"
+            if ($Api -eq 'wasapi') {
+                $Out = Join-Path $Root "evidence/mvp0b-audio-wasapi-$Variant-$date.json"
+            } else {
+                $Out = Join-Path $Root "evidence/mvp0b-audio-mmsc-$Variant-$date.json"
+            }
         } else {
             $Out = Join-Path $Root "evidence/mvp0b-audio-probe-$date.json"
         }
@@ -182,6 +197,7 @@ try {
     $probeErr = Join-Path $workDir 'probe.err'
     $probeArgs = @(
         'run', '-q', '-p', 'ravum-dsp-harness', '--bin', 'ravum-audio-probe', '--',
+        '--api', $Api,
         '--seconds', "$Seconds",
         '--buffers', "$Buffers",
         '--frames', "$Frames",
@@ -209,8 +225,8 @@ try {
         Write-Host ("[charge] note transmise a la sonde via RAVUM_PROBE_LOAD_NOTE")
     }
 
-    Write-Host ("[probe] {0} s, {1} frames/tampon, {2} tampons, swap={3} ms, crossfade={4} frames, mmcss={5}, thread-priority={6}" -f `
-        $Seconds, $Frames, $Buffers, $SwapEveryMs, $CrossfadeFrames, [bool]$Mmcss, $ThreadPriority)
+    Write-Host ("[probe] api={0}, {1} s, {2} frames/tampon demandees, {3} tampons (waveout), swap={4} ms, crossfade={5} frames, mmcss={6}, thread-priority={7}" -f `
+        $Api, $Seconds, $Frames, $Buffers, $SwapEveryMs, $CrossfadeFrames, [bool]$Mmcss, $ThreadPriority)
     Write-Host '[probe] le peripherique ne recoit que du silence ; le signal DSP est mesure puis jete'
     & cargo @probeArgs 2>$probeErr | Out-File -Encoding UTF8 $probeOut
     $probeExit = $LASTEXITCODE
@@ -240,12 +256,23 @@ try {
     Write-Host ''
     Write-Host '--- resultat mesure ---'
     Write-Host ("  statut        : {0}" -f $report.status)
-    Write-Host ("  peripherique  : {0} (waveOut id {1})" -f $report.device.name, $report.device.resolved_device_id)
-    Write-Host ("  format        : {0} {1} canaux {2} Hz, {3} frames/tampon, {4} tampons (periode {5} us)" -f `
-        $report.format.sample_format, $report.format.channels, $report.format.sample_rate, `
-        $report.format.frames_per_buffer, $report.format.buffers_in_rotation, $m.period_us)
-    Write-Host ("  tampons       : {0} traites, cadence livree {1} tampons/s (attendue {2} tampons/s, soit {3} ech/s)" -f `
-        $m.blocks_processed, [Math]::Round($m.delivered_rate_hz, 1), [Math]::Round($m.expected_completion_rate_hz, 1), [Math]::Round($m.delivered_sample_rate_hz, 0))
+    if ($Api -eq 'wasapi') {
+        Write-Host ("  peripherique  : {0} (WASAPI {1})" -f $report.device.name, $report.device.endpoint_id)
+        Write-Host ("  mix format    : {0} ({1}), {2} canaux, {3} Hz" -f `
+            $report.mix_format.sample_format, $report.mix_format.format_tag_name, $report.mix_format.channels, $report.mix_format.sample_rate)
+        Write-Host ("  moteur        : buffer endpoint {0} frames ({1} us), periode device {2} us (min {3} us), latence stream {4} us" -f `
+            $report.engine.buffer_frames, $report.engine.buffer_duration_us, $report.engine.device_period_default_us, `
+            $report.engine.device_period_minimum_us, $report.engine.stream_latency_us)
+        Write-Host ("  evenements    : {0} traites, cadence livree {1} ev/s (attendue {2} ev/s)" -f `
+            $m.blocks_processed, [Math]::Round($m.event_cadence.delivered_events_per_s, 1), [Math]::Round($m.event_cadence.expected_events_per_s, 1))
+    } else {
+        Write-Host ("  peripherique  : {0} (waveOut id {1})" -f $report.device.name, $report.device.resolved_device_id)
+        Write-Host ("  format        : {0} {1} canaux {2} Hz, {3} frames/tampon, {4} tampons (periode {5} us)" -f `
+            $report.format.sample_format, $report.format.channels, $report.format.sample_rate, `
+            $report.format.frames_per_buffer, $report.format.buffers_in_rotation, $m.period_us)
+        Write-Host ("  tampons       : {0} traites, cadence livree {1} tampons/s (attendue {2} tampons/s, soit {3} ech/s)" -f `
+            $m.blocks_processed, [Math]::Round($m.delivered_rate_hz, 1), [Math]::Round($m.expected_completion_rate_hz, 1), [Math]::Round($m.delivered_sample_rate_hz, 0))
+    }
     Write-Host ("  temps reel    : ratio {0:0.00} (tenu : {1})" -f $report.realtime_cadence.ratio, $report.realtime_cadence.held_real_time)
     $rt = $report.realtime
     Write-Host ("  priorite      : MMCSS demande={0} acquis={1} (tache {2}, priorite {3}) ; SetThreadPriority demande={4} pose={5} ; priorite de base observee={6}" -f `
@@ -271,10 +298,17 @@ try {
         $m.wake_lateness_us.p50, $m.wake_lateness_us.p95, $m.wake_lateness_us.p99, $m.wake_lateness_us.max)
     Write-Host ("  intervalles   : p50 {0} us, p95 {1} us, max {2} us" -f `
         $m.interval_us.p50, $m.interval_us.p95, $m.interval_us.max)
-    Write-Host ("  marge de file : min {0} us, p50 {1} us (risques de vidage : {2})" -f `
-        $m.queue_margin_us.min, $m.queue_margin_us.p50, $m.queue_drain_risk_events)
-    Write-Host ("  en retard     : {0} tampons > 1 periode ({1} reveils) ; timeouts {2} ; tampons groupes {3}" -f `
-        $m.buffers_late_gt_one_period, $m.wakes_late_gt_one_period, $m.wait_timeouts, $m.coalesced_completions)
+    if ($Api -eq 'wasapi') {
+        Write-Host ("  starvation    : {0} evenements buffer plein ; {1} evenements avec place < buffer ; evenements en retard > periode : {2}" -f `
+            $m.starvation_events, $m.available_smaller_than_buffer_events, $m.late_events_gt_one_period)
+        Write-Host ("  padding       : p50 {0} frames, max {1} frames au reveil" -f `
+            $m.padding_at_wake_frames.p50, $m.padding_at_wake_frames.max)
+    } else {
+        Write-Host ("  marge de file : min {0} us, p50 {1} us (risques de vidage : {2})" -f `
+            $m.queue_margin_us.min, $m.queue_margin_us.p50, $m.queue_drain_risk_events)
+        Write-Host ("  en retard     : {0} tampons > 1 periode ({1} reveils) ; timeouts {2} ; tampons groupes {3}" -f `
+            $m.buffers_late_gt_one_period, $m.wakes_late_gt_one_period, $m.wait_timeouts, $m.coalesced_completions)
+    }
     Write-Host ("  allocations   : {0} sur le thread de rendu, {1} desallocations" -f `
         $m.allocations_on_render_thread, $m.deallocations_on_render_thread)
     Write-Host ("  swaps         : {0} demandes, {1} actives, {2} refuses, {3} erreurs" -f `
@@ -285,14 +319,22 @@ try {
     }
     Write-Host ("  preuve        : {0}" -f $Out)
 
-    $delivered = [double]$m.delivered_rate_hz
-    $expected = [double]$m.expected_completion_rate_hz
+    if ($Api -eq 'wasapi') {
+        $delivered = [double]$m.event_cadence.delivered_events_per_s
+        $expected = [double]$m.event_cadence.expected_events_per_s
+        if ($m.starvation_events -gt 0) {
+            Write-Warning ("{0} evenements avec buffer endpoint plein (starvation observee) ; ce n'est pas un XRUN mesure, WASAPI partage ne l'expose pas directement." -f $m.starvation_events)
+        }
+    } else {
+        $delivered = [double]$m.delivered_rate_hz
+        $expected = [double]$m.expected_completion_rate_hz
+        if ($m.queue_drain_risk_events -gt 0) {
+            Write-Warning ("{0} evenements avec marge de file negative : risque de starvation (pas un XRUN mesure, waveOut ne l'expose pas)." -f $m.queue_drain_risk_events)
+        }
+    }
     if ($expected -gt 0 -and $delivered -lt (0.9 * $expected)) {
         Write-Host ''
-        Write-Warning ("cadence livree {0:0.0} Hz < 90% de la cadence attendue {1:0.0} Hz : le pilote ne tient pas le temps reel avec cette taille de tampon, la file se vide. C'est un resultat, pas une erreur du script." -f $delivered, $expected)
-    }
-    if ($m.queue_drain_risk_events -gt 0) {
-        Write-Warning ("{0} evenements avec marge de file negative : risque de starvation (pas un XRUN mesure, waveOut ne l'expose pas)." -f $m.queue_drain_risk_events)
+        Write-Warning ("cadence livree {0:0.0} Hz < 90% de la cadence attendue {1:0.0} Hz : le backend ne tient pas le temps reel. C'est un resultat, pas une erreur du script." -f $delivered, $expected)
     }
     if ($m.allocations_on_render_thread -gt 0 -or $m.deallocations_on_render_thread -gt 0) {
         Write-Warning 'le thread de rendu a alloue ou libere de la memoire : violation du contrat audio.'

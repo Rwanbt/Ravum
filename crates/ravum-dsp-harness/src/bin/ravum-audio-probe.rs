@@ -107,6 +107,32 @@ const FIRST_WAIT_TIMEOUT_MS: u32 = 250;
 // Command line
 // ---------------------------------------------------------------------------------------
 
+/// Audio backend under test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioApi {
+    /// Legacy `waveOut` (winmm) mapper path: app-owned buffers, `WOM_DONE` events.
+    WaveOut,
+    /// Modern Windows Audio Session API, **shared** mode, event-driven.
+    Wasapi,
+}
+
+impl AudioApi {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "waveout" | "wave_out" => Some(Self::WaveOut),
+            "wasapi" => Some(Self::Wasapi),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::WaveOut => "waveout",
+            Self::Wasapi => "wasapi",
+        }
+    }
+}
+
 /// Raw Win32 thread priority requested with `--thread-priority`. Kept apart from MMCSS
 /// on purpose: the caller can measure the scheduler effect of one, the other, or both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,6 +185,8 @@ impl ThreadPriorityChoice {
 
 #[derive(Debug, Clone)]
 struct Config {
+    /// Backend under test. Defaults to `waveout` so existing campaigns keep their meaning.
+    api: AudioApi,
     seconds: u64,
     buffers: usize,
     frames: usize,
@@ -184,6 +212,7 @@ impl Config {
 
     fn parse(args: &[String]) -> Result<Self, String> {
         let mut config = Config {
+            api: AudioApi::WaveOut,
             seconds: 3,
             buffers: 4,
             frames: 256,
@@ -202,6 +231,12 @@ impl Config {
         while index < args.len() {
             let flag = args[index].as_str();
             match flag {
+                "--api" => {
+                    let value = take_string(args, &mut index, flag)?;
+                    config.api = AudioApi::parse(&value).ok_or_else(|| {
+                        format!("--api expects waveout|wasapi, got {value:?}")
+                    })?;
+                }
                 "--seconds" => {
                     config.seconds = take_u64(args, &mut index, flag)?;
                 }
@@ -294,6 +329,12 @@ impl Config {
             // Explicitly asking for WAVE_MAPPER is valid; normalise to the default.
             config.device = None;
         }
+        if config.api == AudioApi::Wasapi && config.device.is_some() {
+            return Err(
+                "--device selects a waveOut index and does not apply to --api wasapi; WASAPI uses the default render endpoint"
+                    .to_owned(),
+            );
+        }
         Ok(config)
     }
 }
@@ -319,6 +360,8 @@ fn usage() -> String {
 \n\
 Usage: {TOOL} [OPTIONS]\n\
 \n\
+  --api BACKEND         audio backend under test: waveout | wasapi (default waveout).\n\
+                        wasapi = shared mode, event-driven, default render endpoint\n\
   --seconds N           probe duration in seconds, 1..=10 (default 3)\n\
   --buffers N           buffers kept in rotation, 1..=16 (default 4)\n\
   --frames N            frames per buffer, 32..=4096 (default 256)\n\
@@ -400,6 +443,7 @@ fn stats_i64(values: &[i64]) -> Value {
 
 fn config_json(config: &Config) -> Value {
     json!({
+        "api": config.api.as_str(),
         "seconds": config.seconds,
         "buffers": config.buffers,
         "frames": config.frames,
@@ -428,12 +472,13 @@ fn limits_json(config: &Config) -> Value {
     };
     json!([
         "waveOut (winmm) is a legacy emulated mapper API, not a certified real-time audio path: no WASAPI exclusive mode, no ASIO",
+        "WASAPI shared mode is the Windows audio engine's own buffer path; the app does not own the period, the engine does. It is not exclusive mode and not ASIO",
         "MMCSS registration (Pro Audio) and AVRT_PRIORITY_CRITICAL change the scheduling class the OS grants this thread; they are not a deadline guarantee and not a hard real-time qualification",
-        "MMCSS changes the probe's render thread, never the waveOut driver path or the waveOut API semantics",
+        "MMCSS changes the probe's render thread, never the audio driver path or the API semantics",
         "not a hard real-time qualification; the numbers describe this machine under this load for a few seconds, not a guarantee",
         format!("the probe binary runs in the {profile} Cargo profile; host-side overhead of process_rt reflects that profile"),
         "the device always receives digital silence; the DSP signal is computed, measured and discarded, so nothing is played audibly",
-        "XRUNs are driver events that waveOut does not expose; the report gives buffers submitted late and a derived queue-drain risk, never measured XRUNs",
+        "XRUNs are driver events that this probe cannot observe directly from either backend; the report gives buffers submitted late, padding/starvation events and a derived queue-drain risk, never measured XRUNs",
         "wake lateness is measured per wake, anchored on the first measured completion after warm-up and on the oldest completion of each wake's batch; it excludes the device start-up bias (reported as first_completion_offset_us)",
         "waveOut delivers WOM_DONE in batches at the audio engine's service cadence (observed: consecutive wakes ~10 ms apart, sometimes two buffers per wake); wake lateness therefore contains driver event-delivery quantisation, not only OS scheduler jitter",
         "a buffer shorter than the driver's service quantum can make the waveOut path consume the stream slower than real time; the report exposes delivered-vs-expected completion cadence for that reason",
@@ -551,38 +596,78 @@ fn print_human(report: &Value) {
         println!("  plateforme   non Windows: aucune mesure produite");
         return;
     }
+    let api = report
+        .get("api")
+        .and_then(Value::as_str)
+        .unwrap_or("waveout");
     let device = report
         .get("device")
         .and_then(Value::as_object)
         .and_then(|device| device.get("name"))
         .and_then(Value::as_str)
         .unwrap_or("?");
-    let device_id = report
-        .get("device")
-        .and_then(|device| device.get("resolved_device_id"))
-        .cloned()
-        .unwrap_or(Value::Null);
-    println!("  périphérique {device} (waveOut id {device_id})");
-    if let Some(format) = report.get("format") {
+    if api == "wasapi" {
+        let endpoint = report
+            .get("device")
+            .and_then(|device| device.get("endpoint_id"))
+            .and_then(Value::as_str)
+            .unwrap_or("?");
+        println!("  périphérique {device} (WASAPI {endpoint})");
+        let mix = report.get("mix_format").cloned().unwrap_or(Value::Null);
+        let engine = report.get("engine").cloned().unwrap_or(Value::Null);
         println!(
-            "  format       PCM 16 bits, {} canaux, {} Hz, {} frames/tampon ({} tampons)",
-            format
-                .get("channels")
+            "  format       {} ({}), {} canaux, {} Hz, buffer endpoint {} frames ({} µs)",
+            mix.get("sample_format")
+                .and_then(Value::as_str)
+                .unwrap_or("?"),
+            mix.get("format_tag_name")
+                .and_then(Value::as_str)
+                .unwrap_or("?"),
+            mix.get("channels").and_then(Value::as_u64).unwrap_or(0),
+            mix.get("sample_rate").and_then(Value::as_u64).unwrap_or(0),
+            engine
+                .get("buffer_frames")
                 .and_then(Value::as_u64)
                 .unwrap_or(0),
-            format
-                .get("sample_rate")
-                .and_then(Value::as_u64)
-                .unwrap_or(0),
-            format
-                .get("frames_per_buffer")
-                .and_then(Value::as_u64)
-                .unwrap_or(0),
-            format
-                .get("buffers_in_rotation")
+            engine
+                .get("buffer_duration_us")
                 .and_then(Value::as_u64)
                 .unwrap_or(0),
         );
+        println!(
+            "  moteur       période device {} µs (min {} µs), latence stream {} µs, mode partagé événementiel",
+            field_u64(&engine, "device_period_default_us"),
+            field_u64(&engine, "device_period_minimum_us"),
+            field_u64(&engine, "stream_latency_us"),
+        );
+    } else {
+        let device_id = report
+            .get("device")
+            .and_then(|device| device.get("resolved_device_id"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        println!("  périphérique {device} (waveOut id {device_id})");
+        if let Some(format) = report.get("format") {
+            println!(
+                "  format       PCM 16 bits, {} canaux, {} Hz, {} frames/tampon ({} tampons)",
+                format
+                    .get("channels")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                format
+                    .get("sample_rate")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                format
+                    .get("frames_per_buffer")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                format
+                    .get("buffers_in_rotation")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+            );
+        }
     }
     if let Some(realtime) = report.get("realtime") {
         let requested = realtime
@@ -646,8 +731,13 @@ fn print_human(report: &Value) {
         .cloned()
         .unwrap_or(Value::Null);
     let work = measurements.get("work_us").cloned().unwrap_or(Value::Null);
+    let unit = if api == "wasapi" {
+        "événements"
+    } else {
+        "tampons"
+    };
     println!(
-        "  mesure       {} tampons, période {} µs",
+        "  mesure       {} {unit}, période {} µs",
         measurements
             .get("completions_measured")
             .and_then(Value::as_u64)
@@ -680,21 +770,39 @@ fn print_human(report: &Value) {
         field_i64(&lateness, "p99"),
         field_i64(&lateness, "max"),
     );
-    println!(
-        "  tampons en retard > période: {}   risque de starvation: {}   réveils sans tampon: {}",
-        measurements
-            .get("buffers_late_gt_one_period")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        measurements
-            .get("queue_drain_risk_events")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        measurements
-            .get("wakes_without_completion")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-    );
+    if api == "wasapi" {
+        println!(
+            "  starvation   événements avec buffer endpoint plein: {}   événements en retard > période: {}   timeouts: {}",
+            measurements
+                .get("starvation_events")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            measurements
+                .get("late_events_gt_one_period")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            measurements
+                .get("wait_timeouts")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+        );
+    } else {
+        println!(
+            "  tampons en retard > période: {}   risque de starvation: {}   réveils sans tampon: {}",
+            measurements
+                .get("buffers_late_gt_one_period")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            measurements
+                .get("queue_drain_risk_events")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            measurements
+                .get("wakes_without_completion")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+        );
+    }
     println!(
         "  allocations / désallocations sur le thread de rendu: {} / {}",
         measurements
@@ -722,7 +830,7 @@ fn print_human(report: &Value) {
         );
     }
     println!(
-        "  limites      waveOut legacy, pas de hard-RT, XRUN non observables ; voir `limits` du JSON"
+        "  limites      backend {api} ; pas de hard-RT, XRUN réels non observables ; voir `limits` du JSON"
     );
 }
 
@@ -1056,10 +1164,21 @@ mod win {
             }
         }
 
+        /// Failure carrying a COM `HRESULT` (WASAPI calls).
+        fn hresult(stage: &'static str, code: i32, message: impl Into<String>) -> Self {
+            Self {
+                stage,
+                code: Some(code as u32),
+                message: message.into(),
+                code_system: "hresult",
+            }
+        }
+
         fn to_json(&self) -> Value {
             let code_name = match (self.code, self.code_system) {
                 (None, _) => Value::Null,
                 (Some(code), "win32") => Value::from(win32_name(code)),
+                (Some(code), "hresult") => Value::from(hresult_name(code as i32)),
                 (Some(code), _) => Value::from(mm_name(code)),
             };
             json!({
@@ -1085,6 +1204,52 @@ mod win {
             127 => "ERROR_PROC_NOT_FOUND",
             998 => "ERROR_NOACCESS",
             _ => "WIN32_ERROR",
+        }
+    }
+
+    /// `HRESULT` names for the COM / WASAPI codes this probe can receive. Full 32-bit
+    /// values are also reported, so an unmapped code is still explicit.
+    fn hresult_name(code: i32) -> &'static str {
+        match code as u32 {
+            0 => "S_OK",
+            1 => "S_FALSE",
+            0x8000_4002 => "E_NOINTERFACE",
+            0x8000_4005 => "E_POINTER",
+            0x8007_0057 => "E_INVALIDARG",
+            0x8007_000E => "E_OUTOFMEMORY",
+            0x8004_01F0 => "CO_E_NOTINITIALIZED",
+            0x8001_0106 => "RPC_E_CHANGED_MODE",
+            0x8004_0154 => "REGDB_E_CLASSNOTREG",
+            0x8889_0001 => "AUDCLNT_E_NOT_INITIALIZED",
+            0x8889_0002 => "AUDCLNT_E_ALREADY_INITIALIZED",
+            0x8889_0003 => "AUDCLNT_E_WRONG_ENDPOINT_TYPE",
+            0x8889_0004 => "AUDCLNT_E_DEVICE_INVALIDATED",
+            0x8889_0005 => "AUDCLNT_E_NOT_STOPPED",
+            0x8889_0006 => "AUDCLNT_E_BUFFER_TOO_LARGE",
+            0x8889_0007 => "AUDCLNT_E_OUT_OF_ORDER",
+            0x8889_0008 => "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            0x8889_0009 => "AUDCLNT_E_INVALID_SIZE",
+            0x8889_000A => "AUDCLNT_E_DEVICE_IN_USE",
+            0x8889_000B => "AUDCLNT_E_BUFFER_OPERATION_PENDING",
+            0x8889_000C => "AUDCLNT_E_THREAD_NOT_REGISTERED",
+            0x8889_000E => "AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED",
+            0x8889_000F => "AUDCLNT_E_ENDPOINT_CREATE_FAILED",
+            0x8889_0010 => "AUDCLNT_E_SERVICE_NOT_RUNNING",
+            0x8889_0011 => "AUDCLNT_E_EVENTHANDLE_NOT_EXPECTED",
+            0x8889_0012 => "AUDCLNT_E_EXCLUSIVE_MODE_ONLY",
+            0x8889_0013 => "AUDCLNT_E_BUFDURATION_PERIOD_NOT_EQUAL",
+            0x8889_0014 => "AUDCLNT_E_EVENTHANDLE_NOT_SET",
+            0x8889_0015 => "AUDCLNT_E_INCORRECT_BUFFER_SIZE",
+            0x8889_0016 => "AUDCLNT_E_BUFFER_SIZE_ERROR",
+            0x8889_0017 => "AUDCLNT_E_CPUUSAGE_EXCEEDED",
+            0x8889_0018 => "AUDCLNT_E_BUFFER_ERROR",
+            0x8889_0019 => "AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED",
+            0x8889_0020 => "AUDCLNT_E_INVALID_DEVICE_PERIOD",
+            0x8889_0021 => "AUDCLNT_E_INVALID_STREAM_FLAG",
+            0x8889_0026 => "AUDCLNT_E_RESOURCES_INVALIDATED",
+            0x8889_0028 => "AUDCLNT_E_ENGINE_PERIODICITY_LOCKED",
+            0x8889_0029 => "AUDCLNT_E_ENGINE_FORMAT_LOCKED",
+            _ => "HRESULT_UNKNOWN",
         }
     }
 
@@ -2588,7 +2753,7 @@ mod win {
         (report, 1)
     }
 
-    pub fn execute(config: &Config, os: Value) -> (Value, i32) {
+    pub fn execute_waveout(config: &Config, os: Value) -> (Value, i32) {
         let mut report = json!({
             "schema_version": 1,
             "kind": "audio-device-probe",
@@ -2948,4 +3113,1768 @@ mod win {
         let exit_code = if status == "ok" { 0 } else { 1 };
         (report, exit_code)
     }
+
+    // ===================================================================================
+    // WASAPI shared-mode backend — part 1: direct COM FFI (no external crate)
+    // ===================================================================================
+    //
+    // COM is initialised as MTA on the render thread only. Every interface is released
+    // and CoUninitialize is called before that thread ends. The endpoint only ever
+    // receives digital zeros; the DSP block is computed, measured and discarded.
+
+    type Hresult = i32;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, PartialEq, Eq, Default)]
+    struct Guid {
+        data1: u32,
+        data2: u16,
+        data3: u16,
+        data4: [u8; 8],
+    }
+
+    impl Guid {
+        const fn new(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> Self {
+            Self {
+                data1,
+                data2,
+                data3,
+                data4,
+            }
+        }
+    }
+
+    const CLSID_MMDEVICE_ENUMERATOR: Guid = Guid::new(
+        0xBCDE_0395,
+        0xE52F,
+        0x467C,
+        [0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E],
+    );
+    const IID_IMMDEVICE_ENUMERATOR: Guid = Guid::new(
+        0xA956_64D2,
+        0x9614,
+        0x4F35,
+        [0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6],
+    );
+    const IID_IAUDIO_CLIENT: Guid = Guid::new(
+        0x1CB9_AD4C,
+        0xDBFA,
+        0x4C32,
+        [0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2],
+    );
+    const IID_IAUDIO_RENDER_CLIENT: Guid = Guid::new(
+        0xF294_ACFC,
+        0x3146,
+        0x4483,
+        [0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2],
+    );
+
+    const KSDATAFORMAT_SUBTYPE_PCM: Guid = Guid::new(
+        0x0000_0001,
+        0x0000,
+        0x0010,
+        [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
+    );
+    const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: Guid = Guid::new(
+        0x0000_0003,
+        0x0000,
+        0x0010,
+        [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
+    );
+
+    #[repr(C)]
+    struct PropertyKey {
+        fmtid: Guid,
+        pid: u32,
+    }
+
+    const PKEY_DEVICE_FRIENDLY_NAME: PropertyKey = PropertyKey {
+        fmtid: Guid::new(
+            0xA45C_254E,
+            0xDF1C,
+            0x4EFD,
+            [0x80, 0x20, 0x67, 0xD1, 0x46, 0xA8, 0x50, 0xE0],
+        ),
+        pid: 14,
+    };
+
+    /// `PROPVARIANT` (24 bytes on x64): 8-byte header then a 16-byte union.
+    #[repr(C)]
+    struct PropVariant {
+        vt: u16,
+        r1: u16,
+        r2: u16,
+        r3: u16,
+        data: [u64; 2],
+    }
+
+    impl PropVariant {
+        fn zeroed() -> Self {
+            Self {
+                vt: 0,
+                r1: 0,
+                r2: 0,
+                r3: 0,
+                data: [0, 0],
+            }
+        }
+    }
+
+    const VT_LPWSTR: u16 = 31;
+    const STGM_READ: u32 = 0;
+    const CLSCTX_ALL: u32 = 23;
+    const E_RENDER: u32 = 0;
+    const E_CONSOLE: u32 = 0;
+    const COINIT_MULTITHREADED: u32 = 0;
+    const AUDCLNT_SHAREMODE_SHARED: u32 = 0;
+    const AUDCLNT_STREAMFLAGS_EVENTCALLBACK: u32 = 0x0004_0000;
+    const AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED: Hresult = 0x8889_0019u32 as Hresult;
+
+    /// `WAVEFORMATEX` exactly as returned by `GetMixFormat` (18-byte packed layout).
+    #[repr(C, packed(1))]
+    #[derive(Clone, Copy)]
+    struct WaveFormatExPackedW {
+        w_format_tag: u16,
+        n_channels: u16,
+        n_samples_per_sec: u32,
+        n_avg_bytes_per_sec: u32,
+        n_block_align: u16,
+        w_bits_per_sample: u16,
+        cb_size: u16,
+    }
+
+    #[link(name = "ole32")]
+    extern "system" {
+        fn CoInitializeEx(reserved: *mut c_void, co_init: u32) -> Hresult;
+        fn CoUninitialize();
+        fn CoCreateInstance(
+            clsid: *const Guid,
+            outer: *mut c_void,
+            cls_context: u32,
+            iid: *const Guid,
+            out: *mut ComHandle,
+        ) -> Hresult;
+        fn CoTaskMemFree(ptr: *mut c_void);
+        fn PropVariantClear(prop: *mut PropVariant) -> Hresult;
+    }
+
+    type ComHandle = *mut c_void;
+
+    #[repr(C)]
+    struct IUnknownVtbl {
+        query_interface: unsafe extern "system" fn(ComHandle, *const Guid, *mut ComHandle) -> Hresult,
+        add_ref: unsafe extern "system" fn(ComHandle) -> u32,
+        release: unsafe extern "system" fn(ComHandle) -> u32,
+    }
+
+    #[repr(C)]
+    struct IMMDeviceEnumeratorVtbl {
+        base: IUnknownVtbl,
+        enum_audio_endpoints: usize,
+        get_default_audio_endpoint:
+            unsafe extern "system" fn(ComHandle, u32, u32, *mut ComHandle) -> Hresult,
+        get_device: usize,
+        register_endpoint_notification_callback: usize,
+        unregister_endpoint_notification_callback: usize,
+    }
+
+    #[repr(C)]
+    struct IMMDeviceVtbl {
+        base: IUnknownVtbl,
+        activate: unsafe extern "system" fn(
+            ComHandle,
+            *const Guid,
+            u32,
+            *mut c_void,
+            *mut ComHandle,
+        ) -> Hresult,
+        open_property_store: unsafe extern "system" fn(ComHandle, u32, *mut ComHandle) -> Hresult,
+        get_id: unsafe extern "system" fn(ComHandle, *mut *mut u16) -> Hresult,
+        get_state: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
+    }
+
+    #[repr(C)]
+    struct IAudioClientVtbl {
+        base: IUnknownVtbl,
+        initialize: unsafe extern "system" fn(
+            ComHandle,
+            u32,
+            u32,
+            i64,
+            i64,
+            *const WaveFormatExPackedW,
+            *const Guid,
+        ) -> Hresult,
+        get_buffer_size: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
+        get_stream_latency: unsafe extern "system" fn(ComHandle, *mut i64) -> Hresult,
+        get_current_padding: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
+        is_format_supported: usize,
+        get_mix_format: unsafe extern "system" fn(ComHandle, *mut *mut c_void) -> Hresult,
+        get_device_period: unsafe extern "system" fn(ComHandle, *mut i64, *mut i64) -> Hresult,
+        start: unsafe extern "system" fn(ComHandle) -> Hresult,
+        stop: unsafe extern "system" fn(ComHandle) -> Hresult,
+        reset: unsafe extern "system" fn(ComHandle) -> Hresult,
+        set_event_handle: unsafe extern "system" fn(ComHandle, Handle) -> Hresult,
+        get_service: unsafe extern "system" fn(ComHandle, *const Guid, *mut ComHandle) -> Hresult,
+    }
+
+    #[repr(C)]
+    struct IAudioRenderClientVtbl {
+        base: IUnknownVtbl,
+        get_buffer: unsafe extern "system" fn(ComHandle, u32, *mut *mut u8) -> Hresult,
+        release_buffer: unsafe extern "system" fn(ComHandle, u32, u32) -> Hresult,
+    }
+
+    #[repr(C)]
+    struct IPropertyStoreVtbl {
+        base: IUnknownVtbl,
+        get_count: usize,
+        get_at: usize,
+        get_value: unsafe extern "system" fn(ComHandle, *const PropertyKey, *mut PropVariant) -> Hresult,
+        set_value: usize,
+        commit: usize,
+    }
+
+    // Interface-object headers: the object starts with its vtable pointer.
+    #[repr(C)]
+    struct ComEnumerator {
+        vtbl: *const IMMDeviceEnumeratorVtbl,
+    }
+    #[repr(C)]
+    struct ComDevice {
+        vtbl: *const IMMDeviceVtbl,
+    }
+    #[repr(C)]
+    struct ComAudioClient {
+        vtbl: *const IAudioClientVtbl,
+    }
+    #[repr(C)]
+    struct ComRenderClient {
+        vtbl: *const IAudioRenderClientVtbl,
+    }
+    #[repr(C)]
+    struct ComPropertyStore {
+        vtbl: *const IPropertyStoreVtbl,
+    }
+
+    /// Call a COM method through its vtable. `$ptr` is the raw interface pointer.
+    macro_rules! com_call {
+        ($ptr:expr, $iface:ty, $method:ident ( $($arg:expr),* )) => {{
+            let object_ptr: ComHandle = $ptr;
+            let typed = object_ptr as *mut $iface;
+            // SAFETY: `object_ptr` is a live COM interface of the expected type whose
+            // vtable starts with the three IUnknown slots and the interface methods.
+            let vtbl = unsafe { (*typed).vtbl };
+            unsafe { ((*vtbl).$method)(object_ptr, $($arg),*) }
+        }};
+    }
+
+    /// Owned COM interface pointer: released exactly once on drop.
+    struct ComPtr {
+        ptr: ComHandle,
+    }
+
+    impl ComPtr {
+
+        fn release(&mut self) {
+            if self.ptr.is_null() {
+                return;
+            }
+            // SAFETY: every COM interface starts with the IUnknown vtable.
+            unsafe {
+                let object = self.ptr as *mut ComEnumerator;
+                let vtbl = (*object).vtbl as *const IUnknownVtbl;
+                ((*vtbl).release)(self.ptr);
+            }
+            self.ptr = std::ptr::null_mut();
+        }
+    }
+
+    impl Drop for ComPtr {
+        fn drop(&mut self) {
+            self.release();
+        }
+    }
+
+    /// Closes a Win32 event handle on drop.
+    struct EventGuard {
+        handle: Handle,
+    }
+
+    impl EventGuard {
+        fn take(mut self) -> Handle {
+            let handle = self.handle;
+            self.handle = std::ptr::null_mut();
+            handle
+        }
+    }
+
+    impl Drop for EventGuard {
+        fn drop(&mut self) {
+            if !self.handle.is_null() {
+                // SAFETY: the handle was created by CreateEventW for this session.
+                unsafe {
+                    CloseHandle(self.handle);
+                }
+            }
+        }
+    }
+
+    /// Frees a CoTaskMem-allocated buffer on drop.
+    struct CoTaskMemBuffer {
+        ptr: *mut c_void,
+    }
+
+    impl Drop for CoTaskMemBuffer {
+        fn drop(&mut self) {
+            if !self.ptr.is_null() {
+                // SAFETY: allocated by a COM API with CoTaskMemAlloc.
+                unsafe { CoTaskMemFree(self.ptr) };
+            }
+        }
+    }
+
+    /// COM apartment initialisation for the calling thread (MTA), balanced on drop.
+    struct ComGuard {
+        active: bool,
+    }
+
+    impl ComGuard {
+        fn init_mta() -> Result<Self, Failure> {
+            // SAFETY: documented COM initialisation; the thread is owned by this probe.
+            let hr = unsafe { CoInitializeEx(std::ptr::null_mut(), COINIT_MULTITHREADED) };
+            if hr < 0 {
+                return Err(Failure::hresult(
+                    "CoInitializeEx",
+                    hr,
+                    "COM MTA initialisation failed on the render thread",
+                ));
+            }
+            Ok(Self { active: true })
+        }
+    }
+
+    impl Drop for ComGuard {
+        fn drop(&mut self) {
+            if self.active {
+                // SAFETY: balances CoInitializeEx on the same thread.
+                unsafe { CoUninitialize() };
+                self.active = false;
+            }
+        }
+    }
+
+    fn wasapi_failure(stage: &'static str, hr: Hresult, detail: &str) -> Failure {
+        Failure::hresult(
+            stage,
+            hr,
+            format!("{detail} (HRESULT {hr:#010X} {})", hresult_name(hr)),
+        )
+    }
+
+    /// # Safety
+    /// `wide` must point to a NUL-terminated UTF-16 string readable for up to 4096 units.
+    unsafe fn decode_wide_raw(wide: *const u16) -> String {
+        let mut buffer: Vec<u16> = Vec::new();
+        for index in 0..4096usize {
+            // SAFETY: the caller guarantees a NUL-terminated UTF-16 string.
+            let unit = unsafe { *wide.add(index) };
+            if unit == 0 {
+                break;
+            }
+            buffer.push(unit);
+        }
+        String::from_utf16_lossy(&buffer)
+    }
+
+    fn create_event_pair() -> Result<EventGuard, Failure> {
+        // SAFETY: anonymous, auto-reset, initially unsignalled event; null attributes.
+        let handle = unsafe { CreateEventW(std::ptr::null_mut(), 0, 0, std::ptr::null()) };
+        if handle.is_null() {
+            let code = code_of_last_error();
+            return Err(Failure::win32(
+                "CreateEventW",
+                code,
+                "cannot create the WASAPI event handle",
+            ));
+        }
+        Ok(EventGuard { handle })
+    }
+
+    fn create_device_enumerator() -> Result<ComPtr, Failure> {
+        let mut raw: ComHandle = std::ptr::null_mut();
+        // SAFETY: CLSID/IID are the documented MMDeviceEnumerator constants.
+        let hr = unsafe {
+            CoCreateInstance(
+                &CLSID_MMDEVICE_ENUMERATOR,
+                std::ptr::null_mut(),
+                CLSCTX_ALL,
+                &IID_IMMDEVICE_ENUMERATOR,
+                &mut raw,
+            )
+        };
+        if hr < 0 {
+            return Err(wasapi_failure(
+                "CoCreateInstance(MMDeviceEnumerator)",
+                hr,
+                "MMDeviceEnumerator COM object could not be created",
+            ));
+        }
+        Ok(ComPtr { ptr: raw })
+    }
+
+    fn default_render_endpoint(enumerator: &ComPtr) -> Result<ComPtr, Failure> {
+        let mut raw: ComHandle = std::ptr::null_mut();
+        let hr = com_call!(
+            enumerator.ptr,
+            ComEnumerator,
+            get_default_audio_endpoint(E_RENDER, E_CONSOLE, &mut raw)
+        );
+        if hr < 0 {
+            return Err(wasapi_failure(
+                "IMMDeviceEnumerator::GetDefaultAudioEndpoint",
+                hr,
+                "no default render endpoint",
+            ));
+        }
+        Ok(ComPtr { ptr: raw })
+    }
+
+    fn device_state_name(state: u32) -> &'static str {
+        match state {
+            0x1 => "active",
+            0x2 => "disabled",
+            0x4 => "not_present",
+            0x8 => "unplugged",
+            _ => "unknown",
+        }
+    }
+
+    fn device_friendly_name(device: &ComPtr) -> Option<String> {
+        let mut store: ComHandle = std::ptr::null_mut();
+        let hr = com_call!(
+            device.ptr,
+            ComDevice,
+            open_property_store(STGM_READ, &mut store)
+        );
+        if hr < 0 || store.is_null() {
+            return None;
+        }
+        let store_ptr = ComPtr { ptr: store };
+        let mut prop = PropVariant::zeroed();
+        let hr = com_call!(
+            store_ptr.ptr,
+            ComPropertyStore,
+            get_value(&PKEY_DEVICE_FRIENDLY_NAME, &mut prop)
+        );
+        if hr < 0 {
+            return None;
+        }
+        let name = if prop.vt == VT_LPWSTR {
+            let wide = prop.data[0] as *const u16;
+            if wide.is_null() {
+                None
+            } else {
+                // SAFETY: VT_LPWSTR payload is a NUL-terminated UTF-16 string owned by
+                // the PROPVARIANT; it is copied before PropVariantClear.
+                Some(unsafe { decode_wide_raw(wide) })
+            }
+        } else {
+            None
+        };
+        // SAFETY: the PROPVARIANT was filled by IPropertyStore::GetValue.
+        unsafe {
+            PropVariantClear(&mut prop);
+        }
+        name
+    }
+
+    fn device_endpoint_id(device: &ComPtr) -> Result<String, Failure> {
+        let mut wide: *mut u16 = std::ptr::null_mut();
+        let hr = com_call!(device.ptr, ComDevice, get_id(&mut wide));
+        if hr < 0 {
+            return Err(wasapi_failure(
+                "IMMDevice::GetId",
+                hr,
+                "cannot read the endpoint id",
+            ));
+        }
+        if wide.is_null() {
+            return Err(Failure::new(
+                "IMMDevice::GetId",
+                None,
+                "IMMDevice::GetId returned a null string",
+            ));
+        }
+        // SAFETY: the string is CoTaskMem-allocated and NUL-terminated.
+        let text = unsafe { decode_wide_raw(wide) };
+        unsafe { CoTaskMemFree(wide as *mut c_void) };
+        Ok(text)
+    }
+
+    /// Dispatch between the two tested audio backends.
+    pub fn execute(config: &Config, os: Value) -> (Value, i32) {
+        match config.api {
+            AudioApi::WaveOut => execute_waveout(config, os),
+            AudioApi::Wasapi => execute_wasapi(config, os),
+        }
+    }
+
+    // ===================================================================================
+    // WASAPI shared-mode backend — part 2: format/engine info, session, measurement
+    // ===================================================================================
+
+    fn guid_string(guid: &Guid) -> String {
+        format!(
+            "{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}",
+            guid.data1,
+            guid.data2,
+            guid.data3,
+            guid.data4[0],
+            guid.data4[1],
+            guid.data4[2],
+            guid.data4[3],
+            guid.data4[4],
+            guid.data4[5],
+            guid.data4[6],
+            guid.data4[7]
+        )
+    }
+
+    fn sample_format_label(
+        tag: u16,
+        extensible: bool,
+        sub_format: Option<Guid>,
+        bits: u16,
+    ) -> &'static str {
+        let kind = if extensible {
+            match sub_format {
+                Some(guid) if guid == KSDATAFORMAT_SUBTYPE_PCM => "pcm",
+                Some(guid) if guid == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => "float",
+                _ => "other",
+            }
+        } else {
+            match tag {
+                1 => "pcm",
+                3 => "float",
+                _ => "other",
+            }
+        };
+        match (kind, bits) {
+            ("pcm", 8) => "pcm_u8",
+            ("pcm", 16) => "pcm_s16le",
+            ("pcm", 24) => "pcm_s24le",
+            ("pcm", 32) => "pcm_s32le",
+            ("float", 32) => "float32le",
+            ("float", 64) => "float64le",
+            _ => "unknown",
+        }
+    }
+
+    fn format_tag_name(tag: u16) -> &'static str {
+        match tag {
+            1 => "WAVE_FORMAT_PCM",
+            3 => "WAVE_FORMAT_IEEE_FLOAT",
+            0xFFFE => "WAVE_FORMAT_EXTENSIBLE",
+            _ => "WAVE_FORMAT_OTHER",
+        }
+    }
+
+    #[derive(Clone)]
+    struct MixFormatInfo {
+        format_tag: u16,
+        extensible: bool,
+        channels: u16,
+        sample_rate: u32,
+        bits_per_sample: u16,
+        valid_bits_per_sample: u16,
+        block_align: u16,
+        avg_bytes_per_sec: u32,
+        channel_mask: Option<u32>,
+        sub_format: Option<Guid>,
+        sample_format: &'static str,
+    }
+
+    impl MixFormatInfo {
+        fn to_json(&self) -> Value {
+            json!({
+                "format_tag": self.format_tag,
+                "format_tag_name": format_tag_name(self.format_tag),
+                "extensible": self.extensible,
+                "sample_format": self.sample_format,
+                "channels": self.channels,
+                "sample_rate": self.sample_rate,
+                "bits_per_sample": self.bits_per_sample,
+                "valid_bits_per_sample": self.valid_bits_per_sample,
+                "block_align": self.block_align,
+                "avg_bytes_per_sec": self.avg_bytes_per_sec,
+                "channel_mask": self.channel_mask,
+                "sub_format": self.sub_format.as_ref().map(guid_string),
+            })
+        }
+    }
+
+    /// Read a `WAVEFORMATEX`/`WAVEFORMATEXTENSIBLE` returned by `GetMixFormat`.
+    ///
+    /// # Safety
+    /// `ptr` must point to a readable `WAVEFORMATEX` whose `cbSize` describes the
+    /// trailing extensible bytes.
+    unsafe fn read_mix_format(ptr: *const c_void) -> MixFormatInfo {
+        let base = std::ptr::read_unaligned(ptr as *const WaveFormatExPackedW);
+        let format_tag = base.w_format_tag;
+        let channels = base.n_channels;
+        let sample_rate = base.n_samples_per_sec;
+        let avg_bytes_per_sec = base.n_avg_bytes_per_sec;
+        let block_align = base.n_block_align;
+        let bits_per_sample = base.w_bits_per_sample;
+        let cb_size = base.cb_size;
+        let mut valid_bits_per_sample = bits_per_sample;
+        let mut channel_mask = None;
+        let mut sub_format = None;
+        let extensible = format_tag == 0xFFFE && cb_size >= 22;
+        if extensible {
+            let bytes = ptr as *const u8;
+            valid_bits_per_sample = std::ptr::read_unaligned(bytes.add(18) as *const u16);
+            channel_mask = Some(std::ptr::read_unaligned(bytes.add(20) as *const u32));
+            sub_format = Some(std::ptr::read_unaligned(bytes.add(24) as *const Guid));
+        }
+        let sample_format =
+            sample_format_label(format_tag, extensible, sub_format, bits_per_sample);
+        MixFormatInfo {
+            format_tag,
+            extensible,
+            channels,
+            sample_rate,
+            bits_per_sample,
+            valid_bits_per_sample,
+            block_align,
+            avg_bytes_per_sec,
+            channel_mask,
+            sub_format,
+            sample_format,
+        }
+    }
+
+    struct EngineInfo {
+        requested_frames: u32,
+        requested_buffer_duration_us: i64,
+        duration_clamped_to_minimum: bool,
+        alignment_retry_used: bool,
+        device_period_default_us: i64,
+        device_period_minimum_us: i64,
+        stream_latency_us: Option<i64>,
+        buffer_frames: u32,
+        buffer_duration_us: i64,
+        event_period_us: i64,
+    }
+
+    impl EngineInfo {
+        fn to_json(&self) -> Value {
+            json!({
+                "share_mode": "shared",
+                "stream_flags": ["event_callback"],
+                "requested_frames": self.requested_frames,
+                "requested_buffer_duration_us": self.requested_buffer_duration_us,
+                "duration_clamped_to_minimum": self.duration_clamped_to_minimum,
+                "alignment_retry_used": self.alignment_retry_used,
+                "device_period_default_us": self.device_period_default_us,
+                "device_period_minimum_us": self.device_period_minimum_us,
+                "stream_latency_us": self.stream_latency_us,
+                "buffer_frames": self.buffer_frames,
+                "buffer_duration_us": self.buffer_duration_us,
+                "event_period_us": self.event_period_us,
+                "engine_owns_period": true,
+                "definition": "GetDevicePeriod/GetBufferSize/GetStreamLatency from IAudioClient in shared mode; event_period_us is the device default period used for the lateness grid, buffer_duration_us is the endpoint buffer size in time. stream_latency_us is reported exactly as GetStreamLatency returned it (some shared-mode drivers report 0)",
+            })
+        }
+    }
+
+    /// One measured WASAPI render session.
+    struct WasapiRunData {
+        period_us: u64,
+        buffer_frames: u32,
+        rate: u32,
+        warmup_target: u64,
+        warmup_events: u64,
+        events_measured: u64,
+        events_total: u64,
+        writes_measured: u64,
+        frames_written_total: u64,
+        work_us: Vec<u64>,
+        callback_total_us: Vec<u64>,
+        event_lateness_us: Vec<i64>,
+        interval_us: Vec<u64>,
+        padding_frames: Vec<u64>,
+        available_frames: Vec<u64>,
+        block_frames: Vec<u64>,
+        events_with_padding: u64,
+        starvation_events: u64,
+        starvation_first_us: Option<u64>,
+        starvation_last_us: Option<u64>,
+        available_smaller_than_buffer_events: u64,
+        late_gt_period: u64,
+        wait_timeouts: u64,
+        writes_total: u64,
+        allocations: u64,
+        deallocations: u64,
+        open_prepare_us: u64,
+        render_elapsed_us: u64,
+        elapsed_us: u64,
+        completion_times_us: Vec<u64>,
+        completion_delta: Vec<f32>,
+        completion_lateness_us: Vec<i64>,
+        max_sample_delta: f32,
+        baseline_sample_delta: f32,
+        non_finite_samples: u64,
+        input_wraps: u64,
+        fatal_stage: Option<&'static str>,
+        fatal_code: Option<Hresult>,
+        notes: Vec<String>,
+    }
+
+    impl WasapiRunData {
+        fn new(period_us: u64, buffer_frames: u32, rate: u32, baseline_sample_delta: f32, capacity: usize) -> Self {
+            Self {
+                period_us,
+                buffer_frames,
+                rate,
+                warmup_target: 8,
+                warmup_events: 0,
+                events_measured: 0,
+                events_total: 0,
+                writes_measured: 0,
+                frames_written_total: 0,
+                work_us: Vec::with_capacity(capacity),
+                callback_total_us: Vec::with_capacity(capacity),
+                event_lateness_us: Vec::with_capacity(capacity),
+                interval_us: Vec::with_capacity(capacity),
+                padding_frames: Vec::with_capacity(capacity),
+                available_frames: Vec::with_capacity(capacity),
+                block_frames: Vec::with_capacity(capacity),
+                events_with_padding: 0,
+                starvation_events: 0,
+                starvation_first_us: None,
+                starvation_last_us: None,
+                available_smaller_than_buffer_events: 0,
+                late_gt_period: 0,
+                wait_timeouts: 0,
+                writes_total: 0,
+                allocations: 0,
+                deallocations: 0,
+                open_prepare_us: 0,
+                render_elapsed_us: 0,
+                elapsed_us: 0,
+                completion_times_us: Vec::with_capacity(capacity),
+                completion_delta: Vec::with_capacity(capacity),
+                completion_lateness_us: Vec::with_capacity(capacity),
+                max_sample_delta: 0.0,
+                baseline_sample_delta,
+                non_finite_samples: 0,
+                input_wraps: 0,
+                fatal_stage: None,
+                fatal_code: None,
+                notes: Vec::new(),
+            }
+        }
+    }
+
+    struct WasapiSession {
+        // Keep-alive interface references: dropped (released) when the session ends.
+        #[allow(dead_code)]
+        enumerator: ComPtr,
+        #[allow(dead_code)]
+        device: ComPtr,
+        client: ComPtr,
+        render: ComPtr,
+        event: Handle,
+        mix: MixFormatInfo,
+        engine: EngineInfo,
+        endpoint_id: String,
+        friendly_name: Option<String>,
+        device_state: u32,
+        timer_active: bool,
+        started: bool,
+        closed: bool,
+        cleanup: Vec<Value>,
+        // Must be the last field: CoUninitialize must run after every interface release.
+        _com: ComGuard,
+    }
+
+    impl WasapiSession {
+        fn open(config: &Config) -> Result<Self, Failure> {
+            let com = ComGuard::init_mta()?;
+            let enumerator = create_device_enumerator()?;
+            let device = default_render_endpoint(&enumerator)?;
+            let endpoint_id = device_endpoint_id(&device)?;
+            let friendly_name = device_friendly_name(&device);
+            let mut state: u32 = 0;
+            let state_hr = com_call!(device.ptr, ComDevice, get_state(&mut state));
+            let device_state = if state_hr >= 0 { state } else { 0 };
+
+            let mut client_raw: ComHandle = std::ptr::null_mut();
+            let hr = com_call!(
+                device.ptr,
+                ComDevice,
+                activate(
+                    &IID_IAUDIO_CLIENT,
+                    CLSCTX_ALL,
+                    std::ptr::null_mut(),
+                    &mut client_raw
+                )
+            );
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IMMDevice::Activate",
+                    hr,
+                    "IAudioClient activation failed",
+                ));
+            }
+            let client = ComPtr { ptr: client_raw };
+
+            let mut format_raw: *mut c_void = std::ptr::null_mut();
+            let hr = com_call!(client.ptr, ComAudioClient, get_mix_format(&mut format_raw));
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::GetMixFormat",
+                    hr,
+                    "cannot read the engine mix format",
+                ));
+            }
+            if format_raw.is_null() {
+                return Err(Failure::new(
+                    "IAudioClient::GetMixFormat",
+                    None,
+                    "IAudioClient::GetMixFormat returned a null format",
+                ));
+            }
+            let format_guard = CoTaskMemBuffer { ptr: format_raw };
+            // SAFETY: GetMixFormat returns a WAVEFORMATEX/WAVEFORMATEXTENSIBLE whose
+            // cbSize describes the trailing bytes.
+            let mix = unsafe { read_mix_format(format_guard.ptr) };
+
+            let mut default_hns: i64 = 0;
+            let mut minimum_hns: i64 = 0;
+            let hr = com_call!(
+                client.ptr,
+                ComAudioClient,
+                get_device_period(&mut default_hns, &mut minimum_hns)
+            );
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::GetDevicePeriod",
+                    hr,
+                    "cannot read the device period",
+                ));
+            }
+
+            let mut timer_active = false;
+            // SAFETY: documented winmm timer granularity call, balanced in close().
+            if unsafe { timeBeginPeriod(1) } == 0 {
+                timer_active = true;
+            }
+            let event_guard = create_event_pair()?;
+
+            let rate = mix.sample_rate.max(1) as i64;
+            let requested_hns =
+                ((config.frames as i64) * 10_000_000 + rate / 2) / rate;
+            let mut duration = requested_hns;
+            let mut clamped = false;
+            if minimum_hns > 0 && duration < minimum_hns {
+                duration = minimum_hns;
+                clamped = true;
+            }
+            if duration <= 0 {
+                duration = if default_hns > 0 { default_hns } else { 100_000 };
+            }
+            let mut alignment_retry = false;
+            let mut notes: Vec<String> = Vec::new();
+            loop {
+                let hr = com_call!(
+                    client.ptr,
+                    ComAudioClient,
+                    initialize(
+                        AUDCLNT_SHAREMODE_SHARED,
+                        AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                        duration,
+                        0,
+                        format_guard.ptr as *const WaveFormatExPackedW,
+                        std::ptr::null()
+                    )
+                );
+                if hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED && !alignment_retry {
+                    alignment_retry = true;
+                    let mut frames: u32 = 0;
+                    let _ = com_call!(client.ptr, ComAudioClient, get_buffer_size(&mut frames));
+                    if frames > 0 {
+                        duration =
+                            ((frames as i64) * 10_000_000 + rate / 2) / rate;
+                        notes.push(
+                            "Initialize returned AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED; retried with a duration derived from GetBufferSize"
+                                .to_owned(),
+                        );
+                        continue;
+                    }
+                }
+                if hr < 0 {
+                    return Err(wasapi_failure(
+                        "IAudioClient::Initialize",
+                        hr,
+                        "shared-mode event-driven initialisation failed (format or duration refused)",
+                    ));
+                }
+                break;
+            }
+            // The format was copied by Initialize; release the CoTaskMem buffer now.
+            drop(format_guard);
+
+            let hr = com_call!(
+                client.ptr,
+                ComAudioClient,
+                set_event_handle(event_guard.handle)
+            );
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::SetEventHandle",
+                    hr,
+                    "cannot bind the event handle to the audio client",
+                ));
+            }
+            let mut buffer_frames: u32 = 0;
+            let hr = com_call!(client.ptr, ComAudioClient, get_buffer_size(&mut buffer_frames));
+            if hr < 0 || buffer_frames == 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::GetBufferSize",
+                    if hr < 0 { hr } else { 0 },
+                    "cannot read the endpoint buffer size",
+                ));
+            }
+            let mut latency_hns: i64 = 0;
+            let latency_ok = com_call!(
+                client.ptr,
+                ComAudioClient,
+                get_stream_latency(&mut latency_hns)
+            ) >= 0;
+            let stream_latency_us = if latency_ok {
+                Some(latency_hns / 10)
+            } else {
+                None
+            };
+            let mut render_raw: ComHandle = std::ptr::null_mut();
+            let hr = com_call!(
+                client.ptr,
+                ComAudioClient,
+                get_service(&IID_IAUDIO_RENDER_CLIENT, &mut render_raw)
+            );
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::GetService(IAudioRenderClient)",
+                    hr,
+                    "cannot obtain the render client",
+                ));
+            }
+            let render = ComPtr { ptr: render_raw };
+            let hr = com_call!(client.ptr, ComAudioClient, start());
+            if hr < 0 {
+                return Err(wasapi_failure(
+                    "IAudioClient::Start",
+                    hr,
+                    "the audio client refused to start",
+                ));
+            }
+            let buffer_duration_us = buffer_frames as i64 * 1_000_000 / rate;
+            let event_period_us = if default_hns > 0 {
+                default_hns / 10
+            } else {
+                buffer_duration_us
+            };
+            let engine = EngineInfo {
+                requested_frames: config.frames as u32,
+                requested_buffer_duration_us: requested_hns / 10,
+                duration_clamped_to_minimum: clamped,
+                alignment_retry_used: alignment_retry,
+                device_period_default_us: default_hns / 10,
+                device_period_minimum_us: minimum_hns / 10,
+                stream_latency_us,
+                buffer_frames,
+                buffer_duration_us,
+                event_period_us,
+            };
+            Ok(Self {
+                enumerator,
+                device,
+                client,
+                render,
+                event: event_guard.take(),
+                mix,
+                engine,
+                endpoint_id,
+                friendly_name,
+                device_state,
+                timer_active,
+                started: true,
+                closed: false,
+                cleanup: Vec::new(),
+                _com: com,
+            })
+        }
+
+        fn info_json(&self) -> Value {
+            let name = self
+                .friendly_name
+                .clone()
+                .unwrap_or_else(|| self.endpoint_id.clone());
+            json!({
+                "api": "wasapi",
+                "device": {
+                    "endpoint_id": self.endpoint_id,
+                    "friendly_name": self.friendly_name,
+                    "name": name,
+                    "state": self.device_state,
+                    "state_name": device_state_name(self.device_state),
+                    "data_flow": "render",
+                    "role": "eConsole",
+                },
+                "requested_device": {"kind": "default_render_endpoint"},
+                "mix_format": self.mix.to_json(),
+                "engine": self.engine.to_json(),
+                "format": {
+                    "sample_format": self.mix.sample_format,
+                    "channels": self.mix.channels,
+                    "sample_rate": self.mix.sample_rate,
+                    "bits_per_sample": self.mix.bits_per_sample,
+                    "block_align": self.mix.block_align,
+                    "frames_per_buffer": self.engine.buffer_frames,
+                    "buffer_duration_us": self.engine.buffer_duration_us,
+                    "period_us": self.engine.event_period_us as u64,
+                    "buffers_in_rotation": Value::Null,
+                },
+                "timer_begin_period_ok": self.timer_active,
+            })
+        }
+
+        fn render(
+            &mut self,
+            host: Option<Arc<BlockHost>>,
+            stop: &AtomicBool,
+            input: &[f32],
+            run_start: Instant,
+            thread_start: Instant,
+            capacity: usize,
+            baseline_delta: f32,
+        ) -> WasapiRunData {
+            let mut run = WasapiRunData::new(
+                self.engine.event_period_us.max(1) as u64,
+                self.engine.buffer_frames,
+                self.mix.sample_rate,
+                baseline_delta,
+                capacity,
+            );
+            run.open_prepare_us = thread_start.elapsed().as_micros() as u64;
+            let submit_start = Instant::now();
+            let buffer_frames = self.engine.buffer_frames as usize;
+            let bytes_per_frame = self.mix.block_align as usize;
+            let mut state = DspState::default();
+            let mut computed: Vec<f32> = vec![0f32; buffer_frames + 64];
+            let mut previous_sample = 0f32;
+            let mut input_cursor = 0usize;
+            let mut anchor: Option<Instant> = None;
+            let mut previous_event_wake: Option<Instant> = None;
+
+            while !stop.load(Ordering::Relaxed) {
+                let timeout = if run.events_total == 0 {
+                    FIRST_WAIT_TIMEOUT_MS
+                } else {
+                    WAIT_TIMEOUT_MS
+                };
+                // SAFETY: the event handle belongs to this session.
+                let wait = unsafe { WaitForSingleObject(self.event, timeout) };
+                let wake = Instant::now();
+                if wait == WAIT_TIMEOUT {
+                    run.wait_timeouts += 1;
+                    continue;
+                }
+                if wait != WAIT_OBJECT_0 {
+                    run.fatal_stage = Some("WaitForSingleObject");
+                    run.fatal_code = Some(wait as Hresult);
+                    break;
+                }
+                run.events_total += 1;
+
+                let mut padding: u32 = 0;
+                let hr = com_call!(
+                    self.client.ptr,
+                    ComAudioClient,
+                    get_current_padding(&mut padding)
+                );
+                if hr < 0 {
+                    run.fatal_stage = Some("IAudioClient::GetCurrentPadding");
+                    run.fatal_code = Some(hr);
+                    break;
+                }
+                let available = self.engine.buffer_frames.saturating_sub(padding);
+                let in_warmup = run.warmup_events < run.warmup_target;
+                let measured = !in_warmup;
+
+                if measured {
+                    if anchor.is_none() {
+                        anchor = Some(wake);
+                    }
+                    let grid = anchor.unwrap_or(wake)
+                        + Duration::from_micros(
+                            run.period_us.saturating_mul(run.events_measured),
+                        );
+                    let lateness = signed_micros(wake, grid);
+                    run.events_measured += 1;
+                    if lateness > run.period_us as i64 {
+                        run.late_gt_period += 1;
+                    }
+                    if let Some(previous) = previous_event_wake {
+                        run.interval_us.push((wake - previous).as_micros() as u64);
+                    }
+                    previous_event_wake = Some(wake);
+                    run.event_lateness_us.push(lateness);
+                    run.completion_lateness_us.push(lateness);
+                    run.padding_frames.push(padding as u64);
+                    run.available_frames.push(available as u64);
+                    run.completion_times_us
+                        .push(run_start.elapsed().as_micros() as u64);
+                    if padding > 0 {
+                        run.events_with_padding += 1;
+                    }
+                } else {
+                    run.warmup_events += 1;
+                    if run.warmup_events == run.warmup_target {
+                        // Warm-up over: the counters start here.
+                        reset_thread_counters();
+                    }
+                }
+
+                if available == 0 {
+                    // The endpoint buffer is completely full: at this instant the app
+                    // cannot write anything. That is the observable starvation signal
+                    // this backend can provide (a real XRUN is not exposed directly).
+                    if measured {
+                        run.starvation_events += 1;
+                        let at = run_start.elapsed().as_micros() as u64;
+                        run.starvation_first_us = Some(run.starvation_first_us.map_or(at, |v| v.min(at)));
+                        run.starvation_last_us = Some(run.starvation_last_us.map_or(at, |v| v.max(at)));
+                        run.completion_delta.push(0.0);
+                    }
+                    continue;
+                }
+                if measured && available < self.engine.buffer_frames {
+                    run.available_smaller_than_buffer_events += 1;
+                }
+
+                let frames = available as usize;
+                while input_cursor + frames > input.len() {
+                    input_cursor = 0;
+                    run.input_wraps += 1;
+                }
+                let slice = &input[input_cursor..input_cursor + frames];
+
+                let work_started = Instant::now();
+                match host.as_ref() {
+                    Some(host) => {
+                        host.process_rt(slice, &mut computed[..frames], &mut state);
+                    }
+                    None => computed[..frames].copy_from_slice(slice),
+                }
+                let work_us = work_started.elapsed().as_micros() as u64;
+                input_cursor += frames;
+
+                let mut block_delta = 0f32;
+                for &sample in computed[..frames].iter() {
+                    if !sample.is_finite() {
+                        run.non_finite_samples += 1;
+                        continue;
+                    }
+                    let delta = (sample - previous_sample).abs();
+                    if delta > block_delta {
+                        block_delta = delta;
+                    }
+                    previous_sample = sample;
+                }
+                if block_delta > run.max_sample_delta {
+                    run.max_sample_delta = block_delta;
+                }
+
+                // Silence: the endpoint buffer is filled with zeros, never with the
+                // computed DSP signal.
+                let mut data: *mut u8 = std::ptr::null_mut();
+                let hr = com_call!(
+                    self.render.ptr,
+                    ComRenderClient,
+                    get_buffer(frames as u32, &mut data)
+                );
+                if hr < 0 || data.is_null() {
+                    run.fatal_stage = Some("IAudioRenderClient::GetBuffer");
+                    run.fatal_code = Some(hr);
+                    break;
+                }
+                // SAFETY: `data` points to `frames * block_align` writable bytes in the
+                // endpoint buffer, valid until ReleaseBuffer.
+                unsafe {
+                    std::ptr::write_bytes(data, 0u8, frames * bytes_per_frame);
+                }
+                let hr = com_call!(
+                    self.render.ptr,
+                    ComRenderClient,
+                    release_buffer(frames as u32, 0)
+                );
+                let callback_total_us = wake.elapsed().as_micros() as u64;
+                run.writes_total += 1;
+                run.frames_written_total += frames as u64;
+                if hr < 0 {
+                    run.fatal_stage = Some("IAudioRenderClient::ReleaseBuffer");
+                    run.fatal_code = Some(hr);
+                    break;
+                }
+
+                if measured {
+                    run.writes_measured += 1;
+                    run.work_us.push(work_us);
+                    run.callback_total_us.push(callback_total_us);
+                    run.block_frames.push(frames as u64);
+                    run.completion_delta.push(block_delta);
+                }
+            }
+
+            run.allocations = allocations_on_this_thread();
+            run.deallocations = deallocations_on_this_thread();
+            run.render_elapsed_us = submit_start.elapsed().as_micros() as u64;
+            run.elapsed_us = run_start.elapsed().as_micros() as u64;
+            run
+        }
+
+        fn close(&mut self) -> Vec<Value> {
+            if self.closed {
+                return std::mem::take(&mut self.cleanup);
+            }
+            if self.started {
+                let hr = com_call!(self.client.ptr, ComAudioClient, stop());
+                if hr < 0 {
+                    self.cleanup.push(json!({
+                        "step": "IAudioClient::Stop",
+                        "code": hr,
+                        "code_name": hresult_name(hr),
+                        "code_system": "hresult",
+                    }));
+                }
+                self.started = false;
+            }
+            if !self.event.is_null() {
+                // SAFETY: the handle was created by this session.
+                unsafe { CloseHandle(self.event) };
+                self.event = std::ptr::null_mut();
+            }
+            if self.timer_active {
+                // SAFETY: balances timeBeginPeriod(1) in open().
+                unsafe { timeEndPeriod(1) };
+                self.timer_active = false;
+            }
+            self.closed = true;
+            std::mem::take(&mut self.cleanup)
+        }
+    }
+
+    impl Drop for WasapiSession {
+        fn drop(&mut self) {
+            let _ = self.close();
+        }
+    }
+
+    fn wasapi_measurements_json(run: &WasapiRunData) -> Value {
+        let fatal = run.fatal_stage.map(|stage| {
+            json!({
+                "stage": stage,
+                "code": run.fatal_code,
+                "code_name": run.fatal_code.map(hresult_name),
+                "code_system": "hresult",
+            })
+        });
+        let cadence = if run.completion_times_us.len() >= 2 {
+            let first = run.completion_times_us[0];
+            let last = *run.completion_times_us.last().unwrap_or(&first);
+            let window_us = last.saturating_sub(first);
+            let intervals = (run.completion_times_us.len() - 1) as f64;
+            let delivered = if window_us > 0 {
+                intervals * 1_000_000.0 / window_us as f64
+            } else {
+                0.0
+            };
+            json!({
+                "window_us": window_us,
+                "delivered_events_per_s": delivered,
+            })
+        } else {
+            json!({
+                "window_us": Value::Null,
+                "delivered_events_per_s": Value::Null,
+            })
+        };
+        let expected_events_per_s = if run.period_us > 0 {
+            1_000_000.0 / run.period_us as f64
+        } else {
+            0.0
+        };
+        let delivered = cadence["delivered_events_per_s"].as_f64().unwrap_or(0.0);
+        let ratio = if expected_events_per_s > 0.0 {
+            delivered / expected_events_per_s
+        } else {
+            0.0
+        };
+        json!({
+            "api": "wasapi",
+            "period_us": run.period_us,
+            "buffer_frames": run.buffer_frames,
+            "rate": run.rate,
+            "warmup_events": run.warmup_events,
+            "warmup_target_events": run.warmup_target,
+            "events_measured": run.events_measured,
+            "blocks_processed": run.events_total,
+            "completions_measured": run.events_measured,
+            "writes_measured": run.writes_measured,
+            "writes_total": run.writes_total,
+            "frames_written_total": run.frames_written_total,
+            "work_us": stats_u64(&run.work_us),
+            "callback_total_us": stats_u64(&run.callback_total_us),
+            "wake_lateness_us": stats_i64(&run.event_lateness_us),
+            "event_lateness_us": stats_i64(&run.event_lateness_us),
+            "interval_us": stats_u64(&run.interval_us),
+            "padding_at_wake_frames": stats_u64(&run.padding_frames),
+            "available_write_frames": stats_u64(&run.available_frames),
+            "block_frames": stats_u64(&run.block_frames),
+            "events_with_padding": run.events_with_padding,
+            "starvation_events": run.starvation_events,
+            "starvation_window_us": {
+                "first": run.starvation_first_us,
+                "last": run.starvation_last_us,
+                "note": "positions relative to run_start, only for starvation events"
+            },
+            "available_smaller_than_buffer_events": run.available_smaller_than_buffer_events,
+            "late_events_gt_one_period": run.late_gt_period,
+            "wait_timeouts": run.wait_timeouts,
+            "allocations_on_render_thread": run.allocations,
+            "deallocations_on_render_thread": run.deallocations,
+            "open_prepare_us": run.open_prepare_us,
+            "render_elapsed_us": run.render_elapsed_us,
+            "elapsed_us": run.elapsed_us,
+            "wall_ms": run.elapsed_us / 1000,
+            "event_cadence": {
+                "window_us": cadence["window_us"].clone(),
+                "delivered_events_per_s": cadence["delivered_events_per_s"].clone(),
+                "expected_events_per_s": expected_events_per_s,
+                "ratio": ratio,
+                "held_real_time": ratio >= 0.95,
+            },
+            "fatal": fatal,
+            "lateness_definition": "per wake: event wake instant minus anchor + k*period_us, where anchor is the first measured event after warm-up (events after that are counted with k=0,1,2,...) and period_us is the device default period reported by GetDevicePeriod. This removes the engine start-up bias but still contains the engine's event-delivery quantisation",
+            "starvation_definition": "an event where GetCurrentPadding == bufferFrames at the moment the app wanted to write: the endpoint buffer is completely full, so no frame can be submitted. This is the closest observable signal to an underrun; a real XRUN is not exposed by WASAPI shared mode",
+            "available_smaller_than_buffer_definition": "events where the writable space was smaller than bufferFrames; this is normal when the endpoint buffer spans more than one engine period and is not a fault by itself",
+            "notes": run.notes,
+        })
+    }
+
+    fn wasapi_correlation_json(
+        times: &[u64],
+        deltas: &[f32],
+        lates: &[i64],
+        swaps: &SwapOutcome,
+        window_us: u64,
+    ) -> Value {
+        if swaps.requested == 0 {
+            return Value::Null;
+        }
+        let mut swap_delta_max = 0f32;
+        let mut steady_delta_max = 0f32;
+        let mut swap_lateness_max = i64::MIN;
+        let mut steady_lateness_max = i64::MIN;
+        let mut swap_completions = 0u64;
+        let mut steady_completions = 0u64;
+        for (index, completion_time) in times.iter().enumerate() {
+            let in_swap_window = swaps
+                .swap_times_us
+                .iter()
+                .any(|at| *completion_time >= *at && *completion_time <= at + window_us);
+            let delta = deltas.get(index).copied().unwrap_or(0.0);
+            let lateness = lates.get(index).copied().unwrap_or(0);
+            if in_swap_window {
+                swap_completions += 1;
+                swap_delta_max = swap_delta_max.max(delta);
+                swap_lateness_max = swap_lateness_max.max(lateness);
+            } else {
+                steady_completions += 1;
+                steady_delta_max = steady_delta_max.max(delta);
+                steady_lateness_max = steady_lateness_max.max(lateness);
+            }
+        }
+        json!({
+            "definition": "events in [swap_time, swap_time + window_us] are attributed to the swap (publication + crossfade); the others are steady-state",
+            "window_us": window_us,
+            "swap_completions": swap_completions,
+            "steady_completions": steady_completions,
+            "max_sample_delta_at_swaps": swap_delta_max,
+            "max_sample_delta_steady": steady_delta_max,
+            "max_lateness_at_swaps_us": if swap_completions > 0 { Value::from(swap_lateness_max) } else { Value::Null },
+            "max_lateness_steady_us": if steady_completions > 0 { Value::from(steady_lateness_max) } else { Value::Null },
+        })
+    }
+
+    fn wasapi_failure_report(
+        config: &Config,
+        os: Value,
+        stage: &str,
+        failure: &Failure,
+        realtime: Value,
+    ) -> (Value, i32) {
+        let mut error = failure.to_json();
+        if let Some(object) = error.as_object_mut() {
+            object.insert("stage".to_owned(), Value::from(stage));
+        }
+        let report = json!({
+            "schema_version": 1,
+            "kind": "audio-device-probe",
+            "api": "wasapi",
+            "tool": TOOL,
+            "tool_version": TOOL_VERSION,
+            "status": "error",
+            "os": os,
+            "config": config_json(config),
+            "realtime": realtime,
+            "error": error,
+            "limits": limits_json(config),
+        });
+        (report, 1)
+    }
+
+    fn execute_wasapi(config: &Config, os: Value) -> (Value, i32) {
+        let mut report = json!({
+            "schema_version": 1,
+            "kind": "audio-device-probe",
+            "api": "wasapi",
+            "tool": TOOL,
+            "tool_version": TOOL_VERSION,
+            "status": "running",
+            "os": os,
+            "config": config_json(config),
+        });
+
+        // 1) Bootstrap the block host from a prebuilt module, if one was given.
+        let host: Option<Arc<BlockHost>> = match &config.module {
+            Some(path) => match BlockHost::bootstrap_with_crossfade(
+                ExpectedAbi::dsp(),
+                Path::new(path),
+                config.crossfade_frames,
+            ) {
+                Ok(host) => Some(Arc::new(host)),
+                Err(reason) => {
+                    let failure = Failure::new(
+                        "BlockHost::bootstrap",
+                        None,
+                        format!("the DSP module was refused: {reason:?}"),
+                    );
+                    let mut failed = wasapi_failure_report(
+                        config,
+                        os_info(),
+                        "BlockHost::bootstrap",
+                        &failure,
+                        json!({"mmcss_requested": config.mmcss, "notes": ["thread priority was not applied: the probe failed before the render thread started"]}),
+                    );
+                    if let Some(object) = failed.0.as_object_mut() {
+                        object.insert(
+                            "module_refusal".to_owned(),
+                            serde_json::to_value(&reason).unwrap_or(Value::Null),
+                        );
+                    }
+                    return failed;
+                }
+            },
+            None => None,
+        };
+        let bootstrap_identity = host.as_ref().map(|host| {
+            (
+                host.active_artifact(),
+                host.active_patch_id(),
+                host.active_verification().as_str().to_owned(),
+            )
+        });
+
+        // 2) Hot-swap candidates (JSON emitted by `ravum build --json`).
+        let mut candidates: Vec<BuildOutput> = Vec::new();
+        for path in &config.swap_builds {
+            let text = match std::fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) => {
+                    let failure =
+                        Failure::new("swap-build", None, format!("cannot read {path}: {error}"));
+                    return wasapi_failure_report(
+                        config,
+                        os_info(),
+                        "swap-build",
+                        &failure,
+                        json!({"mmcss_requested": config.mmcss, "notes": ["thread priority was not applied: the probe failed before the render thread started"]}),
+                    );
+                }
+            };
+            let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+            match serde_json::from_str::<BuildOutput>(text) {
+                Ok(build) => candidates.push(build),
+                Err(error) => {
+                    let failure = Failure::new(
+                        "swap-build",
+                        None,
+                        format!("{path} is not a BuildOutput JSON: {error}"),
+                    );
+                    return wasapi_failure_report(
+                        config,
+                        os_info(),
+                        "swap-build",
+                        &failure,
+                        json!({"mmcss_requested": config.mmcss, "notes": ["thread priority was not applied: the probe failed before the render thread started"]}),
+                    );
+                }
+            }
+        }
+
+        // 3) Continuous test signal.
+        let total_input_frames = (config.seconds as usize)
+            .saturating_mul(config.rate as usize)
+            .saturating_add(config.rate as usize)
+            .saturating_add(config.frames * 16);
+        let omega = 2.0 * std::f32::consts::PI * SINE_FREQUENCY_HZ / config.rate.max(1) as f32;
+        let mut input = Vec::with_capacity(total_input_frames);
+        for index in 0..total_input_frames {
+            input.push(SINE_AMPLITUDE * (omega * index as f32).sin());
+        }
+        let baseline_delta = 2.0 * SINE_AMPLITUDE * (omega / 2.0).sin().abs();
+
+        // 4) Run: render thread (COM MTA + MMCSS), control thread for swaps.
+        let run_start = Instant::now();
+        let stop = Arc::new(AtomicBool::new(false));
+        let (init_tx, init_rx) = std::sync::mpsc::channel();
+        let render_config = config.clone();
+        let render_host = host.clone();
+        let render_stop = Arc::clone(&stop);
+        let requested_period_us = (config.frames as u64 * 1_000_000) / config.rate.max(1) as u64;
+        let capacity = ((config.seconds as usize).saturating_mul(1_000_000)
+            / requested_period_us.max(1) as usize)
+            + 256;
+        let render_handle = std::thread::spawn(move || {
+            let thread_start = Instant::now();
+            let mut realtime = match RealtimeState::apply(&render_config) {
+                Ok(state) => state,
+                Err((failure, partial)) => {
+                    let _ = init_tx.send(Err((failure, partial)));
+                    return Err(Failure::new("realtime", None, "thread priority setup failed"));
+                }
+            };
+            let mut session = match WasapiSession::open(&render_config) {
+                Ok(session) => session,
+                Err(failure) => {
+                    let realtime_json = realtime.to_json();
+                    let _ = init_tx.send(Err((failure, realtime_json)));
+                    let _ = realtime.revert();
+                    return Err(Failure::new("wasapi", None, "WASAPI session not opened"));
+                }
+            };
+            let _ = init_tx.send(Ok((session.info_json(), realtime.to_json())));
+            let run = session.render(
+                render_host,
+                &render_stop,
+                &input,
+                run_start,
+                thread_start,
+                capacity,
+                baseline_delta,
+            );
+            let cleanup = session.close();
+            let revert = realtime.revert();
+            Ok((run, cleanup, revert))
+        });
+
+        let (init_info, realtime_info) = match init_rx.recv_timeout(Duration::from_secs(20)) {
+            Ok(Ok((info, realtime))) => (info, realtime),
+            Ok(Err((failure, realtime))) => {
+                stop.store(true, Ordering::SeqCst);
+                let _ = render_handle.join();
+                return wasapi_failure_report(
+                    config,
+                    os_info(),
+                    failure.stage,
+                    &failure,
+                    realtime,
+                );
+            }
+            Err(error) => {
+                stop.store(true, Ordering::SeqCst);
+                let _ = render_handle.join();
+                let failure = Failure::new(
+                    "wasapi-init",
+                    None,
+                    format!("no initialisation result from the render thread: {error}"),
+                );
+                return wasapi_failure_report(
+                    config,
+                    os_info(),
+                    "wasapi-init",
+                    &failure,
+                    json!({"mmcss_requested": config.mmcss, "notes": ["no initialisation result"]}),
+                );
+            }
+        };
+        let load_window_started = Instant::now();
+        let load_start = system_sample();
+        report["realtime"] = realtime_info.clone();
+        report["device"] = init_info["device"].clone();
+        report["requested_device"] = init_info["requested_device"].clone();
+        report["mix_format"] = init_info["mix_format"].clone();
+        report["engine"] = init_info["engine"].clone();
+        report["format"] = init_info["format"].clone();
+        report["timer_begin_period_ok"] = init_info["timer_begin_period_ok"].clone();
+
+        let swap_handle = if config.swap_every_ms > 0 && !candidates.is_empty() {
+            let swap_host = host.clone();
+            let swap_stop = Arc::clone(&stop);
+            let interval = Duration::from_millis(config.swap_every_ms);
+            Some(std::thread::spawn(move || {
+                swap_loop(
+                    swap_host.expect("the host is bootstrapped when swaps are requested"),
+                    candidates,
+                    interval,
+                    swap_stop,
+                    run_start,
+                )
+            }))
+        } else {
+            None
+        };
+
+        std::thread::sleep(Duration::from_secs(config.seconds));
+        stop.store(true, Ordering::SeqCst);
+
+        let render_result = render_handle.join();
+        let swap_outcome = match swap_handle.map(|handle| handle.join()) {
+            Some(Ok(outcome)) => outcome,
+            Some(Err(_)) => {
+                report["swap_thread_panicked"] = Value::Bool(true);
+                SwapOutcome::default()
+            }
+            None => SwapOutcome::default(),
+        };
+
+        let (run, cleanup, revert) = match render_result {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => {
+                let failure =
+                    Failure::new("render-thread", None, "render thread failed after WASAPI init");
+                return wasapi_failure_report(
+                    config,
+                    os_info(),
+                    "render-thread",
+                    &failure,
+                    realtime_info,
+                );
+            }
+            Err(_) => {
+                let failure = Failure::new(
+                    "render-thread",
+                    None,
+                    "render thread panicked; no measurement is reported",
+                );
+                return wasapi_failure_report(
+                    config,
+                    os_info(),
+                    "render-thread",
+                    &failure,
+                    realtime_info,
+                );
+            }
+        };
+
+        if let Some(realtime) = report.get_mut("realtime").and_then(Value::as_object_mut) {
+            realtime.insert("revert".to_owned(), revert);
+        }
+        let load_window_ms = load_window_started.elapsed().as_millis() as u64;
+        let load_end = system_sample();
+        report["load"] = system_load_json(
+            load_start,
+            load_end,
+            load_window_ms,
+            std::env::var("RAVUM_PROBE_LOAD_NOTE").ok(),
+        );
+
+        let fatal = run.fatal_stage.is_some();
+        let status = if fatal {
+            "partial"
+        } else if run.events_measured == 0 {
+            "error"
+        } else {
+            "ok"
+        };
+
+        if let Some(host) = &host {
+            let (bootstrap_artifact, bootstrap_patch, bootstrap_verification) = bootstrap_identity
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| {
+                    (
+                        host.active_artifact(),
+                        host.active_patch_id(),
+                        String::new(),
+                    )
+                });
+            report["module"] = json!({
+                "provided": true,
+                "bootstrap_path": config.module,
+                "bootstrap_artifact_id": bootstrap_artifact,
+                "bootstrap_patch_id": bootstrap_patch,
+                "bootstrap_verification": bootstrap_verification,
+                "final_artifact_id": host.active_artifact(),
+                "final_patch_id": host.active_patch_id(),
+                "crossfade_frames": host.crossfade_frames(),
+            });
+        } else {
+            report["module"] = json!({"provided": false});
+        }
+
+        let measurements = wasapi_measurements_json(&run);
+        report["measurements"] = measurements.clone();
+        report["realtime_cadence"] = measurements["event_cadence"].clone();
+        report["swaps"] = swap_json(&swap_outcome);
+        let crossfade_us = (config.crossfade_frames as u64) * 1_000_000 / config.rate.max(1) as u64;
+        let window_us = crossfade_us + 2 * run.period_us;
+        report["correlation"] = wasapi_correlation_json(
+            &run.completion_times_us,
+            &run.completion_delta,
+            &run.completion_lateness_us,
+            &swap_outcome,
+            window_us,
+        );
+        if let Some(host) = &host {
+            let status = host.status();
+            report["host"] = json!({
+                "activations": status.activations,
+                "unloaded_modules": status.unloaded_modules,
+                "live_modules": status.live_modules,
+                "final_active_version": status.active_version,
+            });
+        }
+        report["dsp"] = json!({
+            "bootstrap_module": config.module,
+            "signal": "mono 440 Hz sine, amplitude 0.5, continuous phase across blocks; computed, measured, never audible",
+            "max_sample_delta": run.max_sample_delta,
+            "baseline_sample_delta": run.baseline_sample_delta,
+            "non_finite_samples": run.non_finite_samples,
+            "input_wraps": run.input_wraps,
+            "block_frames": stats_u64(&run.block_frames),
+        });
+        report["cleanup"] = Value::from(cleanup);
+        report["status"] = Value::from(status);
+        report["limits"] = limits_json(config);
+
+        let exit_code = if status == "ok" { 0 } else { 1 };
+        (report, exit_code)
+    }
+
 }

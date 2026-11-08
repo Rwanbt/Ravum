@@ -27,9 +27,10 @@
 | **Chemin DSP réel sur périphérique `waveOut` (silence)** | **mesuré (§4)** : 282 tampons, 0 alloc/0 free sur le thread de rendu, 11 swaps |
 | **Swaps à chaud sous pilote réel, avec et sans crossfade** | **mesurés (§4.5)** : 11 activations/run, 0 refus ; `\|delta\|` 0,0291 avec fondu vs 0,1260 sans |
 | **Priorité temps réel MMCSS (Pro Audio + critical) sous charge CPU 100 %** | **mesurée (§5)** : 2 runs/cellule, 0 tampon en retard avec MMCSS (max 2,7 ms) ; sans MMCSS un run dégradé à 134,4 ms et 255 tampons en retard |
-| Périphérique réel via WASAPI/ASIO, priorité RT via WASAPI exclusive | **aucun** |
+| **Chemin DSP réel sur WASAPI mode partagé (silence)** | **mesuré (§6)** : 8 runs, endpoint MOTU 48 kHz float32, buffer moteur 22 ms, cadence ratio 1,0001–1,0009, 0 événement en retard, 0 alloc/0 free, 11/11 swaps |
+| WASAPI mode exclusif / ASIO, priorité RT via WASAPI exclusive | **aucun** |
 | Hôte CLAP/VST3/ASIO branché sur le module | **aucun** |
-| XRUN mesurés, glitches de pilote comptés | **aucun** (`waveOut` ne les expose pas) |
+| XRUN mesurés, glitches de pilote comptés | **aucun** (ni `waveOut` ni WASAPI partagé ne les exposent ; seules des starvations définies et des lateness mesurées) |
 
 ## 2. Inventaire matériel observé (Windows 11 26100)
 
@@ -392,27 +393,112 @@ Preuves : 9 rapports bruts
 plus le récapitulatif **dérivé** `evidence/mvp0b-audio-mmsc-campaign-2026-11-08.json`
 (celui-ci n'est pas une mesure : il agrège les rapports bruts et le dit).
 
-## 6. Ce qui n'a pas été exécuté (et pourquoi)
+## 6. WASAPI mode partagé (backend `--api wasapi`)
+
+### 6.1 Ce qui est implémenté
+
+La sonde accepte `--api waveout|wasapi` (défaut `waveout`, pour ne pas casser les
+campagnes existantes). Le backend `wasapi` n'ajoute **aucune dépendance externe** : FFI
+directe de `ole32`/`mmdevapi`/`kernel32`, en `extern "system"`.
+
+- COM (`CoInitializeEx` MTA) sur le **thread de rendu**, `MMDeviceEnumerator` →
+  endpoint de rendu par défaut, `IMMDevice::OpenPropertyStore` pour le nom convivial et
+  `IMMDevice::GetId` pour l'identifiant stable de l'endpoint ;
+- `IAudioClient::GetMixFormat` : format du **moteur audio** (et non un format choisi par
+  l'application), `IAudioClient::GetDevicePeriod` (période par défaut et minimale) ;
+- `Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, duration, 0,
+  mix_format, NULL)` avec `duration` dérivé de `--frames`, puis `SetEventHandle` ;
+- boucle événementielle : `WaitForSingleObject`, `GetCurrentPadding`, si la place le
+  permet `GetBuffer` → écriture de **zéros** → `ReleaseBuffer` ; le signal DSP est calculé
+  par `BlockHost::process_rt`, mesuré (travail, delta inter-échantillon), puis jeté : le
+  endpoint ne reçoit **que du silence** ;
+- swaps à chaud du module réel via les vraies portes (`prepare`/preuve/`apply`) et crossfade
+  optionnel, exactement comme pour `waveOut` ;
+- `--mmcss` / `--thread-priority` réutilisés sur le thread de rendu ;
+- arrêt propre : `Stop`, release de toutes les interfaces COM, `CoUninitialize`,
+  `AvRevertMmThreadCharacteristics` ; toute erreur est un échec explicite avec HRESULT.
+
+**Définition de la starvation** (la plus proche observation possible d'un underrun) : un
+événement où `GetCurrentPadding == bufferFrames` au moment où l'application veut écrire —
+le buffer du endpoint est plein, aucune frame ne peut être soumise. Un XRUN réel n'est
+**pas** exposé par WASAPI en mode partagé.
+
+### 6.2 Périphérique, format et période observés
+
+| Élément | Valeur observée |
+|---|---|
+| Endpoint par défaut | `Out 1-2 (MOTU M Series)` |
+| Format du moteur (mix format) | **float32**, 2 canaux, **48 000 Hz**, block align 8 |
+| Buffer du endpoint | **1 056 frames = 22 000 µs** (`buffer_duration_us`) |
+| Période du device | **10 000 µs** par défaut (**3 000 µs** minimum annoncée) |
+| Mode | partagé, événementiel (`EVENTCALLBACK`), événements à ~100 Hz |
+| Coût d'activation du moteur | `open_prepare_us` 0,28–0,55 s (mesuré séparément, hors période) |
+
+Le buffer du endpoint (22 ms) est plus grand que la période du device (10 ms) : la sonde
+écrit des blocs de 480 à 960 frames à chaque événement, et « place disponible < buffer »
+est **normal** (276 événements sur un run de 3 s) : ce n'est pas une faute.
+
+### 6.3 Résultats réels : 4 cellules × 2 runs (même protocole, 3 s, module + swaps)
+
+| Cellule | CPU mesuré | cadence (ratio) | lateness p50 | p95 | max | événements en retard >1 période | starvations | callback p95 | work p95 | alloc/free | swaps |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| repos sans MMCSS r1 | 24,2 % | 1,0001 | −121 µs | 598 µs | 1 077 µs | 0 | 18 | 50 µs | 16 µs | 0/0 | 11/11 |
+| repos sans MMCSS r2 | 39,8 % | 1,0005 | −367 µs | 194 µs | 703 µs | 0 | 0 | 54 µs | 14 µs | 0/0 | 11/11 |
+| repos MMCSS r1 | 44,5 % | 1,0009 | −216 µs | 377 µs | 841 µs | 0 | 0 | 50 µs | 15 µs | 0/0 | 11/11 |
+| repos MMCSS r2 | 29,7 % | 1,0007 | 174 µs | 847 µs | 1 198 µs | 0 | 18 | 46 µs | 13 µs | 0/0 | 11/11 |
+| **charge 100 % sans MMCSS r1** | 99,0 % | 1,0003 | −314 µs | 335 µs | 716 µs | 0 | 4 | 61 µs | 14 µs | 0/0 | 11/11 |
+| **charge 100 % sans MMCSS r2** | 100,0 % | 1,0006 | −22 µs | 485 µs | 1 398 µs | 0 | 0 | 56 µs | 14 µs | 0/0 | 11/11 |
+| **charge 100 % MMCSS r1** | 99,5 % | 1,0005 | −267 µs | 180 µs | 694 µs | 0 | 0 | 58 µs | 14 µs | 0/0 | 11/11 |
+| **charge 100 % MMCSS r2** | 99,8 % | 1,0007 | 319 µs | 933 µs | 1 242 µs | 0 | 18 | 62 µs | 16 µs | 0/0 | 11/11 |
+
+Sur les 8 runs : cadence tenue (ratio 1,0001–1,0009), **0 événement en retard de plus
+d'une période**, lateness max **0,7–1,4 ms**, travail DSP p50 5–8 µs / p95 10–16 µs,
+callback complet p95 46–62 µs, **0 allocation et 0 désallocation sur le thread de rendu**,
+**11/11 swaps activés**, `|delta|` aux swaps 0,0290–0,0293 avec fondu. Les starvations
+observées (0, 4 ou 18 selon le run) sont des moments où le buffer de 22 ms était plein :
+elles n'ont produit ni retard > période ni échantillon manquant mesurable ; la définition
+est conservée telle quelle car WASAPI partagé n'expose pas de compteur d'XRUN.
+
+### 6.4 Comparaison honnête avec `waveOut` (mêmes 3 s, même module, même machine)
+
+| Chemin | Buffer | Sous charge 100 %, sans MMCSS | Sous charge 100 %, avec MMCSS |
+|---|---|---|---|
+| `waveOut` (legacy) | 512 frames, 10,67 ms de période, 4 tampons | 1 run dégradé (3 tampons en retard, max 15,7 ms) et **1 run décroché (255 tampons, max 134,4 ms, marge −111,9 ms)** | **0 tampon en retard**, max 2,5–2,7 ms |
+| **WASAPI partagé** | endpoint 1 056 frames, 22 ms ; période device 10 ms | **0 événement en retard**, lateness max 0,7–1,4 ms, starvations 0/4 | **0 événement en retard**, max 0,7–1,2 ms, starvations 0/18 |
+
+Lecture : le chemin événementiel WASAPI moderne est **beaucoup plus robuste à une charge
+CPU concurrente** que `waveOut` legacy, et MMCSS n'y apporte pas de gain visible (les deux
+configurations tiennent) — à l'inverse de `waveOut`, où MMCSS était décisif sous charge.
+Deux réserves : (a) les métriques ne sont pas identiques (`waveOut` compte des
+soumissions de tampon en retard, WASAPI compte des réveils tardifs et des starvations),
+même si les deux capturent un retard de livraison ; (b) le mode partagé impose le buffer
+du moteur (22 ms ici), donc une latence de sortie plus grande que les 10,67 ms de
+`waveOut` — ce n'est pas une qualification de latence audio, seulement un constat.
+**Aucune revendication hard-RT** : pas de MMCSS obligatoire pour WASAPI ici, pas de XRUN
+mesuré, un seul endpoint et un seul OS.
+
+## 7. Ce qui n'a pas été exécuté (et pourquoi)
 
 | Élément du mandat L4-C | Statut | Raison |
 |---|---|---|
 | Test dans un hôte audio réel (CLAP/VST3/DAW) | **non exécuté** | Ravum ne produit pas encore de binaire plugin CLAP/VST3 ; en créer un est un travail d'ABI distinct (hôte, GUI, paramètres, bus) hors périmètre de ce lot. |
-| Périphérique réel via WASAPI/ASIO | **non exécuté** — seul `waveOut` legacy a été utilisé | WASAPI/ASIO exigent une boucle COM/WASAPI (ou SDK ASIO) et une sortie physique ; lot suivant. Une exécution réelle aurait des effets audibles non sollicités ; la sonde `waveOut` contourne ce point en n'émettant que du silence. |
+| Périphérique réel via **WASAPI mode partagé** | **exécuté** (§6) : endpoint par défaut, mix format float32 48 kHz, buffer 22 ms, événementiel, 8 runs (repos/charge × MMCSS), 11/11 swaps, 0 alloc/free | — |
+| Périphérique réel via **WASAPI exclusif / ASIO** | **non exécuté** | Le mode exclusif exige un format exclusif et peut exclure les autres applications ; ASIO un SDK tiers. Lot suivant. |
 | Identification OS / pilote / sample rate / buffer size | **partiel** : OS et périphériques identifiés (§2), format/période/taille de tampon et quantum de service observés (§4), mais le pilote interne et l'endpoint physique résolu par `WAVE_MAPPER` restent inconnus (`waveOutGetID` renvoie `0xFFFFFFFF`). | — |
-| Mesure des XRUN | **toujours non exécutée** | Un XRUN est un événement de pilote ; `waveOut` ne l'expose pas. On mesure des tampons soumis en retard et une marge de file dérivée, nommés comme tels. |
+| Mesure des XRUN | **toujours non exécutée** | Un XRUN est un événement de pilote ; ni waveOut ni WASAPI partagé ne l''exposent. On mesure des tampons soumis en retard, des réveils tardifs, une marge de file dérivée et des **starvations définies** (buffer plein au moment d''écrire), nommés comme tels. |
 | Durée de callback sur périphérique réel | **mesurée** (§4.3) : travail `process_rt` p50 7 µs / p95 14 µs / max 83 µs ; callback complet (réveil → re-soumission) p50 275 µs / p95 503 µs / max 756 µs | — |
 | Swaps répétés dans un callback réel | **mesurés** (§4.3, §4.5) : 11 activations par run sous pilote, 0 refus, avec et sans fondu | — |
 | Continuation d'état à travers un swap en conditions réelles | **mesurée** (§4.5) : `\|delta\|` aux swaps 0,0291 avec fondu (0,1260 sans), état possédé par l'hôte | — |
 | Reproductibilité des erreurs audio (dropouts, glitches) | **partielle** : plusieurs runs de référence, un run sous charge contrôlée (§4.6) et la campagne MMCSS 4 cellules × 2 runs + 1 reprise (§5) ; pas de fenêtre longue (minutes), pas de compteur de glitches du pilote. | — |
 | Priorité temps réel MMCSS | **mesurée** (§5) : `AvSetMmThreadCharacteristicsW("Pro Audio")` + `AVRT_PRIORITY_CRITICAL`, priorité de base observée 18, revert ok ; 2 runs/cellule sous charge CPU 100 % | — |
 | Priorité Win32 brute (`SetThreadPriority`) | **implémentée et vérifiée** : `normal`/`above`/`high`/`time-critical` (priorités observées 0/1/2/15), appliquée après MMCSS lorsqu'elles sont demandées ensemble | — |
-| WASAPI exclusive / ASIO / priorité temps réel WASAPI | **non exécuté** | `waveOut` n'offre pas ce chemin ; lot suivant. MMCSS ne compense pas : c'est une classe d'ordonnancement, pas un pilote certifié. |
+| WASAPI exclusive / ASIO / priorité temps réel WASAPI | **non exécuté** | Seul le mode **partagé** est implémenté ; l'exclusif et ASIO restent à faire. MMCSS ne compense pas : c'est une classe d'ordonnancement, pas un pilote certifié. |
 | Qualification hard-réaliste | **non exécutée et non revendiquée** | Voir §4.7 et §5.4 : la voie utilisée n'est pas certifiée, MMCSS ne promet pas d'échéance et la charge machine fait varier le résultat. |
 
 Ces éléments restent des **travaux non faits**, et aucune conclusion de qualité audio
 réelle ne doit en être tirée.
 
-## 7. Plan proposé pour une vraie qualification (partiellement commencé)
+## 8. Plan proposé pour une vraie qualification (partiellement commencé)
 
 1. ~~**Option la moins risquée** : boucle de rendu silencieuse qui appelle `process_rt`
    dans le callback du pilote.~~ **Fait avec `waveOut`** (§4) : la boucle existe, ne fait
@@ -434,7 +520,7 @@ réelle ne doit en être tirée.
    ne tient pas le temps réel à 5,33 ms (§4.4) ; 512 frames (10,67 ms) est la plus petite
    taille mesurée qui tient.
 
-## 8. Reproduire
+## 9. Reproduire
 
 ```powershell
 cd D:\App\Ravum
@@ -464,6 +550,12 @@ powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Load 12
 
 # Une seule cellule avec MMCSS + priorité Win32 brute (séparation des deux mécanismes) :
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -ThreadPriority time-critical -Variant smoke-mmcss-tc
+
+# 2bis) Backend WASAPI mode partage (silence, evenementiel) : 4 cellules de la campagne.
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Variant rest-nommscss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mmcss -Variant rest-mmcss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Load 12 -Variant load-nommscss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mmcss -Load 12 -Variant load-mmcss-r1
 
 # Commande directe de la sonde (module précompilé par ravum build) :
 cargo run -q -p ravum-dsp-harness --bin ravum-audio-probe -- --seconds 3 --frames 512 `
