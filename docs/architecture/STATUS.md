@@ -13,6 +13,7 @@
 | Prototype COLLAB-1 (multi-agents, écrivain Git unique) | **Implémenté et exécuté** ; ni rebase automatique, ni AST, ni CRDT |
 | Vérification bornée (M2) | **Implémentée** : `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
 | DSP de bloc (M3) | **Démonstrateur** : ABI de bloc, état possédé par l'hôte, swap sans verrou, 0 allocation mesurée ; pas d'hôte audio réel, pas de crossfade |
+| Verticale full-stack (M4) | **Application témoin** : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E réels ; pas de navigateur piloté, pas de TLS |
 | Benchmark, test de latence ou certification RT Ravum | Latence de la boucle M1 **mesurée localement** ; aucune qualification temps réel |
 | Gate M5 pour un nouveau langage | Proposed, **pas accepté** |
 | Code de release | Aucun |
