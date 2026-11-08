@@ -25,6 +25,7 @@ pub fn parse_rustc_json(
 ) -> DiagnosticSet {
     let mut set = DiagnosticSet::new(snapshot.clone(), tool, tool_version);
     let mut leftovers: Vec<String> = Vec::new();
+    let mut unparsed: Vec<String> = Vec::new();
 
     for line in stderr.lines() {
         let line = line.trim();
@@ -32,6 +33,7 @@ pub fn parse_rustc_json(
             continue;
         }
         let Ok(value) = serde_json::from_str::<Value>(line) else {
+            unparsed.push(line.to_string());
             if line.starts_with("error") {
                 leftovers.push(line.to_string());
             }
@@ -52,9 +54,19 @@ pub fn parse_rustc_json(
     }
 
     if !exit_success && !set.has_errors() {
-        let mut diag = Diagnostic::error(
-            "rustc exited with a failure status but emitted no error diagnostic".to_owned(),
-        );
+        // Never lose the reason: a failing tool with no structured diagnostic must
+        // still report what it printed, otherwise the failure is undebuggable.
+        let mut detail = unparsed.join(" | ");
+        if detail.len() > 800 {
+            detail.truncate(800);
+            detail.push_str("...");
+        }
+        let message = if detail.is_empty() {
+            "rustc exited with a failure status and produced no output at all".to_owned()
+        } else {
+            format!("rustc exited with a failure status: {detail}")
+        };
+        let mut diag = Diagnostic::error(message);
         diag.code = Some("no-diagnostic".to_owned());
         set.diagnostics.push(diag);
     }
@@ -128,9 +140,14 @@ mod tests {
 
     #[test]
     fn failed_process_without_diagnostic_still_reports_an_error() {
-        let set = parse_rustc_json("garbage", &SnapshotId::new("s"), "rustc", "1", false);
+        let set = parse_rustc_json("garbage from the tool", &SnapshotId::new("s"), "rustc", "1", false);
         assert!(set.has_errors());
         assert_eq!(set.diagnostics[0].code.as_deref(), Some("no-diagnostic"));
+        assert!(
+            set.diagnostics[0].message.contains("garbage from the tool"),
+            "the raw output must be preserved: {}",
+            set.diagnostics[0].message
+        );
     }
 
     #[test]
