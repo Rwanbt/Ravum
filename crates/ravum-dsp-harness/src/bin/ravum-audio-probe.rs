@@ -114,6 +114,8 @@ enum AudioApi {
     WaveOut,
     /// Modern Windows Audio Session API, **shared** mode, event-driven.
     Wasapi,
+    /// WASAPI **exclusive** mode: the app owns the format and the period.
+    WasapiExclusive,
 }
 
 impl AudioApi {
@@ -121,6 +123,7 @@ impl AudioApi {
         match value {
             "waveout" | "wave_out" => Some(Self::WaveOut),
             "wasapi" => Some(Self::Wasapi),
+            "wasapi-exclusive" | "wasapi_exclusive" | "wasapi-excl" => Some(Self::WasapiExclusive),
             _ => None,
         }
     }
@@ -129,7 +132,16 @@ impl AudioApi {
         match self {
             Self::WaveOut => "waveout",
             Self::Wasapi => "wasapi",
+            Self::WasapiExclusive => "wasapi-exclusive",
         }
+    }
+
+    fn is_wasapi(&self) -> bool {
+        matches!(self, Self::Wasapi | Self::WasapiExclusive)
+    }
+
+    fn is_exclusive(&self) -> bool {
+        matches!(self, Self::WasapiExclusive)
     }
 }
 
@@ -201,6 +213,14 @@ struct Config {
     mmcss: bool,
     /// Raw Win32 thread priority for the render thread, applied after MMCSS.
     thread_priority: Option<ThreadPriorityChoice>,
+    /// WASAPI exclusive mode only: requested output sample rate (default: the engine
+    /// mix format rate). Ignored by the shared backend.
+    exclusive_rate: Option<u32>,
+    /// WASAPI exclusive mode only: requested output bits per sample (16/24/32, default 16).
+    exclusive_bits: Option<u16>,
+    /// WASAPI exclusive mode only: active render endpoint index to open instead of the
+    /// default endpoint (diagnostic; the default device is not changed).
+    exclusive_endpoint: Option<usize>,
     json: bool,
     out: Option<String>,
 }
@@ -224,6 +244,9 @@ impl Config {
             device: None,
             mmcss: false,
             thread_priority: None,
+            exclusive_rate: None,
+            exclusive_bits: None,
+            exclusive_endpoint: None,
             json: false,
             out: None,
         };
@@ -234,8 +257,27 @@ impl Config {
                 "--api" => {
                     let value = take_string(args, &mut index, flag)?;
                     config.api = AudioApi::parse(&value).ok_or_else(|| {
-                        format!("--api expects waveout|wasapi, got {value:?}")
+                        format!("--api expects waveout|wasapi|wasapi-exclusive, got {value:?}")
                     })?;
+                }
+                "--exclusive" => {
+                    // Short spelling accepted by the brief: `--api wasapi --exclusive`.
+                    if config.api == AudioApi::Wasapi || config.api == AudioApi::WasapiExclusive {
+                        config.api = AudioApi::WasapiExclusive;
+                        index += 1;
+                    } else {
+                        return Err("--exclusive requires --api wasapi".to_owned());
+                    }
+                }
+                "--exclusive-rate" => {
+                    config.exclusive_rate = Some(take_u64(args, &mut index, flag)? as u32);
+                }
+                "--exclusive-bits" => {
+                    config.exclusive_bits = Some(take_u64(args, &mut index, flag)? as u16);
+                }
+                "--exclusive-endpoint" => {
+                    config.exclusive_endpoint =
+                        Some(take_u64(args, &mut index, flag)? as usize);
                 }
                 "--seconds" => {
                     config.seconds = take_u64(args, &mut index, flag)?;
@@ -313,6 +355,30 @@ impl Config {
                 config.rate
             ));
         }
+        if let Some(rate) = config.exclusive_rate {
+            if !(8_000..=192_000).contains(&rate) {
+                return Err(format!(
+                    "--exclusive-rate must be in 8000..=192000 (got {rate})"
+                ));
+            }
+        }
+        if let Some(bits) = config.exclusive_bits {
+            if !matches!(bits, 16 | 24 | 32) {
+                return Err(format!(
+                    "--exclusive-bits must be 16, 24 or 32 (got {bits})"
+                ));
+            }
+        }
+        if !config.api.is_exclusive()
+            && (config.exclusive_rate.is_some()
+                || config.exclusive_bits.is_some()
+                || config.exclusive_endpoint.is_some())
+        {
+            return Err(
+                "--exclusive-rate/--exclusive-bits/--exclusive-endpoint only apply to --api wasapi-exclusive"
+                    .to_owned(),
+            );
+        }
         if config.swap_every_ms > 0 && config.swap_every_ms < 20 {
             return Err("--swap-every-ms must be 0 (disabled) or >= 20".to_owned());
         }
@@ -329,9 +395,9 @@ impl Config {
             // Explicitly asking for WAVE_MAPPER is valid; normalise to the default.
             config.device = None;
         }
-        if config.api == AudioApi::Wasapi && config.device.is_some() {
+        if config.api.is_wasapi() && config.device.is_some() {
             return Err(
-                "--device selects a waveOut index and does not apply to --api wasapi; WASAPI uses the default render endpoint"
+                "--device selects a waveOut index and does not apply to WASAPI; WASAPI uses the default render endpoint"
                     .to_owned(),
             );
         }
@@ -360,8 +426,16 @@ fn usage() -> String {
 \n\
 Usage: {TOOL} [OPTIONS]\n\
 \n\
-  --api BACKEND         audio backend under test: waveout | wasapi (default waveout).\n\
-                        wasapi = shared mode, event-driven, default render endpoint\n\
+  --api BACKEND         audio backend under test: waveout | wasapi | wasapi-exclusive\n\
+                        (default waveout). wasapi = shared mode, event-driven, default\n\
+                        render endpoint. wasapi-exclusive = exclusive mode, app-owned\n\
+                        PCM format; the default endpoint driver may refuse it (explicit\n\
+                        HRESULT, never a fake success)\n\
+  --exclusive           short spelling for --api wasapi --exclusive\n\
+  --exclusive-rate N    exclusive mode: requested sample rate (default: engine mix rate)\n\
+  --exclusive-bits N    exclusive mode: requested bits per sample, 16|24|32 (default 16)\n\
+  --exclusive-endpoint N exclusive mode: open active render endpoint N instead of the\n\
+                        default endpoint (diagnostic; the system default is not changed)\n\
   --seconds N           probe duration in seconds, 1..=10 (default 3)\n\
   --buffers N           buffers kept in rotation, 1..=16 (default 4)\n\
   --frames N            frames per buffer, 32..=4096 (default 256)\n\
@@ -461,6 +535,8 @@ fn config_json(config: &Config) -> Value {
         "thread_priority_requested": config
             .thread_priority
             .map(|priority| priority.as_str()),
+        "exclusive_rate": config.exclusive_rate,
+        "exclusive_bits": config.exclusive_bits,
     })
 }
 
@@ -473,6 +549,8 @@ fn limits_json(config: &Config) -> Value {
     json!([
         "waveOut (winmm) is a legacy emulated mapper API, not a certified real-time audio path: no WASAPI exclusive mode, no ASIO",
         "WASAPI shared mode is the Windows audio engine's own buffer path; the app does not own the period, the engine does. It is not exclusive mode and not ASIO",
+        "WASAPI exclusive mode gives the app the format and the period, but it is still a shared Windows audio engine endpoint: it is not ASIO and not a hard real-time qualification",
+        "in WASAPI exclusive mode a refused format is a result, not a bug: the driver's exact HRESULT and the tried format are reported",
         "MMCSS registration (Pro Audio) and AVRT_PRIORITY_CRITICAL change the scheduling class the OS grants this thread; they are not a deadline guarantee and not a hard real-time qualification",
         "MMCSS changes the probe's render thread, never the audio driver path or the API semantics",
         "not a hard real-time qualification; the numbers describe this machine under this load for a few seconds, not a guarantee",
@@ -606,25 +684,30 @@ fn print_human(report: &Value) {
         .and_then(|device| device.get("name"))
         .and_then(Value::as_str)
         .unwrap_or("?");
-    if api == "wasapi" {
+    if api.starts_with("wasapi") {
         let endpoint = report
             .get("device")
             .and_then(|device| device.get("endpoint_id"))
             .and_then(Value::as_str)
             .unwrap_or("?");
         println!("  périphérique {device} (WASAPI {endpoint})");
-        let mix = report.get("mix_format").cloned().unwrap_or(Value::Null);
+        let format = report.get("format").cloned().unwrap_or(Value::Null);
         let engine = report.get("engine").cloned().unwrap_or(Value::Null);
         println!(
             "  format       {} ({}), {} canaux, {} Hz, buffer endpoint {} frames ({} µs)",
-            mix.get("sample_format")
+            format
+                .get("sample_format")
                 .and_then(Value::as_str)
                 .unwrap_or("?"),
-            mix.get("format_tag_name")
+            format
+                .get("format_tag_name")
                 .and_then(Value::as_str)
                 .unwrap_or("?"),
-            mix.get("channels").and_then(Value::as_u64).unwrap_or(0),
-            mix.get("sample_rate").and_then(Value::as_u64).unwrap_or(0),
+            format.get("channels").and_then(Value::as_u64).unwrap_or(0),
+            format
+                .get("sample_rate")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
             engine
                 .get("buffer_frames")
                 .and_then(Value::as_u64)
@@ -635,10 +718,14 @@ fn print_human(report: &Value) {
                 .unwrap_or(0),
         );
         println!(
-            "  moteur       période device {} µs (min {} µs), latence stream {} µs, mode partagé événementiel",
+            "  moteur       période device {} µs (min {} µs), latence stream {} µs, mode {} événementiel",
             field_u64(&engine, "device_period_default_us"),
             field_u64(&engine, "device_period_minimum_us"),
             field_u64(&engine, "stream_latency_us"),
+            engine
+                .get("share_mode")
+                .and_then(Value::as_str)
+                .unwrap_or("?"),
         );
     } else {
         let device_id = report
@@ -731,7 +818,7 @@ fn print_human(report: &Value) {
         .cloned()
         .unwrap_or(Value::Null);
     let work = measurements.get("work_us").cloned().unwrap_or(Value::Null);
-    let unit = if api == "wasapi" {
+    let unit = if api.starts_with("wasapi") {
         "événements"
     } else {
         "tampons"
@@ -770,7 +857,7 @@ fn print_human(report: &Value) {
         field_i64(&lateness, "p99"),
         field_i64(&lateness, "max"),
     );
-    if api == "wasapi" {
+    if api.starts_with("wasapi") {
         println!(
             "  starvation   événements avec buffer endpoint plein: {}   événements en retard > période: {}   timeouts: {}",
             measurements
@@ -1142,6 +1229,9 @@ mod win {
         code: Option<u32>,
         message: String,
         code_system: &'static str,
+        /// Optional structured facts attached to the failure (e.g. the WASAPI
+        /// exclusive format that was tried and the sweep of accepted formats).
+        details: Option<Value>,
     }
 
     impl Failure {
@@ -1151,6 +1241,7 @@ mod win {
                 code,
                 message: message.into(),
                 code_system: "mmresult",
+                details: None,
             }
         }
 
@@ -1161,6 +1252,7 @@ mod win {
                 code: Some(code),
                 message: message.into(),
                 code_system: "win32",
+                details: None,
             }
         }
 
@@ -1171,7 +1263,17 @@ mod win {
                 code: Some(code as u32),
                 message: message.into(),
                 code_system: "hresult",
+                details: None,
             }
+        }
+
+        fn with_details(mut self, details: Value) -> Self {
+            self.details = Some(details);
+            self
+        }
+
+        fn details(&self) -> Option<&Value> {
+            self.details.as_ref()
         }
 
         fn to_json(&self) -> Value {
@@ -1187,6 +1289,7 @@ mod win {
                 "code_name": code_name,
                 "code_system": self.code_system,
                 "message": self.message,
+                "details": self.details.clone(),
             })
         }
     }
@@ -2757,6 +2860,7 @@ mod win {
         let mut report = json!({
             "schema_version": 1,
             "kind": "audio-device-probe",
+            "api": config.api.as_str(),
             "tool": TOOL,
             "tool_version": TOOL_VERSION,
             "status": "running",
@@ -3227,6 +3331,8 @@ mod win {
     const E_CONSOLE: u32 = 0;
     const COINIT_MULTITHREADED: u32 = 0;
     const AUDCLNT_SHAREMODE_SHARED: u32 = 0;
+    const AUDCLNT_SHAREMODE_EXCLUSIVE: u32 = 1;
+    const DEVICE_STATE_ACTIVE: u32 = 0x1;
     const AUDCLNT_STREAMFLAGS_EVENTCALLBACK: u32 = 0x0004_0000;
     const AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED: Hresult = 0x8889_0019u32 as Hresult;
 
@@ -3270,7 +3376,8 @@ mod win {
     #[repr(C)]
     struct IMMDeviceEnumeratorVtbl {
         base: IUnknownVtbl,
-        enum_audio_endpoints: usize,
+        enum_audio_endpoints:
+            unsafe extern "system" fn(ComHandle, u32, u32, *mut ComHandle) -> Hresult,
         get_default_audio_endpoint:
             unsafe extern "system" fn(ComHandle, u32, u32, *mut ComHandle) -> Hresult,
         get_device: usize,
@@ -3308,7 +3415,12 @@ mod win {
         get_buffer_size: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
         get_stream_latency: unsafe extern "system" fn(ComHandle, *mut i64) -> Hresult,
         get_current_padding: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
-        is_format_supported: usize,
+        is_format_supported: unsafe extern "system" fn(
+            ComHandle,
+            u32,
+            *const WaveFormatExPackedW,
+            *mut *mut c_void,
+        ) -> Hresult,
         get_mix_format: unsafe extern "system" fn(ComHandle, *mut *mut c_void) -> Hresult,
         get_device_period: unsafe extern "system" fn(ComHandle, *mut i64, *mut i64) -> Hresult,
         start: unsafe extern "system" fn(ComHandle) -> Hresult,
@@ -3355,6 +3467,18 @@ mod win {
     #[repr(C)]
     struct ComPropertyStore {
         vtbl: *const IPropertyStoreVtbl,
+    }
+
+    #[repr(C)]
+    struct IMMDeviceCollectionVtbl {
+        base: IUnknownVtbl,
+        get_count: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
+        item: unsafe extern "system" fn(ComHandle, u32, *mut ComHandle) -> Hresult,
+    }
+
+    #[repr(C)]
+    struct ComDeviceCollection {
+        vtbl: *const IMMDeviceCollectionVtbl,
     }
 
     /// Call a COM method through its vtable. `$ptr` is the raw interface pointer.
@@ -3612,11 +3736,174 @@ mod win {
         Ok(text)
     }
 
+    fn active_render_endpoints(enumerator: &ComPtr) -> Result<Vec<ComPtr>, Failure> {
+        let mut collection_raw: ComHandle = std::ptr::null_mut();
+        let hr = com_call!(
+            enumerator.ptr,
+            ComEnumerator,
+            enum_audio_endpoints(E_RENDER, DEVICE_STATE_ACTIVE, &mut collection_raw)
+        );
+        if hr < 0 {
+            return Err(wasapi_failure(
+                "IMMDeviceEnumerator::EnumAudioEndpoints",
+                hr,
+                "cannot enumerate active render endpoints",
+            ));
+        }
+        if collection_raw.is_null() {
+            return Err(Failure::new(
+                "IMMDeviceEnumerator::EnumAudioEndpoints",
+                None,
+                "EnumAudioEndpoints returned a null collection",
+            ));
+        }
+        let collection = ComPtr { ptr: collection_raw };
+        let mut count: u32 = 0;
+        let hr = com_call!(collection.ptr, ComDeviceCollection, get_count(&mut count));
+        if hr < 0 {
+            return Err(wasapi_failure(
+                "IMMDeviceCollection::GetCount",
+                hr,
+                "cannot count active render endpoints",
+            ));
+        }
+        let mut devices = Vec::new();
+        for index in 0..count.min(16) {
+            let mut device_raw: ComHandle = std::ptr::null_mut();
+            let hr = com_call!(
+                collection.ptr,
+                ComDeviceCollection,
+                item(index, &mut device_raw)
+            );
+            if hr < 0 || device_raw.is_null() {
+                continue;
+            }
+            devices.push(ComPtr { ptr: device_raw });
+        }
+        Ok(devices)
+    }
+
+    fn select_render_endpoint(enumerator: &ComPtr, index: usize) -> Result<ComPtr, Failure> {
+        let devices = active_render_endpoints(enumerator)?;
+        let count = devices.len();
+        devices.into_iter().nth(index).ok_or_else(|| {
+            Failure::new(
+                "IMMDeviceEnumerator::EnumAudioEndpoints",
+                None,
+                format!(
+                    "--exclusive-endpoint {index} is out of range: {count} active render endpoint(s)"
+                ),
+            )
+        })
+    }
+
+    /// Read-only diagnostic: does the endpoint's driver accept an exclusive-mode PCM16
+    /// format? `IsFormatSupported` does not open a stream, so no other application loses
+    /// its audio; only the format support is queried.
+    fn endpoint_exclusive_support(device: &ComPtr) -> Value {
+        let endpoint_id = device_endpoint_id(device).unwrap_or_else(|_| "?".to_owned());
+        let friendly_name = device_friendly_name(device);
+        let mut state: u32 = 0;
+        let _ = com_call!(device.ptr, ComDevice, get_state(&mut state));
+        let mut client_raw: ComHandle = std::ptr::null_mut();
+        let activate_hr = com_call!(
+            device.ptr,
+            ComDevice,
+            activate(
+                &IID_IAUDIO_CLIENT,
+                CLSCTX_ALL,
+                std::ptr::null_mut(),
+                &mut client_raw
+            )
+        );
+        if activate_hr < 0 || client_raw.is_null() {
+            return json!({
+                "endpoint_id": endpoint_id,
+                "friendly_name": friendly_name,
+                "state_name": device_state_name(state),
+                "activate_hresult": activate_hr,
+                "activate_hresult_name": hresult_name(activate_hr),
+                "exclusive_pcm16_trials": [],
+                "exclusive_pcm16_accepted_trials": 0,
+            });
+        }
+        let client = ComPtr { ptr: client_raw };
+        let mut format_raw: *mut c_void = std::ptr::null_mut();
+        let mut mix_rate = 48_000u32;
+        let mut mix_json = Value::Null;
+        if com_call!(client.ptr, ComAudioClient, get_mix_format(&mut format_raw)) >= 0
+            && !format_raw.is_null()
+        {
+            let guard = CoTaskMemBuffer { ptr: format_raw };
+            // SAFETY: CoTaskMem WAVEFORMATEX returned by GetMixFormat.
+            let info = unsafe { read_mix_format(guard.ptr) };
+            mix_rate = info.sample_rate;
+            mix_json = info.to_json();
+            drop(guard);
+        }
+        let rates = unique_rates(mix_rate, 44_100, &[48_000]);
+        let mut trials: Vec<Value> = Vec::new();
+        let mut accepted = 0u32;
+        for &rate in &rates {
+            for layout in [ExclusiveLayout::Extensible, ExclusiveLayout::Plain] {
+                let format = ExclusivePcmFormat::new(rate, 2, 16, layout);
+                let mut closest: *mut c_void = std::ptr::null_mut();
+                let hr = com_call!(
+                    client.ptr,
+                    ComAudioClient,
+                    is_format_supported(
+                        AUDCLNT_SHAREMODE_EXCLUSIVE,
+                        format.as_ptr(),
+                        &mut closest
+                    )
+                );
+                if !closest.is_null() {
+                    // SAFETY: CoTaskMem WAVEFORMATEX for the closest match.
+                    unsafe { CoTaskMemFree(closest) };
+                }
+                if hr == 0 {
+                    accepted += 1;
+                }
+                trials.push(json!({
+                    "rate": rate,
+                    "bits": 16,
+                    "channels": 2,
+                    "layout": layout.name(),
+                    "status": if hr == 0 { "accepted" } else if hr == 1 { "closest_match_only" } else { "refused" },
+                    "hresult": hr,
+                    "hresult_name": hresult_name(hr),
+                }));
+            }
+        }
+        json!({
+            "endpoint_id": endpoint_id,
+            "friendly_name": friendly_name,
+            "state": state,
+            "state_name": device_state_name(state),
+            "mix_format": mix_json,
+            "exclusive_pcm16_trials": trials,
+            "exclusive_pcm16_accepted_trials": accepted,
+        })
+    }
+
+    fn exclusive_support_scan(enumerator: &ComPtr) -> Vec<Value> {
+        match active_render_endpoints(enumerator) {
+            Ok(devices) => devices
+                .iter()
+                .take(8)
+                .map(endpoint_exclusive_support)
+                .collect(),
+            Err(failure) => vec![json!({
+                "error": failure.to_json(),
+            })],
+        }
+    }
+
     /// Dispatch between the two tested audio backends.
     pub fn execute(config: &Config, os: Value) -> (Value, i32) {
         match config.api {
             AudioApi::WaveOut => execute_waveout(config, os),
-            AudioApi::Wasapi => execute_wasapi(config, os),
+            AudioApi::Wasapi | AudioApi::WasapiExclusive => execute_wasapi(config, os),
         }
     }
 
@@ -3755,8 +4042,281 @@ mod win {
         }
     }
 
+    /// A `WAVEFORMATEXTENSIBLE` PCM format owned by the probe (exclusive mode).
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct WaveFormatExtensibleExclusive {
+        w_format_tag: u16,
+        n_channels: u16,
+        n_samples_per_sec: u32,
+        n_avg_bytes_per_sec: u32,
+        n_block_align: u16,
+        w_bits_per_sample: u16,
+        cb_size: u16,
+        w_valid_bits_per_sample: u16,
+        dw_channel_mask: u32,
+        sub_format: Guid,
+    }
+
+    impl WaveFormatExtensibleExclusive {
+        fn pcm(rate: u32, channels: u16, bits: u16) -> Self {
+            let block_align = channels.saturating_mul(bits / 8);
+            Self {
+                w_format_tag: 0xFFFE,
+                n_channels: channels,
+                n_samples_per_sec: rate,
+                n_avg_bytes_per_sec: rate.saturating_mul(block_align as u32),
+                n_block_align: block_align,
+                w_bits_per_sample: bits,
+                cb_size: 22,
+                w_valid_bits_per_sample: bits,
+                dw_channel_mask: if channels == 2 { 3 } else { 0 },
+                sub_format: KSDATAFORMAT_SUBTYPE_PCM,
+            }
+        }
+
+        fn info(&self) -> MixFormatInfo {
+            let format_tag = self.w_format_tag;
+            let channels = self.n_channels;
+            let sample_rate = self.n_samples_per_sec;
+            let bits_per_sample = self.w_bits_per_sample;
+            let bits = bits_per_sample;
+            let channel_mask = self.dw_channel_mask;
+            let sub_format = self.sub_format;
+            MixFormatInfo {
+                format_tag,
+                extensible: true,
+                channels,
+                sample_rate,
+                bits_per_sample,
+                valid_bits_per_sample: self.w_valid_bits_per_sample,
+                block_align: self.n_block_align,
+                avg_bytes_per_sec: self.n_avg_bytes_per_sec,
+                channel_mask: Some(channel_mask),
+                sub_format: Some(sub_format),
+                sample_format: sample_format_label(format_tag, true, Some(sub_format), bits),
+            }
+        }
+    }
+
+    /// Classic `WAVEFORMATEX` PCM format (no channel mask / sub-format). Some drivers
+    /// accept this form for exclusive mode and refuse `WAVEFORMATEXTENSIBLE`, so both
+    /// forms are probed and reported.
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct WaveFormatExOwned {
+        w_format_tag: u16,
+        n_channels: u16,
+        n_samples_per_sec: u32,
+        n_avg_bytes_per_sec: u32,
+        n_block_align: u16,
+        w_bits_per_sample: u16,
+        cb_size: u16,
+    }
+
+    impl WaveFormatExOwned {
+        fn pcm(rate: u32, channels: u16, bits: u16) -> Self {
+            let block_align = channels.saturating_mul(bits / 8);
+            Self {
+                w_format_tag: 1,
+                n_channels: channels,
+                n_samples_per_sec: rate,
+                n_avg_bytes_per_sec: rate.saturating_mul(block_align as u32),
+                n_block_align: block_align,
+                w_bits_per_sample: bits,
+                cb_size: 0,
+            }
+        }
+
+        fn info(&self) -> MixFormatInfo {
+            let format_tag = self.w_format_tag;
+            let bits = self.w_bits_per_sample;
+            MixFormatInfo {
+                format_tag,
+                extensible: false,
+                channels: self.n_channels,
+                sample_rate: self.n_samples_per_sec,
+                bits_per_sample: bits,
+                valid_bits_per_sample: bits,
+                block_align: self.n_block_align,
+                avg_bytes_per_sec: self.n_avg_bytes_per_sec,
+                channel_mask: None,
+                sub_format: None,
+                sample_format: sample_format_label(format_tag, false, None, bits),
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum ExclusiveLayout {
+        Extensible,
+        Plain,
+    }
+
+    impl ExclusiveLayout {
+        fn name(&self) -> &'static str {
+            match self {
+                Self::Extensible => "extensible",
+                Self::Plain => "plain_waveformatex",
+            }
+        }
+    }
+
+    /// One owned exclusive-mode PCM format in the selected layout.
+    #[derive(Clone, Copy)]
+    struct ExclusivePcmFormat {
+        layout: ExclusiveLayout,
+        extensible: WaveFormatExtensibleExclusive,
+        plain: WaveFormatExOwned,
+    }
+
+    impl ExclusivePcmFormat {
+        fn new(rate: u32, channels: u16, bits: u16, layout: ExclusiveLayout) -> Self {
+            Self {
+                layout,
+                extensible: WaveFormatExtensibleExclusive::pcm(rate, channels, bits),
+                plain: WaveFormatExOwned::pcm(rate, channels, bits),
+            }
+        }
+
+        fn as_ptr(&self) -> *const WaveFormatExPackedW {
+            match self.layout {
+                ExclusiveLayout::Extensible => &self.extensible
+                    as *const WaveFormatExtensibleExclusive
+                    as *const WaveFormatExPackedW,
+                ExclusiveLayout::Plain => &self.plain as *const WaveFormatExOwned
+                    as *const WaveFormatExPackedW,
+            }
+        }
+
+        fn info(&self) -> MixFormatInfo {
+            match self.layout {
+                ExclusiveLayout::Extensible => self.extensible.info(),
+                ExclusiveLayout::Plain => self.plain.info(),
+            }
+        }
+
+        fn block_align(&self) -> u16 {
+            self.info().block_align
+        }
+
+        fn describe(&self) -> Value {
+            let mut value = self.info().to_json();
+            if let Some(object) = value.as_object_mut() {
+                object.insert(
+                    "layout".to_owned(),
+                    Value::from(self.layout.name()),
+                );
+            }
+            value
+        }
+    }
+
+    fn unique_rates(first: u32, second: u32, extra: &[u32]) -> Vec<u32> {
+        let mut rates = vec![first];
+        for rate in [second].into_iter().chain(extra.iter().copied()) {
+            if rate >= 8_000 && rate <= 192_000 && !rates.contains(&rate) {
+                rates.push(rate);
+            }
+        }
+        rates
+    }
+
+    /// Ask the driver which exclusive-mode PCM formats it accepts (exact match only).
+    /// Both `WAVEFORMATEXTENSIBLE` and classic `WAVEFORMATEX` layouts are probed.
+    ///
+    /// Returns (sweep rows, accepted layout for the selected combination or `None`,
+    /// first HRESULT of the selected combination, its format description, rate, bits).
+    fn exclusive_format_sweep(
+        client: &ComPtr,
+        config: &Config,
+        mix_rate: u32,
+    ) -> (Vec<Value>, Option<ExclusiveLayout>, Hresult, Value, u32, u16) {
+        let selected_rate = config.exclusive_rate.unwrap_or(mix_rate);
+        let selected_bits = config.exclusive_bits.unwrap_or(16);
+        let rates = unique_rates(mix_rate, 44_100, &[selected_rate, 48_000]);
+        let bits_list = [16u16, 24, 32];
+        let layouts = [ExclusiveLayout::Extensible, ExclusiveLayout::Plain];
+        let mut rows: Vec<Value> = Vec::new();
+        let mut selected_layout: Option<ExclusiveLayout> = None;
+        let mut selected_hr: Hresult = 1;
+        let mut selected_describe = Value::Null;
+        for &rate in &rates {
+            for &bits in &bits_list {
+                for layout in layouts {
+                    let format = ExclusivePcmFormat::new(rate, 2, bits, layout);
+                    let is_selected = rate == selected_rate && bits == selected_bits;
+                    let mut closest: *mut c_void = std::ptr::null_mut();
+                    let hr = com_call!(
+                        client.ptr,
+                        ComAudioClient,
+                        is_format_supported(
+                            AUDCLNT_SHAREMODE_EXCLUSIVE,
+                            format.as_ptr(),
+                            &mut closest
+                        )
+                    );
+                    let closest_info = if closest.is_null() {
+                        Value::Null
+                    } else {
+                        let guard = CoTaskMemBuffer { ptr: closest };
+                        // SAFETY: the closest-match pointer, when non-null, is a
+                        // CoTaskMem WAVEFORMATEX for the returned format.
+                        let info = unsafe { read_mix_format(guard.ptr) };
+                        let value = info.to_json();
+                        drop(guard);
+                        value
+                    };
+                    let status = if hr == 0 {
+                        "accepted"
+                    } else if hr == 1 {
+                        "closest_match_only"
+                    } else {
+                        "refused"
+                    };
+                    if is_selected {
+                        if selected_describe.is_null() {
+                            // First layout tried for the selected combination: keep its
+                            // description and HRESULT for the explicit refusal message.
+                            selected_describe = format.describe();
+                            selected_hr = hr;
+                        }
+                        if hr == 0 && selected_layout.is_none() {
+                            selected_layout = Some(layout);
+                            selected_hr = 0;
+                            selected_describe = format.describe();
+                        }
+                    }
+                    rows.push(json!({
+                        "rate": rate,
+                        "bits": bits,
+                        "channels": 2,
+                        "layout": layout.name(),
+                        "share_mode": "exclusive",
+                        "format": format.describe(),
+                        "hresult": hr,
+                        "hresult_name": hresult_name(hr),
+                        "status": status,
+                        "closest_match": closest_info,
+                    }));
+                }
+            }
+        }
+        (
+            rows,
+            selected_layout,
+            selected_hr,
+            selected_describe,
+            selected_rate,
+            selected_bits,
+        )
+    }
+
     struct EngineInfo {
+        share_mode: &'static str,
         requested_frames: u32,
+        requested_rate: u32,
+        requested_bits: u16,
         requested_buffer_duration_us: i64,
         duration_clamped_to_minimum: bool,
         alignment_retry_used: bool,
@@ -3770,10 +4330,13 @@ mod win {
 
     impl EngineInfo {
         fn to_json(&self) -> Value {
+            let engine_owns_period = self.share_mode == "shared";
             json!({
-                "share_mode": "shared",
+                "share_mode": self.share_mode,
                 "stream_flags": ["event_callback"],
                 "requested_frames": self.requested_frames,
+                "requested_rate": self.requested_rate,
+                "requested_bits": self.requested_bits,
                 "requested_buffer_duration_us": self.requested_buffer_duration_us,
                 "duration_clamped_to_minimum": self.duration_clamped_to_minimum,
                 "alignment_retry_used": self.alignment_retry_used,
@@ -3783,8 +4346,12 @@ mod win {
                 "buffer_frames": self.buffer_frames,
                 "buffer_duration_us": self.buffer_duration_us,
                 "event_period_us": self.event_period_us,
-                "engine_owns_period": true,
-                "definition": "GetDevicePeriod/GetBufferSize/GetStreamLatency from IAudioClient in shared mode; event_period_us is the device default period used for the lateness grid, buffer_duration_us is the endpoint buffer size in time. stream_latency_us is reported exactly as GetStreamLatency returned it (some shared-mode drivers report 0)",
+                "engine_owns_period": engine_owns_period,
+                "definition": if engine_owns_period {
+                    "GetDevicePeriod/GetBufferSize/GetStreamLatency from IAudioClient in shared mode; event_period_us is the device default period used for the lateness grid, buffer_duration_us is the endpoint buffer size in time. stream_latency_us is reported exactly as GetStreamLatency returned it (some shared-mode drivers report 0)"
+                } else {
+                    "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod"
+                },
             })
         }
     }
@@ -3889,6 +4456,22 @@ mod win {
         event: Handle,
         mix: MixFormatInfo,
         engine: EngineInfo,
+        /// Output format actually initialised: `None` for shared mode (the mix format),
+        /// `Some` for exclusive mode (the app-owned PCM format).
+        exclusive_format: Option<MixFormatInfo>,
+        /// Layout of the exclusive format ("extensible" / "plain_waveformatex").
+        exclusive_layout: Option<&'static str>,
+        /// `IsFormatSupported` sweep of exclusive PCM formats (shared mode: null).
+        format_sweep: Value,
+        mode: &'static str,
+        /// Format the endpoint actually receives (sample rate / frame size).
+        output_rate: u32,
+        output_block_align: u16,
+        /// Active render endpoint index when `--exclusive-endpoint` selected one.
+        selected_endpoint_index: Option<usize>,
+        /// Read-only `IsFormatSupported` diagnostic across every active render endpoint
+        /// (exclusive mode only; empty for shared mode).
+        endpoint_support: Vec<Value>,
         endpoint_id: String,
         friendly_name: Option<String>,
         device_state: u32,
@@ -3904,7 +4487,12 @@ mod win {
         fn open(config: &Config) -> Result<Self, Failure> {
             let com = ComGuard::init_mta()?;
             let enumerator = create_device_enumerator()?;
-            let device = default_render_endpoint(&enumerator)?;
+            let device = match config.exclusive_endpoint {
+                Some(index) if config.api.is_exclusive() => {
+                    select_render_endpoint(&enumerator, index)?
+                }
+                _ => default_render_endpoint(&enumerator)?,
+            };
             let endpoint_id = device_endpoint_id(&device)?;
             let friendly_name = device_friendly_name(&device);
             let mut state: u32 = 0;
@@ -3974,7 +4562,73 @@ mod win {
             }
             let event_guard = create_event_pair()?;
 
-            let rate = mix.sample_rate.max(1) as i64;
+            // Shared vs exclusive: in exclusive mode the app owns the format and the
+            // period; the engine may refuse the format, which is reported explicitly.
+            let exclusive_mode = config.api.is_exclusive();
+            let mut exclusive_format_struct: Option<ExclusivePcmFormat> = None;
+            let mut exclusive_format_info: Option<MixFormatInfo> = None;
+            let mut exclusive_layout: Option<&'static str> = None;
+            let mut format_sweep = Value::Null;
+            let mut initialize_mode = AUDCLNT_SHAREMODE_SHARED;
+            let mut output_rate = mix.sample_rate.max(1);
+            let mut output_block_align = mix.block_align;
+            let mut requested_rate = mix.sample_rate.max(1);
+            let mut requested_bits = 16u16;
+            let mut endpoint_support: Vec<Value> = Vec::new();
+            if exclusive_mode {
+                // Read-only diagnostic across every active render endpoint: attributes a
+                // refusal to the selected endpoint instead of leaving it unexplained.
+                endpoint_support = exclusive_support_scan(&enumerator);
+                let (
+                    sweep,
+                    selected_layout,
+                    selected_hr,
+                    selected_describe,
+                    selected_rate,
+                    selected_bits,
+                ) = exclusive_format_sweep(&client, config, mix.sample_rate);
+                format_sweep = Value::from(sweep);
+                requested_rate = selected_rate;
+                requested_bits = selected_bits;
+                let Some(layout) = selected_layout else {
+                    // Every probed exclusive format is refused: explicit failure with
+                    // the HRESULT, the tried format and the whole sweep.
+                    let details = json!({
+                        "outcome": "refused",
+                        "mix_format": mix.to_json(),
+                        "format": selected_describe,
+                        "format_sweep": format_sweep,
+                        "endpoint_support": endpoint_support,
+                        "exclusive": {
+                            "requested_rate": selected_rate,
+                            "requested_bits": selected_bits,
+                            "requested_channels": 2,
+                            "selected_endpoint": config.exclusive_endpoint,
+                            "selected_hresult": selected_hr,
+                            "selected_hresult_name": hresult_name(selected_hr),
+                            "accepted_combinations": [],
+                        },
+                    });
+                    drop(format_guard);
+                    return Err(Failure::hresult(
+                        "IAudioClient::IsFormatSupported(exclusive)",
+                        selected_hr,
+                        format!(
+                            "the driver refuses every probed exclusive PCM format (requested {} Hz, {} bits, 2 ch, extensible and plain WAVEFORMATEX); see details.format and details.format_sweep",
+                            selected_rate, selected_bits
+                        ),
+                    )
+                    .with_details(details));
+                };
+                let format = ExclusivePcmFormat::new(selected_rate, 2, selected_bits, layout);
+                output_rate = selected_rate;
+                output_block_align = format.block_align();
+                exclusive_format_info = Some(format.info());
+                exclusive_layout = Some(layout.name());
+                initialize_mode = AUDCLNT_SHAREMODE_EXCLUSIVE;
+                exclusive_format_struct = Some(format);
+            }
+            let rate = output_rate as i64;
             let requested_hns =
                 ((config.frames as i64) * 10_000_000 + rate / 2) / rate;
             let mut duration = requested_hns;
@@ -3989,15 +4643,21 @@ mod win {
             let mut alignment_retry = false;
             let mut notes: Vec<String> = Vec::new();
             loop {
+                // In exclusive mode the periodicity must equal the buffer duration.
+                let periodicity = if exclusive_mode { duration } else { 0 };
+                let format_ptr = match &exclusive_format_struct {
+                    Some(format) => format.as_ptr(),
+                    None => format_guard.ptr as *const WaveFormatExPackedW,
+                };
                 let hr = com_call!(
                     client.ptr,
                     ComAudioClient,
                     initialize(
-                        AUDCLNT_SHAREMODE_SHARED,
+                        initialize_mode,
                         AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                         duration,
-                        0,
-                        format_guard.ptr as *const WaveFormatExPackedW,
+                        periodicity,
+                        format_ptr,
                         std::ptr::null()
                     )
                 );
@@ -4016,11 +4676,32 @@ mod win {
                     }
                 }
                 if hr < 0 {
-                    return Err(wasapi_failure(
-                        "IAudioClient::Initialize",
-                        hr,
-                        "shared-mode event-driven initialisation failed (format or duration refused)",
-                    ));
+                    let message = if exclusive_mode {
+                        "exclusive-mode event-driven initialisation failed (format or duration refused)"
+                    } else {
+                        "shared-mode event-driven initialisation failed (format or duration refused)"
+                    };
+                    let mut failure = wasapi_failure("IAudioClient::Initialize", hr, message);
+                    if exclusive_mode {
+                        failure = failure.with_details(json!({
+                            "outcome": "refused",
+                            "stage": "IAudioClient::Initialize",
+                            "hresult": hr,
+                            "hresult_name": hresult_name(hr),
+                            "mix_format": mix.to_json(),
+                            "format": match &exclusive_format_info {
+                                Some(info) => info.to_json(),
+                                None => Value::Null,
+                            },
+                            "format_sweep": format_sweep,
+                            "exclusive": {
+                                "requested_rate": requested_rate,
+                                "requested_bits": requested_bits,
+                                "requested_channels": 2,
+                            },
+                        }));
+                    }
+                    return Err(failure);
                 }
                 break;
             }
@@ -4073,6 +4754,43 @@ mod win {
                 ));
             }
             let render = ComPtr { ptr: render_raw };
+            if exclusive_mode {
+                // Exclusive mode: pre-roll one silent buffer before Start, so the engine
+                // has data to pull when it starts (the documented render pattern).
+                let mut data: *mut u8 = std::ptr::null_mut();
+                let hr = com_call!(
+                    render.ptr,
+                    ComRenderClient,
+                    get_buffer(buffer_frames, &mut data)
+                );
+                if hr < 0 || data.is_null() {
+                    return Err(wasapi_failure(
+                        "IAudioRenderClient::GetBuffer(pre-roll)",
+                        if hr < 0 { hr } else { 0 },
+                        "cannot pre-roll an exclusive-mode buffer",
+                    ));
+                }
+                // SAFETY: data points to buffer_frames * block_align writable bytes.
+                unsafe {
+                    std::ptr::write_bytes(
+                        data,
+                        0u8,
+                        buffer_frames as usize * output_block_align as usize,
+                    );
+                }
+                let hr = com_call!(
+                    render.ptr,
+                    ComRenderClient,
+                    release_buffer(buffer_frames, 0)
+                );
+                if hr < 0 {
+                    return Err(wasapi_failure(
+                        "IAudioRenderClient::ReleaseBuffer(pre-roll)",
+                        hr,
+                        "cannot pre-roll an exclusive-mode buffer",
+                    ));
+                }
+            }
             let hr = com_call!(client.ptr, ComAudioClient, start());
             if hr < 0 {
                 return Err(wasapi_failure(
@@ -4082,13 +4800,20 @@ mod win {
                 ));
             }
             let buffer_duration_us = buffer_frames as i64 * 1_000_000 / rate;
-            let event_period_us = if default_hns > 0 {
+            let event_period_us = if exclusive_mode {
+                // Exclusive mode: the app-owned buffer duration is the event period.
+                buffer_duration_us
+            } else if default_hns > 0 {
                 default_hns / 10
             } else {
                 buffer_duration_us
             };
+            let mode: &'static str = if exclusive_mode { "exclusive" } else { "shared" };
             let engine = EngineInfo {
+                share_mode: mode,
                 requested_frames: config.frames as u32,
+                requested_rate,
+                requested_bits,
                 requested_buffer_duration_us: requested_hns / 10,
                 duration_clamped_to_minimum: clamped,
                 alignment_retry_used: alignment_retry,
@@ -4107,6 +4832,14 @@ mod win {
                 event: event_guard.take(),
                 mix,
                 engine,
+                exclusive_format: exclusive_format_info,
+                exclusive_layout,
+                format_sweep,
+                mode,
+                output_rate,
+                output_block_align,
+                selected_endpoint_index: config.exclusive_endpoint,
+                endpoint_support,
                 endpoint_id,
                 friendly_name,
                 device_state,
@@ -4123,8 +4856,54 @@ mod win {
                 .friendly_name
                 .clone()
                 .unwrap_or_else(|| self.endpoint_id.clone());
+            let api = if self.mode == "exclusive" {
+                "wasapi-exclusive"
+            } else {
+                "wasapi"
+            };
+            let mut format = match &self.exclusive_format {
+                Some(info) => info.to_json(),
+                None => json!({
+                    "sample_format": self.mix.sample_format,
+                    "format_tag_name": format_tag_name(self.mix.format_tag),
+                    "channels": self.mix.channels,
+                    "sample_rate": self.mix.sample_rate,
+                    "bits_per_sample": self.mix.bits_per_sample,
+                    "block_align": self.mix.block_align,
+                }),
+            };
+            if let Some(object) = format.as_object_mut() {
+                if let Some(layout) = self.exclusive_layout {
+                    object.insert("layout".to_owned(), Value::from(layout));
+                }
+                object.insert(
+                    "frames_per_buffer".to_owned(),
+                    Value::from(self.engine.buffer_frames),
+                );
+                object.insert(
+                    "buffer_duration_us".to_owned(),
+                    Value::from(self.engine.buffer_duration_us),
+                );
+                object.insert(
+                    "period_us".to_owned(),
+                    Value::from(self.engine.event_period_us as u64),
+                );
+                object.insert("buffers_in_rotation".to_owned(), Value::Null);
+            }
+            let exclusive = match &self.exclusive_format {
+                Some(info) => json!({
+                    "requested_rate": self.engine.requested_rate,
+                    "requested_bits": self.engine.requested_bits,
+                    "requested_channels": 2,
+                    "selected_endpoint": self.selected_endpoint_index,
+                    "selected_format": info.to_json(),
+                    "format_sweep": self.format_sweep,
+                    "endpoint_support": self.endpoint_support,
+                }),
+                None => Value::Null,
+            };
             json!({
-                "api": "wasapi",
+                "api": api,
                 "device": {
                     "endpoint_id": self.endpoint_id,
                     "friendly_name": self.friendly_name,
@@ -4133,21 +4912,13 @@ mod win {
                     "state_name": device_state_name(self.device_state),
                     "data_flow": "render",
                     "role": "eConsole",
+                    "selected_endpoint_index": self.selected_endpoint_index,
                 },
                 "requested_device": {"kind": "default_render_endpoint"},
                 "mix_format": self.mix.to_json(),
                 "engine": self.engine.to_json(),
-                "format": {
-                    "sample_format": self.mix.sample_format,
-                    "channels": self.mix.channels,
-                    "sample_rate": self.mix.sample_rate,
-                    "bits_per_sample": self.mix.bits_per_sample,
-                    "block_align": self.mix.block_align,
-                    "frames_per_buffer": self.engine.buffer_frames,
-                    "buffer_duration_us": self.engine.buffer_duration_us,
-                    "period_us": self.engine.event_period_us as u64,
-                    "buffers_in_rotation": Value::Null,
-                },
+                "format": format,
+                "exclusive": exclusive,
                 "timer_begin_period_ok": self.timer_active,
             })
         }
@@ -4165,14 +4936,14 @@ mod win {
             let mut run = WasapiRunData::new(
                 self.engine.event_period_us.max(1) as u64,
                 self.engine.buffer_frames,
-                self.mix.sample_rate,
+                self.output_rate,
                 baseline_delta,
                 capacity,
             );
             run.open_prepare_us = thread_start.elapsed().as_micros() as u64;
             let submit_start = Instant::now();
             let buffer_frames = self.engine.buffer_frames as usize;
-            let bytes_per_frame = self.mix.block_align as usize;
+            let bytes_per_frame = self.output_block_align as usize;
             let mut state = DspState::default();
             let mut computed: Vec<f32> = vec![0f32; buffer_frames + 64];
             let mut previous_sample = 0f32;
@@ -4211,7 +4982,15 @@ mod win {
                     run.fatal_code = Some(hr);
                     break;
                 }
-                let available = self.engine.buffer_frames.saturating_sub(padding);
+                let available = if self.mode == "exclusive" {
+                    // In exclusive mode the client owns the whole buffer and writes one
+                    // full period per event; GetCurrentPadding is still recorded for
+                    // diagnostics but is not used to size the write (some drivers keep it
+                    // pinned at bufferFrames).
+                    self.engine.buffer_frames
+                } else {
+                    self.engine.buffer_frames.saturating_sub(padding)
+                };
                 let in_warmup = run.warmup_events < run.warmup_target;
                 let measured = !in_warmup;
 
@@ -4384,7 +5163,7 @@ mod win {
         }
     }
 
-    fn wasapi_measurements_json(run: &WasapiRunData) -> Value {
+    fn wasapi_measurements_json(run: &WasapiRunData, api: &str) -> Value {
         let fatal = run.fatal_stage.map(|stage| {
             json!({
                 "stage": stage,
@@ -4425,7 +5204,7 @@ mod win {
             0.0
         };
         json!({
-            "api": "wasapi",
+            "api": api,
             "period_us": run.period_us,
             "buffer_frames": run.buffer_frames,
             "rate": run.rate,
@@ -4532,19 +5311,35 @@ mod win {
         if let Some(object) = error.as_object_mut() {
             object.insert("stage".to_owned(), Value::from(stage));
         }
-        let report = json!({
+        // An exclusive-format refusal is a result: status "refused" plus the tried
+        // format and the accepted/refused sweep attached to the failure.
+        let status = failure
+            .details()
+            .and_then(|details| details.get("outcome"))
+            .and_then(Value::as_str)
+            .unwrap_or("error");
+        let mut report = json!({
             "schema_version": 1,
             "kind": "audio-device-probe",
-            "api": "wasapi",
+            "api": config.api.as_str(),
             "tool": TOOL,
             "tool_version": TOOL_VERSION,
-            "status": "error",
+            "status": status,
             "os": os,
             "config": config_json(config),
             "realtime": realtime,
             "error": error,
             "limits": limits_json(config),
         });
+        if let Some(details) = failure.details().and_then(Value::as_object) {
+            if let Some(object) = report.as_object_mut() {
+                for (key, value) in details {
+                    if key != "outcome" {
+                        object.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        }
         (report, 1)
     }
 
@@ -4552,7 +5347,7 @@ mod win {
         let mut report = json!({
             "schema_version": 1,
             "kind": "audio-device-probe",
-            "api": "wasapi",
+            "api": config.api.as_str(),
             "tool": TOOL,
             "tool_version": TOOL_VERSION,
             "status": "running",
@@ -4731,6 +5526,7 @@ mod win {
         report["mix_format"] = init_info["mix_format"].clone();
         report["engine"] = init_info["engine"].clone();
         report["format"] = init_info["format"].clone();
+        report["exclusive"] = init_info["exclusive"].clone();
         report["timer_begin_period_ok"] = init_info["timer_begin_period_ok"].clone();
 
         let swap_handle = if config.swap_every_ms > 0 && !candidates.is_empty() {
@@ -4838,7 +5634,7 @@ mod win {
             report["module"] = json!({"provided": false});
         }
 
-        let measurements = wasapi_measurements_json(&run);
+        let measurements = wasapi_measurements_json(&run, config.api.as_str());
         report["measurements"] = measurements.clone();
         report["realtime_cadence"] = measurements["event_cadence"].clone();
         report["swaps"] = swap_json(&swap_outcome);

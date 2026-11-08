@@ -28,7 +28,8 @@
 | **Swaps à chaud sous pilote réel, avec et sans crossfade** | **mesurés (§4.5)** : 11 activations/run, 0 refus ; `\|delta\|` 0,0291 avec fondu vs 0,1260 sans |
 | **Priorité temps réel MMCSS (Pro Audio + critical) sous charge CPU 100 %** | **mesurée (§5)** : 2 runs/cellule, 0 tampon en retard avec MMCSS (max 2,7 ms) ; sans MMCSS un run dégradé à 134,4 ms et 255 tampons en retard |
 | **Chemin DSP réel sur WASAPI mode partagé (silence)** | **mesuré (§6)** : 8 runs, endpoint MOTU 48 kHz float32, buffer moteur 22 ms, cadence ratio 1,0001–1,0009, 0 événement en retard, 0 alloc/0 free, 11/11 swaps |
-| WASAPI mode exclusif / ASIO, priorité RT via WASAPI exclusive | **aucun** |
+| **Chemin DSP réel sur WASAPI mode exclusif (silence)** | **mesuré (§6.5) sur l'endpoint NVIDIA HDMI** : PCM16 48 kHz, période applicative 10 ms, 5 runs, ratio 1,0000, 0 événement en retard, 0 starvations, 0 alloc/free, 11/11 swaps. Le périphérique par défaut (MOTU) **refuse** tous les formats exclusifs balayés (`AUDCLNT_E_UNSUPPORTED_FORMAT`). |
+| ASIO, priorité temps réel WASAPI exclusive sur le périphérique par défaut | **aucun** |
 | Hôte CLAP/VST3/ASIO branché sur le module | **aucun** |
 | XRUN mesurés, glitches de pilote comptés | **aucun** (ni `waveOut` ni WASAPI partagé ne les exposent ; seules des starvations définies et des lateness mesurées) |
 
@@ -477,14 +478,129 @@ du moteur (22 ms ici), donc une latence de sortie plus grande que les 10,67 ms d
 **Aucune revendication hard-RT** : pas de MMCSS obligatoire pour WASAPI ici, pas de XRUN
 mesuré, un seul endpoint et un seul OS.
 
+### 6.5 Mode exclusif WASAPI (`--api wasapi-exclusive`)
+
+#### 6.5.1 Ce qui est implémenté
+
+`--api wasapi-exclusive` (ou `--api wasapi --exclusive`) ouvre un flux **exclusif** sur
+un endpoint de rendu : plus aucun mélange du moteur audio, l'application possède le
+**format** et la **période**. FFI directe, aucune dépendance ajoutée.
+
+- Le format est un **PCM 16 bits, 2 canaux, 48 kHz** (par défaut) construit par la sonde
+  en `WAVEFORMATEXTENSIBLE` ; `--exclusive-rate` et `--exclusive-bits` (16/24/32)
+  permettent de balayer d'autres combinaisons.
+- Avant toute ouverture, `IAudioClient::IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE,
+  format, &closest)` est appelé sur **12 combinaisons** : 2 layouts
+  (`WAVEFORMATEXTENSIBLE` et `WAVEFORMATEX` classique) × 2 taux (taux du mix, 44 100 Hz,
+  48 000 Hz) × 3 profondeurs (16/24/32 bits). Le JSON `exclusive.format_sweep` contient
+  chaque combinaison avec son HRESULT et son statut (`accepted` / `closest_match_only` /
+  `refused`).
+- Si la combinaison demandée est refusée, la sonde **échoue explicitement** : statut
+  `refused`, code HRESULT exact, format essayé, balayage complet et support exclusif de
+  chaque endpoint ; **aucune mesure n'est inventée**.
+- `Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE, EVENTCALLBACK, duration, duration, format,
+  NULL)` (en mode exclusif la périodicité est égale à la durée du buffer), puis
+  `SetEventHandle`, `GetBufferSize`, `GetStreamLatency`, `GetService(IAudioRenderClient)`,
+  **pré-roll d'un buffer de silence**, puis `Start`.
+- Boucle identique au partagé : `WaitForSingleObject`, `GetCurrentPadding` (enregistré
+  pour diagnostic), `GetBuffer` → **zéros uniquement** → `ReleaseBuffer`, travail DSP
+  mesuré puis jeté. En exclusif, la sonde écrit **un buffer complet par événement** (le
+  buffer applicatif est la période) ; `GetCurrentPadding` reste épinglé à `bufferFrames`
+  sur ce pilote et n'est donc pas utilisé pour dimensionner l'écriture.
+- `--mmcss` / `--thread-priority`, swaps à chaud + crossfade, mesures (lateness, work,
+  callback, starvations, alloc/free, ratio, swaps) : mêmes mécanismes que le partagé.
+- Arrêt propre : `Stop`, release des interfaces, `CoUninitialize`, revert MMCSS.
+- `--exclusive-endpoint N` ouvre l'endpoint de rendu actif N au lieu du périphérique par
+  défaut, **sans modifier le périphérique par défaut du système** (diagnostic) ; l'ordre
+  est celui de `IMMDeviceEnumerator::EnumAudioEndpoints` et le JSON reporte l'`endpoint_id`
+  stable + le support exclusif de chaque endpoint.
+
+#### 6.5.2 Formats acceptés / refusés (résultat réel)
+
+Le **périphérique par défaut (MOTU, WDM)** refuse **les 12 combinaisons** testées :
+`AUDCLNT_E_UNSUPPORTED_FORMAT` (HRESULT `0x88890008`, soit −2004287480), aussi bien en
+`WAVEFORMATEXTENSIBLE` qu'en `WAVEFORMATEX` classique, à 44,1 kHz comme à 48 kHz, en
+16/24/32 bits. C'est un **résultat négatif explicite**, pas un défaut du harnais —
+preuve `evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json`.
+
+Un balayage **read-only** (`IsFormatSupported` seul, aucun flux ouvert) sur tous les
+endpoints de rendu actifs explique le refus :
+
+| Endpoint | Support exclusif PCM16 (4 essais : mix/44,1/48 kHz × 2 layouts) |
+|---|---:|
+| `Haut-parleurs (Realtek(R) Audio)` | **4/4 acceptés** |
+| `FHD (NVIDIA High Definition Audio)` (index 1) | **4/4 acceptés** |
+| `FHD (NVIDIA High Definition Audio)` (index 2) | 2/4 acceptés |
+| `Out 1-2 (MOTU M Series)` — défaut | **0/4 accepté** |
+
+Le mode exclusif est donc disponible sur cette machine, mais **pas sur l'interface
+MOTU par défaut**. Une tentative réelle sur l'endpoint Realtek (Initialize accepté) n'a
+pas produit un flux stable : 76 timeouts sur 2 s, ratio 0,975, lateness p50 15,7 ms /
+p95 53 ms — probablement parce qu'aucune sortie physique n'est active sur cet endpoint ;
+elle n'a pas été retenue comme plateforme de mesure.
+
+La campagne a donc été exécutée sur l'endpoint **NVIDIA HDMI (index 1)**, format
+**PCM16 extensible 48 kHz 2 canaux** :
+
+| Élément | Valeur observée |
+|---|---|
+| Endpoint | `FHD (NVIDIA High Definition Audio)`, index actif 1 (`endpoint_id` dans le JSON) |
+| Format exclusif | **pcm_s16le**, `WAVE_FORMAT_EXTENSIBLE`, 2 canaux, **48 000 Hz**, block align 4, layout `extensible` |
+| Buffer du endpoint | **480 frames = 10 000 µs** (`GetBufferSize`) |
+| Période | **10 000 µs**, possédée par l'application (`hnsBufferDuration == hnsPeriodicity`) |
+| Latence de flux | `GetStreamLatency` = **10 000 µs** |
+| Périodes device | 10 000 µs par défaut, 3 000 µs minimum annoncée |
+| Durée de buffer demandée | 480 frames à 48 kHz = 10 000 µs (non arrondie, pas de retry d'alignement) |
+
+#### 6.5.3 Résultats réels (5 runs, 3 s, module + swaps + crossfade 256, sans MMCSS)
+
+| Cellule | CPU mesuré | ratio | work p50/p95/max (µs) | callback p50/p95/max (µs) | lateness p50/p95/max (µs) | tardifs > 1 période | starv. | alloc/free | swaps | `\|delta\|` aux swaps |
+|---|---:|---:|---|---|---|---:|---:|---|---:|---:|
+| repos r1 | 26,4 % | 1,0000 | 7/14/99 | 65/170/361 | 10/161/558 | 0 | 0 | 0/0 | 11/11 | 0,0293 |
+| repos r2 | 32,2 % | 1,0000 | 7/15/104 | 75/172/1 133 | 88/256/705 | 0 | 0 | 0/0 | 11/11 | 0,0293 |
+| repos r3 (reprise) | 27,2 % | 1,0000 | 7/11/281 | 66/172/453 | 32/139/250 | 0 | 0 | 0/0 | 11/11 | 0,0293 |
+| **charge 100 % r1** | 100,0 % | 1,0000 | 11/47/511 | 113/461/1 176 | −241/1 196/3 498 | **0** | 0 | 0/0 | 11/11 | 0,0291 |
+| **charge 100 % r2** | 99,6 % | 1,0000 | 11/25/148 | 117/493/1 105 | −160/967/3 476 | **0** | 0 | 0/0 | 11/11 | 0,0293 |
+
+Référence sinusoïdale du delta : 0,0288 ; hors swap : 0,0287 ; aucun échantillon
+non fini. Événements traités : 294 par run (302 avec warm-up), soit exactement la
+cadence attendue de 100 Hz sur 3 s.
+
+#### 6.5.4 Lecture honnête
+
+1. **Résultat négatif important** : sur cette machine, le périphérique audio principal
+   (MOTU M Series, endpoint par défaut) **n'expose pas le mode exclusif WASAPI** — le
+   pilote WDM refuse les 12 formats balayés. Pour utiliser l'interface MOTU en latence
+   minimale, il faudrait passer par **ASIO**, non implémenté ici. Ce n'est pas une
+   conclusion sur « WASAPI exclusif » en général : d'autres endpoints de la même machine
+   l'acceptent.
+2. **Le mode exclusif mesuré** (NVIDIA HDMI, PCM16 48 kHz, période applicative 10 ms)
+   tient la cadence (ratio 1,0000 sur 5 runs), avec **0 événement en retard de plus d'une
+   période, 0 starvation, 0 allocation/désallocation** sur le thread de rendu, et 11/11
+   swaps à chaque run. Au repos, lateness max 0,25–0,71 ms ; sous charge CPU 100 % (sans
+   MMCSS), lateness p95 0,97–1,20 ms / max 3,5 ms, callback p95 0,46–0,49 ms, travail DSP
+   p95 25–47 µs.
+3. **Comparaison avec le mode partagé (§6.4)** : les deux modes tiennent le temps réel
+   avec 0 événement en retard. Le mode exclusif offre une **période de sortie de 10 ms**
+   (buffer 480 frames) contre **22 ms** en partagé (buffer moteur 1 056 frames), donc moins
+   de latence de sortie mais aussi **moins de marge** : sous charge, la lateness max monte
+   à 3,5 ms en exclusif contre 0,7–1,4 ms en partagé, tout en restant sous la période.
+   **Réserve de méthode** : la campagne partagée utilisait l'endpoint MOTU par défaut, la
+   campagne exclusive l'endpoint NVIDIA ; le mode et l'endpoint varient donc ensemble — on
+   ne peut pas isoler l'effet du seul mode.
+4. **Pas de hard-RT, pas d'XRUN mesuré** : un XRUN réel reste non observable de façon
+   fiable ; les starvations définies (§6.1) et les événements en retard sont les signaux
+   proxy. 5 runs, un seul OS, un seul pilote HDMI, fenêtres de 3 s ; aucune extrapolation.
+
 ## 7. Ce qui n'a pas été exécuté (et pourquoi)
 
 | Élément du mandat L4-C | Statut | Raison |
 |---|---|---|
 | Test dans un hôte audio réel (CLAP/VST3/DAW) | **non exécuté** | Ravum ne produit pas encore de binaire plugin CLAP/VST3 ; en créer un est un travail d'ABI distinct (hôte, GUI, paramètres, bus) hors périmètre de ce lot. |
 | Périphérique réel via **WASAPI mode partagé** | **exécuté** (§6) : endpoint par défaut, mix format float32 48 kHz, buffer 22 ms, événementiel, 8 runs (repos/charge × MMCSS), 11/11 swaps, 0 alloc/free | — |
-| Périphérique réel via **WASAPI exclusif / ASIO** | **non exécuté** | Le mode exclusif exige un format exclusif et peut exclure les autres applications ; ASIO un SDK tiers. Lot suivant. |
-| Identification OS / pilote / sample rate / buffer size | **partiel** : OS et périphériques identifiés (§2), format/période/taille de tampon et quantum de service observés (§4), mais le pilote interne et l'endpoint physique résolu par `WAVE_MAPPER` restent inconnus (`waveOutGetID` renvoie `0xFFFFFFFF`). | — |
+| Périphérique réel via **WASAPI mode exclusif** | **partiellement exécuté** (§6.5) : refus explicite (`AUDCLNT_E_UNSUPPORTED_FORMAT`) du périphérique par défaut MOTU pour les 12 formats balayés ; mesure réelle sur l'endpoint NVIDIA HDMI (PCM16 48 kHz, période 10 ms, 5 runs, 0 événement en retard, 11/11 swaps). Aucune mesure exclusive sur le MOTU ; le périphérique par défaut du système n'a pas été changé. | — |
+| Périphérique réel via **ASIO** | **non exécuté** | ASIO exige un SDK tiers et un pilote ASIO dédié ; lot suivant. C'est pourtant le chemin nécessaire pour utiliser l'interface MOTU en latence minimale, puisque son endpoint WDM refuse l'exclusif. |
+| Identification OS / pilote / sample rate / buffer size | **partiel** : OS et périphériques identifiés (§2), format/période/taille de tampon et quantum de service observés (§4, §6, §6.5), mais le pilote interne et l'endpoint physique résolu par `WAVE_MAPPER` restent inconnus (`waveOutGetID` renvoie `0xFFFFFFFF`). | — |
 | Mesure des XRUN | **toujours non exécutée** | Un XRUN est un événement de pilote ; ni waveOut ni WASAPI partagé ne l''exposent. On mesure des tampons soumis en retard, des réveils tardifs, une marge de file dérivée et des **starvations définies** (buffer plein au moment d''écrire), nommés comme tels. |
 | Durée de callback sur périphérique réel | **mesurée** (§4.3) : travail `process_rt` p50 7 µs / p95 14 µs / max 83 µs ; callback complet (réveil → re-soumission) p50 275 µs / p95 503 µs / max 756 µs | — |
 | Swaps répétés dans un callback réel | **mesurés** (§4.3, §4.5) : 11 activations par run sous pilote, 0 refus, avec et sans fondu | — |
@@ -492,7 +608,7 @@ mesuré, un seul endpoint et un seul OS.
 | Reproductibilité des erreurs audio (dropouts, glitches) | **partielle** : plusieurs runs de référence, un run sous charge contrôlée (§4.6) et la campagne MMCSS 4 cellules × 2 runs + 1 reprise (§5) ; pas de fenêtre longue (minutes), pas de compteur de glitches du pilote. | — |
 | Priorité temps réel MMCSS | **mesurée** (§5) : `AvSetMmThreadCharacteristicsW("Pro Audio")` + `AVRT_PRIORITY_CRITICAL`, priorité de base observée 18, revert ok ; 2 runs/cellule sous charge CPU 100 % | — |
 | Priorité Win32 brute (`SetThreadPriority`) | **implémentée et vérifiée** : `normal`/`above`/`high`/`time-critical` (priorités observées 0/1/2/15), appliquée après MMCSS lorsqu'elles sont demandées ensemble | — |
-| WASAPI exclusive / ASIO / priorité temps réel WASAPI | **non exécuté** | Seul le mode **partagé** est implémenté ; l'exclusif et ASIO restent à faire. MMCSS ne compense pas : c'est une classe d'ordonnancement, pas un pilote certifié. |
+| WASAPI exclusive / ASIO / priorité temps réel WASAPI | **exclusif partiellement exécuté, ASIO non** | Le mode exclusif est implémenté et mesuré sur l'endpoint NVIDIA HDMI (§6.5) ; le périphérique par défaut MOTU le refuse explicitement. ASIO reste à faire. MMCSS ne compense pas : c'est une classe d'ordonnancement, pas un pilote certifié. |
 | Qualification hard-réaliste | **non exécutée et non revendiquée** | Voir §4.7 et §5.4 : la voie utilisée n'est pas certifiée, MMCSS ne promet pas d'échéance et la charge machine fait varier le résultat. |
 
 Ces éléments restent des **travaux non faits**, et aucune conclusion de qualité audio
@@ -503,10 +619,10 @@ réelle ne doit en être tirée.
 1. ~~**Option la moins risquée** : boucle de rendu silencieuse qui appelle `process_rt`
    dans le callback du pilote.~~ **Fait avec `waveOut`** (§4) : la boucle existe, ne fait
    aucun son, et mesure travail/lateness/swaps/allocations sur un vrai périphérique.
-   **Fait aussi : MMCSS** (§5), la priorité haute est mesurée sous charge. Reste à faire
-   la version **WASAPI** *shared* puis *exclusive* (FFI directe ou crate `windows`) avec
-   `AvSetMmThreadCharacteristics` (MMCSS) et priorité de thread, pour comparer `waveOut`
-   legacy + MMCSS à un chemin audio moderne + MMCSS.
+   **Fait aussi : MMCSS** (§5), la priorité haute est mesurée sous charge. **Fait aussi :
+   WASAPI partagé (§6) puis exclusif (§6.5)**. Reste à faire la version **WASAPI sur le
+   périphérique par défaut** (refusée par le pilote MOTU, à contourner par ASIO) et le
+   chemin **ASIO** lui-même.
 2. **Option produit** : construire un plugin CLAP minimal autour de l'ABI de bloc
    (`clap_entry`, process, params) et l'héberger dans un hôte réel (Seno/Reaper/…). Exige
    un ABI hôte distinct et une GUI ; lot séparé.
@@ -557,6 +673,16 @@ powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mm
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Load 12 -Variant load-nommscss-r1
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mmcss -Load 12 -Variant load-mmcss-r1
 
+# 2ter) Backend WASAPI mode exclusif (silence). Le peripherique par defaut MOTU refuse
+#    tous les formats exclusifs : la preuve de refus s'obtient sans -ExclusiveEndpoint.
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -Out evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json
+#    Mesures exclusives reelles sur l'endpoint NVIDIA HDMI (index actif 1), sans changer
+#    le peripherique par defaut du systeme :
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Variant rest-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Variant rest-r2
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Load 12 -Variant load-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Frames 480 -Load 12 -Variant load-r2
+
 # Commande directe de la sonde (module précompilé par ravum build) :
 cargo run -q -p ravum-dsp-harness --bin ravum-audio-probe -- --seconds 3 --frames 512 `
   --module target/ravum/artifacts/<iir_v1>.dll `
@@ -586,3 +712,7 @@ Preuves JSON de ce document :
 | `evidence/mvp0b-audio-mmsc-load-nommscss-r{1,2}-2026-11-08.json` | charge 100 %, sans MMCSS | 3 / 255 tampons en retard, lateness max 15 682 / 134 445 µs |
 | `evidence/mvp0b-audio-mmsc-load-mmcss-r{1,2}-2026-11-08.json` | charge 100 %, MMCSS | **0 / 0** tampon en retard, lateness max 2 538 / 2 700 µs |
 | `evidence/mvp0b-audio-mmsc-campaign-2026-11-08.json` | récapitulatif **dérivé** des 9 runs bruts (pas une mesure) | agrégats par cellule |
+| `evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json` | exclusif sur le périphérique par défaut MOTU | **refusé** : `AUDCLNT_E_UNSUPPORTED_FORMAT` sur 12/12 formats, endpoint_support 4 endpoints |
+| `evidence/mvp0b-audio-wasapi-exclusive-rest-r{1,2,3}-2026-11-08.json` | exclusif NVIDIA HDMI, repos | ratio 1,0000, 0 événement en retard, lateness max 0,25–0,71 ms, 0 alloc, 11/11 swaps |
+| `evidence/mvp0b-audio-wasapi-exclusive-load-r{1,2}-2026-11-08.json` | exclusif NVIDIA HDMI, charge CPU 100 % | ratio 1,0000, 0 événement en retard, lateness max 3,5 ms, 0 alloc, 11/11 swaps |
+| `evidence/mvp0b-audio-wasapi-exclusive-campaign-2026-11-08.json` | récapitulatif **dérivé** des 5 runs + refus (pas une mesure) | agrégats + support exclusif par endpoint |
