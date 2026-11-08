@@ -11,6 +11,7 @@ members = [
   "crates/ravum-store",
   "crates/ravum-todo-core",
   "crates/ravum-workspace-coordinator",
+  "crates/ravum-daemon",
   "crates/ravum-cli",
   "apps/ravum-demo-host",
   "apps/ravum-todo",

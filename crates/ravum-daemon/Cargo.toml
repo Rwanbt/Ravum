@@ -1,0 +1,22 @@
+[package]
+name = "ravum-daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Persistent incremental Rust analysis daemon built on the public rustc CLI"
+
+autobins = false
+
+[[bin]]
+name = "ravum-daemon"
+path = "src/bin/ravum-daemon.rs"
+
+[[bin]]
+name = "ravum-daemon-bench"
+path = "src/bin/ravum-daemon-bench/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
