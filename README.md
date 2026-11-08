@@ -70,6 +70,7 @@ ravum run    <fichier.rs>    # application de démonstration
 ravum watch  <fichier.rs>    # boucle complète : édition -> activation
 ravum status                 # dernier état enregistré
 ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
+ravum cycle-bench <f.rs>      # édition -> diagnostic -> build -> verify -> load -> activation, MVP-0a vs MVP-0b
 ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
 ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
 ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next) et crossfade (--crossfade-frames)
@@ -87,11 +88,16 @@ l'absence de prouveur externe produit `Unsupported`, pas un succès.
 
 **Cibles de latence : partiellement atteintes en MVP-0b, sans fausse promesse.** Le
 daemon persistant ramène l'analyse d'un contenu **inchangé** de ~145 ms à **< 1 ms**,
-mais une **modification réelle** coûte encore 165–208 ms (p50) : la cible diagnostic
-< 50 ms n'est donc **pas** atteinte pour du code modifié. Le gain de `-C incremental`
-n'apparaît qu'au-delà de ~1 000 lignes (−12/−24 %) et atteint −30/−36 % vers 3 200+
-lignes. Le patch complet (< 500 ms) n'est pas re-mesuré de bout en bout. Mesures et
-verdict : [docs/mvp/MVP-0b-incremental.md](docs/mvp/MVP-0b-incremental.md),
+mais une **modification réelle** coûte encore 95–262 ms (p50) selon la taille : la cible
+diagnostic < 50 ms n'est donc **pas** atteinte pour du code modifié. Mesuré de bout en
+bout (`ravum cycle-bench`) : pour un contenu inchangé le **cycle complet** (diagnostic →
+build → vérification → chargement → activation) passe de 85–177 ms à **8–13 ms** (×10 à
+×13) ; pour une **édition réelle** il reste dominé par le build à froid (230–435 ms) et
+MVP-0b n'est pas plus rapide (316–339 ms petite unité, 524–600 ms unité de 2 313 lignes).
+La cible « petit patch p95 < 500 ms » est atteinte sur petite unité (335–362 ms) et
+manquée sur l'unité de 2 313 lignes (702–743 ms). Preuves :
+[docs/mvp/MVP-0b-cycle.md](docs/mvp/MVP-0b-cycle.md),
+[docs/mvp/MVP-0b-incremental.md](docs/mvp/MVP-0b-incremental.md),
 [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
 
 **DSP** : le chemin audio est sans verrou, sans allocation **et sans désallocation**
@@ -177,6 +183,7 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 - [L1-B / L3 — collaboration multi-agents et publication Git transactionnelle](docs/mvp/MVP-0b-collab-2-3.md)
 - [L4-B — crossfade de remplacement DSP](docs/mvp/MVP-0b-dsp-crossfade.md)
 - [L2 — daemon persistant d'analyse incrémentale](docs/mvp/MVP-0b-incremental.md)
+- [P0-A/P0-I — mesure de bout en bout édition → activation](docs/mvp/MVP-0b-cycle.md)
 - [L3/S8 — worktrees vs workspace partagé vs séquentiel](docs/mvp/MVP-0b-s8.md)
 - [L4-A — E2E navigateur réel (CDP, sans dépendance npm)](docs/mvp/MVP-0b-browser-e2e.md)
 - [L4-C — chemin audio réel : ce qui est mesuré et ce qui ne l'est pas](docs/mvp/MVP-0b-audio-host.md)
