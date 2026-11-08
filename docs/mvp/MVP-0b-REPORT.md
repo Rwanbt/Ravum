@@ -26,18 +26,18 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **41 commits** au-dessus de `6b37ad3` (27 de code, 13 de documentation + ce rapport) |
-| Dernier commit de code | `a1a99df` ; dernier commit du lot : ce rapport de consolidation |
-| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; **273 fichiers, +104 329/−297** au dernier commit de code (`a1a99df`, hors ce rapport) |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **54 commits** au-dessus de `6b37ad3` (35 de code/CI/test, 19 de documentation dont ce rapport et `MVP-0b-blockers.md`) |
+| Dernier commit de code | `e354c22` ; les seuls ajouts postérieurs sont documentaires (ce rapport, `MVP-0b-blockers.md`) |
+| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; **303 fichiers, +127 969/−304** au HEAD de code `e354c22` (les deux documents ajoutés ensuite ne sont pas comptés dans ces chiffres) |
 | PR #78 | inchangée, non fusionnée, non réécrite |
-| CI du lot | run produit [42518281359](https://github.com/Rwanbt/Ravum/actions/runs/42518281359) — **succès** (build, **327 tests**, démos M1/COLLAB-1/M2/M3/M4, **E2E navigateur**, artefacts) sur le commit de code `a1a99df`. Le run d'impact correspondant ([42518281316](https://github.com/Rwanbt/Ravum/actions/runs/42518281316)) est resté bloqué sur un échec d'infrastructure GitHub (`Set up job`, aucun step applicatif exécuté) et a été **annulé**, pas maquillé ; un run neuf est déclenché par le push de ce rapport. Deux échecs réels antérieurs (tests de cache et flake auto-GC) sont documentés en §13.6/§13.7 et corrigés. |
-| Tests workspace | **327 réussis, 0 échec**, 78 binaires, 87,2 s (GC auto et WASAPI exclusif inclus) |
+| CI du lot | **verte sur `e354c22`** : produit [42528381666](https://github.com/Rwanbt/Ravum/actions/runs/42528381666) (build, **347 tests**, démos, **E2E navigateur**, job auto-GC) et impact [42528381640](https://github.com/Rwanbt/Ravum/actions/runs/42528381640). Un run d'impact antérieur sur `dfd6135` (commit **documentaire**, aucun code) a échoué dans l'étape FULL alors que le même code était vert dans le run produit voisin : instabilité de runner consignée §26.6, log d'étape non récupérable via l'API GitHub, non maquillée. Le push de ce rapport déclenche une nouvelle exécution de la même suite. |
+| Tests workspace | **347 réussis, 0 échec**, 54 suites, **trois exécutions locales complètes** (daemon **94**, harness DSP **15**, CLI, coordinator, patch-host, etc.) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
-| Vault | 6 sessions publiées et vérifiées (voir §25) |
+| Vault | **7 sessions publiées et vérifiées** (voir §25) |
 
 ## 3. Subagents réellement utilisés
 
-Six teammates durables, chacun avec un périmètre d'écriture exclusif et une mission
+Huit teammates durables, chacun avec un périmètre d'écriture exclusif et une mission
 vérifiable ; le Lead a contrôlé et intégré chaque livraison (relecture + ré-exécution des
 tests), plutôt que de se fier aux rapports.
 
@@ -54,8 +54,16 @@ tests), plutôt que de se fier aux rapports.
 
 Le Lead a réalisé lui-même : L0 (audit/baseline), L1-A (cycle de vie temps réel DSP),
 L4-B (crossfade), L4-C/L4-D (statuts honnêtes), L5.3 (licence), l'intégration CLI du
-daemon, la consolidation documentaire, la protection de branches, les PR et les deux
+daemon, la consolidation documentaire, la protection de branches, les PR et les
 sauvegardes Obsidian.
+
+**Sixième lot** : trois de ces workers (`incremental`, `audio-probe`, `impact-ci`) ont repris
+chacun un chantier restant — compaction intra-contexte + daemon multi-client loopback,
+détection des périodes audio manquées, GC automatique en CI + décision d'impact docs-only.
+Le Lead a mesuré lui-même les leviers build+link (`scripts/build-flags.ps1`), écrit
+`MVP-0b-blockers.md`, consolidé ce rapport et publié la septième session Obsidian ; il a
+aussi constaté un worker interrompu sans commit et lui a fait terminer son travail plutôt
+que de le refaire.
 
 ## 4. Tickets et exigences traités
 
@@ -70,9 +78,24 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (41 : 27 de code, 13 de documentation + ce rapport)
+## 5. Commits (54 : 35 de code/CI/test, 18 de documentation + ce rapport)
 
-Commits de code (27) :
+### 5.1 Sixième lot — 12 commits ajoutés (détail des contenus au §26)
+
+1. `b55e8ea` — ci(mvp0b): exercise bounded automatic GC invariants in a dedicated CI job
+2. `ad69031` — docs(mvp0b): document bounded auto-GC CI job and docs-only impact decision
+3. `dfd6135` — ci(mvp0b): record the first green GitHub Actions run of the bounded auto-GC job
+4. `882c214` — feat(mvp0b): detect missed audio periods from the playback clock
+5. `a59d08e` — test(mvp0b): campaign the missed-period detector and validate it by injection
+6. `28bbc4b` — style(mvp0b): formater ravum-dsp-harness après le travail XRUN
+7. `25208ab` — bench(mvp0b): mesurer codegen+link à froid sous neuf jeux d'options rustc
+8. `5b7350d` — docs(mvp0b): consigner les leviers build+link testés et écartés
+9. `1f39b76` — style(mvp0b): appliquer cargo fmt au crate ravum-daemon
+10. `1565476` — feat(mvp0b): compacter l'état incrémental et servir plusieurs clients loopback
+11. `70331cb` — test(mvp0b): couvrir la compaction réelle et le multi-client loopback
+12. `e354c22` — docs(mvp0b): documenter la compaction intra-contexte et le multi-client loopback
+
+Commits de code du lot initial (27) :
 
 1. `a1a99df` — test(daemon): wait for the auto-GC effect instead of a single idle moment
 2. `3a68fb9` — feat(daemon): opt-in automatic background GC, measured on a bounded soak
@@ -265,22 +288,23 @@ agents IA (tokens et supervision **non mesurés ici**).
 
 | Commande | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **327 réussis / 0 échec**, 78 binaires, 87,2 s (arbre incluant GC auto et WASAPI exclusif) |
+| `cargo test --workspace -- --test-threads=1` | **347 réussis / 0 échec**, 54 suites, deux exécutions locales complètes (arbre du sixième lot : compaction, multi-client, XRUN) |
 | Baseline L0 avant modifications | 139 réussis / 0 échec, 46,52 s |
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
-| `ravum-daemon` | 83 (49 unit dont 9 GC et 8 auto-GC, 3 bench, 15 intégration, 9 intégration GC, 7 intégration auto-GC) |
+| `ravum-daemon` | **94** (56 unit, 3 bench, 7 intégration auto-GC, 15 intégration daemon, 10 intégration GC, **3 intégration TCP multi-client**) |
 | `ravum-cli` | 36 (15 unitaires du binaire dont 3 `cycle-bench` + 10 `collab-cycle`, 4 intégration COLLAB-4, 17 intégrations existantes préservées) |
+| `ravum-dsp-harness` | **15** (6 lib, **9 arithmétique XRUN**) |
 | `ravum-proof` | 28 (19 unit, 9 proof_cache) |
-| `ravum-rust-adapter` | 8 (dont le nouveau cas rustc-direct) |
+| `ravum-rust-adapter` | 8 (dont le cas rustc-direct) |
 | `ravum-todo` | 14 (4 unit + 10 E2E HTTP) |
 | E2E navigateur | **10/10** localement (Chromium headless 156) **et en CI windows-latest (Edge)** |
-| CI complète | [run 42487917654](https://github.com/Rwanbt/Ravum/actions/runs/42487917654) **succès** |
+| CI complète | produit [42528381666](https://github.com/Rwanbt/Ravum/actions/runs/42528381666) **succès** + impact [42528381640](https://github.com/Rwanbt/Ravum/actions/runs/42528381640) **succès** sur `e354c22` |
 
 ## 13. Tests échoués (et ce qu'il en est advenu)
 
-Aucun test ne reste en échec. Trois défaillances réelles ont été trouvées et corrigées à
-la racine, **pas masquées** :
+Aucun test ne reste en échec. Six défaillances réelles ont été trouvées et corrigées à la
+racine, **pas masquées** ; une instabilité de runner non expliquée est consignée en §13.7.
 
 1. **`ravum-proof`, test instable préexistant** : `timeout_never_authorizes_activation`
    échouait par intermittence car tous les tests partageaient un ledger temporaire
@@ -310,6 +334,16 @@ la racine, **pas masquées** :
    Correctif : `without_artifact_cache()` dans ce test (les deux builds sont réels) et
    assertion séparée par étape ; **3 exécutions 7/7**, puis suite complète et CI vertes.
    L'échec CI a été conservé tel quel dans l'historique des runs, pas masqué.
+7. **Instabilité de runner non expliquée (run d'impact 42523779386, commit `dfd6135`)** :
+   ce commit ne change que de la documentation et une évidence JSON — **aucun code**. Son
+   run d'impact a choisi FULL (règle conservatrice sur `evidence/**`) et l'étape
+   `cargo test --workspace -- --test-threads=1` a échoué, alors que le run produit du
+   **même code** (même arbre, minutes plus tôt) était vert et que les runs suivants le
+   sont aussi sur les deux workflows. Le log de l'étape n'est pas récupérable via l'API
+   GitHub (`UNKNOWN STEP`), donc le test fautif n'est pas identifié : **ce n'est pas
+   maquillé**, c'est une instabilité de runner à investiguer, pas une régression produit
+   démontrée. Deux exécutions locales complètes supplémentaires n'ont pas reproduit
+   (§26.6).
 
 Défaillances transitoires d'environnement, documentées sans les compter comme régressions :
 `STATUS_DLL_INIT_FAILED` lors d'un link concurrent, un `link.exe exit 1104` (fichier en
@@ -318,35 +352,37 @@ d'un autre worker (WIP), jamais présents dans un commit.
 
 ## 14. Tests non exécutés
 
-- **Chemin audio réel** : **exécuté** via `waveOut` (silence), **WASAPI mode partagé**
-  (MOTU, float32 48 kHz, buffer 22 ms) et **WASAPI mode exclusif** (NVIDIA HDMI PCM16
-  48 kHz, buffer 10 ms ; la MOTU refuse l''exclusif) — cadence tenue, 0 alloc/free,
-  11/11 swaps, MMCSS/priorité sous charge (9 runs), WASAPI partagé stable sous charge
-  sans MMCSS (8 runs), exclusif mesuré (5 runs). Restent non exécutés : **ASIO**, **XRUN
-  réels** (non observables dans ces API), hôte CLAP/VST3/DAW, fenêtres longues et autres
-  machines/pilotes.
-- **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` — plan
-  proposé dans `MVP-0b-verification.md`.
-- **Soak test RSS / fuite longue** du daemon : seul un soak court (30 requêtes, 38,8 s)
-  est fait ; un soak de plusieurs heures, deux daemons partageant un même `work_dir` et
-  un crash pendant écriture de cache restent non exécutés. Une anomalie de 1re analyse
-  sous charge est consignée (§16) et reste à investiguer. Le **GC** est mesuré sur 40
-  éditions (5,4 Mo) mais pas en automatique ni sur un état de plusieurs centaines de Mo.
+- **Chemin audio réel** : **exécuté** via `waveOut` (silence, 512 frames), **WASAPI mode
+  partagé** (MOTU, float32 48 kHz, buffer 22 ms) et **WASAPI mode exclusif** (NVIDIA HDMI
+  PCM16 48 kHz, 10 ms ; la MOTU refuse les 12 combinaisons exclusives) — cadence tenue,
+  0 alloc/free, 10–11/11 swaps, MMCSS/priorité sous charge, et **périodes manquées
+  désormais détectées** (`IAudioClock` / `waveOutGetPosition`, 15 runs + validation par
+  injection 120/120/150 ms → 12/11/14). Restent non exécutés : **ASIO** (SDK Steinberg
+  propriétaire, décision de licence), hôte **CLAP/VST3/DAW**, fenêtres de plusieurs
+  minutes, autres machines/pilotes, compteur XRUN officiel (inexistant sous Windows).
+- **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` ; Kani ne
+  supporte pas Windows comme hôte, un runner Linux/WSL2 dédié serait nécessaire
+  (`MVP-0b-verification.md` et `MVP-0b-blockers.md`).
+- **Soak long** : le daemon est désormais mesuré en **multi-client loopback** (3 clients ×
+  120 s, 816 requêtes, 0 erreur) et par un **soak auto-GC borné en CI** ; restent non
+  exécutés : plusieurs heures, plusieurs machines, deux daemons sur un même `work_dir`, un
+  crash pendant l'écriture du cache. Une anomalie de 1re analyse sous charge reste à
+  investiguer (§16).
 - **S8 avec de vrais agents LLM** : agents scriptés seulement, tokens et supervision non
-  mesurés.
+  mesurés ; aucune clé/budget disponible dans l'environnement (décision requise).
 - **S8 sur un vrai projet multi-crates** ; **fixtures macro-lourdes**.
 - **Firefox/WebKit**, mobile, a11y complète, TLS/HTTPS pour l'E2E navigateur.
 - **MSRV 1.74** déclarée dans les manifestes : compilée/testée avec `rustc 1.95` seulement.
-- **Workflow `mvp-impact.yml`** : désormais **exécuté sur GitHub Actions** (runs
-  [42489068304](https://github.com/Rwanbt/Ravum/actions/runs/42489068304) et
-  [42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677), déclenchés par
-  des pushs de branche) : décision FULL légitime, suite complète verte, garde documentaire
-  exécutée. Restent non exercés : le chemin **sélectif** sur un runner GitHub (couvert
-  localement par 3 diffs) et la configuration de checks requis de `dev`.
-- **Benchmark de bout en bout** : désormais **mesuré** (`ravum cycle-bench`, voir
-  `MVP-0b-cycle.md`) pour une petite unité et une unité synthétique de 2 313 lignes ;
-  restent non mesurés : un vrai crate multi-crates, les macros procédurales, le coût du
-  seul link incrémental et la preview dans une interface réelle.
+- **Workflow `mvp-impact.yml`** : **exécuté sur GitHub Actions** (runs FULL réels verts,
+  dont [42528381640](https://github.com/Rwanbt/Ravum/actions/runs/42528381640) ; chemin
+  sélectif docs-only prouvé par l'outil et exécuté en local) ; le chemin sélectif **sur une
+  PR réelle vers `dev`** reste impossible tant que `dev` est un squelette documentaire sans
+  crates (`MVP-0b-blockers.md` §2.6).
+- **Benchmark de bout en bout** : mesuré (`ravum cycle-bench`) pour une petite unité et une
+  unité synthétique de 2 313 lignes ; les **leviers build+link restants** ont été mesurés
+  et écartés (`MVP-0b-cycle.md` §7). Restent non mesurés : un vrai crate multi-crates, les
+  macros procédurales, la preview dans une interface réelle, et le coût DSP de
+  `-C opt-level=0` (décision).
 
 ## 15. Mesures M0/M1/MVP-0b comparées
 
@@ -511,19 +547,24 @@ des garanties d'échéance, et la charge est artificielle.
 - Cible P0-A **non atteinte sur code modifié** (analyse 95–262 ms p50 selon la taille) ;
   cycle complet mesuré : p95 335–362 ms sur petite unité (< 500 ms) mais 702–743 ms sur
   l'unité de 2 313 lignes ; le goulot est le **build+link à froid**, non couvert par le
-  daemon.
+  daemon. Quatre leviers d'options rustc mesurés et écartés (`MVP-0b-cycle.md` §7) ; les
+  gains réels viennent du chevauchement analyse/build et du cache d'artefacts.
 - Daemon : analyse seule (pas de codegen/link), pas de trace de réutilisation par requête,
-  état disque non collecté, révisions non persistées, pas de client éditeur/LSP.
+  pas de client éditeur/LSP ; **GC manuel et automatique** bornés, **compaction opt-in**
+  (défaut OFF, réutilisation non démontrée), **multi-client loopback mono-machine**
+  (`peak_active_jobs=1`, pas de parallélisme de compilation), un seul `work_dir`, pas de
+  réseau/TLS/auth.
 - S8 : agents scriptés (pas de LLM), n=5, éditions triviales, fixture locale ; verdict
   **défavorable** au workspace partagé en temps.
 - COLLAB-2/3 : pas d'AST complète (heuristiques), pas de CRDT, vérification limitée à une
   racine de crate inférée, 2 faux conflits assumés, `--verify-tests` exécute du code du
   snapshot (opt-in, pas de bac à sable).
-- Audio : chemin `waveOut` réel exercé (silence) avec MMCSS/priorité mesurés sous charge
-  contrôlée, mais API legacy émulée, sans WASAPI/ASIO ; XRUN non observables ; un seul OS,
-  un seul jeu de pilotes, fenêtres de 3 s, charge artificielle (busy-loops, pas
-  d'interruptions audio), ordre des cellules fixe ; 256 frames décroche sur la voie par
-  défaut ; MMCSS ne garantit aucune échéance — aucune prétention hard-RT.
+- Audio : chemins `waveOut`, **WASAPI partagé** et **WASAPI exclusif** réellement exercés
+  en silence, MMCSS/priorité mesurés sous charge contrôlée, **périodes manquées**
+  détectées par proxy local (borne inférieure d'une période) ; pas d'**ASIO** (SDK
+  propriétaire), un seul OS, un seul jeu de pilotes, fenêtres de 3 s, charge artificielle,
+  aucun compteur XRUN officiel, aucune prétention hard-RT ; la MOTU refuse l'exclusif
+  WASAPI (12/12 combinaisons).
 - Vérification : aucun prouveur externe, aucun `PROVED` général, aucune preuve de sûreté
   mémoire du code natif.
 - E2E navigateur : Chromium/Edge uniquement, pas d'a11y, pas de TLS, un onglet.
@@ -536,60 +577,63 @@ des garanties d'échéance, et la charge est artificielle.
 
 | Risque | Sévérité | Mitigation actuelle | Reste à faire |
 |---|---|---|---|
-| Pas de qualification audio temps réel | haute | chemins `waveOut` + **WASAPI partagé et exclusif** mesurés (silence), MMCSS/priorité, limites publiées | **ASIO** (MOTU refuse l'exclusif), XRUN, hôte CLAP/VST3, fenêtres longues, plateforme qualifiée |
+| Pas de qualification audio temps réel | haute | chemins `waveOut` + **WASAPI partagé et exclusif** mesurés (silence), MMCSS/priorité, **XRUN proxy** mesuré (15 runs + injection), limites publiées | **ASIO** (SDK propriétaire ; la MOTU refuse l'exclusif), hôte CLAP/VST3, fenêtres longues, autres machines/pilotes, compteur XRUN officiel inexistant |
 | P0-A toujours manquée sur code modifié | haute | daemon + mesure | réduire le plancher de démarrage `rustc` (processus persistant, stratégie adaptative) |
 | S8 défavorable sans mesure LLM | moyenne | verdict publié | campagne avec vrais agents, tokens mesurés |
 | Faux conflits COLLAB (2/10) | moyenne | fail-closed + documentation | hybride ancres+symboles |
-| Croissance disque du daemon | moyenne | **GC manuel et automatique** mesurés (−66 %, 12 collectes, disque borné), protections vérifiées | compaction de l'état incrémental, soak de plusieurs heures, branchement CI |
+| Croissance disque du daemon | moyenne | **GC manuel, automatique et CI** mesurés (disque borné), **compaction** mesurée (−89,5 %, opt-in, réutilisation non démontrée) | soak de plusieurs heures, deux daemons sur un `work_dir`, état de plusieurs centaines de Mo |
 | Hooks Git = code local de confiance | moyenne | exécution explicite | isolation/timeout si usage non fiable |
 | Prouveur absent | moyenne | statuts honnêtes | installer Kani + harness |
 | Anomalie de 1re analyse daemon (metadata stub `core`) | moyenne | consignée, non reproduite sur 3 probes frais | reproduire sous charge, vérifier `-C incremental`/sysroot, soak long |
-| CI impact : chemin sélectif non exercé sur runner GitHub | faible | selftest 48 cas + runs FULL réels en CI | exercer le chemin sélectif sur une PR vers `dev` |
+| CI impact : chemin sélectif non exercé sur une PR vers `dev` | faible | selftest 48 cas, décision docs-only prouvée par l'outil, runs FULL réels verts en CI | PR réelle vers `dev` impossible tant que `dev` est un squelette sans crates (décision de fusion) |
+| Instabilité de runner CI (1 run FULL échoué sur code identique) | faible | échec consigné, non reproduit localement (2 exécutions complètes), causes non établies | log d'étape indisponible via l'API ; surveiller la prochaine exécution FULL |
 | `enforce_admins=false` | faible | assumé mainteneur solo | revoir si second mainteneur |
 
 ## 23. Décisions nécessitant approbation du responsable
 
 1. **Fusion de la PR #78** (MVP-0a) puis de la **PR #80** (MVP-0b), et ordre de fusion.
-   Aucune fusion n'a été faite. Après fusion de #78, #80 doit être retargetée vers `dev`.
+   Aucune fusion n'a été faite. Après fusion de #78, #80 doit être retargetée vers `dev` ;
+   tant que `dev` est un squelette documentaire sans crates, une PR sélective vers `dev`
+   ne peut pas être validée (`MVP-0b-blockers.md` §2.6).
 2. **Licence** (#34) : option recommandée `MIT OR Apache-2.0` pour l'outillage, licence
    documentaire séparée à décider, DCO à instaurer ; **rien n'est publié**.
 3. **Statut de la RFC #79** (shared workspace) : nourrie par COLLAB-2/3 et S8, toujours
    `PROPOSED` ; aucun numéro ADR attribué.
-4. **Priorité suivante** : (a) réduire encore le coût du build+link à froid (nombre de
-   builds, cache de builds) ; (b) WASAPI exclusif/ASIO + XRUN + hôte CLAP/VST3 ; (c) campagne
-   S8 avec vrais agents IA et comptage de tokens.
-5. **Durcissement de `dev`** avec checks requis, une fois la CI sélective éprouvée.
-6. Acceptation éventuelle des ADR touchés (aucun ne l'a été par un agent).
+4. **ASIO** : accepter la licence Steinberg ASIO SDK pour qualifier la MOTU (nécessaire :
+   elle refuse les 12 combinaisons exclusives WASAPI).
+5. **Options de build** : `-C opt-level=0` réduit le build de 35,5 % mais change le code
+   généré ; validation DSP requise avant toute adoption.
+6. **Kani** (runner Linux/WSL2 + installation) et **S8 avec vrais agents IA** (clés,
+   budget, comptage de tokens).
+7. **Durcissement de `dev`** avec checks requis, une fois la CI sélective éprouvée.
+8. Acceptation éventuelle des ADR touchés (aucun ne l'a été par un agent).
 
 ## 24. Prochaines étapes proposées
 
-1. Réduire le coût d'une modification réelle : le **build+link à froid** (230–435 ms)
-   reste le chemin critique (`-C incremental` cdylib et `lld-link` ont été mesurés et
-   rejetés). Deux leviers validés par la mesure : (a) **chevaucher analyse et build**
-   (`--concurrent`) : p50 −15/−31 %, p95 −18/−38 %, cible p95 < 500 ms atteinte sur les
-   deux tailles — **productisé** dans `ravum watch`/`ravum run` (`--concurrent`, opt-in,
-   seuils de vérification/fraîcheur inchangés) ; (b) réduire le nombre de builds (cache
-   de builds par contenu, patchs multi-fonctions).
+1. Réduire le coût d'une modification réelle : les **leviers d'options rustc** sont
+   mesurés et écartés (`MVP-0b-cycle.md` §7) ; restent le chevauchement analyse/build
+   (`--concurrent`, productisé : p50 −15/−31 %, p95 −18/−38 %) et la réduction du nombre de
+   builds (cache par contenu, patchs multi-fonctions).
 2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
    features), vérification sémantique des changements acceptés, historique d'activation
    natif partagé avec le daemon.
-3. Audio : ajouter **ASIO** (le partagé, l'exclusif et MMCSS sont mesurés ; la MOTU
-   refuse l'exclusif WASAPI), un hôte **CLAP/VST3** minimal, et des mesures de XRUN sur
-   fenêtres longues et plusieurs machines/pilotes.
-4. Daemon : compaction de l'état incrémental (ou documentation de son impossibilité sans
-   `rustc` privé), soak de plusieurs heures avec plusieurs clients, et branchement du GC
-   automatique dans la CI (désactivé par défaut aujourd'hui).
-4. Installer Kani dans un environnement dédié et écrire un harness borné versionné.
-5. GC/compaction de l'état incrémental ; soak test mémoire ; deux daemons sur un `work_dir`.
-6. Hybride ancres syntaxiques + symboles pour supprimer les 2 faux conflits ; campagne S8
-   avec de vrais agents IA et comptage de tokens.
-7. Première exécution du workflow `mvp-impact.yml` sur une PR vers `dev`.
+3. Audio : **ASIO** (décision de licence) puis hôte CLAP/VST3 minimal, fenêtres de plusieurs
+   minutes et multi-machines ; le proxy XRUN est mesuré et borné
+   (`MVP-0b-audio-host.md` §10).
+4. Daemon : soak de plusieurs heures multi-clients (le multi-client loopback est mesuré :
+   3 × 120 s, 0 erreur), deux daemons sur un `work_dir`, et activation de la compaction
+   seulement si un gain de réutilisation est démontré.
+5. Installer Kani dans un environnement dédié et écrire un harness borné versionné.
+6. Campagne S8 avec de vrais agents IA et comptage de tokens ; hybride ancres + symboles
+   pour supprimer les 2 faux conflits.
+7. Après fusion de MVP-0a : première PR réelle vers `dev` pour exercer le chemin sélectif,
+   puis durcissement de `dev`.
 
 ## 25. Sauvegardes Obsidian publiées (liens vérifiés sur GitHub)
 
-Les deux notes ont été validées par `python _system/tooling/vault.py check --format json`
+Les sept notes ont été validées par `python _system/tooling/vault.py check --format json`
 (vert), commitées avec `docs(ravum): …` et poussées en fast-forward sur `master`, puis
-relues sur le dépôt distant :
+relues sur le dépôt distant (blob GitHub identique au fichier local pour la septième) :
 
 1. [Session MVP-0b L0–L1 — durcissement temps réel et Git transactionnel](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-l0-l1-rt-and-git-hardening.md)
    — commit vault `f50795a` (lecture distante vérifiée).
@@ -603,6 +647,69 @@ relues sur le dépôt distant :
    — commit vault `8ffb805` (lecture distante vérifiée).
 6. [Session MVP-0b cinquième lot — WASAPI exclusif et GC automatique](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-wasapi-exclusive-auto-gc.md)
    — commit vault `59d49dd` (lecture distante vérifiée).
+7. [Session MVP-0b sixième lot — compaction, multi-client, XRUN et leviers build+link](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-compaction-multiclient-xrun.md)
+   — commit vault `0bca52d` (blob distant `9911b8f` identique au fichier local, contenu
+   SHA-256 comparé ; relu sur `origin/master`).
+
+## 26. Sixième lot (2026-11-08) — compaction, multi-client, XRUN, leviers build+link
+
+Cette section consigne le lot qui a suivi la rédaction initiale du rapport ; les sections
+précédentes sont mises à jour en conséquence, sans réécrire l'historique.
+
+### 26.1 Commits ajoutés (12)
+
+Voir §5.1 pour la liste et les messages. Code/CI/test : `b55e8ea`, `882c214`, `a59d08e`
+(test), `28bbc4b` (style), `25208ab` (bench), `1f39b76` (style), `1565476`, `70331cb`,
+`dfd6135` (CI + évidence). Documentation : `ad69031`, `5b7350d`, `e354c22`. Aucun ADR,
+aucun changement de `main`/`dev`.
+
+### 26.2 CI du sixième lot
+
+| Run | Commit | Résultat |
+|---|---|---|
+| produit [42528381666](https://github.com/Rwanbt/Ravum/actions/runs/42528381666) | `e354c22` | **succès** (build, 347 tests, démos, E2E, job auto-GC) |
+| impact [42528381640](https://github.com/Rwanbt/Ravum/actions/runs/42528381640) | `e354c22` | **succès** |
+| produit [42527727846](https://github.com/Rwanbt/Ravum/actions/runs/42527727846) | `5b7350d` | succès |
+| impact [42527727854](https://github.com/Rwanbt/Ravum/actions/runs/42527727854) | `5b7350d` | succès |
+| impact 42523779386 | `dfd6135` | **échec** dans l'étape FULL (code identique, vert ailleurs) — §26.6 |
+
+### 26.3 Mesures ajoutées
+
+| Mesure | Résultat | Preuve |
+|---|---|---|
+| Compaction intra-contexte, 20 éditions | disque 1 821 741 → 191 055 B (−89,5 %), GC 20 ms, 0 erreur ; `reuse_retained=false` (140 ms après vs 119 ms à froid) ; défaut OFF | `evidence/mvp0b-daemon-compaction-2026-11-08.json`, doc incrémental §13 |
+| Daemon multi-client loopback | 3 clients × 120 s : 816 requêtes, 0 erreur, 0 timeout, p50 155 / p95 289 / p99 386 ms, `peak_active_jobs=1`, RSS 5,57 → 7,59 Mo, `valid=true` ; contrôle mono 290 requêtes, p50 143 ms | `evidence/mvp0b-daemon-soak-multi-2026-11-08.json`, doc incrémental §14 |
+| XRUN proxy (périodes manquées) | 15 runs : exclusif 2/0/0 au repos et 8/1 sous charge ; partagé 1/1/0 et 1/0 ; waveOut 512 1/0/1 et 5/14 ; injection 12/11/14 ; 0 alloc/free | `evidence/mvp0b-audio-xrun-*.json`, doc audio §10 |
+| Leviers build+link, 9 jeux d'options × 16 tours × 2 tailles | plancher de bruit +0,4 à +2,7 % ; meilleures variantes conservatrices −5 à −7 % (10–13/16) ; `opt-level=0` −35,5 % (16/16) mais code généré différent → décision | `evidence/mvp0b-build-flags*.json`, `MVP-0b-cycle.md` §7 |
+| GC automatique en CI | job dédié, 18 invariants, run vert (52 s, `runs=5`, disque max 183 332 B) ; sens d'échec prouvé en forçant la borne | `evidence/mvp0b-ci-auto-gc.json`, `MVP-0b-ci.md` §9 |
+| Décision d'impact docs-only | `selective`, `full:false`, `docs_required:true`, 1 commande docs ; selftest 48 cas / 388 assertions | `evidence/mvp0b-ci-docs-only-impact.json`, `MVP-0b-ci.md` §10 |
+
+### 26.4 Correctifs et robustesse
+
+- Flake de test auto-GC déjà corrigé au lot précédent ; **aucun nouveau test en échec**
+  dans ce lot (347/0, deux exécutions complètes).
+- `cargo fmt` appliqué à `ravum-daemon` et aux fichiers `ravum-dsp-harness` touchés ; le
+  seul fichier non formaté restant (`ravum-jitter.rs`) est **préexistant** au HEAD.
+- Un worker s'est arrêté sans commit : le Lead a constaté le WIP, commité lui-même les
+  reformatages et fichiers de mesure, puis fait terminer le worker (plutôt que de refaire
+  le travail) ; le worker a poussé 4 commits et 94 tests verts.
+
+### 26.5 Décisions ouvertes
+
+Voir §23 (fusion/ordre, licence, RFC #79, ASIO, options de build, Kani/S8, `dev`) et le
+document dédié [MVP-0b-blockers.md](MVP-0b-blockers.md) qui récapitule l'état de chaque
+point restant (fait / partiel / bloqué / hors périmètre) avec sa preuve et son décideur.
+
+### 26.6 Instabilité de runner constatée (non maquillée)
+
+Le run d'impact [42523779386](https://github.com/Rwanbt/Ravum/actions/runs/42523779386)
+sur le commit `dfd6135` (documentation + évidence uniquement, **aucun code**) a échoué à
+l'étape `cargo test --workspace -- --test-threads=1` (décision FULL légitime sur
+`evidence/**`). Le même arbre était vert dans le run produit du même commit et dans les
+runs adjacents, et deux exécutions locales complètes supplémentaires n'ont pas reproduit.
+Le log de l'étape n'est pas récupérable via l'API GitHub (`UNKNOWN STEP`), donc le test
+fautif n'est pas identifié. Conclusion honnête : **instabilité de runner/CI**, pas une
+régression produit démontrée ; à surveiller sur les prochaines exécutions FULL.
 
 ## Renvois
 
@@ -611,5 +718,6 @@ relues sur le dépôt distant :
 - Collaboration : [MVP-0b-collab-2-3.md](MVP-0b-collab-2-3.md) · S8 : [MVP-0b-s8.md](MVP-0b-s8.md)
 - E2E navigateur : [MVP-0b-browser-e2e.md](MVP-0b-browser-e2e.md) · CI impact : [MVP-0b-ci.md](MVP-0b-ci.md)
 - Audio réel : [MVP-0b-audio-host.md](MVP-0b-audio-host.md) · Vérification : [MVP-0b-verification.md](MVP-0b-verification.md)
+- Points restants et blocages : [MVP-0b-blockers.md](MVP-0b-blockers.md)
 - Licence : [MVP-0b-licence-analysis.md](MVP-0b-licence-analysis.md)
 - Statut : [../architecture/STATUS.md](../architecture/STATUS.md) · PR [#80](https://github.com/Rwanbt/Ravum/pull/80) · PR [#78](https://github.com/Rwanbt/Ravum/pull/78)
