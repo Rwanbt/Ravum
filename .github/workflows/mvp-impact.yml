@@ -1,0 +1,288 @@
+name: MVP impact-selected checks (conservative, fail-closed)
+
+# CI sélective par impact (mandat MVP-0b, L4-E).
+#
+# Ce workflow calcule les fichiers modifiés par la pull request, en déduit les
+# tests requis via le graphe d'impact (`tools/impact/impact.mjs`) et exécute
+# EXACTEMENT ces tests, sérialisés (`--test-threads=1`, `CARGO_BUILD_JOBS=2`)
+# parce que la machine de référence a ~16 Go de RAM.
+#
+# Garanties :
+#   - aucun test pertinent n'est désactivé, exclu ou ignoré ;
+#   - un FULL par RÈGLE CONSERVATRICE de contenu (manifeste, protocole/ABI,
+#     patch-host, workflow CI, fixtures, scripts, outil d'impact, chemin inconnu)
+#     est une issue LÉGITIME : la suite complète est exécutée, la raison est
+#     rapportée dans le résumé, et le job réussit/échoue UNIQUEMENT selon le
+#     résultat réel des tests. Aucun code non nul artificiel, aucune variable
+#     de dépôt requise ;
+#   - un mapping INCERTAIN ou une erreur interne (diff vide, statut Git non
+#     résolu, manifeste illisible, base introuvable, JSON invalide) exécute la
+#     suite complète par sécurité PUIS échoue explicitement (code non nul +
+#     message) : c'est la seule catégorie qui échoue pour raison de mapping ;
+#   - ce workflow ne qualifie ni compilateur, ni preuve, ni ABI, ni temps réel.
+
+on:
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Base git du diff (défaut: origin/main)'
+        required: false
+        default: 'origin/main'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mvp-impact-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  impact:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+
+    steps:
+      - name: Checkout (historique complet pour le merge-base)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python (vérification d'intégrité des documents seulement)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show toolchain
+        shell: pwsh
+        run: |
+          node --version
+          rustc -vV
+          cargo --version
+          git --version
+          python --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-impact-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-impact-
+            ${{ runner.os }}-mvp-
+
+      # ---------------------------------------------------------------------
+      # 1. Décision d'impact. Toute panne de l'outil est convertie en décision
+      #    FULL + INCERTAIN explicite : jamais de job vert silencieux.
+      # ---------------------------------------------------------------------
+      - name: Compute impact mapping
+        id: impact
+        shell: pwsh
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || inputs.base || 'origin/main' }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $fallbackJson = '{"schema":"ravum-impact/1","full":true,"uncertain":true,"packages":[],"packages_scope":"workspace","direct_packages":[],"naive_packages":[],"commands":[{"id":"cargo-test-workspace","kind":"cargo","argv":["cargo","test","--workspace","--","--test-threads=1"],"reason":"fallback: aucune décision produite par impact.mjs","package":null}],"reasons":["full:fallback — aucune décision produite par impact.mjs","uncertain:mapping — la CI doit échouer explicitement"],"unknown_paths":[],"notes":[],"limits":[],"docs_required":false,"changed":[],"components":{},"provenance":{}}'
+
+          Write-Host "Base du diff: $env:BASE_REF"
+          $raw = (& node tools/impact/impact.mjs --base "$env:BASE_REF" --json 2> impact.stderr.txt) -join "`n"
+          $toolExit = $LASTEXITCODE
+          if (Test-Path impact.stderr.txt) {
+            $errText = Get-Content impact.stderr.txt -Raw
+            if ($errText) { Write-Host $errText }
+            Remove-Item impact.stderr.txt -ErrorAction SilentlyContinue
+          }
+
+          $decision = $null
+          if ($raw -and $raw.Trim().Length -gt 0) {
+            try { $decision = $raw | ConvertFrom-Json } catch { $decision = $null }
+          }
+          if ($null -eq $decision -or $null -eq $decision.full) {
+            Write-Host "::warning::impact.mjs n'a produit aucune décision exploitable (exit $toolExit): repli explicite FULL+INCERTAIN"
+            $raw = $fallbackJson
+            $decision = $raw | ConvertFrom-Json
+            $toolExit = 2
+          }
+
+          $raw | Set-Content -Path impact.json -Encoding utf8NoBOM
+
+          # Fail-closed : `incertain` manquant => considéré INCERTAIN.
+          $uncertainFlag = 'true'
+          if ($decision.uncertain -eq $false) { $uncertainFlag = 'false' }
+          $fullFlag = 'true'
+          if ($decision.full -eq $false) { $fullFlag = 'false' }
+          $docsFlag = 'false'
+          if ($decision.docs_required -eq $true) { $docsFlag = 'true' }
+
+          "full=$fullFlag" >> $env:GITHUB_OUTPUT
+          "uncertain=$uncertainFlag" >> $env:GITHUB_OUTPUT
+          "docs=$docsFlag" >> $env:GITHUB_OUTPUT
+          "tool_exit=$toolExit" >> $env:GITHUB_OUTPUT
+          "base=$($decision.base)" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Décision: full=$fullFlag uncertain=$uncertainFlag docs=$docsFlag (exit outil=$toolExit)"
+          Write-Host ($raw | ConvertFrom-Json | ConvertTo-Json -Depth 4 -Compress)
+
+      # ---------------------------------------------------------------------
+      # 2. Vérification documentaire : uniquement si des documents changent,
+      #    jamais à la place des tests Rust.
+      # ---------------------------------------------------------------------
+      - name: Documentation integrity check (only when docs changed)
+        if: always() && steps.impact.outputs.docs == 'true'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path impact.json)) {
+            Write-Host "::error::aucune décision d'impact: échec explicite (pas de vert silencieux)"
+            exit 1
+          }
+          $decision = Get-Content impact.json -Raw | ConvertFrom-Json
+          $docsCommand = @($decision.commands | Where-Object { $_.kind -eq 'docs' })[0]
+          if ($null -eq $docsCommand) {
+            Write-Host "::error::docs_required=true mais aucune commande docs dans la décision d'impact"
+            exit 1
+          }
+          $argv = @($docsCommand.argv)
+          Write-Host "Commande docs exacte: $($argv -join ' ')"
+          & $argv[0] @($argv[1..($argv.Length - 1)])
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::vérification d'intégrité des documents en échec (exit $LASTEXITCODE)"
+            exit $LASTEXITCODE
+          }
+
+      # ---------------------------------------------------------------------
+      # 3a. FULL par règle conservatrice de contenu = issue LÉGITIME : la suite
+      #     complète EST l'exigence de ce diff. Le step réussit si les tests
+      #     passent, échoue s'ils échouent — aucun échec artificiel.
+      # ---------------------------------------------------------------------
+      - name: Run the FULL workspace suite (legitimate conservative mapping)
+        if: always() && steps.impact.outputs.full == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::notice::Mapping FULL par règle conservatrice : la suite complète est l'exigence de ce diff (issue légitime)."
+          Write-Host "Raisons:"
+          $decision = Get-Content impact.json -Raw | ConvertFrom-Json
+          $decision.reasons | ForEach-Object { Write-Host "  - $_" }
+          cargo test --workspace -- --test-threads=1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::la suite complète a échoué (exit $LASTEXITCODE) : échec réel des tests, pas un échec de mapping"
+            exit $LASTEXITCODE
+          }
+          Write-Host "OK: suite complète exécutée et verte (FULL légitime)."
+
+      # ---------------------------------------------------------------------
+      # 3b. Mapping sélectif : exactement les suites déterminées, une par une,
+      #     sérialisées. On exécute toutes les suites requises même si l'une
+      #     échoue, pour ne pas masquer les autres échecs.
+      # ---------------------------------------------------------------------
+      - name: Run exactly the required Rust tests (serialized)
+        if: always() && steps.impact.outputs.full != 'true'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path impact.json)) {
+            Write-Host "::error::aucune décision d'impact: échec explicite (pas de vert silencieux)"
+            exit 1
+          }
+          $decision = Get-Content impact.json -Raw | ConvertFrom-Json
+          $cargoCommands = @($decision.commands | Where-Object { $_.kind -eq 'cargo' })
+          if ($cargoCommands.Count -eq 0) {
+            Write-Host "::warning::aucune suite Rust requise par le mapping (diff hors code Rust): seuls les contrôles non-Rust s'appliquent"
+            exit 0
+          }
+          $failed = New-Object System.Collections.Generic.List[string]
+          $index = 0
+          foreach ($command in $cargoCommands) {
+            $index += 1
+            $argv = @($command.argv)
+            $label = ($argv -join ' ')
+            Write-Host "::group::[$index/$($cargoCommands.Count)] $label"
+            & $argv[0] @($argv[1..($argv.Length - 1)])
+            $code = $LASTEXITCODE
+            Write-Host "::endgroup::"
+            if ($code -ne 0) {
+              Write-Host "::error::$label a échoué (exit $code)"
+              $failed.Add($label) | Out-Null
+            }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Host "::error::$($failed.Count) suite(s) impactée(s) en échec: $($failed -join ' | ')"
+            exit 1
+          }
+          Write-Host "OK: $($cargoCommands.Count) suite(s) impactée(s) exécutée(s) SÉRIALISÉMENT (--test-threads=1), aucune exclue."
+
+      # ---------------------------------------------------------------------
+      # 4. Garde d'incertitude : seule catégorie qui échoue POUR RAISON DE
+      #    MAPPING. La suite complète de secours (step 3a, car full=true) a déjà
+      #    été exécutée ; ce step rend l'incertitude visible et non contournable.
+      # ---------------------------------------------------------------------
+      - name: Fail explicitly on an uncertain mapping
+        if: always() && steps.impact.outputs.uncertain == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::error::Mapping d'impact INCERTAIN ou erreur interne (exit outil ${{ steps.impact.outputs.tool_exit }}). La suite complète de secours a été exécutée, mais ce job échoue explicitement: corriger les manifestes, la base Git ou l'outil d'impact."
+          if (Test-Path impact.json) {
+            $decision = Get-Content impact.json -Raw | ConvertFrom-Json
+            Write-Host "Raisons:"
+            $decision.reasons | ForEach-Object { Write-Host "  - $_" }
+          }
+          exit 1
+
+      # ---------------------------------------------------------------------
+      # 5. Traçabilité.
+      # ---------------------------------------------------------------------
+      - name: Impact summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path impact.json)) {
+            "## Impact CI conservateur`n`nAucune décision d'impact disponible." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+            exit 0
+          }
+          $d = Get-Content impact.json -Raw | ConvertFrom-Json
+          $lines = @()
+          $lines += '## Impact CI conservateur (MVP-0b L4-E)'
+          $lines += ''
+          $decisionLabel = switch ([string]$d.decision) {
+            'full-conservative' { 'FULL — règle conservatrice de contenu (issue LÉGITIME : vert si les tests passent)' }
+            'full-uncertain'    { 'FULL — mapping INCERTAIN (échec explicite exigé)' }
+            'selective'         { 'SÉLECTIVE (tests ciblés)' }
+            default             { 'INCONNUE (champ decision absent)' }
+          }
+          $uncertainLabel = if ($d.uncertain -eq $true) { 'OUI — échec explicite après exécution de secours' } else { 'non' }
+          $lines += "- Décision: $decisionLabel"
+          $lines += "- Mapping incertain: $uncertainLabel"
+          $lines += '- Politique: un FULL conservateur est évalué par le résultat réel des tests ; seul l''incertain/erreur interne fait échouer le job pour raison de mapping.'
+          $lines += "- Base: $($d.base)"
+          $lines += "- Fichiers modifiés: $($d.changed.Count)"
+          $packagesLabel = if ($d.full -eq $true) { '(workspace entier)' } else { (($d.packages) -join ', ') }
+          $lines += "- Paquets requis: $packagesLabel"
+          $lines += ''
+          $lines += '### Commandes exigées'
+          foreach ($command in $d.commands) { $lines += ('- `' + ($command.argv -join ' ') + '`') }
+          $lines += ''
+          $lines += '### Raisons'
+          foreach ($reason in $d.reasons) { $lines += "- $reason" }
+          if ($d.unknown_paths.Count -gt 0) {
+            $lines += ''
+            $lines += '### Chemins inconnus (fail-closed => FULL)'
+            foreach ($unknown in $d.unknown_paths) { $lines += "- $unknown" }
+          }
+          $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+
+      - name: Scope notice
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Sélection de tests par impact uniquement: ce workflow ne qualifie ni compilateur, ni preuve, ni ABI, ni temps réel, ni release."
+          Write-Host "Aucun test n'est exclu, ignoré ou désactivé; voir docs/mvp/MVP-0b-ci.md pour les règles et limites."
