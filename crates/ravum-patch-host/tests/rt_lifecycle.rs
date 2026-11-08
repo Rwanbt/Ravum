@@ -180,13 +180,13 @@ fn audio_loop(host: &BlockHost, campaign: &Campaign) -> AudioResult {
     let mut saw_v2 = false;
     while !campaign.stop.load(Ordering::SeqCst) {
         // One guard per block: the whole block sees exactly one version.
-        let module = host.enter_rt();
-        match module.manifest.patch_id.as_str() {
+        let program = host.enter_rt();
+        match program.current.manifest.patch_id.as_str() {
             "dsp-gain-v1" => saw_v1 = true,
             "dsp-gain-v2" => saw_v2 = true,
             _ => {}
         }
-        module.process_block(&input, &mut output, &mut state);
+        program.current.process_block(&input, &mut output, &mut state);
         blocks += 1;
         campaign.blocks.fetch_add(1, Ordering::SeqCst);
         std::hint::black_box(output[0]);

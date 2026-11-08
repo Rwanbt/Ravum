@@ -17,7 +17,10 @@ mod host;
 mod reclaimer;
 mod slot;
 
-pub use block::{prepare_block, BlockFn, BlockHost, BlockModule, PreparedBlock};
+pub use block::{
+    prepare_block, BlockFn, BlockHost, BlockModule, BlockProgram, PreparedBlock,
+    DEFAULT_CROSSFADE_FRAMES, MAX_FADE_FRAMES,
+};
 pub use host::{
     inspect_artifact, prepare, ArtifactFacts, ComputeFn, ExpectedAbi, LoadedModule, PatchHost,
     PreparedPatch,
