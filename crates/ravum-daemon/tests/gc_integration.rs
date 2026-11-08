@@ -91,7 +91,11 @@ fn request(revision: u64, seed: u32) -> ravum_daemon::AnalysisRequest {
     }
 }
 
-fn cache_key_for(context: &ravum_daemon::BuildContext, toolchain: &ToolchainInfo, seed: u32) -> String {
+fn cache_key_for(
+    context: &ravum_daemon::BuildContext,
+    toolchain: &ToolchainInfo,
+    seed: u32,
+) -> String {
     // Recompute the daemon identities from the request content exactly like the
     // daemon does, so tests can name the keys the GC deletes.
     let request = request(1, seed);
@@ -101,7 +105,10 @@ fn cache_key_for(context: &ravum_daemon::BuildContext, toolchain: &ToolchainInfo
 }
 
 fn snapshot_for(toolchain: &ToolchainInfo, seed: u32) -> String {
-    request(1, seed).identity(toolchain).expect("identity").snapshot_id
+    request(1, seed)
+        .identity(toolchain)
+        .expect("identity")
+        .snapshot_id
 }
 
 fn dir_size(path: &Path) -> u64 {
@@ -128,8 +135,13 @@ fn seed_three(work: &Path) -> (Daemon, ravum_daemon::BuildContext, ToolchainInfo
     let daemon = daemon_at(work);
     let context = request(1, 1).context;
     for seed in 1..=3 {
-        let report = daemon.analyze(&request(seed as u64, seed)).expect("analysis");
-        assert!(report.is_current() && report.success, "seed {seed} must compile");
+        let report = daemon
+            .analyze(&request(seed as u64, seed))
+            .expect("analysis");
+        assert!(
+            report.is_current() && report.success,
+            "seed {seed} must compile"
+        );
         assert!(!report.cache.hit, "distinct contents must be cache misses");
     }
     let stats = daemon.stats();
@@ -149,7 +161,9 @@ fn gc_keep_recent_serves_recent_without_rustc_and_recompiles_old() {
     let daemon = daemon_at(&work);
     let context = request(1, 1).context;
     for seed in 1..=4u32 {
-        let report = daemon.analyze(&request(seed as u64, seed)).expect("analysis");
+        let report = daemon
+            .analyze(&request(seed as u64, seed))
+            .expect("analysis");
         assert!(report.is_current() && report.success);
         assert!(!report.cache.hit);
     }
@@ -216,13 +230,20 @@ fn gc_keep_recent_serves_recent_without_rustc_and_recompiles_old() {
     // After a restart the kept content is still served from the disk cache.
     drop(daemon);
     let reopened = daemon_at(&work);
-    let disk_hit = reopened.analyze(&request(1, 4)).expect("replay after restart");
+    let disk_hit = reopened
+        .analyze(&request(1, 4))
+        .expect("replay after restart");
     assert!(disk_hit.cache.hit);
     assert_eq!(disk_hit.cache.kind.as_str(), "disk");
     // Content 2 was collected by GC and never recompiled in this session: after a
     // restart it is still a miss, proving the disk entry was really removed.
-    let rebuilt = reopened.analyze(&request(2, 2)).expect("rebuilt after restart");
-    assert!(!rebuilt.cache.hit, "collected content must not be served after restart");
+    let rebuilt = reopened
+        .analyze(&request(2, 2))
+        .expect("rebuilt after restart");
+    assert!(
+        !rebuilt.cache.hit,
+        "collected content must not be served after restart"
+    );
     assert_eq!(reopened.stats().rustc_runs, 1);
 
     let _ = std::fs::remove_dir_all(&work);
@@ -248,9 +269,11 @@ fn gc_never_deletes_current_content() {
         report.protected.last_snapshot_id.as_deref(),
         Some(current_snapshot.as_str())
     );
-    assert!(report.kept.recent.iter().any(|entry| {
-        entry.snapshot_id == current_snapshot && entry.revision == 3
-    }));
+    assert!(report
+        .kept
+        .recent
+        .iter()
+        .any(|entry| { entry.snapshot_id == current_snapshot && entry.revision == 3 }));
     assert!(work
         .join("snapshots")
         .join(&current_snapshot)
@@ -303,7 +326,10 @@ fn gc_dry_run_plans_without_deleting() {
     let report = daemon.gc(&policy).expect("dry-run gc");
     assert!(report.dry_run);
     assert_eq!(report.freed_bytes, 0);
-    assert!(!report.planned.cache_keys.is_empty(), "plan must list victims");
+    assert!(
+        !report.planned.cache_keys.is_empty(),
+        "plan must list victims"
+    );
     assert_eq!(report.before, report.after);
     assert_eq!(dir_size(&work.join("cache")), cache_before);
     assert_eq!(dir_size(&work.join("snapshots")), snapshots_before);
@@ -336,10 +362,16 @@ fn gc_stats_are_coherent_with_filesystem_and_report() {
     let stats = daemon.stats();
     assert_eq!(stats.gc_runs, 1);
     assert_eq!(stats.gc_freed_bytes, report.freed_bytes);
-    assert_eq!(stats.gc_deleted_entries, report.deleted.entry_count() as u64);
+    assert_eq!(
+        stats.gc_deleted_entries,
+        report.deleted.entry_count() as u64
+    );
     // Report sizes match the real filesystem (cache + snapshots + build state).
     assert_eq!(report.after.cache_bytes, dir_size(&work.join("cache")));
-    assert_eq!(report.after.snapshots_bytes, dir_size(&work.join("snapshots")));
+    assert_eq!(
+        report.after.snapshots_bytes,
+        dir_size(&work.join("snapshots"))
+    );
     let build_state = dir_size(&work.join("incremental"))
         + dir_size(&work.join("out"))
         + dir_size(&work.join("units"));
@@ -363,7 +395,9 @@ fn invalid_gc_policies_are_rejected() {
         keep_recent: 0,
         ..Default::default()
     };
-    let error = daemon.gc(&zero_keep).expect_err("keep_recent=0 must be rejected");
+    let error = daemon
+        .gc(&zero_keep)
+        .expect_err("keep_recent=0 must be rejected");
     assert_eq!(error.kind, ErrorKind::InvalidRequest);
     let zero_cap = GcPolicy {
         max_cache_bytes: Some(0),
@@ -397,7 +431,9 @@ fn gc_tolerates_partial_work_directory() {
     assert_eq!(report.after.snapshots, 0);
     assert_eq!(report.after.incremental_contexts, 0);
     // The daemon still answers (recompiles if the verdict was collected).
-    let report = daemon.analyze(&request(30, 3)).expect("analysis after partial gc");
+    let report = daemon
+        .analyze(&request(30, 3))
+        .expect("analysis after partial gc");
     assert!(report.is_current());
     let _ = std::fs::remove_dir_all(&work);
 }
@@ -408,7 +444,10 @@ fn gc_tolerates_partial_work_directory() {
 
 fn run_binary(args: &[&str], stdin: Option<&str>) -> (i32, String, String) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ravum-daemon"));
-    command.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if stdin.is_some() {
         command.stdin(Stdio::piped());
     } else {
@@ -434,7 +473,9 @@ fn run_binary(args: &[&str], stdin: Option<&str>) -> (i32, String, String) {
 fn populate_work_dir(work: &Path) {
     let daemon = daemon_at(work);
     for seed in 1..=2 {
-        let report = daemon.analyze(&request(seed as u64, seed)).expect("analysis");
+        let report = daemon
+            .analyze(&request(seed as u64, seed))
+            .expect("analysis");
         assert!(!report.cache.hit);
     }
     drop(daemon);
@@ -449,11 +490,21 @@ fn one_shot_cli_gc_reports_json_and_exit_codes() {
 
     // Valid policy with dry-run: exit 0, one JSON report on stdout.
     let (code, stdout, stderr) = run_binary(
-        &["--gc", "--work-dir", &work_text, "--dry-run", "--keep-recent", "1", "--max-cache-bytes", "1"],
+        &[
+            "--gc",
+            "--work-dir",
+            &work_text,
+            "--dry-run",
+            "--keep-recent",
+            "1",
+            "--max-cache-bytes",
+            "1",
+        ],
         None,
     );
     assert_eq!(code, 0, "dry-run gc must exit 0; stderr={stderr}");
-    let report: Value = serde_json::from_str(stdout.trim()).expect("stdout must be one JSON report");
+    let report: Value =
+        serde_json::from_str(stdout.trim()).expect("stdout must be one JSON report");
     assert_eq!(report["kind"], "ravum-daemon-gc-report");
     assert_eq!(report["mode"], "one_shot");
     assert_eq!(report["dry_run"], true);
@@ -463,12 +514,18 @@ fn one_shot_cli_gc_reports_json_and_exit_codes() {
 
     // Inline JSON policy, real run: exit 0 and bytes really freed.
     let policy = r#"{"max_cache_bytes":1,"max_snapshot_bytes":1,"keep_recent":1}"#;
-    let (code, stdout, stderr) = run_binary(&["--gc", "--work-dir", &work_text, "--policy", policy], None);
+    let (code, stdout, stderr) = run_binary(
+        &["--gc", "--work-dir", &work_text, "--policy", policy],
+        None,
+    );
     assert_eq!(code, 0, "real gc must exit 0; stderr={stderr}");
     let report: Value = serde_json::from_str(stdout.trim()).expect("valid JSON report");
     assert_eq!(report["dry_run"], false);
     assert!(report["freed_bytes"].as_u64().unwrap_or(0) > 0);
-    assert!(!report["deleted"]["cache_keys"].as_array().unwrap().is_empty());
+    assert!(!report["deleted"]["cache_keys"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 
     // Invalid policy: exit 1 with an explicit error.
     let (code, _stdout, stderr) = run_binary(
@@ -561,3 +618,115 @@ fn server_gc_command_protects_recent_and_collects_old() {
 /// type explicitly referenced so refactors do not silently drop the check.
 #[allow(dead_code)]
 fn _assert_error_type(_: DaemonError) {}
+// ---------------------------------------------------------------------------
+// Incremental session compaction inside a build context (P0-H §13)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn gc_compaction_real_rustc_sessions_and_valid_after() {
+    let _guard = rustc_guard();
+    let work = temp_dir("compaction-real");
+    let daemon = daemon_at(&work);
+    let mut context = request(1, 1).context;
+    context.crate_name = "compact_unit".to_owned();
+    let mut last_report = None;
+    for seed in 1..=20u32 {
+        let mut req = request(seed as u64, seed);
+        req.context = context.clone();
+        let report = daemon.analyze(&req).expect("analysis");
+        assert!(report.is_current() && report.success && !report.cache.hit);
+        last_report = Some(report);
+    }
+    let context_id = last_report.expect("at least one analysis").context_id;
+    let short = &context_id[..12];
+    let context_dir = work.join("incremental").join(short);
+    fn count_sessions(root: &std::path::Path) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&current) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("s-") {
+                    found.push(path.display().to_string());
+                } else {
+                    stack.push(path);
+                }
+            }
+        }
+        found
+    }
+    let session_names = count_sessions(&context_dir);
+    let sessions_before = session_names.len();
+    assert!(
+        sessions_before >= 2,
+        "20 real compilations must leave several rustc sessions in {} (got {}: {:?}); entries={:?}",
+        context_dir.display(),
+        sessions_before,
+        session_names,
+        std::fs::read_dir(&context_dir).map(|entries| entries
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect::<Vec<_>>())
+    );
+    let disk_before = dir_size(&work);
+
+    let policy = ravum_daemon::GcPolicy {
+        compact_incremental: true,
+        keep_incremental_sessions: 1,
+        keep_recent: 4,
+        ..Default::default()
+    };
+    let started = std::time::Instant::now();
+    let report = daemon.gc(&policy).expect("compacting gc");
+    let gc_ms = started.elapsed().as_millis() as u64;
+    assert!(report.compaction.enabled);
+    assert!(
+        report.compaction.sessions_deleted >= 1,
+        "compaction must remove older sessions: {:?}",
+        report.compaction
+    );
+    assert_eq!(report.compaction.sessions_kept, 1);
+    assert!(report.compaction.bytes_freed > 0);
+    assert!(report.freed_bytes >= report.compaction.bytes_freed);
+    let disk_after = dir_size(&work);
+    assert!(
+        disk_after < disk_before,
+        "compaction must free disk (before={disk_before} after={disk_after})"
+    );
+    let sessions_after = count_sessions(&context_dir).len();
+    assert_eq!(sessions_after, 1, "exactly the newest session is kept");
+    // Cache intact: a recently served content is still a cache hit.
+    let mut recent_req = request(100, 20);
+    recent_req.context = context.clone();
+    let recent = daemon.analyze(&recent_req).expect("recent analysis");
+    assert!(
+        recent.cache.hit,
+        "the cache must stay valid after compaction"
+    );
+    assert_eq!(recent.timings.analysis_ms, 0);
+    // A brand-new content still analyses correctly after compaction.
+    let mut fresh_req = request(101, 21);
+    fresh_req.context = context.clone();
+    let fresh = daemon
+        .analyze(&fresh_req)
+        .expect("post-compaction analysis");
+    assert!(fresh.is_current() && fresh.success);
+    println!(
+        "compaction: sessions {}->{}, bytes {}->{}, freed={}, gc={}ms, post-compaction analysis={}ms",
+        sessions_before,
+        sessions_after,
+        disk_before,
+        disk_after,
+        report.freed_bytes,
+        gc_ms,
+        fresh.timings.analysis_ms
+    );
+    let _ = std::fs::remove_dir_all(&work);
+}
