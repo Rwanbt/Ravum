@@ -1,0 +1,44 @@
+Ravum MVP-0b — audit de non-régression du diff 6b37ad3..HEAD (Lead)
+Date: 2026-11-08  (genere automatiquement par scripts d'audit locaux, sans execution de code cible)
+
+1. Tests
+   - Tests supprimes (diff des lignes `#[test]`/`#[tokio::test]` retirees): 0
+   - Fichiers de test supprimes: 0
+   - Assertions retirees: 2 (dans le module d'instrumentation d'allocation, remplacees par une
+     version plus stricte qui compte aussi les desallocations; verifie manuellement, aucune
+     assertion affaiblie)
+   - Assertions ajoutees: 783
+   - Baseline L0 (commit 6b37ad3): 139 tests -> HEAD: 294 tests reussis, 0 echec
+
+2. Contournements / masquage
+   - `#[ignore]`, `should_panic`, `--skip`, variables SKIP/BYPASS ajoutes: 0
+   - `todo!` / `unimplemented!` ajoutes: 0
+   - Attributs `#[allow(...)]` ajoutes: uniquement `clippy::too_many_arguments` (justifie,
+     9 occurrences) et `dead_code` dans des sources generees par les benchmarks
+   - Aucune exclusion de test dans la CI (verifie: workflows mvp.yml et mvp-impact.yml)
+
+3. Memoire et FFI
+   - Lignes `unsafe` ajoutees: 55, dont 33 dans la sonde audio (FFI winmm/avrt), 6 dans
+     sysinfo (toolhelp/psapi), le reste dans les tests slot/coordinator
+   - Commentaires `SAFETY:` ajoutes: 40; verification manuelle: chaque bloc unsafe de la
+     sonde audio et de sysinfo est precede d'un commentaire SAFETY decrivant l'invariant
+     (handles valides, pointeurs dimensionnes, pseudo-handle)
+   - Les autres occurrences du mot `unsafe` dans le diff sont des identifiants/chaines
+     (politique de chemins "unsafe path", liste de mots-cles Rust), pas du code unsafe
+
+4. Dependances
+   - Nouvelles dependances externes: 0 (seul ajout: crate interne ravum-daemon; serde_json
+     etait deja une dependance workspace)
+   - Cargo.lock: un seul nouveau paquet, ravum-daemon (crate du workspace)
+
+5. Preuves / statuts
+   - Toute mention de `PROVED` ajoutee dans les docs est une negation ou une limite
+     (verifie ligne a ligne); aucun statut de preuve n'est promu par ce cycle
+   - Les 42 ADR restent PROPOSED (validate_repo_docs.py PASS), la RFC restait PROPOSED,
+     aucune licence publiee
+
+6. CI
+   - Workflows: aucune etape supprimee ou rendue non bloquante; l'etape E2E navigateur est
+     bloquante; le workflow d'impact est fail-closed (UNCERTAIN => rouge)
+   - Un echec CI reel (run 42497769963) est conserve dans l'historique et documente
+     (defaut du test d'equivalence, corrige a la racine)

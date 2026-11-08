@@ -308,8 +308,10 @@ d'un autre worker (WIP), jamais présents dans un commit.
   hôte CLAP/VST3/DAW, fenêtres longues (minutes) et autres machines/pilotes.
 - **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` — plan
   proposé dans `MVP-0b-verification.md`.
-- **Soak test RSS / fuite longue** du daemon ; **deux daemons partageant un même
-  `work_dir`** ; crash pendant écriture de cache.
+- **Soak test RSS / fuite longue** du daemon : seul un soak court (30 requêtes, 38,8 s)
+  est fait ; un soak de plusieurs heures, deux daemons partageant un même `work_dir` et
+  un crash pendant écriture de cache restent non exécutés. Une anomalie de 1re analyse
+  sous charge est consignée (§16) et reste à investiguer.
 - **S8 avec de vrais agents LLM** : agents scriptés seulement, tokens et supervision non
   mesurés.
 - **S8 sur un vrai projet multi-crates** ; **fixtures macro-lourdes**.
@@ -365,6 +367,16 @@ d'un autre worker (WIP), jamais présents dans un commit.
 - S8 : RAM pic coordinateur 5,5 Mo ; testeurs 93–142 Mo ; CPU 1,8–2,6 s par campagne ;
   disque ~12,6 Mo par réplique.
 - Sonde de jigue : lateness max 2,6 ms sous 52 % de charge — aucune extrapolation hard-RT.
+- **Soak court du daemon** (`scripts/soak-daemon.ps1`, 30 requêtes séquentielles, 38,8 s,
+  contenu neuf toutes les 4 requêtes puis resoumission) : WorkingSet 5,93 → **6,10 Mo**
+  (max 6,13 Mo, **+0,17 Mo** sur la campagne), état disque +46,5 Kio (23 snapshots d'une
+  unité minuscule, même contexte incrémental), 7 hits mémoire, 23 misses, `peak_active_jobs=1`,
+  arrêt propre (exit 0). **Une anomalie réelle** : la 1re analyse de la campagne a échoué
+  avec des erreurs `rustc` de type « only metadata stub found for rlib dependency core »
+  (durée 9,1 s), puis toutes les suivantes ont réussi ; non reproduite sur 3 démarrages
+  daemon frais (3/3 OK) ni sur les probes de diagnostic — consignée comme **anomalie
+  ouverte** (piste P0-D), pas masquée. Ce soak fait des minutes, pas des heures, et un
+  seul client séquentiel : il ne prouve pas l'absence de fuite longue.
 
 ## 17. Résultats E2E navigateur
 
@@ -421,8 +433,12 @@ d'échéance, et la charge est artificielle.
 
 ## 20. Régressions éventuelles
 
-- **Aucune régression de test** : 275/275 verts, CI verte, demos M1/COLLAB-1/M2/M3/M4
-  inchangées et exécutées en CI.
+- **Aucune régression de test** : **294/294 verts** (baseline L0 : 139), CI verte, demos
+  M1/COLLAB-1/M2/M3/M4 inchangées et exécutées en CI. **Audit de non-régression du diff
+  complet** (`evidence/mvp0b-non-regression-audit.txt`) : 0 test supprimé, 0 `#[ignore]`
+  ajouté, 0 `todo!`/`unimplemented!`, 2 assertions retirées mais remplacées par une version
+  plus stricte, 55 lignes `unsafe` ajoutées couvertes par 40 commentaires `SAFETY:` (FFI
+  Windows confinée), **0 dépendance externe nouvelle**, aucun statut de preuve promu.
 - Changements de comportement **assumés et documentés** :
   `BlockHost::process_rt` utilise une garde (payload publié `BlockProgram`) — API interne
   des tests adaptée ; les diagnostics `rustc` sont désormais structurés au lieu d'un
