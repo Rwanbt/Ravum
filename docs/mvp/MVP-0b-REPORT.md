@@ -30,7 +30,7 @@
 | Dernier commit de code | `715bd75` ; dernier commit du lot : rapport de consolidation `f965d70` |
 | PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 262 fichiers, +93 374/−297 |
 | PR #78 | inchangée, non fusionnée, non réécrite |
-| CI du dernier commit poussé | run [42498344011](https://github.com/Rwanbt/Ravum/actions/runs/42498344011) — **succès** (18 étapes dont l'E2E navigateur) ; workflow d'impact aussi vert ([42498344027](https://github.com/Rwanbt/Ravum/actions/runs/42498344027)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
+| CI du lot validé (code + docs) | run [42510525751](https://github.com/Rwanbt/Ravum/actions/runs/42510525751) — **succès** (build, **312 tests**, démos M1/COLLAB-1/M2/M3/M4, **E2E navigateur**, artefacts) ; workflow d'impact aussi vert ([42510525683](https://github.com/Rwanbt/Ravum/actions/runs/42510525683)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
 | Tests workspace | **312 réussis, 0 échec**, 78 binaires, 65,1 s (après ajout du GC daemon et du backend WASAPI) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
 | Vault | 5 sessions publiées et vérifiées (voir §25) |
