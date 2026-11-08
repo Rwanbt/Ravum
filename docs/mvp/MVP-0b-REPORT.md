@@ -50,7 +50,7 @@ tests), plutôt que de se fier aux rapports.
 | `s8-bench` (Worker E) | S8 benchmark | harnais `benchmarks/s8`, 15 campagnes, preuves JSON | protocole `ok`, verdict relu |
 | `impact-ci` (Worker I) | L4-E CI sélective | `tools/impact`, workflow `mvp-impact.yml`, selftest 48 cas | selftest re-exécuté, correction du FULL légitime |
 | `collab-4` (Worker J) | L3.4 collaboration ↔ daemon | `ravum collab-cycle`, graphe d'unités fail-closed, 36 tests CLI, preuve JSON | 36 tests re-exécutés, démo re-jouée |
-| `audio-probe` (Worker K) | L4-C audio réel | sonde `waveOut` silencieuse, 5 preuves réelles, doc audio-host refondue | 6 tests du harnais re-exécutés, sonde relancée par le Lead (ratio 1,001, 11/11 swaps) |
+| `audio-probe` (Worker K puis L) | L4-C audio réel + priorité | sonde `waveOut` silencieuse (5 preuves) puis MMCSS/priorité Win32 et campagne sous charge (9 preuves brutes + récapitulatif) | 6 tests harnais re-exécutés, sonde MMCSS relancée par le Lead (mmcss_acquired=true, 0 alloc), campagne vérifiée |
 
 Le Lead a réalisé lui-même : L0 (audit/baseline), L1-A (cycle de vie temps réel DSP),
 L4-B (crossfade), L4-C/L4-D (statuts honnêtes), L5.3 (licence), l'intégration CLI du
@@ -273,6 +273,11 @@ la racine, **pas masquées** :
    initial encore en vol sur le runner Chrome complet, plus lent). Ni l'assertion ni le
    produit n'étaient faux. Correctif : l'UI expose `data-ravum-ready="1"` après le premier
    rendu, le harnais attend ce signal ; **3 exécutions locales 10/10** puis CI verte.
+5. **`ravum-patch-host`, test instable** : `unloading_happens_off_the_dropping_thread`
+   (reclaimer) pouvait échouer quand le test de burst voisin déchargeait un module entre
+   l'instantané `live_modules()` et l'assertion. Les 3 tests du module sont maintenant
+   sérialisés par un verrou de test (assertion inchangée) ; **10 exécutions consécutives
+   8/8**, puis suite complète verte.
 
 Défaillances transitoires d'environnement, documentées sans les compter comme régressions :
 `STATUS_DLL_INIT_FAILED` lors d'un link concurrent, un `link.exe exit 1104` (fichier en
@@ -281,11 +286,11 @@ d'un autre worker (WIP), jamais présents dans un commit.
 
 ## 14. Tests non exécutés
 
-- **Chemin audio réel** : désormais **exécuté** via `waveOut` (silence) — 512 frames tient
-  la cadence (ratio 1,001), 0 alloc/free, 11/11 swaps ; 256 frames sur la voie par défaut
-  décroche (ratio 0,53). Restent non exécutés : **WASAPI/ASIO/MMCSS**, priorité temps réel,
-  **XRUN réels** (non observables via `waveOut`), hôte CLAP/VST3/DAW, fenêtres longues
-  (minutes) et autres machines/pilotes.
+- **Chemin audio réel** : **exécuté** via `waveOut` (silence) — 512 frames tient la cadence
+  (ratio 1,001), 0 alloc/free, 11/11 swaps ; 256 frames sur la voie par défaut décroche
+  (ratio 0,53) ; **MMCSS + priorité Win32 mesurés** sous charge CPU contrôlée (9 runs).
+  Restent non exécutés : **WASAPI/ASIO**, **XRUN réels** (non observables via `waveOut`),
+  hôte CLAP/VST3/DAW, fenêtres longues (minutes) et autres machines/pilotes.
 - **Prouveur externe** (Kani) : non installé, aucun harness, donc `Unsupported` — plan
   proposé dans `MVP-0b-verification.md`.
 - **Soak test RSS / fuite longue** du daemon ; **deux daemons partageant un même
@@ -324,6 +329,8 @@ d'un autre worker (WIP), jamais présents dans un commit.
 | Périphérique réel `waveOut`, 256 frames (défaut) | non mesuré | ratio **0,53**, ~25,6 kéch/s, 292 tampons en retard | le pilote par défaut ne tient pas 5,33 ms ; limite du chemin, pas du DSP |
 | Même chemin sous charge CPU 100 % | — | ratio 0,93, lateness max **≈208 ms**, **0 alloc**, 11/11 swaps | aucune revendication hard-RT possible |
 | Swaps à chaud sur périphérique (avec/sans fondu) | — | 11/11 activés, delta **0,0291** avec fondu vs **0,1260** sans | clic reproduit et supprimé sur le chemin réel |
+| MMCSS « Pro Audio » + critical, charge CPU 100 % | non mesuré | **0 tampon en retard**, lateness max **2,5–2,7 ms**, marge +29 ms, ratio 1,0004–1,0009 | l'ordonnanceur protège le thread de rendu sous charge concurrente |
+| Sans MMCSS, même charge | non mesuré | run dégradé (3 tampons, max 15,7 ms) et run décroché (**255 tampons, max 134,4 ms, marge −111,9 ms**) | sans priorité, la charge désordonnance le thread ; aucune garantie hard-RT pour autant |
 | Cycle complet, contenu **inchangé** (édition→activation) | 85–177 ms (p50) | **8–13 ms** (p50), p95 9–18 ms | ×10 à ×13, cache de verdicts + cache d'artefacts |
 | Cycle complet, **édition réelle**, petite unité | 316 ms p50 / 335 ms p95 | 339 ms p50 / 362 ms p95 | MVP-0b ≈ +7 %, build à froid dominant |
 | Cycle complet, **édition réelle**, unité 2 313 lignes | 524 ms p50 / 702 ms p95 | 600 ms p50 / 743 ms p95 | cible p95 < 500 ms **manquée** à cette taille |
@@ -377,8 +384,15 @@ voie MOTU par défaut, la cadence s'effondre (ratio 0,53) ; le même 256 frames 
 l'endpoint Realtek tient (ratio 1,001) : c'est une propriété de la voie/pilote, pas du DSP.
 Sous charge CPU 100 % : ratio 0,93, lateness max ≈208 ms, toujours 0 allocation et 11/11
 swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
-**Aucun WASAPI/ASIO/MMCSS, aucune priorité temps réel, aucun XRUN observable via
-`waveOut`, aucune qualification hard-RT.**
+Sous charge CPU contrôlée (12 busy-loops, 100 % mesuré) : **MMCSS « Pro Audio » +
+`AVRT_PRIORITY_CRITICAL`** maintient 0 tampon en retard sur 2 runs (lateness max 2,5–2,7 ms,
+marge +29 ms, ratio 1,0004–1,0009), alors que sans MMCSS le même protocole donne un run
+dégradé (3 tampons, max 15,7 ms) et un run décroché (255 tampons, max 134,4 ms, marge
+−111,9 ms). Au repos, MMCSS n'apporte rien de mesurable ; la priorité Win32 brute
+(`SetThreadPriority`) est aussi mesurée (normal/above/high/time-critical = 0/1/2/15) et
+appliquée après MMCSS. **Aucun WASAPI/ASIO, aucun XRUN observable via `waveOut`, aucune
+qualification hard-RT** : MMCSS est une classe d'ordonnancement, pas une garantie
+d'échéance, et la charge est artificielle.
 
 ## 19. Résultats de vérification
 
@@ -418,10 +432,11 @@ swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
 - COLLAB-2/3 : pas d'AST complète (heuristiques), pas de CRDT, vérification limitée à une
   racine de crate inférée, 2 faux conflits assumés, `--verify-tests` exécute du code du
   snapshot (opt-in, pas de bac à sable).
-- Audio : chemin `waveOut` réel exercé (silence) mais API legacy émulée, sans
-  WASAPI/ASIO/MMCSS ni priorité temps réel ; XRUN non observables ; un seul OS, un seul
-  jeu de pilotes, fenêtres de 3 s ; 256 frames décroche sur la voie par défaut ; la charge
-  CPU a montré ≈208 ms de lateness sans allocation, donc aucune prétention hard-RT.
+- Audio : chemin `waveOut` réel exercé (silence) avec MMCSS/priorité mesurés sous charge
+  contrôlée, mais API legacy émulée, sans WASAPI/ASIO ; XRUN non observables ; un seul OS,
+  un seul jeu de pilotes, fenêtres de 3 s, charge artificielle (busy-loops, pas
+  d'interruptions audio), ordre des cellules fixe ; 256 frames décroche sur la voie par
+  défaut ; MMCSS ne garantit aucune échéance — aucune prétention hard-RT.
 - Vérification : aucun prouveur externe, aucun `PROVED` général, aucune preuve de sûreté
   mémoire du code natif.
 - E2E navigateur : Chromium/Edge uniquement, pas d'a11y, pas de TLS, un onglet.
@@ -434,7 +449,7 @@ swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
 
 | Risque | Sévérité | Mitigation actuelle | Reste à faire |
 |---|---|---|---|
-| Pas de qualification audio temps réel | haute | chemin `waveOut` réel mesuré (silence) + limites publiées | WASAPI/ASIO/MMCSS + priorité RT, XRUN, hôte CLAP/VST3, plateforme qualifiée |
+| Pas de qualification audio temps réel | haute | chemin `waveOut` + MMCSS mesurés (silence) + limites publiées | WASAPI/ASIO, XRUN, hôte CLAP/VST3, fenêtres longues, plateforme qualifiée |
 | P0-A toujours manquée sur code modifié | haute | daemon + mesure | réduire le plancher de démarrage `rustc` (processus persistant, stratégie adaptative) |
 | S8 défavorable sans mesure LLM | moyenne | verdict publié | campagne avec vrais agents, tokens mesurés |
 | Faux conflits COLLAB (2/10) | moyenne | fail-closed + documentation | hybride ancres+symboles |
@@ -469,8 +484,8 @@ swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
 2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
    features), vérification sémantique des changements acceptés, historique d'activation
    natif partagé avec le daemon.
-3. Harnais WASAPI/ASIO + MMCSS et priorité temps réel, plugin CLAP minimal, mesures XRUN
-   sur fenêtres longues et plusieurs machines/pilotes.
+3. Harnais WASAPI/ASIO (MMCSS et priorité déjà mesurés sur `waveOut`), plugin CLAP
+   minimal, mesures XRUN sur fenêtres longues et plusieurs machines/pilotes.
 4. Installer Kani dans un environnement dédié et écrire un harness borné versionné.
 5. GC/compaction de l'état incrémental ; soak test mémoire ; deux daemons sur un `work_dir`.
 6. Hybride ancres syntaxiques + symboles pour supprimer les 2 faux conflits ; campagne S8
