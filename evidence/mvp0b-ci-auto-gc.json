@@ -410,6 +410,55 @@
     "le daemon tourne in-process dans le harnais : le RSS mesuré est celui du processus de benchmark",
     "le GC auto ne collecte que des contextes de build entiers : les internes incrémentaux de rustc ne sont jamais compactés (plancher de disque)",
     "le plafond CI de 1 Mio est une borne grossière (marge ~5,8x sur le max mesuré) ; la borne réelle est portée par la politique (max < min) et par auto_gc_runs >= 1",
-    "preuve locale exécutée sur une machine partagée et chargée ; GitHub Actions n’a pas encore exécuté ce job"
-  ]
+    "preuve locale exécutée sur une machine partagée et chargée ; le job a ensuite été exécuté une fois sur GitHub Actions avec succès (run 42523426221) — une exécution ne prouve pas une stabilité dans le temps"
+  ],
+  "ci_execution": {
+    "first_real_execution": true,
+    "status": "success",
+    "repository": "Rwanbt/Ravum",
+    "workflow_file": ".github/workflows/mvp.yml",
+    "workflow_name": "MVP product checks (build, tests, demos)",
+    "run_id": 42523426221,
+    "run_url": "https://github.com/Rwanbt/Ravum/actions/runs/42523426221",
+    "run_overall_conclusion": "success",
+    "job_id": 128861666582,
+    "job_name": "Bounded automatic GC (opt-in path, bounded soak)",
+    "job_conclusion": "success",
+    "job_started_utc": "2026-11-08T21:05:37Z",
+    "job_completed_utc": "2026-11-08T21:06:29Z",
+    "job_duration_s": 52,
+    "step_durations_s": {
+      "checkout": 8,
+      "rust_toolchain": 7,
+      "cache_restore": 5,
+      "build_harness": 14,
+      "bounded_soak": 6,
+      "assert_invariants": 1,
+      "upload_artifact": 2
+    },
+    "invariants_passed": 18,
+    "invariants_failed": 0,
+    "ci_log_tail": [
+      "PASS  valid (valid=True)",
+      "PASS  auto.failures (auto.failures=0)",
+      "PASS  control.failures (control.failures=0)",
+      "PASS  auto.requests (auto.requests=24)",
+      "PASS  auto.auto_gc.enabled (enabled=True)",
+      "PASS  auto.auto_gc.runs (runs=5)",
+      "PASS  auto.auto_gc.failures (failures=0)",
+      "PASS  auto.auto_gc.checks (checks=6)",
+      "PASS  auto.auto_gc.last.ok (last.ok=True)",
+      "PASS  auto.settled (settled=True)",
+      "PASS  auto.recent.hit_without_compiler (recent.hit_without_compiler=True)",
+      "PASS  auto.old.success (old.success=True)",
+      "PASS  auto.policy.enabled (policy.enabled=True)",
+      "PASS  auto.policy.bounded (max=16384 < min=32768)",
+      "PASS  control.auto_gc.disabled (control.enabled=False)",
+      "PASS  auto.disk_bytes.max <= ceiling (max=183332 B <= 1048576)",
+      "PASS  auto.disk_bytes.end <= ceiling (end=67284 B <= 1048576)",
+      "PASS  auto.journal_lines (journal_lines=5)",
+      "OK: 18 bounded auto-GC invariants hold (auto_gc_runs=5, disk_max=183332 B <= 1048576 B)."
+    ],
+    "note": "Le run global (job mvp + job auto-gc) est vert ; le job auto-gc a produit et uploadé son artefact auto-gc-evidence."
+  }
 }
