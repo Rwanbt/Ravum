@@ -1,0 +1,16 @@
+{
+  "id": "s05_append_tail",
+  "description": "Insertion en fin de fichier.",
+  "path": "src/lib.rs",
+  "expect": "accept",
+  "symbols_a": [
+    "delta"
+  ],
+  "symbols_b": [
+    "beta"
+  ],
+  "merged_contains": [
+    "20",
+    "delta"
+  ]
+}

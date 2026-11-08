@@ -1,0 +1,13 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 2632e68..45fa4a4 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,7 +1,7 @@
+ #![allow(dead_code)]
+ 
+ fn helper(x: u32) -> u32 {
+-    x + 1
++    x + 5
+ }
+ 
+ fn compose(x: u32) -> u32 {

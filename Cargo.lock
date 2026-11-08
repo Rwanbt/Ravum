@@ -319,6 +319,7 @@ name = "ravum-workspace-coordinator"
 version = "0.1.0"
 dependencies = [
  "ravum-protocol",
+ "ravum-rust-adapter",
  "ravum-snapshot",
  "serde",
  "serde_json",

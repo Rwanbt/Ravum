@@ -1,0 +1,13 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 8968da4..6bd8e9d 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,7 +1,7 @@
+ #![allow(dead_code)]
+ 
+ fn alpha() -> u32 {
+-    1
++    99
+ }
+ 
+ fn beta() -> u32 {

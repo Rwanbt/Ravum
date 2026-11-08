@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 77819b6..c15008f 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,6 +1,6 @@
+ #![allow(dead_code)]
+ 
+ #[no_mangle]
+-pub extern "C" fn abi_entry(value: u32) -> u32 {
++pub extern "C" fn abi_entry(value: u64) -> u32 {
+     value + 1
+ }

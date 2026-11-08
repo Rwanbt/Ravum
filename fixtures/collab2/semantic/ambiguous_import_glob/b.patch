@@ -1,0 +1,10 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index b74e759..046cd00 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -6 +6 @@ fn s() -> u32 { 0 }
+-mod w {}
++mod b { pub fn f() -> u32 { 2 } }
+@@ -8 +8 @@ fn t() -> u32 { 0 }
+-fn u() -> u32 { 0 }
++use b::*;

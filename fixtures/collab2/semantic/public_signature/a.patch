@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 54985e8..fbd6f44 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,5 +1,5 @@
+ #![allow(dead_code)]
+ 
+-pub fn area(width: u32) -> u32 {
+-    width * 2
++pub fn area(width: u32, height: u32) -> u32 {
++    width * height
+ }

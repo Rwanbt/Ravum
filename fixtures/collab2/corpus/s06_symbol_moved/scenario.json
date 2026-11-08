@@ -1,0 +1,15 @@
+{
+  "id": "s06_symbol_moved",
+  "description": "Symbole deplace: alpha deplace apres beta, B edite beta.",
+  "path": "src/lib.rs",
+  "expect": "accept",
+  "symbols_a": [
+    "alpha"
+  ],
+  "symbols_b": [
+    "beta"
+  ],
+  "merged_contains": [
+    "20"
+  ]
+}

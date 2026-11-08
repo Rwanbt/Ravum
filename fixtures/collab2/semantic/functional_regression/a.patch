@@ -1,0 +1,13 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 1a18e3a..fdb6eb4 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,7 +1,7 @@
+ #![allow(dead_code)]
+ 
+ fn double(value: u32) -> u32 {
+-    value * 2
++    value + 2
+ }
+ 
+ #[cfg(test)]

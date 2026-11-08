@@ -1,0 +1,13 @@
+{
+  "id": "s09_same_function_disjoint_lines",
+  "description": "Meme fonction, lignes differentes: aucune strategie textuelle ne voit le conflit d intention.",
+  "path": "src/lib.rs",
+  "expect": "same_function_conflict",
+  "symbols_a": [
+    "alpha"
+  ],
+  "symbols_b": [
+    "alpha"
+  ],
+  "merged_contains": []
+}

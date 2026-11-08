@@ -1,0 +1,16 @@
+{
+  "id": "s01_two_functions",
+  "description": "Deux fonctions independantes du meme fichier.",
+  "path": "src/lib.rs",
+  "expect": "accept",
+  "symbols_a": [
+    "alpha"
+  ],
+  "symbols_b": [
+    "beta"
+  ],
+  "merged_contains": [
+    "10",
+    "20"
+  ]
+}
