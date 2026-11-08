@@ -54,6 +54,12 @@ pub struct DspSessionReport {
     pub overruns: u64,
     /// Allocations performed on the audio thread (must be zero).
     pub allocations_on_audio_thread: u64,
+    /// Deallocations performed on the audio thread (must be zero).
+    ///
+    /// Additive field (schema_version stays 1): an older report without it still
+    /// deserializes, and its absence means "not measured", never zero.
+    #[serde(default)]
+    pub deallocations_on_audio_thread: u64,
     /// Largest |x[n] - x[n-1]| observed on the output.
     pub max_sample_delta: f32,
     /// Same metric measured on a pure sine of the same amplitude, as a baseline.
@@ -94,6 +100,7 @@ mod tests {
             },
             overruns: 0,
             allocations_on_audio_thread: 0,
+            deallocations_on_audio_thread: 0,
             max_sample_delta: 0.12,
             baseline_sample_delta: 0.11,
             swaps: 1,

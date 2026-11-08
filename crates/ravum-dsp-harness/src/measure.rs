@@ -7,7 +7,9 @@
 
 use ravum_protocol::{DspBlockTimings, DspSessionReport, DspState};
 
-use crate::alloc::{allocations_on_this_thread, reset_thread_counter};
+use crate::alloc::{
+    allocations_on_this_thread, deallocations_on_this_thread, reset_thread_counters,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SessionConfig {
@@ -57,6 +59,9 @@ pub struct SessionMeasurement {
     pub timings: DspBlockTimings,
     pub overruns: u64,
     pub allocations: u64,
+    /// Frees observed on the same thread. A retired module freed by the callback is
+    /// exactly what this counter is meant to catch.
+    pub deallocations: u64,
     pub max_sample_delta: f32,
     pub baseline_sample_delta: f32,
 }
@@ -76,6 +81,7 @@ impl SessionMeasurement {
             block_timings: self.timings,
             overruns: self.overruns,
             allocations_on_audio_thread: self.allocations,
+            deallocations_on_audio_thread: self.deallocations,
             max_sample_delta: self.max_sample_delta,
             baseline_sample_delta: self.baseline_sample_delta,
             swaps,
@@ -121,6 +127,7 @@ where
     let mut state = initial_state;
     let mut samples: Vec<u64> = Vec::with_capacity(config.blocks as usize);
     let mut allocations = 0u64;
+    let mut deallocations = 0u64;
     let mut overruns = 0u64;
     let mut max_delta = 0f32;
     let mut previous_sample = previous_output_sample;
@@ -128,11 +135,12 @@ where
 
     for block in 0..config.blocks {
         fill_sine(&mut input, block, &config);
-        reset_thread_counter();
+        reset_thread_counters();
         let started = std::time::Instant::now();
         process(&input, &mut output, &mut state);
         let elapsed_us = started.elapsed().as_micros() as u64;
         allocations = allocations.saturating_add(allocations_on_this_thread());
+        deallocations = deallocations.saturating_add(deallocations_on_this_thread());
         samples.push(elapsed_us);
         if period_us > 0 && elapsed_us > period_us {
             overruns += 1;
@@ -163,6 +171,7 @@ where
             timings,
             overruns,
             allocations,
+            deallocations,
             max_sample_delta: max_delta,
             baseline_sample_delta: baseline,
         },
@@ -230,6 +239,10 @@ mod tests {
         assert_eq!(
             measurement.allocations, 0,
             "copying a block must not allocate"
+        );
+        assert_eq!(
+            measurement.deallocations, 0,
+            "copying a block must not free, either"
         );
         assert_eq!(measurement.timings.count, 20);
         // A pass-through cannot exceed the input's own sample-to-sample delta.

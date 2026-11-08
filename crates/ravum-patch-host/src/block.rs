@@ -111,6 +111,10 @@ impl BlockHost {
     /// First activation of a fresh process: ABI validated, no verification evidence
     /// yet, so the status is `Assumed`.
     pub fn bootstrap(expected: ExpectedAbi, path: &Path) -> Result<Self, RejectReason> {
+        // Start the reclaimer before any library can be dropped, so no `Drop` path can
+        // ever spawn a thread (that would be an unbounded operation on whichever thread
+        // drops the first library).
+        crate::reclaimer::init_reclaimer();
         let prepared = prepare_block(path, &expected)?;
         Ok(Self {
             expected,
@@ -155,7 +159,7 @@ impl BlockHost {
         let activate_started = Instant::now();
         {
             let _writer = self.writer.lock().unwrap_or_else(|e| e.into_inner());
-            let active = self.slot.load();
+            let active = self.slot.load_owning();
             if active.artifact_id == prepared.module.artifact_id {
                 drop(active);
                 drop(_writer);
@@ -199,16 +203,29 @@ impl BlockHost {
         report
     }
 
-    /// Audio-thread entry point: lock-free, allocation-free.
+    /// Audio-thread entry point: lock-free, allocation-free **and free-free**.
+    ///
+    /// The reader guard is non-owning: it cannot release the last `Arc` reference, so
+    /// the retired module's `Drop` (and therefore the deferred library release) can
+    /// never run on this thread. That is the fix for the MVP-0a hazard where a
+    /// `process_rt` call could be the last holder of a retired module.
     pub fn process_rt(&self, input: &[f32], output: &mut [f32], state: &mut DspState) -> usize {
-        let module = self.slot.load();
+        let module = self.slot.enter();
         module.process_block(input, output, state)
     }
 
-    /// Enter a block explicitly and keep the module alive for its duration.
+    /// Enter a block with a non-owning guard and keep the module alive for its duration.
+    /// This is the real-time safe equivalent of [`BlockHost::enter`].
     /// Used by tests and by callers that need to measure the block themselves.
+    pub fn enter_rt(&self) -> crate::slot::ReadGuard<'_, BlockModule> {
+        self.slot.enter()
+    }
+
+    /// Enter a block with an **owning** `Arc`. Control-thread only: if the returned
+    /// `Arc` is the last reference to a retired module, its `Drop` would run on the
+    /// caller's thread. An audio callback must call [`BlockHost::enter_rt`] instead.
     pub fn enter(&self) -> Arc<BlockModule> {
-        self.slot.load()
+        self.slot.load_owning()
     }
 
     pub fn active_version(&self) -> ActiveVersionId {
@@ -216,11 +233,11 @@ impl BlockHost {
     }
 
     pub fn active_artifact(&self) -> ArtifactId {
-        self.slot.load().artifact_id.clone()
+        self.slot.load_owning().artifact_id.clone()
     }
 
     pub fn active_patch_id(&self) -> String {
-        self.slot.load().manifest.patch_id.clone()
+        self.slot.load_owning().manifest.patch_id.clone()
     }
 
     pub fn active_verification(&self) -> VerificationStatus {
@@ -228,7 +245,7 @@ impl BlockHost {
     }
 
     pub fn status(&self) -> HostStatus {
-        let module = self.slot.load();
+        let module = self.slot.load_owning();
         HostStatus {
             schema_version: PATCH_SCHEMA_VERSION,
             pid: std::process::id(),

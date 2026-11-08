@@ -11,7 +11,10 @@ pub mod alloc;
 pub mod evidence;
 pub mod measure;
 
-pub use alloc::{allocations_on_this_thread, reset_thread_counter, CountingAllocator};
+pub use alloc::{
+    allocator_ops_on_this_thread, allocations_on_this_thread, deallocations_on_this_thread,
+    reset_thread_counter, reset_thread_counters, CountingAllocator,
+};
 pub use evidence::{block_evidence, dsp_evidence_key, EVIDENCE_PROPERTY};
 pub use measure::{measure, measure_from, SessionConfig, SessionMeasurement, SessionOutcome};
 
