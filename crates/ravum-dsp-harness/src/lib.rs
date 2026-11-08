@@ -12,7 +12,7 @@ pub mod evidence;
 pub mod measure;
 
 pub use alloc::{
-    allocator_ops_on_this_thread, allocations_on_this_thread, deallocations_on_this_thread,
+    allocations_on_this_thread, allocator_ops_on_this_thread, deallocations_on_this_thread,
     reset_thread_counter, reset_thread_counters, CountingAllocator,
 };
 pub use evidence::{block_evidence, dsp_evidence_key, EVIDENCE_PROPERTY};
