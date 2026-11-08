@@ -26,8 +26,8 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **34 commits** au-dessus de `6b37ad3` (dont 32 de code) |
-| Dernier commit de code | `715bd75` ; dernier commit du lot : rapport de consolidation `f965d70` |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **37 commits** au-dessus de `6b37ad3` (24 de code, 12 de documentation + ce rapport) |
+| Dernier commit de code | `715bd75` ; dernier commit du lot : ce rapport de consolidation |
 | PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 262 fichiers, +93 374/−297 |
 | PR #78 | inchangée, non fusionnée, non réécrite |
 | CI du lot validé (code + docs) | run [42510525751](https://github.com/Rwanbt/Ravum/actions/runs/42510525751) — **succès** (build, **312 tests**, démos M1/COLLAB-1/M2/M3/M4, **E2E navigateur**, artefacts) ; workflow d'impact aussi vert ([42510525683](https://github.com/Rwanbt/Ravum/actions/runs/42510525683)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
@@ -70,41 +70,50 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (34 dont 32 de code, sur `feat/mvp0b-hardening`)
+## 5. Commits (37 : 24 de code, 12 de documentation + ce rapport)
 
-1. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
-2. `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
-3. `44573a4` — feat(dsp): crossfade block swaps without adding work to the callback
-4. `245db0b` — feat(collab): make Git publication transactional and hook-respecting
-5. `7026f21` — feat(daemon): persistent incremental analysis engine with honest measurements
-6. `41260bd` — fix(proof): isolate test ledgers; record verification and audio-host status
-7. `a094c2d` — docs(licence): third-party inventory, options and implicit-decision audit
-8. `25d9856` — feat(cli): route `ravum check --daemon` through the persistent engine
-9. `c2c2ce9` — feat(m4): real browser E2E via CDP, and fix the two UI bugs it found
-10. `da3e6ad` — bench(s8): worktrees vs shared workspace vs sequential, negative result
-11. `f58c32b` — ci(impact): conservative fail-closed impact selection
-12. `50d1273` — fix(adapter): parse the direct rustc JSON diagnostics
-13. `902b912` — fix(daemon): isolate cache test directories for parallel tests
-14. `167281b` — feat(collab): COLLAB-2/3 with symbol-aware merges and real verification
-15. `6d5b1b7` — docs(mvp0b): consolidate the verified state, status and roadmap
-16. `bf4ab6d` — docs(mvp0b): add the cycle report and link the published Obsidian sessions
-17. `78b3420` — ci(impact): trigger on feature-branch pushes and diff against the integration branch
-18. `a44b371` — feat(cli): measure the full edit->activation cycle, MVP-0a vs MVP-0b
-19. `2687ec9` — docs(mvp0b): record two rejected build accelerations and the daemon idle footprint
-20. `7bc128a` — fix(m4): make the browser E2E deterministic with an explicit UI readiness signal
-21. `cba70f1` — feat(collab): COLLAB-4 -- an accepted change analyses only its affected units
-22. `5cb821a` — feat(dsp): probe the real Windows audio path with silence, and measure what it shows
-23. `dc6643c` — docs(mvp0b): integrate COLLAB-4 and the real audio-path results into the cycle report
-24. `d6fd17b` — docs(mvp0b): link the third, verified Obsidian session in the cycle report
-25. `9df66c7` — feat(cli): overlap analysis and build in cycle-bench, and measure the gain
-26. `f444265` — feat(core): productise the overlapped analysis/build scheduling in watch and run
-27. `573cb48` — feat(dsp): measure MMCSS real-time priority under controlled CPU load
-28. `c848396` — fix(patch-host): serialize the reclaimer tests that read process-wide counters
-29. `c83746c` — fix(coordination): make the concurrent-equivalence test independent of the artifact cache
-30. `3b7b3a1` — docs(mvp0b): audit the full diff for hidden regressions, and soak the daemon briefly
-31. `9ee76b6` — feat(daemon): bounded retention GC, measured on a real 40-edit campaign
-32. `715bd75` — feat(dsp): add a real WASAPI shared-mode backend and measure it under load
-33. `f965d70` — docs(mvp0b): consolidate the fourth-lot state (retention GC, WASAPI, audit and soak)
+Commits de code (24) :
+
+1. `715bd75` — feat(dsp): add a real WASAPI shared-mode backend and measure it under load
+2. `9ee76b6` — feat(daemon): bounded retention GC, measured on a real 40-edit campaign
+3. `c83746c` — fix(coordination): make the concurrent-equivalence test independent of the artifact cache
+4. `c848396` — fix(patch-host): serialize the reclaimer tests that read process-wide counters
+5. `573cb48` — feat(dsp): measure MMCSS real-time priority under controlled CPU load
+6. `f444265` — feat(core): productise the overlapped analysis/build scheduling in watch and run
+7. `9df66c7` — feat(cli): overlap analysis and build in cycle-bench, and measure the gain
+8. `5cb821a` — feat(dsp): probe the real Windows audio path with silence, and measure what it shows
+9. `cba70f1` — feat(collab): COLLAB-4 -- an accepted change analyses only its affected units
+10. `7bc128a` — fix(m4): make the browser E2E deterministic with an explicit UI readiness signal
+11. `a44b371` — feat(cli): measure the full edit->activation cycle, MVP-0a vs MVP-0b
+12. `78b3420` — ci(impact): trigger on feature-branch pushes and diff against the integration branch
+13. `167281b` — feat(collab): COLLAB-2/3 with symbol-aware merges and real verification of the merged snapshot
+14. `902b912` — fix(daemon): isolate cache test directories so parallel tests cannot corrupt each other
+15. `50d1273` — fix(adapter): parse the direct rustc JSON diagnostics, not only cargo's wrapper
+16. `f58c32b` — ci(impact): conservative fail-closed impact selection without faking a red PR
+17. `da3e6ad` — bench(s8): measure worktrees vs shared workspace vs sequential, and publish the negative result
+18. `c2c2ce9` — feat(m4): real browser E2E via CDP, and fix the two UI bugs it found
+19. `25d9856` — feat(cli): route 'ravum check --daemon' through the persistent analysis engine
+20. `41260bd` — fix(proof): isolate test ledgers; record honest verification and audio-host status (L4-D/L4-C)
+21. `7026f21` — feat(daemon): persistent incremental analysis engine with honest measurements
+22. `245db0b` — feat(collab): make Git publication transactional and hook-respecting
+23. `44573a4` — feat(dsp): crossfade block swaps without adding work to the callback
+24. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
+
+Commits de documentation (12, y compris les audits, la consolidation et les liens de sessions Obsidian vérifiés) :
+
+- `b80160c` — docs(mvp0b): record the green CI runs of the validated fourth lot
+- `47427d9` — docs(mvp0b): fix the final commit/PR counts in the cycle report
+- `f965d70` — docs(mvp0b): consolidate the fourth-lot state (retention GC, WASAPI, audit and soak)
+- `3b7b3a1` — docs(mvp0b): audit the full diff for hidden regressions, and soak the daemon briefly
+- `5777ffa` — docs(mvp0b): finalise the cycle report with the third-lot state
+- `d6fd17b` — docs(mvp0b): link the third, verified Obsidian session in the cycle report
+- `dc6643c` — docs(mvp0b): integrate COLLAB-4 and the real audio-path results into the cycle report
+- `2687ec9` — docs(mvp0b): record two rejected build accelerations and the daemon's idle footprint
+- `bf4ab6d` — docs(mvp0b): add the cycle report and link the published Obsidian sessions
+- `6d5b1b7` — docs(mvp0b): consolidate the verified state, status and roadmap headers
+- `a094c2d` — docs(licence): third-party inventory, options and an audit that refuses implicit decisions
+- `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
+- ce rapport de clôture du quatrième lot (commit suivant, même branche).
 
 ## 6. PR créées ou mises à jour
 
