@@ -587,7 +587,9 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&dir);
         let rustc = std::env::var("RAVUM_RUSTC").unwrap_or_else(|_| "rustc".to_owned());
-        Pipeline::new(rustc, &dir)
+        // Timing assertions below need a real build in *both* paths: without this the
+        // second candidate would be a cache hit and build_ms could legitimately be 0.
+        Pipeline::new(rustc, &dir).without_artifact_cache()
     }
 
     fn snapshot(content: &str) -> SourceSnapshot {
@@ -611,8 +613,13 @@ mod tests {
         assert!(concurrent.check.is_some(), "the concurrent path keeps the diagnostics");
         assert!(concurrent.evidence.is_some(), "the concurrent path keeps the evidence");
         assert!(
-            concurrent.timings.check_ms > 0 && concurrent.timings.build_ms > 0,
-            "both overlapped stages must be measured: {:?}",
+            concurrent.timings.check_ms > 0,
+            "the analysis stage must be measured: {:?}",
+            concurrent.timings
+        );
+        assert!(
+            concurrent.timings.build_ms > 0,
+            "the build stage must be measured (artifact cache disabled in this test): {:?}",
             concurrent.timings
         );
 
