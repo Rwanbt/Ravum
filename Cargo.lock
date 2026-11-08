@@ -230,6 +230,7 @@ version = "0.1.0"
 dependencies = [
  "ravum-patch-host",
  "ravum-protocol",
+ "serde_json",
 ]
 
 [[package]]
