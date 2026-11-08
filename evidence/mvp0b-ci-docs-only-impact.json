@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0b-ci-docs-only-impact",
+  "date": "2026-11-08",
+  "head": "29045142712ee29131206d8dedf47c31b9109197",
+  "branch": "feat/mvp0b-hardening",
+  "base_reference": {
+    "origin_dev_available": true,
+    "origin_dev_commit": "78411024e2665dafce31b029786ef56d400bdab2",
+    "method_note": "Le diff Git réel origin/dev...HEAD n’est pas docs-only (il contient toute l’avance de la branche) ; la préparation PR utilise donc le mode --files (diff synthétique supporté par l’outil) avec les chemins exacts."
+  },
+  "selftest": {
+    "command": "node tools/impact/selftest.mjs",
+    "exit_code": 0,
+    "result_line": "SELFTEST PASS — 48 cas, 388 assertions, 0 échec.",
+    "cases": 48,
+    "assertions": 388,
+    "failures": 0,
+    "locks": [
+      "une classification trop étroite est refusée (cas dédiés, fermeture de référence indépendante)",
+      "FULL légitime => exit 0 (aucun faux échec de CI)",
+      "INCERTAIN => exit 2 (seul échec pour raison de mapping)",
+      "workflow : pas de variable d’échappement, pas d’exit 1 conditionné au FULL"
+    ]
+  },
+  "decisions": {
+    "docs_only": {
+      "schema": "ravum-impact/1",
+      "decision": "selective",
+      "full": false,
+      "uncertain": false,
+      "docs_required": true,
+      "packages": [],
+      "direct_packages": [],
+      "commands": [
+        {
+          "id": "docs-integrity",
+          "kind": "docs",
+          "argv": [
+            "python",
+            "tools/validate_repo_docs.py"
+          ],
+          "reason": "documentation modifiée: vérification d’intégrité des documents (README/ADR), pas une qualification produit",
+          "package": null
+        }
+      ],
+      "reasons": [
+        "docs — documentation modifiée: vérification d’intégrité des documents requise"
+      ],
+      "unknown_paths": []
+    },
+    "docs_plus_evidence": {
+      "schema": "ravum-impact/1",
+      "decision": "selective",
+      "full": false,
+      "uncertain": false,
+      "docs_required": true,
+      "packages": [],
+      "direct_packages": [],
+      "commands": [
+        {
+          "id": "docs-integrity",
+          "kind": "docs",
+          "argv": [
+            "python",
+            "tools/validate_repo_docs.py"
+          ],
+          "reason": "documentation modifiée: vérification d’intégrité des documents (README/ADR), pas une qualification produit",
+          "package": null
+        }
+      ],
+      "reasons": [
+        "docs — documentation modifiée: vérification d’intégrité des documents requise"
+      ],
+      "unknown_paths": []
+    },
+    "integration_pr_shape": {
+      "schema": "ravum-impact/1",
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "docs_required": true,
+      "packages": [],
+      "direct_packages": [],
+      "commands": [
+        {
+          "id": "cargo-test-workspace",
+          "kind": "cargo",
+          "argv": [
+            "cargo",
+            "test",
+            "--workspace",
+            "--",
+            "--test-threads=1"
+          ],
+          "reason": "FULL: au moins une règle fail-closed est déclenchée (voir reasons)",
+          "package": null
+        },
+        {
+          "id": "docs-integrity",
+          "kind": "docs",
+          "argv": [
+            "python",
+            "tools/validate_repo_docs.py"
+          ],
+          "reason": "documentation modifiée: vérification d’intégrité des documents (README/ADR), pas une qualification produit",
+          "package": null
+        }
+      ],
+      "reasons": [
+        "full:ci — .github/workflows/mvp.yml :: FULL: fichier de CI modifié (workflow) — la sélection de tests est elle-même en jeu",
+        "docs — documentation modifiée: vérification d’intégrité des documents requise"
+      ],
+      "unknown_paths": []
+    }
+  },
+  "conclusion": {
+    "docs_only_selective": true,
+    "docs_only_rust_tests": 0,
+    "docs_only_commands": [
+      "python tools/validate_repo_docs.py"
+    ],
+    "docs_only_triggers_full": false,
+    "integration_pr_decision": "full-conservative",
+    "integration_pr_is_legitimate_full": true,
+    "mapping_change_needed": false,
+    "mapping_change_reason": "aucun bug de mapping trouvé : le diff docs-only suit la règle documentée (docs => check docs, pas de test Rust) ; le diff de la PR d’intégration touche .github/workflows/mvp.yml donc FULL conservateur est la décision attendue et légitime."
+  },
+  "limits": [
+    "preuve outillée locale, sans ouverture de PR ; la première exécution réelle du workflow sur une PR vers dev reste à faire par le Lead",
+    "diff synthétique --files (chemins réels) et non un diff Git réel docs-only, car la branche contient d’autres commits",
+    "la commande docs exige python (installé par le workflow via setup-python ; localement python est présent)"
+  ]
+}

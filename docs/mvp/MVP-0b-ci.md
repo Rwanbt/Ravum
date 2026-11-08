@@ -182,7 +182,7 @@ Le mapping est déclaré **INCERTAIN** dans les cas non prouvables :
 
 ### 5.1 Selftest — `node tools/impact/selftest.mjs`
 
-**Résultat réel après correction : `SELFTEST PASS — 48 cas, 385 assertions, 0 échec.`**
+**Résultat réel après correction : `SELFTEST PASS — 48 cas, 388 assertions, 0 échec.`**
 
 Le corpus compare chaque décision à une **implémentation de référence indépendante** de la
 fermeture (point fixe sur les arêtes inverses, écrite dans le selftest, sans réutiliser le
@@ -451,11 +451,215 @@ via `git diff base...HEAD`, `fetch-depth: 0`), avec repli documenté `origin/mai
 
 ---
 
-## 9. Conclusion
+## 9. GC automatique en CI (job `auto-gc`)
+
+### 9.1 Objectif et constat sur le code à HEAD
+
+Le GC automatique du daemon (`crates/ravum-daemon/src/auto_gc.rs`) est **opt-in** :
+`AutoGcPolicy::default().enabled == false`. Aucune CI ne l'exerçait. Le job `auto-gc`
+de `.github/workflows/mvp.yml` exerce le chemin **activé** sur un soak borné, sans
+changer aucun défaut produit : aucun fichier `crates/**` n'est modifié par cette tâche.
+
+**Constat à HEAD `2904514`** : le harnais `ravum-daemon-bench` n'expose **aucun** flag
+`--auto-gc*` (vérifié dans `bin/ravum-daemon-bench/main.rs`). La suite `soak` active
+elle-même un `AutoGcPolicy` explicite pour sa campagne « auto » (`soak.rs` :
+`check_every_requests=5`, `idle_only=true`, `keep_recent=6`, bornes passées par
+`--soak-min-total-bytes`/`--soak-max-total-bytes`), tandis que sa campagne « control »
+tourne avec `AutoGcPolicy::default()` (désactivé). Le job CI n'utilise donc que les flags
+réellement supportés, et l'invariant `control.auto_gc.enabled == false` prouve que le
+défaut produit reste désactivé.
+
+### 9.2 Commande exacte
+
+```powershell
+cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite soak --soak-requests 24 --soak-seconds 30 --soak-pace-ms 100 --soak-control-requests 8 --soak-control-seconds 30 --soak-control-pace-ms 50 --soak-min-total-bytes 32768 --soak-max-total-bytes 16384 --soak-sample-every 2 --work-dir target/ravum-daemon-bench-ci-auto-gc --out-soak evidence/local/mvp0b-ci-auto-gc.json
+```
+
+Détails de robustesse :
+
+- 24 requêtes (le harnais exige `requests >= 8`), 100 ms de pace, une évaluation de
+  seuil toutes les 5 requêtes, trigger GC 32 Kio / cible 16 Kio
+  (`0 < max_total_bytes < min_total_bytes` exigé par la validation fail-closed) ;
+- le work-dir `target/ravum-daemon-bench-ci-auto-gc` contient le marqueur
+  `ravum-daemon-bench` exigé par la garde `--clean` du harnais : un re-run dans le même
+  workspace est donc sûr (vérifié : deux exécutions consécutives, cf. §9.4) ;
+- le JSON complet est produit dans `evidence/local/mvp0b-ci-auto-gc.json` et uploadé en
+  artefact `auto-gc-evidence` avec le journal `gc-auto.log` ;
+- `CARGO_BUILD_JOBS=2`, step borné à 5 min, job borné à 15 min.
+
+### 9.3 Invariants assertés (18, stables — pas de latence, pas de timing serré)
+
+| Invariant | Attendu |
+|---|---|
+| `valid` | `true` |
+| `auto.failures`, `control.failures` | `0` |
+| `auto.requests` | `>= 8` |
+| `auto.auto_gc.enabled` | `true` (campagne automatique) |
+| `auto.auto_gc.runs` | `>= 1` (au moins une collecte réelle) |
+| `auto.auto_gc.failures` | `0` |
+| `auto.auto_gc.checks` | `>= 1` |
+| `auto.auto_gc.last.ok` | `true` |
+| `auto.settled` | `true` |
+| `auto.verification.recent.hit_without_compiler` | `true` (récent toujours servi) |
+| `auto.verification.old.success` | `true` (ancien toujours répondable) |
+| `auto.policy.enabled` | `true` |
+| `auto.policy.max_total_bytes` | `< auto.policy.min_total_bytes` (borne réelle) |
+| `control.auto_gc.enabled` | `false` (défaut produit intact) |
+| `auto.disk_bytes.max` | `<= 1 048 576` octets (plafond CI) |
+| `auto.disk_bytes.end` | `<= 1 048 576` octets (plafond CI) |
+| `auto.journal_lines` | `>= 1` |
+
+Toute violation écrit un `::error::` par invariant, imprime le JSON complet dans le log
+et termine en code non nul.
+
+### 9.4 Preuves exécutées, dans les deux sens
+
+**Sens succès, sur HEAD pur (`2904514`)** — méthode : `git archive HEAD` vers un
+répertoire temporaire (aucun fichier du dépôt partagé modifié), puis le **corps exact du
+step** extrait du YAML :
+
+- build propre (`cargo build -q -p ravum-daemon --bin ravum-daemon-bench`) : **25,3 s** ;
+- exécution 1 (workspace `target` froid) : **exit 0**, **28,45 s** (compile incluse) ;
+- exécution 2 (même workspace, re-run) : **exit 0**, **10,39 s** — prouve aussi la garde
+  `--clean` ;
+- JSON : `valid=true`, `auto.requests=24`, `auto.auto_gc.runs=5` (>= 1),
+  `auto.auto_gc.checks=6`, `auto.auto_gc.failures=0`, `last.ok=true`,
+  `auto.failures=0`, `control.failures=0`, `control.auto_gc.enabled=false`,
+  `settled=true`, `recent.hit_without_compiler=true`, `old.success=true`,
+  disque `max=180 351 B`, `end=66 297 B`, `journal_lines=5` ;
+- SHA-256 du JSON : `2a3e8e65074643391f69dd330ae454d69e59cfdbb702d42dfcf4ddb7069805c3` ;
+- assertions (même code que le workflow) : **18/18 PASS, exit 0**.
+
+Une première exécution sur l'arbre de travail partagé (contenant des modifications WIP
+d'autres agents) avait aussi donné exit 0 en 14,16 s, avec `auto_gc_runs=5` et
+`disk_max=179 622 B` — cohérente avec HEAD pur.
+
+**Sens échec attendu (borne violée)** — même bloc d'assertions, borne disque abaissée
+volontairement via `AUTO_GC_MAX_DISK_BYTES=1024` :
+
+```
+::error::invariant violated: auto.disk_bytes.max <= ceiling (max=180351 B <= 1024)
+::error::invariant violated: auto.disk_bytes.end <= ceiling (end=66297 B <= 1024)
+::error::bounded auto-GC invariants violated: auto.disk_bytes.max <= ceiling, auto.disk_bytes.end <= ceiling
+```
+
+→ **exit 1**, JSON complet imprimé dans le log. Le chemin d'échec est donc réellement
+opérant, pas seulement déclaratif.
+
+### 9.5 Durée, marge et charge
+
+- **durée mesurée du step** : 10,39 s à chaud (dont campagne auto ~6 s et contrôle ~1 s),
+  28,45 s avec compilation à froid dans un workspace vierge ;
+- **marge disque vs plafond CI 1 Mio** : ×5,82 sur le max mesuré (180 351 B), ×15,82 sur
+  l'état final (66 297 B) ;
+- **bornes dures** : chaque campagne est bornée par `--soak-seconds 30` ; les attentes de
+  fin (`wait_auto_gc_idle(30_000)` puis `(20_000)`) sont bornées ; le step est limité à
+  5 min et le job à 15 min ;
+- **machine partagée et chargée** : deux autres agents compilaient/mesuraient en parallèle
+  (processus `claude`/DeepSeek Harness actifs ; compteurs CIM indisponibles sous charge au
+  moment de la mesure). Les durées ci-dessus incluent cette concurrence et ne sont pas des
+  durées de runner CI isolé.
+
+### 9.6 Limites et non-claims
+
+1. Soak **borné (secondes)** : il prouve le chemin auto-GC et la borne disque sur un petit
+   scénario, **pas** une stabilité de production multi-heure.
+2. Un seul processus daemon et un client séquentiel ; le chemin concurrent est couvert par
+   les tests d'intégration, pas par ce soak.
+3. Le daemon tourne in-process dans le harnais : le RSS mesuré est celui du processus de
+   benchmark (daemon + harnais).
+4. Le GC automatique ne collecte que des **contextes de build entiers** : les internes
+   incrémentaux de rustc ne sont jamais compactés (plancher de disque).
+5. Le plafond CI de 1 Mio est une borne grossière ; la borne réelle est portée par la
+   politique (`max < min`) et par `auto_gc_runs >= 1`.
+6. **Aucun défaut produit modifié** ; le job CI n'a pas encore été exécuté sur GitHub
+   Actions (le run CI antérieur `42489068304` précède ce job).
+7. Non-qualification : ce job ne qualifie ni le temps réel, ni l'ABI, ni une release.
+
+---
+
+## 10. Décision d'impact sur un diff docs-only (préparation PR dev)
+
+### 10.1 Méthode
+
+`origin/dev` est disponible (`7841102`), mais le diff Git `origin/dev...HEAD` n'est **pas**
+docs-only (il contient toute l'avance de la branche). La préparation PR utilise donc le
+mode `--files` de l'outil (diff synthétique supporté, chemins réels) pour isoler un diff
+docs-only, puis le diff réel de la PR d'intégration. Le selftest est exécuté à chaque
+étape : `SELFTEST PASS — 48 cas, 388 assertions, 0 échec`.
+
+### 10.2 Décision exacte — diff docs-only
+
+```powershell
+node tools/impact/impact.mjs --files "docs/mvp/MVP-0b-ci.md" --json
+```
+
+```json
+{
+  "schema": "ravum-impact/1",
+  "decision": "selective",
+  "full": false,
+  "uncertain": false,
+  "docs_required": true,
+  "packages": [],
+  "direct_packages": [],
+  "commands": [
+    {
+      "id": "docs-integrity",
+      "kind": "docs",
+      "argv": ["python", "tools/validate_repo_docs.py"],
+      "reason": "documentation modifiée: vérification d'intégrité des documents (README/ADR), pas une qualification produit"
+    }
+  ],
+  "reasons": ["docs — documentation modifiée: vérification d'intégrité des documents requise"]
+}
+```
+
+→ **la décision docs-only ne déclenche PAS FULL** : 0 test Rust, une seule commande
+`python tools/validate_repo_docs.py`, `docs_required: true`, `full: false`, `uncertain: false`,
+exit 0. Un diff `docs + evidence` (mêmes documents plus un JSON d'évidence) donne la même
+décision : `evidence/**` n'exige aucun test automatisé.
+
+### 10.3 Décision exacte — forme réelle de la PR d'intégration
+
+La PR d'intégration de ce lot modifie `.github/workflows/mvp.yml`, le document et un
+JSON d'évidence :
+
+```powershell
+node tools/impact/impact.mjs --files ".github/workflows/mvp.yml;docs/mvp/MVP-0b-ci.md;evidence/mvp0b-ci-auto-gc.json" --json
+```
+
+Décision : `full-conservative`, `full: true`, `uncertain: false` — raison
+`full:ci — .github/workflows/mvp.yml` (plus la vérification docs). Ce n'est **pas** un
+bug de mapping : la règle documentée « toute modification de `.github/**` ⇒ FULL
+conservateur » s'applique, et la correction de conception du Lead rend cette issue
+**légitime** (suite complète exécutée, job vert si les tests passent, aucune variable
+requise). Le chemin sélectif docs-only reste celui qui s'appliquera aux PR purement
+documentaires.
+
+### 10.4 Conclusion
+
+- `docs_only_selective = true`, `docs_only_triggers_full = false` ;
+- **aucune correction du mapping n'est nécessaire** (aucun bug trouvé) ;
+- le JSON complet des trois décisions est conservé dans
+  [`evidence/mvp0b-ci-docs-only-impact.json`](../../evidence/mvp0b-ci-docs-only-impact.json).
+
+### 10.5 Limites
+
+1. Preuve **outillée locale**, sans ouverture de PR ; la première exécution réelle sur une
+   PR vers `dev` reste à faire par le Lead.
+2. Diff **synthétique** (`--files`, chemins réels) et non un diff Git docs-only, la branche
+   contenant d'autres commits.
+3. La commande docs exige `python` (installé par le workflow via `setup-python` ; présent
+   localement).
+
+---
+
+## 11. Conclusion
 
 - Le graphe est **construit et vérifié** : 14 paquets, arêtes normales/dev/build typées,
   fermeture transitive des dépendants, preuve indépendante dans le selftest (48 cas,
-  385 assertions, dont un cas dédié qui refuse une classification trop étroite).
+  388 assertions, dont un cas dédié qui refuse une classification trop étroite).
 - La sélection **n'a jamais masqué un échec** : les 2 échecs dus à un travail concurrent
   non commité (WIP d'un autre worker) ont fait échouer la commande FULL et le lanceur local
   (exit 1) ; un échec réel de test rend le job rouge.
@@ -465,6 +669,13 @@ via `git diff base...HEAD`, `fetch-depth: 0`), avec repli documenté `origin/mai
   exit 1 côté job), après exécution de secours.
 - Les tests des dépendants **sont réellement exécutés** quand un crate change
   (démonstration exécutée : 27 tests sur 3 paquets pour un changement de `ravum-todo-core`).
-- Les limites sont explicites (§7) ; la première exécution GitHub Actions a été réalisée (run 42489068304) et ses limites sont reportées.
-- **Aucun résultat ci-dessus ne qualifie le produit Ravum** : c'est une preuve de
-  mécanisme de sélection de tests, sur une machine partagée et chargée.
+- Le **GC automatique opt-in** est désormais exercé par la CI sur un soak borné, avec
+  18 invariants stables et preuve des deux sens (succès exit 0, borne violée exit 1) ;
+  aucun défaut produit n'est modifié (§9).
+- Le **chemin sélectif docs-only** est prouvé sans PR : `selective`, 0 test Rust, check docs
+  conservé, `full: false` (§10) ; la forme réelle de la PR d'intégration résout
+  légitimement en FULL conservateur.
+- Les limites sont explicites (§7, §9.6, §10.5) ; la première exécution GitHub Actions du
+  job `auto-gc` reste à faire par le Lead.
+- **Aucun résultat ci-dessus ne qualifie le produit Ravum** : ce sont des preuves de
+  mécanisme (sélection de tests, GC borné), sur une machine partagée et chargée.
