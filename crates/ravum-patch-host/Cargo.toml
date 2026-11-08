@@ -10,3 +10,8 @@ description = "Versioned native module host: ABI validation, atomic activation, 
 ravum-protocol = { workspace = true }
 libloading = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+ravum-rust-adapter = { workspace = true }
+ravum-snapshot = { workspace = true }
+ravum-dsp-harness = { workspace = true }

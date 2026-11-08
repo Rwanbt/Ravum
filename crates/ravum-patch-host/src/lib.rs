@@ -12,9 +12,12 @@
 //! Not provided: arbitrary struct passing, panics across the FFI boundary,
 //! thread-affine state, or any claim of hard real-time behaviour.
 
+mod block;
 mod host;
 mod reclaimer;
+mod slot;
 
+pub use block::{prepare_block, BlockFn, BlockHost, BlockModule, PreparedBlock};
 pub use host::{
     inspect_artifact, prepare, ArtifactFacts, ComputeFn, ExpectedAbi, LoadedModule, PatchHost,
     PreparedPatch,
@@ -22,3 +25,4 @@ pub use host::{
 pub use reclaimer::{
     live_modules, pending_reclamations, unloaded_modules, wait_until_idle, DeferredLibrary,
 };
+pub use slot::ArcSlot;

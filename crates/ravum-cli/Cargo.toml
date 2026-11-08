@@ -13,6 +13,7 @@ ravum-rust-adapter = { workspace = true }
 ravum-patch-host = { workspace = true }
 ravum-coordinator = { workspace = true }
 ravum-proof = { workspace = true }
+ravum-dsp-harness = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

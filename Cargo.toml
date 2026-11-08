@@ -7,6 +7,7 @@ members = [
   "crates/ravum-patch-host",
   "crates/ravum-coordinator",
   "crates/ravum-proof",
+  "crates/ravum-dsp-harness",
   "crates/ravum-workspace-coordinator",
   "crates/ravum-cli",
   "apps/ravum-demo-host",
@@ -30,6 +31,7 @@ ravum-rust-adapter = { path = "crates/ravum-rust-adapter" }
 ravum-patch-host = { path = "crates/ravum-patch-host" }
 ravum-coordinator = { path = "crates/ravum-coordinator" }
 ravum-proof = { path = "crates/ravum-proof" }
+ravum-dsp-harness = { path = "crates/ravum-dsp-harness" }
 ravum-workspace-coordinator = { path = "crates/ravum-workspace-coordinator" }
 
 # Keep debug info minimal: the reference machine has ~16 Go RAM and the
