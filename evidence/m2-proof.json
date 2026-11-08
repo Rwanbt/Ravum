@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "tool": "ravum prove",
+  "commit": "e0a7114",
+  "rustc": "1.95.0",
+  "os": "Windows 11 26100",
+  "cpu": "i7-13620H",
+  "ram_go": 15.71,
+  "ledger": "evidence/m2-ledger.jsonl",
+  "positive": {
+    "artifact_id": "137070d4bec0d1a706f016b8e7579a085f08209534ca68dd7a318e43bd2cf204",
+    "assumptions": [
+      "no assumption was declared by the obligation author",
+      "declared domain: 4 explicit input(s); nothing outside it is covered",
+      "trust base: rustc-built artifact, the native loader, and this harness (ravum-exhaustive 0.1.0)",
+      "verifier wall time: 3 ms"
+    ],
+    "authorizes_activation": true,
+    "counterexample": null,
+    "from_cache": false,
+    "ledger": "evidence/m2-ledger.jsonl",
+    "passed": true,
+    "property": "cli.obligation: finite result over 4 declared input(s)",
+    "status": "proved",
+    "verification_key": "874946ea4509fc3ece36116d50579a45d9f0c56a4393d2b9649252c1202c036f"
+  },
+  "negative": {
+    "artifact_id": "bb3445aecd388f5b86a8f2fc203bfde9fdd0f3b51120a4c03bd8456867a6cb0f",
+    "assumptions": [
+      "no assumption was declared by the obligation author",
+      "declared domain: 4 explicit input(s); nothing outside it is covered",
+      "trust base: rustc-built artifact, the native loader, and this harness (ravum-exhaustive 0.1.0)",
+      "verifier wall time: 4 ms"
+    ],
+    "authorizes_activation": false,
+    "counterexample": "f(2) = -1 < 0",
+    "from_cache": false,
+    "ledger": "evidence/m2-ledger.jsonl",
+    "passed": false,
+    "property": "cli.obligation: result >= 0 over 4 declared input(s)",
+    "status": "tested",
+    "verification_key": "5421312db400a048f8f5e65b54b7e097db5250381c08047a00bf9fc2397b363d"
+  }
+}

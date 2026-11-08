@@ -11,6 +11,7 @@
 | Outil Rust MVP-0a | **Implémenté (M1), expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
 | Prototype COLLAB-1 (multi-agents, écrivain Git unique) | **Implémenté et exécuté** ; ni rebase automatique, ni AST, ni CRDT |
+| Vérification bornée (M2) | **Implémentée** : `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
 | Benchmark, test de latence ou certification RT Ravum | Latence de la boucle M1 **mesurée localement** ; aucune qualification temps réel |
 | Gate M5 pour un nouveau langage | Proposed, **pas accepté** |
 | Code de release | Aucun |

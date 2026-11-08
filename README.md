@@ -45,6 +45,8 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Hot swap natif | **Démontré** sur une entrée `f64 -> f64` à ABI vérifiée ; migration d'état **non** implémentée |
 | Moteur de preuve Ravum / qualification RT / full-stack | **Non implémentés** (M2–M4 non commencés) |
 | Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
+| Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
+| Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
 Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
@@ -63,7 +65,9 @@ ravum patch  <artefact>      # validation ABI / manifeste / symboles
 ravum run    <fichier.rs>    # application de démonstration
 ravum watch  <fichier.rs>    # boucle complète : édition -> activation
 ravum status                 # dernier état enregistré
-ravum bench  <a.rs> <b.rs>   # mesures par étape, p50/p95/p99
+ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
+ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
+ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
 ```
 
 Démonstrations exécutables : `scripts/demo-m1.ps1` (hot patch d'un processus vivant)
@@ -72,8 +76,13 @@ Git unique).
 
 **Limites assumées** : un seul point d'entrée `f64 -> f64` ; une panique dans un
 patch avorte le processus hôte (`panic=abort`) ; aucune migration d'état, aucune
-fusion AST/CRDT, aucune garantie temps réel, aucun statut `PROVED`. Le détail est
-dans [docs/mvp/architecture.md](docs/mvp/architecture.md).
+fusion AST/CRDT, aucune garantie temps réel. Un statut `PROVED` n'est émis que pour
+un **domaine fini explicitement énuméré** (jamais pour une propriété générale), et
+l'absence de prouveur externe produit `Unsupported`, pas un succès.
+
+**Cibles de latence non atteintes** : ni le diagnostic (< 50 ms) ni le patch
+complet (< 500 ms) ne passent de façon reproductible, parce que `rustc` est lancé à
+froid à chaque édition. Mesures et verdict : [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
 
 ## Stratégie d'implémentation : apprendre avant de figer
 

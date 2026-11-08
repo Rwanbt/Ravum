@@ -1,8 +1,21 @@
 {
   "activated": 20,
+  "artifact_cache": "disabled for this run: every build is a real rustc invocation",
+  "calibration": {
+    "note": "median wall time of a bare `rustc -vV` spawn, measured in the same run: it characterises machine load, not rustc's analysis cost",
+    "rustc_spawn_ms": {
+      "count": 5,
+      "max": 101,
+      "mean": 94.8,
+      "min": 88,
+      "p50": 96,
+      "p95": 101,
+      "p99": 101
+    }
+  },
   "env": {
     "arch": "x86_64",
-    "commit": "16b1ff2adc11289f1648f42fcf52014542cb30fb",
+    "commit": "e0a7114",
     "family": "windows",
     "os": "windows",
     "parallelism": 16
@@ -18,9 +31,9 @@
     "note": "16 Go RAM reference machine; concurrent cargo builds were avoided"
   },
   "memory": {
-    "delta_bytes": 176128,
-    "working_set_bytes_after": 5484544,
-    "working_set_bytes_before": 5308416
+    "delta_bytes": 487424,
+    "working_set_bytes_after": 6045696,
+    "working_set_bytes_before": 5558272
   },
   "refused": 0,
   "rustc": "1.95.0",
@@ -28,222 +41,222 @@
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 329,
-      "check_ms": 128,
+      "build_ms": 367,
+      "check_ms": 135,
       "iteration": 0,
-      "load_ms": 2,
-      "outcome": "activated",
-      "total_ms": 461,
-      "verify_ms": 2
-    },
-    {
-      "activate_ms": 0,
-      "activated": true,
-      "build_ms": 291,
-      "check_ms": 92,
-      "iteration": 1,
-      "load_ms": 2,
-      "outcome": "activated",
-      "total_ms": 387,
-      "verify_ms": 2
-    },
-    {
-      "activate_ms": 0,
-      "activated": true,
-      "build_ms": 356,
-      "check_ms": 103,
-      "iteration": 2,
       "load_ms": 3,
       "outcome": "activated",
-      "total_ms": 466,
+      "total_ms": 509,
       "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 264,
-      "check_ms": 110,
+      "build_ms": 364,
+      "check_ms": 138,
+      "iteration": 1,
+      "load_ms": 3,
+      "outcome": "activated",
+      "total_ms": 508,
+      "verify_ms": 3
+    },
+    {
+      "activate_ms": 0,
+      "activated": true,
+      "build_ms": 371,
+      "check_ms": 146,
+      "iteration": 2,
+      "load_ms": 4,
+      "outcome": "activated",
+      "total_ms": 525,
+      "verify_ms": 4
+    },
+    {
+      "activate_ms": 0,
+      "activated": true,
+      "build_ms": 600,
+      "check_ms": 140,
       "iteration": 3,
-      "load_ms": 2,
+      "load_ms": 3,
       "outcome": "activated",
-      "total_ms": 378,
-      "verify_ms": 2
+      "total_ms": 746,
+      "verify_ms": 3
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 254,
-      "check_ms": 89,
+      "build_ms": 369,
+      "check_ms": 145,
       "iteration": 4,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 348,
-      "verify_ms": 3
+      "total_ms": 522,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 232,
-      "check_ms": 91,
+      "build_ms": 381,
+      "check_ms": 132,
       "iteration": 5,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 328,
+      "total_ms": 522,
+      "verify_ms": 5
+    },
+    {
+      "activate_ms": 0,
+      "activated": true,
+      "build_ms": 436,
+      "check_ms": 153,
+      "iteration": 6,
+      "load_ms": 3,
+      "outcome": "activated",
+      "total_ms": 596,
+      "verify_ms": 4
+    },
+    {
+      "activate_ms": 0,
+      "activated": true,
+      "build_ms": 347,
+      "check_ms": 149,
+      "iteration": 7,
+      "load_ms": 3,
+      "outcome": "activated",
+      "total_ms": 502,
       "verify_ms": 3
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 251,
-      "check_ms": 90,
-      "iteration": 6,
-      "load_ms": 2,
-      "outcome": "activated",
-      "total_ms": 345,
-      "verify_ms": 2
-    },
-    {
-      "activate_ms": 0,
-      "activated": true,
-      "build_ms": 237,
-      "check_ms": 87,
-      "iteration": 7,
-      "load_ms": 2,
-      "outcome": "activated",
-      "total_ms": 328,
-      "verify_ms": 2
-    },
-    {
-      "activate_ms": 0,
-      "activated": true,
-      "build_ms": 259,
-      "check_ms": 92,
+      "build_ms": 363,
+      "check_ms": 134,
       "iteration": 8,
       "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 358,
+      "total_ms": 504,
       "verify_ms": 3
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 336,
-      "check_ms": 136,
+      "build_ms": 381,
+      "check_ms": 145,
       "iteration": 9,
-      "load_ms": 3,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 478,
+      "total_ms": 533,
       "verify_ms": 3
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 355,
-      "check_ms": 122,
+      "build_ms": 363,
+      "check_ms": 136,
       "iteration": 10,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 481,
-      "verify_ms": 2
+      "total_ms": 506,
+      "verify_ms": 3
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 272,
-      "check_ms": 109,
+      "build_ms": 362,
+      "check_ms": 136,
       "iteration": 11,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 386,
-      "verify_ms": 3
+      "total_ms": 506,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 269,
-      "check_ms": 107,
+      "build_ms": 365,
+      "check_ms": 132,
       "iteration": 12,
-      "load_ms": 2,
+      "load_ms": 3,
       "outcome": "activated",
-      "total_ms": 380,
-      "verify_ms": 2
+      "total_ms": 504,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 269,
-      "check_ms": 81,
+      "build_ms": 470,
+      "check_ms": 132,
       "iteration": 13,
-      "load_ms": 2,
+      "load_ms": 5,
       "outcome": "activated",
-      "total_ms": 354,
-      "verify_ms": 2
+      "total_ms": 614,
+      "verify_ms": 7
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 239,
-      "check_ms": 93,
+      "build_ms": 519,
+      "check_ms": 290,
       "iteration": 14,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 336,
-      "verify_ms": 2
+      "total_ms": 817,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 245,
-      "check_ms": 100,
+      "build_ms": 486,
+      "check_ms": 169,
       "iteration": 15,
-      "load_ms": 2,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 350,
-      "verify_ms": 3
+      "total_ms": 663,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 299,
-      "check_ms": 108,
+      "build_ms": 486,
+      "check_ms": 189,
       "iteration": 16,
-      "load_ms": 4,
+      "load_ms": 5,
       "outcome": "activated",
-      "total_ms": 415,
-      "verify_ms": 4
+      "total_ms": 685,
+      "verify_ms": 5
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 366,
-      "check_ms": 171,
+      "build_ms": 459,
+      "check_ms": 180,
       "iteration": 17,
-      "load_ms": 3,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 544,
+      "total_ms": 647,
       "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 323,
-      "check_ms": 131,
+      "build_ms": 474,
+      "check_ms": 162,
       "iteration": 18,
-      "load_ms": 4,
+      "load_ms": 3,
       "outcome": "activated",
-      "total_ms": 461,
-      "verify_ms": 3
+      "total_ms": 643,
+      "verify_ms": 4
     },
     {
       "activate_ms": 0,
       "activated": true,
-      "build_ms": 323,
-      "check_ms": 133,
+      "build_ms": 433,
+      "check_ms": 150,
       "iteration": 19,
-      "load_ms": 3,
+      "load_ms": 4,
       "outcome": "activated",
-      "total_ms": 462,
-      "verify_ms": 3
+      "total_ms": 592,
+      "verify_ms": 5
     }
   ],
   "schema_version": 1,
@@ -259,48 +272,48 @@
     },
     "build_ms": {
       "count": 20,
-      "max": 366,
-      "mean": 288.45,
-      "min": 232,
-      "p50": 269,
-      "p95": 356,
-      "p99": 366
+      "max": 600,
+      "mean": 419.8,
+      "min": 347,
+      "p50": 381,
+      "p95": 519,
+      "p99": 600
     },
     "check_ms": {
       "count": 20,
-      "max": 171,
-      "mean": 108.65,
-      "min": 81,
-      "p50": 103,
-      "p95": 136,
-      "p99": 171
+      "max": 290,
+      "mean": 154.65,
+      "min": 132,
+      "p50": 145,
+      "p95": 189,
+      "p99": 290
     },
     "load_ms": {
       "count": 20,
-      "max": 4,
-      "mean": 2.5,
-      "min": 2,
-      "p50": 2,
-      "p95": 4,
-      "p99": 4
+      "max": 5,
+      "mean": 3.75,
+      "min": 3,
+      "p50": 4,
+      "p95": 5,
+      "p99": 5
     },
     "total_ms": {
       "count": 20,
-      "max": 544,
-      "mean": 402.3,
-      "min": 328,
-      "p50": 380,
-      "p95": 481,
-      "p99": 544
+      "max": 817,
+      "mean": 582.2,
+      "min": 502,
+      "p50": 525,
+      "p95": 746,
+      "p99": 817
     },
     "verify_ms": {
       "count": 20,
-      "max": 4,
-      "mean": 2.7,
-      "min": 2,
-      "p50": 3,
-      "p95": 4,
-      "p99": 4
+      "max": 7,
+      "mean": 4.0,
+      "min": 3,
+      "p50": 4,
+      "p95": 5,
+      "p99": 7
     }
   },
   "tool": "ravum bench",
