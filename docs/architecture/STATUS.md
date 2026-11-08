@@ -22,6 +22,7 @@
 | MVP-0b / L4-C — audio réel | **Non exécuté** : périphériques identifiés (MOTU M Series, Realtek…), mais aucun hôte/pilote branché ; une mesure d'ordonnanceur OS borne honnêtement les prétentions — [MVP-0b-audio-host.md](../mvp/MVP-0b-audio-host.md) |
 | MVP-0b / L4-D — vérification et prouveur externe | **Bornée conservée** ; **aucun prouveur externe installé** (`kani` absent → `Unsupported`) ; un test instable préexistant du ledger de preuves a été identifié et corrigé — [MVP-0b-verification.md](../mvp/MVP-0b-verification.md) |
 | MVP-0b / L3 — collaboration multi-agents | COLLAB-1 conservé ; COLLAB-2/3 implémentés avec vérification du fusionné ; **benchmark S8 exécuté** (agents scriptés, pas des LLM) — [MVP-0b-collab-2-3.md](../mvp/MVP-0b-collab-2-3.md), [MVP-0b-s8.md](../mvp/MVP-0b-s8.md) |
+| MVP-0b / L3.4 — collaboration ↔ daemon | **Implémenté et mesuré** : unités affectées + dépendants path-deps seulement, unité indépendante jamais analysée, identités vérifiées fichier par fichier, rejeu 0 `rustc` (cache mémoire/disque) — [MVP-0b-collab-4.md](../mvp/MVP-0b-collab-4.md) |
 | MVP-0b / L4-A — E2E navigateur | Harnais CDP sans dépendance npm, scénarios réels sur l'UI — [MVP-0b-browser-e2e.md](../mvp/MVP-0b-browser-e2e.md) |
 | MVP-0b / L4-E — CI sélective | Graphe d'impact conservateur et fail-closed ; suite complète conservée — [MVP-0b-ci.md](../mvp/MVP-0b-ci.md) |
 | Vérification bornée (M2) | `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |

@@ -4,6 +4,7 @@
 //! `check`, `build`, `patch`, `run`, `watch`, `status`, `bench`.
 
 mod bench;
+mod collab_cycle;
 mod commands;
 mod cycle_bench;
 mod dsp;
@@ -32,6 +33,7 @@ fn main() -> ExitCode {
         "prove" => commands::prove(rest),
         "artifacts" => commands::artifacts(rest),
         "dsp" => dsp::dsp(rest),
+        "collab-cycle" => collab_cycle::collab_cycle(rest),
         "--help" | "-h" | "help" => {
             usage();
             0
@@ -61,6 +63,7 @@ fn usage() {
          \x20 ravum prove  <file.rs> [options]          check one obligation, record it in the evidence ledger\n\
          \x20 ravum artifacts [--prune --keep N]          list or prune built artifacts (never the active one when known)\n\
          \x20 ravum dsp   <file.rs> [--next <file.rs>]     measured DSP session, optional hot swap of the processing\n\
+         \x20 ravum collab-cycle <workspace> [options]   targeted daemon analysis of accepted collaborative changes\n\
          \n\
          ENV: RAVUM_HOST_BIN overrides the demo-host binary path.\n\
          NOTE: no command here is a proof, a release or a real-time qualification.",
