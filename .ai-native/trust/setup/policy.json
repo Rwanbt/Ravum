@@ -1,0 +1,23 @@
+{
+  "approval_predicate": {
+    "policy_digest": "94ca7396ad35ad344091d9c7cb2dd2a3b917b8046dd45ebb1af975a4aa82406d",
+    "predicate_id": "recorded_owner_ack"
+  },
+  "human_approval_rule": {
+    "policy_digest": "94ca7396ad35ad344091d9c7cb2dd2a3b917b8046dd45ebb1af975a4aa82406d",
+    "predicate_id": "recorded_owner_ack"
+  },
+  "promotion_policy": "explicit",
+  "required_evidence_facts": {
+    "git_recorded": true
+  },
+  "required_mutation_facts": {
+    "git_recorded": true
+  },
+  "schema_name": "project_policy",
+  "schema_version": 1,
+  "waiver_approval_rule": {
+    "policy_digest": "94ca7396ad35ad344091d9c7cb2dd2a3b917b8046dd45ebb1af975a4aa82406d",
+    "predicate_id": "recorded_owner_ack"
+  }
+}

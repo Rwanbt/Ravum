@@ -1,0 +1,12 @@
+{
+  "bootstrap": {
+    "initialized_at": "2026-11-08T00:33:07Z",
+    "initialized_by": "Erwan"
+  },
+  "policy_digest": "94ca7396ad35ad344091d9c7cb2dd2a3b917b8046dd45ebb1af975a4aa82406d",
+  "root_digest": "3f76b1c783d13daecf91dea54d6d79d8ea8b7c677ce0526dab9e7df8fbae7c8f",
+  "root_provenance": "GIT_RECORDED",
+  "schema_name": "approval_root",
+  "schema_version": 1,
+  "uid": "root_01M6W95G6K1ENVK3KTYAWADJZD"
+}

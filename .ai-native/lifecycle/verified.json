@@ -1,0 +1,7 @@
+{
+  "authority": "none \u2014 activation record only, never a trust or convergence fact",
+  "component": "verified-workplane",
+  "profile": "verified",
+  "schema_version": 1,
+  "stack_version": "2.5.0"
+}

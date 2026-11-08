@@ -23,3 +23,9 @@ venv/
 # Measurements and local machine state
 bench-local/
 evidence/local/
+# >>> BEGIN ai-native-dev-stack (managed — do not edit inside)
+tools/ai_docs/config.sh
+.ai-native/lifecycle/backups/
+.ai-native/lifecycle/update-cache.json
+.ai-native/state/
+# <<< END ai-native-dev-stack

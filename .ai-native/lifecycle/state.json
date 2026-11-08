@@ -1,0 +1,440 @@
+{
+  "active_features": [
+    "forge-github"
+  ],
+  "active_profile": "verified",
+  "adopted_from_legacy": false,
+  "created_at": "2026-11-08T00:33:02.445741+00:00",
+  "installation_id": "install_7044669c5cfa4bd3810bcb4b8ad635a0",
+  "installed_components": [
+    "ai-docs-tooling",
+    "claude-hook",
+    "context-template",
+    "conventions",
+    "engineering-method",
+    "github-templates",
+    "gitignore-entry",
+    "machine-config",
+    "skills-agents",
+    "skills-claude",
+    "verified-data",
+    "verified-guide",
+    "verified-workplane"
+  ],
+  "last_transaction": "txn_00ea56182af14885b11a0dc147dcb167",
+  "managed_files": [
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "5ef7a2f544de0420e9009a6fe8c461f06358a8c44884b13fafc72f4bc011705b",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/assemble_context.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "38464b92233e3572819d20d132edf723d46ceb63587fb9f28363c2a8e0e39083",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/config.sh.example"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "75ee3ee4a3a9a9f9ba670c402af57819f6e23d4034f4c6302933ae8e6a77a1d0",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/find_python.sh"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "16703a3fb812b0baa8caba6e0e7149b880d83edadef4d1498f719498177069a8",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/generate_ai_summary.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "0ec84c9a110c00e2bc5733986b7376d4f2727f892afcc0c259eb7ed1d1f20d39",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/generate_all.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "d699b15368169657f4577ce7f32c30e5ba7884cc4216728ee0137108cf4d5fc8",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/generate_metrics.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "8b0494186c470982e15dbe2c6b3d9cfbb6b3a21ffdde5c2c21291f2d9196b804",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/module_discovery.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "262efbe824e88499ee65bb71881701fcdcb41b8fa95a341d8ba84da2daf4e685",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/run_hook.ps1"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "e71ccfaff0fe81dc544b5b8f621e44711217ccf31d857594649bd8bc782d3038",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/run_hook.sh"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "6d29a18a79a88d5237a578793d138139308de929d3a8515ebca0345cb90d49ec",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/source_config.py"
+    },
+    {
+      "component": "ai-docs-tooling",
+      "created_by_ainative": true,
+      "digest_at_install": "138c0273c1b9d4bb217106266fc2301576be0505eb14c50a1937ae02baa897a9",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": "tools/ai_docs/update_on_edit.py"
+    },
+    {
+      "component": "claude-hook",
+      "created_by_ainative": true,
+      "digest_at_install": null,
+      "kind": "json_hook",
+      "ownership": "EXTERNAL_CONFIG",
+      "path": ".claude/settings.json"
+    },
+    {
+      "component": "context-template",
+      "created_by_ainative": true,
+      "digest_at_install": "8f5832d47d302294b00aba1f014b504179daf480738aeb93785cc1046073fcb8",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".ai-native/templates/AI_CONTEXT_template.md"
+    },
+    {
+      "component": "context-template",
+      "created_by_ainative": true,
+      "digest_at_install": "760398efb7e49afb2e2760f3bb91d6b171f4f44a1195234b4f4bbd162cbf2c5d",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".ai-native/templates/settings_hook_example.json"
+    },
+    {
+      "component": "conventions",
+      "created_by_ainative": true,
+      "digest_at_install": "9aa69d790302517d401fe73ddb3c82c22d01b37cd20dd2176adae5eca8fb83c6",
+      "kind": "file",
+      "ownership": "MANAGED_MUTABLE",
+      "path": "conventions.json"
+    },
+    {
+      "component": "github-templates",
+      "created_by_ainative": true,
+      "digest_at_install": "b318d8baac5a323f1b4a828349c7a15f2ac6938a434b8c94dfb7a4dc7541eab9",
+      "kind": "file",
+      "ownership": "MANAGED_MUTABLE",
+      "path": ".github/ISSUE_TEMPLATE/bug.md"
+    },
+    {
+      "component": "github-templates",
+      "created_by_ainative": true,
+      "digest_at_install": "211d077f1999b9dc0eef2689d5a2c7ed5dadc2de169ff0bd0048eb50c36afaf0",
+      "kind": "file",
+      "ownership": "MANAGED_MUTABLE",
+      "path": ".github/ISSUE_TEMPLATE/feature.md"
+    },
+    {
+      "component": "gitignore-entry",
+      "created_by_ainative": true,
+      "digest_at_install": null,
+      "kind": "external_block",
+      "ownership": "EXTERNAL_CONFIG",
+      "path": ".gitignore"
+    },
+    {
+      "component": "machine-config",
+      "created_by_ainative": true,
+      "digest_at_install": "38464b92233e3572819d20d132edf723d46ceb63587fb9f28363c2a8e0e39083",
+      "kind": "file",
+      "ownership": "USER_DATA",
+      "path": "tools/ai_docs/config.sh"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "bf5eea59c7f1bb45696d258f874096c83b4efdbdfd89187c46a07b9fdcccfd8f",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/ai-pilot/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "9d8f3533f7547619676e9e20539740262add2d8920a8e80fa5689ed2bcb13205",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/commit-convention/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "ad9be1e7e92fc3833b55c2bc4d212a883b70e10e2e49fcf3ade5552f1494c0c4",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/commit-convention/bin/extract_commit_msg.py"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "81945fba0c8dd21b24ec770d23d92a08b8ee300833471e7d6385fc28bb2d37ba",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/commit-convention/bin/validate-commit.sh"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "7b7f416418e3aaf34c2d36c3101ff6dc4784f376564cd473a6963073f3a2372e",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/commit-convention/tests/test_validate.sh"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "f7a25245a878c3acfac53d574cc43164652fd2860da08a48eb5143507c6d353c",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/github-triage/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "74e169d5856d1be6c3f61d3ca4af1300e798dfd7aeb07b916f2c134f2cbef375",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/implementation-economy/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "eca4d13e898a839670692393c15f9712e1133d4e5b9d1bc1c9b2a10959abcb9c",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/issue-to-implementation/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "db1700a43919e46cfcd16e0656675798cb869e73f8f21161da59071545641c22",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/issue-to-implementation/bin/ac_guard.py"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "f327d0767f1b273ce1643f1b4f33cb6780192b636d279919b62ff30e9844552d",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/issue-to-implementation/bin/claim_resolution.py"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "1added1dbaacb9406d8adf1d82a91ae9ef5308dc26fcff16cf4f5206e20a7d9f",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/stack-upgrade/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "7afe363ae61e867189ef13393f74029a9eb88359c9f36a4483ec93e35440c716",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/verify-ai-docs/SKILL.md"
+    },
+    {
+      "component": "skills-agents",
+      "created_by_ainative": true,
+      "digest_at_install": "94a26c5f2d0696167261463f6c20b399ca88a1e4bf5e3c7418e886b24191f93d",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".agents/skills/verify-standards/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "bf5eea59c7f1bb45696d258f874096c83b4efdbdfd89187c46a07b9fdcccfd8f",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/ai-pilot/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "9d8f3533f7547619676e9e20539740262add2d8920a8e80fa5689ed2bcb13205",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/commit-convention/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "ad9be1e7e92fc3833b55c2bc4d212a883b70e10e2e49fcf3ade5552f1494c0c4",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/commit-convention/bin/extract_commit_msg.py"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "81945fba0c8dd21b24ec770d23d92a08b8ee300833471e7d6385fc28bb2d37ba",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/commit-convention/bin/validate-commit.sh"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "7b7f416418e3aaf34c2d36c3101ff6dc4784f376564cd473a6963073f3a2372e",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/commit-convention/tests/test_validate.sh"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "f7a25245a878c3acfac53d574cc43164652fd2860da08a48eb5143507c6d353c",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/github-triage/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "74e169d5856d1be6c3f61d3ca4af1300e798dfd7aeb07b916f2c134f2cbef375",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/implementation-economy/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "eca4d13e898a839670692393c15f9712e1133d4e5b9d1bc1c9b2a10959abcb9c",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/issue-to-implementation/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "db1700a43919e46cfcd16e0656675798cb869e73f8f21161da59071545641c22",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/issue-to-implementation/bin/ac_guard.py"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "f327d0767f1b273ce1643f1b4f33cb6780192b636d279919b62ff30e9844552d",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/issue-to-implementation/bin/claim_resolution.py"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "1added1dbaacb9406d8adf1d82a91ae9ef5308dc26fcff16cf4f5206e20a7d9f",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/stack-upgrade/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "7afe363ae61e867189ef13393f74029a9eb88359c9f36a4483ec93e35440c716",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/verify-ai-docs/SKILL.md"
+    },
+    {
+      "component": "skills-claude",
+      "created_by_ainative": true,
+      "digest_at_install": "94a26c5f2d0696167261463f6c20b399ca88a1e4bf5e3c7418e886b24191f93d",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".claude/skills/verify-standards/SKILL.md"
+    },
+    {
+      "component": "verified-data",
+      "created_by_ainative": false,
+      "digest_at_install": null,
+      "kind": "data_root",
+      "ownership": "USER_DATA",
+      "path": ".ai-native/runs"
+    },
+    {
+      "component": "verified-data",
+      "created_by_ainative": false,
+      "digest_at_install": null,
+      "kind": "data_root",
+      "ownership": "USER_DATA",
+      "path": ".ai-native/trust"
+    },
+    {
+      "component": "verified-data",
+      "created_by_ainative": false,
+      "digest_at_install": null,
+      "kind": "data_root",
+      "ownership": "USER_DATA",
+      "path": ".ai-native/work"
+    },
+    {
+      "component": "verified-guide",
+      "created_by_ainative": true,
+      "digest_at_install": "7008156ad77bd4edfb3f5837ff60b51c89cf756b8b4fa82f25525c26790f0f26",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".ai-native/docs/VERIFIED-WORK-PLANE.md"
+    },
+    {
+      "component": "verified-workplane",
+      "created_by_ainative": true,
+      "digest_at_install": "53e3263b3c92f43875dda6e8da5674f9a7d8f77f554838811596dc531fe71c7f",
+      "kind": "file",
+      "ownership": "MANAGED_IMMUTABLE",
+      "path": ".ai-native/lifecycle/verified.json"
+    }
+  ],
+  "previous_profile": null,
+  "schema_version": 2,
+  "source_revision": null,
+  "source_version": "2.5.0",
+  "stack_version": "2.5.0",
+  "update_channel": "stable",
+  "update_preferences": {
+    "auto_check": true,
+    "channel": "stable",
+    "check_interval": 86400,
+    "enabled": true
+  },
+  "updated_at": "2026-11-08T00:33:03.295363+00:00"
+}
