@@ -69,12 +69,10 @@ pub use daemon::{single_file_request, work_dir_below, Daemon};
 pub use diagnostics::{parse_rustc_json, signature_set, Diagnostic, ParsedOutput, Severity};
 pub use error::{DaemonError, ErrorKind, Result};
 pub use gc::{
-    run_gc, BudgetStatus, CategorySizes, GcBudgets, GcDeleted, GcKept, GcMode, GcPolicy,
-    GcProtection, GcReport, RecentAnalysis, RetentionState,
+    run_gc, BudgetStatus, CategorySizes, GcBudgets, GcCompaction, GcDeleted, GcKept, GcMode,
+    GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState,
 };
-pub use report::{
-    AnalysisReport, AutoGcLast, DaemonStats, ReportStatus, SnapshotReport, Timings,
-};
+pub use report::{AnalysisReport, AutoGcLast, DaemonStats, ReportStatus, SnapshotReport, Timings};
 pub use snapshot::{
     sync_unit_dir, AnalysisRequest, MaterializedSnapshot, SnapshotIdentity, SnapshotStore,
     SourceFile, SyncStats,

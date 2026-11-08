@@ -158,6 +158,11 @@ impl AutoGcPolicy {
             max_incremental_bytes: self.max_incremental_bytes,
             max_total_bytes: self.max_total_bytes,
             keep_recent: self.keep_recent,
+            // Automatic GC keeps the manual defaults for compaction (off): an
+            // operator can request compaction explicitly; it is never implied by
+            // a background threshold pass.
+            compact_incremental: false,
+            keep_incremental_sessions: crate::gc::DEFAULT_KEEP_INCREMENTAL_SESSIONS,
             dry_run: false,
         }
     }
@@ -463,12 +468,7 @@ impl AutoGcRuntime {
     }
 
     /// Records a failed automatic collection (the daemon keeps running).
-    pub fn record_failure(
-        &self,
-        error: String,
-        total_before_bytes: u64,
-        requests_analyzed: u64,
-    ) {
+    pub fn record_failure(&self, error: String, total_before_bytes: u64, requests_analyzed: u64) {
         let entry = AutoGcLast {
             at_unix: crate::cache::now_unix(),
             duration_ms: 0,
@@ -576,7 +576,9 @@ mod tests {
         let text = serde_json::to_string(&policy(true)).unwrap();
         let parsed: AutoGcPolicy = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed, policy(true));
-        assert!(serde_json::from_str::<AutoGcPolicy>(r#"{"enabled":true,"min_total":"x"}"#).is_err());
+        assert!(
+            serde_json::from_str::<AutoGcPolicy>(r#"{"enabled":true,"min_total":"x"}"#).is_err()
+        );
         let gc_policy = policy(true).gc_policy();
         assert!(!gc_policy.dry_run);
         assert_eq!(gc_policy.keep_recent, 4);
@@ -603,22 +605,30 @@ mod tests {
         let runtime = AutoGcRuntime::new(policy(true), &dir).unwrap();
         assert_eq!(
             runtime.decision(999_999, 0),
-            AutoGcDecision::BelowThreshold { total_bytes: 999_999 }
+            AutoGcDecision::BelowThreshold {
+                total_bytes: 999_999
+            }
         );
         assert_eq!(
             runtime.decision(1_000_000, 2),
-            AutoGcDecision::Busy { total_bytes: 1_000_000 }
+            AutoGcDecision::Busy {
+                total_bytes: 1_000_000
+            }
         );
         assert_eq!(
             runtime.decision(1_500_000, 0),
-            AutoGcDecision::Run { total_bytes: 1_500_000 }
+            AutoGcDecision::Run {
+                total_bytes: 1_500_000
+            }
         );
         let mut not_idle = policy(true);
         not_idle.idle_only = false;
         let runtime = AutoGcRuntime::new(not_idle, &dir).unwrap();
         assert_eq!(
             runtime.decision(1_500_000, 3),
-            AutoGcDecision::Run { total_bytes: 1_500_000 }
+            AutoGcDecision::Run {
+                total_bytes: 1_500_000
+            }
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -644,7 +654,10 @@ mod tests {
             append_journal(&path, &entry).unwrap();
         }
         let text = std::fs::read_to_string(&path).unwrap();
-        let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect();
         assert_eq!(lines.len(), AUTO_GC_JOURNAL_MAX_ENTRIES);
         assert!(lines.last().unwrap().contains("\"at_unix\""));
         let first: AutoGcJournalEntry = serde_json::from_str(lines[0]).unwrap();
@@ -696,6 +709,7 @@ mod tests {
             kept: Default::default(),
             budgets: Default::default(),
             protected: Default::default(),
+            compaction: Default::default(),
             errors: Vec::new(),
             notes: Vec::new(),
         };
