@@ -1,0 +1,17 @@
+# Normalisation des fins de ligne.
+#
+# Les fixtures de patch sont comparées ligne à ligne : un checkout Windows qui
+# convertit LF -> CRLF rendrait les hunks non applicables. On force donc LF dans
+# le dépôt ET dans l'arbre de travail pour les fichiers de code et de données.
+# Les scripts PowerShell tolèrent les deux, mais restent en CRLF pour l'éditeur.
+* text=auto eol=lf
+
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
+*.ico binary
+*.dll binary
+*.exe binary
