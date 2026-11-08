@@ -534,6 +534,18 @@ Une première exécution sur l'arbre de travail partagé (contenant des modifica
 d'autres agents) avait aussi donné exit 0 en 14,16 s, avec `auto_gc_runs=5` et
 `disk_max=179 622 B` — cohérente avec HEAD pur.
 
+**Exécution réelle GitHub Actions (première)** — le push de ce lot a déclenché le
+workflow `mvp.yml` :
+
+- run [42523426221](https://github.com/Rwanbt/Ravum/actions/runs/42523426221) :
+  **conclusion globale `success`** (job `mvp` + job `auto-gc`) ;
+- job `Bounded automatic GC (opt-in path, bounded soak)` : **`success` en 52 s**
+  (build du harnais 14 s, soak borné **6 s**, assertions < 1 s, upload 2 s) ;
+- **18/18 invariants PASS** dans le log CI, avec `auto_gc_runs=5`,
+  `disk_max=183 332 B`, `disk_end=67 284 B`, `control.auto_gc.enabled=false`,
+  et la ligne finale `OK: 18 bounded auto-GC invariants hold (...)`;
+- l'artefact `auto-gc-evidence` (JSON complet + journal `gc-auto.log`) a été uploadé.
+
 **Sens échec attendu (borne violée)** — même bloc d'assertions, borne disque abaissée
 volontairement via `AUTO_GC_MAX_DISK_BYTES=1024` :
 
@@ -572,8 +584,9 @@ opérant, pas seulement déclaratif.
    incrémentaux de rustc ne sont jamais compactés (plancher de disque).
 5. Le plafond CI de 1 Mio est une borne grossière ; la borne réelle est portée par la
    politique (`max < min`) et par `auto_gc_runs >= 1`.
-6. **Aucun défaut produit modifié** ; le job CI n'a pas encore été exécuté sur GitHub
-   Actions (le run CI antérieur `42489068304` précède ce job).
+6. **Aucun défaut produit modifié** ; le job a été exécuté une fois sur GitHub Actions
+   avec succès (run `42523426221`, 52 s). Une exécution ne prouve pas une stabilité dans
+   le temps : le soak reste borné et volontairement court.
 7. Non-qualification : ce job ne qualifie ni le temps réel, ni l'ABI, ni une release.
 
 ---
@@ -676,6 +689,6 @@ documentaires.
   conservé, `full: false` (§10) ; la forme réelle de la PR d'intégration résout
   légitimement en FULL conservateur.
 - Les limites sont explicites (§7, §9.6, §10.5) ; la première exécution GitHub Actions du
-  job `auto-gc` reste à faire par le Lead.
+  job `auto-gc` a réussi (run `42523426221`, 18/18 invariants, 52 s de job).
 - **Aucun résultat ci-dessus ne qualifie le produit Ravum** : ce sont des preuves de
   mécanisme (sélection de tests, GC borné), sur une machine partagée et chargée.
