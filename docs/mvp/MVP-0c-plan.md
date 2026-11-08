@@ -273,7 +273,11 @@ Cibles mesurées, pas déclarées :
   campagne S8 réelle à petite échelle avec les subagents du harnais. Limites : pas de
   ventilation par tâche, `cacheReadTokens` inclus dans les totaux, pas de coût
   monétaire exposé, et une campagne concurrente consomme réellement du budget LLM —
-  elle doit rester bornée et pré-enregistrée.
+  elle doit rester bornée et pré-enregistrée. L'outil sans dépendance
+  `tools/agent-usage/usage.mjs` agrège ces compteurs par session/agent (tokens
+  d'entrée, de cache, de sortie, tokens traités, durée, profondeur de délégation) et
+  sert de base de mesure pour S8 ; première exécution validée sur 10 sessions du
+  workspace Ravum.
 
 ## 7. L4 — tests, CI, DSP, vérification (conception)
 
