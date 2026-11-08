@@ -104,8 +104,8 @@ pub fn bench(args: &[String]) -> u8 {
     for stage in ["check", "build", "verify", "load", "activate", "total"] {
         let s = &payload["stats"][format!("{stage}_ms")];
         println!(
-            "  {stage:<9} p50={:>5}ms p95={:>5}ms p99={:>5}ms max={:>5}ms",
-            s["p50"], s["p95"], s["p99"], s["max"]
+            "  {stage:<9} min={:>5}ms p50={:>5}ms p95={:>5}ms p99={:>5}ms max={:>5}ms",
+            s["min"], s["p50"], s["p95"], s["p99"], s["max"]
         );
     }
     if let (Some(before), Some(after)) = (memory_before, memory_after) {
