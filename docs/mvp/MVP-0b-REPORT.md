@@ -26,14 +26,14 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **22 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
-| Dernier commit de code | `5cb821a` |
-| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 232 fichiers, +72 705/−285 au moment de la rédaction |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **29 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
+| Dernier commit de code | `c83746c` |
+| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 246 fichiers, +81 881/−297 au moment de la rédaction |
 | PR #78 | inchangée, non fusionnée, non réécrite |
-| CI du dernier commit poussé | run [42489568590](https://github.com/Rwanbt/Ravum/actions/runs/42489568590) — **succès** (18 étapes dont l'E2E navigateur) ; le workflow d'impact est aussi vert ([42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677)) |
-| Tests workspace | **293 réussis, 0 échec** (arbre incluant COLLAB-4, la sonde audio et le test d'équivalence séquentiel/concurrent) |
+| CI du dernier commit poussé | run [42498344011](https://github.com/Rwanbt/Ravum/actions/runs/42498344011) — **succès** (18 étapes dont l'E2E navigateur) ; workflow d'impact aussi vert ([42498344027](https://github.com/Rwanbt/Ravum/actions/runs/42498344027)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
+| Tests workspace | **294 réussis, 0 échec**, 78 binaires, 127,6 s (machine chargée) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
-| Vault | 3 sessions publiées et vérifiées (voir §25) |
+| Vault | 4 sessions publiées et vérifiées (voir §25) |
 
 ## 3. Subagents réellement utilisés
 
@@ -70,7 +70,7 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (22 de code, sur `feat/mvp0b-hardening`)
+## 5. Commits (29 de code, sur `feat/mvp0b-hardening`)
 
 1. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
 2. `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
@@ -94,6 +94,13 @@ sauvegardes Obsidian.
 20. `7bc128a` — fix(m4): make the browser E2E deterministic with an explicit UI readiness signal
 21. `cba70f1` — feat(collab): COLLAB-4 -- an accepted change analyses only its affected units
 22. `5cb821a` — feat(dsp): probe the real Windows audio path with silence, and measure what it shows
+23. `dc6643c` — docs(mvp0b): integrate COLLAB-4 and the real audio-path results into the cycle report
+24. `d6fd17b` — docs(mvp0b): link the third, verified Obsidian session in the cycle report
+25. `9df66c7` — feat(cli): overlap analysis and build in cycle-bench, and measure the gain
+26. `f444265` — feat(core): productise the overlapped analysis/build scheduling in watch and run
+27. `573cb48` — feat(dsp): measure MMCSS real-time priority under controlled CPU load
+28. `c848396` — fix(patch-host): serialize the reclaimer tests that read process-wide counters
+29. `c83746c` — fix(coordination): make the concurrent-equivalence test independent of the artifact cache
 
 ## 6. PR créées ou mises à jour
 
@@ -103,7 +110,8 @@ sauvegardes Obsidian.
 - **PR #78 inchangée** : aucun commit réécrit, aucun force push, aucun commentaire supprimé.
 - Une seule branche poussée (`feat/mvp0b-hardening`), fast-forward à chaque push.
 - Commentaires publiés : #77 (configuration de protection vérifiée), #34 et #79 (liens vers
-  analyses/livrables, voir §25).
+  analyses/livrables, voir §25) ; PR #80 : deux mises à jour de vérification détaillées
+  + une confirmation de CI finale (avec correction transparente d'un numéro de run mal cité).
 
 ## 7. Correctifs DSP (L1-A + L4-B)
 
@@ -240,7 +248,7 @@ agents IA (tokens et supervision **non mesurés ici**).
 
 | Commande | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **292 réussis / 0 échec**, 78 binaires, 67,3 s |
+| `cargo test --workspace --all-targets` | **294 réussis / 0 échec**, 78 binaires, 127,6 s (machine chargée, builds réels du test concurrent) |
 | Baseline L0 avant modifications | 139 réussis / 0 échec, 46,52 s |
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
@@ -511,6 +519,8 @@ relues sur le dépôt distant :
    — commit vault `37b22b0` (lecture distante vérifiée ; sommet de `master` au moment de la publication).
 3. [Session MVP-0b second lot — P0-A/P0-I, COLLAB-4 et audio réel](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-cycle-collab4-audio-real.md)
    — commit vault `3e607da` (lecture distante vérifiée).
+4. [Session MVP-0b troisième lot — scheduling chevauché et MMCSS](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-08-mvp0b-scheduling-concurrent-mmsc.md)
+   — publiée en `b23d38e`, corrigée après CI en `3f1346b` (lecture distante vérifiée des deux états).
 
 ## Renvois
 
