@@ -243,7 +243,21 @@ fn threshold_reached_collects_bounds_disk_and_keeps_recent_served() {
         assert!(report.is_current() && report.success);
         last_seen = Some((index + 1, crate_name.to_owned()));
     }
-    assert!(daemon.wait_auto_gc_idle(15_000), "auto-GC must settle");
+    // Wait for the *observed effect*, not merely for a moment of idleness: the
+    // maintenance thread may not have been scheduled yet when a single idle check
+    // returns true (under CPU contention the wake-up can be delayed), and the point
+    // of this test is that a collection eventually happens and is recorded.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut stats = daemon.stats();
+    while stats.auto_gc.runs == 0 && std::time::Instant::now() < deadline {
+        let _ = daemon.wait_auto_gc_idle(500);
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        stats = daemon.stats();
+    }
+    assert!(
+        daemon.wait_auto_gc_idle(15_000),
+        "auto-GC must settle after the collection"
+    );
     let stats = daemon.stats();
     assert!(stats.auto_gc.enabled);
     assert!(stats.auto_gc.checks >= 1);
@@ -399,7 +413,21 @@ fn concurrent_clients_with_auto_gc_no_corruption() {
         all_fresh,
         "every concurrent analysis must be fresh and successful"
     );
-    assert!(daemon.wait_auto_gc_idle(15_000), "auto-GC must settle");
+    // Wait for the *observed effect*, not merely for a moment of idleness: the
+    // maintenance thread may not have been scheduled yet when a single idle check
+    // returns true (under CPU contention the wake-up can be delayed), and the point
+    // of this test is that a collection eventually happens and is recorded.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut stats = daemon.stats();
+    while stats.auto_gc.runs == 0 && std::time::Instant::now() < deadline {
+        let _ = daemon.wait_auto_gc_idle(500);
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        stats = daemon.stats();
+    }
+    assert!(
+        daemon.wait_auto_gc_idle(15_000),
+        "auto-GC must settle after the collection"
+    );
     let stats = daemon.stats();
     assert_eq!(stats.cache_corrupt, 0);
     assert_eq!(stats.auto_gc.failures, 0);
