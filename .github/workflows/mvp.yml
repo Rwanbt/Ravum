@@ -61,4 +61,5 @@ jobs:
           cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json
 
       - name: Scope notice
-        run: echo "Product checks only: no proof, no release, no real-time qualification, no ABI stability claim."
+        run: |
+          echo "Product checks only: no proof, no release, no real-time qualification, no ABI stability claim."
