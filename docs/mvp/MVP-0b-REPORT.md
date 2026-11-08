@@ -236,7 +236,7 @@ agents IA (tokens et supervision **non mesurés ici**).
 | `ravum-patch-host` | 26 (8 unit, 8 block_host, 5 rt_lifecycle, 5 crossfade) |
 | `ravum-workspace-coordinator` | 87 (49 unit, 2 collab1, 3 collab2, 10 collab3, 2 stratégies, 16 git_publication, 2 git_writer, 3 journal) |
 | `ravum-daemon` | 50 (32 unit, 3 chaînes d'édition, 15 intégration) |
-| `ravum-cli` | 19 |
+| `ravum-cli` | 22 (5 unitaires du binaire dont les 3 nouveaux de `cycle-bench` + intégrations) |
 | `ravum-proof` | 28 (19 unit, 9 proof_cache) |
 | `ravum-rust-adapter` | 8 (dont le nouveau cas rustc-direct) |
 | `ravum-todo` | 14 (4 unit + 10 E2E HTTP) |
@@ -281,8 +281,10 @@ d'un autre worker (WIP), jamais présents dans un commit.
 - **Workflow `mvp-impact.yml`** : validé localement (selftest, PyYAML, simulation) mais
   **pas encore exécuté sur GitHub Actions** (le déclencheur est `pull_request` vers
   `main`/`dev` ; il s'exécutera à la première PR vers `dev`).
-- **Benchmark de bout en bout édition→diagnostic→patch→activation** : non re-mesuré
-  (seule l'étape d'analyse a été mesurée en MVP-0b).
+- **Benchmark de bout en bout** : désormais **mesuré** (`ravum cycle-bench`, voir
+  `MVP-0b-cycle.md`) pour une petite unité et une unité synthétique de 2 313 lignes ;
+  restent non mesurés : un vrai crate multi-crates, les macros procédurales, le coût du
+  seul link incrémental et la preview dans une interface réelle.
 
 ## 15. Mesures M0/M1/MVP-0b comparées
 
@@ -292,12 +294,15 @@ d'un autre worker (WIP), jamais présents dans un commit.
 | Analyse contenu identique | non couverte (cache d'artefacts de build) | **0 ms p50/p95** (cache de verdicts) | gain majeur, cible <50 ms atteinte **pour ce cas** |
 | Analyse après modification réelle | ~145–190 ms | 165–208 ms p50 | **cible <50 ms non atteinte** |
 | `-C incremental` persistant | inexistant | −12/−24 % à ~1 100 lignes ; **−30/−36 % à 3 200–7 629 lignes** | gain réel mais dépendant de l'échelle |
-| Patch total (analyse+build+link+verify) | p50 525 ms, p95 746 ms | **non mesuré de bout en bout** | cible p95 <500 ms toujours non démontrée |
+| Patch total (analyse+build+link+verify) | p50 525 ms, p95 746 ms (fixture calculator) | **mesuré** : petite unité 316–339 ms p50 / 335–362 ms p95 ; unité 2 313 lignes 524–600 ms p50 / 702–743 ms p95 | cible p95 < 500 ms atteinte sur petite unité, manquée à 2 313 lignes ; build+link à froid dominant |
 | Clic de remplacement DSP (IIR / gain) | 0,108 / 0,657 | **0,029 / 0,058** avec fondu | mesure ; pas de seuil psychoacoustique revendiqué |
 | Allocations callback | 0 mesurées | **0 allocations et 0 désallocations** (199 517 blocs) | garde temps réel |
 | RAM daemon (WorkingSet) | — | 5,6–7,4 Mo pendant la campagne | sobriété du moteur |
 | Temps total jusqu'à tests verts, 3 agents | — | A 5 661 ms / B 6 678 ms / C 4 786 ms | S8, voir §11 |
 | Jigue OS (période 5,33 ms) | non mesurée | lateness p50 0,37 ms / p95 0,65 ms / max **2,6 ms** | borne les prétentions RT |
+| Cycle complet, contenu **inchangé** (édition→activation) | 85–177 ms (p50) | **8–13 ms** (p50), p95 9–18 ms | ×10 à ×13, cache de verdicts + cache d'artefacts |
+| Cycle complet, **édition réelle**, petite unité | 316 ms p50 / 335 ms p95 | 339 ms p50 / 362 ms p95 | MVP-0b ≈ +7 %, build à froid dominant |
+| Cycle complet, **édition réelle**, unité 2 313 lignes | 524 ms p50 / 702 ms p95 | 600 ms p50 / 743 ms p95 | cible p95 < 500 ms **manquée** à cette taille |
 
 ## 16. CPU et RAM
 
@@ -363,7 +368,10 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
 
 ## 21. Limitations
 
-- Cible P0-A **non atteinte sur code modifié** (165–208 ms) ; patch <500 ms non re-mesuré.
+- Cible P0-A **non atteinte sur code modifié** (analyse 95–262 ms p50 selon la taille) ;
+  cycle complet mesuré : p95 335–362 ms sur petite unité (< 500 ms) mais 702–743 ms sur
+  l'unité de 2 313 lignes ; le goulot est le **build+link à froid**, non couvert par le
+  daemon.
 - Daemon : analyse seule (pas de codegen/link), pas de trace de réutilisation par requête,
   état disque non collecté, révisions non persistées, pas de client éditeur/LSP.
 - S8 : agents scriptés (pas de LLM), n=5, éditions triviales, fixture locale ; verdict
@@ -410,9 +418,10 @@ priorité temps réel, aucun XRUN, aucune qualification hard-RT.**
 
 ## 24. Prochaines étapes proposées
 
-1. Réduire le coût d'une modification réelle : stratégie adaptative (cache de verdicts
-   seul sous ~1 000 lignes, `-C incremental` au-delà), puis re-mesurer le **patch complet**
-   de bout en bout (la seule métrique P0-A/P0-I qui compte).
+1. Réduire le coût d'une modification réelle, désormais identifié comme le **build+link à
+   froid** (230–435 ms) : cache de builds par contenu étendu, `-C incremental` sur la
+   compilation cdylib, lien incrémental mesuré, puis re-mesurer le cycle complet avec
+   `ravum cycle-bench`.
 2. Intégrer `AcceptedChange` (COLLAB) au daemon : invalidation ciblée par chemins/symboles,
    journal d'activations partagé, identifiants de snapshots communs (COLLAB-4).
 3. Harnais audio WASAPI shared-mode silencieux + plugin CLAP minimal, mesures XRUN.

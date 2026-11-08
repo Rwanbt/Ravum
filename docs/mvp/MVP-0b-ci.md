@@ -1,6 +1,6 @@
 # MVP-0b — CI sélective par impact (L4-E)
 
-> **Statut** : outil, workflow et preuves locales livrés ; **non exécuté sur GitHub Actions**
+> **Statut** : outil, workflow, preuves locales **et première exécution réelle sur GitHub Actions** (run [42489068304](https://github.com/Rwanbt/Ravum/actions/runs/42489068304), succès : décision FULL légitime sur un diff touchant `scripts/` et `crates/ravum-protocol`, suite complète verte, garde documentaire exécutée)
 > dans ce contexte (voir §7). Le workflow a été validé syntaxiquement et sa logique de
 > commandes a été exercée localement via `scripts/impact.ps1` et par simulation des steps.
 >
@@ -385,7 +385,13 @@ de la suite complète — c'est le prix de la conservation des tests.
 9. **Suppression/désactivation d'un test** : le graphe ne peut pas la détecter (il ne lit
    pas le contenu des tests). Le workflow ne neutralise rien, mais ne prouve pas non plus
    l'absence de tests retirés : c'est un gate de sélection, pas un gate anti-suppression.
-10. **Workflow non exécuté sur GitHub Actions dans ce contexte** : validation locale =
+10. **Première exécution GitHub Actions réalisée le 2026-11-08** (run
+    42489068304, déclenchée par un push sur `feat/**` conformément au déclencheur ajouté) :
+    diff vs `origin/dev` => FULL par règles conservatrices (`scripts/**`, protocole), suite
+    complète exécutée et verte, contrôle documentaire exécuté, étape sélective sautée comme
+    attendu. Limite restante : ce run n'exerce pas le chemin *sélectif* (le diff était
+    FULL) ; la validation locale du 2026-11-08 couvre ce chemin avec 3 diffs sélectifs et
+    seuls les runners GitHub restent à éprouver. Détail : validation locale =
     syntaxe YAML (`PyYAML OK`, 12 steps), simulation des steps FULL/incertain extraits du
     YAML, logique de commandes exercée via `scripts/impact.ps1`, garde statique dans le
     selftest. La première exécution réelle sur `pull_request` reste à faire par le Lead.
@@ -459,6 +465,6 @@ via `git diff base...HEAD`, `fetch-depth: 0`), avec repli documenté `origin/mai
   exit 1 côté job), après exécution de secours.
 - Les tests des dépendants **sont réellement exécutés** quand un crate change
   (démonstration exécutée : 27 tests sur 3 paquets pour un changement de `ravum-todo-core`).
-- Les limites sont explicites (§7) ; la première exécution GitHub Actions reste à faire.
+- Les limites sont explicites (§7) ; la première exécution GitHub Actions a été réalisée (run 42489068304) et ses limites sont reportées.
 - **Aucun résultat ci-dessus ne qualifie le produit Ravum** : c'est une preuve de
   mécanisme de sélection de tests, sur une machine partagée et chargée.

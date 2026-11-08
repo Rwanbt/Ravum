@@ -426,6 +426,12 @@ démontre **pas** : la cible « diagnostic p95 < 50 ms sur une modification rée
 non atteinte (voir §6), et le temps total édition→diagnostic→patch→activation n'est pas
 encore mesuré de bout en bout par la CLI.
 
+**Mise à jour (même journée)** : la boucle complète a depuis été mesurée par
+`ravum cycle-bench` — voir [MVP-0b-cycle.md](MVP-0b-cycle.md). Résultat : contenu
+inchangé, cycle complet 85–177 ms → **8–13 ms** ; édition réelle 316–600 ms, dominée par
+le build+link à froid, MVP-0b non plus rapide. C'est cohérent avec les chiffres
+d'analyse ci-dessus et cela déplace le goulot identifié vers le build/link.
+
 ## 11. Prochaines étapes proposées
 
 1. **Brancher le daemon dans la boucle Ravum** (CLI/overlay) pour mesurer le
