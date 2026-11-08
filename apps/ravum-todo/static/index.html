@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ravum TODO — application témoin M4</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { font-size: 1.4rem; }
+    .banner { padding: .6rem .8rem; border-radius: .4rem; margin-bottom: 1rem; display: none; }
+    .banner.warn { background: #fff3cd; color: #664d03; }
+    .banner.ok { background: #d1e7dd; color: #0f5132; }
+    fieldset { border: 1px solid currentColor; border-radius: .4rem; margin-bottom: 1rem; }
+    label { display: block; margin: .4rem 0 .2rem; font-size: .85rem; }
+    input[type="text"], input[type="date"], input[type="password"] { width: 100%; padding: .4rem; box-sizing: border-box; }
+    button { padding: .35rem .7rem; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li { display: flex; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid rgba(128,128,128,.3); }
+    li .title { flex: 1; }
+    li.done .title { text-decoration: line-through; opacity: .6; }
+    .due { font-size: .8rem; opacity: .7; }
+    #error { color: #b02a37; white-space: pre-wrap; min-height: 1.2rem; }
+    .muted { font-size: .8rem; opacity: .7; }
+  </style>
+</head>
+<body>
+  <h1>Ravum TODO</h1>
+  <p class="muted">Application témoin M4 : UI statique, API HTTP, SQLite, contrat partagé.</p>
+
+  <div id="banner" class="banner"></div>
+  <p id="error" role="alert"></p>
+
+  <fieldset>
+    <legend>Jeton d'écriture</legend>
+    <label for="token">Bearer token (jamais stocké, conservé en mémoire seulement)</label>
+    <input id="token" type="password" autocomplete="off" placeholder="jeton" />
+  </fieldset>
+
+  <form id="new-task">
+    <fieldset>
+      <legend>Nouvelle tâche</legend>
+      <label for="title">Titre (obligatoire, 120 caractères max)</label>
+      <input id="title" type="text" maxlength="200" required />
+      <label for="due">Échéance (facultative)</label>
+      <input id="due" type="date" />
+      <p><button type="submit">Ajouter</button></p>
+    </fieldset>
+  </form>
+
+  <fieldset>
+    <legend>Tâches</legend>
+    <ul id="tasks"></ul>
+    <p><button id="refresh" type="button">Rafraîchir</button></p>
+  </fieldset>
+
+  <p class="muted">
+    Le client vérifie <code>contract_version</code> au démarrage. En cas d'écart, les
+    mutations sont désactivées : mieux vaut refuser que corrompre.
+  </p>
+
+  <script src="/app.js"></script>
+</body>
+</html>

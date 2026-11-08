@@ -1,0 +1,11 @@
+[package]
+name = "ravum-todo-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Shared task types, server-side validation and the exported client contract (M4)."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
