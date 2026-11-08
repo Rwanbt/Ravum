@@ -31,8 +31,20 @@ try {
     }
     Write-Host "Sortie complète: $OutFile"
 
-    & cargo test --workspace --offline -- --test-threads=1 2>&1 | Tee-Object -FilePath $OutFile
-    $code = $LASTEXITCODE
+    # Windows PowerShell 5.1 converts native stderr into a *terminating*
+    # NativeCommandError when $ErrorActionPreference is 'Stop' (set above). A
+    # single rustc warning on stderr aborted the run before the output file was
+    # created (observed 2026-11-09). Keep the preference non-terminating for the
+    # duration of the child process only, then restore it.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & cargo test --workspace --offline -- --test-threads=1 2>&1 | Tee-Object -FilePath $OutFile
+        $code = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
 
     Write-Host ''
     Write-Host ('Code de sortie cargo test: ' + $code)
