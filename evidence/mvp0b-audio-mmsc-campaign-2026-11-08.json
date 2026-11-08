@@ -1,0 +1,467 @@
+{
+  "schema_version": 1,
+  "kind": "audio-mmsc-campaign-summary",
+  "tool": "scripts/audio-probe.ps1",
+  "date": "2026-11-08",
+  "derived": true,
+  "note": "Agregat derive des executions brutes listees dans raw_runs ; ce fichier n-est pas lui-meme une mesure, chaque nombre vient d un rapport brut.",
+  "harness": "crates/ravum-dsp-harness/src/bin/ravum-audio-probe.rs (waveOut, silence, MMCSS optionnel)",
+  "config": {
+    "seconds": 3,
+    "frames": 512,
+    "buffers": 4,
+    "swap_every_ms": 250,
+    "crossfade_frames": 256,
+    "device": "WAVE_MAPPER",
+    "module": "fixtures/dsp/iir_v1.rs -> swaps iir_v2/iir_v1",
+    "load_processes": 12,
+    "load_tool": "PowerShell busy loops started by scripts/audio-probe.ps1 -Load 12"
+  },
+  "os": {
+    "arch": "x86_64",
+    "logical_cpus": 16,
+    "name": "windows",
+    "process_id": 3140,
+    "processor_identifier": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "profile": "debug",
+    "windows_version": "10.0.26100"
+  },
+  "cells": [
+    {
+      "variant": "rest-nommscss",
+      "label": "repos sans MMCSS",
+      "mmcss_requested": false,
+      "load_processes": 0,
+      "repetitions": 3,
+      "reps": [
+        {
+          "file": "evidence/mvp0b-audio-mmsc-rest-nommscss-r1-2026-11-08.json",
+          "mmcss_acquired": false,
+          "mmcss_task_index": null,
+          "mmcss_revert_ok": null,
+          "thread_priority_observed": 0,
+          "cpu_busy_percent_measured": 39.1,
+          "ram_available_mib": 1334.0,
+          "cadence_ratio": 1.0007,
+          "blocks_processed": 281,
+          "open_prepare_us": 487683,
+          "lateness_us": {
+            "count": 273,
+            "max": 1785,
+            "min": -8844,
+            "p50": -3510,
+            "p95": 997,
+            "p99": 1558
+          },
+          "work_us": {
+            "p50": 7,
+            "p95": 13,
+            "max": 24
+          },
+          "callback_us": {
+            "p50": 286,
+            "p95": 490,
+            "max": 931
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 29817,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.0292640570551157
+        },
+        {
+          "file": "evidence/mvp0b-audio-mmsc-rest-nommscss-r2-2026-11-08.json",
+          "mmcss_acquired": false,
+          "mmcss_task_index": null,
+          "mmcss_revert_ok": null,
+          "thread_priority_observed": 0,
+          "cpu_busy_percent_measured": 39.5,
+          "ram_available_mib": 1412.0,
+          "cadence_ratio": 1.0005,
+          "blocks_processed": 281,
+          "open_prepare_us": 472619,
+          "lateness_us": {
+            "count": 272,
+            "max": 4988,
+            "min": -5966,
+            "p50": -836,
+            "p95": 3607,
+            "p99": 4632
+          },
+          "work_us": {
+            "p50": 7,
+            "p95": 13,
+            "max": 26
+          },
+          "callback_us": {
+            "p50": 282,
+            "p95": 478,
+            "max": 890
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 26534,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.0292640570551157
+        },
+        {
+          "file": "evidence/mvp0b-audio-mmsc-rest-nommscss-r3-2026-11-08.json",
+          "mmcss_acquired": false,
+          "mmcss_task_index": null,
+          "mmcss_revert_ok": null,
+          "thread_priority_observed": 0,
+          "cpu_busy_percent_measured": 51.7,
+          "ram_available_mib": 2845.0,
+          "cadence_ratio": 1.0006,
+          "blocks_processed": 281,
+          "open_prepare_us": 497397,
+          "lateness_us": {
+            "count": 273,
+            "max": 6139,
+            "min": -4388,
+            "p50": 412,
+            "p95": 4945,
+            "p99": 5790
+          },
+          "work_us": {
+            "p50": 9,
+            "p95": 22,
+            "max": 131
+          },
+          "callback_us": {
+            "p50": 415,
+            "p95": 675,
+            "max": 1853
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 25507,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.029323792085051537
+        }
+      ],
+      "aggregate": {
+        "lateness_max_us_min": 1785.0,
+        "lateness_max_us_max": 6139.0,
+        "lateness_p95_us_min": 997.0,
+        "lateness_p95_us_max": 4945.0,
+        "callback_max_us_max": 1853.0,
+        "buffers_late_total": 0.0,
+        "queue_margin_min_us": 25507.0,
+        "cadence_ratio_min": 1.0005,
+        "allocations_total": 0.0,
+        "deallocations_total": 0.0
+      }
+    },
+    {
+      "variant": "rest-mmcss",
+      "label": "repos avec MMCSS",
+      "mmcss_requested": true,
+      "load_processes": 0,
+      "repetitions": 2,
+      "reps": [
+        {
+          "file": "evidence/mvp0b-audio-mmsc-rest-mmcss-r1-2026-11-08.json",
+          "mmcss_acquired": true,
+          "mmcss_task_index": 407,
+          "mmcss_revert_ok": true,
+          "thread_priority_observed": 18,
+          "cpu_busy_percent_measured": 31.1,
+          "ram_available_mib": 1552.0,
+          "cadence_ratio": 1.0009,
+          "blocks_processed": 282,
+          "open_prepare_us": 435747,
+          "lateness_us": {
+            "count": 274,
+            "max": 7693,
+            "min": -2726,
+            "p50": 2072,
+            "p95": 6809,
+            "p99": 7385
+          },
+          "work_us": {
+            "p50": 7,
+            "p95": 10,
+            "max": 17
+          },
+          "callback_us": {
+            "p50": 223,
+            "p95": 402,
+            "max": 478
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 24076,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.02899600751698017
+        },
+        {
+          "file": "evidence/mvp0b-audio-mmsc-rest-mmcss-r2-2026-11-08.json",
+          "mmcss_acquired": true,
+          "mmcss_task_index": 410,
+          "mmcss_revert_ok": true,
+          "thread_priority_observed": 18,
+          "cpu_busy_percent_measured": 41.6,
+          "ram_available_mib": 1595.0,
+          "cadence_ratio": 1.0007,
+          "blocks_processed": 281,
+          "open_prepare_us": 82173,
+          "lateness_us": {
+            "count": 273,
+            "max": 8307,
+            "min": -2101,
+            "p50": 2841,
+            "p95": 7594,
+            "p99": 8243
+          },
+          "work_us": {
+            "p50": 8,
+            "p95": 11,
+            "max": 24
+          },
+          "callback_us": {
+            "p50": 301,
+            "p95": 428,
+            "max": 464
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 23300,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.029126716777682304
+        }
+      ],
+      "aggregate": {
+        "lateness_max_us_min": 7693.0,
+        "lateness_max_us_max": 8307.0,
+        "lateness_p95_us_min": 6809.0,
+        "lateness_p95_us_max": 7594.0,
+        "callback_max_us_max": 478.0,
+        "buffers_late_total": 0.0,
+        "queue_margin_min_us": 23300.0,
+        "cadence_ratio_min": 1.0007,
+        "allocations_total": 0.0,
+        "deallocations_total": 0.0
+      }
+    },
+    {
+      "variant": "load-nommscss",
+      "label": "charge 100% sans MMCSS",
+      "mmcss_requested": false,
+      "load_processes": 12,
+      "repetitions": 2,
+      "reps": [
+        {
+          "file": "evidence/mvp0b-audio-mmsc-load-nommscss-r1-2026-11-08.json",
+          "mmcss_acquired": false,
+          "mmcss_task_index": null,
+          "mmcss_revert_ok": null,
+          "thread_priority_observed": 0,
+          "cpu_busy_percent_measured": 100.0,
+          "ram_available_mib": 1237.0,
+          "cadence_ratio": 0.9975,
+          "blocks_processed": 282,
+          "open_prepare_us": 768084,
+          "lateness_us": {
+            "count": 274,
+            "max": 15682,
+            "min": -2055,
+            "p50": 2927,
+            "p95": 7423,
+            "p99": 11606
+          },
+          "work_us": {
+            "p50": 10,
+            "p95": 16,
+            "max": 24
+          },
+          "callback_us": {
+            "p50": 329,
+            "p95": 410,
+            "max": 8701
+          },
+          "buffers_late_gt_one_period": 3,
+          "queue_margin_min_us": 15983,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 10,
+          "swaps_requested": 10,
+          "max_sample_delta_at_swaps": 0.029346097260713577
+        },
+        {
+          "file": "evidence/mvp0b-audio-mmsc-load-nommscss-r2-2026-11-08.json",
+          "mmcss_acquired": false,
+          "mmcss_task_index": null,
+          "mmcss_revert_ok": null,
+          "thread_priority_observed": 0,
+          "cpu_busy_percent_measured": 100.0,
+          "ram_available_mib": 1216.0,
+          "cadence_ratio": 0.9594,
+          "blocks_processed": 269,
+          "open_prepare_us": 750624,
+          "lateness_us": {
+            "count": 255,
+            "max": 134445,
+            "min": -622,
+            "p50": 117597,
+            "p95": 126254,
+            "p99": 130961
+          },
+          "work_us": {
+            "p50": 9,
+            "p95": 13,
+            "max": 28
+          },
+          "callback_us": {
+            "p50": 322,
+            "p95": 9367,
+            "max": 40408
+          },
+          "buffers_late_gt_one_period": 255,
+          "queue_margin_min_us": -111885,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 11,
+          "swaps_requested": 11,
+          "max_sample_delta_at_swaps": 0.02899625524878502
+        }
+      ],
+      "aggregate": {
+        "lateness_max_us_min": 15682.0,
+        "lateness_max_us_max": 134445.0,
+        "lateness_p95_us_min": 7423.0,
+        "lateness_p95_us_max": 126254.0,
+        "callback_max_us_max": 40408.0,
+        "buffers_late_total": 258.0,
+        "queue_margin_min_us": -111885.0,
+        "cadence_ratio_min": 0.9594,
+        "allocations_total": 0.0,
+        "deallocations_total": 0.0
+      }
+    },
+    {
+      "variant": "load-mmcss",
+      "label": "charge 100% avec MMCSS",
+      "mmcss_requested": true,
+      "load_processes": 12,
+      "repetitions": 2,
+      "reps": [
+        {
+          "file": "evidence/mvp0b-audio-mmsc-load-mmcss-r1-2026-11-08.json",
+          "mmcss_acquired": true,
+          "mmcss_task_index": 417,
+          "mmcss_revert_ok": true,
+          "thread_priority_observed": 18,
+          "cpu_busy_percent_measured": 100.0,
+          "ram_available_mib": 1492.0,
+          "cadence_ratio": 1.0004,
+          "blocks_processed": 281,
+          "open_prepare_us": 746893,
+          "lateness_us": {
+            "count": 273,
+            "max": 2538,
+            "min": -7873,
+            "p50": -2848,
+            "p95": 1459,
+            "p99": 2118
+          },
+          "work_us": {
+            "p50": 10,
+            "p95": 14,
+            "max": 25
+          },
+          "callback_us": {
+            "p50": 335,
+            "p95": 402,
+            "max": 505
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 29109,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 10,
+          "swaps_requested": 10,
+          "max_sample_delta_at_swaps": 0.029033765196800232
+        },
+        {
+          "file": "evidence/mvp0b-audio-mmsc-load-mmcss-r2-2026-11-08.json",
+          "mmcss_acquired": true,
+          "mmcss_task_index": 420,
+          "mmcss_revert_ok": true,
+          "thread_priority_observed": 18,
+          "cpu_busy_percent_measured": 100.0,
+          "ram_available_mib": 1037.0,
+          "cadence_ratio": 1.0009,
+          "blocks_processed": 282,
+          "open_prepare_us": 1560763,
+          "lateness_us": {
+            "count": 274,
+            "max": 2700,
+            "min": -7899,
+            "p50": -2830,
+            "p95": 1513,
+            "p99": 2205
+          },
+          "work_us": {
+            "p50": 10,
+            "p95": 12,
+            "max": 26
+          },
+          "callback_us": {
+            "p50": 339,
+            "p95": 398,
+            "max": 498
+          },
+          "buffers_late_gt_one_period": 0,
+          "queue_margin_min_us": 28973,
+          "allocations": 0,
+          "deallocations": 0,
+          "swaps_activated": 10,
+          "swaps_requested": 10,
+          "max_sample_delta_at_swaps": 0.029340524226427078
+        }
+      ],
+      "aggregate": {
+        "lateness_max_us_min": 2538.0,
+        "lateness_max_us_max": 2700.0,
+        "lateness_p95_us_min": 1459.0,
+        "lateness_p95_us_max": 1513.0,
+        "callback_max_us_max": 505.0,
+        "buffers_late_total": 0.0,
+        "queue_margin_min_us": 28973.0,
+        "cadence_ratio_min": 1.0004,
+        "allocations_total": 0.0,
+        "deallocations_total": 0.0
+      }
+    }
+  ],
+  "raw_runs": [
+    "evidence/mvp0b-audio-mmsc-load-mmcss-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-load-mmcss-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-load-nommscss-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-load-nommscss-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-rest-mmcss-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-rest-mmcss-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-rest-nommscss-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-rest-nommscss-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-mmsc-rest-nommscss-r3-2026-11-08.json"
+  ],
+  "limits": [
+    "derived summary, not a measurement: re-read the raw_runs files for every number",
+    "2 repetitions per cell, plus 1 extra reproducibility run of the rest-no-MMCSS cell: the effect is consistent but this is not a statistical proof",
+    "MMCSS Pro Audio + AVRT_PRIORITY_CRITICAL is a scheduling class request, not a deadline guarantee and not hard real-time",
+    "the controlled load is 12 PowerShell busy-loop processes, not an audio workload with driver interrupts",
+    "waveOut remains a legacy emulated API: no WASAPI exclusive, no ASIO, no XRUN observable",
+    "one machine, one device, one format, 3 s windows: results are not portable"
+  ]
+}

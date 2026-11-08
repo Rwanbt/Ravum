@@ -5,12 +5,15 @@
 > chemin DSP sur un périphérique `waveOut` Windows **en n'émettant que du silence**. Ce
 > document rapporte (1) l'inventaire matériel réel de la machine, (2) une mesure réelle
 > d'ordonnanceur OS qui borne honnêtement les prétentions, (3) les mesures réelles sur
-> périphérique (travail DSP, latence, swaps, allocations), (4) la liste explicite de ce
-> qui n'a pas été exécuté et pourquoi.
+> périphérique (travail DSP, latence, swaps, allocations), (4) la priorité temps réel
+> Windows (MMCSS) mesurée sous charge CPU contrôlée, (5) la liste explicite de ce qui
+> n'a pas été exécuté et pourquoi.
 >
-> **Ce qui n'est toujours pas qualifié** : pas de WASAPI/ASIO, pas de priorité temps réel
-> ni de MMCSS, pas d'hôte CLAP/VST3/DAW, pas de XRUN mesurable via `waveOut`, **aucune**
-> qualification hard-réaliste. Une sonde `waveOut` legacy n'est pas un pilote audio certifié.
+> **Ce qui n'est toujours pas qualifié** : pas de WASAPI/ASIO, pas d'hôte CLAP/VST3/DAW,
+> pas de XRUN mesurable via `waveOut`, **aucune** qualification hard-réaliste. La priorité
+> temps réel Windows (MMCSS « Pro Audio » + `AVRT_PRIORITY_CRITICAL`) a été **mesurée**
+> sous charge CPU contrôlée (§5), mais c'est une demande de classe d'ordonnancement, pas
+> une garantie d'échéance. Une sonde `waveOut` legacy n'est pas un pilote audio certifié.
 
 ## 1. Ce qui est réellement implémenté et mesuré aujourd'hui
 
@@ -23,7 +26,8 @@
 | Cadence simulée `frames / sample_rate` | mesuré (période dérivée 5 333 µs) |
 | **Chemin DSP réel sur périphérique `waveOut` (silence)** | **mesuré (§4)** : 282 tampons, 0 alloc/0 free sur le thread de rendu, 11 swaps |
 | **Swaps à chaud sous pilote réel, avec et sans crossfade** | **mesurés (§4.5)** : 11 activations/run, 0 refus ; `\|delta\|` 0,0291 avec fondu vs 0,1260 sans |
-| Périphérique réel via WASAPI/ASIO, priorité RT, MMCSS | **aucun** |
+| **Priorité temps réel MMCSS (Pro Audio + critical) sous charge CPU 100 %** | **mesurée (§5)** : 2 runs/cellule, 0 tampon en retard avec MMCSS (max 2,7 ms) ; sans MMCSS un run dégradé à 134,4 ms et 255 tampons en retard |
+| Périphérique réel via WASAPI/ASIO, priorité RT via WASAPI exclusive | **aucun** |
 | Hôte CLAP/VST3/ASIO branché sur le module | **aucun** |
 | XRUN mesurés, glitches de pilote comptés | **aucun** (`waveOut` ne les expose pas) |
 
@@ -236,14 +240,18 @@ occupée ; CPU mesuré 50 % → 100 % pendant le run), même configuration de r�
 Conclusion : le facteur limitant est **l'ordonnancement OS d'un thread non temps réel**,
 pas le travail DSP (p50 9 µs) ni les swaps (delta inchangé). Des décrochages du même ordre
 (~100 ms) ont aussi été observés sporadiquement sur des runs sans charge ajoutée, quand
-d'autres agents de la machine compilaient. C'est exactement la raison pour laquelle aucune
-revendication hard-RT n'est faite.
+d'autres agents de la machine compilaient. Le §5 mesure précisément ce point : avec MMCSS
+`Pro Audio` + `AVRT_PRIORITY_CRITICAL`, ces mêmes 100 % de charge CPU ne font plus
+décrocher le thread de rendu (0 tampon en retard sur 2 runs) ; sans MMCSS, la dégradation
+reste possible. C'est exactement la raison pour laquelle aucune revendication hard-RT
+n'est faite : MMCSS améliore l'ordonnancement, il ne garantit pas l'échéance.
 
 ### 4.7 Ce que ces chiffres ne prouvent pas
 
 - `waveOut` (winmm) est une API **legacy émulée**, pas un pilote temps réel certifié :
-  pas de WASAPI exclusive, pas d'ASIO, pas d'enregistrement MMCSS, pas de priorité
-  `THREAD_PRIORITY_TIME_CRITICAL`. Ce n'est **pas** une qualification hard-réaliste.
+  pas de WASAPI exclusive, pas d'ASIO. Les runs du §5 enregistrent le thread de rendu
+  auprès de MMCSS, mais MMCSS ne change ni le pilote ni l'API et ne promet aucune
+  échéance. Ce n'est **pas** une qualification hard-réaliste.
 - **Les XRUN ne sont pas mesurables via `waveOut`.** Le document parle de « tampons
   soumis en retard », de « marge de file » et de « risque de starvation » — jamais de
   XRUN mesurés.
@@ -257,9 +265,134 @@ revendication hard-RT n'est faite.
 - Le binaire est en profil **debug** ; le module DSP est compilé `opt-level=1` par
   `ravum build`.
 - Chaque run mesure un état instantané de la machine (charge des autres agents incluse) ;
-  la variabilité run-à-run est réelle et documentée (§4.3, §4.6).
+  la variabilité run-à-run est réelle et documentée (§4.3, §4.6, §5).
+- MMCSS « Pro Audio » + `AVRT_PRIORITY_CRITICAL` est une **classe d'ordonnancement**,
+  pas une garantie d'échéance : il ne rend pas `waveOut` temps réel certifié et ne
+  remplace pas WASAPI/ASIO (§5).
 
-## 5. Ce qui n'a pas été exécuté (et pourquoi)
+## 5. Priorité temps réel (MMCSS) sous charge
+
+### 5.1 Ce qui a été implémenté
+
+La sonde accepte désormais `--mmcss` (défaut **off**) et
+`--thread-priority <normal|above|high|time-critical>`. Les deux s'appliquent au
+**thread de rendu**, pas au processus :
+
+1. `AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index)` (`avrt.dll`) : si le
+   handle est nul, la sonde **échoue explicitement** (code `GetLastError`, sortie 1) —
+   jamais de faux succès ; le rapport contient `realtime.mmcss_acquired=false`,
+   `avrt_error` et une note ;
+2. `AvSetMmThreadPriority(handle, AVRT_PRIORITY_CRITICAL)` : retour vérifié ; un échec
+   libère le handle MMCSS et échoue explicitement (`avrt_error`) ;
+3. `SetThreadPriority` (kernel32) **après** MMCSS, si `--thread-priority` est demandé ;
+   échec explicite (`win32_error`), MMCSS libéré ;
+4. en fin de run, `AvRevertMmThreadCharacteristics(handle)` : le résultat est reporté
+   dans `realtime.revert` (appelé, ok, code d'erreur, priorité de base après revert).
+
+Ordre appliqué : MMCSS d'abord, priorité Win32 brute ensuite. Le rapport JSON `realtime`
+contient `mmcss_requested`, `mmcss_acquired`, `mmcss_task_index`, `mmcss_priority`,
+`mmcss_priority_set`, `thread_priority_requested`, `thread_priority_win32_constant`,
+`thread_priority_set`, `thread_priority_observed` (valeur relue par `GetThreadPriority`),
+`baseline_thread_priority`, `priority_after_mmcss`, `applied_order`, `avrt_error`,
+`win32_error`, `notes`, et `revert`.
+
+Mesures d'observation sur cette machine : priorité de base au départ **0** ; après
+MMCSS Pro Audio + critical, `GetThreadPriority` renvoie **18** ; `--thread-priority
+time-critical` seul renvoie **15**, `high` renvoie **2** ; avec MMCSS puis
+`time-critical`, la priorité observée finale est **15** (la priorité brute écrase la
+priorité MMCSS, c'est l'ordre documenté). Revert MMCSS : **ok**, priorité de base de
+retour à **0**.
+
+La sonde échantillonne aussi la charge machine autour de la fenêtre mesurée
+(`GetSystemTimes` : delta occupé/total sur tous les CPU ; `GlobalMemoryStatusEx` : RAM
+libre/totale), et chaque preuve JSON contient `load` avec
+`cpu_busy_percent_measured`, `ram_available_bytes_start/end`, `ram_total_bytes` et
+`probe_load_note`. La charge contrôlée est créée par `scripts/audio-probe.ps1 -Load 12` :
+12 processus PowerShell en boucle occupée, bornés à ≤ 10 s, arrêtés dans le `finally`
+du script.
+
+### 5.2 Protocole de campagne
+
+Configuration identique à la référence §4.3 : `--seconds 3 --frames 512 --buffers 4`,
+module réel `iir_v1` + swaps `iir_v2`/`iir_v1` toutes les 250 ms, crossfade 256 frames.
+4 cellules × **2 répétitions**, plus une 3e exécution de la cellule « repos sans MMCSS »
+pour la reproductibilité :
+
+| Cellule | MMCSS | Charge contrôlée |
+|---|---|---|
+| `rest-nommscss` | non | aucune |
+| `rest-mmcss` | Pro Audio + critical | aucune |
+| `load-nommscss` | non | 12 processus busy-loop |
+| `load-mmcss` | Pro Audio + critical | 12 processus busy-loop |
+
+CPU mesuré par la sonde : **31–52 %** pour les cellules « repos » (machine partagée avec
+d'autres agents), **100,0 %** pour les cellules « charge ». RAM libre au départ :
+1,0–1,6 Gio sur 15,7 Gio. Le coût d'activation du moteur audio reste mesuré séparément :
+0,08–0,49 s au repos, **0,75–1,56 s** sous charge (`open_prepare_us`), il n'entre pas
+dans la lateness.
+
+### 5.3 Résultats mesurés (répétitions brutes)
+
+Lateness par réveil (µs), travail DSP, callback, tampons en retard, marge de file, ratio
+de cadence et allocations, pour chaque répétition :
+
+| Cellule | CPU | ratio | lateness p50 | lateness p95 | lateness max | callback max | tardifs > 1 période | marge min | alloc/free |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| rest-nommscss r1 | 39,1 % | 1,0007 | −3 510 | 997 | 1 785 | 931 | 0 | +29 817 | 0/0 |
+| rest-nommscss r2 | 39,5 % | 1,0005 | −836 | 3 607 | 4 988 | 890 | 0 | +26 534 | 0/0 |
+| rest-nommscss r3 (reproductibilité) | 51,7 % | 1,0006 | 412 | 4 945 | 6 139 | 1 853 | 0 | +25 507 | 0/0 |
+| rest-mmcss r1 | 31,1 % | 1,0009 | 2 072 | 6 809 | 7 693 | 478 | 0 | +24 076 | 0/0 |
+| rest-mmcss r2 | 41,6 % | 1,0007 | 2 841 | 7 594 | 8 307 | 464 | 0 | +23 300 | 0/0 |
+| load-nommscss r1 | 100,0 % | 0,9975 | 2 927 | 7 423 | 15 682 | 8 701 | **3** | +15 983 | 0/0 |
+| load-nommscss r2 | 100,0 % | 0,9594 | **117 597** | **126 254** | **134 445** | **40 408** | **255** | **−111 885** | 0/0 |
+| load-mmcss r1 | 100,0 % | 1,0004 | −2 848 | 1 459 | **2 538** | 505 | **0** | +29 109 | 0/0 |
+| load-mmcss r2 | 100,0 % | 1,0009 | −2 830 | 1 513 | **2 700** | 498 | **0** | +28 973 | 0/0 |
+
+Travail DSP (p50/p95/max, µs) : 7–10 / 10–22 / 17–131 selon les runs — le travail
+lui-même reste de l'ordre de la dizaine de µs, seul l'ordonnancement varie (le max 131 µs
+correspond au run r3 à 51,7 % de CPU). Swaps : 10 à 11 activations par run, 0 refus,
+`|delta|` aux swaps 0,0290–0,0293 (fondu continu) dans **toutes** les cellules. Toutes
+les cellules : **0 allocation / 0 désallocation** sur le thread de rendu, modules MMCSS
+acquis (`mmcss_acquired=true`, `task_index` 407/410/417/420), priorité `critical` posée,
+revert MMCSS ok.
+
+### 5.4 Lecture honnête
+
+1. **Sous charge CPU 100 % contrôlée, MMCSS change le résultat de façon nette** : les
+   deux runs `load-mmcss` restent à 0 tampon en retard, lateness max **2,5–2,7 ms**,
+   marge de file **+29 ms**, callback max ~500 µs, ratio 1,0004–1,0009. Sans MMCSS, le
+   même protocole donne un run légèrement dégradé (3 tampons en retard, max 15,7 ms) et
+   **un run franchement décroché** (255 tampons en retard, lateness max **134,4 ms**,
+   marge **−111,9 ms**, ratio 0,959) — le thread non priorisé a été désordonnancé par la
+   charge.
+2. **Au repos, MMCSS n'apporte rien de mesurable** : les deux configurations tiennent le
+   temps réel (0 tampon en retard) ; la lateness max observée est même un peu plus haute
+   avec MMCSS (7,7–8,3 ms) que sans (1,8–6,1 ms sur 3 runs) alors que le callback max est
+   plus bas avec MMCSS (464–478 µs vs 890–1 853 µs). L'écart est dans la variabilité
+   run-à-run : sur une machine non saturée, MMCSS ne peut pas « améliorer » ce qui n'est
+   pas dégradé.
+3. **MMCSS n'est pas du hard-RT.** « Pro Audio » + `AVRT_PRIORITY_CRITICAL` est une
+   demande de classe d'ordonnancement ; le système ne garantit aucune échéance. Ça ne
+   corrige ni le pilote `waveOut` legacy, ni la quantification de livraison des
+   `WOM_DONE`, ni les limites du chemin audio mesurées au §4.
+4. **La charge est artificielle** : 12 boucles PowerShell occupent le CPU, mais elles ne
+   produisent ni interruptions de pilote audio, ni accès disque/PCIe comparables à un
+   DAW. Le résultat dit « MMCSS protège ce thread contre une charge CPU concurrente »,
+   pas « MMCSS garantit l'audio en production ».
+5. **Deux répétitions par cellule** (plus une 3e exécution de la cellule repos sans MMCSS
+   pour la reproductibilité, cohérente : ratio 1,0006, 0 tampon en retard, lateness max
+   6 139 µs, marge +25,5 ms) : l'effet est cohérent avec le mécanisme et net, mais ce
+   n'est pas une preuve statistique. Les cellules ont été exécutées dans un ordre fixe
+   (repos sans, repos avec, charge sans, charge avec), pas en ordre aléatoire, et la
+   machine est partagée avec d'autres agents : une partie de la variabilité vient de là.
+   Toujours pas de WASAPI/ASIO, pas de XRUN mesurable, pas de fenêtre longue.
+
+Preuves : 9 rapports bruts
+`evidence/mvp0b-audio-mmsc-{rest-nommscss-r1,rest-nommscss-r2,rest-nommscss-r3,rest-mmcss-r1,rest-mmcss-r2,load-nommscss-r1,load-nommscss-r2,load-mmcss-r1,load-mmcss-r2}-2026-11-08.json`,
+plus le récapitulatif **dérivé** `evidence/mvp0b-audio-mmsc-campaign-2026-11-08.json`
+(celui-ci n'est pas une mesure : il agrège les rapports bruts et le dit).
+
+## 6. Ce qui n'a pas été exécuté (et pourquoi)
 
 | Élément du mandat L4-C | Statut | Raison |
 |---|---|---|
@@ -270,21 +403,24 @@ revendication hard-RT n'est faite.
 | Durée de callback sur périphérique réel | **mesurée** (§4.3) : travail `process_rt` p50 7 µs / p95 14 µs / max 83 µs ; callback complet (réveil → re-soumission) p50 275 µs / p95 503 µs / max 756 µs | — |
 | Swaps répétés dans un callback réel | **mesurés** (§4.3, §4.5) : 11 activations par run sous pilote, 0 refus, avec et sans fondu | — |
 | Continuation d'état à travers un swap en conditions réelles | **mesurée** (§4.5) : `\|delta\|` aux swaps 0,0291 avec fondu (0,1260 sans), état possédé par l'hôte | — |
-| Reproductibilité des erreurs audio (dropouts, glitches) | **partielle** : plusieurs runs de référence et un run sous charge contrôlée (§4.6) ; pas de fenêtre longue (minutes), pas de compteur de glitches du pilote. | — |
-| Priorité temps réel / MMCSS / WASAPI exclusive | **non exécuté** | `waveOut` n'offre pas ce chemin ; lot suivant. |
-| Qualification hard-réaliste | **non exécutée et non revendiquée** | Voir §4.7 : la voie utilisée n'est pas certifiée et la charge machine fait varier le résultat. |
+| Reproductibilité des erreurs audio (dropouts, glitches) | **partielle** : plusieurs runs de référence, un run sous charge contrôlée (§4.6) et la campagne MMCSS 4 cellules × 2 runs + 1 reprise (§5) ; pas de fenêtre longue (minutes), pas de compteur de glitches du pilote. | — |
+| Priorité temps réel MMCSS | **mesurée** (§5) : `AvSetMmThreadCharacteristicsW("Pro Audio")` + `AVRT_PRIORITY_CRITICAL`, priorité de base observée 18, revert ok ; 2 runs/cellule sous charge CPU 100 % | — |
+| Priorité Win32 brute (`SetThreadPriority`) | **implémentée et vérifiée** : `normal`/`above`/`high`/`time-critical` (priorités observées 0/1/2/15), appliquée après MMCSS lorsqu'elles sont demandées ensemble | — |
+| WASAPI exclusive / ASIO / priorité temps réel WASAPI | **non exécuté** | `waveOut` n'offre pas ce chemin ; lot suivant. MMCSS ne compense pas : c'est une classe d'ordonnancement, pas un pilote certifié. |
+| Qualification hard-réaliste | **non exécutée et non revendiquée** | Voir §4.7 et §5.4 : la voie utilisée n'est pas certifiée, MMCSS ne promet pas d'échéance et la charge machine fait varier le résultat. |
 
 Ces éléments restent des **travaux non faits**, et aucune conclusion de qualité audio
 réelle ne doit en être tirée.
 
-## 6. Plan proposé pour une vraie qualification (partiellement commencé)
+## 7. Plan proposé pour une vraie qualification (partiellement commencé)
 
 1. ~~**Option la moins risquée** : boucle de rendu silencieuse qui appelle `process_rt`
    dans le callback du pilote.~~ **Fait avec `waveOut`** (§4) : la boucle existe, ne fait
    aucun son, et mesure travail/lateness/swaps/allocations sur un vrai périphérique.
-   Reste à faire la version **WASAPI** *shared* puis *exclusive* (FFI directe ou crate
-   `windows`) avec `AvSetMmThreadCharacteristics` (MMCSS) et priorité de thread, qui
-   permettra de comparer `waveOut` legacy à un chemin moderne.
+   **Fait aussi : MMCSS** (§5), la priorité haute est mesurée sous charge. Reste à faire
+   la version **WASAPI** *shared* puis *exclusive* (FFI directe ou crate `windows`) avec
+   `AvSetMmThreadCharacteristics` (MMCSS) et priorité de thread, pour comparer `waveOut`
+   legacy + MMCSS à un chemin audio moderne + MMCSS.
 2. **Option produit** : construire un plugin CLAP minimal autour de l'ABI de bloc
    (`clap_entry`, process, params) et l'héberger dans un hôte réel (Seno/Reaper/…). Exige
    un ABI hôte distinct et une GUI ; lot séparé.
@@ -298,7 +434,7 @@ réelle ne doit en être tirée.
    ne tient pas le temps réel à 5,33 ms (§4.4) ; 512 frames (10,67 ms) est la plus petite
    taille mesurée qui tient.
 
-## 7. Reproduire
+## 8. Reproduire
 
 ```powershell
 cd D:\App\Ravum
@@ -313,6 +449,22 @@ powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Device 1 -Fram
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -CrossfadeFrames 0    # clic attendu (delta 0,1260)
 powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -ListDevices          # indices waveOut
 
+# 2) Campagne MMCSS : repos / charge × sans / avec MMCSS, 2 répétitions chacune.
+#    -Mmcss enregistre le thread de rendu "Pro Audio" + AVRT_PRIORITY_CRITICAL ;
+#    -Load 12 crée 12 processus PowerShell busy-loop, bornés et arrêtés en fin de run ;
+#    -Variant nomme la preuve evidence/mvp0b-audio-mmsc-<variant>-<date>.json.
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Variant rest-nommscss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Variant rest-nommscss-r2
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Variant rest-mmcss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Variant rest-mmcss-r2
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Load 12 -Variant load-nommscss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Load 12 -Variant load-nommscss-r2
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Load 12 -Variant load-mmcss-r1
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Load 12 -Variant load-mmcss-r2
+
+# Une seule cellule avec MMCSS + priorité Win32 brute (séparation des deux mécanismes) :
+powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -ThreadPriority time-critical -Variant smoke-mmcss-tc
+
 # Commande directe de la sonde (module précompilé par ravum build) :
 cargo run -q -p ravum-dsp-harness --bin ravum-audio-probe -- --seconds 3 --frames 512 `
   --module target/ravum/artifacts/<iir_v1>.dll `
@@ -320,10 +472,10 @@ cargo run -q -p ravum-dsp-harness --bin ravum-audio-probe -- --seconds 3 --frame
   --swap-build target/ravum/audio-probe/build-iir_v1.json `
   --swap-every-ms 250 --crossfade-frames 256 --json --out evidence/mvp0b-audio-probe-2026-11-08.json
 
-# 2) Gigue d'ordonnanceur OS (inchangée) :
+# 3) Gigue d'ordonnanceur OS (inchangée) :
 cargo run -q -p ravum-dsp-harness --bin ravum-jitter -- --iterations 2000 --period-us 5333 --json
 
-# 3) Simulateur de blocs (avec crossfade) :
+# 4) Simulateur de blocs (avec crossfade) :
 cargo run -q --bin ravum -- dsp fixtures/dsp/iir_v1.rs --next fixtures/dsp/iir_v2.rs --blocks 400 --crossfade-frames 256 --json
 ```
 
@@ -336,3 +488,9 @@ Preuves JSON de ce document :
 | `evidence/mvp0b-audio-probe-2026-11-08-realtek-f256.json` | index 1 (Realtek), 256 frames | ratio 1,001, 0 risque de vidage |
 | `evidence/mvp0b-audio-probe-2026-11-08-nocrossfade.json` | défaut, 512 frames, sans fondu | delta swaps 0,1260 (clic) |
 | `evidence/mvp0b-audio-probe-2026-11-08-under-load.json` | défaut, 512 frames, charge CPU 100 % | lateness max 207 862 µs, 240 tampons en retard |
+| `evidence/mvp0b-audio-mmsc-rest-nommscss-r{1,2}-2026-11-08.json` | repos, sans MMCSS | 0 tampon en retard, lateness max 1 785 / 4 988 µs |
+| `evidence/mvp0b-audio-mmsc-rest-nommscss-r3-2026-11-08.json` | repos, sans MMCSS, reproductibilité | 0 tampon en retard, lateness max 6 139 µs |
+| `evidence/mvp0b-audio-mmsc-rest-mmcss-r{1,2}-2026-11-08.json` | repos, MMCSS Pro Audio + critical | 0 tampon en retard, lateness max 7 693 / 8 307 µs |
+| `evidence/mvp0b-audio-mmsc-load-nommscss-r{1,2}-2026-11-08.json` | charge 100 %, sans MMCSS | 3 / 255 tampons en retard, lateness max 15 682 / 134 445 µs |
+| `evidence/mvp0b-audio-mmsc-load-mmcss-r{1,2}-2026-11-08.json` | charge 100 %, MMCSS | **0 / 0** tampon en retard, lateness max 2 538 / 2 700 µs |
+| `evidence/mvp0b-audio-mmsc-campaign-2026-11-08.json` | récapitulatif **dérivé** des 9 runs bruts (pas une mesure) | agrégats par cellule |
