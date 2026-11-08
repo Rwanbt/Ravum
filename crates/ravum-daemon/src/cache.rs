@@ -412,13 +412,27 @@ mod tests {
         )
     }
 
-    fn cache() -> (ResultCache, PathBuf) {
+    /// A directory that no other test of this binary can use.
+    ///
+    /// The previous helper keyed the directory on `process::id()` and a
+    /// second-granularity timestamp: tests running in parallel inside the same second
+    /// shared the same directory (and `remove_dir_all` deleted each other's entries),
+    /// which made `corrupt_payload_is_rejected_as_corrupt`, `clear_empties_both_levels`
+    /// and `max_entries_evicts_lru_entries` fail intermittently under `--test-threads>1`.
+    /// Observed in the MVP-0b full-workspace run; fixed with a process-unique sequence.
+    fn unique_dir(tag: &str) -> PathBuf {
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-cache-{}-{}",
-            std::process::id(),
-            now_unix()
+            "ravum-daemon-{tag}-{}-{seq}",
+            std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn cache() -> (ResultCache, PathBuf) {
+        let dir = unique_dir("cache");
         let cache = ResultCache::new(dir.clone(), 4).unwrap();
         (cache, dir)
     }
@@ -470,11 +484,7 @@ mod tests {
 
     #[test]
     fn max_entries_evicts_lru_entries() {
-        let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-cache-lru-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = unique_dir("cache-lru");
         let cache = ResultCache::new(dir.clone(), 2).unwrap();
         for index in 0..4 {
             let expected = CacheLookupKey::new(
