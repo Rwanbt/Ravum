@@ -38,7 +38,10 @@ pub fn safe_join(base: &Path, logical_path: &str) -> Result<PathBuf> {
 /// result cache treats any unreadable entry as a miss (fail-closed).
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or_else(|| {
-        DaemonError::io(format!("cannot write {}: no parent directory", path.display()))
+        DaemonError::io(format!(
+            "cannot write {}: no parent directory",
+            path.display()
+        ))
     })?;
     std::fs::create_dir_all(parent)?;
     let seq = WRITE_SEQ.fetch_add(1, Ordering::Relaxed);
@@ -101,10 +104,7 @@ mod tests {
 
     #[test]
     fn atomic_write_replaces_existing_file() {
-        let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-fsutil-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("ravum-daemon-fsutil-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("entry.json");

@@ -14,18 +14,16 @@
 //!
 //! The daemon owns its working directory; it never writes a user file.
 
-use crate::auto_gc::{
-    AutoGcDecision, AutoGcPolicy, AutoGcRuntime, AutoGcStats,
+use crate::auto_gc::{AutoGcDecision, AutoGcPolicy, AutoGcRuntime, AutoGcStats};
+use crate::cache::{
+    CacheKind, CacheLookupKey, CacheReport, CachedVerdict, LookupOutcome, ResultCache,
 };
-use crate::cache::{CacheKind, CacheLookupKey, CacheReport, CachedVerdict, LookupOutcome, ResultCache};
 use crate::config::{BuildContext, DaemonConfig, Priority, ToolchainInfo};
 use crate::diagnostics::parse_rustc_json;
 use crate::error::{DaemonError, Result};
 use crate::fsutil::safe_join;
 use crate::gate::JobGate;
-use crate::gc::{
-    GcMode, GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState,
-};
+use crate::gc::{GcMode, GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState};
 use crate::report::{AnalysisReport, DaemonStats, ReportStatus, SnapshotReport, Timings};
 use crate::revision::{CancelToken, RevisionTracker, RunningJobs};
 use crate::rustc_driver::{incremental_dir, out_dir, unit_dir, DriverOptions, RustcDriver};
@@ -238,10 +236,8 @@ impl Daemon {
             .lock()
             .map(|state| state.clone())
             .unwrap_or_default();
-        let protection =
-            GcProtection::from_retention(&retention, self.inner.revisions.current());
-        let mut report =
-            crate::gc::run_gc(&self.inner.config.work_dir, policy, &protection, mode)?;
+        let protection = GcProtection::from_retention(&retention, self.inner.revisions.current());
+        let mut report = crate::gc::run_gc(&self.inner.config.work_dir, policy, &protection, mode)?;
         if !policy.dry_run {
             let evicted = self.inner.cache.remove_keys(&report.deleted.cache_keys);
             if evicted > 0 {
@@ -308,9 +304,7 @@ impl Daemon {
                 return false;
             }
             if let Ok(guard) = runtime.signal_lock.lock() {
-                let _ = runtime
-                    .signal
-                    .wait_timeout(guard, Duration::from_millis(5));
+                let _ = runtime.signal.wait_timeout(guard, Duration::from_millis(5));
             } else {
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -369,11 +363,7 @@ impl Daemon {
                     }
                     Err(error) => {
                         let message = format!("{error}");
-                        runtime.record_failure(
-                            message.clone(),
-                            total_before,
-                            requests_analyzed,
-                        );
+                        runtime.record_failure(message.clone(), total_before, requests_analyzed);
                         Err(message)
                     }
                 }
@@ -651,8 +641,7 @@ impl Daemon {
 
         let root_path = safe_join(&unit, &request.root)?;
         let context_out_dir = out_dir(&self.inner.config.work_dir, &context_id);
-        let context_incremental_dir =
-            incremental_dir(&self.inner.config.work_dir, &context_id);
+        let context_incremental_dir = incremental_dir(&self.inner.config.work_dir, &context_id);
         let options = DriverOptions {
             root_path: &root_path,
             out_dir: &context_out_dir,
@@ -848,7 +837,9 @@ impl Daemon {
                     }
                     std::thread::sleep(poll);
                 }
-                Err(TryLockError::Poisoned(poisoned)) => return UnitLockOutcome::Locked(poisoned.into_inner()),
+                Err(TryLockError::Poisoned(poisoned)) => {
+                    return UnitLockOutcome::Locked(poisoned.into_inner())
+                }
             }
         }
     }
@@ -869,12 +860,9 @@ impl Daemon {
             snapshot_id: identity.snapshot_id.clone(),
             context_id: context_id.to_owned(),
             toolchain: self.inner.toolchain.clone(),
-            incremental_dir: incremental_dir(
-                &self.inner.config.work_dir,
-                context_id,
-            )
-            .display()
-            .to_string(),
+            incremental_dir: incremental_dir(&self.inner.config.work_dir, context_id)
+                .display()
+                .to_string(),
             cache: CacheReport::miss(self.inner.cache.entries()),
             success: false,
             exit_code: None,

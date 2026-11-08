@@ -14,8 +14,8 @@
 //! is transparent instead of flattering.
 
 use ravum_daemon::{
-    parse_rustc_json, signature_set, BuildContext, DaemonConfig, Daemon, Diagnostic,
-    SourceFile, ToolchainInfo,
+    parse_rustc_json, signature_set, BuildContext, Daemon, DaemonConfig, Diagnostic, SourceFile,
+    ToolchainInfo,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -162,7 +162,11 @@ pub fn run_cold(
         .map_err(|error| format!("cannot spawn rustc (cold): {error}"))?;
     let ms = started.elapsed().as_millis() as u64;
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let parsed = parse_rustc_json(&stderr, Some(&call_dir.join("unit")), output.status.success());
+    let parsed = parse_rustc_json(
+        &stderr,
+        Some(&call_dir.join("unit")),
+        output.status.success(),
+    );
     Ok(ModeRun {
         mode: "cold",
         ms,
@@ -300,8 +304,8 @@ pub fn stats(values: &[u64]) -> Value {
 /// `rustc -vV` parsed as evidence (the same call the daemon uses).
 pub fn toolchain_json(repo_root: &Path) -> Result<(ToolchainInfo, Value), String> {
     let rustc = rustc_path();
-    let toolchain = ToolchainInfo::query(&rustc)
-        .map_err(|error| format!("cannot query rustc: {error}"))?;
+    let toolchain =
+        ToolchainInfo::query(&rustc).map_err(|error| format!("cannot query rustc: {error}"))?;
     let version = Command::new(&rustc)
         .arg("-vV")
         .output()
@@ -370,7 +374,10 @@ pub fn git_json(repo_root: &Path) -> Value {
         .ok()
         .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
         .unwrap_or_default();
-    let dirty_files = status.lines().filter(|line| !line.trim().is_empty()).count();
+    let dirty_files = status
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
     json!({
         "branch": branch,
         "head": head,
@@ -459,10 +466,7 @@ pub fn run_daemon(
 /// Compares the diagnostic signature sets of several runs. Returns `None` when
 /// they agree, or a description of the first mismatch.
 pub fn compare_runs(runs: &[&ModeRun]) -> Option<String> {
-    let reference = runs
-        .first()
-        .map(|run| run.signatures())
-        .unwrap_or_default();
+    let reference = runs.first().map(|run| run.signatures()).unwrap_or_default();
     for run in runs.iter().skip(1) {
         let signatures = run.signatures();
         if signatures != reference {

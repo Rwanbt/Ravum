@@ -169,8 +169,7 @@ impl DaemonStats {
     /// Cache hit rate over cache lookups. `None` when nothing was looked up.
     pub fn cache_hit_rate(&self) -> Option<f64> {
         let lookups = self.cache_hits_memory + self.cache_hits_disk + self.cache_misses;
-        (lookups > 0).then(|| {
-            (self.cache_hits_memory + self.cache_hits_disk) as f64 / lookups as f64
-        })
+        (lookups > 0)
+            .then(|| (self.cache_hits_memory + self.cache_hits_disk) as f64 / lookups as f64)
     }
 }

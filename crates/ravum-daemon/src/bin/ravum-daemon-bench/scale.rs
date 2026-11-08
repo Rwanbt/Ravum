@@ -183,8 +183,7 @@ fn run_case(
         }
         // Interleave: cold first on even reps, incremental first on odd reps.
         if rep % 2 == 0 {
-            let incremental =
-                run_incremental(work_root, rustc, fixture, &category, &state)?;
+            let incremental = run_incremental(work_root, rustc, fixture, &category, &state)?;
             incremental_samples.push(incremental.ms);
             incremental_runs.push(incremental);
             let cold = run_cold(work_root, rustc, fixture, &category, sequence, &state)?;
@@ -196,8 +195,7 @@ fn run_case(
             sequence += 1;
             cold_samples.push(cold.ms);
             cold_runs.push(cold);
-            let incremental =
-                run_incremental(work_root, rustc, fixture, &category, &state)?;
+            let incremental = run_incremental(work_root, rustc, fixture, &category, &state)?;
             incremental_samples.push(incremental.ms);
             incremental_runs.push(incremental);
         }
@@ -228,9 +226,7 @@ fn apply_body_edit(state: &[SourceFile], rep: usize) -> Result<Vec<SourceFile>, 
         "pub fn op_1(x: f64) -> f64 {{\n    let a = x * SCALE + 1.{};",
         rep - 1
     );
-    let replace = format!(
-        "pub fn op_1(x: f64) -> f64 {{\n    let a = x * SCALE + 1.{rep};"
-    );
+    let replace = format!("pub fn op_1(x: f64) -> f64 {{\n    let a = x * SCALE + 1.{rep};");
     if math.content.matches(&find).count() != 1 {
         return Err(format!("body edit anchor {find:?} not found exactly once"));
     }
@@ -239,7 +235,10 @@ fn apply_body_edit(state: &[SourceFile], rep: usize) -> Result<Vec<SourceFile>, 
 }
 
 fn generate(spec: &SizeSpec, work_root: &Path) -> Result<Fixture, String> {
-    let unit_dir = work_root.join("scale").join(spec.name).join("generated-unit");
+    let unit_dir = work_root
+        .join("scale")
+        .join(spec.name)
+        .join("generated-unit");
     let _ = std::fs::remove_dir_all(&unit_dir);
     let src = unit_dir.join("src");
     std::fs::create_dir_all(&src)

@@ -183,9 +183,7 @@ fn is_valid_crate_name(name: &str) -> bool {
         Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
         _ => return false,
     }
-    name.len() <= 128
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && !name.is_empty()
+    name.len() <= 128 && chars.all(|c| c.is_ascii_alphanumeric() || c == '_') && !name.is_empty()
 }
 
 /// Flags the daemon must keep sole control of to preserve provenance and
@@ -358,7 +356,11 @@ mod tests {
 
     #[test]
     fn priority_orders_interactive_first() {
-        let mut levels = vec![Priority::Normal, Priority::Interactive, Priority::Background];
+        let mut levels = vec![
+            Priority::Normal,
+            Priority::Interactive,
+            Priority::Background,
+        ];
         levels.sort();
         assert_eq!(
             levels,

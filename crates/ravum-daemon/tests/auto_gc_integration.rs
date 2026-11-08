@@ -180,7 +180,9 @@ fn disabled_by_default_no_thread_no_journal_no_cost() {
     assert!(!daemon.auto_gc_stats().enabled);
     assert!(daemon.auto_gc_journal_path().is_none());
     for seed in 1..=2 {
-        let report = daemon.analyze(&request(seed, "auto_unit")).expect("analysis");
+        let report = daemon
+            .analyze(&request(seed, "auto_unit"))
+            .expect("analysis");
         assert!(report.is_current() && report.success);
     }
     std::thread::sleep(Duration::from_millis(100));
@@ -208,7 +210,9 @@ fn below_threshold_runs_no_collection() {
     };
     let daemon = Daemon::open(config(&work, policy)).expect("daemon");
     for seed in 1..=3 {
-        let report = daemon.analyze(&request(seed, "auto_unit")).expect("analysis");
+        let report = daemon
+            .analyze(&request(seed, "auto_unit"))
+            .expect("analysis");
         assert!(report.is_current() && report.success && !report.cache.hit);
     }
     assert!(daemon.wait_auto_gc_idle(5_000), "auto-GC must settle");
@@ -217,7 +221,10 @@ fn below_threshold_runs_no_collection() {
     assert_eq!(stats.auto_gc.runs, 0, "below threshold: no collection");
     assert_eq!(stats.auto_gc.failures, 0);
     assert!(stats.auto_gc.last.is_none());
-    assert!(!work.join("gc-auto.log").exists(), "no collection -> no journal");
+    assert!(
+        !work.join("gc-auto.log").exists(),
+        "no collection -> no journal"
+    );
     // No overhead beyond the checks: the next analysis still works.
     let next = daemon.analyze(&request(4, "auto_unit")).expect("analysis");
     assert!(next.is_current() && next.success);
@@ -354,7 +361,10 @@ fn injected_auto_gc_failure_never_fails_an_analysis() {
     assert!(first.is_current() && first.success);
     assert!(daemon.wait_auto_gc_idle(5_000), "auto-GC must settle");
     let stats = daemon.stats();
-    assert!(stats.auto_gc.failures >= 1, "injected failure must be visible");
+    assert!(
+        stats.auto_gc.failures >= 1,
+        "injected failure must be visible"
+    );
     let last = stats.auto_gc.last.as_ref().expect("last attempt recorded");
     assert!(!last.ok);
     assert!(

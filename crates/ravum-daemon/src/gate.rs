@@ -56,11 +56,7 @@ impl JobGate {
             let best = state
                 .waiters
                 .iter()
-                .max_by(|a, b| {
-                    a.priority
-                        .cmp(&b.priority)
-                        .then_with(|| b.seq.cmp(&a.seq))
-                })
+                .max_by(|a, b| a.priority.cmp(&b.priority).then_with(|| b.seq.cmp(&a.seq)))
                 .map(|waiter| waiter.seq);
             if state.active < self.max && best == Some(seq) {
                 state.waiters.retain(|waiter| waiter.seq != seq);

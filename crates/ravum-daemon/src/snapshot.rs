@@ -20,7 +20,7 @@ use crate::config::{
 };
 use crate::diagnostics::normalize_path;
 use crate::error::{DaemonError, Result};
-use crate::fsutil::{safe_join, atomic_write};
+use crate::fsutil::{atomic_write, safe_join};
 use crate::hash::{push_field, sha256_hex};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -468,9 +468,28 @@ fn is_windows_reserved(part: &str) -> bool {
     let stem = part.split('.').next().unwrap_or(part).to_ascii_uppercase();
     matches!(
         stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL"
-            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
-            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
     )
 }
 
@@ -522,10 +541,16 @@ mod tests {
     #[test]
     fn identity_is_stable_and_content_addressed() {
         let toolchain = toolchain();
-        let a = request("src/lib.rs", "pub fn a() {}").identity(&toolchain).unwrap();
-        let b = request("src/lib.rs", "pub fn a() {}").identity(&toolchain).unwrap();
+        let a = request("src/lib.rs", "pub fn a() {}")
+            .identity(&toolchain)
+            .unwrap();
+        let b = request("src/lib.rs", "pub fn a() {}")
+            .identity(&toolchain)
+            .unwrap();
         assert_eq!(a.snapshot_id, b.snapshot_id);
-        let c = request("src/lib.rs", "pub fn b() {}").identity(&toolchain).unwrap();
+        let c = request("src/lib.rs", "pub fn b() {}")
+            .identity(&toolchain)
+            .unwrap();
         assert_ne!(a.snapshot_id, c.snapshot_id);
         let mut changed_context = request("src/lib.rs", "pub fn a() {}");
         changed_context.context.flags = vec!["-D".to_owned(), "warnings".to_owned()];
@@ -548,7 +573,15 @@ mod tests {
 
     #[test]
     fn traversal_and_reserved_paths_are_rejected() {
-        for path in ["../escape.rs", "/abs.rs", "C:/abs.rs", "src//lib.rs", "src/./lib.rs", "src/../lib.rs", "NUL.rs"] {
+        for path in [
+            "../escape.rs",
+            "/abs.rs",
+            "C:/abs.rs",
+            "src//lib.rs",
+            "src/./lib.rs",
+            "src/../lib.rs",
+            "NUL.rs",
+        ] {
             assert!(
                 request(path, "fn main() {}").validate().is_err(),
                 "path {path:?} must be rejected"
@@ -565,10 +598,8 @@ mod tests {
 
     #[test]
     fn materialize_verifies_existing_snapshot_and_detects_tampering() {
-        let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-snapshot-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ravum-daemon-snapshot-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(dir.join("snapshots")).unwrap();
         let toolchain = toolchain();
@@ -578,7 +609,10 @@ mod tests {
         let first = store.materialize(&identity, &files).unwrap();
         assert!(first.created);
         let second = store.materialize(&identity, &files).unwrap();
-        assert!(!second.created, "second materialization must verify, not rewrite");
+        assert!(
+            !second.created,
+            "second materialization must verify, not rewrite"
+        );
 
         // Tamper with an immutable snapshot: the daemon must refuse it.
         let target = first.checkout.join("src").join("lib.rs");
@@ -590,10 +624,7 @@ mod tests {
 
     #[test]
     fn sync_unit_dir_writes_only_changes_and_removes_stale_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-sync-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("ravum-daemon-sync-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let files = vec![
             ("src/lib.rs".to_owned(), "pub fn a() {}"),
@@ -602,14 +633,18 @@ mod tests {
         let first = sync_unit_dir(&dir, &files).unwrap();
         assert_eq!(first.written_files, 2);
         let second = sync_unit_dir(&dir, &files).unwrap();
-        assert_eq!(second.written_files, 0, "unchanged content must not be rewritten");
+        assert_eq!(
+            second.written_files, 0,
+            "unchanged content must not be rewritten"
+        );
         let changed = vec![
             ("src/lib.rs".to_owned(), "pub fn a() {}"),
             ("src/math.rs".to_owned(), "pub fn m2() {}"),
         ];
         let third = sync_unit_dir(&dir, &changed).unwrap();
         assert_eq!(third.written_files, 1);
-        let removed = sync_unit_dir(&dir, &vec![("src/lib.rs".to_owned(), "pub fn a() {}")]).unwrap();
+        let removed =
+            sync_unit_dir(&dir, &vec![("src/lib.rs".to_owned(), "pub fn a() {}")]).unwrap();
         assert_eq!(removed.removed_files, 1);
         assert!(!dir.join("src").join("math.rs").exists());
         let _ = std::fs::remove_dir_all(&dir);

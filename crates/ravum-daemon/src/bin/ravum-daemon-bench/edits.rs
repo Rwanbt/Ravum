@@ -114,7 +114,8 @@ const SIGNATURE: &[&[Edit]] = &[
         Edit {
             file: "src/pipeline.rs",
             find: "use crate::math::{accumulate, clamp01, histogram, map_all, scale, SCALE};",
-            replace: "use crate::math::{accumulate, clamp01, histogram, map_all, scale_pair, SCALE};",
+            replace:
+                "use crate::math::{accumulate, clamp01, histogram, map_all, scale_pair, SCALE};",
         },
         Edit {
             file: "src/lib.rs",
@@ -611,7 +612,8 @@ pub fn categories() -> Vec<CategorySpec> {
     vec![
         CategorySpec {
             name: "identical",
-            description: "same buffer submitted again: cache-hit path (MVP-0a artifact cache analogue)",
+            description:
+                "same buffer submitted again: cache-hit path (MVP-0a artifact cache analogue)",
             kind: CategoryKind::Identical,
             steps: Vec::new(),
         },
@@ -721,11 +723,7 @@ pub fn build_states(
                     .iter_mut()
                     .find(|file| file.path == "src/math.rs")
                     .ok_or_else(|| "fixture has no src/math.rs".to_owned())?;
-                let keep = target
-                    .content
-                    .len()
-                    .saturating_sub(8 + sample * 11)
-                    .max(1);
+                let keep = target.content.len().saturating_sub(8 + sample * 11).max(1);
                 let keep = floor_char_boundary(&target.content, keep);
                 target.content.truncate(keep);
                 states.push(broken);
@@ -779,7 +777,8 @@ mod tests {
                 let mut previous = base.clone();
                 for (index, state) in states.iter().enumerate() {
                     assert_ne!(
-                        previous, *state,
+                        previous,
+                        *state,
                         "{} step {} produced identical content",
                         category.name,
                         index + 1

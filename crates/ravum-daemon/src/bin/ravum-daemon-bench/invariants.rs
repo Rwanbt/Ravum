@@ -100,7 +100,8 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
     let (toolchain, toolchain_evidence) = toolchain_json(&options.repo_root)?;
     let work_root = options.work_root.join("invariants");
     let _ = std::fs::remove_dir_all(&work_root);
-    std::fs::create_dir_all(&work_root).map_err(|error| format!("cannot create work dir: {error}"))?;
+    std::fs::create_dir_all(&work_root)
+        .map_err(|error| format!("cannot create work dir: {error}"))?;
     let start_load = load_json(&[], &crate::harness::rustc_path());
     let daemon = open_daemon(&work_root, 1)?;
     let mut suite = Suite {
@@ -139,10 +140,10 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
         )?;
         let cold_broken = suite.cold(&broken)?;
         let daemon_broken = suite.daemon_analyze(&daemon, "signature-broken", &broken)?;
-        let consistent = cold_broken.signatures() == ravum_daemon::signature_set(&daemon_broken.diagnostics);
+        let consistent =
+            cold_broken.signatures() == ravum_daemon::signature_set(&daemon_broken.diagnostics);
         let caller_error = daemon_broken.diagnostics.iter().any(|diagnostic| {
-            diagnostic.severity.is_error()
-                && diagnostic.file.as_deref() == Some("src/pipeline.rs")
+            diagnostic.severity.is_error() && diagnostic.file.as_deref() == Some("src/pipeline.rs")
         });
         let mut fixed = broken.clone();
         apply_edit(
@@ -530,22 +531,22 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
                 let daemon = daemon_budget.clone();
                 let root = suite.fixture.root.clone();
                 let context = suite.fixture.context.clone();
-                let handle = std::thread::spawn(move || {
-                    ravum_daemon::AnalysisRequest {
-                        revision: (index + 1) as u64,
-                        label: format!("budget-{index}"),
-                        root,
-                        files: state,
-                        context,
-                        priority: Priority::Interactive,
-                    }
+                let handle = std::thread::spawn(move || ravum_daemon::AnalysisRequest {
+                    revision: (index + 1) as u64,
+                    label: format!("budget-{index}"),
+                    root,
+                    files: state,
+                    context,
+                    priority: Priority::Interactive,
                 });
                 (daemon, handle)
             })
             .collect();
         let mut all_fresh = true;
         for (daemon, handle) in handles {
-            let request = handle.join().map_err(|_| "budget thread panicked".to_owned())?;
+            let request = handle
+                .join()
+                .map_err(|_| "budget thread panicked".to_owned())?;
             let report = daemon
                 .analyze(&request)
                 .map_err(|error| format!("daemon analyze failed: {error}"))?;
@@ -662,7 +663,13 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
             .copied()
             .filter(|key| parsed.get(*key).is_none())
             .collect();
-        let timings_required = ["accept_ms", "queue_ms", "lookup_ms", "analysis_ms", "total_ms"];
+        let timings_required = [
+            "accept_ms",
+            "queue_ms",
+            "lookup_ms",
+            "analysis_ms",
+            "total_ms",
+        ];
         let missing_timings: Vec<&str> = timings_required
             .iter()
             .copied()
@@ -723,8 +730,7 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
         )?;
         let local_cold = suite.cold(&local)?;
         let local_daemon = suite.daemon_analyze(&daemon, "locality-local", &local)?;
-        let incremental_dir_count =
-            count_entries(&work_root.join("daemon").join("incremental"));
+        let incremental_dir_count = count_entries(&work_root.join("daemon").join("incremental"));
         suite.check(
             "granularity_observable_proxy",
             local_cold.success
@@ -797,5 +803,3 @@ fn count_entries(path: &Path) -> usize {
 pub fn write(path: &Path, value: &Value) -> Result<(), String> {
     write_evidence(path, value)
 }
-
-
