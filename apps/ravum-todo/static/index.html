@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ravum TODO — application témoin M4</title>
+  <!-- Inline empty favicon: avoids a /favicon.ico request (and its 404) without adding
+       a binary asset. Documented in docs/mvp/MVP-0b-browser-e2e.md. -->
+  <link rel="icon" href="data:," />
   <style>
     :root { color-scheme: light dark; }
     body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
@@ -18,6 +21,7 @@
     ul { list-style: none; padding: 0; }
     li { display: flex; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid rgba(128,128,128,.3); }
     li .title { flex: 1; }
+    li .edit-title { flex: 1; width: auto; }
     li.done .title { text-decoration: line-through; opacity: .6; }
     .due { font-size: .8rem; opacity: .7; }
     #error { color: #b02a37; white-space: pre-wrap; min-height: 1.2rem; }

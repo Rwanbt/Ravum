@@ -80,6 +80,27 @@ jobs:
       - name: Demo M4 - UI + API + SQLite end to end
         run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4.ps1
 
+      # Browser E2E: the real UI JavaScript is executed in headless Chromium/Edge and the
+      # displayed DOM is asserted (CDP pilot, zero npm dependency). windows-latest ships
+      # Edge, so -RequireBrowser turns "no browser found" into a failure instead of a
+      # silent green; exit code 2 (explicit SKIP) can only happen outside this step.
+      - name: Setup Node.js for the browser E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Browser E2E - real Chromium/Edge via CDP (no npm dependency)
+        run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots
+
+      - name: Upload browser E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-evidence
+          path: target/ravum/browser-e2e
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Measure the loop (informational, not a performance gate)
         run: |
           cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json
