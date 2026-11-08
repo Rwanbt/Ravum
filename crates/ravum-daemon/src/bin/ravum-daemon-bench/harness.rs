@@ -407,6 +407,7 @@ pub fn open_daemon(work_root: &Path, max_jobs: usize) -> Result<Daemon, String> 
         poll_interval_ms: 2,
         analysis_timeout_ms: 120_000,
         toolchain_override: None,
+        auto_gc: ravum_daemon::AutoGcPolicy::default(),
     })
     .map_err(|error| format!("cannot open daemon: {error}"))
 }

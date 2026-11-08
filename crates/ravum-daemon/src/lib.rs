@@ -43,6 +43,7 @@
 //! * The build/verify/activation stages remain the responsibility of the
 //!   existing Ravum pipeline; this daemon only covers the analysis stage.
 
+pub mod auto_gc;
 pub mod cache;
 pub mod config;
 pub mod daemon;
@@ -58,6 +59,7 @@ pub mod rustc_driver;
 pub mod snapshot;
 pub mod sysinfo;
 
+pub use auto_gc::{AutoGcDecision, AutoGcJournalEntry, AutoGcPolicy, AutoGcStats};
 pub use cache::{CacheKind, CacheLookupKey, CacheReport, CachedVerdict};
 pub use config::{
     context_id, BuildContext, DaemonConfig, Priority, ToolchainInfo, ANALYSIS_ENGINE_VERSION,
@@ -70,7 +72,9 @@ pub use gc::{
     run_gc, BudgetStatus, CategorySizes, GcBudgets, GcDeleted, GcKept, GcMode, GcPolicy,
     GcProtection, GcReport, RecentAnalysis, RetentionState,
 };
-pub use report::{AnalysisReport, DaemonStats, ReportStatus, SnapshotReport, Timings};
+pub use report::{
+    AnalysisReport, AutoGcLast, DaemonStats, ReportStatus, SnapshotReport, Timings,
+};
 pub use snapshot::{
     sync_unit_dir, AnalysisRequest, MaterializedSnapshot, SnapshotIdentity, SnapshotStore,
     SourceFile, SyncStats,

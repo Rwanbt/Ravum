@@ -137,6 +137,8 @@ impl GcPolicy {
 pub enum GcMode {
     Daemon,
     OneShot,
+    /// Automatic background GC triggered by `AutoGcPolicy` thresholds.
+    Auto,
 }
 
 impl GcMode {
@@ -144,6 +146,7 @@ impl GcMode {
         match self {
             GcMode::Daemon => "daemon",
             GcMode::OneShot => "one_shot",
+            GcMode::Auto => "auto",
         }
     }
 }
@@ -456,6 +459,17 @@ enum VictimKind {
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
+
+/// Metadata-only size of the three collected categories (no file content is read,
+/// nothing is deleted). Used by the automatic GC to evaluate its threshold off the
+/// analysis path. Errors are recorded but a missing/partial directory counts as 0.
+pub fn measure_total_bytes(work_dir: &Path) -> Result<u64> {
+    let mut errors = Vec::new();
+    let cache = inventory_cache(work_dir, &mut errors);
+    let snapshots = inventory_snapshots(work_dir, &mut errors);
+    let contexts = inventory_contexts(work_dir, &mut errors);
+    Ok(sizes(&cache, &snapshots, &contexts).total_bytes)
+}
 
 /// Runs one explicit GC pass over `work_dir`. This function takes no daemon lock:
 /// [`crate::daemon::Daemon::gc`] wraps it under the analysis write lock; the

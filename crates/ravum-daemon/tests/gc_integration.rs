@@ -56,6 +56,7 @@ fn daemon_at(work_dir: &Path) -> Daemon {
         poll_interval_ms: 2,
         analysis_timeout_ms: 60_000,
         toolchain_override: None,
+        auto_gc: ravum_daemon::AutoGcPolicy::default(),
     })
     .expect("daemon open")
 }

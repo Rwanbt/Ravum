@@ -607,8 +607,9 @@ redémarrage : récent = hit disque 0 ms, ancien = miss reconstruit 171 ms).
 
 ### 12.5 Limites (spécifiques au GC)
 
-- **Pas de GC automatique** : aucune collecte en tâche de fond ni pendant une
-  analyse ; un client ou un opérateur doit l'appeler (serveur ou one-shot).
+- **Pas de GC automatique** *(au moment de cette campagne)* : aucune collecte en tâche de
+  fond ni pendant une analyse ; un client ou un opérateur doit l'appeler (serveur ou
+  one-shot). **Depuis, un GC automatique opt-in a été ajouté et mesuré (§12.6).**
 - **Pas de compaction de l'état incrémental de rustc lui-même** : seule la
   suppression d'un contexte entier est implémentée. Avec un seul contexte actif,
   ses octets ne peuvent pas baisser ; le plafond est alors rapporté non satisfait
@@ -630,3 +631,59 @@ redémarrage : récent = hit disque 0 ms, ancien = miss reconstruit 171 ms).
   GitHub (hors périmètre de cette tâche) ; elle est reproductible localement.
 - **Windows uniquement** pour la campagne (métadonnées de fichiers) ; le code
   compile et les chemins sont portables, mais aucun autre OS n'est mesuré.
+
+### 12.6 GC automatique en fond (ajouté après la campagne, 2026-11-08)
+
+Le GC manuel a été complété par un **GC automatique opt-in** (`AutoGcPolicy`, désactivé par
+défaut : aucun thread, aucun coût). Quand il est activé, un thread de maintenance vérifie le
+seuil tous les `check_every_requests` (5 dans la campagne), avec `min_total_bytes`
+(déclencheur), une **cible** `max_total_bytes` et des plafonds par catégorie, `keep_recent`
+et `idle_only` (ne collecte qu'entre deux analyses). Les mêmes protections et le même verrou
+que le GC manuel s'appliquent ; un échec de collecte est **journalisé et n'échoue jamais une
+analyse** ; les statistiques exposent `auto_gc_runs` / `auto_gc_last` et un journal JSONL
+borné (`gc-auto.log`) garde les derniers événements.
+
+Politique de la campagne : `enabled`, `check_every_requests=5`, `min_total_bytes=65 536`,
+`max_total_bytes=32 768`, cache 40 000, snapshots 40 000, incrémental 120 000,
+`keep_recent=6`, `idle_only=true`. Machine : Windows 11, `rustc 1.95.0`, charge rapportée
+dans la preuve (`load_start`/`load_end`).
+
+| Campagne (`ravum-daemon-bench --suite soak`) | requêtes | durée | auto-GC | disque final | pic disque | RSS dérive | latence p50/p95 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **auto-GC activé** | 60 | 23 s | **12 runs, 0 échec** | **69 921 B** | 184 466 B | +0,86 Mio | 98 / 135 ms |
+| contrôle (sans auto-GC) | 40 | 15 s | 0 | 210 678 B | 210 678 B | +0,13 Mio | 103 / 122 ms |
+
+- Le disque est **borné à ~70 Ko** (pic 184 Ko, ramené sous le seuil à chaque collecte) contre
+  une croissance **monotone à 210 Ko** sans collecte ; 12 collectes, 0 échec, journal de
+  12 lignes. Dernière collecte observée : 123 348 B → 35 234 B en 18 ms (88 114 B libérés,
+  8 entrées supprimées).
+- Aucune invalidation incorrecte : après la campagne, le contenu récent est **hit mémoire
+  sans `rustc`** (0 ms) et l'ancien contenu (graine 1) est **recompilé** (103 ms) ; l'outil
+  de campagne vérifie `recent_hit`, `old_success`, `settled` et `valid=true`.
+- Latence des analyses stable (p50 98 ms, p95 135 ms pendant les 12 collectes), aucune
+  analyse en échec.
+- Dérive RSS : **+0,86 Mio sur 23 s** avec auto-GC (contre +0,13 Mio sur 15 s sans) — ordre
+  de grandeur d'un thread de maintenance + verrous, pas une fuite démontrée ; la campagne
+  est courte (voir limites).
+
+Preuve : `evidence/mvp0b-daemon-gc-auto-2026-11-08.json`. Reproductible :
+`cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite soak --soak-requests 60
+--soak-pace-ms 300 --soak-min-total-bytes 65536 --soak-max-total-bytes 32768 --out-soak
+evidence/mvp0b-daemon-gc-auto-2026-11-08.json` (le script `scripts/soak-daemon.ps1 -AutoGc`
+délègue à cette suite).
+
+### 12.7 Limites mises à jour (auto-GC)
+
+Les limites de §12.5 restent valables, avec ces précisions :
+
+- **Le GC automatique existe désormais** (opt-in, seuils explicites) ; il reste **désactivé
+  par défaut** et n'est pas branché dans la CI.
+- **La cible `max_total_bytes` n'est pas toujours strictement atteinte** : les protections
+  (contenu récent, contexte actif) priment ; la campagne borne à ~70 Ko pour une cible de
+  32 Ko, et le GC manuel rapportait déjà `met=false` quand un contexte actif protégé excède
+  le plafond.
+- **Soak toujours court** : 23 s / 60 requêtes avec auto-GC (et 38,8 s / 30 requêtes en soak
+  court manuel) ; un soak de plusieurs heures, multi-clients et avec un état incrémental de
+  crate large (24,6 Mo) reste à faire.
+- **Pas de compaction interne** de l'état incrémental rustc (contextes entiers seulement) ;
+  pas de GC pendant une analyse (idle_only) ; un seul daemon par `work_dir` testé.

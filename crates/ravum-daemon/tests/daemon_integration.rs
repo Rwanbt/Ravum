@@ -113,6 +113,7 @@ fn daemon_at(work_dir: &Path, max_jobs: usize, max_cache_entries: usize) -> Daem
         poll_interval_ms: 2,
         analysis_timeout_ms: 60_000,
         toolchain_override: None,
+        auto_gc: ravum_daemon::AutoGcPolicy::default(),
     })
     .expect("daemon open")
 }
@@ -338,6 +339,7 @@ fn build_context_flags_and_toolchain_identity_invalidate_cache() {
         poll_interval_ms: 2,
         analysis_timeout_ms: 60_000,
         toolchain_override: Some(simulated),
+        auto_gc: ravum_daemon::AutoGcPolicy::default(),
     })
     .expect("toolchain daemon");
     let forced = other.analyze(&request(1, &files)).expect("toolchain");
@@ -618,6 +620,7 @@ fn runaway_compiler_is_timed_out() {
         poll_interval_ms: 1,
         analysis_timeout_ms: 1,
         toolchain_override: None,
+        auto_gc: ravum_daemon::AutoGcPolicy::default(),
     })
     .expect("timeout daemon");
     let report = daemon

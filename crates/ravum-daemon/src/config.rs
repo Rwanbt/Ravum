@@ -4,6 +4,7 @@
 //! triple. All three are reduced to SHA-256 identities *before* any compilation
 //! so cache invalidation is a pure identity comparison, never a guess.
 
+use crate::auto_gc::AutoGcPolicy;
 use crate::error::{DaemonError, Result};
 use crate::hash::push_field;
 use serde::{Deserialize, Serialize};
@@ -246,6 +247,10 @@ pub struct DaemonConfig {
     /// Used by the invalidation tests to prove that a toolchain change is a
     /// cache miss without installing a second toolchain.
     pub toolchain_override: Option<ToolchainInfo>,
+    /// Opt-in automatic background retention GC. Disabled by default; when
+    /// enabled, `Daemon::open` starts one maintenance thread that evaluates the
+    /// configured byte thresholds off the analysis path.
+    pub auto_gc: AutoGcPolicy,
 }
 
 impl Default for DaemonConfig {
@@ -260,6 +265,7 @@ impl Default for DaemonConfig {
             poll_interval_ms: 2,
             analysis_timeout_ms: 30_000,
             toolchain_override: None,
+            auto_gc: AutoGcPolicy::default(),
         }
     }
 }
