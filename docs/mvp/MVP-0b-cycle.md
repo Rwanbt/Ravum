@@ -175,9 +175,15 @@ variantes et hôtes séparés), dans la même fenêtre machine (charge 35–54 %
   disputent les cœurs), et les valeurs de « stages » en mode concurrent incluent la
   contention. La sémantique de sûreté est inchangée : l'activation n'est acceptée que si
   **l'analyse est propre et le build vérifié** ; un build lancé en parallèle d'un
-  diagnostic en erreur est simplement jeté (aucune activation partielle). Productiser ce
-  mode dans `ravum watch` (avec rejet du build si le diagnostic est en erreur) est la
-  prochaine étape naturelle, non réalisée à ce stade.
+  diagnostic en erreur est simplement jeté (aucune activation partielle).
+- **Productisé** : `ravum watch --concurrent` et `ravum run --concurrent` utilisent
+  `Pipeline::prepare_candidate_concurrent` (analyse ∥ build, puis seuils de vérification
+  et fraîcheur inchangés). Vérification réelle : `run --concurrent` exit 0 ; `watch
+  --concurrent` sur une copie de la fixture avec une édition réelle a activé la nouvelle
+  version (`version":"v2"` dans les ticks, aucune activation partielle) ; un test
+  d'équivalence séquentiel/concurrent (propre, invalide, périmé) est dans
+  `ravum-coordinator`. Le mode reste **opt-in** : le défaut séquentiel est conservé pour
+  les machines à peu de cœurs.
 
 
 

@@ -55,8 +55,8 @@ fn usage() {
          \x20 ravum check  <file.rs> [--json]              analysis only (rustc --emit=metadata)\n\
          \x20 ravum build  <file.rs> [--json]              build a patchable cdylib after a clean check\n\
          \x20 ravum patch  <artifact> [--json]             validate an existing artifact (ABI, manifest, symbols)\n\
-         \x20 ravum run    <file.rs> [--tick-ms N]         build then run the demo host (info only)\n\
-         \x20 ravum watch  <file.rs> [options]              full loop: edit -> check -> build -> verify -> hot activate\n\
+         \x20 ravum run    <file.rs> [--tick-ms N]         build then run the demo host (info only; --concurrent overlaps analysis and build)\n\
+         \x20 ravum watch  <file.rs> [options]              full loop: edit -> check -> build -> verify -> hot activate (--concurrent overlaps check and build)\n\
          \x20 ravum status [--json]                        last recorded state (target/ravum/state.json)\n\
          \x20 ravum bench  <file-a.rs> <file-b.rs> [options] measure every stage, p50/p95/p99\n\
          \x20 ravum cycle-bench <file.rs> [options]     edit -> diagnostic -> build -> verify -> load -> activate, MVP-0a vs MVP-0b\n\

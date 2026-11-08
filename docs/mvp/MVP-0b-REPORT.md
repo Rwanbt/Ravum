@@ -31,7 +31,7 @@
 | PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 232 fichiers, +72 705/−285 au moment de la rédaction |
 | PR #78 | inchangée, non fusionnée, non réécrite |
 | CI du dernier commit poussé | run [42489568590](https://github.com/Rwanbt/Ravum/actions/runs/42489568590) — **succès** (18 étapes dont l'E2E navigateur) ; le workflow d'impact est aussi vert ([42489568677](https://github.com/Rwanbt/Ravum/actions/runs/42489568677)) |
-| Tests workspace | **292 réussis, 0 échec**, 78 binaires de test, 67,3 s (arbre incluant COLLAB-4 et la sonde audio) |
+| Tests workspace | **293 réussis, 0 échec** (arbre incluant COLLAB-4, la sonde audio et le test d'équivalence séquentiel/concurrent) |
 | ADR / RFC / licence | inchangés : 42 `PROPOSED`, RFC `PROPOSED`, aucune licence publiée |
 | Vault | 3 sessions publiées et vérifiées (voir §25) |
 
@@ -463,9 +463,9 @@ swaps — le facteur limitant est l'ordonnancement d'un thread non temps réel.
    reste le chemin critique (`-C incremental` cdylib et `lld-link` ont été mesurés et
    rejetés). Deux leviers validés par la mesure : (a) **chevaucher analyse et build**
    (`--concurrent`) : p50 −15/−31 %, p95 −18/−38 %, cible p95 < 500 ms atteinte sur les
-   deux tailles — à productiser dans `ravum watch` avec rejet du build si le diagnostic
-   échoue ; (b) réduire le nombre de builds (cache de builds par contenu, patchs
-   multi-fonctions).
+   deux tailles — **productisé** dans `ravum watch`/`ravum run` (`--concurrent`, opt-in,
+   seuils de vérification/fraîcheur inchangés) ; (b) réduire le nombre de builds (cache
+   de builds par contenu, patchs multi-fonctions).
 2. Étendre COLLAB-4 : graphe de dépendances avec `cargo metadata` (dev/build deps,
    features), vérification sémantique des changements acceptés, historique d'activation
    natif partagé avec le daemon.
