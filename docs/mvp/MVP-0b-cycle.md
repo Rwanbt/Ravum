@@ -208,7 +208,50 @@ variantes et hôtes séparés), dans la même fenêtre machine (charge 35–54 %
 - Aucun preview réel (pas d'interface) : « activation » signifie ici le chargement natif
   et la publication dans le `PatchHost` en processus.
 
-## 7. Reproduire
+## 7. Accélérations de build+link testées et écartées (relevé du 2026-11-08)
+
+Le build+link à froid reste le chemin critique (`build_ms` p50 253 ms sur la fixture
+courte au relevé officiel). Après avoir mesuré et rejeté `-C incremental` sur la cdylib et
+`lld-link` (§5.1), quatre leviers d'options rustc restaient candidats. Ils ont été mesurés
+par `scripts/build-flags.ps1` : même source, **9 jeux d'options** (dont un contrôle
+`baseline-b` aux options strictement identiques), **16 tours entrelacés** (l'ordre des
+variantes tourne à chaque tour), aucun état incrémental, aucun cache, calibration du spawn
+`rustc -vV` à chaque campagne. Deux tailles : 1 342 o / 51 lignes (fonctions ajoutées comme
+lors d'une édition réelle) et 35 654 o / 1 619 lignes.
+
+| Variante (options ajoutées aux options produit) | petit : médiane | Δ apparié | gros : médiane | Δ apparié |
+|---|---:|---:|---:|---:|
+| `baseline` (options produit actuelles) | 276,1 ms | — | 494,4 ms | — |
+| `baseline-b` (**contrôle**, mêmes options) | 268,0 ms | +0,4 % (8/16) | 476,0 ms | +2,7 % (6/16) |
+| `-C codegen-units=1` | 268,7 ms | −5,4 % (10/16) | 456,4 ms | −5,6 % (12/16) |
+| `-C codegen-units=64` | 271,2 ms | −2,1 % (10/16) | 501,2 ms | +4,1 % (6/16) |
+| `-C codegen-units=256` | 269,5 ms | −4,4 % (12/16) | 491,6 ms | +1,2 % (7/16) |
+| `-C embed-bitcode=no` | 263,6 ms | −5,4 % (10/16) | 499,4 ms | −2,0 % (10/16) |
+| `-C strip=symbols` | 266,3 ms | +0,2 % (8/16) | 486,6 ms | −2,2 % (10/16) |
+| `codegen-units=1` + `strip=symbols` | 272,9 ms | −3,6 % (10/16) | 449,8 ms | −6,8 % (13/16) |
+| `-C opt-level=0` (**change le code généré**) | 248,6 ms | −10,5 % (11/16) | 307,4 ms | −35,5 % (16/16) |
+
+Lecture honnête :
+
+- **Aucune variante qui conserve la sémantique ne dépasse le plancher de bruit de façon
+  robuste** : le contrôle `baseline-b`, identique au produit, varie de +0,4 % à +2,7 % de
+  médiane appariée, et les meilleures variantes conservatrices restent à −5 à −7 % avec
+  10–13 tours sur 16 (signe binomial faible, tests multiples). Un relevé pilote à 8 tours
+  donnait `codegen-units=1` à −12,2 % sur la grande source ; à 16 tours l'effet tombe à
+  −7,7 % médian / −5,6 % apparié, ce qui illustre exactement le bruit à ne pas promouvoir
+  en résultat.
+- **`-C opt-level=0`** réduit franchement le build (−35,5 % apparié, 16/16 sur la grande
+  source) mais **change le code généré** : le coût DSP à l'exécution n'est pas mesuré ici.
+  C'est donc une **décision** (avec validation DSP), pas une optimisation appliquée.
+- Conséquence : les options produit restent inchangées. Les leviers réellement mesurés
+  restent le **chevauchement analyse/build** (`--concurrent`, productisé, §5.2) et le
+  **cache d'artefacts par contenu** (resoumission = hit, §3).
+- Limites : une machine, une forme de source, `rustc` direct sous Windows, machine
+  partagée avec d'autres agents (calibration de spawn 60–72 ms médiane pendant ces
+  campagnes) ; aucune conclusion sur le débit DSP, la qualité du code ou le temps réel ;
+  aucune preuve de supériorité produit.
+
+## 8. Reproduire
 
 ```powershell
 cd D:\App\Ravum
@@ -216,6 +259,10 @@ cargo run -q --bin ravum -- cycle-bench fixtures/calculator/v1.rs --iterations 1
 # fixture synthétique (générée par la campagne, non versionnée) :
 cargo run -q --bin ravum -- cycle-bench target/ravum/cycle-large.rs --iterations 5 --out evidence/mvp0b-cycle-bench-large.json
 # lecture : scenarios.cold/edit, scenarios.daemon/resubmit, daemon.cache_*, machine.*
+# options rustc (leviers de build+link, §7) :
+pwsh -File scripts/build-flags.ps1 -Rounds 16 -Out evidence/mvp0b-build-flags-2026-11-08.json
+pwsh -File scripts/build-flags.ps1 -Rounds 16 -AppendFunctions 400 -Out evidence/mvp0b-build-flags-large-2026-11-08.json
 ```
 
-Preuves : `evidence/mvp0b-cycle-bench.json`, `evidence/mvp0b-cycle-bench-large.json`.
+Preuves : `evidence/mvp0b-cycle-bench.json`, `evidence/mvp0b-cycle-bench-large.json`,
+`evidence/mvp0b-build-flags-2026-11-08.json`, `evidence/mvp0b-build-flags-large-2026-11-08.json`.
