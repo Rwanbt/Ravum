@@ -178,10 +178,10 @@ impl ThreadPriorityChoice {
     /// `SetThreadPriority` value (`THREAD_PRIORITY_*`).
     fn win32_value(&self) -> i32 {
         match self {
-            Self::Normal => 0,         // THREAD_PRIORITY_NORMAL
-            Self::AboveNormal => 1,    // THREAD_PRIORITY_ABOVE_NORMAL
-            Self::Highest => 2,        // THREAD_PRIORITY_HIGHEST
-            Self::TimeCritical => 15,  // THREAD_PRIORITY_TIME_CRITICAL
+            Self::Normal => 0,        // THREAD_PRIORITY_NORMAL
+            Self::AboveNormal => 1,   // THREAD_PRIORITY_ABOVE_NORMAL
+            Self::Highest => 2,       // THREAD_PRIORITY_HIGHEST
+            Self::TimeCritical => 15, // THREAD_PRIORITY_TIME_CRITICAL
         }
     }
 
@@ -221,6 +221,10 @@ struct Config {
     /// WASAPI exclusive mode only: active render endpoint index to open instead of the
     /// default endpoint (diagnostic; the default device is not changed).
     exclusive_endpoint: Option<usize>,
+    /// Diagnostic only (default 0 = off): sleep this long once, in the middle of the
+    /// measured window, to force a real underrun and prove that the missed-period
+    /// detector sees it. Never enabled by the normal campaigns.
+    inject_underrun_ms: u64,
     json: bool,
     out: Option<String>,
 }
@@ -247,6 +251,7 @@ impl Config {
             exclusive_rate: None,
             exclusive_bits: None,
             exclusive_endpoint: None,
+            inject_underrun_ms: 0,
             json: false,
             out: None,
         };
@@ -276,8 +281,10 @@ impl Config {
                     config.exclusive_bits = Some(take_u64(args, &mut index, flag)? as u16);
                 }
                 "--exclusive-endpoint" => {
-                    config.exclusive_endpoint =
-                        Some(take_u64(args, &mut index, flag)? as usize);
+                    config.exclusive_endpoint = Some(take_u64(args, &mut index, flag)? as usize);
+                }
+                "--inject-underrun-ms" => {
+                    config.inject_underrun_ms = take_u64(args, &mut index, flag)?;
                 }
                 "--seconds" => {
                     config.seconds = take_u64(args, &mut index, flag)?;
@@ -295,7 +302,9 @@ impl Config {
                     config.module = Some(take_string(args, &mut index, flag)?);
                 }
                 "--swap-build" => {
-                    config.swap_builds.push(take_string(args, &mut index, flag)?);
+                    config
+                        .swap_builds
+                        .push(take_string(args, &mut index, flag)?);
                 }
                 "--swap-every-ms" => {
                     config.swap_every_ms = take_u64(args, &mut index, flag)?;
@@ -386,7 +395,9 @@ impl Config {
             return Err("--swap-build requires --swap-every-ms > 0".to_owned());
         }
         if !config.swap_builds.is_empty() && config.module.is_none() {
-            return Err("--swap-build requires --module (the version to swap away from)".to_owned());
+            return Err(
+                "--swap-build requires --module (the version to swap away from)".to_owned(),
+            );
         }
         if config.crossfade_frames > 0 && config.module.is_none() {
             return Err("--crossfade-frames requires --module".to_owned());
@@ -436,6 +447,8 @@ Usage: {TOOL} [OPTIONS]\n\
   --exclusive-bits N    exclusive mode: requested bits per sample, 16|24|32 (default 16)\n\
   --exclusive-endpoint N exclusive mode: open active render endpoint N instead of the\n\
                         default endpoint (diagnostic; the system default is not changed)\n\
+  --inject-underrun-ms N diagnostic only: sleep N ms once in the measured window to force\n\
+                        a real underrun and check that missed_periods detects it (default 0)\n\
   --seconds N           probe duration in seconds, 1..=10 (default 3)\n\
   --buffers N           buffers kept in rotation, 1..=16 (default 4)\n\
   --frames N            frames per buffer, 32..=4096 (default 256)\n\
@@ -537,6 +550,7 @@ fn config_json(config: &Config) -> Value {
             .map(|priority| priority.as_str()),
         "exclusive_rate": config.exclusive_rate,
         "exclusive_bits": config.exclusive_bits,
+        "inject_underrun_ms": config.inject_underrun_ms,
     })
 }
 
@@ -556,7 +570,9 @@ fn limits_json(config: &Config) -> Value {
         "not a hard real-time qualification; the numbers describe this machine under this load for a few seconds, not a guarantee",
         format!("the probe binary runs in the {profile} Cargo profile; host-side overhead of process_rt reflects that profile"),
         "the device always receives digital silence; the DSP signal is computed, measured and discarded, so nothing is played audibly",
-        "XRUNs are driver events that this probe cannot observe directly from either backend; the report gives buffers submitted late, padding/starvation events and a derived queue-drain risk, never measured XRUNs",
+        "XRUNs are not exposed by either backend as an official driver counter: realtime.missed_periods is a measured lower bound derived from the playback position (IAudioClock for WASAPI/waveOutGetPosition for waveOut) versus wall time and supplied frames, with one-period granularity",
+        "missed_periods = 0 means no missing period was observed at this resolution; it does not prove the stream never glitched below one period, and it is not a driver-level XRUN count",
+        "WASAPI exclusive mode on some drivers freezes the playback position during an underrun instead of rendering silence, so the detector also compares the position with the wall clock; the observed granularity is reported as missed_periods_granularity",
         "wake lateness is measured per wake, anchored on the first measured completion after warm-up and on the oldest completion of each wake's batch; it excludes the device start-up bias (reported as first_completion_offset_us)",
         "waveOut delivers WOM_DONE in batches at the audio engine's service cadence (observed: consecutive wakes ~10 ms apart, sometimes two buffers per wake); wake lateness therefore contains driver event-delivery quantisation, not only OS scheduler jitter",
         "a buffer shorter than the driver's service quantum can make the waveOut path consume the stream slower than real time; the report exposes delivered-vs-expected completion cadence for that reason",
@@ -737,10 +753,7 @@ fn print_human(report: &Value) {
         if let Some(format) = report.get("format") {
             println!(
                 "  format       PCM 16 bits, {} canaux, {} Hz, {} frames/tampon ({} tampons)",
-                format
-                    .get("channels")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0),
+                format.get("channels").and_then(Value::as_u64).unwrap_or(0),
                 format
                     .get("sample_rate")
                     .and_then(Value::as_u64)
@@ -890,6 +903,17 @@ fn print_human(report: &Value) {
                 .unwrap_or(0),
         );
     }
+    if let Some(realtime) = report.get("realtime") {
+        let missed = realtime
+            .get("missed_periods")
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        let method = realtime
+            .get("missed_periods_granularity")
+            .and_then(Value::as_str)
+            .unwrap_or("?");
+        println!("  XRUN proxy   périodes manquées: {missed} (granularité: {method}; méthode et limites dans le JSON)");
+    }
     println!(
         "  allocations / désallocations sur le thread de rendu: {} / {}",
         measurements
@@ -905,7 +929,10 @@ fn print_human(report: &Value) {
         println!(
             "  swaps        {} demandés, {} activés, {} refusés",
             swaps.get("requested").and_then(Value::as_u64).unwrap_or(0),
-            swaps.get("activations").and_then(Value::as_u64).unwrap_or(0),
+            swaps
+                .get("activations")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
             swaps.get("rejections").and_then(Value::as_u64).unwrap_or(0),
         );
     }
@@ -928,10 +955,7 @@ fn compact_error(error: &Value) -> String {
         .unwrap_or("unknown");
     let message = error.get("message").and_then(Value::as_str).unwrap_or("");
     let code = error.get("code").cloned().unwrap_or(Value::Null);
-    let name = error
-        .get("code_name")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let name = error.get("code_name").and_then(Value::as_str).unwrap_or("");
     if code.is_null() {
         format!("{stage}: {message}")
     } else {
@@ -959,6 +983,310 @@ fn field_f32(value: &Value, field: &str) -> String {
         None => "n/a".to_owned(),
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Missed-period (XRUN proxy) arithmetic — backend independent, unit tested below.
+// ---------------------------------------------------------------------------------------
+
+/// Counts audio periods the device played but the application never supplied.
+///
+/// Both backends expose a *position* clock: `IAudioClock::GetPosition` (WASAPI, in
+/// frames) and `waveOutGetPosition(TIME_SAMPLES)` (waveOut, in frames on this driver —
+/// verified by the observed drift staying far below one period). `position_frames` is
+/// the number of frames the device has played since the stream started, and
+/// `supplied_frames` is the number of frames the application has written to the device.
+///
+/// A healthy stream always satisfies `position <= supplied`: the device cannot play
+/// frames it never received (frames still queued are, on WASAPI, counted by
+/// `GetCurrentPadding`). A deficit `position - supplied` therefore means the device
+/// rendered frames the application never provided — at least one period was missed.
+///
+/// The counter keeps the **highest** deficit observed since the baseline: clock samples
+/// make the raw deficit oscillate by a few frames, so only its maximum carries a real
+/// underrun. Sub-period jitter therefore never becomes a missed period; a real missing
+/// period raises the maximum by at least one period. `tolerance_frames` absorbs
+/// clock/frame rounding and small clean-start biases and must stay far below one period.
+/// Combined missed-period detector (defensive on both possible driver behaviours).
+///
+/// Two deficits are tracked, both in frames and both relative to a baseline taken at the
+/// first measured observation (so constant device latency and exclusive-mode pre-roll
+/// never count):
+///
+/// * `stall_deficit = wall_expected_frames - position_frames`: the wall clock advanced
+///   faster than the device position, i.e. the device stopped consuming frames (some
+///   drivers freeze the clock on an exclusive-mode underrun instead of playing silence);
+/// * `played_deficit = position_frames - supplied_frames`: the device played frames the
+///   application never supplied (a shared-mode engine keeps its clock running and renders
+///   silence during an underrun).
+///
+/// The larger of the two is the period deficit. Only its maximum since the baseline is
+/// claimed: clock samples make both raw deficits oscillate by a few frames, so a real
+/// missed period must raise the maximum by at least one period. `tolerance_frames`
+/// absorbs frame/clock rounding and must stay far below one period. `wall_expected_frames`
+/// must be derived from the same monotonic clock as `position_frames`'s start point; the
+/// constant offset between the two is captured by the baseline.
+#[derive(Debug, Clone, Copy)]
+struct MissedPeriodCounter {
+    period_frames: u64,
+    tolerance_frames: u64,
+    max_deficit_frames: u64,
+    last_deficit_frames: u64,
+    baseline_stall_frames: i64,
+    baseline_played_frames: i64,
+    baseline_set: bool,
+    observations: u64,
+    regressions: u64,
+}
+
+impl MissedPeriodCounter {
+    fn new(period_frames: u64, tolerance_frames: u64) -> Self {
+        Self {
+            period_frames,
+            tolerance_frames,
+            max_deficit_frames: 0,
+            last_deficit_frames: 0,
+            baseline_stall_frames: 0,
+            baseline_played_frames: 0,
+            baseline_set: false,
+            observations: 0,
+            regressions: 0,
+        }
+    }
+
+    /// First measured observation: the constant offsets of both deficits are recorded as
+    /// baselines. A deficit already present here (engine warm-up, pre-roll, driver
+    /// backlog) is not counted.
+    fn set_baseline(
+        &mut self,
+        position_frames: u64,
+        supplied_frames: u64,
+        wall_expected_frames: u64,
+    ) {
+        let (stall, played) =
+            Self::raw_deficits(position_frames, supplied_frames, wall_expected_frames);
+        self.baseline_stall_frames = stall;
+        self.baseline_played_frames = played;
+        self.baseline_set = true;
+        self.max_deficit_frames = 0;
+        self.last_deficit_frames = 0;
+        self.observations = 1;
+    }
+
+    /// Observe one clock sample and the wall-clock expectation. Returns how many frames
+    /// the maximum period deficit grew by (0 on a healthy stream and under sub-period
+    /// jitter).
+    fn observe(
+        &mut self,
+        position_frames: u64,
+        supplied_frames: u64,
+        wall_expected_frames: u64,
+    ) -> u64 {
+        self.observations += 1;
+        if !self.baseline_set {
+            self.set_baseline(position_frames, supplied_frames, wall_expected_frames);
+            return 0;
+        }
+        let (stall, played) =
+            Self::raw_deficits(position_frames, supplied_frames, wall_expected_frames);
+        let stall_deficit = stall.saturating_sub(self.baseline_stall_frames);
+        let played_deficit = played.saturating_sub(self.baseline_played_frames);
+        let deficit = Self::positive(stall_deficit, self.tolerance_frames)
+            .max(Self::positive(played_deficit, self.tolerance_frames));
+        if deficit < self.last_deficit_frames {
+            // Sampling phase or clock hiccup: never a negative count.
+            self.regressions += 1;
+        }
+        self.last_deficit_frames = deficit;
+        if deficit > self.max_deficit_frames {
+            let growth = deficit - self.max_deficit_frames;
+            self.max_deficit_frames = deficit;
+            growth
+        } else {
+            0
+        }
+    }
+
+    fn raw_deficits(
+        position_frames: u64,
+        supplied_frames: u64,
+        wall_expected_frames: u64,
+    ) -> (i64, i64) {
+        let stall = wall_expected_frames as i64 - position_frames as i64;
+        let played = position_frames as i64 - supplied_frames as i64;
+        (stall, played)
+    }
+
+    fn positive(value: i64, tolerance_frames: u64) -> u64 {
+        let tolerance = tolerance_frames.min(i64::MAX as u64) as i64;
+        value.saturating_sub(tolerance).max(0) as u64
+    }
+
+    /// Frames of missed service, above the measurement baseline.
+    fn missed_frames(&self) -> u64 {
+        self.max_deficit_frames
+    }
+
+    /// Whole periods missed, from the highest deficit observed so far. `0` when the
+    /// period is unknown (never a division by zero, never an invented count).
+    fn missed_periods(&self) -> u64 {
+        if self.period_frames == 0 {
+            0
+        } else {
+            self.missed_frames() / self.period_frames
+        }
+    }
+
+    fn remainder_frames(&self) -> u64 {
+        if self.period_frames == 0 {
+            self.missed_frames()
+        } else {
+            self.missed_frames() % self.period_frames
+        }
+    }
+
+    fn baseline_stall_frames(&self) -> Option<i64> {
+        if self.baseline_set {
+            Some(self.baseline_stall_frames)
+        } else {
+            None
+        }
+    }
+
+    fn baseline_played_frames(&self) -> Option<i64> {
+        if self.baseline_set {
+            Some(self.baseline_played_frames)
+        } else {
+            None
+        }
+    }
+
+    fn observations(&self) -> u64 {
+        self.observations
+    }
+
+    fn regressions(&self) -> u64 {
+        self.regressions
+    }
+}
+
+#[cfg(test)]
+mod xrun_arithmetic_tests {
+    use super::MissedPeriodCounter;
+
+    #[test]
+    fn healthy_stream_counts_nothing() {
+        // Constant device latency (100 frames) and lockstep progress: no deficit.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 100);
+        for step in 1..=100u64 {
+            assert_eq!(counter.observe(step * 480, step * 480, 100 + step * 480), 0);
+        }
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.missed_frames(), 0);
+    }
+
+    #[test]
+    fn one_missed_period_is_counted_once() {
+        // The device played 960 frames while only 480 were supplied: the shared-mode
+        // engine rendered a period of silence it never received.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(960, 480, 960), 480);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.observe(960, 480, 960), 0);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.observe(1440, 1440, 1440), 0);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn stalled_clock_is_detected() {
+        // Some exclusive-mode drivers freeze the playback clock on an underrun instead of
+        // rendering silence: the wall clock runs but the position does not.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(480, 480, 480), 0);
+        // Position frozen at 480 while wall time says 1 440 frames should have played.
+        assert_eq!(counter.observe(480, 960, 1440), 960);
+        assert_eq!(counter.missed_periods(), 2);
+    }
+
+    #[test]
+    fn partial_deficits_accumulate_into_periods() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(300, 0, 300), 300);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.observe(600, 100, 600), 200);
+        assert_eq!(counter.missed_frames(), 500);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.remainder_frames(), 20);
+    }
+
+    #[test]
+    fn tolerance_absorbs_rounding_but_not_a_period() {
+        let mut counter = MissedPeriodCounter::new(480, 8);
+        counter.set_baseline(0, 0, 0);
+        // 8 frames of clock noise: below tolerance, no false positive.
+        assert_eq!(counter.observe(488, 480, 480), 0);
+        assert_eq!(counter.missed_periods(), 0);
+        // 9 frames ahead: one frame beyond tolerance, still not a whole period.
+        assert_eq!(counter.observe(489, 480, 481), 1);
+        assert_eq!(counter.missed_periods(), 0);
+        // A real missing period is still detected.
+        assert_eq!(counter.observe(969, 480, 960), 480);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn unknown_period_never_divides_by_zero() {
+        let mut counter = MissedPeriodCounter::new(0, 0);
+        counter.set_baseline(0, 0, 0);
+        counter.observe(10, 0, 10);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.remainder_frames(), 10);
+    }
+
+    #[test]
+    fn clock_going_backwards_is_not_a_missed_period() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(960, 480, 960), 480);
+        // Position wraps or the driver resets: raw deficits shrink, never negative counts.
+        assert_eq!(counter.observe(10, 4096, 10), 0);
+        assert_eq!(counter.regressions(), 1);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn sub_period_jitter_never_becomes_a_missed_period() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        // Clock sampling phase makes both raw deficits oscillate by a few frames; no full
+        // period is ever reached, so no missed period is claimed.
+        for step in 1..=2000u64 {
+            let jitter = step % 9;
+            counter.observe(step * 480 + jitter, step * 480, step * 480);
+            assert_eq!(counter.missed_periods(), 0);
+        }
+    }
+
+    #[test]
+    fn baseline_excludes_startup_deficit() {
+        // The engine rendered 1 000 frames before measurement started; that startup bias
+        // is recorded as baseline, not counted as a missed period.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(1000, 0, 1000);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.observe(2000, 1000, 2000), 0);
+        assert_eq!(counter.observe(2500, 1500, 2500), 0);
+        assert_eq!(counter.missed_periods(), 0);
+    }
+}
+
+const WAVEOUT_UNDERRUN_METHOD: &str = "missed periods = increments of max(0, waveOutGetPosition(TIME_SAMPLES) - frames supplied). waveOutGetPosition is treated as frames: on this driver the observed position drift stays far below one buffer period, which rules out a channel-count interpretation. Granularity is one buffer period; the driver exposes no XRUN counter, so this is a lower-bound detector of real underruns, not a driver XRUN count. A non-zero value proves at least this many periods were not serviced in time; zero does not prove the stream never glitched below one-period resolution.";
+
+const WASAPI_UNDERRUN_METHOD: &str = "missed periods = increments of max(0, IAudioClock::GetPosition(frames played) - frames supplied to IAudioRenderClient), counted once as the deficit grows. In shared mode the engine's event period is used as period_frames; in exclusive mode the app-owned buffer duration is used. Cross-check: GetCurrentPadding is recorded at every wake and padding==0 with a growing deficit is the starvation proxy; a full padding with no deficit is not an underrun. WASAPI exposes no official XRUN counter, so this is a lower-bound detector with one-period granularity: a non-zero value proves real missed periods, zero does not prove the absence of glitches below that resolution.";
 
 // ---------------------------------------------------------------------------------------
 // Windows implementation
@@ -1822,6 +2150,7 @@ mod win {
         requested_device: u32,
         timer_period_ms: u32,
         timer_active: bool,
+        inject_underrun_ms: u64,
         buffers: Vec<Box<[u8]>>,
         headers: Box<[WaveHdr]>,
         prepared: Vec<bool>,
@@ -1939,6 +2268,7 @@ mod win {
                 requested_device,
                 timer_period_ms,
                 timer_active,
+                inject_underrun_ms: config.inject_underrun_ms,
                 buffers,
                 headers,
                 prepared,
@@ -2109,9 +2439,8 @@ mod win {
                 extra: 0,
             };
             // SAFETY: `time` is a valid MMTIME of the size passed to the driver.
-            let result = unsafe {
-                waveOutGetPosition(self.handle, &mut time, size_of::<MmTime>() as u32)
-            };
+            let result =
+                unsafe { waveOutGetPosition(self.handle, &mut time, size_of::<MmTime>() as u32) };
             if result != 0 {
                 Err(result)
             } else {
@@ -2130,12 +2459,22 @@ mod win {
             baseline_delta: f32,
         ) -> RunData {
             let frames = (self.format_bytes_per_buffer / self.format.n_block_align as u32) as usize;
-            let period_us = (frames as u64 * 1_000_000) / self.format.n_samples_per_sec.max(1) as u64;
+            let period_us =
+                (frames as u64 * 1_000_000) / self.format.n_samples_per_sec.max(1) as u64;
             let buffers = self.headers.len();
-            let mut run = RunData::new(period_us, frames, self.format.n_samples_per_sec, buffers, baseline_delta, capacity);
+            let mut run = RunData::new(
+                period_us,
+                frames,
+                self.format.n_samples_per_sec,
+                buffers,
+                baseline_delta,
+                capacity,
+            );
 
             let submit_start = Instant::now();
-            run.open_prepare_us = submit_start.saturating_duration_since(thread_start).as_micros() as u64;
+            run.open_prepare_us = submit_start
+                .saturating_duration_since(thread_start)
+                .as_micros() as u64;
             for index in 0..buffers {
                 let result = self.write_buffer(index);
                 run.writes_attempted += 1;
@@ -2152,6 +2491,9 @@ mod win {
                 return run;
             }
 
+            // Frames actually handed to the driver: initial buffers plus one per
+            // completion. Compared with the playback position to detect missed periods.
+            let mut written_frames: u64 = (buffers * frames) as u64;
             let mut state = DspState::default();
             let mut computed = vec![0f32; frames];
             let mut previous_sample = 0f32;
@@ -2184,6 +2526,18 @@ mod win {
                     break;
                 }
                 run.wakes += 1;
+
+                if self.inject_underrun_ms > 0
+                    && !run.injected_underrun
+                    && run.completions_measured >= 40
+                {
+                    // Diagnostic only (disabled by default): do not submit anything for
+                    // a while so the waveOut queue really drains, then let the detector
+                    // observe the underrun.
+                    run.injected_underrun = true;
+                    run.xrun_injected_sleep_ms = self.inject_underrun_ms;
+                    std::thread::sleep(Duration::from_millis(self.inject_underrun_ms));
+                }
 
                 done_indices.clear();
                 for index in 0..buffers {
@@ -2271,17 +2625,37 @@ mod win {
                     if position_supported {
                         match self.position_samples() {
                             Ok(played_samples) => {
-                                let expected = (total_completions as u64)
-                                    .saturating_mul(frames as u64)
-                                    as i64;
+                                let expected =
+                                    (total_completions as u64).saturating_mul(frames as u64) as i64;
                                 let drift = played_samples as i64 - expected;
                                 if !in_warmup {
                                     run.position_drift_frames.push(drift);
+                                    // Missed-period detection: frames the device played
+                                    // beyond the frames supplied. Baseline at the first
+                                    // measured observation so start-up bias is not counted.
+                                    let position = u64::from(played_samples);
+                                    run.xrun_position_first_frames.get_or_insert(position);
+                                    run.xrun_position_last_frames = Some(position);
+                                    let wall_expected = ((run_start.elapsed().as_micros() as u128
+                                        * self.format.n_samples_per_sec as u128)
+                                        / 1_000_000)
+                                        as u64;
+                                    if run.xrun.observations() == 0 {
+                                        run.xrun.set_baseline(
+                                            position,
+                                            written_frames,
+                                            wall_expected,
+                                        );
+                                    } else {
+                                        run.xrun.observe(position, written_frames, wall_expected);
+                                    }
                                 }
                             }
                             Err(code) => {
                                 position_supported = false;
                                 position_error = Some(code);
+                                run.xrun_position_read_failures =
+                                    run.xrun_position_read_failures.saturating_add(1);
                             }
                         }
                     }
@@ -2294,6 +2668,9 @@ mod win {
                     let result = self.write_buffer(buffer_index);
                     let callback_total_us = wake.elapsed().as_micros() as u64;
                     run.writes_attempted += 1;
+                    if result == 0 {
+                        written_frames = written_frames.saturating_add(frames as u64);
+                    }
                     if result != 0 {
                         run.write_failures += 1;
                         run.fatal_stage = Some("waveOutWrite");
@@ -2324,7 +2701,8 @@ mod win {
                         run.callback_total_us.push(callback_total_us);
                         run.completion_lateness_us.push(completion_lateness);
                         run.queue_margin_us.push(margin_us);
-                        run.completion_times_us.push(run_start.elapsed().as_micros() as u64);
+                        run.completion_times_us
+                            .push(run_start.elapsed().as_micros() as u64);
                         run.completion_delta.push(block_delta);
                         if margin_us < 0 {
                             run.queue_drain_risk_events += 1;
@@ -2352,6 +2730,7 @@ mod win {
 
             run.position_supported = position_supported;
             run.position_error_code = position_error;
+            run.xrun_position_available = position_supported && run.xrun.observations() > 0;
             run.allocations = allocations_on_this_thread();
             run.deallocations = deallocations_on_this_thread();
             run.render_elapsed_us = submit_start.elapsed().as_micros() as u64;
@@ -2421,6 +2800,13 @@ mod win {
         position_drift_frames: Vec<i64>,
         position_supported: bool,
         position_error_code: Option<u32>,
+        xrun: MissedPeriodCounter,
+        xrun_position_available: bool,
+        xrun_position_read_failures: u64,
+        xrun_position_first_frames: Option<u64>,
+        xrun_position_last_frames: Option<u64>,
+        xrun_injected_sleep_ms: u64,
+        injected_underrun: bool,
         wakes: u64,
         wakes_without_completion: u64,
         wakes_with_multiple_done: u64,
@@ -2477,6 +2863,13 @@ mod win {
                 position_drift_frames: Vec::with_capacity(capacity),
                 position_supported: false,
                 position_error_code: None,
+                xrun: MissedPeriodCounter::new(frames as u64, 0),
+                xrun_position_available: false,
+                xrun_position_read_failures: 0,
+                xrun_position_first_frames: None,
+                xrun_position_last_frames: None,
+                xrun_injected_sleep_ms: 0,
+                injected_underrun: false,
                 wakes: 0,
                 wakes_without_completion: 0,
                 wakes_with_multiple_done: 0,
@@ -2632,12 +3025,7 @@ mod win {
             let evidence_ms = evidence_started.elapsed().as_millis() as u64;
             let patch_id = prepared.module.manifest.patch_id.clone();
             let apply_started = Instant::now();
-            let report = host.apply(
-                prepared,
-                build,
-                Some(&evidence),
-                &build.source_snapshot_id,
-            );
+            let report = host.apply(prepared, build, Some(&evidence), &build.source_snapshot_id);
             let apply_ms = apply_started.elapsed().as_millis() as u64;
             match report.status {
                 ravum_protocol::ActivationStatus::Activated => {
@@ -2750,6 +3138,20 @@ mod win {
             "position_clock_supported": run.position_supported,
             "position_clock_error_code": run.position_error_code,
             "position_clock_error_name": run.position_error_code.map(mm_name),
+            "missed_periods": if run.xrun_position_available { Some(run.xrun.missed_periods()) } else { None },
+            "missed_frames": if run.xrun_position_available { Some(run.xrun.missed_frames()) } else { None },
+            "missed_periods_remainder_frames": if run.xrun_position_available { Some(run.xrun.remainder_frames()) } else { None },
+            "missed_periods_baseline_stall_frames": run.xrun.baseline_stall_frames(),
+            "missed_periods_baseline_played_frames": run.xrun.baseline_played_frames(),
+            "missed_periods_observations": run.xrun.observations(),
+            "missed_periods_regressions": run.xrun.regressions(),
+            "xrun_position_available": run.xrun_position_available,
+            "xrun_position_read_failures": run.xrun_position_read_failures,
+            "xrun_position_first_frames": run.xrun_position_first_frames,
+            "xrun_position_last_frames": run.xrun_position_last_frames,
+            "xrun_clock_source": "waveOutGetPosition(TIME_SAMPLES)",
+            "xrun_injected_sleep_ms": run.xrun_injected_sleep_ms,
+            "underrun_method": WAVEOUT_UNDERRUN_METHOD,
             "first_completion_offset_us": run.first_completion_offset_us,
             "wakes": run.wakes,
             "wakes_without_completion": run.wakes_without_completion,
@@ -2919,8 +3321,13 @@ mod win {
                         None,
                         format!("the DSP module was refused: {reason:?}"),
                     );
-                    let mut report_failure =
-                        failure_report(config, os_info(), "BlockHost::bootstrap", &failure, "error");
+                    let mut report_failure = failure_report(
+                        config,
+                        os_info(),
+                        "BlockHost::bootstrap",
+                        &failure,
+                        "error",
+                    );
                     if let Some(object) = report_failure.0.as_object_mut() {
                         object.insert(
                             "module_refusal".to_owned(),
@@ -2950,11 +3357,8 @@ mod win {
             let text = match std::fs::read_to_string(path) {
                 Ok(text) => text,
                 Err(error) => {
-                    let failure = Failure::new(
-                        "swap-build",
-                        None,
-                        format!("cannot read {path}: {error}"),
-                    );
+                    let failure =
+                        Failure::new("swap-build", None, format!("cannot read {path}: {error}"));
                     return failure_report(config, os_info(), "swap-build", &failure, "error");
                 }
             };
@@ -2993,8 +3397,10 @@ mod win {
         let render_config = config.clone();
         let render_host = host.clone();
         let render_stop = Arc::clone(&stop);
-        let capacity =
-            ((config.seconds as usize).saturating_mul(config.rate as usize) / config.frames) + 4 * config.buffers + 128;
+        let capacity = ((config.seconds as usize).saturating_mul(config.rate as usize)
+            / config.frames)
+            + 4 * config.buffers
+            + 128;
         let render_handle = std::thread::spawn(move || {
             let thread_start = Instant::now();
             // 5a) Scheduling characteristics of THIS thread, before any measurement:
@@ -3146,17 +3552,23 @@ mod win {
         );
 
         let fatal = run.fatal_stage.is_some();
-        let status = if fatal { "partial" } else if run.completions_measured == 0 {
+        let status = if fatal {
+            "partial"
+        } else if run.completions_measured == 0 {
             "error"
         } else {
             "ok"
         };
 
         if let Some(host) = &host {
-            let (bootstrap_artifact, bootstrap_patch, bootstrap_verification) = bootstrap_identity
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| (host.active_artifact(), host.active_patch_id(), String::new()));
+            let (bootstrap_artifact, bootstrap_patch, bootstrap_verification) =
+                bootstrap_identity.as_ref().cloned().unwrap_or_else(|| {
+                    (
+                        host.active_artifact(),
+                        host.active_patch_id(),
+                        String::new(),
+                    )
+                });
             report["module"] = json!({
                 "provided": true,
                 "bootstrap_path": config.module,
@@ -3189,6 +3601,45 @@ mod win {
             "definition": "ratio = observed buffer-completion cadence / nominal cadence (rate/frames). A ratio well below 1 means the waveOut path consumed the stream slower than real time and the playback queue drained; this is a driver/path property observed from this API, not an XRUN count",
         });
         report["measurements"] = measurements;
+        let missed_periods = if run.xrun_position_available {
+            json!(run.xrun.missed_periods())
+        } else {
+            Value::Null
+        };
+        let missed_frames = if run.xrun_position_available {
+            json!(run.xrun.missed_frames())
+        } else {
+            Value::Null
+        };
+        if let Some(realtime) = report.get_mut("realtime").and_then(Value::as_object_mut) {
+            realtime.insert("missed_periods".to_owned(), missed_periods);
+            realtime.insert("missed_frames".to_owned(), missed_frames);
+            realtime.insert(
+                "underrun_method".to_owned(),
+                Value::from(WAVEOUT_UNDERRUN_METHOD),
+            );
+            realtime.insert(
+                "missed_periods_granularity".to_owned(),
+                Value::from("one buffer period (frames per buffer)"),
+            );
+            realtime.insert(
+                "xrun_clock".to_owned(),
+                json!({
+                    "source": "waveOutGetPosition(TIME_SAMPLES)",
+                    "available": run.xrun_position_available,
+                    "error_code": run.position_error_code,
+                    "error_name": run.position_error_code.map(mm_name),
+                    "read_failures": run.xrun_position_read_failures,
+                    "position_first_frames": run.xrun_position_first_frames,
+                    "position_last_frames": run.xrun_position_last_frames,
+                    "observations": run.xrun.observations(),
+                    "baseline_stall_frames": run.xrun.baseline_stall_frames(),
+                    "baseline_played_frames": run.xrun.baseline_played_frames(),
+                    "regressions": run.xrun.regressions(),
+                    "injected_sleep_ms": run.xrun_injected_sleep_ms,
+                }),
+            );
+        }
         report["swaps"] = swap_json(&swap_outcome);
         let crossfade_us = (config.crossfade_frames as u64) * 1_000_000 / config.rate.max(1) as u64;
         let window_us = crossfade_us + 2 * run.period_us;
@@ -3271,6 +3722,13 @@ mod win {
         0x3146,
         0x4483,
         [0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2],
+    );
+    /// CD63314F-3FBA-4a1b-812C-EF96358728E7
+    const IID_IAUDIO_CLOCK: Guid = Guid::new(
+        0xCD63_314F,
+        0x3FBA,
+        0x4A1B,
+        [0x81, 0x2C, 0xEF, 0x96, 0x35, 0x87, 0x28, 0xE7],
     );
 
     const KSDATAFORMAT_SUBTYPE_PCM: Guid = Guid::new(
@@ -3368,7 +3826,8 @@ mod win {
 
     #[repr(C)]
     struct IUnknownVtbl {
-        query_interface: unsafe extern "system" fn(ComHandle, *const Guid, *mut ComHandle) -> Hresult,
+        query_interface:
+            unsafe extern "system" fn(ComHandle, *const Guid, *mut ComHandle) -> Hresult,
         add_ref: unsafe extern "system" fn(ComHandle) -> u32,
         release: unsafe extern "system" fn(ComHandle) -> u32,
     }
@@ -3437,12 +3896,23 @@ mod win {
         release_buffer: unsafe extern "system" fn(ComHandle, u32, u32) -> Hresult,
     }
 
+    /// IAudioClock: Gets the frequency of the stream's clock and the stream position.
+    /// GetPosition takes an optional QPC pointer, passed as NULL here.
+    #[repr(C)]
+    struct IAudioClockVtbl {
+        base: IUnknownVtbl,
+        get_frequency: unsafe extern "system" fn(ComHandle, *mut u64) -> Hresult,
+        get_position: unsafe extern "system" fn(ComHandle, *mut u64, *mut u64) -> Hresult,
+        get_characteristics: unsafe extern "system" fn(ComHandle, *mut u32) -> Hresult,
+    }
+
     #[repr(C)]
     struct IPropertyStoreVtbl {
         base: IUnknownVtbl,
         get_count: usize,
         get_at: usize,
-        get_value: unsafe extern "system" fn(ComHandle, *const PropertyKey, *mut PropVariant) -> Hresult,
+        get_value:
+            unsafe extern "system" fn(ComHandle, *const PropertyKey, *mut PropVariant) -> Hresult,
         set_value: usize,
         commit: usize,
     }
@@ -3463,6 +3933,10 @@ mod win {
     #[repr(C)]
     struct ComRenderClient {
         vtbl: *const IAudioRenderClientVtbl,
+    }
+    #[repr(C)]
+    struct ComAudioClock {
+        vtbl: *const IAudioClockVtbl,
     }
     #[repr(C)]
     struct ComPropertyStore {
@@ -3499,7 +3973,6 @@ mod win {
     }
 
     impl ComPtr {
-
         fn release(&mut self) {
             if self.ptr.is_null() {
                 return;
@@ -3757,7 +4230,9 @@ mod win {
                 "EnumAudioEndpoints returned a null collection",
             ));
         }
-        let collection = ComPtr { ptr: collection_raw };
+        let collection = ComPtr {
+            ptr: collection_raw,
+        };
         let mut count: u32 = 0;
         let hr = com_call!(collection.ptr, ComDeviceCollection, get_count(&mut count));
         if hr < 0 {
@@ -3851,11 +4326,7 @@ mod win {
                 let hr = com_call!(
                     client.ptr,
                     ComAudioClient,
-                    is_format_supported(
-                        AUDCLNT_SHAREMODE_EXCLUSIVE,
-                        format.as_ptr(),
-                        &mut closest
-                    )
+                    is_format_supported(AUDCLNT_SHAREMODE_EXCLUSIVE, format.as_ptr(), &mut closest)
                 );
                 if !closest.is_null() {
                     // SAFETY: CoTaskMem WAVEFORMATEX for the closest match.
@@ -4181,11 +4652,13 @@ mod win {
 
         fn as_ptr(&self) -> *const WaveFormatExPackedW {
             match self.layout {
-                ExclusiveLayout::Extensible => &self.extensible
-                    as *const WaveFormatExtensibleExclusive
-                    as *const WaveFormatExPackedW,
-                ExclusiveLayout::Plain => &self.plain as *const WaveFormatExOwned
-                    as *const WaveFormatExPackedW,
+                ExclusiveLayout::Extensible => {
+                    &self.extensible as *const WaveFormatExtensibleExclusive
+                        as *const WaveFormatExPackedW
+                }
+                ExclusiveLayout::Plain => {
+                    &self.plain as *const WaveFormatExOwned as *const WaveFormatExPackedW
+                }
             }
         }
 
@@ -4203,10 +4676,7 @@ mod win {
         fn describe(&self) -> Value {
             let mut value = self.info().to_json();
             if let Some(object) = value.as_object_mut() {
-                object.insert(
-                    "layout".to_owned(),
-                    Value::from(self.layout.name()),
-                );
+                object.insert("layout".to_owned(), Value::from(self.layout.name()));
             }
             value
         }
@@ -4231,7 +4701,14 @@ mod win {
         client: &ComPtr,
         config: &Config,
         mix_rate: u32,
-    ) -> (Vec<Value>, Option<ExclusiveLayout>, Hresult, Value, u32, u16) {
+    ) -> (
+        Vec<Value>,
+        Option<ExclusiveLayout>,
+        Hresult,
+        Value,
+        u32,
+        u16,
+    ) {
         let selected_rate = config.exclusive_rate.unwrap_or(mix_rate);
         let selected_bits = config.exclusive_bits.unwrap_or(16);
         let rates = unique_rates(mix_rate, 44_100, &[selected_rate, 48_000]);
@@ -4382,6 +4859,17 @@ mod win {
         late_gt_period: u64,
         wait_timeouts: u64,
         writes_total: u64,
+        xrun: MissedPeriodCounter,
+        xrun_position_available: bool,
+        clock_available: bool,
+        clock_hresult: Option<Hresult>,
+        clock_frequency_hz: Option<u64>,
+        clock_read_failures: u64,
+        clock_position_first_frames: Option<u64>,
+        clock_position_last_frames: Option<u64>,
+        clock_deficit_with_zero_padding: u64,
+        xrun_injected_sleep_ms: u64,
+        injected_underrun: bool,
         allocations: u64,
         deallocations: u64,
         open_prepare_us: u64,
@@ -4400,7 +4888,13 @@ mod win {
     }
 
     impl WasapiRunData {
-        fn new(period_us: u64, buffer_frames: u32, rate: u32, baseline_sample_delta: f32, capacity: usize) -> Self {
+        fn new(
+            period_us: u64,
+            buffer_frames: u32,
+            rate: u32,
+            baseline_sample_delta: f32,
+            capacity: usize,
+        ) -> Self {
             Self {
                 period_us,
                 buffer_frames,
@@ -4426,6 +4920,20 @@ mod win {
                 late_gt_period: 0,
                 wait_timeouts: 0,
                 writes_total: 0,
+                xrun: MissedPeriodCounter::new(
+                    ((period_us as u128 * rate as u128 + 500_000) / 1_000_000) as u64,
+                    0,
+                ),
+                xrun_position_available: false,
+                clock_available: false,
+                clock_hresult: None,
+                clock_frequency_hz: None,
+                clock_read_failures: 0,
+                clock_position_first_frames: None,
+                clock_position_last_frames: None,
+                clock_deficit_with_zero_padding: 0,
+                xrun_injected_sleep_ms: 0,
+                injected_underrun: false,
                 allocations: 0,
                 deallocations: 0,
                 open_prepare_us: 0,
@@ -4478,6 +4986,11 @@ mod win {
         timer_active: bool,
         started: bool,
         closed: bool,
+        /// IAudioClock obtained with GetService, used for the missed-period detector.
+        clock: Option<ComPtr>,
+        clock_hresult: Option<Hresult>,
+        clock_frequency_hz: Option<u64>,
+        inject_underrun_ms: u64,
         cleanup: Vec<Value>,
         // Must be the last field: CoUninitialize must run after every interface release.
         _com: ComGuard,
@@ -4629,8 +5142,7 @@ mod win {
                 exclusive_format_struct = Some(format);
             }
             let rate = output_rate as i64;
-            let requested_hns =
-                ((config.frames as i64) * 10_000_000 + rate / 2) / rate;
+            let requested_hns = ((config.frames as i64) * 10_000_000 + rate / 2) / rate;
             let mut duration = requested_hns;
             let mut clamped = false;
             if minimum_hns > 0 && duration < minimum_hns {
@@ -4638,7 +5150,11 @@ mod win {
                 clamped = true;
             }
             if duration <= 0 {
-                duration = if default_hns > 0 { default_hns } else { 100_000 };
+                duration = if default_hns > 0 {
+                    default_hns
+                } else {
+                    100_000
+                };
             }
             let mut alignment_retry = false;
             let mut notes: Vec<String> = Vec::new();
@@ -4666,8 +5182,7 @@ mod win {
                     let mut frames: u32 = 0;
                     let _ = com_call!(client.ptr, ComAudioClient, get_buffer_size(&mut frames));
                     if frames > 0 {
-                        duration =
-                            ((frames as i64) * 10_000_000 + rate / 2) / rate;
+                        duration = ((frames as i64) * 10_000_000 + rate / 2) / rate;
                         notes.push(
                             "Initialize returned AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED; retried with a duration derived from GetBufferSize"
                                 .to_owned(),
@@ -4721,7 +5236,11 @@ mod win {
                 ));
             }
             let mut buffer_frames: u32 = 0;
-            let hr = com_call!(client.ptr, ComAudioClient, get_buffer_size(&mut buffer_frames));
+            let hr = com_call!(
+                client.ptr,
+                ComAudioClient,
+                get_buffer_size(&mut buffer_frames)
+            );
             if hr < 0 || buffer_frames == 0 {
                 return Err(wasapi_failure(
                     "IAudioClient::GetBufferSize",
@@ -4754,6 +5273,27 @@ mod win {
                 ));
             }
             let render = ComPtr { ptr: render_raw };
+            // Audio clock: authoritative frame position used by the missed-period
+            // detector. A failure is reported explicitly, never folded into a zero.
+            let mut clock_raw: ComHandle = std::ptr::null_mut();
+            let clock_hresult = com_call!(
+                client.ptr,
+                ComAudioClient,
+                get_service(&IID_IAUDIO_CLOCK, &mut clock_raw)
+            );
+            let clock = if clock_hresult >= 0 && !clock_raw.is_null() {
+                Some(ComPtr { ptr: clock_raw })
+            } else {
+                None
+            };
+            let mut clock_frequency_hz: Option<u64> = None;
+            if let Some(clock_ref) = &clock {
+                let mut frequency: u64 = 0;
+                let hr = com_call!(clock_ref.ptr, ComAudioClock, get_frequency(&mut frequency));
+                if hr >= 0 && frequency > 0 {
+                    clock_frequency_hz = Some(frequency);
+                }
+            }
             if exclusive_mode {
                 // Exclusive mode: pre-roll one silent buffer before Start, so the engine
                 // has data to pull when it starts (the documented render pattern).
@@ -4808,7 +5348,11 @@ mod win {
             } else {
                 buffer_duration_us
             };
-            let mode: &'static str = if exclusive_mode { "exclusive" } else { "shared" };
+            let mode: &'static str = if exclusive_mode {
+                "exclusive"
+            } else {
+                "shared"
+            };
             let engine = EngineInfo {
                 share_mode: mode,
                 requested_frames: config.frames as u32,
@@ -4846,6 +5390,10 @@ mod win {
                 timer_active,
                 started: true,
                 closed: false,
+                clock,
+                clock_hresult: Some(clock_hresult),
+                clock_frequency_hz,
+                inject_underrun_ms: config.inject_underrun_ms,
                 cleanup: Vec::new(),
                 _com: com,
             })
@@ -4942,6 +5490,9 @@ mod win {
             );
             run.open_prepare_us = thread_start.elapsed().as_micros() as u64;
             let submit_start = Instant::now();
+            run.clock_available = self.clock.is_some();
+            run.clock_hresult = self.clock_hresult;
+            run.clock_frequency_hz = self.clock_frequency_hz;
             let buffer_frames = self.engine.buffer_frames as usize;
             let bytes_per_frame = self.output_block_align as usize;
             let mut state = DspState::default();
@@ -4999,9 +5550,7 @@ mod win {
                         anchor = Some(wake);
                     }
                     let grid = anchor.unwrap_or(wake)
-                        + Duration::from_micros(
-                            run.period_us.saturating_mul(run.events_measured),
-                        );
+                        + Duration::from_micros(run.period_us.saturating_mul(run.events_measured));
                     let lateness = signed_micros(wake, grid);
                     run.events_measured += 1;
                     if lateness > run.period_us as i64 {
@@ -5020,12 +5569,74 @@ mod win {
                     if padding > 0 {
                         run.events_with_padding += 1;
                     }
+                    // Missed-period detector: compare the device playback position with
+                    // the frames supplied so far. No position, no claim: a missing or
+                    // failing IAudioClock leaves missed_periods null (see JSON).
+                    if let Some(clock_ref) = &self.clock {
+                        let mut position: u64 = 0;
+                        let hr = com_call!(
+                            clock_ref.ptr,
+                            ComAudioClock,
+                            get_position(&mut position, std::ptr::null_mut())
+                        );
+                        if hr >= 0 {
+                            // IAudioClock::GetPosition is expressed in the stream clock's
+                            // units, not necessarily frames: the observed frequency was
+                            // 48 000 on the exclusive PCM16 stream but 384 000 on the
+                            // shared float32 stream (8 = block align). Frames are
+                            // recovered as position * rate / frequency.
+                            let position_frames = match run.clock_frequency_hz {
+                                Some(frequency) if frequency > 0 => {
+                                    ((position as u128 * self.output_rate as u128)
+                                        / frequency as u128)
+                                        as u64
+                                }
+                                _ => position,
+                            };
+                            run.clock_position_first_frames
+                                .get_or_insert(position_frames);
+                            run.clock_position_last_frames = Some(position_frames);
+                            let wall_expected = ((run_start.elapsed().as_micros() as u128
+                                * self.output_rate as u128)
+                                / 1_000_000) as u64;
+                            if run.xrun.observations() == 0 {
+                                run.xrun.set_baseline(
+                                    position_frames,
+                                    run.frames_written_total,
+                                    wall_expected,
+                                );
+                            } else {
+                                let newly_missed = run.xrun.observe(
+                                    position_frames,
+                                    run.frames_written_total,
+                                    wall_expected,
+                                );
+                                if newly_missed > 0 && padding == 0 {
+                                    run.clock_deficit_with_zero_padding += 1;
+                                }
+                            }
+                        } else {
+                            run.clock_read_failures += 1;
+                        }
+                    }
                 } else {
                     run.warmup_events += 1;
                     if run.warmup_events == run.warmup_target {
                         // Warm-up over: the counters start here.
                         reset_thread_counters();
                     }
+                }
+
+                if self.inject_underrun_ms > 0
+                    && !run.injected_underrun
+                    && run.events_measured >= 40
+                {
+                    // Diagnostic only (disabled by default): stop servicing the stream
+                    // for a while so the endpoint really underruns, then verify that the
+                    // clock-based detector reports it.
+                    run.injected_underrun = true;
+                    run.xrun_injected_sleep_ms = self.inject_underrun_ms;
+                    std::thread::sleep(Duration::from_millis(self.inject_underrun_ms));
                 }
 
                 if available == 0 {
@@ -5035,8 +5646,10 @@ mod win {
                     if measured {
                         run.starvation_events += 1;
                         let at = run_start.elapsed().as_micros() as u64;
-                        run.starvation_first_us = Some(run.starvation_first_us.map_or(at, |v| v.min(at)));
-                        run.starvation_last_us = Some(run.starvation_last_us.map_or(at, |v| v.max(at)));
+                        run.starvation_first_us =
+                            Some(run.starvation_first_us.map_or(at, |v| v.min(at)));
+                        run.starvation_last_us =
+                            Some(run.starvation_last_us.map_or(at, |v| v.max(at)));
                         run.completion_delta.push(0.0);
                     }
                     continue;
@@ -5123,6 +5736,15 @@ mod win {
             run.deallocations = deallocations_on_this_thread();
             run.render_elapsed_us = submit_start.elapsed().as_micros() as u64;
             run.elapsed_us = run_start.elapsed().as_micros() as u64;
+            let position_advancing = match (
+                run.clock_position_first_frames,
+                run.clock_position_last_frames,
+            ) {
+                (Some(first), Some(last)) => last > first,
+                _ => false,
+            };
+            run.xrun_position_available =
+                run.clock_available && run.xrun.observations() > 0 && position_advancing;
             run
         }
 
@@ -5234,6 +5856,25 @@ mod win {
             "available_smaller_than_buffer_events": run.available_smaller_than_buffer_events,
             "late_events_gt_one_period": run.late_gt_period,
             "wait_timeouts": run.wait_timeouts,
+            "missed_periods": if run.xrun_position_available { Some(run.xrun.missed_periods()) } else { None },
+            "missed_frames": if run.xrun_position_available { Some(run.xrun.missed_frames()) } else { None },
+            "missed_periods_remainder_frames": if run.xrun_position_available { Some(run.xrun.remainder_frames()) } else { None },
+            "missed_periods_baseline_stall_frames": run.xrun.baseline_stall_frames(),
+            "missed_periods_baseline_played_frames": run.xrun.baseline_played_frames(),
+            "missed_periods_observations": run.xrun.observations(),
+            "missed_periods_regressions": run.xrun.regressions(),
+            "clock_deficit_with_zero_padding_events": run.clock_deficit_with_zero_padding,
+            "xrun_clock_source": "IAudioClock",
+            "xrun_position_available": run.xrun_position_available,
+            "xrun_clock_available": run.clock_available,
+            "xrun_clock_hresult": run.clock_hresult,
+            "xrun_clock_hresult_name": run.clock_hresult.map(hresult_name),
+            "xrun_clock_frequency_hz": run.clock_frequency_hz,
+            "xrun_clock_read_failures": run.clock_read_failures,
+            "xrun_clock_position_first_frames": run.clock_position_first_frames,
+            "xrun_clock_position_last_frames": run.clock_position_last_frames,
+            "xrun_injected_sleep_ms": run.xrun_injected_sleep_ms,
+            "underrun_method": WASAPI_UNDERRUN_METHOD,
             "allocations_on_render_thread": run.allocations,
             "deallocations_on_render_thread": run.deallocations,
             "open_prepare_us": run.open_prepare_us,
@@ -5461,7 +6102,11 @@ mod win {
                 Ok(state) => state,
                 Err((failure, partial)) => {
                     let _ = init_tx.send(Err((failure, partial)));
-                    return Err(Failure::new("realtime", None, "thread priority setup failed"));
+                    return Err(Failure::new(
+                        "realtime",
+                        None,
+                        "thread priority setup failed",
+                    ));
                 }
             };
             let mut session = match WasapiSession::open(&render_config) {
@@ -5493,13 +6138,7 @@ mod win {
             Ok(Err((failure, realtime))) => {
                 stop.store(true, Ordering::SeqCst);
                 let _ = render_handle.join();
-                return wasapi_failure_report(
-                    config,
-                    os_info(),
-                    failure.stage,
-                    &failure,
-                    realtime,
-                );
+                return wasapi_failure_report(config, os_info(), failure.stage, &failure, realtime);
             }
             Err(error) => {
                 stop.store(true, Ordering::SeqCst);
@@ -5562,8 +6201,11 @@ mod win {
         let (run, cleanup, revert) = match render_result {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => {
-                let failure =
-                    Failure::new("render-thread", None, "render thread failed after WASAPI init");
+                let failure = Failure::new(
+                    "render-thread",
+                    None,
+                    "render thread failed after WASAPI init",
+                );
                 return wasapi_failure_report(
                     config,
                     os_info(),
@@ -5610,10 +6252,8 @@ mod win {
         };
 
         if let Some(host) = &host {
-            let (bootstrap_artifact, bootstrap_patch, bootstrap_verification) = bootstrap_identity
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| {
+            let (bootstrap_artifact, bootstrap_patch, bootstrap_verification) =
+                bootstrap_identity.as_ref().cloned().unwrap_or_else(|| {
                     (
                         host.active_artifact(),
                         host.active_patch_id(),
@@ -5636,6 +6276,48 @@ mod win {
 
         let measurements = wasapi_measurements_json(&run, config.api.as_str());
         report["measurements"] = measurements.clone();
+        let missed_periods = if run.xrun_position_available {
+            json!(run.xrun.missed_periods())
+        } else {
+            Value::Null
+        };
+        let missed_frames = if run.xrun_position_available {
+            json!(run.xrun.missed_frames())
+        } else {
+            Value::Null
+        };
+        if let Some(realtime) = report.get_mut("realtime").and_then(Value::as_object_mut) {
+            realtime.insert("missed_periods".to_owned(), missed_periods);
+            realtime.insert("missed_frames".to_owned(), missed_frames);
+            realtime.insert(
+                "underrun_method".to_owned(),
+                Value::from(WASAPI_UNDERRUN_METHOD),
+            );
+            realtime.insert(
+                "missed_periods_granularity".to_owned(),
+                Value::from("one period (shared: engine event period; exclusive: app-owned buffer duration)"),
+            );
+            realtime.insert(
+                "xrun_clock".to_owned(),
+                json!({
+                    "source": "IAudioClock",
+                    "available": run.clock_available,
+                    "detector_active": run.xrun_position_available,
+                    "hresult": run.clock_hresult,
+                    "hresult_name": run.clock_hresult.map(hresult_name),
+                    "frequency_hz": run.clock_frequency_hz,
+                    "read_failures": run.clock_read_failures,
+                    "position_first_frames": run.clock_position_first_frames,
+                    "position_last_frames": run.clock_position_last_frames,
+                    "observations": run.xrun.observations(),
+                    "baseline_stall_frames": run.xrun.baseline_stall_frames(),
+                    "baseline_played_frames": run.xrun.baseline_played_frames(),
+                    "regressions": run.xrun.regressions(),
+                    "deficit_with_zero_padding_events": run.clock_deficit_with_zero_padding,
+                    "injected_sleep_ms": run.xrun_injected_sleep_ms,
+                }),
+            );
+        }
         report["realtime_cadence"] = measurements["event_cadence"].clone();
         report["swaps"] = swap_json(&swap_outcome);
         let crossfade_us = (config.crossfade_frames as u64) * 1_000_000 / config.rate.max(1) as u64;
@@ -5672,5 +6354,4 @@ mod win {
         let exit_code = if status == "ok" { 0 } else { 1 };
         (report, exit_code)
     }
-
 }

@@ -133,6 +133,8 @@ param(
     [ValidateSet(-1, 16, 24, 32)]
     [int]$ExclusiveBits = -1,
     [int]$ExclusiveEndpoint = -1,
+    [ValidateRange(0, 5000)]
+    [int]$InjectUnderrunMs = 0,
     [ValidateSet('', 'normal', 'above', 'high', 'time-critical')]
     [string]$ThreadPriority = '',
     [ValidateRange(0, 64)]
@@ -240,6 +242,7 @@ try {
         if ($ExclusiveBits -ge 0) { $probeArgs += @('--exclusive-bits', "$ExclusiveBits") }
         if ($ExclusiveEndpoint -ge 0) { $probeArgs += @('--exclusive-endpoint', "$ExclusiveEndpoint") }
     }
+    if ($InjectUnderrunMs -gt 0) { $probeArgs += @('--inject-underrun-ms', "$InjectUnderrunMs") }
 
     if ($Load -gt 0) {
         Write-Host ("[charge] demarrage de {0} processus PowerShell en boucle occupee (limite {1} s)" -f $Load, $LoadSeconds)
