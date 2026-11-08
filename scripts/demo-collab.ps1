@@ -68,11 +68,18 @@ try {
     Write-Host '[3/4] Intégration par le coordinateur (écrivain Git unique)'
     $journal = Join-Path $Root 'target\ravum\collab-journal.jsonl'
     Remove-Item $journal -ErrorAction SilentlyContinue
+    # The publication journal must live in the disposable demo workspace, not in
+    # `target/`: CI restores a cached `target/` and a publication record surviving from a
+    # previous run makes the idempotent writer refuse the same publication id with
+    # `AlreadyPublished`. Scoping it to $work (recreated above) makes the demo re-runnable
+    # and keeps the writer's idempotence intact instead of disabling it.
+    $publicationJournal = Join-Path $work 'publication-journal.jsonl'
     $integrationArgs = @(
         'integrate',
         '--workspace', $work,
         '--proposals', $generated,
-        '--journal', $journal
+        '--journal', $journal,
+        '--publication-journal', $publicationJournal
     )
     if ($Commit) { $integrationArgs += '--commit' }
     & $exe @integrationArgs

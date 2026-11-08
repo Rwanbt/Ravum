@@ -1,0 +1,9 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 13edddd..9e514a9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -9,2 +9,2 @@ fn debug_it<T: Debug>(value: T) -> String {
+-fn other() -> u32 {
+-    0
++fn other<T: Debug>(value: T) -> String {
++    format!("{value:?}")

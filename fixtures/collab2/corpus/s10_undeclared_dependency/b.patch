@@ -1,0 +1,11 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 2632e68..baba8d9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -5,5 +5,5 @@ fn helper(x: u32) -> u32 {
+ }
+ 
+ fn compose(x: u32) -> u32 {
+-    helper(x) * 2
++    helper(x) * 3
+ }

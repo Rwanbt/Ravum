@@ -1,0 +1,13 @@
+{
+  "id": "s10_undeclared_dependency",
+  "description": "Dependance non declaree: B modifie compose qui appelle helper change par A.",
+  "path": "src/lib.rs",
+  "expect": "semantic_risk",
+  "symbols_a": [
+    "helper"
+  ],
+  "symbols_b": [
+    "compose"
+  ],
+  "merged_contains": []
+}

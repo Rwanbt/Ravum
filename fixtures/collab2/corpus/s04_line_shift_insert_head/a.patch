@@ -1,0 +1,10 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 8968da4..a825834 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,4 +1,5 @@
+ #![allow(dead_code)]
++use core::fmt::Write as _;
+ 
+ fn alpha() -> u32 {
+     1

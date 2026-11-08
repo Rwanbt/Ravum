@@ -1,0 +1,13 @@
+{
+  "id": "s03_same_function",
+  "description": "Meme fonction, meme ligne modifiee deux fois.",
+  "path": "src/lib.rs",
+  "expect": "textual_conflict",
+  "symbols_a": [
+    "alpha"
+  ],
+  "symbols_b": [
+    "alpha"
+  ],
+  "merged_contains": []
+}

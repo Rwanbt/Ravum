@@ -1,0 +1,13 @@
+{
+  "id": "s07_name_conflict",
+  "description": "Deux renommages independants creent un nom duplique (E0428): seule la compilation le voit.",
+  "path": "src/lib.rs",
+  "expect": "compile_failure",
+  "symbols_a": [
+    "slot_a"
+  ],
+  "symbols_b": [
+    "slot_b"
+  ],
+  "merged_contains": []
+}
