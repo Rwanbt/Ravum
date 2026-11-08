@@ -77,6 +77,9 @@ jobs:
           cargo run -q --bin ravum -- dsp fixtures/dsp/iir_v1.rs --next fixtures/dsp/iir_v2.rs --blocks 200
           cargo run -q --bin ravum -- dsp fixtures/dsp/gain_v1.rs --next fixtures/dsp/gain_v2.rs --blocks 200
 
+      - name: Demo M4 - UI + API + SQLite end to end
+        run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4.ps1
+
       - name: Measure the loop (informational, not a performance gate)
         run: |
           cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json

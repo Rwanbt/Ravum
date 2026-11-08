@@ -44,6 +44,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
 | Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
 | DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, **0 allocation** mesurée sur 400 blocs ; aucun périphérique audio, aucun crossfade |
+| Verticale full-stack (M4) | **Application témoin** : UI statique + API HTTP + SQLite, contrat versionné, validation serveur, migrations additives, 10 tests E2E ; aucun navigateur piloté, aucun TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
@@ -87,6 +88,18 @@ froid à chaque édition. Mesures et verdict : [docs/mvp/M2-evidence.md](docs/mv
 **aucun périphérique audio, aucune priorité temps réel et aucun crossfade** — un
 changement de gain ou de coefficient produit un clic, mesuré et publié. Détail :
 [docs/mvp/M3-evidence.md](docs/mvp/M3-evidence.md).
+
+### Application témoin full-stack (M4)
+
+```text
+cargo run -p ravum-todo -- --db target/ravum/todo.db --port 8080 --token dev-token
+```
+
+UI statique (aucune étape de build), API HTTP, SQLite avec migrations versionnées,
+types partagés exposés à `/api/schema`, validation et autorisation côté serveur.
+Les tests E2E démarrent le serveur sur une vraie socket et une vraie base. Limites :
+aucun navigateur piloté, aucun TLS, une seule connexion SQLite. Détail :
+[docs/mvp/M4-evidence.md](docs/mvp/M4-evidence.md).
 
 ## Stratégie d'implémentation : apprendre avant de figer
 
