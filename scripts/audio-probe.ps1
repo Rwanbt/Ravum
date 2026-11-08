@@ -77,6 +77,22 @@
     (le moteur audio possede la periode et le buffer) ; -Frames ne fait que proposer
     une duree de buffer, que Initialize peut arrondir. La periode reelle et le format
     sont reportes dans le JSON (mix_format, engine).
+    wasapi-exclusive = mode exclusif : le format PCM et la periode appartiennent a
+    l'application ; si le pilote refuse le format, la sonde echoue explicitement avec
+    le HRESULT, les formats essayes et le balayage des combinaisons acceptees.
+
+.PARAMETER ExclusiveRate
+    Mode exclusif seulement : taux demande (defaut : taux du mix format moteur).
+
+.PARAMETER ExclusiveBits
+    Mode exclusif seulement : bits par echantillon demandes (16, 24 ou 32 ; defaut 16).
+
+.PARAMETER ExclusiveEndpoint
+    Mode exclusif seulement : index d'endpoint de rendu actif a ouvrir au lieu du
+    peripherique par defaut (-1 = defaut). Diagnostic : le peripherique par defaut du
+    systeme n'est pas modifie. L'ordre des endpoints est celui de
+    IMMDeviceEnumerator::EnumAudioEndpoints (actifs, rendu) ; le JSON reporte
+    l'endpoint_id stable et le support exclusif de chaque endpoint.
 
 .PARAMETER LoadSeconds
     Duree maximale de la boucle de chaque processus de charge, en secondes (defaut 10,
@@ -96,11 +112,12 @@
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Load 12 -Variant load-nommscss-r1
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Variant rest-nommscss-r1
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi -Mmcss -Load 12 -Variant load-mmcss-r1
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Api wasapi-exclusive -ExclusiveEndpoint 1 -Variant rest-r1
 #>
 [CmdletBinding()]
 param(
     [string]$Root = '',
-    [ValidateSet('waveout', 'wasapi')]
+    [ValidateSet('waveout', 'wasapi', 'wasapi-exclusive')]
     [string]$Api = 'waveout',
     [ValidateRange(1, 10)]
     [int]$Seconds = 3,
@@ -112,6 +129,10 @@ param(
     [int]$CrossfadeFrames = 256,
     [int]$Device = -1,
     [switch]$Mmcss,
+    [int]$ExclusiveRate = -1,
+    [ValidateSet(-1, 16, 24, 32)]
+    [int]$ExclusiveBits = -1,
+    [int]$ExclusiveEndpoint = -1,
     [ValidateSet('', 'normal', 'above', 'high', 'time-critical')]
     [string]$ThreadPriority = '',
     [ValidateRange(0, 64)]
@@ -160,7 +181,9 @@ try {
     if (-not $Out) {
         $date = Get-Date -Format 'yyyy-MM-dd'
         if ($Variant) {
-            if ($Api -eq 'wasapi') {
+            if ($Api -eq 'wasapi-exclusive') {
+                $Out = Join-Path $Root "evidence/mvp0b-audio-wasapi-exclusive-$Variant-$date.json"
+            } elseif ($Api -like 'wasapi*') {
                 $Out = Join-Path $Root "evidence/mvp0b-audio-wasapi-$Variant-$date.json"
             } else {
                 $Out = Join-Path $Root "evidence/mvp0b-audio-mmsc-$Variant-$date.json"
@@ -212,6 +235,11 @@ try {
     if ($Device -ge 0) { $probeArgs += @('--device', "$Device") }
     if ($Mmcss) { $probeArgs += '--mmcss' }
     if ($ThreadPriority) { $probeArgs += @('--thread-priority', $ThreadPriority) }
+    if ($Api -eq 'wasapi-exclusive') {
+        if ($ExclusiveRate -ge 0) { $probeArgs += @('--exclusive-rate', "$ExclusiveRate") }
+        if ($ExclusiveBits -ge 0) { $probeArgs += @('--exclusive-bits', "$ExclusiveBits") }
+        if ($ExclusiveEndpoint -ge 0) { $probeArgs += @('--exclusive-endpoint', "$ExclusiveEndpoint") }
+    }
 
     if ($Load -gt 0) {
         Write-Host ("[charge] demarrage de {0} processus PowerShell en boucle occupee (limite {1} s)" -f $Load, $LoadSeconds)
@@ -256,13 +284,30 @@ try {
     Write-Host ''
     Write-Host '--- resultat mesure ---'
     Write-Host ("  statut        : {0}" -f $report.status)
-    if ($Api -eq 'wasapi') {
+    if ($Api -like 'wasapi*') {
         Write-Host ("  peripherique  : {0} (WASAPI {1})" -f $report.device.name, $report.device.endpoint_id)
         Write-Host ("  mix format    : {0} ({1}), {2} canaux, {3} Hz" -f `
             $report.mix_format.sample_format, $report.mix_format.format_tag_name, $report.mix_format.channels, $report.mix_format.sample_rate)
         Write-Host ("  moteur        : buffer endpoint {0} frames ({1} us), periode device {2} us (min {3} us), latence stream {4} us" -f `
             $report.engine.buffer_frames, $report.engine.buffer_duration_us, $report.engine.device_period_default_us, `
             $report.engine.device_period_minimum_us, $report.engine.stream_latency_us)
+        if ($Api -eq 'wasapi-exclusive') {
+            Write-Host ("  exclusif      : {0} {1} bit(s) a {2} Hz, layout {3}, mode {4}" -f `
+                $report.format.sample_format, $report.format.bits_per_sample, $report.format.sample_rate, `
+                $report.format.layout, $report.engine.share_mode)
+            $accepted = @($report.exclusive.format_sweep | Where-Object { $_.status -eq 'accepted' })
+            $total = @($report.exclusive.format_sweep).Count
+            Write-Host ("  formats       : {0} combinaison(s) acceptee(s) / {1} testee(s) ; endpoint selectionne #{2}" -f `
+                $accepted.Count, $total, $report.exclusive.selected_endpoint)
+            if ($report.exclusive.endpoint_support) {
+                foreach ($ep in $report.exclusive.endpoint_support) {
+                    if ($ep.friendly_name) {
+                        Write-Host ("                  support exclusif endpoint: {0} -> {1}/{2} acceptes" -f `
+                            $ep.friendly_name, $ep.exclusive_pcm16_accepted_trials, @($ep.exclusive_pcm16_trials).Count)
+                    }
+                }
+            }
+        }
         Write-Host ("  evenements    : {0} traites, cadence livree {1} ev/s (attendue {2} ev/s)" -f `
             $m.blocks_processed, [Math]::Round($m.event_cadence.delivered_events_per_s, 1), [Math]::Round($m.event_cadence.expected_events_per_s, 1))
     } else {
@@ -298,7 +343,7 @@ try {
         $m.wake_lateness_us.p50, $m.wake_lateness_us.p95, $m.wake_lateness_us.p99, $m.wake_lateness_us.max)
     Write-Host ("  intervalles   : p50 {0} us, p95 {1} us, max {2} us" -f `
         $m.interval_us.p50, $m.interval_us.p95, $m.interval_us.max)
-    if ($Api -eq 'wasapi') {
+    if ($Api -like 'wasapi*') {
         Write-Host ("  starvation    : {0} evenements buffer plein ; {1} evenements avec place < buffer ; evenements en retard > periode : {2}" -f `
             $m.starvation_events, $m.available_smaller_than_buffer_events, $m.late_events_gt_one_period)
         Write-Host ("  padding       : p50 {0} frames, max {1} frames au reveil" -f `
@@ -319,7 +364,7 @@ try {
     }
     Write-Host ("  preuve        : {0}" -f $Out)
 
-    if ($Api -eq 'wasapi') {
+    if ($Api -like 'wasapi*') {
         $delivered = [double]$m.event_cadence.delivered_events_per_s
         $expected = [double]$m.event_cadence.expected_events_per_s
         if ($m.starvation_events -gt 0) {

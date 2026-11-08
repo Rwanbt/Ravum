@@ -1,0 +1,663 @@
+{
+  "schema_version": 1,
+  "kind": "audio-wasapi-exclusive-campaign-summary",
+  "tool": "scripts/audio-probe.ps1",
+  "date": "2026-11-08",
+  "derived": true,
+  "note": "Agregat derive des 6 preuves brutes listees dans raw_runs ; ce fichier n-est pas lui-meme une mesure.",
+  "config": {
+    "api": "wasapi-exclusive",
+    "seconds": 3,
+    "frames_requested": 480,
+    "buffer_frames_observed": 480,
+    "period_us": 10000,
+    "module": "fixtures/dsp/iir_v1.rs -> swaps iir_v2/iir_v1",
+    "swap_every_ms": 250,
+    "crossfade_frames": 256,
+    "exclusive_endpoint_index": 1
+  },
+  "selected_endpoint": {
+    "index": 1,
+    "friendly_name": "FHD (NVIDIA High Definition Audio)",
+    "note": "le peripherique par defaut (MOTU) refuse tous les formats exclusifs testes ; le Realtek accepte les formats mais ne signale pas d evenements de maniere stable ; le mode exclusif a donc ete mesure sur un troisieme endpoint (NVIDIA HDMI), sans changer le peripherique par defaut du systeme"
+  },
+  "default_endpoint_refusal": {
+    "file": "evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json",
+    "status": "refused",
+    "hresult": 2290679816,
+    "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+    "formats_tried": 12,
+    "formats_accepted": 0,
+    "endpoint_support": [
+      {
+        "endpoint_id": "{0.0.0.00000000}.{35fafc54-4c61-4bc4-813a-0688e857d427}",
+        "exclusive_pcm16_accepted_trials": 4,
+        "exclusive_pcm16_trials": [
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "extensible",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "plain_waveformatex",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "extensible",
+            "rate": 44100,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "plain_waveformatex",
+            "rate": 44100,
+            "status": "accepted"
+          }
+        ],
+        "friendly_name": "Haut-parleurs (Realtek(R) Audio)",
+        "mix_format": {
+          "avg_bytes_per_sec": 384000,
+          "bits_per_sample": 32,
+          "block_align": 8,
+          "channel_mask": 3,
+          "channels": 2,
+          "extensible": true,
+          "format_tag": 65534,
+          "format_tag_name": "WAVE_FORMAT_EXTENSIBLE",
+          "sample_format": "float32le",
+          "sample_rate": 48000,
+          "sub_format": "{00000003-0000-0010-8000-00AA00389B71}",
+          "valid_bits_per_sample": 32
+        },
+        "state": 1,
+        "state_name": "active"
+      },
+      {
+        "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+        "exclusive_pcm16_accepted_trials": 4,
+        "exclusive_pcm16_trials": [
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "extensible",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "plain_waveformatex",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "extensible",
+            "rate": 44100,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "plain_waveformatex",
+            "rate": 44100,
+            "status": "accepted"
+          }
+        ],
+        "friendly_name": "FHD (NVIDIA High Definition Audio)",
+        "mix_format": {
+          "avg_bytes_per_sec": 384000,
+          "bits_per_sample": 32,
+          "block_align": 8,
+          "channel_mask": 3,
+          "channels": 2,
+          "extensible": true,
+          "format_tag": 65534,
+          "format_tag_name": "WAVE_FORMAT_EXTENSIBLE",
+          "sample_format": "float32le",
+          "sample_rate": 48000,
+          "sub_format": "{00000003-0000-0010-8000-00AA00389B71}",
+          "valid_bits_per_sample": 32
+        },
+        "state": 1,
+        "state_name": "active"
+      },
+      {
+        "endpoint_id": "{0.0.0.00000000}.{b43f6921-b942-4982-a46c-53317ee9ae0a}",
+        "exclusive_pcm16_accepted_trials": 2,
+        "exclusive_pcm16_trials": [
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "extensible",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": 0,
+            "hresult_name": "S_OK",
+            "layout": "plain_waveformatex",
+            "rate": 48000,
+            "status": "accepted"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "extensible",
+            "rate": 44100,
+            "status": "refused"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "plain_waveformatex",
+            "rate": 44100,
+            "status": "refused"
+          }
+        ],
+        "friendly_name": "FHD (NVIDIA High Definition Audio)",
+        "mix_format": {
+          "avg_bytes_per_sec": 384000,
+          "bits_per_sample": 32,
+          "block_align": 8,
+          "channel_mask": 3,
+          "channels": 2,
+          "extensible": true,
+          "format_tag": 65534,
+          "format_tag_name": "WAVE_FORMAT_EXTENSIBLE",
+          "sample_format": "float32le",
+          "sample_rate": 48000,
+          "sub_format": "{00000003-0000-0010-8000-00AA00389B71}",
+          "valid_bits_per_sample": 32
+        },
+        "state": 1,
+        "state_name": "active"
+      },
+      {
+        "endpoint_id": "{0.0.0.00000000}.{e29eff7a-c10e-441c-bef9-76787b492711}",
+        "exclusive_pcm16_accepted_trials": 0,
+        "exclusive_pcm16_trials": [
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "extensible",
+            "rate": 48000,
+            "status": "refused"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "plain_waveformatex",
+            "rate": 48000,
+            "status": "refused"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "extensible",
+            "rate": 44100,
+            "status": "refused"
+          },
+          {
+            "bits": 16,
+            "channels": 2,
+            "hresult": -2004287480,
+            "hresult_name": "AUDCLNT_E_UNSUPPORTED_FORMAT",
+            "layout": "plain_waveformatex",
+            "rate": 44100,
+            "status": "refused"
+          }
+        ],
+        "friendly_name": "Out 1-2 (MOTU M Series)",
+        "mix_format": {
+          "avg_bytes_per_sec": 384000,
+          "bits_per_sample": 32,
+          "block_align": 8,
+          "channel_mask": 3,
+          "channels": 2,
+          "extensible": true,
+          "format_tag": 65534,
+          "format_tag_name": "WAVE_FORMAT_EXTENSIBLE",
+          "sample_format": "float32le",
+          "sample_rate": 48000,
+          "sub_format": "{00000003-0000-0010-8000-00AA00389B71}",
+          "valid_bits_per_sample": 32
+        },
+        "state": 1,
+        "state_name": "active"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "file": "evidence/mvp0b-audio-wasapi-exclusive-load-r1-2026-11-08.json",
+      "variant": "load",
+      "repetition": 1,
+      "cpu_busy_percent_measured": 100.0,
+      "ram_available_mib": 2248.0,
+      "endpoint": "FHD (NVIDIA High Definition Audio)",
+      "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+      "selected_endpoint_index": 1,
+      "format": {
+        "sample_format": "pcm_s16le",
+        "tag": "WAVE_FORMAT_EXTENSIBLE",
+        "rate": 48000,
+        "bits": 16,
+        "layout": "extensible"
+      },
+      "engine": {
+        "alignment_retry_used": false,
+        "buffer_duration_us": 10000,
+        "buffer_frames": 480,
+        "definition": "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod",
+        "device_period_default_us": 10000,
+        "device_period_minimum_us": 3000,
+        "duration_clamped_to_minimum": false,
+        "engine_owns_period": false,
+        "event_period_us": 10000,
+        "requested_bits": 16,
+        "requested_buffer_duration_us": 10000,
+        "requested_frames": 480,
+        "requested_rate": 48000,
+        "share_mode": "exclusive",
+        "stream_flags": [
+          "event_callback"
+        ],
+        "stream_latency_us": 10000
+      },
+      "cadence_ratio": 1.0,
+      "events_measured": 294,
+      "blocks_processed": 302,
+      "open_prepare_us": 197907,
+      "work_us": {
+        "count": 294,
+        "max": 511,
+        "min": 8,
+        "p50": 11,
+        "p95": 47,
+        "p99": 126
+      },
+      "callback_us": {
+        "count": 294,
+        "max": 1176,
+        "min": 82,
+        "p50": 113,
+        "p95": 461,
+        "p99": 1038
+      },
+      "lateness_us": {
+        "count": 294,
+        "max": 3498,
+        "min": -672,
+        "p50": -241,
+        "p95": 1196,
+        "p99": 1776
+      },
+      "starvation_events": 0,
+      "late_events_gt_one_period": 0,
+      "wait_timeouts": 0,
+      "allocations": 0,
+      "deallocations": 0,
+      "swaps_activated": 11,
+      "swaps_requested": 11,
+      "max_sample_delta_at_swaps": 0.029098667204380035,
+      "max_sample_delta_steady": 0.028709430247545242,
+      "baseline_sample_delta": 0.028793953359127045
+    },
+    {
+      "file": "evidence/mvp0b-audio-wasapi-exclusive-load-r2-2026-11-08.json",
+      "variant": "load",
+      "repetition": 2,
+      "cpu_busy_percent_measured": 99.6,
+      "ram_available_mib": 2289.0,
+      "endpoint": "FHD (NVIDIA High Definition Audio)",
+      "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+      "selected_endpoint_index": 1,
+      "format": {
+        "sample_format": "pcm_s16le",
+        "tag": "WAVE_FORMAT_EXTENSIBLE",
+        "rate": 48000,
+        "bits": 16,
+        "layout": "extensible"
+      },
+      "engine": {
+        "alignment_retry_used": false,
+        "buffer_duration_us": 10000,
+        "buffer_frames": 480,
+        "definition": "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod",
+        "device_period_default_us": 10000,
+        "device_period_minimum_us": 3000,
+        "duration_clamped_to_minimum": false,
+        "engine_owns_period": false,
+        "event_period_us": 10000,
+        "requested_bits": 16,
+        "requested_buffer_duration_us": 10000,
+        "requested_frames": 480,
+        "requested_rate": 48000,
+        "share_mode": "exclusive",
+        "stream_flags": [
+          "event_callback"
+        ],
+        "stream_latency_us": 10000
+      },
+      "cadence_ratio": 1.0,
+      "events_measured": 294,
+      "blocks_processed": 302,
+      "open_prepare_us": 194464,
+      "work_us": {
+        "count": 294,
+        "max": 148,
+        "min": 8,
+        "p50": 11,
+        "p95": 25,
+        "p99": 113
+      },
+      "callback_us": {
+        "count": 294,
+        "max": 1105,
+        "min": 85,
+        "p50": 117,
+        "p95": 493,
+        "p99": 904
+      },
+      "lateness_us": {
+        "count": 294,
+        "max": 3476,
+        "min": -508,
+        "p50": -160,
+        "p95": 967,
+        "p99": 1668
+      },
+      "starvation_events": 0,
+      "late_events_gt_one_period": 0,
+      "wait_timeouts": 0,
+      "allocations": 0,
+      "deallocations": 0,
+      "swaps_activated": 11,
+      "swaps_requested": 11,
+      "max_sample_delta_at_swaps": 0.02932378463447094,
+      "max_sample_delta_steady": 0.028709430247545242,
+      "baseline_sample_delta": 0.028793953359127045
+    },
+    {
+      "file": "evidence/mvp0b-audio-wasapi-exclusive-rest-r1-2026-11-08.json",
+      "variant": "rest",
+      "repetition": 1,
+      "cpu_busy_percent_measured": 26.4,
+      "ram_available_mib": 3050.0,
+      "endpoint": "FHD (NVIDIA High Definition Audio)",
+      "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+      "selected_endpoint_index": 1,
+      "format": {
+        "sample_format": "pcm_s16le",
+        "tag": "WAVE_FORMAT_EXTENSIBLE",
+        "rate": 48000,
+        "bits": 16,
+        "layout": "extensible"
+      },
+      "engine": {
+        "alignment_retry_used": false,
+        "buffer_duration_us": 10000,
+        "buffer_frames": 480,
+        "definition": "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod",
+        "device_period_default_us": 10000,
+        "device_period_minimum_us": 3000,
+        "duration_clamped_to_minimum": false,
+        "engine_owns_period": false,
+        "event_period_us": 10000,
+        "requested_bits": 16,
+        "requested_buffer_duration_us": 10000,
+        "requested_frames": 480,
+        "requested_rate": 48000,
+        "share_mode": "exclusive",
+        "stream_flags": [
+          "event_callback"
+        ],
+        "stream_latency_us": 10000
+      },
+      "cadence_ratio": 1.0,
+      "events_measured": 294,
+      "blocks_processed": 302,
+      "open_prepare_us": 198360,
+      "work_us": {
+        "count": 294,
+        "max": 99,
+        "min": 5,
+        "p50": 7,
+        "p95": 14,
+        "p99": 69
+      },
+      "callback_us": {
+        "count": 294,
+        "max": 361,
+        "min": 53,
+        "p50": 65,
+        "p95": 170,
+        "p99": 264
+      },
+      "lateness_us": {
+        "count": 294,
+        "max": 558,
+        "min": -117,
+        "p50": 10,
+        "p95": 161,
+        "p99": 312
+      },
+      "starvation_events": 0,
+      "late_events_gt_one_period": 0,
+      "wait_timeouts": 0,
+      "allocations": 0,
+      "deallocations": 0,
+      "swaps_activated": 11,
+      "swaps_requested": 11,
+      "max_sample_delta_at_swaps": 0.029280846938490868,
+      "max_sample_delta_steady": 0.028709430247545242,
+      "baseline_sample_delta": 0.028793953359127045
+    },
+    {
+      "file": "evidence/mvp0b-audio-wasapi-exclusive-rest-r2-2026-11-08.json",
+      "variant": "rest",
+      "repetition": 2,
+      "cpu_busy_percent_measured": 32.2,
+      "ram_available_mib": 3029.0,
+      "endpoint": "FHD (NVIDIA High Definition Audio)",
+      "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+      "selected_endpoint_index": 1,
+      "format": {
+        "sample_format": "pcm_s16le",
+        "tag": "WAVE_FORMAT_EXTENSIBLE",
+        "rate": 48000,
+        "bits": 16,
+        "layout": "extensible"
+      },
+      "engine": {
+        "alignment_retry_used": false,
+        "buffer_duration_us": 10000,
+        "buffer_frames": 480,
+        "definition": "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod",
+        "device_period_default_us": 10000,
+        "device_period_minimum_us": 3000,
+        "duration_clamped_to_minimum": false,
+        "engine_owns_period": false,
+        "event_period_us": 10000,
+        "requested_bits": 16,
+        "requested_buffer_duration_us": 10000,
+        "requested_frames": 480,
+        "requested_rate": 48000,
+        "share_mode": "exclusive",
+        "stream_flags": [
+          "event_callback"
+        ],
+        "stream_latency_us": 10000
+      },
+      "cadence_ratio": 1.0,
+      "events_measured": 294,
+      "blocks_processed": 302,
+      "open_prepare_us": 64687,
+      "work_us": {
+        "count": 294,
+        "max": 104,
+        "min": 5,
+        "p50": 7,
+        "p95": 15,
+        "p99": 31
+      },
+      "callback_us": {
+        "count": 294,
+        "max": 1133,
+        "min": 51,
+        "p50": 75,
+        "p95": 172,
+        "p99": 309
+      },
+      "lateness_us": {
+        "count": 294,
+        "max": 705,
+        "min": -13,
+        "p50": 88,
+        "p95": 256,
+        "p99": 363
+      },
+      "starvation_events": 0,
+      "late_events_gt_one_period": 0,
+      "wait_timeouts": 0,
+      "allocations": 0,
+      "deallocations": 0,
+      "swaps_activated": 11,
+      "swaps_requested": 11,
+      "max_sample_delta_at_swaps": 0.029323797672986984,
+      "max_sample_delta_steady": 0.028709430247545242,
+      "baseline_sample_delta": 0.028793953359127045
+    },
+    {
+      "file": "evidence/mvp0b-audio-wasapi-exclusive-rest-r3-2026-11-08.json",
+      "variant": "rest",
+      "repetition": 3,
+      "cpu_busy_percent_measured": 27.2,
+      "ram_available_mib": 3015.0,
+      "endpoint": "FHD (NVIDIA High Definition Audio)",
+      "endpoint_id": "{0.0.0.00000000}.{a3e063bc-0153-44e1-8550-ed7ce0c290ed}",
+      "selected_endpoint_index": 1,
+      "format": {
+        "sample_format": "pcm_s16le",
+        "tag": "WAVE_FORMAT_EXTENSIBLE",
+        "rate": 48000,
+        "bits": 16,
+        "layout": "extensible"
+      },
+      "engine": {
+        "alignment_retry_used": false,
+        "buffer_duration_us": 10000,
+        "buffer_frames": 480,
+        "definition": "exclusive mode: the app owns the period; event_period_us is the buffer duration (hnsBufferDuration == hnsPeriodicity) used for the lateness grid, buffer_duration_us is the endpoint buffer size in time, device_period_* are the driver's default/minimum periods reported by GetDevicePeriod",
+        "device_period_default_us": 10000,
+        "device_period_minimum_us": 3000,
+        "duration_clamped_to_minimum": false,
+        "engine_owns_period": false,
+        "event_period_us": 10000,
+        "requested_bits": 16,
+        "requested_buffer_duration_us": 10000,
+        "requested_frames": 480,
+        "requested_rate": 48000,
+        "share_mode": "exclusive",
+        "stream_flags": [
+          "event_callback"
+        ],
+        "stream_latency_us": 10000
+      },
+      "cadence_ratio": 1.0,
+      "events_measured": 294,
+      "blocks_processed": 302,
+      "open_prepare_us": 64598,
+      "work_us": {
+        "count": 294,
+        "max": 281,
+        "min": 5,
+        "p50": 7,
+        "p95": 11,
+        "p99": 49
+      },
+      "callback_us": {
+        "count": 294,
+        "max": 453,
+        "min": 50,
+        "p50": 66,
+        "p95": 172,
+        "p99": 260
+      },
+      "lateness_us": {
+        "count": 294,
+        "max": 250,
+        "min": -62,
+        "p50": 32,
+        "p95": 139,
+        "p99": 204
+      },
+      "starvation_events": 0,
+      "late_events_gt_one_period": 0,
+      "wait_timeouts": 0,
+      "allocations": 0,
+      "deallocations": 0,
+      "swaps_activated": 11,
+      "swaps_requested": 11,
+      "max_sample_delta_at_swaps": 0.029280846938490868,
+      "max_sample_delta_steady": 0.028709430247545242,
+      "baseline_sample_delta": 0.028793953359127045
+    }
+  ],
+  "raw_runs": [
+    "evidence/mvp0b-audio-wasapi-exclusive-load-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-wasapi-exclusive-load-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-wasapi-exclusive-rest-r1-2026-11-08.json",
+    "evidence/mvp0b-audio-wasapi-exclusive-rest-r2-2026-11-08.json",
+    "evidence/mvp0b-audio-wasapi-exclusive-rest-r3-2026-11-08.json",
+    "evidence/mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json"
+  ],
+  "limits": [
+    "derived summary, not a measurement: every number comes from the raw_runs files",
+    "exclusive mode was measured on the NVIDIA HDMI endpoint, not on the default MOTU endpoint: mode and endpoint differ from the shared-mode campaign, so the comparison is mode+endpoint",
+    "the default MOTU endpoint refused every probed exclusive PCM format with AUDCLNT_E_UNSUPPORTED_FORMAT; this is a driver/endpoint result, not a harness failure",
+    "5 repetitions total (2 rest + 2 load + 1 extra rest), one machine, one format family, 3 s windows: not a statistical proof",
+    "a real XRUN is still not observable from WASAPI; starvation/padding and late events are the proxy signals",
+    "ASIO, CLAP/VST3 host and exclusive WASAPI on the default device remain untested"
+  ]
+}
