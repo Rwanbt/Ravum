@@ -31,16 +31,39 @@
 //! * allocations/deallocations performed on this thread, counted by the counting global
 //!   allocator of `ravum-dsp-harness`, after a warm-up of `2*buffers` completions.
 //!
+//! # Thread priority: MMCSS and raw Win32 priority
+//!
+//! With `--mmcss`, the **render thread** registers itself with the Windows Multimedia
+//! Class Scheduler Service as `Pro Audio`
+//! (`AvSetMmThreadCharacteristicsW(L"Pro Audio", ...)`) and asks for
+//! `AVRT_PRIORITY_CRITICAL` (`AvSetMmThreadPriority`). It reverts with
+//! `AvRevertMmThreadCharacteristics` before the thread ends. `--thread-priority
+//! <normal|above|high|time-critical>` additionally calls `SetThreadPriority` on the same
+//! thread; the applied order is MMCSS first, raw Win32 priority second, and both the
+//! requested values and the base priorities observed with `GetThreadPriority` are
+//! reported. A requested priority that cannot be applied is an **explicit failure**
+//! (Win32/AVRT error code, exit 1), never a silent success.
+//!
+//! Reporting the effect is the point: **MMCSS `Pro Audio` + `AVRT_PRIORITY_CRITICAL` is
+//! not a hard real-time guarantee.** It asks the scheduler for preferential treatment; it
+//! does not promise a deadline, does not make `waveOut` a certified driver, and does not
+//! turn the callback into a bounded-latency real-time path.
+//!
 //! # What this does **not** measure
 //!
 //! * `waveOut` is a legacy emulated mapper API, not a certified real-time driver path
-//!   (no WASAPI exclusive, no ASIO, no MMCSS/`AvSetMmThreadCharacteristics`, no
-//!   `THREAD_PRIORITY_TIME_CRITICAL`). This is **not** a hard real-time qualification.
+//!   (no WASAPI exclusive, no ASIO). MMCSS changes the **scheduling class** of the
+//!   probe's render thread; it does not change the driver or the API. This is **not** a
+//!   hard real-time qualification.
 //! * XRUNs are driver events that `waveOut` does not expose; the report talks about
 //!   "buffers submitted late" and "queue-drain risk", never about measured XRUNs.
 //! * One machine, one device, one format, a few seconds. Results vary with load.
 //! * The allocation counters instrument Rust's global allocator per thread: a positive
 //!   count is proof of a violation, a zero is not proof of hard-RT behaviour.
+//!
+//! The probe also samples the machine load around the run (`GetSystemTimes` delta and
+//! `GlobalMemoryStatusEx`), so every JSON report states the measured CPU busy percentage
+//! and available RAM instead of assuming a quiet machine.
 //!
 //! The DSP module is **prebuilt**: this binary takes `--module <path>` (a cdylib built
 //! by `ravum build`) and hot-swap candidates as `--swap-build <json>` files (the JSON
@@ -84,6 +107,56 @@ const FIRST_WAIT_TIMEOUT_MS: u32 = 250;
 // Command line
 // ---------------------------------------------------------------------------------------
 
+/// Raw Win32 thread priority requested with `--thread-priority`. Kept apart from MMCSS
+/// on purpose: the caller can measure the scheduler effect of one, the other, or both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThreadPriorityChoice {
+    Normal,
+    AboveNormal,
+    Highest,
+    TimeCritical,
+}
+
+impl ThreadPriorityChoice {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "normal" => Some(Self::Normal),
+            "above" | "above-normal" => Some(Self::AboveNormal),
+            "high" | "highest" => Some(Self::Highest),
+            "time-critical" | "time_critical" => Some(Self::TimeCritical),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::AboveNormal => "above-normal",
+            Self::Highest => "high",
+            Self::TimeCritical => "time-critical",
+        }
+    }
+
+    /// `SetThreadPriority` value (`THREAD_PRIORITY_*`).
+    fn win32_value(&self) -> i32 {
+        match self {
+            Self::Normal => 0,         // THREAD_PRIORITY_NORMAL
+            Self::AboveNormal => 1,    // THREAD_PRIORITY_ABOVE_NORMAL
+            Self::Highest => 2,        // THREAD_PRIORITY_HIGHEST
+            Self::TimeCritical => 15,  // THREAD_PRIORITY_TIME_CRITICAL
+        }
+    }
+
+    fn win32_name(&self) -> &'static str {
+        match self {
+            Self::Normal => "THREAD_PRIORITY_NORMAL",
+            Self::AboveNormal => "THREAD_PRIORITY_ABOVE_NORMAL",
+            Self::Highest => "THREAD_PRIORITY_HIGHEST",
+            Self::TimeCritical => "THREAD_PRIORITY_TIME_CRITICAL",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Config {
     seconds: u64,
@@ -95,6 +168,11 @@ struct Config {
     swap_every_ms: u64,
     crossfade_frames: u32,
     device: Option<u32>,
+    /// Request Windows MMCSS registration (`Pro Audio` + `AVRT_PRIORITY_CRITICAL`) on
+    /// the render thread. Off by default: the baseline must be a normal thread.
+    mmcss: bool,
+    /// Raw Win32 thread priority for the render thread, applied after MMCSS.
+    thread_priority: Option<ThreadPriorityChoice>,
     json: bool,
     out: Option<String>,
 }
@@ -115,6 +193,8 @@ impl Config {
             swap_every_ms: 0,
             crossfade_frames: 0,
             device: None,
+            mmcss: false,
+            thread_priority: None,
             json: false,
             out: None,
         };
@@ -148,6 +228,20 @@ impl Config {
                 }
                 "--device" => {
                     config.device = Some(take_u64(args, &mut index, flag)? as u32);
+                }
+                "--mmcss" => {
+                    config.mmcss = true;
+                    index += 1;
+                }
+                "--thread-priority" => {
+                    let value = take_string(args, &mut index, flag)?;
+                    config.thread_priority = Some(ThreadPriorityChoice::parse(&value).ok_or_else(
+                        || {
+                            format!(
+                                "--thread-priority expects normal|above|high|time-critical, got {value:?}"
+                            )
+                        },
+                    )?);
                 }
                 "--out" => {
                     config.out = Some(take_string(args, &mut index, flag)?);
@@ -236,6 +330,12 @@ Usage: {TOOL} [OPTIONS]\n\
   --swap-every-ms N     delay between hot swaps, 0 disables swaps (default 0)\n\
   --crossfade-frames N  crossfade length armed for swaps (default 0 = immediate)\n\
   --device N            waveOut device index (default: WAVE_MAPPER, i.e. the OS default)\n\
+  --mmcss               register the render thread with Windows MMCSS as \"Pro Audio\" and\n\
+                        ask for AVRT_PRIORITY_CRITICAL (default off; explicit failure if the\n\
+                        registration or the priority cannot be set)\n\
+  --thread-priority P   also call SetThreadPriority on the render thread:\n\
+                        normal | above | high | time-critical. Applied AFTER MMCSS when both\n\
+                        are requested, and the observed base priorities are reported\n\
   --json                print the full JSON report on stdout\n\
   --out PATH            also write the JSON report to PATH\n\
   --help                show this help\n\
@@ -313,6 +413,10 @@ fn config_json(config: &Config) -> Value {
         "swap_builds": config.swap_builds,
         "swap_every_ms": config.swap_every_ms,
         "crossfade_frames": config.crossfade_frames,
+        "mmcss_requested": config.mmcss,
+        "thread_priority_requested": config
+            .thread_priority
+            .map(|priority| priority.as_str()),
     })
 }
 
@@ -323,7 +427,9 @@ fn limits_json(config: &Config) -> Value {
         "release"
     };
     json!([
-        "waveOut (winmm) is a legacy emulated mapper API, not a certified real-time audio path: no WASAPI exclusive mode, no ASIO, no MMCSS registration, no time-critical thread priority",
+        "waveOut (winmm) is a legacy emulated mapper API, not a certified real-time audio path: no WASAPI exclusive mode, no ASIO",
+        "MMCSS registration (Pro Audio) and AVRT_PRIORITY_CRITICAL change the scheduling class the OS grants this thread; they are not a deadline guarantee and not a hard real-time qualification",
+        "MMCSS changes the probe's render thread, never the waveOut driver path or the waveOut API semantics",
         "not a hard real-time qualification; the numbers describe this machine under this load for a few seconds, not a guarantee",
         format!("the probe binary runs in the {profile} Cargo profile; host-side overhead of process_rt reflects that profile"),
         "the device always receives digital silence; the DSP signal is computed, measured and discarded, so nothing is played audibly",
@@ -333,6 +439,8 @@ fn limits_json(config: &Config) -> Value {
         "a buffer shorter than the driver's service quantum can make the waveOut path consume the stream slower than real time; the report exposes delivered-vs-expected completion cadence for that reason",
         "queue_margin_us is derived from the anchored lateness and the callback duration; it is a risk indicator, not an observation of the driver's internal buffering",
         "allocation counters instrument Rust's global allocator per thread; a positive count proves a violation, a zero count does not prove hard real-time behaviour",
+        "the measured CPU busy percentage comes from GetSystemTimes over the probe window and includes every process on the machine, not only this probe",
+        "the controlled load used for some runs is generated by separate PowerShell busy-loop processes and is reported in load.probe_load_note",
         "one machine, one device, one format, one short window: results are not portable and were not repeated over minutes",
         if config.module.is_none() {
             "no DSP module was given: the measured work is an identity copy, not the real block ABI path"
@@ -410,6 +518,15 @@ fn execute(config: &Config) -> (Value, i32) {
             "status": "unsupported",
             "os": os,
             "config": config_json(config),
+            "realtime": {
+                "mmcss_requested": config.mmcss,
+                "mmcss_acquired": false,
+                "thread_priority_requested": config
+                    .thread_priority
+                    .map(|priority| priority.as_str()),
+                "thread_priority_set": false,
+                "notes": ["MMCSS (avrt.dll) is Windows-only; this platform reports Unsupported"],
+            },
             "error": {
                 "stage": "platform",
                 "message": "the waveOut audio probe is Windows-only; this platform reports Unsupported instead of inventing a measurement",
@@ -465,6 +582,59 @@ fn print_human(report: &Value) {
                 .get("buffers_in_rotation")
                 .and_then(Value::as_u64)
                 .unwrap_or(0),
+        );
+    }
+    if let Some(realtime) = report.get("realtime") {
+        let requested = realtime
+            .get("mmcss_requested")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let acquired = realtime
+            .get("mmcss_acquired")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let raw_priority = realtime
+            .get("thread_priority_requested")
+            .and_then(Value::as_str)
+            .unwrap_or("none");
+        let observed = realtime
+            .get("thread_priority_observed")
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        println!(
+            "  priorité     MMCSS demandé={requested} acquis={acquired} · SetThreadPriority={raw_priority} · priorité de base observée={observed}"
+        );
+        if let Some(notes) = realtime.get("notes").and_then(Value::as_array) {
+            for note in notes {
+                if let Some(text) = note.as_str() {
+                    println!("               note: {text}");
+                }
+            }
+        }
+    }
+    if let Some(load) = report.get("load") {
+        let cpu = load
+            .get("cpu_busy_percent_measured")
+            .and_then(Value::as_f64)
+            .map(|value| format!("{:.1}", (value * 10.0).round() / 10.0))
+            .unwrap_or_else(|| "n/a".to_owned());
+        let window = load
+            .get("cpu_sample_window_ms")
+            .and_then(Value::as_u64)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        let ram_free = load
+            .get("ram_available_bytes_start")
+            .and_then(Value::as_u64)
+            .map(|value| (value / (1024 * 1024)).to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        let ram_total = load
+            .get("ram_total_bytes")
+            .and_then(Value::as_u64)
+            .map(|value| (value / (1024 * 1024)).to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        println!(
+            "  charge       CPU occupé mesuré {cpu} % (fenêtre {window} ms) · RAM libre {ram_free} Mio / {ram_total} Mio"
         );
     }
     let measurements = report
@@ -710,6 +880,54 @@ mod win {
         csd_version: [u16; 128],
     }
 
+    /// `FILETIME`: 100 ns intervals since 1601, split in two `DWORD`s.
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct FileTimeRaw {
+        low: u32,
+        high: u32,
+    }
+
+    impl FileTimeRaw {
+        fn zeroed() -> Self {
+            Self { low: 0, high: 0 }
+        }
+
+        fn to_u64(&self) -> u64 {
+            ((self.high as u64) << 32) | self.low as u64
+        }
+    }
+
+    /// `MEMORYSTATUSEX` from kernel32/`sysinfoapi.h`.
+    #[repr(C)]
+    struct MemoryStatusEx {
+        length: u32,
+        memory_load_percent: u32,
+        total_phys: u64,
+        avail_phys: u64,
+        total_page_file: u64,
+        avail_page_file: u64,
+        total_virtual: u64,
+        avail_virtual: u64,
+        avail_extended_virtual: u64,
+    }
+
+    impl MemoryStatusEx {
+        fn zeroed() -> Self {
+            Self {
+                length: size_of::<MemoryStatusEx>() as u32,
+                memory_load_percent: 0,
+                total_phys: 0,
+                avail_phys: 0,
+                total_page_file: 0,
+                avail_page_file: 0,
+                total_virtual: 0,
+                avail_virtual: 0,
+                avail_extended_virtual: 0,
+            }
+        }
+    }
+
     #[link(name = "winmm")]
     extern "system" {
         fn waveOutGetNumDevs() -> u32;
@@ -744,6 +962,23 @@ mod win {
         fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
         fn CloseHandle(handle: Handle) -> i32;
         fn GetLastError() -> u32;
+        fn GetCurrentThread() -> Handle;
+        fn SetThreadPriority(thread: Handle, priority: i32) -> i32;
+        fn GetThreadPriority(thread: Handle) -> i32;
+        fn GetSystemTimes(
+            idle: *mut FileTimeRaw,
+            kernel: *mut FileTimeRaw,
+            user: *mut FileTimeRaw,
+        ) -> i32;
+        fn GlobalMemoryStatusEx(status: *mut MemoryStatusEx) -> i32;
+    }
+
+    // avrt.dll: Windows Multimedia Class Scheduler Service (MMCSS) registration.
+    #[link(name = "avrt")]
+    extern "system" {
+        fn AvSetMmThreadCharacteristicsW(task_name: *const u16, task_index: *mut u32) -> Handle;
+        fn AvSetMmThreadPriority(handle: Handle, priority: i32) -> i32;
+        fn AvRevertMmThreadCharacteristics(handle: Handle) -> i32;
     }
 
     #[link(name = "ntdll")]
@@ -798,6 +1033,7 @@ mod win {
         stage: &'static str,
         code: Option<u32>,
         message: String,
+        code_system: &'static str,
     }
 
     impl Failure {
@@ -806,16 +1042,49 @@ mod win {
                 stage,
                 code,
                 message: message.into(),
+                code_system: "mmresult",
+            }
+        }
+
+        /// Failure carrying a Win32 `GetLastError` code (AVRT / kernel32 calls).
+        fn win32(stage: &'static str, code: u32, message: impl Into<String>) -> Self {
+            Self {
+                stage,
+                code: Some(code),
+                message: message.into(),
+                code_system: "win32",
             }
         }
 
         fn to_json(&self) -> Value {
+            let code_name = match (self.code, self.code_system) {
+                (None, _) => Value::Null,
+                (Some(code), "win32") => Value::from(win32_name(code)),
+                (Some(code), _) => Value::from(mm_name(code)),
+            };
             json!({
                 "stage": self.stage,
                 "code": self.code,
-                "code_name": self.code.map(mm_name),
+                "code_name": code_name,
+                "code_system": self.code_system,
                 "message": self.message,
             })
+        }
+    }
+
+    /// A small, explicit mapping for the Win32 error codes this probe can receive.
+    fn win32_name(code: u32) -> &'static str {
+        match code {
+            0 => "ERROR_SUCCESS",
+            5 => "ERROR_ACCESS_DENIED",
+            6 => "ERROR_INVALID_HANDLE",
+            8 => "ERROR_NOT_ENOUGH_MEMORY",
+            13 => "ERROR_INVALID_DATA",
+            87 => "ERROR_INVALID_PARAMETER",
+            126 => "ERROR_MOD_NOT_FOUND",
+            127 => "ERROR_PROC_NOT_FOUND",
+            998 => "ERROR_NOACCESS",
+            _ => "WIN32_ERROR",
         }
     }
 
@@ -826,6 +1095,341 @@ mod win {
             Some(code),
             format!("{} (MMRESULT / winmm)", mm_name(code)),
         )
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Thread priority: MMCSS (avrt.dll) and raw Win32 priority
+    // -----------------------------------------------------------------------------------
+
+    /// `L"Pro Audio"` as a NUL-terminated UTF-16 array (no allocation needed).
+    const PRO_AUDIO_UTF16: [u16; 10] = [
+        b'P' as u16,
+        b'r' as u16,
+        b'o' as u16,
+        b' ' as u16,
+        b'A' as u16,
+        b'u' as u16,
+        b'd' as u16,
+        b'i' as u16,
+        b'o' as u16,
+        0,
+    ];
+    const AVRT_PRIORITY_CRITICAL: i32 = 2;
+    /// `GetThreadPriority` returns this value on failure.
+    const THREAD_PRIORITY_ERROR_RETURN: i32 = -2;
+
+    struct RealtimeState {
+        mmcss_requested: bool,
+        mmcss_acquired: bool,
+        mmcss_handle: Handle,
+        mmcss_task_index: Option<u32>,
+        mmcss_priority_set: bool,
+        thread_priority_requested: Option<ThreadPriorityChoice>,
+        thread_priority_set: bool,
+        baseline_priority: Option<i32>,
+        priority_after_mmcss: Option<i32>,
+        thread_priority_observed: Option<i32>,
+        applied_order: Vec<&'static str>,
+        avrt_error: Option<u32>,
+        win32_error: Option<u32>,
+        notes: Vec<String>,
+    }
+
+    impl RealtimeState {
+        /// Apply the requested scheduling characteristics to the **calling** thread.
+        ///
+        /// Order: MMCSS registration (`Pro Audio`) → `AVRT_PRIORITY_CRITICAL` → raw
+        /// `SetThreadPriority`. Any failure is explicit: the returned `Failure` carries
+        /// the Win32 error and the partial state is reported, so a request that was not
+        /// fulfilled can never look like a success.
+        fn apply(config: &Config) -> Result<Self, (Failure, Value)> {
+            let mut state = RealtimeState {
+                mmcss_requested: config.mmcss,
+                mmcss_acquired: false,
+                mmcss_handle: std::ptr::null_mut(),
+                mmcss_task_index: None,
+                mmcss_priority_set: false,
+                thread_priority_requested: config.thread_priority,
+                thread_priority_set: false,
+                baseline_priority: None,
+                priority_after_mmcss: None,
+                thread_priority_observed: None,
+                applied_order: Vec::new(),
+                avrt_error: None,
+                win32_error: None,
+                notes: Vec::new(),
+            };
+
+            // SAFETY: GetCurrentThread returns a pseudo-handle usable for the calling thread.
+            let baseline = unsafe { GetThreadPriority(GetCurrentThread()) };
+            if baseline != THREAD_PRIORITY_ERROR_RETURN {
+                state.baseline_priority = Some(baseline);
+            } else {
+                state.notes.push(
+                    "GetThreadPriority returned THREAD_PRIORITY_ERROR_RETURN before setup"
+                        .to_owned(),
+                );
+            }
+
+            if config.mmcss {
+                let mut task_index: u32 = 0;
+                // SAFETY: PRO_AUDIO_UTF16 is a valid NUL-terminated UTF-16 string and
+                // task_index is a writable u32.
+                let handle = unsafe {
+                    AvSetMmThreadCharacteristicsW(PRO_AUDIO_UTF16.as_ptr(), &mut task_index)
+                };
+                if handle.is_null() {
+                    let error = code_of_last_error();
+                    state.avrt_error = Some(error);
+                    state.notes.push(format!(
+                        "AvSetMmThreadCharacteristicsW(L\"Pro Audio\") failed with Win32 error {error}; the render thread is NOT MMCSS-registered"
+                    ));
+                    let failure = Failure::win32(
+                        "AvSetMmThreadCharacteristicsW",
+                        error,
+                        "MMCSS 'Pro Audio' registration failed; refusing to run as if a real-time priority had been applied",
+                    );
+                    return Err((failure, state.to_json()));
+                }
+                state.mmcss_acquired = true;
+                state.mmcss_handle = handle;
+                state.mmcss_task_index = Some(task_index);
+                state
+                    .applied_order
+                    .push("AvSetMmThreadCharacteristicsW(Pro Audio)");
+
+                // SAFETY: `handle` comes from AvSetMmThreadCharacteristicsW; the priority
+                // value is one of the documented AVRT_PRIORITY_* constants.
+                let priority_ok = unsafe { AvSetMmThreadPriority(handle, AVRT_PRIORITY_CRITICAL) };
+                if priority_ok == 0 {
+                    let error = code_of_last_error();
+                    state.avrt_error = Some(error);
+                    state.notes.push(format!(
+                        "AvSetMmThreadPriority(AVRT_PRIORITY_CRITICAL) failed with Win32 error {error}"
+                    ));
+                    // SAFETY: `handle` is still owned by this thread at this point.
+                    let reverted = unsafe { AvRevertMmThreadCharacteristics(handle) } != 0;
+                    state.mmcss_acquired = false;
+                    state.mmcss_handle = std::ptr::null_mut();
+                    state.notes.push(format!(
+                        "MMCSS handle released after the priority failure: {reverted}"
+                    ));
+                    let failure = Failure::win32(
+                        "AvSetMmThreadPriority",
+                        error,
+                        "AVRT_PRIORITY_CRITICAL could not be set; refusing to report a real-time priority that was not applied",
+                    );
+                    return Err((failure, state.to_json()));
+                }
+                state.mmcss_priority_set = true;
+                state
+                    .applied_order
+                    .push("AvSetMmThreadPriority(AVRT_PRIORITY_CRITICAL)");
+                // SAFETY: pseudo-handle of the calling thread.
+                let observed = unsafe { GetThreadPriority(GetCurrentThread()) };
+                if observed != THREAD_PRIORITY_ERROR_RETURN {
+                    state.priority_after_mmcss = Some(observed);
+                }
+            }
+
+            if let Some(choice) = config.thread_priority {
+                // SAFETY: pseudo-handle; `win32_value` is a documented THREAD_PRIORITY_*.
+                let ok = unsafe { SetThreadPriority(GetCurrentThread(), choice.win32_value()) };
+                if ok == 0 {
+                    let error = code_of_last_error();
+                    state.win32_error = Some(error);
+                    state.notes.push(format!(
+                        "SetThreadPriority({}) failed with Win32 error {error}",
+                        choice.win32_name()
+                    ));
+                    if state.mmcss_acquired {
+                        // SAFETY: handle still owned by this thread.
+                        let _ = unsafe { AvRevertMmThreadCharacteristics(state.mmcss_handle) };
+                        state.mmcss_acquired = false;
+                        state.mmcss_handle = std::ptr::null_mut();
+                    }
+                    let failure = Failure::win32(
+                        "SetThreadPriority",
+                        error,
+                        format!(
+                            "SetThreadPriority({}) failed; refusing to report a priority that was not applied",
+                            choice.win32_name()
+                        ),
+                    );
+                    return Err((failure, state.to_json()));
+                }
+                state.thread_priority_set = true;
+                state.applied_order.push(match choice {
+                    ThreadPriorityChoice::Normal => "SetThreadPriority(THREAD_PRIORITY_NORMAL)",
+                    ThreadPriorityChoice::AboveNormal => {
+                        "SetThreadPriority(THREAD_PRIORITY_ABOVE_NORMAL)"
+                    }
+                    ThreadPriorityChoice::Highest => "SetThreadPriority(THREAD_PRIORITY_HIGHEST)",
+                    ThreadPriorityChoice::TimeCritical => {
+                        "SetThreadPriority(THREAD_PRIORITY_TIME_CRITICAL)"
+                    }
+                });
+                // SAFETY: pseudo-handle of the calling thread.
+                let observed = unsafe { GetThreadPriority(GetCurrentThread()) };
+                if observed != THREAD_PRIORITY_ERROR_RETURN {
+                    state.thread_priority_observed = Some(observed);
+                }
+            } else {
+                // No raw priority requested: report the base priority resulting from the
+                // MMCSS setup (or the untouched baseline when MMCSS was not requested).
+                state.thread_priority_observed =
+                    state.priority_after_mmcss.or(state.baseline_priority);
+            }
+
+            if state.mmcss_acquired {
+                state.notes.push(
+                    "MMCSS 'Pro Audio' + AVRT_PRIORITY_CRITICAL is a scheduling hint: it is not a deadline guarantee and not a hard real-time qualification"
+                        .to_owned(),
+                );
+            }
+            if state.thread_priority_requested.is_some() {
+                state.notes.push(
+                    "SetThreadPriority was applied after MMCSS (when both were requested); thread_priority_observed is the base priority read back with GetThreadPriority"
+                        .to_owned(),
+                );
+            }
+            Ok(state)
+        }
+
+        /// Revert the MMCSS registration of the calling thread, reporting the result.
+        fn revert(&mut self) -> Value {
+            if !self.mmcss_acquired {
+                return json!({
+                    "called": false,
+                    "ok": Value::Null,
+                    "error": Value::Null,
+                    "error_name": Value::Null,
+                    "thread_priority_after_revert": Value::Null,
+                    "note": "no MMCSS handle was held by this thread",
+                });
+            }
+            // SAFETY: `mmcss_handle` was returned by AvSetMmThreadCharacteristicsW for
+            // this thread and is still owned by it.
+            let ok = unsafe { AvRevertMmThreadCharacteristics(self.mmcss_handle) };
+            let error = if ok == 0 {
+                Some(code_of_last_error())
+            } else {
+                None
+            };
+            // SAFETY: pseudo-handle of the calling thread.
+            let observed = unsafe { GetThreadPriority(GetCurrentThread()) };
+            self.mmcss_acquired = false;
+            self.mmcss_handle = std::ptr::null_mut();
+            json!({
+                "called": true,
+                "ok": ok != 0,
+                "error": error,
+                "error_name": error.map(win32_name),
+                "thread_priority_after_revert": if observed != THREAD_PRIORITY_ERROR_RETURN { Value::from(observed) } else { Value::Null },
+            })
+        }
+
+        fn to_json(&self) -> Value {
+            json!({
+                "mmcss_requested": self.mmcss_requested,
+                "mmcss_acquired": self.mmcss_acquired,
+                "mmcss_task_name": "Pro Audio",
+                "mmcss_task_index": self.mmcss_task_index,
+                "mmcss_priority": if self.mmcss_requested { json!("critical") } else { Value::Null },
+                "mmcss_priority_set": self.mmcss_priority_set,
+                "thread_priority_requested": self.thread_priority_requested.map(|choice| choice.as_str()),
+                "thread_priority_win32_constant": self.thread_priority_requested.map(|choice| choice.win32_name()),
+                "thread_priority_value": self.thread_priority_requested.map(|choice| choice.win32_value()),
+                "thread_priority_set": self.thread_priority_set,
+                "thread_priority_observed": self.thread_priority_observed,
+                "baseline_thread_priority": self.baseline_priority,
+                "priority_after_mmcss": self.priority_after_mmcss,
+                "applied_order": self.applied_order,
+                "avrt_error": self.avrt_error,
+                "win32_error": self.win32_error,
+                "notes": self.notes,
+            })
+        }
+    }
+
+    fn code_of_last_error() -> u32 {
+        // SAFETY: documented kernel32 call; no arguments, no lifetime.
+        unsafe { GetLastError() }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Machine load sampling (CPU + RAM) around the measured window
+    // -----------------------------------------------------------------------------------
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct SystemSample {
+        busy_100ns: u64,
+        total_100ns: u64,
+        ram_available: u64,
+        ram_total: u64,
+        ram_load_percent: u32,
+    }
+
+    pub fn system_sample() -> Option<SystemSample> {
+        let mut idle = FileTimeRaw::zeroed();
+        let mut kernel = FileTimeRaw::zeroed();
+        let mut user = FileTimeRaw::zeroed();
+        // SAFETY: three writable FILETIME buffers.
+        let ok = unsafe { GetSystemTimes(&mut idle, &mut kernel, &mut user) };
+        if ok == 0 {
+            return None;
+        }
+        let idle = idle.to_u64();
+        let total = kernel.to_u64().saturating_add(user.to_u64());
+        let mut memory = MemoryStatusEx::zeroed();
+        // SAFETY: `memory` has `length` set to its own size, as the API requires.
+        let memory_ok = unsafe { GlobalMemoryStatusEx(&mut memory) };
+        let (ram_available, ram_total, ram_load_percent) = if memory_ok != 0 {
+            (
+                memory.avail_phys,
+                memory.total_phys,
+                memory.memory_load_percent,
+            )
+        } else {
+            (0, 0, 0)
+        };
+        Some(SystemSample {
+            busy_100ns: total.saturating_sub(idle),
+            total_100ns: total,
+            ram_available,
+            ram_total,
+            ram_load_percent,
+        })
+    }
+
+    pub fn system_load_json(
+        start: Option<SystemSample>,
+        end: Option<SystemSample>,
+        window_ms: u64,
+        note: Option<String>,
+    ) -> Value {
+        let cpu_busy_percent = match (start, end) {
+            (Some(start), Some(end)) if end.total_100ns > start.total_100ns => {
+                let total = end.total_100ns - start.total_100ns;
+                let busy = end.busy_100ns.saturating_sub(start.busy_100ns);
+                Some(busy as f64 * 100.0 / total as f64)
+            }
+            _ => None,
+        };
+        let logical = std::thread::available_parallelism()
+            .map(|count| count.get())
+            .unwrap_or(0);
+        json!({
+            "cpu_busy_percent_measured": cpu_busy_percent,
+            "cpu_sample_window_ms": window_ms,
+            "cpu_logical": logical,
+            "ram_available_bytes_start": start.map(|sample| sample.ram_available),
+            "ram_available_bytes_end": end.map(|sample| sample.ram_available),
+            "ram_total_bytes": end.or(start).map(|sample| sample.ram_total),
+            "ram_load_percent_start": start.map(|sample| sample.ram_load_percent),
+            "probe_load_note": note,
+            "method": "GetSystemTimes delta (idle vs kernel+user, all CPUs) and GlobalMemoryStatusEx, sampled by this probe process for the measured window",
+        })
     }
 
     #[derive(Debug, Clone)]
@@ -1966,6 +2570,18 @@ mod win {
             "status": status,
             "os": os,
             "config": config_json(config),
+            "realtime": {
+                "mmcss_requested": config.mmcss,
+                "mmcss_acquired": false,
+                "mmcss_priority": Value::Null,
+                "mmcss_priority_set": false,
+                "thread_priority_requested": config.thread_priority.map(|choice| choice.as_str()),
+                "thread_priority_set": false,
+                "thread_priority_observed": Value::Null,
+                "avrt_error": Value::Null,
+                "win32_error": Value::Null,
+                "notes": ["thread priority was not applied: the probe failed before the render thread could set it"],
+            },
             "error": error,
             "limits": limits_json(config),
         });
@@ -2112,18 +2728,36 @@ mod win {
             ((config.seconds as usize).saturating_mul(config.rate as usize) / config.frames) + 4 * config.buffers + 128;
         let render_handle = std::thread::spawn(move || {
             let thread_start = Instant::now();
+            // 5a) Scheduling characteristics of THIS thread, before any measurement:
+            //     MMCSS first, raw Win32 priority second. A request that cannot be
+            //     applied is a hard failure, never a silent no-op.
+            let mut realtime = match RealtimeState::apply(&render_config) {
+                Ok(state) => state,
+                Err((failure, partial)) => {
+                    let _ = open_tx.send(Err((failure, partial)));
+                    return Err(Failure::new(
+                        "realtime",
+                        None,
+                        "thread priority setup failed",
+                    ));
+                }
+            };
             let mut session = match Session::open(&render_config) {
                 Ok(session) => session,
                 Err(failure) => {
-                    let _ = open_tx.send(Err(failure));
+                    let realtime_json = realtime.to_json();
+                    let _ = open_tx.send(Err((failure, realtime_json)));
+                    let _ = realtime.revert();
                     return Err(Failure::new("open", None, "device not opened"));
                 }
             };
             if let Err(failure) = session.prepare() {
-                let _ = open_tx.send(Err(failure));
+                let realtime_json = realtime.to_json();
+                let _ = open_tx.send(Err((failure, realtime_json)));
+                let _ = realtime.revert();
                 return Err(Failure::new("prepare", None, "buffers not prepared"));
             }
-            let _ = open_tx.send(Ok(session.info_json()));
+            let _ = open_tx.send(Ok((session.info_json(), realtime.to_json())));
             let run = session.render(
                 render_host,
                 &render_stop,
@@ -2134,15 +2768,20 @@ mod win {
                 baseline_delta,
             );
             let cleanup = session.close();
-            Ok((run, cleanup))
+            // Restore the thread characteristics explicitly before the thread ends.
+            let revert = realtime.revert();
+            Ok((run, cleanup, revert))
         });
 
-        let open_info = match open_rx.recv_timeout(Duration::from_secs(20)) {
-            Ok(Ok(info)) => info,
-            Ok(Err(failure)) => {
+        let (open_info, realtime_info) = match open_rx.recv_timeout(Duration::from_secs(20)) {
+            Ok(Ok((info, realtime))) => (info, realtime),
+            Ok(Err((failure, realtime))) => {
                 stop.store(true, Ordering::SeqCst);
                 let _ = render_handle.join();
-                return failure_report(config, os_info(), failure.stage, &failure, "error");
+                let (mut failed_report, code) =
+                    failure_report(config, os_info(), failure.stage, &failure, "error");
+                failed_report["realtime"] = realtime;
+                return (failed_report, code);
             }
             Err(error) => {
                 stop.store(true, Ordering::SeqCst);
@@ -2155,6 +2794,10 @@ mod win {
                 return failure_report(config, os_info(), "waveOutOpen", &failure, "error");
             }
         };
+        // Load sampling window: from the confirmed device open to the end of the joins.
+        let load_window_started = Instant::now();
+        let load_start = system_sample();
+        report["realtime"] = realtime_info.clone();
         report["device"] = open_info["device"].clone();
         report["requested_device"] = open_info["requested_device"].clone();
         report["format"] = open_info["format"].clone();
@@ -2196,13 +2839,16 @@ mod win {
             None => SwapOutcome::default(),
         };
 
-        let (run, cleanup) = match render_result {
-            Ok(Ok((run, cleanup))) => (run, cleanup),
+        let (run, cleanup, revert) = match render_result {
+            Ok(Ok((run, cleanup, revert))) => (run, cleanup, revert),
             Ok(Err(_failure)) => {
                 // Should be unreachable: open/prepare failures go through the channel.
                 let failure =
                     Failure::new("render-thread", None, "render thread failed after open");
-                return failure_report(config, os_info(), "render-thread", &failure, "error");
+                let (mut failed_report, code) =
+                    failure_report(config, os_info(), "render-thread", &failure, "error");
+                failed_report["realtime"] = realtime_info.clone();
+                return (failed_report, code);
             }
             Err(_) => {
                 let failure = Failure::new(
@@ -2210,9 +2856,25 @@ mod win {
                     None,
                     "render thread panicked; no measurement is reported",
                 );
-                return failure_report(config, os_info(), "render-thread", &failure, "error");
+                let (mut failed_report, code) =
+                    failure_report(config, os_info(), "render-thread", &failure, "error");
+                failed_report["realtime"] = realtime_info.clone();
+                return (failed_report, code);
             }
         };
+
+        // Attach the MMCSS revert result and the machine load measured over the run.
+        if let Some(realtime) = report.get_mut("realtime").and_then(Value::as_object_mut) {
+            realtime.insert("revert".to_owned(), revert);
+        }
+        let load_window_ms = load_window_started.elapsed().as_millis() as u64;
+        let load_end = system_sample();
+        report["load"] = system_load_json(
+            load_start,
+            load_end,
+            load_window_ms,
+            std::env::var("RAVUM_PROBE_LOAD_NOTE").ok(),
+        );
 
         let fatal = run.fatal_stage.is_some();
         let status = if fatal { "partial" } else if run.completions_measured == 0 {

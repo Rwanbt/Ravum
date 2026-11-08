@@ -17,6 +17,12 @@
     de tampons reellement livree par le pilote differe de la cadence attendue, c'est
     affiche comme un avertissement, pas cache.
 
+    Options de qualification temps reel : -Mmcss (enregistrement MMCSS "Pro Audio" +
+    AVRT_PRIORITY_CRITICAL sur le thread de rendu) et -ThreadPriority (priorite Win32
+    brute). -Load lance N processus PowerShell en boucle occupee autour de la sonde
+    (charge controlee, bornee, arretee en fin de run) pour mesurer l'effet reel de ces
+    priorites sous charge. MMCSS n'est pas une garantie hard-RT et le JSON le dit.
+
     Prerequis : Windows, PowerShell 5.1+, toolchain Rust, depot Ravum courant.
 
 .PARAMETER Root
@@ -46,7 +52,31 @@
     Utiliser -ListDevices pour voir les index disponibles.
 
 .PARAMETER Out
-    Chemin du JSON de preuve. Defaut : evidence/mvp0b-audio-probe-<date>.json.
+    Chemin du JSON de preuve. Defaut : evidence/mvp0b-audio-probe-<date>.json, ou
+    evidence/mvp0b-audio-mmsc-<Variant>-<date>.json si -Variant est fourni.
+
+.PARAMETER Mmcss
+    Demande au thread de rendu de s'enregistrer aupres de MMCSS Windows ("Pro Audio")
+    et de demander AVRT_PRIORITY_CRITICAL (avrt.dll), puis de restaurer en fin de run.
+    Un echec est explicite (code Win32) et la sonde sort en erreur : jamais de faux
+    succes. MMCSS n'est PAS une garantie hard-RT.
+
+.PARAMETER ThreadPriority
+    Priorite Win32 brute du thread de rendu : normal | above | high | time-critical
+    (SetThreadPriority, appliquee APRES MMCSS si les deux sont demandes).
+
+.PARAMETER Load
+    Nombre de processus PowerShell en boucle occupee lances autour de la sonde pour
+    creer une charge CPU controlee (0 = aucune charge, defaut). La charge est arretee
+    en fin de run, quoi qu'il arrive. La charge mesuree est dans le JSON.
+
+.PARAMETER LoadSeconds
+    Duree maximale de la boucle de chaque processus de charge, en secondes (defaut 10,
+    borne volontairement courte pour ne pas bloquer les autres agents).
+
+.PARAMETER Variant
+    Nom de variante pour le fichier de preuve par defaut
+    (evidence/mvp0b-audio-mmsc-<Variant>-<date>.json).
 
 .PARAMETER ListDevices
     Affiche les peripheriques waveOut vus par la sonde et sort.
@@ -54,7 +84,9 @@
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1
     powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Frames 256 -Device 1
-    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Seconds 5 -CrossfadeFrames 0
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Variant rest-mmcss-r1
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Load 12 -Variant load-nommscss-r1
+    powershell -ExecutionPolicy Bypass -File scripts/audio-probe.ps1 -Mmcss -Load 12 -Variant load-mmcss-r1
 #>
 [CmdletBinding()]
 param(
@@ -68,11 +100,20 @@ param(
     [int]$SwapEveryMs = 250,
     [int]$CrossfadeFrames = 256,
     [int]$Device = -1,
+    [switch]$Mmcss,
+    [ValidateSet('', 'normal', 'above', 'high', 'time-critical')]
+    [string]$ThreadPriority = '',
+    [ValidateRange(0, 64)]
+    [int]$Load = 0,
+    [ValidateRange(2, 60)]
+    [int]$LoadSeconds = 10,
+    [string]$Variant = '',
     [string]$Out = '',
     [switch]$ListDevices
 )
 
 $ErrorActionPreference = 'Stop'
+$loadProcesses = @()
 if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 if (-not $Root) { $Root = (Get-Location).Path }
 Push-Location $Root
@@ -107,7 +148,11 @@ try {
 
     if (-not $Out) {
         $date = Get-Date -Format 'yyyy-MM-dd'
-        $Out = Join-Path $Root "evidence/mvp0b-audio-probe-$date.json"
+        if ($Variant) {
+            $Out = Join-Path $Root "evidence/mvp0b-audio-mmsc-$Variant-$date.json"
+        } else {
+            $Out = Join-Path $Root "evidence/mvp0b-audio-probe-$date.json"
+        }
     } elseif (-not [System.IO.Path]::IsPathRooted($Out)) {
         $Out = Join-Path $Root $Out
     }
@@ -149,8 +194,23 @@ try {
         '--out', $Out
     )
     if ($Device -ge 0) { $probeArgs += @('--device', "$Device") }
+    if ($Mmcss) { $probeArgs += '--mmcss' }
+    if ($ThreadPriority) { $probeArgs += @('--thread-priority', $ThreadPriority) }
 
-    Write-Host ("[probe] {0} s, {1} frames/tampon, {2} tampons, swap={3} ms, crossfade={4} frames" -f $Seconds, $Frames, $Buffers, $SwapEveryMs, $CrossfadeFrames)
+    if ($Load -gt 0) {
+        Write-Host ("[charge] demarrage de {0} processus PowerShell en boucle occupee (limite {1} s)" -f $Load, $LoadSeconds)
+        $loop = '$e=(Get-Date).AddSeconds(' + $LoadSeconds + '); while((Get-Date) -lt $e) { $x=1 }'
+        for ($i = 0; $i -lt $Load; $i++) {
+            $loadProcesses += Start-Process -FilePath 'powershell' `
+                -ArgumentList @('-NoProfile', '-Command', $loop) -PassThru -WindowStyle Hidden
+        }
+        Start-Sleep -Milliseconds 900
+        $env:RAVUM_PROBE_LOAD_NOTE = "controlled load: $Load PowerShell busy-loop processes for up to $LoadSeconds s, started by scripts/audio-probe.ps1 -Load; the measured CPU load is in load.cpu_busy_percent_measured"
+        Write-Host ("[charge] note transmise a la sonde via RAVUM_PROBE_LOAD_NOTE")
+    }
+
+    Write-Host ("[probe] {0} s, {1} frames/tampon, {2} tampons, swap={3} ms, crossfade={4} frames, mmcss={5}, thread-priority={6}" -f `
+        $Seconds, $Frames, $Buffers, $SwapEveryMs, $CrossfadeFrames, [bool]$Mmcss, $ThreadPriority)
     Write-Host '[probe] le peripherique ne recoit que du silence ; le signal DSP est mesure puis jete'
     & cargo @probeArgs 2>$probeErr | Out-File -Encoding UTF8 $probeOut
     $probeExit = $LASTEXITCODE
@@ -187,6 +247,22 @@ try {
     Write-Host ("  tampons       : {0} traites, cadence livree {1} tampons/s (attendue {2} tampons/s, soit {3} ech/s)" -f `
         $m.blocks_processed, [Math]::Round($m.delivered_rate_hz, 1), [Math]::Round($m.expected_completion_rate_hz, 1), [Math]::Round($m.delivered_sample_rate_hz, 0))
     Write-Host ("  temps reel    : ratio {0:0.00} (tenu : {1})" -f $report.realtime_cadence.ratio, $report.realtime_cadence.held_real_time)
+    $rt = $report.realtime
+    Write-Host ("  priorite      : MMCSS demande={0} acquis={1} (tache {2}, priorite {3}) ; SetThreadPriority demande={4} pose={5} ; priorite de base observee={6}" -f `
+        $rt.mmcss_requested, $rt.mmcss_acquired, $rt.mmcss_task_index, $rt.mmcss_priority, `
+        $rt.thread_priority_requested, $rt.thread_priority_set, $rt.thread_priority_observed)
+    if ($rt.revert) {
+        Write-Host ("  restauration  : MMCSS revert appele={0} ok={1} (priorite apres={2})" -f `
+            $rt.revert.called, $rt.revert.ok, $rt.revert.thread_priority_after_revert)
+    }
+    if ($rt.notes) {
+        foreach ($note in $rt.notes) { Write-Host ("               note: {0}" -f $note) }
+    }
+    $ld = $report.load
+    Write-Host ("  charge        : CPU occupe {0:0.0} % mesure sur {1} ms ; RAM libre {2} Mio / {3} Mio" -f `
+        [double]$ld.cpu_busy_percent_measured, [int]$ld.cpu_sample_window_ms, `
+        ([math]::Round([double]$ld.ram_available_bytes_start / 1MB)), ([math]::Round([double]$ld.ram_total_bytes / 1MB)))
+    if ($ld.probe_load_note) { Write-Host ("               note: {0}" -f $ld.probe_load_note) }
     Write-Host ("  work DSP      : p50 {0} us, p95 {1} us, p99 {2} us, max {3} us ({4} mesures)" -f `
         $m.work_us.p50, $m.work_us.p95, $m.work_us.p99, $m.work_us.max, $m.work_us.count)
     Write-Host ("  callback      : p50 {0} us, p95 {1} us, max {2} us" -f `
@@ -226,6 +302,14 @@ try {
     Write-Host ("ERREUR: {0}" -f $_.Exception.Message)
     $exitCode = 1
 } finally {
+    if ($loadProcesses -and $loadProcesses.Count -gt 0) {
+        foreach ($loadProcess in $loadProcesses) {
+            try { Stop-Process -Id $loadProcess.Id -Force -ErrorAction SilentlyContinue } catch { }
+        }
+        Write-Host ("[charge] {0} processus de charge arretes" -f $loadProcesses.Count)
+        $loadProcesses = @()
+    }
+    $env:RAVUM_PROBE_LOAD_NOTE = $null
     Pop-Location
 }
 exit $exitCode
