@@ -140,6 +140,46 @@ dans le travail de compilation+relink lui-même. Les prochaines pistes crédible
 multi-fonctions regroupés) ou d'isoler la **preview** du cycle de build complet, plutôt que
 d'espérer un lien incrémental magique.
 
+### 5.2 Deuxième levier mesuré : chevaucher l'analyse et le build (`--concurrent`)
+
+L'analyse (diagnostic) et le build ne dépendent pas l'un de l'autre pour s'exécuter : le
+diagnostic rapide sert à la preview, le build produit l'artefact. Les lancer **en
+parallèle** transforme le temps total en `max(analyse, build) + queue`, au lieu de
+`analyse + build`. `cycle-bench --concurrent` mesure ce chevauchement avec le **même
+protocole** que la campagne séquentielle (mêmes contenus, mêmes éditions, mêmes caches,
+variantes et hôtes séparés), dans la même fenêtre machine (charge 35–54 %, RAM libre
+1,85–1,91 Go, reportée dans chaque fichier) :
+
+| Campagne (édition réelle) | anal. p50 | build p50 | **total p50** | **total p95** | activées |
+|---|---:|---:|---:|---:|---:|
+| Petite unité, séquentiel | 122 ms | 253 ms | 390 ms | 450 ms | 10/10 |
+| Petite unité, **concurrent** | 134 ms | 296 ms | **303 ms** | **316 ms** | 10/10 |
+| Unité 2 313 lignes, séquentiel | 190 ms | 393 ms | 593 ms | 695 ms | 5/5 |
+| Unité 2 313 lignes, **concurrent** | 193 ms | 402 ms | **412 ms** | **428 ms** | 5/5 |
+
+- Gain sur le cycle complet : **−15 à −31 % en p50** et **−18 à −38 % en p95** selon la
+  taille, pour la variante daemon comme pour la variante à froid (petite unité :
+  390 → 303 ms p50 ; 2 313 lignes : 593 → 412 ms p50).
+- Le coût du chevauchement est **visible et non caché** : chaque étape est plus lente sous
+  contention (build 253 → 296 ms en petite unité ; analyse 190 → 193 ms en grande), mais
+  le chemin critique reste inférieur à la somme.
+- Conséquence sur la cible : avec ce scheduling, **p95 < 500 ms est atteint sur les deux
+  tailles** (316 ms et 428 ms) alors que le séquentiel manquait la grande unité
+  (695 ms). Le gain vient du **scheduling**, pas d'un build plus rapide : le build reste
+  le chemin critique.
+- Cas du contenu inchangé : aucun changement (analyse 0 ms pour le daemon, build déjà
+  caché) ; l'analyse à froid reste le chemin critique et le chevauchement n'apporte rien
+  (99–109 ms p50, écart dans le bruit).
+- Limites : machine chargée et partagée, 10 et 5 itérations, unités mono-fichier ; sur une
+  machine à 1–2 cœurs le chevauchement peut être contre-productif (deux `rustc` se
+  disputent les cœurs), et les valeurs de « stages » en mode concurrent incluent la
+  contention. La sémantique de sûreté est inchangée : l'activation n'est acceptée que si
+  **l'analyse est propre et le build vérifié** ; un build lancé en parallèle d'un
+  diagnostic en erreur est simplement jeté (aucune activation partielle). Productiser ce
+  mode dans `ravum watch` (avec rejet du build si le diagnostic est en erreur) est la
+  prochaine étape naturelle, non réalisée à ce stade.
+
+
 
 ## 6. Limites
 
