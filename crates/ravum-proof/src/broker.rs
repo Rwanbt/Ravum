@@ -210,9 +210,20 @@ mod tests {
         )
     }
 
+    /// Each test needs its *own* ledger file.
+    ///
+    /// The previous version keyed the path on the verifier run counter, which starts at
+    /// 0 in every test: all tests in the binary therefore shared
+    /// `ravum-broker-<pid>-0.jsonl`. Because every test also builds the same
+    /// `ProofContext` and obligation, a record appended by one test (e.g. `Proved`) was
+    /// a *fresh cache hit* for another (e.g. `Timeout`), which made
+    /// `timeout_never_authorizes_activation` fail intermittently under parallel test
+    /// execution. Observed during the MVP-0b audit; fixed by a process-unique sequence.
     fn broker_with(outcome: VerifierOutcome, runs: Arc<AtomicU64>) -> ProofBroker {
+        static LEDGER_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = LEDGER_SEQ.fetch_add(1, Ordering::SeqCst);
         let path = std::env::temp_dir()
-            .join(format!("ravum-broker-{}-{}.jsonl", std::process::id(), runs.load(Ordering::SeqCst)));
+            .join(format!("ravum-broker-{}-{seq}.jsonl", std::process::id()));
         let _ = std::fs::remove_file(&path);
         ProofBroker::new(
             Box::new(CountingVerifier { outcome, runs }),

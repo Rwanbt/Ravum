@@ -1,0 +1,34 @@
+{
+  "cpu_load_percent_at_start": 52,
+  "interval_us": {
+    "count": 1999,
+    "max": 7564,
+    "min": 3419,
+    "p50": 5290,
+    "p95": 5747,
+    "p99": 5921
+  },
+  "iterations": 2000,
+  "kind": "os-scheduling-jitter",
+  "lateness_us": {
+    "count": 2000,
+    "max": 2602,
+    "min": 51,
+    "p50": 368,
+    "p95": 648,
+    "p99": 910
+  },
+  "limits": [
+    "operating-system scheduler only",
+    "no audio device, driver, buffer, XRUN or WASAPI/ASIO callback",
+    "no real-time thread priority was requested",
+    "this is not a hard real-time qualification"
+  ],
+  "memory_available_bytes_at_start": 3298631680,
+  "missed_deadlines_gt_one_period": 0,
+  "period_us": 5333,
+  "schema_version": 1,
+  "timer_period_ms": 1,
+  "tool": "ravum-jitter 0.1.0",
+  "wall_ms": 10666
+}

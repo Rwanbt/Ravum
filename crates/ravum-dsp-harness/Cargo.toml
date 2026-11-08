@@ -9,3 +9,4 @@ description = "DSP session harness: allocation counting, block timing, discontin
 [dependencies]
 ravum-protocol = { workspace = true }
 ravum-patch-host = { workspace = true }
+serde_json = { workspace = true }
