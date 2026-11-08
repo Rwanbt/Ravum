@@ -39,10 +39,30 @@ pub fn parse_rustc_json(
             }
             continue;
         };
-        if value.get("reason").and_then(Value::as_str) != Some("compiler-message") {
+        // Two JSON shapes exist and both must be accepted:
+        // * `cargo --message-format=json` wraps a diagnostic as
+        //   {"reason":"compiler-message","message":{...}};
+        // * the direct `rustc --error-format=json` stream used by this adapter emits the
+        //   diagnostic object itself: {"$message_type":"diagnostic","message":...,
+        //   "code":...,"level":...,"spans":[...]}.
+        // Accepting only the cargo shape silently reduced every failed check to the
+        // `no-diagnostic` fallback (observed in MVP-0b with rustc 1.95.0).
+        let message = match value.get("reason").and_then(Value::as_str) {
+            Some("compiler-message") => Some(&value["message"]),
+            _ if value.get("$message_type").and_then(Value::as_str) == Some("diagnostic") => {
+                Some(&value)
+            }
+            _ => None,
+        };
+        let Some(message) = message else {
             continue;
-        }
-        if let Some(diag) = to_diagnostic(&value["message"]) {
+        };
+        if let Some(diag) = to_diagnostic(message) {
+            // rustc also emits a trailing summary line ("aborting due to N previous
+            // errors"); it is not a separate finding and would double the error count.
+            if diag.code.is_none() && diag.message.starts_with("aborting due to") {
+                continue;
+            }
             set.diagnostics.push(diag);
         }
     }
@@ -156,5 +176,30 @@ mod tests {
         let set = parse_rustc_json(warn, &SnapshotId::new("s"), "rustc", "1", true);
         assert!(!set.has_errors());
         assert_eq!(set.warning_count(), 1);
+    }
+
+    /// Direct `rustc --error-format=json` shape (not cargo's wrapper), reproduced from
+    /// rustc 1.95.0 output. Both the real error and the trailing summary are present;
+    /// only the real finding must be kept.
+    #[test]
+    fn parses_direct_rustc_json_shape_and_ignores_the_summary_line() {
+        let stream = concat!(
+            r#"{"$message_type":"diagnostic","message":"mismatched types","code":{"code":"E0308","explanation":null},"level":"error","spans":[{"file_name":"unit.rs","line_start":2,"column_start":5,"line_end":2,"column_end":6,"is_primary":true}],"children":[],"rendered":"error[E0308]: mismatched types"}"#,
+            "\n",
+            r#"{"$message_type":"diagnostic","message":"aborting due to 1 previous error","code":null,"level":"error","spans":[],"children":[],"rendered":"error: aborting due to 1 previous error"}"#,
+            "\n",
+            r#"{"$message_type":"diagnostic","message":"For more information about this error, try `rustc --explain E0308`.","code":null,"level":"failure-note","spans":[],"children":[],"rendered":"For more information about this error"}"#,
+            "\n"
+        );
+        let set = parse_rustc_json(stream, &SnapshotId::new("s"), "rustc", "1.95.0", false);
+        assert_eq!(set.error_count(), 1, "diags: {:?}", set.diagnostics);
+        let d = set
+            .diagnostics
+            .iter()
+            .find(|d| d.code.is_some())
+            .expect("structured diagnostic with a code");
+        assert_eq!(d.code.as_deref(), Some("E0308"));
+        assert_eq!(d.message, "mismatched types");
+        assert_eq!(d.span.as_ref().map(|s| s.line_start), Some(2));
     }
 }
