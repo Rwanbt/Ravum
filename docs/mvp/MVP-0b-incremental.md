@@ -687,3 +687,176 @@ Les limites de §12.5 restent valables, avec ces précisions :
   crate large (24,6 Mo) reste à faire.
 - **Pas de compaction interne** de l'état incrémental rustc (contextes entiers seulement) ;
   pas de GC pendant une analyse (idle_only) ; un seul daemon par `work_dir` testé.
+## 13. Compaction intra-contexte de l'état incrémental (P0-H, suite)
+
+> **Statut : implémenté, testé, mesuré — et le gain de réutilisation n'est PAS
+> démontré sur cette fixture.** Le GC ne savait supprimer que des contextes
+> entiers ; cette section ajoute la compaction *à l'intérieur* d'un contexte :
+> sessions `s-*` anciennes et fichiers temporaires orphelins, en gardant toujours
+> la session la plus récente. Preuve brute :
+> [`evidence/mvp0b-daemon-compaction-2026-11-08.json`](../../evidence/mvp0b-daemon-compaction-2026-11-08.json).
+
+### 13.1 Politique et rapport
+
+`GcPolicy` gagne deux champs sérialisés (`serde`, `deny_unknown_fields`) :
+
+| Champ | Défaut | Rôle |
+|---|---|---|
+| `compact_incremental` | `false` | active la compaction des sessions rustc à l'intérieur de chaque contexte |
+| `keep_incremental_sessions` | `1` | nombre de sessions **complétées** les plus récentes conservées par contexte (validé `>= 1`) |
+
+`GcReport` gagne un champ rétro-compatible (`#[serde(default)]`)
+`compaction` : `enabled`, `keep_incremental_sessions`, `contexts_scanned`,
+`sessions_kept`, `sessions_deleted`, `sessions_planned`, `bytes_freed`,
+`planned_bytes`, `tmp_files_deleted`, `tmp_files_planned`,
+`working_sessions_deleted`. `dry_run` produit le plan (sessions/octets planifiés)
+sans supprimer. Règles de sûreté :
+
+- ne supprime **jamais** la session complétée la plus récente ;
+- les répertoires `s-*-working` (temporaires de compilation) sont considérés comme
+  orphelins : une passe de GC s'exécute sous le verrou exclusif des analyses, donc
+  aucun `rustc` ne peut légitimement les posséder ;
+- seuls les répertoires `s-*` et les fichiers `*.tmp` **à l'intérieur des
+  sessions** sont candidats ; les fichiers racine du contexte (`*.bin`, `*.lock`)
+  ne sont jamais touchés ;
+- format rustc réel pris en charge : `<ctx>/<crate-name>-<hash>/s-*` (les deux
+  niveaux sont parcourus) ; toute erreur de suppression est rapportée dans
+  `errors`, jamais avalée.
+
+### 13.2 Commandes
+
+```powershell
+# one-shot
+target\debug\ravum-daemon.exe --gc --work-dir target/ravum-daemon \
+  --compact-incremental --keep-incremental-sessions 1
+# serveur JSON-lines
+{"cmd":"gc","policy":{"compact_incremental":true,"keep_incremental_sessions":1}}
+# mesure reproductible
+cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite compaction
+```
+
+### 13.3 Mesure réelle (20 éditions, un contexte)
+
+Charge : CPU 46,0 → 45,4 %, mémoire libre 2 229 → 2 213 Mo, calibration
+`rustc -vV` 76/73/76 ms → 89/79/79 ms (machine partagée). 20 éditions réelles
+distinctes (20 `rustc`, tous misses ; `analysis_ms` min 169, max 233, dernière
+édition 233 ms), puis une édition de référence *avant* compaction (189 ms), le GC
+de compaction, puis une nouvelle édition.
+
+| Observation | Valeur mesurée |
+|---|---|
+| État incrémental avant | 2 sessions complétées (~0,8 Mo), répertoire work 1 821 741 B |
+| GC de compaction | **20 ms**, 1 session supprimée, 1 conservée, `working_sessions_deleted=0`, 0 erreur, `bytes_freed=818 507 B` |
+| Répertoire après | **191 055 B** (‑1 630 686 B, soit **‑89,5 %**) |
+| Cache intact après compaction | **oui** (contenu servi avant = hit mémoire, `analysis_ms=0`) |
+| Nouvelle édition après compaction | succès, miss, `analysis_ms=140 ms` |
+| Référence à froid (work_dir neuf, sans état) | `analysis_ms=119 ms` |
+| **Réutilisation du state conservé** | **NON démontrée** : 140 ms (post-compaction) > 119 ms (froid) ; `reuse_retained=false` |
+
+Interprétation honnête : la baisse disque de 1,63 Mo inclut aussi l'élagage que
+`rustc` fait lui-même entre l'édition de référence et la mesure ; le GC de
+compaction en revendique 0,82 Mo. La session conservée n'apporte **aucun gain
+mesurable** pour une nouvelle petite unité : le démarrage du compilateur domine.
+Le défaut reste donc **OFF** : la compaction est un outil de **bornage disque**
+(maintenance explicite), pas une optimisation de latence prouvée. Un bénéfice sur
+une unité plus grosse ou des éditions répétées n'est pas mesuré ici et n'est pas
+revendiqué.
+
+### 13.4 Tests et limites
+
+Tests réels : unitaires (sessions synthétiques : anciennes supprimées, plus
+récente complétée conservée, `-working` orphelin supprimé, `*.tmp` nettoyé,
+fichiers racine intacts, `dry_run` sans suppression, désactivé = aucun
+changement, `keep_incremental_sessions=0` refusé) + intégration `gc_integration`
+(20 éditions réelles, sessions `s-*` présentes avant, compaction, 1 session après,
+disque réduit, cache intact, édition suivante valide).
+
+Limites : un seul contexte et un seul daemon ; une seule mesure de réutilisation
+(pas de distribution) ; le format des sessions appartient à rustc (on supprime des
+répertoires entiers, on ne réécrit jamais l'état) ; la compaction ne réduit que
+l'état incrémental **par contexte**, pas `out/`/`units/` ; elle est explicite,
+jamais automatique (l'auto-GC ne l'active pas).
+
+## 14. Multi-client loopback (P0-H, suite)
+
+> **Statut : implémenté, testé, mesuré.** Le serveur savait parler sur
+> stdin/stdout (un seul client). Il accepte maintenant N connexions TCP loopback
+> avec le **même protocole JSON-lines**. Preuve brute :
+> [`evidence/mvp0b-daemon-soak-multi-2026-11-08.json`](../../evidence/mvp0b-daemon-soak-multi-2026-11-08.json).
+
+### 14.1 Transport et conception
+
+```powershell
+target\debug\ravum-daemon.exe --work-dir target/ravum/daemon --listen 127.0.0.1:0
+# première ligne stdout : {"listening":"127.0.0.1:PORT","protocol":"ravum-daemon-jsonl-v1","transport":"tcp",...}
+```
+
+- `--listen ADDR` (port `0` = éphémère) sélectionne le transport TCP ; le
+  protocole par requête/réponse est identique à stdio (`analyze`, `stats`, `gc`,
+  `shutdown`, ...) ;
+- chaque connexion est servie par son propre thread avec un `Daemon` partagé
+  (thread-safe) ; le **gate interne sérialise les `rustc`** (`max_concurrent_jobs=1`),
+  donc les clients sont concurrents mais les compilations sont bornées : aucune
+  revendication de parallélisme de compilation ;
+- `shutdown` émis par n'importe quel client arrête l'écouteur, ferme les
+  connexions (jointure bornée à 2 s, fin de processus déterministe) et sort avec
+  le code 0 ;
+- fail-closed : adresse invalide → exit 1 + erreur JSON ; port occupé → exit 1 +
+  message `cannot listen ...` ; `--listen` combiné avec `--gc` → refus d'usage
+  (exit 2), jamais de mode ambigu ;
+- testé en intégration (`tcp_multi_client`, 3 tests) : 2 clients simultanés
+  corrects, refus du double-mode, port occupé refusé.
+
+### 14.2 Campagne réelle (3 clients 120 s + contrôle mono-client 120 s)
+
+Commande : `cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite multi-soak
+--clients 3 --multi-seconds 120 --multi-control-seconds 120`
+(chaque client envoie des contenus rotatifs, un replays sur quatre attendu en
+cache hit ; révision fixée à 1 par requête pour isoler transport+analyse de la
+chorégraphie de révisions ; 300 ms de pause entre requêtes d'un même client).
+Charge : début CPU 37,1 %, 4 061 Mo libres, calibration 64/64/68 ms ; fin CPU
+31,6 %, 4 093 Mo libres, calibration 100/77/74 ms.
+
+| Métrique | Multi (3 clients, 120 s) | Contrôle (1 client, 120 s) |
+|---|---|---|
+| Requêtes traitées | **816** (272 / 271 / 273 par client) | 290 |
+| Erreurs / timeouts | **0 / 0** | 0 / 0 |
+| Latence p50 (par client) | 155 / 155 / 157 ms | 143 ms |
+| Latence p95 (par client) | 282 / 290 / 289 ms | 183 ms |
+| Latence p99 (par client) | 394 / 416 / 372 ms | 206 ms |
+| Latence globale p50 / p95 / p99 / max | 155 / 289 / 386 / 490 ms | 143 / 183 / 206 / 212 ms |
+| `rustc` exécutés / cache hits mémoire / misses | 613 / 203 / 613 | 218 / 72 / 218 |
+| `peak_active_jobs` | **1** (gate) | 1 |
+| Runs GC (`gc_runs`, `auto_gc_runs`) | 0 / 0 (GC non activé dans cette campagne) | 0 / 0 |
+| RSS du daemon début / max / fin | 5,57 / 7,83 / 7,59 Mo (dérive +2,02 Mo) | 6,38 / 7,94 / 7,70 Mo (+1,32 Mo) |
+| Disque daemon fin | 740 732 B | 309 990 B |
+| Arrêt | exit 0 | exit 0 |
+| Vérification contenu récent | hit mémoire, `analysis_ms=0` | — |
+| `valid` | **true** | **true** |
+
+Lecture honnête : le transport multi-client fonctionne (0 erreur, 0 timeout,
+aucun deadlock, arrêt propre), les trois clients sont servis équitablement
+(272/271/273 requêtes). Le p50 multi (155 ms) est supérieur au mono (143 ms)
+parce que les compilations sont **sérialisées par le gate** (une seule à la
+fois) : c'est de la concurrence de clients, pas du parallélisme de compilation.
+Le RSS dérive de ~1,3–2,0 Mo sur 120 s (allocateurs, caches, état du serveur) :
+une campagne bornée ne prouve pas l'absence de fuite sur plusieurs heures. Le GC
+n'était pas activé dans cette campagne : `gc_runs=0`, le disque croît avec le
+volume de requêtes (740 Ko après 816 requêtes sur cette petite unité).
+
+### 14.3 Limites et non-claims
+
+- **loopback uniquement**, une seule machine : aucune garantie réseau, latence,
+  multi-hôte ou authentification ; aucune écoute publique, aucun TLS.
+- **pas de temps réel dur** : latences mesurées sous charge partagée (calibration
+  jusqu'à 100 ms), pas de borne pire-cas ; le gate sérialise `rustc`.
+- **un seul `work_dir` par daemon** : pas de multi-tenant, pas de coordination
+  entre deux daemons sur le même répertoire.
+- les clients utilisent une **révision fixe** dans la campagne (une révision
+  strictement antérieure est, par contrat, rejetée comme périmée) ; la
+  chorégraphie multi-révisions n'est pas mesurée ici.
+- campagne **bornée** (120 s par mode) : pas de soak de plusieurs heures, pas de
+  test de fuite longue, pas de montée en charge au-delà de 3 clients.
+- la vérification de contenu récent est un cache hit ; elle ne prouve pas la
+  correction sémantique de toutes les réponses (les réponses sont validées
+  `fresh`/`success`, pas comparées à un oracle).
