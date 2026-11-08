@@ -26,9 +26,9 @@
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feat/mvp0b-hardening`, poussée, **31 commits de code** au-dessus de `6b37ad3` (ce rapport est ajouté par le commit suivant) |
-| Dernier commit de code | `715bd75` |
-| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 246 fichiers, +81 881/−297 au moment de la rédaction |
+| Branche de travail | `feat/mvp0b-hardening`, poussée, **34 commits** au-dessus de `6b37ad3` (dont 32 de code) |
+| Dernier commit de code | `715bd75` ; dernier commit du lot : rapport de consolidation `f965d70` |
+| PR MVP-0b | **[#80](https://github.com/Rwanbt/Ravum/pull/80)**, base `feat/3-mvp0a-continuous-loop`, `MERGEABLE` ; 262 fichiers, +93 374/−297 |
 | PR #78 | inchangée, non fusionnée, non réécrite |
 | CI du dernier commit poussé | run [42498344011](https://github.com/Rwanbt/Ravum/actions/runs/42498344011) — **succès** (18 étapes dont l'E2E navigateur) ; workflow d'impact aussi vert ([42498344027](https://github.com/Rwanbt/Ravum/actions/runs/42498344027)) ; un échec intermédiaire réel (test de cache, run 42497769963) a été corrigé, voir §13.6 |
 | Tests workspace | **312 réussis, 0 échec**, 78 binaires, 65,1 s (après ajout du GC daemon et du backend WASAPI) |
@@ -70,7 +70,7 @@ sauvegardes Obsidian.
 | P0-F (temps réel) | crossfade + 0 alloc/free callback + statut audio honnête | **partiel** : pas d'hôte réel, aucune qualification RT |
 | P0-I (temps jusqu'au livrable) | S8 mesuré | **mesuré, non démontré supérieur** (workspace partagé plus lent) |
 
-## 5. Commits (31 de code, sur `feat/mvp0b-hardening`)
+## 5. Commits (34 dont 32 de code, sur `feat/mvp0b-hardening`)
 
 1. `f01d7b7` — fix(dsp): never destroy a retired module on the audio callback
 2. `86f90b4` — docs(mvp0b): audit the real state and record the reproducible L0 baseline
@@ -104,6 +104,7 @@ sauvegardes Obsidian.
 30. `3b7b3a1` — docs(mvp0b): audit the full diff for hidden regressions, and soak the daemon briefly
 31. `9ee76b6` — feat(daemon): bounded retention GC, measured on a real 40-edit campaign
 32. `715bd75` — feat(dsp): add a real WASAPI shared-mode backend and measure it under load
+33. `f965d70` — docs(mvp0b): consolidate the fourth-lot state (retention GC, WASAPI, audit and soak)
 
 ## 6. PR créées ou mises à jour
 
