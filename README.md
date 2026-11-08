@@ -102,9 +102,13 @@ manquée sur l'unité de 2 313 lignes (702–743 ms). Preuves :
 **DSP** : le chemin audio est sans verrou, sans allocation **et sans désallocation**
 (mesuré sur 199 517 blocs), avec un crossfade de remplacement optionnel qui réduit les
 clics mesurés en M3 (0,108 → 0,029 pour un coefficient IIR ; 0,657 → 0,058 pour un
-doublement de gain). Il n'y a **aucun périphérique audio, aucune priorité temps réel** :
-une mesure d'ordonnanceur OS sur machine chargée montre déjà 0,4–2,6 ms de gigue pour
-une période de 5,33 ms, donc aucune revendication hard-RT. Détail :
+doublement de gain). Le chemin a aussi été exercé sur un **périphérique réel** via
+`waveOut` en ne rendant que du silence : en 512 frames (10,67 ms) la cadence est tenue
+(ratio 1,001), avec **0 allocation/désallocation dans le thread de rendu** et 11 swaps à
+chaud sur 11 ; en 256 frames sur la voie par défaut, le pilote décroche (ratio 0,53) ; sous
+charge CPU 100 %, la lateness atteint ≈208 ms **sans allocation** — ce qui interdit toute
+revendication hard-RT. Il n'y a **aucun WASAPI/ASIO, aucune priorité temps réel, aucun
+XRUN mesurable** par cette API. Détail :
 [docs/mvp/MVP-0b-rt-lifecycle.md](docs/mvp/MVP-0b-rt-lifecycle.md),
 [docs/mvp/MVP-0b-dsp-crossfade.md](docs/mvp/MVP-0b-dsp-crossfade.md),
 [docs/mvp/MVP-0b-audio-host.md](docs/mvp/MVP-0b-audio-host.md).
