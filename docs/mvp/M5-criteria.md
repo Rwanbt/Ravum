@@ -85,6 +85,18 @@ coûte **3 à 6 ms** (`verify_ms`, `evidence/m2-proof.json`), c'est-à-dire l'or
 grandeur sous lequel une analyse incrémentale native devrait se situer. Le coût de
 l'outillage Rust actuel est donc intégralement dans le lancement du compilateur.
 
+**Apport de M3 :** le harnais DSP mesure 1–2 µs (p95) pour traiter 256 frames, soit
+environ **0,04 %** d'une période de 5 333 µs, avec **0 allocation** sur le thread
+audio (`docs/mvp/M3-evidence.md`). Ce n'est pas une mesure de frontend, mais cela
+donne l'ordre de grandeur du budget restant si une analyse incrémentale native devait
+tourner à côté du thread audio.
+
+**Apport de M4 :** la verticale full-stack n'apporte **aucun chiffre de compilation** :
+l'UI est statique et le serveur est un binaire Rust ordinaire. Elle montre en revanche
+ce que l'option C devrait rendre incrémental — contrat de types partagé, migration de
+schéma, validation — et **aucune de ces trois choses n'est mesurée en temps de
+compilation**. C'est une lacune de mesure, pas un résultat.
+
 ## 6. Ce qui manque pour ouvrir le gate
 
 | Élément | État |
