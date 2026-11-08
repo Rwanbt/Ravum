@@ -182,6 +182,7 @@ name = "ravum-cli"
 version = "0.1.0"
 dependencies = [
  "ravum-coordinator",
+ "ravum-daemon",
  "ravum-dsp-harness",
  "ravum-patch-host",
  "ravum-proof",

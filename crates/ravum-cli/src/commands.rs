@@ -90,9 +90,12 @@ pub fn render_diagnostics(set: &DiagnosticSet) -> String {
 
 pub fn check(args: &[String]) -> u8 {
     let Some(file) = positional(args, 0) else {
-        eprintln!("usage: ravum check <file.rs> [--json]");
+        eprintln!("usage: ravum check <file.rs> [--json] [--daemon]");
         return 2;
     };
+    if has(args, "--daemon") {
+        return check_with_daemon(&file, has(args, "--json"));
+    }
     let snapshot = match load_snapshot(&file) {
         Ok(s) => s,
         Err(e) => {
@@ -119,6 +122,85 @@ pub fn check(args: &[String]) -> u8 {
         );
     }
     if outcome.diagnostics.has_errors() {
+        1
+    } else {
+        0
+    }
+}
+
+/// `ravum check <file> --daemon`: route the analysis through the persistent MVP-0b
+/// daemon instead of a cold `rustc` process.
+///
+/// The daemon keeps its snapshots, verdict cache and incremental directory under
+/// `target/ravum/daemon`, so a second identical check is served from the content cache
+/// (measured 0 ms p50) while a real edit pays the compiler cost. This is an *analysis*
+/// only path: it never builds, verifies or activates anything.
+fn check_with_daemon(file: &str, json_out: bool) -> u8 {
+    let content = match std::fs::read_to_string(file) {
+        Ok(content) => content,
+        Err(error) => {
+            eprintln!("cannot read {file}: {error}");
+            return 2;
+        }
+    };
+    let config = ravum_daemon::DaemonConfig {
+        work_dir: work_dir().join("daemon"),
+        ..ravum_daemon::DaemonConfig::default()
+    };
+    let daemon = match ravum_daemon::Daemon::open(config) {
+        Ok(daemon) => daemon,
+        Err(error) => {
+            eprintln!("daemon error: {error}");
+            return 2;
+        }
+    };
+    let request = ravum_daemon::single_file_request(
+        1,
+        format!("cli-check:{file}"),
+        file,
+        content,
+        ravum_daemon::BuildContext::default(),
+    );
+    let report = match daemon.analyze(&request) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("daemon error: {error}");
+            return 2;
+        }
+    };
+
+    if json_out {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report.to_json())
+                .unwrap_or_else(|_| "{}".to_owned())
+        );
+    } else {
+        println!(
+            "daemon status={} cache={} analysis={} ms total={} ms",
+            report.status.as_str(),
+            report.cache.kind.as_str(),
+            report.timings.analysis_ms,
+            report.timings.total_ms
+        );
+        for diagnostic in &report.diagnostics {
+            let location = match (&diagnostic.file, diagnostic.line, diagnostic.column) {
+                (Some(file), Some(line), Some(column)) => format!("{file}:{line}:{column} "),
+                _ => String::new(),
+            };
+            let code = diagnostic
+                .code
+                .as_deref()
+                .map(|code| format!("[{code}] "))
+                .unwrap_or_default();
+            println!(
+                "{} {location}{code}{}",
+                diagnostic.severity.as_str(),
+                diagnostic.message
+            );
+        }
+    }
+    if report.error_count() > 0 {
         1
     } else {
         0
