@@ -34,6 +34,18 @@ impl Default for ExpectedAbi {
     }
 }
 
+impl ExpectedAbi {
+    /// Contract of a block-processing (DSP) module: distinct ABI version, distinct
+    /// export and signature, so a scalar module can never be loaded as a DSP one.
+    pub fn dsp() -> Self {
+        Self {
+            abi_version: ravum_protocol::DSP_ABI_VERSION,
+            export: ravum_protocol::DSP_EXPORT.to_owned(),
+            signature: ravum_protocol::DSP_SIGNATURE.to_owned(),
+        }
+    }
+}
+
 /// Facts read out of a native artifact, before it is trusted for anything.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactFacts {
@@ -95,14 +107,21 @@ pub fn inspect_artifact(
     })
 }
 
-/// Load and fully validate a candidate artifact. Never activates.
-///
-/// Rejection drops the `DeferredLibrary`, so the OS handle is released by the
-/// reclaimer thread and no partial state is left behind.
-pub fn prepare(path: &Path, expected: &ExpectedAbi) -> Result<PreparedPatch, RejectReason> {
-    let started = Instant::now();
-    let lib = DeferredLibrary::open(path).map_err(|detail| RejectReason::LoadFailed { detail })?;
+/// Artifact facts validated the same way for every ABI: self-declared version,
+/// embedded manifest, and content identity of the bytes actually loaded.
+pub(crate) struct Validated {
+    pub lib: DeferredLibrary,
+    pub manifest: PatchManifest,
+    pub artifact_id: ArtifactId,
+    pub abi_version: u32,
+}
 
+/// Validate ABI version + manifest, without resolving any callable symbol yet.
+pub(crate) fn validate_loaded(
+    lib: DeferredLibrary,
+    path: &Path,
+    expected: &ExpectedAbi,
+) -> Result<Validated, RejectReason> {
     // 1) Cheapest gate first: the module's declared ABI version.
     let abi_fn: unsafe extern "C" fn() -> u32 = unsafe { lib.symbol(b"ravum_abi_version\0") }
         .map_err(|_| RejectReason::MissingExport {
@@ -159,27 +178,76 @@ pub fn prepare(path: &Path, expected: &ExpectedAbi) -> Result<PreparedPatch, Rej
         });
     }
 
-    // 3) Only now resolve the callable symbol.
-    let compute: ComputeFn = unsafe { lib.symbol(b"ravum_compute\0") }.map_err(|_| {
-        RejectReason::MissingExport {
-            symbol: COMPUTE_EXPORT.to_owned(),
-        }
-    })?;
-
     let bytes = std::fs::read(path).map_err(|e| RejectReason::LoadFailed {
         detail: format!("cannot hash artifact: {e}"),
     })?;
     let artifact_id = ArtifactId::new(sha256_hex(&bytes));
 
+    Ok(Validated {
+        lib,
+        manifest,
+        artifact_id,
+        abi_version,
+    })
+}
+
+/// Gates shared by every host, whatever the ABI: freshness first, then evidence.
+pub(crate) fn evaluate_gates(
+    build: &BuildOutput,
+    artifact_id: &ArtifactId,
+    evidence: Option<&EvidenceRecord>,
+    current_snapshot: &SnapshotId,
+) -> Result<VerificationStatus, RejectReason> {
+    if !build.is_current_for(current_snapshot) {
+        return Err(RejectReason::StaleBuild {
+            built_from: build.source_snapshot_id.clone(),
+            expected: current_snapshot.clone(),
+        });
+    }
+    let verdict = evidence
+        .filter(|e| {
+            e.applies_to(
+                &build.source_snapshot_id,
+                &build.build_context_id,
+                artifact_id,
+            )
+        })
+        .map(|e| (e.status, e.authorizes_activation()))
+        .unwrap_or((VerificationStatus::Unknown, false));
+    if !verdict.1 {
+        return Err(RejectReason::NotVerified {
+            verification_status: verdict.0.as_str().to_owned(),
+        });
+    }
+    Ok(verdict.0)
+}
+
+/// Load and fully validate a candidate artifact. Never activates.
+///
+/// Rejection drops the `DeferredLibrary`, so the OS handle is released by the
+/// reclaimer thread and no partial state is left behind.
+pub fn prepare(path: &Path, expected: &ExpectedAbi) -> Result<PreparedPatch, RejectReason> {
+    let started = Instant::now();
+    let lib = DeferredLibrary::open(path).map_err(|detail| RejectReason::LoadFailed { detail })?;
+    let validated = validate_loaded(lib, path, expected)?;
+
+    // Only now resolve the callable symbol.
+    let compute: ComputeFn =
+        unsafe { validated.lib.symbol(b"ravum_compute\0") }.map_err(|_| {
+            RejectReason::MissingExport {
+                symbol: COMPUTE_EXPORT.to_owned(),
+            }
+        })?;
+
     Ok(PreparedPatch {
         module: Arc::new(LoadedModule {
             compute,
-            manifest,
-            artifact_id,
-            _lib: lib,
+            manifest: validated.manifest,
+            artifact_id: validated.artifact_id,
+            _lib: validated.lib,
         }),
         load_ms: started.elapsed().as_millis() as u64,
-        abi_version,
+        abi_version: validated.abi_version,
     })
 }
 
@@ -233,34 +301,15 @@ impl PatchHost {
             ..StageTimings::default()
         };
 
-        if !build.is_current_for(current_snapshot) {
-            return self.reject(
-                RejectReason::StaleBuild {
-                    built_from: build.source_snapshot_id.clone(),
-                    expected: current_snapshot.clone(),
-                },
-                timings,
-            );
-        }
-
-        let verdict = evidence
-            .filter(|e| {
-                e.applies_to(
-                    &build.source_snapshot_id,
-                    &build.build_context_id,
-                    &prepared.module.artifact_id,
-                )
-            })
-            .map(|e| (e.status, e.authorizes_activation()))
-            .unwrap_or((VerificationStatus::Unknown, false));
-        if !verdict.1 {
-            return self.reject(
-                RejectReason::NotVerified {
-                    verification_status: verdict.0.as_str().to_owned(),
-                },
-                timings,
-            );
-        }
+        let verdict = match evaluate_gates(
+            build,
+            &prepared.module.artifact_id,
+            evidence,
+            current_snapshot,
+        ) {
+            Ok(status) => status,
+            Err(reason) => return self.reject(reason, timings),
+        };
 
         let activate_started = Instant::now();
         {
@@ -286,7 +335,7 @@ impl PatchHost {
         let new_version = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let previous_version = ActiveVersionId(new_version - 1);
         self.activations.fetch_add(1, Ordering::SeqCst);
-        *self.verification.write().unwrap_or_else(|e| e.into_inner()) = verdict.0;
+        *self.verification.write().unwrap_or_else(|e| e.into_inner()) = verdict;
         timings.total_ms = timings
             .check_ms
             .saturating_add(timings.build_ms)

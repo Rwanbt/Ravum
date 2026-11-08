@@ -5,6 +5,7 @@
 
 mod bench;
 mod commands;
+mod dsp;
 mod hostproc;
 mod metrics;
 mod watch;
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
         "bench" => bench::bench(rest),
         "prove" => commands::prove(rest),
         "artifacts" => commands::artifacts(rest),
+        "dsp" => dsp::dsp(rest),
         "--help" | "-h" | "help" => {
             usage();
             0
@@ -55,6 +57,7 @@ fn usage() {
          \x20 ravum bench  <file-a.rs> <file-b.rs> [options] measure every stage, p50/p95/p99\n\
          \x20 ravum prove  <file.rs> [options]          check one obligation, record it in the evidence ledger\n\
          \x20 ravum artifacts [--prune --keep N]          list or prune built artifacts (never the active one when known)\n\
+         \x20 ravum dsp   <file.rs> [--next <file.rs>]     measured DSP session, optional hot swap of the processing\n\
          \n\
          ENV: RAVUM_HOST_BIN overrides the demo-host binary path.\n\
          NOTE: no command here is a proof, a release or a real-time qualification.",

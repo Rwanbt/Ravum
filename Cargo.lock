@@ -107,6 +107,7 @@ name = "ravum-cli"
 version = "0.1.0"
 dependencies = [
  "ravum-coordinator",
+ "ravum-dsp-harness",
  "ravum-patch-host",
  "ravum-proof",
  "ravum-protocol",
@@ -140,11 +141,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-dsp-harness"
+version = "0.1.0"
+dependencies = [
+ "ravum-patch-host",
+ "ravum-protocol",
+]
+
+[[package]]
 name = "ravum-patch-host"
 version = "0.1.0"
 dependencies = [
  "libloading",
+ "ravum-dsp-harness",
  "ravum-protocol",
+ "ravum-rust-adapter",
+ "ravum-snapshot",
  "serde_json",
 ]
 
