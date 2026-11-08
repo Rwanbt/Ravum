@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "agent_id": "agent-b",
+  "task_id": "tune-compute",
+  "base_snapshot_id": "{{BASE}}",
+  "target_paths": ["two_functions.rs"],
+  "target_symbols": ["ravum_compute"],
+  "expected_hashes": { "two_functions.rs": "{{HASH_TWO_FUNCTIONS}}" },
+  "declared_dependencies": [],
+  "impacted_contracts": [],
+  "unified_patch": "+++ b/two_functions.rs\n@@ -29,5 +29,5 @@\n /// Point d'entree patchable.\n #[no_mangle]\n pub extern \"C\" fn ravum_compute(x: f64) -> f64 {\n-    helper(x) * 2.0\n+    helper(x) * 3.0\n }\n",
+  "note": "Agent B : modifie uniquement ravum_compute(), même fichier, base identique à A."
+}

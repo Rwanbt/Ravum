@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "agent_id": "agent-a",
+  "task_id": "tune-helper",
+  "base_snapshot_id": "{{BASE}}",
+  "target_paths": ["two_functions.rs"],
+  "target_symbols": ["helper"],
+  "expected_hashes": { "two_functions.rs": "{{HASH_TWO_FUNCTIONS}}" },
+  "declared_dependencies": [],
+  "impacted_contracts": [],
+  "unified_patch": "+++ b/two_functions.rs\n@@ -24,4 +24,4 @@\n /// Calcule un decalage simple.\n fn helper(x: f64) -> f64 {\n-    x + 1.0\n+    x + 10.0\n }\n",
+  "note": "Agent A : modifie uniquement helper()."
+}

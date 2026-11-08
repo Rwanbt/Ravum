@@ -1,0 +1,1 @@
+{"agent_id":"agent-b","task_id":"scale-compute-output","file":"two_functions.rs","target_symbols":["ravum_compute"],"declared_dependencies":[],"impacted_contracts":[],"summary":"ravum_compute factor 2.0 -> 5.0"}
