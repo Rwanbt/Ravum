@@ -440,10 +440,8 @@ mod tests {
     fn unique_dir(tag: &str) -> PathBuf {
         static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!(
-            "ravum-daemon-{tag}-{}-{seq}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ravum-daemon-{tag}-{}-{seq}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -504,11 +502,8 @@ mod tests {
         let dir = unique_dir("cache-lru");
         let cache = ResultCache::new(dir.clone(), 2).unwrap();
         for index in 0..4 {
-            let expected = CacheLookupKey::new(
-                &format!("snapshot-{index}"),
-                "context",
-                "toolchain",
-            );
+            let expected =
+                CacheLookupKey::new(&format!("snapshot-{index}"), "context", "toolchain");
             cache.insert(&verdict(&expected)).unwrap();
         }
         assert_eq!(cache.entries(), 2, "memory cache must respect max_entries");

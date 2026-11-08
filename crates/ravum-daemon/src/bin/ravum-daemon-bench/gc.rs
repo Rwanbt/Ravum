@@ -25,8 +25,7 @@ use crate::harness::{
     toolchain_json, write_evidence, Fixture,
 };
 use ravum_daemon::{
-    AnalysisRequest, AnalysisReport, BuildContext, Daemon, GcPolicy, GcReport, Priority,
-    SourceFile,
+    AnalysisReport, AnalysisRequest, BuildContext, Daemon, GcPolicy, GcReport, Priority, SourceFile,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -244,8 +243,7 @@ pub fn run(options: &GcOptions) -> Result<Value, String> {
     //     the live content GC must protect. ---
     let pin_state = states[states.len() - 1].clone();
     let pin_started = Instant::now();
-    let (pin, pin_wall_ms) =
-        accumulator.analyze("gc-pin-recent", &pin_state, &fixture.context)?;
+    let (pin, pin_wall_ms) = accumulator.analyze("gc-pin-recent", &pin_state, &fixture.context)?;
     let pin_wall_ms = pin_wall_ms.max(pin_started.elapsed().as_millis() as u64);
     if !pin.cache.hit {
         return Err("pinning the recent content was expected to be a cache hit".to_owned());
@@ -288,9 +286,8 @@ pub fn run(options: &GcOptions) -> Result<Value, String> {
     let recent_hit = recent.cache.hit;
     let rebuilt_miss = !rebuilt.cache.hit;
     let rebuilt_rustc_ms = rebuilt.timings.analysis_ms;
-    let gc1_collected_entries = gc1.deleted.cache_keys.len()
-        + gc1.deleted.snapshots.len()
-        + gc1.deleted.contexts.len();
+    let gc1_collected_entries =
+        gc1.deleted.cache_keys.len() + gc1.deleted.snapshots.len() + gc1.deleted.contexts.len();
     // The oldest content is only expected to be a miss if GC actually collected
     // something; with undersized accumulated state the caps are not exceeded and
     // the measurement stays valid instead of failing artificially.

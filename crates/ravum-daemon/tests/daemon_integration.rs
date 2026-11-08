@@ -217,7 +217,13 @@ fn analysis_reports_structured_diagnostics_and_timings() {
     ] {
         assert!(value.get(key).is_some(), "missing JSON field {key}");
     }
-    for key in ["accept_ms", "queue_ms", "lookup_ms", "analysis_ms", "total_ms"] {
+    for key in [
+        "accept_ms",
+        "queue_ms",
+        "lookup_ms",
+        "analysis_ms",
+        "total_ms",
+    ] {
         assert!(
             value["timings"].get(key).is_some(),
             "missing timing field {key}"
@@ -262,7 +268,11 @@ fn identifier_rename_and_re_export_stay_consistent() {
     );
     let report = daemon.analyze(&request(1, &files)).expect("analysis");
     assert!(report.is_current());
-    assert!(report.success, "renamed unit must compile: {:?}", report.diagnostics);
+    assert!(
+        report.success,
+        "renamed unit must compile: {:?}",
+        report.diagnostics
+    );
     assert_eq!(report.diagnostics.len(), 0);
 
     let _ = std::fs::remove_dir_all(&work);
@@ -283,7 +293,9 @@ fn identical_content_is_a_cache_hit_and_survives_restart() {
     assert!(first.timings.analysis_ms > 0);
     assert!(first.success);
 
-    let second = daemon.analyze(&request(2, &files)).expect("second analysis");
+    let second = daemon
+        .analyze(&request(2, &files))
+        .expect("second analysis");
     assert!(second.cache.hit, "identical bytes must hit the cache");
     assert_eq!(second.timings.analysis_ms, 0);
     assert_eq!(diagnostics_of(&first), diagnostics_of(&second));
@@ -348,7 +360,9 @@ fn build_context_flags_and_toolchain_identity_invalidate_cache() {
         "miss",
         "a different toolchain identity must not reuse the verdict"
     );
-    let forced_hit = other.analyze(&request(2, &files)).expect("toolchain repeat");
+    let forced_hit = other
+        .analyze(&request(2, &files))
+        .expect("toolchain repeat");
     assert!(forced_hit.cache.hit);
 
     let _ = std::fs::remove_dir_all(&work);
@@ -456,12 +470,7 @@ fn supersession_during_compilation_never_returns_a_current_answer() {
     // Warm the compile unit so this test measures the supersession path.
     let mut state = fixture_files();
     let _ = daemon.analyze(&request(1, &state)).expect("warmup");
-    apply(
-        &mut state,
-        "src/math.rs",
-        "x * SCALE",
-        "x * SCALE + 0.5",
-    );
+    apply(&mut state, "src/math.rs", "x * SCALE", "x * SCALE + 0.5");
     let revision = 2u64;
     let mut slow_request = request(revision, &state);
     slow_request.label = "slow".to_owned();
@@ -480,7 +489,9 @@ fn supersession_during_compilation_never_returns_a_current_answer() {
     ));
     // The compiler was either killed or its answer discarded; a later analysis
     // of the same bytes must still be correct.
-    let after = daemon.analyze(&request(revision + 11, &state)).expect("after");
+    let after = daemon
+        .analyze(&request(revision + 11, &state))
+        .expect("after");
     assert!(after.is_current());
     assert!(after.success);
     let (cold_success, cold_diagnostics) = cold_signatures(&state);
@@ -532,13 +543,18 @@ fn signature_change_is_reported_in_the_caller_and_fixed_after_update() {
         report
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.file.as_deref() == Some("src/pipeline.rs")
-                && diagnostic.severity.is_error()),
+            .any(
+                |diagnostic| diagnostic.file.as_deref() == Some("src/pipeline.rs")
+                    && diagnostic.severity.is_error()
+            ),
         "the caller in pipeline.rs must be re-checked: {:?}",
         diagnostics_of(&report)
     );
     let (cold_success, cold_diagnostics) = cold_signatures(&broken);
-    assert!(!cold_success, "cold rustc must also reject the broken caller");
+    assert!(
+        !cold_success,
+        "cold rustc must also reject the broken caller"
+    );
     assert_eq!(
         diagnostics_of(&report),
         cold_diagnostics,
@@ -603,7 +619,10 @@ fn process_and_memory_budgets_are_enforced() {
     assert_eq!(stats.rustc_runs, 3);
     let (memory_entries, disk_entries) = daemon.cache_entries();
     assert!(memory_entries <= 1, "memory cache budget");
-    assert!(disk_entries >= 3, "disk cache keeps content-addressed verdicts");
+    assert!(
+        disk_entries >= 3,
+        "disk cache keeps content-addressed verdicts"
+    );
 
     let _ = std::fs::remove_dir_all(&work);
 }

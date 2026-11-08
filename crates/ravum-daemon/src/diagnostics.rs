@@ -78,9 +78,15 @@ impl Diagnostic {
             self.severity.as_str(),
             self.code.as_deref().unwrap_or("-"),
             self.file.as_deref().unwrap_or("-"),
-            self.line.map(|v| v.to_string()).unwrap_or_else(|| "-".to_owned()),
-            self.column.map(|v| v.to_string()).unwrap_or_else(|| "-".to_owned()),
-            self.end_line.map(|v| v.to_string()).unwrap_or_else(|| "-".to_owned()),
+            self.line
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".to_owned()),
+            self.column
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".to_owned()),
+            self.end_line
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".to_owned()),
             self.message
         )
     }
@@ -218,22 +224,15 @@ fn diagnostic_from_message(message: &Value, root: Option<&str>) -> Option<Diagno
             spans
                 .iter()
                 .find(|span| span.get("is_primary").and_then(Value::as_bool) == Some(true))
-                .or_else(|| {
-                    spans
-                        .iter()
-                        .find(|span| span.get("file_name").is_some())
-                })
+                .or_else(|| spans.iter().find(|span| span.get("file_name").is_some()))
         });
-    let rendered = message
-        .get("rendered")
-        .and_then(Value::as_str)
-        .map(|text| {
-            if text.len() > 8192 {
-                format!("{}...", &text[..8192])
-            } else {
-                text.to_owned()
-            }
-        });
+    let rendered = message.get("rendered").and_then(Value::as_str).map(|text| {
+        if text.len() > 8192 {
+            format!("{}...", &text[..8192])
+        } else {
+            text.to_owned()
+        }
+    });
     let file = span
         .and_then(|span| span.get("file_name"))
         .and_then(Value::as_str)
@@ -287,11 +286,7 @@ mod tests {
 
     #[test]
     fn parses_new_json_format_and_normalizes_path() {
-        let parsed = parse_rustc_json(
-            NEW_FORMAT_ERROR,
-            Some(Path::new(r"C:\work\unit")),
-            false,
-        );
+        let parsed = parse_rustc_json(NEW_FORMAT_ERROR, Some(Path::new(r"C:\work\unit")), false);
         assert_eq!(parsed.error_count(), 1);
         let diagnostic = &parsed.diagnostics[0];
         assert_eq!(diagnostic.code.as_deref(), Some("E0425"));

@@ -17,9 +17,7 @@
 //! detects gross growth/leaks and proves the automatic GC keeps the disk bounded,
 //! it does not claim long-lived production stability.
 
-use crate::harness::{
-    git_json, load_json, machine_json, toolchain_json, write_evidence,
-};
+use crate::harness::{git_json, load_json, machine_json, toolchain_json, write_evidence};
 use ravum_daemon::{
     AnalysisRequest, AutoGcPolicy, BuildContext, Daemon, DaemonConfig, Priority, SourceFile,
 };
@@ -405,7 +403,10 @@ pub fn run(options: &SoakOptions) -> Result<Value, String> {
         return Err("--soak-requests/--soak-control-requests must be >= 8".to_owned());
     }
     if options.max_total_bytes == 0 || options.max_total_bytes >= options.min_total_bytes {
-        return Err("--soak-max-total-bytes must be >= 1 and strictly below --soak-min-total-bytes".to_owned());
+        return Err(
+            "--soak-max-total-bytes must be >= 1 and strictly below --soak-min-total-bytes"
+                .to_owned(),
+        );
     }
     let (toolchain, toolchain_evidence) = toolchain_json(&options.repo_root)?;
     let rustc = crate::harness::rustc_path();
