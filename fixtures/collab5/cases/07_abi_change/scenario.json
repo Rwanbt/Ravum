@@ -1,0 +1,12 @@
+{
+  "id": "07_abi_change",
+  "description": "Marqueur et signature ABI modifies ; un conflit d'ABI n'est pas prouvable par une compilation locale.",
+  "lane": "textual_default_oracle",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "entry", "target": "src/lib.rs", "symbols": ["abi_entry"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["MANUAL_REQUIRED"],
+  "expected_levels": ["MANUAL_REQUIRED"],
+  "expect_reason_contains": [["ABI_CHANGE"]]
+}

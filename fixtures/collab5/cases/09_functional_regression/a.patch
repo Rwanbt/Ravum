@@ -1,0 +1,6 @@
++++ b/src/lib.rs
+@@ -3,3 +3,3 @@
+ fn double(value: u32) -> u32 {
+-    value * 2
++    value + 2
+ }

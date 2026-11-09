@@ -1,0 +1,7 @@
++++ b/src/lib.rs
+@@ -3,3 +3,3 @@
+-fn scale(value: u32) -> u32 {
+-    value * 2
++fn scale(value: u32, factor: u32) -> u32 {
++    value * factor
+ }
