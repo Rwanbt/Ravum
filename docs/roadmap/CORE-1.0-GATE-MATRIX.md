@@ -43,6 +43,28 @@ Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
 Windows. Chaque cas tourne sur au moins un OS, aucun sur les deux.
 
+## 1 bis. CI sur le SHA `4980355` (Linux, `ubuntu-latest`)
+
+Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
+
+| Job | Résultat |
+|---|---|
+| Workspace tests (stable 1.95.0) | **succès** |
+| Example smoke suite | **succès** |
+| Installer contract | **succès** |
+| `wasm32-wasip1` | **succès** |
+| Fuzz smoke | **succès** |
+| **Miri (nightly)** | **succès — 65 + 93 + 1 = 159 tests, 0 échec** |
+| ThreadSanitizer | **SKIP explicite** `NOT_APPLICABLE` |
+| **Conformance corpus (Linux)** | **ÉCHEC — `total=268 pass=236 fail=30 skip=2`** |
+
+Les **30 mêmes cas** échouent sur Linux et sur Windows : les divergences
+spec ↔ implémentation ne sont pas spécifiques à une plateforme. La CI de
+conformance est donc rouge **volontairement** ; c'est le signal exact décrit
+dans [`T2-FINDINGS.md`](../qualification/T2-FINDINGS.md), en attente de
+l'arbitrage D8. Les autres workflows (*Documentation integrity*, *MVP*,
+*MVP impact-selected*) sont verts sur ce SHA.
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
@@ -57,7 +79,7 @@ Windows. Chaque cas tourne sur au moins un OS, aucun sur les deux.
 | T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, Miri antérieur (159 tests) | **Audit externe absent** ; Miri non rejoué sur ce SHA exact | Audit externe |
+| T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, **Miri rejoué en CI sur ce SHA (159 tests, 0 échec)** | **Audit externe absent** | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible** (digest stable à époque fixée), provenance, checksums, licence | **Pas de signature/attestation**, **pas de build bit-à-bit** | Clé de signature (humaine) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -161,9 +183,10 @@ redémarrage automatique ne satisfait pas une exigence de préservation d'état.
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
 1019 tests, 268 cas de conformance, 31 smoke, **fuzz complet rejoué sur ce
-SHA**. Miri (159 tests) reste **antérieur** : il n'a pas été rejoué sur
-`1b7b4f1`. TSan `NOT_APPLICABLE` justifié (aucun thread/async exposé). **Audit
-externe absent** — c'est ce qui empêche `PASS`.
+SHA**, et **Miri rejoué en CI sur `4980355`** : 65 + 93 + 1 = **159 tests,
+0 échec** (respectivement 225,8 s / 142,4 s / 18,5 s). TSan `NOT_APPLICABLE`
+justifié (aucun thread/async exposé). **Audit externe absent** — c'est ce qui
+empêche `PASS`.
 
 ### T11 — Performance, distribution, supply chain — `PARTIAL`
 
