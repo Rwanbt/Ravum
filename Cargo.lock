@@ -178,9 +178,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-batch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ravum-cli"
 version = "0.1.0"
 dependencies = [
+ "ravum-collab-oracle",
  "ravum-coordinator",
  "ravum-daemon",
  "ravum-dsp-harness",
@@ -189,6 +198,7 @@ dependencies = [
  "ravum-protocol",
  "ravum-rust-adapter",
  "ravum-snapshot",
+ "ravum-unit-graph",
  "ravum-workspace-coordinator",
  "serde",
  "serde_json",
