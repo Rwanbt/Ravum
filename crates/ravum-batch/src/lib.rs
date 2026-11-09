@@ -47,6 +47,8 @@ use std::fmt;
 pub const DEFAULT_WINDOW_MS: u64 = 50;
 /// Fenêtre d'attente maximale acceptée par la configuration.
 pub const MAX_WINDOW_MS: u64 = 100;
+/// Pas d'ajustement par défaut d'une fenêtre adaptative.
+pub const DEFAULT_ADAPTIVE_STEP_MS: u64 = 25;
 /// Taille de lot par défaut.
 pub const DEFAULT_MAX_BATCH: usize = 6;
 /// Taille de lot maximale acceptée par la configuration.
@@ -69,12 +71,49 @@ pub trait BatchProposal {
     fn base_id(&self) -> &str;
 }
 
+/// Politique de fenêtre adaptative.
+///
+/// La fenêtre part de `min_ms` et s'ajuste entre `min_ms` et `max_ms`, par pas
+/// de `step_ms` :
+///
+/// * une proposition qui rejoint un lot déjà ouvert prouve la densité → la
+///   fenêtre grandit, pour regrouper davantage ;
+/// * une fenêtre qui expire sans qu'aucune proposition ne l'ait rejointe prouve
+///   la rareté → la fenêtre rétrécit, pour ne pas retarder un diagnostic isolé.
+///
+/// Les bornes restent `MAX_WINDOW_MS` au plus : la latence d'un développeur seul
+/// n'est jamais sacrifiée au regroupement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdaptiveWindow {
+    pub min_ms: u64,
+    pub max_ms: u64,
+    pub step_ms: u64,
+}
+
+impl AdaptiveWindow {
+    pub fn new(min_ms: u64, max_ms: u64, step_ms: u64) -> Result<Self, ConfigError> {
+        if min_ms > max_ms || max_ms > MAX_WINDOW_MS {
+            return Err(ConfigError::InvalidAdaptiveWindow { min_ms, max_ms });
+        }
+        if step_ms == 0 {
+            return Err(ConfigError::AdaptiveStepZero);
+        }
+        Ok(Self {
+            min_ms,
+            max_ms,
+            step_ms,
+        })
+    }
+}
+
 /// Configuration du collecteur.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BatchConfig {
     window_ms: u64,
     max_batch: usize,
     max_pending: usize,
+    /// `None` = fenêtre fixe historique ; `Some` = fenêtre adaptative.
+    adaptive: Option<AdaptiveWindow>,
 }
 
 impl Default for BatchConfig {
@@ -83,6 +122,7 @@ impl Default for BatchConfig {
             window_ms: DEFAULT_WINDOW_MS,
             max_batch: DEFAULT_MAX_BATCH,
             max_pending: DEFAULT_MAX_PENDING,
+            adaptive: None,
         }
     }
 }
@@ -100,7 +140,31 @@ impl BatchConfig {
             window_ms,
             max_batch,
             max_pending: DEFAULT_MAX_PENDING,
+            adaptive: None,
         })
+    }
+
+    /// Configuration à fenêtre adaptative bornée.
+    pub fn adaptive(
+        min_ms: u64,
+        max_ms: u64,
+        step_ms: u64,
+        max_batch: usize,
+    ) -> Result<Self, ConfigError> {
+        let adaptive = AdaptiveWindow::new(min_ms, max_ms, step_ms)?;
+        if max_batch == 0 || max_batch > MAX_BATCH {
+            return Err(ConfigError::MaxBatchOutOfRange(max_batch));
+        }
+        Ok(Self {
+            window_ms: min_ms,
+            max_batch,
+            max_pending: DEFAULT_MAX_PENDING,
+            adaptive: Some(adaptive),
+        })
+    }
+
+    pub fn adaptive_policy(&self) -> Option<AdaptiveWindow> {
+        self.adaptive
     }
 
     /// Ajuste la borne de propositions en attente (≥ 1).
@@ -131,6 +195,8 @@ pub enum ConfigError {
     WindowTooLarge(u64),
     MaxBatchOutOfRange(usize),
     MaxPendingZero,
+    InvalidAdaptiveWindow { min_ms: u64, max_ms: u64 },
+    AdaptiveStepZero,
 }
 
 impl fmt::Display for ConfigError {
@@ -144,6 +210,11 @@ impl fmt::Display for ConfigError {
                 write!(f, "max_batch={value} is outside 1..={MAX_BATCH}")
             }
             ConfigError::MaxPendingZero => write!(f, "max_pending must be >= 1"),
+            ConfigError::InvalidAdaptiveWindow { min_ms, max_ms } => write!(
+                f,
+                "adaptive window needs 0 <= min_ms={min_ms} <= max_ms={max_ms} <= {MAX_WINDOW_MS}"
+            ),
+            ConfigError::AdaptiveStepZero => write!(f, "adaptive step_ms must be >= 1"),
         }
     }
 }
@@ -285,6 +356,12 @@ pub struct BatchTelemetry {
     pub symbol_conflicts: u64,
     /// Situations où une base différente a empêché une fusion.
     pub base_mismatches: u64,
+    /// Croissances de la fenêtre adaptative (densité observée).
+    pub window_growths: u64,
+    /// Rétrécissements de la fenêtre adaptative (fenêtre expirée sans arrivée).
+    pub window_shrinks: u64,
+    /// Fenêtre effective maximale atteinte pendant la campagne (ms).
+    pub max_effective_window_ms: u64,
     /// Échantillons de latence d'attente des lots exécutés (ms).
     pub wait_samples_ms: Vec<u64>,
     /// Propositions effectivement rapportées (acceptées + refusées).
@@ -427,11 +504,14 @@ pub struct BatchCollector<P: BatchProposal, A: Analyzer> {
     item_index: HashMap<ItemId, String>,
     /// Items déjà exécutés dans un lot (diagnostic immédiat refusé explicitement).
     analyzed_items: HashSet<ItemId>,
+    /// Fenêtre effective courante (égale à `config.window_ms()` si fixe).
+    current_window_ms: u64,
 }
 
 impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
     /// Crée un collecteur ; la configuration a déjà été validée.
     pub fn new(config: BatchConfig, analyzer: A) -> Self {
+        let current_window_ms = config.window_ms();
         Self {
             config,
             analyzer,
@@ -440,11 +520,20 @@ impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
             seen_ids: HashSet::new(),
             next_item_id: 1,
             next_batch_id: 1,
-            telemetry: BatchTelemetry::default(),
+            telemetry: BatchTelemetry {
+                max_effective_window_ms: current_window_ms,
+                ..BatchTelemetry::default()
+            },
             pending_items: 0,
             item_index: HashMap::new(),
             analyzed_items: HashSet::new(),
+            current_window_ms,
         }
+    }
+
+    /// Fenêtre effectivement appliquée aux lots ouverts, en millisecondes.
+    pub fn effective_window_ms(&self) -> u64 {
+        self.current_window_ms
     }
 
     pub fn config(&self) -> &BatchConfig {
@@ -527,6 +616,7 @@ impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
         self.pending_items += 1;
         self.telemetry.proposals_received += 1;
 
+        let joined_open_batch = candidate.is_some();
         match candidate {
             Some(index) => {
                 let batch = &mut self.open[index];
@@ -553,7 +643,42 @@ impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
                 }
             }
         }
+        // Densité observée : une proposition a rejoint un lot déjà ouvert, la
+        // fenêtre peut grandir pour regrouper davantage sans retarder un isolé.
+        if joined_open_batch {
+            self.grow_window();
+        }
         Ok(item_id)
+    }
+
+    fn grow_window(&mut self) {
+        let Some(policy) = self.config.adaptive_policy() else {
+            return;
+        };
+        let next = self
+            .current_window_ms
+            .saturating_add(policy.step_ms)
+            .min(policy.max_ms);
+        if next > self.current_window_ms {
+            self.current_window_ms = next;
+            self.telemetry.window_growths += 1;
+            self.telemetry.max_effective_window_ms =
+                self.telemetry.max_effective_window_ms.max(next);
+        }
+    }
+
+    fn shrink_window(&mut self) {
+        let Some(policy) = self.config.adaptive_policy() else {
+            return;
+        };
+        let next = self
+            .current_window_ms
+            .saturating_sub(policy.step_ms)
+            .max(policy.min_ms);
+        if next < self.current_window_ms {
+            self.current_window_ms = next;
+            self.telemetry.window_shrinks += 1;
+        }
     }
 
     /// Diagnostic immédiat d'une proposition soumise et pas encore analysée.
@@ -608,11 +733,15 @@ impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
     }
 
     fn expire_open(&mut self, now_ms: u64) {
-        let window = self.config.window_ms;
+        let window = self.current_window_ms;
         let mut still_open = Vec::with_capacity(self.open.len());
+        let mut sparse_expiry = false;
         for batch in std::mem::take(&mut self.open) {
             if now_ms.saturating_sub(batch.opened_ms) >= window {
                 let closed_ms = batch.opened_ms.saturating_add(window);
+                if batch.items.len() == 1 {
+                    sparse_expiry = true;
+                }
                 self.ready.push(ClosedBatch {
                     batch_id: batch.batch_id,
                     reason: BatchReason::WindowExpired,
@@ -625,6 +754,11 @@ impl<P: BatchProposal, A: Analyzer> BatchCollector<P, A> {
             }
         }
         self.open = still_open;
+        // Rareté observée : la fenêtre a expiré sans qu'aucune proposition ne
+        // rejoigne le lot ; rétrécir évite de retarder le prochain isolé.
+        if sparse_expiry {
+            self.shrink_window();
+        }
     }
 
     fn close_open(&mut self, index: usize, reason: BatchReason, now_ms: u64) -> ClosedBatch<P> {
