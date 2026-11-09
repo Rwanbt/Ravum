@@ -37,6 +37,7 @@
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 003 it/s, 20,0 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
 | SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, **digest reproductible `21ee4d00…526db`** (deux runs identiques) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 75786AEF…33EEB` (racines et `target/` différents) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
@@ -80,7 +81,7 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
 | T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, **Miri rejoué en CI sur ce SHA (159 tests, 0 échec)** | **Audit externe absent** | Audit externe |
-| T11 | `PARTIAL` | Installateur, SBOM **reproductible** (digest stable à époque fixée), provenance, checksums, licence | **Pas de signature/attestation**, **pas de build bit-à-bit** | Clé de signature (humaine) |
+| T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** | **Pas de signature/attestation** | Clé et custody humaines |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate
@@ -196,8 +197,20 @@ empêche `PASS`.
 SBOM SPDX-2.3 reproductible (64 paquets, 170 relations, digest identique sur
 deux runs à époque fixée — le digest dépend sinon de l'horodatage, ce qui est le
 comportement SPDX attendu et non un défaut), checksums, manifeste de provenance,
-licence réconciliée. **Aucune signature** (aucune clé, aucune custody) et
-**aucune reproductibilité bit-à-bit** du binaire démontrée.
+licence réconciliée.
+
+**Reproductibilité bit-à-bit : mesurée et verte** —
+[`docs/qualification/REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md).
+Deux builds depuis **deux racines différentes** et **deux répertoires de build
+différents** produisent le même `sha256` (`75786AEF…33EEB`) avec
+`CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0`, `--remap-path-prefix` et
+`-C link-arg=/Brepro`. Sans ces drapeaux, trois builds donnaient trois binaires
+différents ; l'écart se limitait à 20 octets, tous des horodatages dans l'en-tête
+PE écrits par `link.exe`.
+
+**Toujours absent** : la **signature** des artefacts et l'attestation de
+provenance signée. Aucune clé de projet n'existe, et la custody d'une clé de
+release ne peut pas être décidée par un agent.
 
 ### T12 — Dogfood, audit final, RC — `BLOCKED`
 
