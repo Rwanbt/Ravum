@@ -37,16 +37,22 @@ pub fn block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReaso
 
     let mut first = vec![0f32; frames];
     let mut first_state = DspState::default();
-    prepared.module.process_block(&input, &mut first, &mut first_state);
+    prepared
+        .module
+        .process_block(&input, &mut first, &mut first_state);
 
     let mut second = vec![0f32; frames];
     let mut second_state = DspState::default();
-    prepared.module.process_block(&input, &mut second, &mut second_state);
+    prepared
+        .module
+        .process_block(&input, &mut second, &mut second_state);
 
     // A second block from the *same advanced state* must be requested from the same
     // module, otherwise a stateful filter would be compared from a fresh state.
     let mut third = vec![0f32; frames];
-    prepared.module.process_block(&input, &mut third, &mut first_state);
+    prepared
+        .module
+        .process_block(&input, &mut third, &mut first_state);
 
     let finite = first.iter().all(|s| s.is_finite()) && third.iter().all(|s| s.is_finite());
     let deterministic = first == second;
@@ -68,7 +74,8 @@ pub fn block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReaso
     let mut assumptions = vec![
         "single fixed 64-frame block of a deterministic ramp".to_owned(),
         "state is host-owned and starts at zero".to_owned(),
-        "does not measure audio quality, latency, real-time behaviour or state migration".to_owned(),
+        "does not measure audio quality, latency, real-time behaviour or state migration"
+            .to_owned(),
         format!("trust base: rustc-built artifact, the native loader, and {tool} {tool_version}"),
     ];
     assumptions.extend(failures);

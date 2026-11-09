@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 pub fn watch(args: &[String]) -> u8 {
     let Some(file) = positional(args, 0) else {
-        eprintln!("usage: ravum watch <file.rs> [--tick-ms N] [--interval-ms N] [--max-activations N] [--duration-ms N] [--json]");
+        eprintln!("usage: ravum watch <file.rs> [--tick-ms N] [--interval-ms N] [--max-activations N] [--duration-ms N] [--concurrent] [--json]");
         return 2;
     };
     let tick_ms = flag_u64(args, "--tick-ms", 100);
@@ -22,6 +22,9 @@ pub fn watch(args: &[String]) -> u8 {
     let max_activations = flag_u64(args, "--max-activations", u64::MAX);
     let duration_ms = flag_u64(args, "--duration-ms", 0);
     let post_activation_ms = flag_u64(args, "--post-activation-ms", 600);
+    // Two-track scheduling: analysis and build overlap; activation still requires a clean
+    // analysis AND a verified build (see `prepare_candidate_concurrent`).
+    let concurrent = has(args, "--concurrent");
     let json_out = has(args, "--json");
 
     let pipeline = pipeline();
@@ -36,7 +39,11 @@ pub fn watch(args: &[String]) -> u8 {
     let stop = Arc::new(AtomicBool::new(false));
     spawn_file_watcher(file.clone(), Arc::clone(&session), Arc::clone(&stop), interval);
 
-    let first = pipeline.prepare_candidate(&initial, &|| session.current());
+    let first = if concurrent {
+        pipeline.prepare_candidate_concurrent(&initial, &|| session.current())
+    } else {
+        pipeline.prepare_candidate(&initial, &|| session.current())
+    };
     if !matches!(first.outcome, LoopOutcome::CandidateReady) {
         eprintln!("initial build refused: {:?}", first.outcome);
         if let Some(check) = &first.check {
@@ -108,7 +115,11 @@ pub fn watch(args: &[String]) -> u8 {
         session.supersede(snapshot.id().clone());
         last_attempted = Some(snapshot.id().clone());
 
-        let mut report = pipeline.prepare_candidate(&snapshot, &|| session.current());
+        let mut report = if concurrent {
+            pipeline.prepare_candidate_concurrent(&snapshot, &|| session.current())
+        } else {
+            pipeline.prepare_candidate(&snapshot, &|| session.current())
+        };
         if matches!(report.outcome, LoopOutcome::CandidateReady) {
             match publish(&mut host, &mut report, &session) {
                 Publish::Activated => activations += 1,

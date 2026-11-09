@@ -43,12 +43,16 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Compilateur Ravum / langage exécutable | **Non implémenté** |
 | Outil Rust MVP-0a (M1) | **Implémenté et testé localement** : boucle `check → build → verify → hot patch`, voir [docs/mvp/architecture.md](docs/mvp/architecture.md) |
 | Hot swap natif | **Démontré** sur une entrée `f64 -> f64` à ABI vérifiée ; migration d'état **non** implémentée |
-| Moteur de preuve Ravum / qualification RT / full-stack | **Non implémentés** (M2–M4 non commencés) |
+| Moteur de preuve Ravum / qualification RT | **Non implémentés** ; vérification bornée M2 présente, aucun PROVED général, aucun prouveur externe installé |
 | Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
 | Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
-| DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, **0 allocation** mesurée sur 400 blocs ; aucun périphérique audio, aucun crossfade |
+| DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, garde temps réel, **0 allocation et 0 désallocation** mesurées sur le thread audio ; crossfade de remplacement optionnel ; aucun périphérique audio |
 | Verticale full-stack (M4) | **Application témoin** : UI statique + API HTTP + SQLite, contrat versionné, validation serveur, migrations additives, 10 tests E2E ; aucun navigateur piloté, aucun TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
+| MVP-0b : daemon persistant (L2) | **Implémenté et mesuré** : cache de verdicts (contenu identique ≈ 0 ms), rejet des résultats périmés, annulation réelle ; gain incrémental seulement au-delà de ~1 000 lignes |
+| MVP-0b : Git transactionnel (L1) | **Implémenté** : index isolé, `commit-tree`, `update-ref` CAS, hooks honorés, journal durable ; 16 tests négatifs |
+| MVP-0b : COLLAB-4 (collaboration ↔ daemon) | **Implémenté et mesuré** : une modification acceptée n'analyse que son unité + ses dépendants ; unité indépendante jamais analysée ; rejeu servi par cache (0 `rustc`) |
+| MVP-0b : P0-H — rétention du daemon | **GC borné** : politique explicite (`keep_recent`, plafonds, `dry_run`), protections du contenu vivant, −66 % de disque sur 40 éditions réelles, aucun résultat valide invalidé ; **GC automatique opt-in** (12 collectes, disque borné à ~70 Ko contre 210 Ko sans collecte) |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
 Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
@@ -61,16 +65,18 @@ dans un **processus déjà en cours d'exécution**, sans redémarrage. Toute ét
 échoue laisse la version précédente active.
 
 ```text
-ravum check  <fichier.rs>    # analyse seule, diagnostics structurés (JSON)
+ravum check  <fichier.rs>    # analyse seule ; --daemon = moteur persistant (cache de verdicts)
 ravum build  <fichier.rs>    # cdylib après une analyse propre
 ravum patch  <artefact>      # validation ABI / manifeste / symboles
-ravum run    <fichier.rs>    # application de démonstration
-ravum watch  <fichier.rs>    # boucle complète : édition -> activation
+ravum run    <fichier.rs>    # application de démonstration ; --concurrent = analyse ∥ build
+ravum watch  <fichier.rs>    # boucle complète : édition -> activation ; --concurrent = analyse ∥ build
 ravum status                 # dernier état enregistré
 ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
+ravum cycle-bench <f.rs>      # édition -> diagnostic -> build -> verify -> load -> activation, MVP-0a vs MVP-0b
+ravum collab-cycle <ws>       # changements acceptés -> analyses daemon ciblées (unités affectées + dépendants)
 ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
 ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
-ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next)
+ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next) et crossfade (--crossfade-frames)
 ```
 
 Démonstrations exécutables : `scripts/demo-m1.ps1` (hot patch d'un processus vivant)
@@ -83,14 +89,35 @@ fusion AST/CRDT, aucune garantie temps réel. Un statut `PROVED` n'est émis que
 un **domaine fini explicitement énuméré** (jamais pour une propriété générale), et
 l'absence de prouveur externe produit `Unsupported`, pas un succès.
 
-**Cibles de latence non atteintes** : ni le diagnostic (< 50 ms) ni le patch
-complet (< 500 ms) ne passent de façon reproductible, parce que `rustc` est lancé à
-froid à chaque édition. Mesures et verdict : [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
+**Cibles de latence : partiellement atteintes en MVP-0b, sans fausse promesse.** Le
+daemon persistant ramène l'analyse d'un contenu **inchangé** de ~145 ms à **< 1 ms**,
+mais une **modification réelle** coûte encore 95–262 ms (p50) selon la taille : la cible
+diagnostic < 50 ms n'est donc **pas** atteinte pour du code modifié. Mesuré de bout en
+bout (`ravum cycle-bench`) : pour un contenu inchangé le **cycle complet** (diagnostic →
+build → vérification → chargement → activation) passe de 85–177 ms à **8–13 ms** (×10 à
+×13) ; pour une **édition réelle** il reste dominé par le build à froid (230–435 ms) et
+MVP-0b n'est pas plus rapide (316–339 ms petite unité, 524–600 ms unité de 2 313 lignes).
+Avec le **scheduling chevauché** (analyse ∥ build, `--concurrent`, productisé dans
+`watch`/`run`) : 390 → **303 ms** p50 (petite unité) et 593 → **412 ms** p50 (2 313 lignes),
+soit **p95 316 ms et 428 ms** — la cible « petit patch p95 < 500 ms » est alors tenue sur
+les deux tailles, le build restant le chemin critique. Preuves :
+[docs/mvp/MVP-0b-cycle.md](docs/mvp/MVP-0b-cycle.md),
+[docs/mvp/MVP-0b-incremental.md](docs/mvp/MVP-0b-incremental.md),
+[docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
 
-**DSP** : le chemin audio est sans verrou et sans allocation (mesuré), mais il n'y a
-**aucun périphérique audio, aucune priorité temps réel et aucun crossfade** — un
-changement de gain ou de coefficient produit un clic, mesuré et publié. Détail :
-[docs/mvp/M3-evidence.md](docs/mvp/M3-evidence.md).
+**DSP** : le chemin audio est sans verrou, sans allocation **et sans désallocation**
+(mesuré sur 199 517 blocs), avec un crossfade de remplacement optionnel qui réduit les
+clics mesurés en M3 (0,108 → 0,029 pour un coefficient IIR ; 0,657 → 0,058 pour un
+doublement de gain). Le chemin a aussi été exercé sur un **périphérique réel** via
+`waveOut` en ne rendant que du silence : en 512 frames (10,67 ms) la cadence est tenue
+(ratio 1,001), avec **0 allocation/désallocation dans le thread de rendu** et 11 swaps à
+chaud sur 11 ; en 256 frames sur la voie par défaut, le pilote décroche (ratio 0,53) ; sous
+charge CPU 100 %, la lateness atteint ≈208 ms **sans allocation** — ce qui interdit toute
+revendication hard-RT. Il n'y a **aucun WASAPI/ASIO, aucune priorité temps réel, aucun
+XRUN mesurable** par cette API. Détail :
+[docs/mvp/MVP-0b-rt-lifecycle.md](docs/mvp/MVP-0b-rt-lifecycle.md),
+[docs/mvp/MVP-0b-dsp-crossfade.md](docs/mvp/MVP-0b-dsp-crossfade.md),
+[docs/mvp/MVP-0b-audio-host.md](docs/mvp/MVP-0b-audio-host.md).
 
 ### Application témoin full-stack (M4)
 
@@ -157,6 +184,22 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 - [Contribuer](CONTRIBUTING.md)
 - [Instructions pour les agents IA](AGENTS.md)
 - [Premières tâches à réaliser](docs/roadmap/START_HERE.md)
+
+### MVP-0b — rapports de ce cycle
+
+- [Audit L0 et baseline reproductible](docs/mvp/MVP-0b-audit.md)
+- [L1-A — cycle de vie temps réel des modules DSP](docs/mvp/MVP-0b-rt-lifecycle.md)
+- [L1-B / L3 — collaboration multi-agents et publication Git transactionnelle](docs/mvp/MVP-0b-collab-2-3.md)
+- [L3.4 / COLLAB-4 — analyse ciblée des changements acceptés par le daemon](docs/mvp/MVP-0b-collab-4.md)
+- [L4-B — crossfade de remplacement DSP](docs/mvp/MVP-0b-dsp-crossfade.md)
+- [L2 — daemon persistant d'analyse incrémentale](docs/mvp/MVP-0b-incremental.md)
+- [P0-A/P0-I — mesure de bout en bout édition → activation](docs/mvp/MVP-0b-cycle.md)
+- [L3/S8 — worktrees vs workspace partagé vs séquentiel](docs/mvp/MVP-0b-s8.md)
+- [L4-A — E2E navigateur réel (CDP, sans dépendance npm)](docs/mvp/MVP-0b-browser-e2e.md)
+- [L4-C — chemin audio réel : ce qui est mesuré et ce qui ne l'est pas](docs/mvp/MVP-0b-audio-host.md)
+- [L4-D — vérification bornée et prouveur externe](docs/mvp/MVP-0b-verification.md)
+- [L4-E — CI sélective par impact](docs/mvp/MVP-0b-ci.md)
+- [L5.3 — analyse de licence et inventaire tiers](docs/mvp/MVP-0b-licence-analysis.md)
 
 ## Branches et contributions
 

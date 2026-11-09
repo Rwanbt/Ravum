@@ -43,9 +43,13 @@ function authHeaders() {
 }
 
 async function api(method, path, body) {
+  // Every mutation carries the bearer token, including DELETE (which has no body).
+  // Before MVP-0b, only requests with a body sent Authorization, so delete always
+  // answered 401 — a real UI bug that HTTP-only tests could not see.
+  const headers = method === "GET" ? {} : authHeaders();
   const response = await fetch(path, {
     method,
-    headers: body === undefined ? {} : authHeaders(),
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 204) {
@@ -82,6 +86,7 @@ function render(tasks) {
   list.replaceChildren();
   for (const task of tasks) {
     const item = document.createElement("li");
+    item.dataset.taskId = String(task.id);
     if (task.done) {
       item.classList.add("done");
     }
@@ -97,6 +102,13 @@ function render(tasks) {
       due.textContent = task.due_date;
       item.append(due);
     }
+
+    const rename = document.createElement("button");
+    rename.type = "button";
+    rename.textContent = "Modifier";
+    rename.disabled = !compatible;
+    rename.addEventListener("click", () => startRename(item, task));
+    item.append(rename);
 
     const toggle = document.createElement("button");
     toggle.type = "button";
@@ -122,6 +134,64 @@ function render(tasks) {
   }
 }
 
+// Inline title editor: the API supports PATCH {title} since M4, the UI exposes it here
+// so renaming is reachable without devtools. The whole list is re-rendered afterwards,
+// like every other mutation.
+function startRename(item, task) {
+  if (item.querySelector(".edit-title")) {
+    return;
+  }
+  const title = item.querySelector(".title");
+  if (!title) {
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "edit-title";
+  input.value = task.title;
+  input.maxLength = 200;
+  input.setAttribute("aria-label", "Nouveau titre");
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.textContent = "Enregistrer";
+  save.disabled = !compatible;
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Annuler";
+
+  title.replaceWith(input);
+  for (const button of item.querySelectorAll("button")) {
+    button.disabled = true;
+  }
+  input.after(save);
+  save.after(cancel);
+  input.focus();
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      save.click();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancel.click();
+    }
+  });
+
+  save.addEventListener("click", () => {
+    const value = input.value;
+    mutate(async () => {
+      await api("PATCH", `/api/tasks/${task.id}`, { title: value });
+    });
+  });
+  cancel.addEventListener("click", () => {
+    clearError();
+    refresh();
+  });
+}
+
 async function refresh() {
   try {
     const payload = await api("GET", "/api/tasks");
@@ -145,6 +215,14 @@ async function mutate(action) {
   }
 }
 
+form.addEventListener("invalid", (event) => {
+  // The browser blocks submission of an empty required field before `submit` fires;
+  // this keeps the failure visible in the DOM instead of only in a native bubble.
+  if (event.target === titleInput) {
+    showError("le titre est obligatoire");
+  }
+}, true);
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const title = titleInput.value;
@@ -167,5 +245,12 @@ refreshButton.addEventListener("click", () => {
     await refresh();
   } catch (error) {
     showError(`démarrage impossible : ${error.message}`);
+  } finally {
+    // Explicit readiness signal for the browser E2E harness. Without it, a test can
+    // interact before the first list render finishes and read a half-initialised DOM;
+    // that was a real intermittent failure of scenario 5 in CI (full Chrome, slower
+    // runner). Readiness means "the initial contract check and list refresh completed",
+    // not that the app is healthy: an error is displayed and asserted separately.
+    document.documentElement.dataset.ravumReady = "1";
   }
 })();

@@ -1,4 +1,4 @@
-# Preuves — MVP-0a (M0/M1)
+# Preuves — MVP-0a (M0/M1) et MVP-0b (L2 incrémental)
 
 > **Ce dossier contient des sorties brutes, pas des promesses.** Chaque fichier
 > indique son origine : commande, commit, machine, toolchain. Les chiffres sont
@@ -16,6 +16,9 @@
 | `collab-demo.txt` | `scripts/demo-collab.ps1` | décisions AUTO_SAFE / CONFLICT / REJECT / MANUAL_REQUIRED / REBASE_REVALIDATE et commit unique |
 | `collab-demo/proposals/*.json.tmpl` | auteurs humains/agents | propositions rejouables (base et hashes injectés au moment de l'exécution) |
 | `multi-agent-live/` | deux subagents réels | propositions produites indépendamment sur la branche partagée, puis intégrées par le coordinateur |
+| `mvp0b-incremental-bench.json` | `ravum-daemon-bench --suite campaign` | 7 catégories d'édition × 3 modes (rustc froid, `-C incremental` persistant, daemon) × 10 échantillons : min/p50/p95, diagnostics comparés à rustc froid, charge par catégorie |
+| `mvp0b-incremental-scale.json` | `ravum-daemon-bench --suite scale` | seuil de rentabilité de `-C incremental` : cold vs incrémental à 1 089 / 3 209 / 7 629 lignes |
+| `mvp0b-incremental-invariants.json` | `ravum-daemon-bench --suite invariants` | 14 contrôles négatifs/limites exécutés : révision périmée, annulation réelle d'un rustc en vol, buffer incomplet, corruption de cache/snapshot, redémarrage, budgets, timeout, JSON, fichiers utilisateur intacts |
 
 ## Non versionné (`evidence/local/`, ignoré par Git)
 
@@ -32,6 +35,13 @@ powershell -ExecutionPolicy Bypass -File scripts/demo-collab.ps1 -Commit
 cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 20 --out evidence/m1-bench.json
 cargo run -q --bin ravum -- prove fixtures/proof/positive.rs --claim finite --inputs 0,1,2.5,1000000 --json
 cargo run -q --bin ravum -- prove fixtures/proof/negative.rs --claim non-negative --inputs 0,1,2,3 --json
+
+# MVP-0b — daemon persistant d'analyse incrémentale (voir docs/mvp/MVP-0b-incremental.md)
+cargo build -p ravum-daemon --offline
+cargo test  -p ravum-daemon --offline -- --test-threads=1
+cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite campaign --samples 10
+cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite scale    --scale-reps 5
+cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite invariants
 ```
 
 ## Règles de lecture
@@ -41,3 +51,7 @@ cargo run -q --bin ravum -- prove fixtures/proof/negative.rs --claim non-negativ
    la CLI publique. Aucun chiffre inventé pour combler ce trou.
 3. Un p99 calculé sur 20 échantillons est le maximum de ces 20 échantillons.
 4. La machine de référence n'est pas un environnement de qualification temps réel.
+5. Les campagnes MVP-0b ont été faites sur une machine partagée avec d'autres
+   agents : chaque fichier porte sa charge (`load_start`/`load_end`, CPU, mémoire
+   libre, processus, calibration `rustc -vV`). Ne pas comparer deux fichiers sans
+   citer la charge de chacun.

@@ -102,21 +102,56 @@ pub fn run(config: ServerConfig) -> Result<Running, String> {
 
 fn handle_connection(stream: TcpStream, shared: &Shared) -> io::Result<()> {
     let mut stream = stream;
-    match read_request(&stream) {
-        Ok(Some(request)) => {
-            let response = route(&request, shared);
-            write_response(&mut stream, &response)
-        }
-        Ok(None) => Ok(()),
-        Err(ParseError::TooLarge) => write_response(
-            &mut stream,
-            &error(413, "payload_too_large", "the request is too large", vec![]),
-        ),
-        Err(ParseError::Incomplete) | Err(ParseError::Malformed(_)) => write_response(
-            &mut stream,
-            &error(400, "malformed_request", "the HTTP request could not be parsed", vec![]),
-        ),
+    // On Windows, a socket accepted from a non-blocking listener inherits the
+    // non-blocking mode. The request worker must block on the request: otherwise a
+    // client that has connected but whose bytes are not in the kernel buffer yet gets
+    // an intermittent 400. This was observed with a real Chromium via CDP (the browser
+    // sends the request a few hundred microseconds after the handshake) and never with
+    // in-process Rust tests, which write immediately after connecting.
+    stream.set_nonblocking(false)?;
+    let debug = std::env::var_os("RAVUM_TODO_HTTP_DEBUG").is_some();
+    if debug {
+        eprintln!(
+            "ravum-todo http debug [connection] peer={:?}",
+            stream.peer_addr()
+        );
     }
+    let response = match read_request(&stream) {
+        Ok(Some(request)) => {
+            if debug {
+                eprintln!(
+                    "ravum-todo http debug [request] {} {} content-length={:?}",
+                    request.method,
+                    request.path,
+                    request.header("content-length")
+                );
+            }
+            route(&request, shared)
+        }
+        Ok(None) => {
+            if debug {
+                eprintln!("ravum-todo http debug [connection] clean EOF before any byte");
+            }
+            return Ok(());
+        }
+        Err(ParseError::TooLarge) => {
+            error(413, "payload_too_large", "the request is too large", vec![])
+        }
+        Err(ParseError::Incomplete) | Err(ParseError::Malformed(_)) => error(
+            400,
+            "malformed_request",
+            "the HTTP request could not be parsed",
+            vec![],
+        ),
+    };
+    if debug {
+        eprintln!(
+            "ravum-todo http debug [response] status={}",
+            response.status
+        );
+    }
+    write_response(&mut stream, &response)?;
+    Ok(())
 }
 
 fn route(request: &Request, shared: &Shared) -> Response {

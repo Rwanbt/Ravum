@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 13edddd..5fb01f3 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -3 +3 @@
+-use core::fmt::Debug;
++use core::fmt::Display;
+@@ -5,2 +5,2 @@ use core::fmt::Debug;
+-fn debug_it<T: Debug>(value: T) -> String {
+-    format!("{value:?}")
++fn debug_it<T: Display>(value: T) -> String {
++    format!("{value}")

@@ -1,0 +1,14 @@
+{
+  "id": "s04_line_shift_insert_head",
+  "description": "Insertion en tete: les lignes de B sont decalees.",
+  "path": "src/lib.rs",
+  "expect": "accept",
+  "symbols_a": [],
+  "symbols_b": [
+    "beta"
+  ],
+  "merged_contains": [
+    "fmt::Write",
+    "20"
+  ]
+}

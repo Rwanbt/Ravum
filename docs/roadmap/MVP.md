@@ -1,6 +1,6 @@
 # MVP Ravum — plan exécutable sans dette architecturale volontaire
 
-> **Statut : PROPOSED, aucun prototype exécuté.** Les chiffres sont des cibles exploratoires, non des performances observées. Ce document est une roadmap, pas une décision de développer un compilateur autonome.
+> **Statut : PROPOSED (feuille de route), partiellement exécutée.** Les jalons M0 à M4 ont produit des prototypes réels (MVP-0a) puis un cycle de durcissement (MVP-0b) ; l'état vérifié est tenu par [docs/architecture/STATUS.md](../architecture/STATUS.md) et les rapports [docs/mvp/](../mvp/). Les chiffres de ce document restent des **cibles exploratoires**, pas des performances observées ; certaines ne sont pas atteintes et sont publiées comme telles. Ce document n'est pas une décision de développer un compilateur autonome.
 
 ## Produit que nous voulons valider
 

@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 8968da4..58459d8 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -7,3 +7,7 @@ fn alpha() -> u32 {
+ fn beta() -> u32 {
+     2
+ }
++
++fn delta() -> u32 {
++    4
++}

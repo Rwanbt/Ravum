@@ -11,6 +11,7 @@ members = [
   "crates/ravum-store",
   "crates/ravum-todo-core",
   "crates/ravum-workspace-coordinator",
+  "crates/ravum-daemon",
   "crates/ravum-cli",
   "apps/ravum-demo-host",
   "apps/ravum-todo",
@@ -38,6 +39,7 @@ ravum-dsp-harness = { path = "crates/ravum-dsp-harness" }
 ravum-store = { path = "crates/ravum-store" }
 ravum-todo-core = { path = "crates/ravum-todo-core" }
 ravum-workspace-coordinator = { path = "crates/ravum-workspace-coordinator" }
+ravum-daemon = { path = "crates/ravum-daemon" }
 
 # Keep debug info minimal: the reference machine has ~16 Go RAM and the
 # permanent-build pipeline measures wall time, so link time matters.

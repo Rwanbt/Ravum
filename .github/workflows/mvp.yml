@@ -80,6 +80,27 @@ jobs:
       - name: Demo M4 - UI + API + SQLite end to end
         run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4.ps1
 
+      # Browser E2E: the real UI JavaScript is executed in headless Chromium/Edge and the
+      # displayed DOM is asserted (CDP pilot, zero npm dependency). windows-latest ships
+      # Edge, so -RequireBrowser turns "no browser found" into a failure instead of a
+      # silent green; exit code 2 (explicit SKIP) can only happen outside this step.
+      - name: Setup Node.js for the browser E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Browser E2E - real Chromium/Edge via CDP (no npm dependency)
+        run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots
+
+      - name: Upload browser E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-evidence
+          path: target/ravum/browser-e2e
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Measure the loop (informational, not a performance gate)
         run: |
           cargo run -q --bin ravum -- bench fixtures/calculator/v1.rs fixtures/calculator/v2.rs --iterations 6 --out evidence/local/ci-bench.json
@@ -87,3 +108,161 @@ jobs:
       - name: Scope notice
         run: |
           echo "Product checks only: no proof, no release, no real-time qualification, no ABI stability claim."
+
+  # P0-H: the automatic retention GC (`crates/ravum-daemon/src/auto_gc.rs`) is an
+  # opt-in product path, never a default. Nothing in the product defaults changes
+  # here: the measurement harness explicitly enables a small AutoGcPolicy for its
+  # "auto" campaign, and the "control" campaign runs with AutoGcPolicy::default()
+  # (disabled) — which this job also asserts.
+  #
+  # The scenario is bounded and asserts STABLE invariants only (no latency gate):
+  # failures==0, auto_gc_runs>=1, settled verification, bounded on-disk state.
+  auto-gc:
+    name: Bounded automatic GC (opt-in path, bounded soak)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+      # Hard CI ceiling for the on-disk state. Measured max ~= 180 KB on the reference
+      # machine with this exact policy; 1 MiB leaves a >5x margin while still bounding
+      # growth. The real collection bound is asserted through the policy (max < min).
+      AUTO_GC_MAX_DISK_BYTES: '1048576'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Show toolchain
+        run: |
+          rustc -vV
+          cargo --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-auto-gc-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-auto-gc-
+            ${{ runner.os }}-mvp-
+
+      - name: Build the measurement harness
+        run: cargo build -q -p ravum-daemon --bin ravum-daemon-bench
+
+      # Bounded scenario (~5-15 s of work measured locally, step hard-bounded by
+      # --soak-seconds 30 and by timeout-minutes): 24 requests at 100 ms pace, one
+      # threshold check every 5 requests, GC trigger 32 KiB / target 16 KiB.
+      # The harness requires requests >= 8 and 0 < max_total_bytes < min_total_bytes.
+      # The work-dir leaf contains the "ravum-daemon-bench" marker mandated by the
+      # harness's fail-closed --clean guard, so a rerun in the same workspace is safe.
+      - name: Run the bounded auto-GC soak
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          New-Item -ItemType Directory -Force -Path evidence/local | Out-Null
+          cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite soak --soak-requests 24 --soak-seconds 30 --soak-pace-ms 100 --soak-control-requests 8 --soak-control-seconds 30 --soak-control-pace-ms 50 --soak-min-total-bytes 32768 --soak-max-total-bytes 16384 --soak-sample-every 2 --work-dir target/ravum-daemon-bench-ci-auto-gc --out-soak evidence/local/mvp0b-ci-auto-gc.json
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::the bounded auto-GC soak exited $LASTEXITCODE (evidence JSON is uploaded as an artifact)"
+            exit $LASTEXITCODE
+          }
+
+      - name: Assert stable auto-GC invariants (fail-closed)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $jsonPath = 'evidence/local/mvp0b-ci-auto-gc.json'
+          if (-not (Test-Path -LiteralPath $jsonPath)) {
+            Write-Host "::error::auto-GC evidence JSON missing: $jsonPath"
+            exit 1
+          }
+          $raw = Get-Content -LiteralPath $jsonPath -Raw
+          try {
+            $j = $raw | ConvertFrom-Json
+          }
+          catch {
+            Write-Host "::error::auto-GC evidence JSON is not parseable: $($_.Exception.Message)"
+            Write-Host $raw
+            exit 1
+          }
+          $maxDisk = 1048576
+          if ($env:AUTO_GC_MAX_DISK_BYTES) {
+            $parsed = 0L
+            if ([long]::TryParse($env:AUTO_GC_MAX_DISK_BYTES, [ref]$parsed) -and $parsed -gt 0) {
+              $maxDisk = $parsed
+            }
+          }
+          $violations = New-Object System.Collections.Generic.List[string]
+          $script:invariantChecks = 0
+          function Assert-Invariant {
+            param([string]$Name, [bool]$Ok, [string]$Detail)
+            $script:invariantChecks += 1
+            if ($Ok) {
+              Write-Host ("PASS  " + $Name + " (" + $Detail + ")")
+            }
+            else {
+              Write-Host ("::error::invariant violated: " + $Name + " (" + $Detail + ")")
+              $script:violations.Add($Name) | Out-Null
+            }
+          }
+          Assert-Invariant 'valid' ($j.valid -eq $true) ("valid=" + $j.valid)
+          Assert-Invariant 'auto.failures' ([long]$j.auto.failures -eq 0) ("auto.failures=" + $j.auto.failures)
+          Assert-Invariant 'control.failures' ([long]$j.control.failures -eq 0) ("control.failures=" + $j.control.failures)
+          Assert-Invariant 'auto.requests' ([long]$j.auto.requests -ge 8) ("auto.requests=" + $j.auto.requests)
+          Assert-Invariant 'auto.auto_gc.enabled' ($j.auto.auto_gc.enabled -eq $true) ("enabled=" + $j.auto.auto_gc.enabled)
+          Assert-Invariant 'auto.auto_gc.runs' ([long]$j.auto.auto_gc.runs -ge 1) ("runs=" + $j.auto.auto_gc.runs)
+          Assert-Invariant 'auto.auto_gc.failures' ([long]$j.auto.auto_gc.failures -eq 0) ("failures=" + $j.auto.auto_gc.failures)
+          Assert-Invariant 'auto.auto_gc.checks' ([long]$j.auto.auto_gc.checks -ge 1) ("checks=" + $j.auto.auto_gc.checks)
+          Assert-Invariant 'auto.auto_gc.last.ok' ($j.auto.auto_gc.last.ok -eq $true) ("last.ok=" + $j.auto.auto_gc.last.ok)
+          Assert-Invariant 'auto.settled' ($j.auto.settled -eq $true) ("settled=" + $j.auto.settled)
+          Assert-Invariant 'auto.recent.hit_without_compiler' ($j.auto.verification.recent.hit_without_compiler -eq $true) ("recent.hit_without_compiler=" + $j.auto.verification.recent.hit_without_compiler)
+          Assert-Invariant 'auto.old.success' ($j.auto.verification.old.success -eq $true) ("old.success=" + $j.auto.verification.old.success)
+          Assert-Invariant 'auto.policy.enabled' ($j.auto.policy.enabled -eq $true) ("policy.enabled=" + $j.auto.policy.enabled)
+          Assert-Invariant 'auto.policy.bounded' (($null -ne $j.auto.policy.max_total_bytes) -and ($null -ne $j.auto.policy.min_total_bytes) -and ([long]$j.auto.policy.max_total_bytes -lt [long]$j.auto.policy.min_total_bytes)) ("max=" + $j.auto.policy.max_total_bytes + " < min=" + $j.auto.policy.min_total_bytes)
+          Assert-Invariant 'control.auto_gc.disabled' ($j.control.auto_gc.enabled -eq $false) ("control.enabled=" + $j.control.auto_gc.enabled)
+          Assert-Invariant 'auto.disk_bytes.max <= ceiling' (($null -ne $j.auto.disk_bytes.max) -and ([long]$j.auto.disk_bytes.max -le $maxDisk)) ("max=" + $j.auto.disk_bytes.max + " B <= " + $maxDisk)
+          Assert-Invariant 'auto.disk_bytes.end <= ceiling' (($null -ne $j.auto.disk_bytes.end) -and ([long]$j.auto.disk_bytes.end -le $maxDisk)) ("end=" + $j.auto.disk_bytes.end + " B <= " + $maxDisk)
+          Assert-Invariant 'auto.journal_lines' ([long]$j.auto.journal_lines -ge 1) ("journal_lines=" + $j.auto.journal_lines)
+          $summary = @(
+            '### Bounded automatic-GC soak invariants',
+            '',
+            ('- valid: {0}' -f $j.valid),
+            ('- auto: requests={0} failures={1} auto_gc_runs={2} auto_gc_failures={3} settled={4}' -f $j.auto.requests, $j.auto.failures, $j.auto.auto_gc.runs, $j.auto.auto_gc.failures, $j.auto.settled),
+            ('- control: enabled={0} failures={1}' -f $j.control.auto_gc.enabled, $j.control.failures),
+            ('- disk: max={0} B end={1} B ceiling={2} B' -f $j.auto.disk_bytes.max, $j.auto.disk_bytes.end, $maxDisk),
+            ('- verification: recent_hit_without_compiler={0} old_success={1}' -f $j.auto.verification.recent.hit_without_compiler, $j.auto.verification.old.success)
+          )
+          if ($env:GITHUB_STEP_SUMMARY) {
+            $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+          }
+          if ($violations.Count -gt 0) {
+            Write-Host ("::error::bounded auto-GC invariants violated: " + ($violations -join ', '))
+            Write-Host '--- full evidence JSON ---'
+            Write-Host $raw
+            exit 1
+          }
+          Write-Host ("OK: {0} bounded auto-GC invariants hold (auto_gc_runs={1}, disk_max={2} B <= {3} B)." -f $script:invariantChecks, $j.auto.auto_gc.runs, $j.auto.disk_bytes.max, $maxDisk)
+
+      - name: Upload auto-GC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-gc-evidence
+          path: |
+            evidence/local/mvp0b-ci-auto-gc.json
+            target/ravum-daemon-bench-ci-auto-gc/soak-suite/auto/gc-auto.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Bounded automatic-GC check only: the product default remains disabled; no real-time, ABI, release or long-soak qualification."

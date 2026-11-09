@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 53c2215..f0791a4 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -4,6 +4,6 @@ fn slot_a() -> u32 {
+     1
+ }
+ 
+-fn slot_b() -> u32 {
++fn helper2() -> u32 {
+     2
+ }

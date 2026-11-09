@@ -1,17 +1,42 @@
-//! `ravum-collab` — run the COLLAB-1 coordinator over a directory of proposals.
+//! `ravum-collab` — run the COLLAB-2/3 coordinator over a directory of proposals.
 //!
 //! Usage:
 //!   ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>]
+//!                          [--publication-journal <path>]
 //!                          [--commit] [--author NAME] [--email MAIL] [--json]
+//!                          [--verify] [--verify-tests]
+//!                          [--rustc <path>] [--work <dir>]
+//!   ravum-collab base --workspace <dir>
 //!
 //! The workspace is read into an immutable snapshot. Proposals are applied to an
 //! in-memory overlay; nothing is written back unless `--commit` is passed, and
-//! even then only through the single `GitWriter`.
+//! even then only through the single `GitWriter`, as one transactional publication
+//! (isolated index, unpublished commit, compare-and-swap, then reconciliation of
+//! the published paths only).
+//!
+//! Semantic verification is **opt-in and defaults to the exact COLLAB-1
+//! behaviour**, because existing COLLAB-1 callers and the historical demo are
+//! workspaces of loose `.rs` files, not crates: they must keep producing their
+//! historical decisions.
+//! * `--verify` turns semantic verification on: before any `AUTO_SAFE` proposal is
+//!   integrated, the candidate merged snapshot is compiled with the public `rustc`
+//!   CLI through the injected `MergeVerifier`. A required check that cannot run
+//!   (no inferable crate root, missing rustc, ...) yields `MANUAL_REQUIRED`, never
+//!   a silent pass.
+//! * `--verify-tests` implies `--verify` and additionally compiles and executes
+//!   the merged snapshot's test harness (it executes code, hence the explicit
+//!   flag).
 
+mod common;
+
+use common::RustcMergeVerifier;
 use ravum_protocol::{ChangeProposal, DecisionKind, ProposalDecision};
 use ravum_snapshot::SourceSnapshot;
-use ravum_workspace_coordinator::{Coordinator, GitWriter, IntegrationSummary};
+use ravum_workspace_coordinator::{
+    Coordinator, GitWriter, IntegrationSummary, MergeCheckStatus, PathUpdate, PublishRequest,
+};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -20,7 +45,7 @@ fn main() {
         Some("base") => base(&args[1..]),
         _ => {
             eprintln!(
-                "usage:\n  ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>] [--commit] [--json] [--fail-on-conflict]\n  ravum-collab base --workspace <dir>"
+                "usage:\n  ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>] [--commit] [--json] [--fail-on-conflict]\n                        [--verify] [--verify-tests] [--rustc <path>] [--work <dir>]\n  ravum-collab base --workspace <dir>"
             );
             2
         }
@@ -73,6 +98,10 @@ fn integrate(args: &[String]) -> i32 {
         .unwrap_or_else(|| PathBuf::from("target/ravum/collab-journal.jsonl"));
     let json = args.iter().any(|a| a == "--json");
     let fail_on_conflict = args.iter().any(|a| a == "--fail-on-conflict");
+    let verify_tests = args.iter().any(|a| a == "--verify-tests");
+    // Opt-in only: COLLAB-1 callers and the historical demo keep their exact
+    // decisions unless semantic verification is explicitly requested.
+    let semantic = verify_tests || args.iter().any(|a| a == "--verify");
 
     let base = read_workspace(&workspace);
     let base = match base {
@@ -82,7 +111,18 @@ fn integrate(args: &[String]) -> i32 {
             return 2;
         }
     };
-    let mut coordinator = match Coordinator::new(base).with_journal(journal_path.clone()) {
+    let mut coordinator = Coordinator::new(base);
+    if semantic {
+        let rustc = flag(args, "--rustc")
+            .or_else(|| std::env::var("RUSTC").ok())
+            .unwrap_or_else(|| "rustc".to_owned());
+        let work_dir = flag(args, "--work")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("target/ravum/verify"));
+        let verifier = RustcMergeVerifier::new(rustc, work_dir, verify_tests);
+        coordinator = coordinator.with_merge_verifier(Arc::new(verifier));
+    }
+    let mut coordinator = match coordinator.with_journal(journal_path.clone()) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("cannot open journal {}: {e}", journal_path.display());
@@ -129,20 +169,57 @@ fn integrate(args: &[String]) -> i32 {
             summary.auto_safe, summary.conflicts, summary.rejected, summary.manual, summary.rebase
         );
         println!("snapshot {} -> {}", initial.short(), coordinator.current_id().short());
+        match coordinator.verifier_name() {
+            Some(name) => println!(
+                "verification: semantic (verifier {name}); {} accepted change record(s)",
+                coordinator.accepted_changes().len()
+            ),
+            None => println!(
+                "verification: textual only (COLLAB-1 default; pass --verify to require semantic verification)"
+            ),
+        }
+        for change in coordinator.accepted_changes() {
+            println!(
+                "  record {} -> {} [{}] {}",
+                change.snapshot_before.short(),
+                change.snapshot_after.short(),
+                change.verification.status.as_str(),
+                change.evidence_ids.join(",")
+            );
+        }
     }
 
+    let mut publication: Option<serde_json::Value> = None;
     if args.iter().any(|a| a == "--commit") {
-        if let Err(e) = commit(&workspace, &coordinator, args) {
-            eprintln!("commit refused: {e}");
-            return 1;
+        match commit(&workspace, &coordinator, args) {
+            Ok(info) => {
+                if json {
+                    publication = Some(info.as_json());
+                } else {
+                    println!(
+                        "committed {} (parent {}) paths={} warnings={}",
+                        info.short_sha, info.short_parent, info.paths, info.warnings
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("commit refused: {e}");
+                return 1;
+            }
         }
     }
 
     if json {
         let payload = serde_json::json!({
-            "schema_version": 1,
+            "schema_version": 2,
             "snapshot_before": initial,
             "snapshot_after": coordinator.current_id(),
+            "verification": {
+                "mode": if coordinator.verification_required() { "semantic" } else { "textual_only" },
+                "requested": semantic,
+                "verifier": coordinator.verifier_name(),
+                "test_execution": verify_tests,
+            },
             "summary": {
                 "auto_safe": summary.auto_safe,
                 "conflict": summary.conflicts,
@@ -151,6 +228,8 @@ fn integrate(args: &[String]) -> i32 {
                 "rebase_revalidate": summary.rebase,
             },
             "decisions": decisions,
+            "accepted_changes": coordinator.accepted_changes(),
+            "publication": publication,
         });
         println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
     }
@@ -161,29 +240,95 @@ fn integrate(args: &[String]) -> i32 {
     0
 }
 
-fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Result<(), String> {
-    let mut integrated: Vec<String> = coordinator
+/// Result of one transactional publication.
+struct CommitInfo {
+    sha: String,
+    parent: String,
+    short_sha: String,
+    short_parent: String,
+    paths: usize,
+    warnings: usize,
+}
+
+impl CommitInfo {
+    fn as_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "sha": self.sha,
+            "parent": self.parent,
+            "paths": self.paths,
+            "warnings": self.warnings,
+        })
+    }
+}
+
+fn short(sha: &str) -> String {
+    sha[..12.min(sha.len())].to_owned()
+}
+
+fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Result<CommitInfo, String> {
+    // Fail closed: in semantic mode nothing is published without a recorded,
+    // passed verification bound to the exact accepted snapshot.
+    for change in coordinator.accepted_changes() {
+        if change.verification_required && change.verification.status != MergeCheckStatus::Passed {
+            return Err(format!(
+                "accepted change {} has no passed semantic verification (status {})",
+                change.proposal_id,
+                change.verification.status.as_str()
+            ));
+        }
+    }
+    let integrated: Vec<String> = coordinator
         .journal()
         .iter()
         .filter(|entry| entry.decision.decision == DecisionKind::AutoSafe)
         .flat_map(|entry| entry.decision.integrated_paths.clone())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect();
-    integrated.sort();
-    integrated.dedup();
     if integrated.is_empty() {
         return Err("no integrated proposal to commit".to_owned());
     }
-    coordinator
-        .current()
-        .materialize_to(workspace)
-        .map_err(|e| format!("cannot materialize snapshot: {e}"))?;
+    // Content comes from the coordinator's overlay, never from a blind rewrite of
+    // the whole workspace: the writer validates each path against the base snapshot
+    // hash before publishing, and writes only what it actually publishes.
+    let mut changes = Vec::with_capacity(integrated.len());
+    for path in &integrated {
+        let Some(content) = coordinator.current().content_of(path) else {
+            return Err(format!(
+                "integrated path {path} has no content in the coordinator snapshot"
+            ));
+        };
+        // An empty expected hash means "the path must be absent from the base".
+        let expected_old = coordinator
+            .base()
+            .file_hash(path)
+            .map(ToOwned::to_owned)
+            .unwrap_or_default();
+        changes.push(
+            PathUpdate::write(path.clone(), content.to_owned())
+                .with_expected_old_sha256(expected_old),
+        );
+    }
 
+    let publication_journal = flag(args, "--publication-journal")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let mut path = coordinator
+                .journal_path()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("target/ravum/collab-journal.jsonl"));
+            path.set_extension("publications.jsonl");
+            path
+        });
     let writer = GitWriter::new(
         workspace,
         flag(args, "--author").unwrap_or_else(|| "ravum-coordinator".to_owned()),
         flag(args, "--email").unwrap_or_else(|| "coordinator@ravum.invalid".to_owned()),
-    );
-    let trailers = coordinator
+    )
+    .with_publication_journal(&publication_journal)
+    .map_err(|e| format!("cannot open publication journal: {e}"))?;
+
+    let mut trailers = coordinator
         .journal()
         .iter()
         .filter(|entry| entry.decision.decision == DecisionKind::AutoSafe)
@@ -197,23 +342,50 @@ fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Resul
             ]
         })
         .collect::<Vec<_>>();
+    // One evidence trailer per accepted change: the commit body then carries the
+    // exact verification proof ids, so an auditor can re-derive what was checked.
+    for change in coordinator.accepted_changes() {
+        trailers.push((
+            "Ravum-Evidence".to_owned(),
+            change.verification.evidence_id.clone(),
+        ));
+        for evidence_id in &change.evidence_ids {
+            if *evidence_id != change.verification.evidence_id {
+                trailers.push(("Ravum-Check-Evidence".to_owned(), evidence_id.clone()));
+            }
+        }
+    }
+    let proposal_ids = coordinator
+        .journal()
+        .iter()
+        .filter(|entry| entry.decision.decision == DecisionKind::AutoSafe)
+        .map(|entry| entry.decision.proposal_id.clone())
+        .collect::<Vec<_>>();
+    // Stable across a restart: the same integrated proposal set maps to the same
+    // publication id, so recovery refuses a second publication instead of redoing it.
+    let request = PublishRequest::new(format!(
+        "chore(collab): integrate {} proposal(s) touching {} path(s)",
+        proposal_ids.len(),
+        integrated.len()
+    ))
+    .with_changes(changes)
+    .with_publication_id(format!("collab:{}", proposal_ids.join(",")))
+    .with_trailers(trailers);
+
     let result = writer
-        .commit_paths(
-            &integrated,
-            &format!(
-                "chore(collab): integrate {} proposal(s) touching {} path(s)",
-                coordinator
-                    .journal()
-                    .iter()
-                    .filter(|e| e.decision.decision == DecisionKind::AutoSafe)
-                    .count(),
-                integrated.len()
-            ),
-            &trailers,
-        )
+        .publish_request(&request)
         .map_err(|e| e.to_string())?;
-    println!("committed {} (parent {})", &result.sha[..12.min(result.sha.len())], &result.parent[..12.min(result.parent.len())]);
-    Ok(())
+    for warning in &result.warnings {
+        eprintln!("warning: {warning}");
+    }
+    Ok(CommitInfo {
+        short_sha: short(&result.sha),
+        short_parent: short(&result.parent),
+        sha: result.sha,
+        parent: result.parent,
+        paths: result.paths.len(),
+        warnings: result.warnings.len(),
+    })
 }
 
 fn read_workspace(root: &Path) -> std::io::Result<SourceSnapshot> {
@@ -252,3 +424,6 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .and_then(|i| args.get(i + 1))
         .cloned()
 }
+
+
+

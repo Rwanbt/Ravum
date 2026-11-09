@@ -4,7 +4,9 @@
 //! `check`, `build`, `patch`, `run`, `watch`, `status`, `bench`.
 
 mod bench;
+mod collab_cycle;
 mod commands;
+mod cycle_bench;
 mod dsp;
 mod hostproc;
 mod metrics;
@@ -27,9 +29,11 @@ fn main() -> ExitCode {
         "status" => commands::status(rest),
         "watch" => watch::watch(rest),
         "bench" => bench::bench(rest),
+        "cycle-bench" => cycle_bench::cycle_bench(rest),
         "prove" => commands::prove(rest),
         "artifacts" => commands::artifacts(rest),
         "dsp" => dsp::dsp(rest),
+        "collab-cycle" => collab_cycle::collab_cycle(rest),
         "--help" | "-h" | "help" => {
             usage();
             0
@@ -51,13 +55,15 @@ fn usage() {
          \x20 ravum check  <file.rs> [--json]              analysis only (rustc --emit=metadata)\n\
          \x20 ravum build  <file.rs> [--json]              build a patchable cdylib after a clean check\n\
          \x20 ravum patch  <artifact> [--json]             validate an existing artifact (ABI, manifest, symbols)\n\
-         \x20 ravum run    <file.rs> [--tick-ms N]         build then run the demo host (info only)\n\
-         \x20 ravum watch  <file.rs> [options]              full loop: edit -> check -> build -> verify -> hot activate\n\
+         \x20 ravum run    <file.rs> [--tick-ms N]         build then run the demo host (info only; --concurrent overlaps analysis and build)\n\
+         \x20 ravum watch  <file.rs> [options]              full loop: edit -> check -> build -> verify -> hot activate (--concurrent overlaps check and build)\n\
          \x20 ravum status [--json]                        last recorded state (target/ravum/state.json)\n\
          \x20 ravum bench  <file-a.rs> <file-b.rs> [options] measure every stage, p50/p95/p99\n\
+         \x20 ravum cycle-bench <file.rs> [options]     edit -> diagnostic -> build -> verify -> load -> activate, MVP-0a vs MVP-0b\n\
          \x20 ravum prove  <file.rs> [options]          check one obligation, record it in the evidence ledger\n\
          \x20 ravum artifacts [--prune --keep N]          list or prune built artifacts (never the active one when known)\n\
          \x20 ravum dsp   <file.rs> [--next <file.rs>]     measured DSP session, optional hot swap of the processing\n\
+         \x20 ravum collab-cycle <workspace> [options]   targeted daemon analysis of accepted collaborative changes\n\
          \n\
          ENV: RAVUM_HOST_BIN overrides the demo-host binary path.\n\
          NOTE: no command here is a proof, a release or a real-time qualification.",

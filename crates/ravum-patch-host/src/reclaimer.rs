@@ -77,8 +77,20 @@ pub struct DeferredLibrary {
     path: std::path::PathBuf,
 }
 
+/// Create the reclaimer thread now, if it does not exist yet.
+///
+/// Call this from a control thread at startup: without it, the *first* library drop
+/// anywhere would create the thread, i.e. an unbounded operation inside a `Drop`. The
+/// host bootstraps it before loading anything.
+pub fn init_reclaimer() {
+    let _ = sender();
+}
+
 impl DeferredLibrary {
     pub fn open(path: &std::path::Path) -> Result<Self, String> {
+        // The reclaimer must already exist before a library can be dropped: creating it
+        // lazily inside `Drop` would spawn a thread on whatever thread drops first.
+        init_reclaimer();
         // SAFETY: loading an arbitrary native library is inherently unsafe; the
         // caller only ever points this at artifacts produced by our own build
         // pipeline. The handle is never used after Drop.
@@ -112,9 +124,16 @@ impl Drop for DeferredLibrary {
     fn drop(&mut self) {
         if let Some(lib) = self.lib.take() {
             METRICS.pending.fetch_add(1, Ordering::SeqCst);
-            // If the reclaimer is gone the channel is closed and the library is
-            // dropped inline by the failed send; the pending counter is then
-            // corrected to stay consistent with `unloaded`.
+            // `sender()` is a process-wide `OnceLock` and the reclaimer thread owns the
+            // receiving end for the life of the process, so the channel never closes:
+            // the send cannot fail in practice, and the fallback below is unreachable.
+            // It is kept so that a hypothetical closed channel degrades to an inline
+            // unload *and stays accounted for* instead of leaking a handle.
+            //
+            // KNOWN LIMITATION: this `Drop` allocates and sends on a channel. That is
+            // fine on a control thread (where it always runs by construction), never on
+            // an audio callback: the guard API in `slot.rs` exists so that a payload
+            // carrying a `DeferredLibrary` can only be dropped by the control thread.
             if sender().send(lib).is_err() {
                 METRICS.pending.fetch_sub(1, Ordering::SeqCst);
                 METRICS.unloaded.fetch_add(1, Ordering::SeqCst);
@@ -126,7 +145,22 @@ impl Drop for DeferredLibrary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::time::{Duration, Instant};
+
+    /// These tests read and assert on process-wide counters (live/unloaded/pending). Cargo
+    /// runs tests in one binary on several threads, so a concurrent reclaimer test can
+    /// unload a module between a snapshot and its assertion (observed once as a false
+    /// failure of `live_modules() > loaded_before`). Serialize the module instead of
+    /// weakening the assertion; a poisoned lock still lets the remaining tests run and
+    /// report their own result.
+    static RECLAIMER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn serialize() -> std::sync::MutexGuard<'static, ()> {
+        RECLAIMER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     fn wait_for_unload(before: u64) -> bool {
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -141,6 +175,7 @@ mod tests {
 
     #[test]
     fn unloading_happens_off_the_dropping_thread() {
+        let _serial = serialize();
         // The test binary itself is a valid module handle to open.
         let exe = std::env::current_exe().expect("current exe");
         let before = unloaded_modules();
@@ -151,5 +186,47 @@ mod tests {
             drop(lib);
         }
         assert!(wait_for_unload(before), "reclaimer never freed the module");
+    }
+
+    /// The queue is unbounded and must drain a burst: a callback that retires many
+    /// modules (or a long campaign) may leave a backlog, never a leak.
+    #[test]
+    fn a_burst_of_retired_libraries_is_drained_and_accounted_for() {
+        let _serial = serialize();
+        let exe = std::env::current_exe().expect("current exe");
+        init_reclaimer();
+        let unloaded_before = unloaded_modules();
+        let live_before = live_modules();
+        for _ in 0..200 {
+            let lib = DeferredLibrary::open(&exe).expect("open self");
+            drop(lib);
+        }
+        assert!(
+            pending_reclamations() <= 200,
+            "the pending counter must account for every queued library"
+        );
+        assert!(
+            wait_until_idle(Duration::from_secs(20)),
+            "the reclaimer must drain a 200-library burst"
+        );
+        assert_eq!(pending_reclamations(), 0);
+        assert_eq!(
+            live_modules(),
+            live_before,
+            "a burst must not leak a single library handle"
+        );
+        assert!(
+            unloaded_modules() >= unloaded_before + 200,
+            "every retired library must be accounted as unloaded"
+        );
+    }
+
+    /// `init_reclaimer` is idempotent and safe to call from any control thread.
+    #[test]
+    fn init_reclaimer_is_idempotent() {
+        let _serial = serialize();
+        init_reclaimer();
+        init_reclaimer();
+        assert!(wait_until_idle(Duration::from_secs(5)));
     }
 }
