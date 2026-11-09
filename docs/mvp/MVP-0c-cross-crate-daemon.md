@@ -258,3 +258,24 @@ compatibilité ascendante est prouvée, et les erreurs sont explicites.
 - Aucun `PROVED` ; pas de test multi-heure ; un seul toolchain/target mesuré.
 - Deux tests d'intégration protocolaires ajoutés (`wire_externs.rs`), stdio et TCP
   réels ; la suite daemon passe de 113 à **115 tests verts**.
+
+## 9. Régénération des preuves (opt-in)
+
+Ce test (`wire_externs`) n'écrit **plus** dans `evidence/` par défaut : une
+exécution ordinaire de `cargo test` reste propre côté Git et dépose la preuve
+sous `target/ravum-evidence/` (répertoire ignoré). Le même convention s'applique
+à `central_evidence` et au test `rootapp_attribution`.
+
+```powershell
+# exécution normale : arbre propre, copie sous target/ravum-evidence/
+cargo test -p ravum-daemon --offline --test wire_externs -- --test-threads=1
+
+# régénération explicite de la preuve versionnée
+$env:RAVUM_WRITE_EVIDENCE = '1'
+cargo test -p ravum-daemon --offline --test wire_externs -- --test-threads=1
+Remove-Item Env:RAVUM_WRITE_EVIDENCE
+```
+
+Toutes les assertions sont conservées dans les deux modes ; seul le chemin
+d'écriture change. Vérification : `evidence/mvp0c-evidence-hygiene-2026-11-09.json`
+(before/after `git status`, copies `target/`, écriture opt-in, restauration).

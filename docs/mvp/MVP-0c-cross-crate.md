@@ -358,3 +358,23 @@ Résultat (exit 0, `valid=true`, `workspace_unchanged=true`) :
 - La détection `include!`/`env!` reste textuelle et sur-conservative (L1).
 - Aucun fichier CLI/daemon/coordinator modifié ; seuls `graph.rs`, le nouveau test,
   la fixture, cette section et l'évidence JSON.
+
+## 12. Régénération des preuves (opt-in)
+
+Le test de régression `rootapp_attribution` n'écrit **plus** dans `evidence/` par
+défaut : l'exécution ordinaire laisse l'arbre Git propre et écrit sous
+`target/ravum-evidence/` (répertoire ignoré). Même convention que
+`central_evidence` et `wire_externs`.
+
+```powershell
+# exécution normale : arbre propre
+cargo test -p ravum-unit-graph --offline --test rootapp_attribution -- --test-threads=1
+
+# régénération explicite de la preuve versionnée
+$env:RAVUM_WRITE_EVIDENCE = '1'
+cargo test -p ravum-unit-graph --offline --test rootapp_attribution -- --test-threads=1
+Remove-Item Env:RAVUM_WRITE_EVIDENCE
+```
+
+Assertions inchangées ; preuve d'hygiène :
+`evidence/mvp0c-evidence-hygiene-2026-11-09.json`.

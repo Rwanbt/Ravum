@@ -261,18 +261,29 @@ fn member_change_keeps_root_content_id_and_root_change_keeps_member_content_id()
         "files outside every unit root remain ignored (pre-existing behaviour); every file below a package root is now attributed exactly once",
         "no PROVED: these are bounded observations",
     ]);
-    let evidence_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("evidence");
+    // Repository evidence is opt-in: a plain `cargo test --workspace` must leave
+    // the git tree clean (same convention as `central_evidence`).
+    let write_repository = std::env::var("RAVUM_WRITE_EVIDENCE").as_deref() == Ok("1");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let evidence_dir = if write_repository {
+        root.join("evidence")
+    } else {
+        root.join("target").join("ravum-evidence")
+    };
     std::fs::create_dir_all(&evidence_dir).expect("evidence dir");
+    let evidence_path = evidence_dir.join("mvp0c-unit-graph-rootapp-2026-11-09.json");
     std::fs::write(
-        evidence_dir.join("mvp0c-unit-graph-rootapp-2026-11-09.json"),
+        &evidence_path,
         format!(
             "{}\n",
             serde_json::to_string_pretty(&evidence).expect("evidence")
         ),
     )
     .expect("write evidence");
+    println!(
+        "unit-graph rootapp evidence written ({}) (set RAVUM_WRITE_EVIDENCE=1 for the repository copy)",
+        evidence_path.display()
+    );
     let _ = std::fs::remove_dir_all(&workspace);
     // Silence the unused-function warning in some build configurations.
     let _ = rel;

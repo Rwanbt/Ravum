@@ -624,12 +624,19 @@ fn wire_externs_stdio_and_tcp_evidence() {
             "no PROVED: these are bounded protocol observations",
         ],
     });
-    let evidence_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("evidence");
+    // Repository evidence is opt-in: a plain `cargo test --workspace` must leave
+    // the git tree clean (same convention as `central_evidence`).
+    let write_repository = std::env::var("RAVUM_WRITE_EVIDENCE").as_deref() == Ok("1");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let evidence_dir = if write_repository {
+        root.join("evidence")
+    } else {
+        root.join("target").join("ravum-evidence")
+    };
     std::fs::create_dir_all(&evidence_dir).expect("evidence dir");
+    let evidence_path = evidence_dir.join("mvp0c-daemon-wire-externs-2026-11-09.json");
     std::fs::write(
-        evidence_dir.join("mvp0c-daemon-wire-externs-2026-11-09.json"),
+        &evidence_path,
         format!(
             "{}\n",
             serde_json::to_string_pretty(&evidence).expect("evidence json")
@@ -637,7 +644,8 @@ fn wire_externs_stdio_and_tcp_evidence() {
     )
     .expect("write evidence");
     println!(
-        "wire externs evidence written; {} assertions",
+        "wire externs evidence written ({}); {} assertions (set RAVUM_WRITE_EVIDENCE=1 for the repository copy)",
+        evidence_path.display(),
         assertions.len()
     );
     let _ = std::fs::remove_dir_all(&work);
