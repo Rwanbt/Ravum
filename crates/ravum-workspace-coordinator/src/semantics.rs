@@ -204,12 +204,14 @@ pub fn analyse(snapshot: &SourceSnapshot, files: &[FilePatch]) -> PatchFacts {
                 match line {
                     DiffLine::Context(_) => old_line += 1,
                     DiffLine::Remove(text) => {
-                        let changed = changed_line(&file.path, old_line, ChangeKind::Removed, text, &spans);
+                        let changed =
+                            changed_line(&file.path, old_line, ChangeKind::Removed, text, &spans);
                         record(&mut facts, changed);
                         old_line += 1;
                     }
                     DiffLine::Add(text) => {
-                        let changed = changed_line(&file.path, old_line, ChangeKind::Added, text, &spans);
+                        let changed =
+                            changed_line(&file.path, old_line, ChangeKind::Added, text, &spans);
                         record(&mut facts, changed);
                     }
                 }
@@ -347,7 +349,12 @@ fn flush_identifier(out: &mut BTreeSet<String>, current: &mut String) {
     if word.len() < 2 {
         return;
     }
-    if word.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(true) {
+    if word
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(true)
+    {
         return;
     }
     if KEYWORDS.contains(&word.as_str()) {
@@ -617,16 +624,106 @@ fn skip_block_comment(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
 }
 
 const KEYWORDS: &[&str] = &[
-    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
-    "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
-    "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true",
-    "type", "unsafe", "use", "where", "while", "String", "Vec", "Option", "Result", "Some",
-    "None", "Ok", "Err", "Box", "format", "println", "print", "u8", "u16", "u32", "u64", "u128",
-    "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32", "f64", "bool", "char", "str",
-    "test", "cfg", "allow", "derive", "Debug", "Display", "Clone", "Copy", "Default", "PartialEq",
-    "Eq", "Send", "Sync", "main", "panic", "unreachable", "assert", "assert_eq", "assert_ne",
-    "debug_assert", "format", "println", "write", "writeln", "vec", "todo", "unimplemented",
-    "matches", "include_str", "include_bytes", "cfg_attr", "env", "concat",
+    "as",
+    "async",
+    "await",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+    "String",
+    "Vec",
+    "Option",
+    "Result",
+    "Some",
+    "None",
+    "Ok",
+    "Err",
+    "Box",
+    "format",
+    "println",
+    "print",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "u128",
+    "usize",
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "i128",
+    "isize",
+    "f32",
+    "f64",
+    "bool",
+    "char",
+    "str",
+    "test",
+    "cfg",
+    "allow",
+    "derive",
+    "Debug",
+    "Display",
+    "Clone",
+    "Copy",
+    "Default",
+    "PartialEq",
+    "Eq",
+    "Send",
+    "Sync",
+    "main",
+    "panic",
+    "unreachable",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "debug_assert",
+    "format",
+    "println",
+    "write",
+    "writeln",
+    "vec",
+    "todo",
+    "unimplemented",
+    "matches",
+    "include_str",
+    "include_bytes",
+    "cfg_attr",
+    "env",
+    "concat",
 ];
 
 #[cfg(test)]
@@ -640,15 +737,35 @@ mod tests {
         let spans = symbol_spans(SAMPLE);
         let names: Vec<&str> = spans.iter().map(|span| span.name.as_str()).collect();
         assert_eq!(names, vec!["alpha", "beta"]);
-        assert_eq!(spans[0], SymbolSpan { name: "alpha".into(), start_line: 3, end_line: 5 });
-        assert_eq!(spans[1], SymbolSpan { name: "beta".into(), start_line: 7, end_line: 9 });
+        assert_eq!(
+            spans[0],
+            SymbolSpan {
+                name: "alpha".into(),
+                start_line: 3,
+                end_line: 5
+            }
+        );
+        assert_eq!(
+            spans[1],
+            SymbolSpan {
+                name: "beta".into(),
+                start_line: 7,
+                end_line: 9
+            }
+        );
     }
 
     #[test]
     fn enclosing_symbol_is_the_innermost_span() {
         let spans = symbol_spans("mod m {\n    fn inner() -> u32 {\n        1\n    }\n}\n");
-        assert_eq!(enclosing_symbol(&spans, 3).map(|s| s.name.as_str()), Some("inner"));
-        assert_eq!(enclosing_symbol(&spans, 1).map(|s| s.name.as_str()), Some("m"));
+        assert_eq!(
+            enclosing_symbol(&spans, 3).map(|s| s.name.as_str()),
+            Some("inner")
+        );
+        assert_eq!(
+            enclosing_symbol(&spans, 1).map(|s| s.name.as_str()),
+            Some("m")
+        );
         assert!(enclosing_symbol(&spans, 6).is_none());
     }
 
@@ -677,11 +794,16 @@ mod tests {
     #[test]
     fn body_change_is_behavioural_and_public_header_is_a_contract_risk() {
         let snapshot = SourceSnapshot::new([("lib.rs".to_string(), SAMPLE.to_string())]);
-        let body = file_patch("+++ b/lib.rs\n@@ -3,3 +3,3 @@\n fn alpha() -> u32 {\n-    1\n+    10\n }\n");
+        let body = file_patch(
+            "+++ b/lib.rs\n@@ -3,3 +3,3 @@\n fn alpha() -> u32 {\n-    1\n+    10\n }\n",
+        );
         let facts = analyse(&snapshot, &body);
         assert!(facts.behavioural_change());
         assert!(facts.contract_risks.is_empty());
-        assert_eq!(facts.modified_symbols.iter().cloned().collect::<Vec<_>>(), vec!["alpha"]);
+        assert_eq!(
+            facts.modified_symbols.iter().cloned().collect::<Vec<_>>(),
+            vec!["alpha"]
+        );
 
         let public: SourceSnapshot = SourceSnapshot::new([(
             "lib.rs".to_string(),
@@ -731,7 +853,14 @@ mod tests {
         let b = analyse(&helper, &file_patch("+++ b/lib.rs\n@@ -5,3 +5,3 @@\n fn compose(x: u32) -> u32 {\n-    helper(x) * 2\n+    helper(x) * 3\n }\n"));
         let mut modified: ModifiedSymbols = BTreeMap::new();
         for symbol in &a.modified_symbols {
-            modified.insert(symbol.clone(), ("lib.rs".to_string(), "a/t".to_string(), "agent-a".to_string()));
+            modified.insert(
+                symbol.clone(),
+                (
+                    "lib.rs".to_string(),
+                    "a/t".to_string(),
+                    "agent-a".to_string(),
+                ),
+            );
         }
         let dependency = undeclared_dependency(&b, &modified).expect("dependency detected");
         assert_eq!(dependency.symbol, "helper");
@@ -752,6 +881,3 @@ mod tests {
         assert!(has_test_code(&with_test));
     }
 }
-
-
-

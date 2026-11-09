@@ -92,7 +92,10 @@ fn accepted_changes_analyse_only_affected_units_and_replay_hits_the_cache() {
     let report = read_report(&report_path);
     assert_eq!(report["exit_code"].as_u64(), Some(0));
     assert!(
-        report["violations"].as_array().expect("violations").is_empty(),
+        report["violations"]
+            .as_array()
+            .expect("violations")
+            .is_empty(),
         "no invariant violation expected: {:?}",
         report["violations"]
     );
@@ -139,7 +142,10 @@ fn accepted_changes_analyse_only_affected_units_and_replay_hits_the_cache() {
     );
     assert_eq!(report["decisions"].as_array().expect("decisions").len(), 4);
     assert_eq!(
-        report["accepted_changes"].as_array().expect("accepted").len(),
+        report["accepted_changes"]
+            .as_array()
+            .expect("accepted")
+            .len(),
         4
     );
 
@@ -195,7 +201,10 @@ fn accepted_changes_analyse_only_affected_units_and_replay_hits_the_cache() {
     assert_eq!(change1["snapshot_after"], change2["snapshot_before"]);
     // Same (proposal, unit) content replayed in pass 2 must have the exact same
     // daemon content identity.
-    for pass1 in analyses.iter().filter(|analysis| analysis["pass"].as_u64() == Some(1)) {
+    for pass1 in analyses
+        .iter()
+        .filter(|analysis| analysis["pass"].as_u64() == Some(1))
+    {
         let replay = analyses
             .iter()
             .find(|candidate| {
@@ -214,18 +223,22 @@ fn accepted_changes_analyse_only_affected_units_and_replay_hits_the_cache() {
     // The durable journal holds one line per decision per pass.
     for path in report["journal_paths"].as_array().expect("journals") {
         let path = path.as_str().expect("journal path");
-        let lines = std::fs::read_to_string(path).expect("journal").lines().count();
+        let lines = std::fs::read_to_string(path)
+            .expect("journal")
+            .lines()
+            .count();
         assert_eq!(lines, 2, "one journal line per decision in {path}");
     }
-    assert!(journal.exists(), "pass 1 journal must be at the requested path");
+    assert!(
+        journal.exists(),
+        "pass 1 journal must be at the requested path"
+    );
 
     // Daemon-level totals: three real compiler runs for eight answers.
     let stats = &report["daemon"]["stats"];
     assert_eq!(stats["rustc_runs"].as_u64(), Some(3), "{stats}");
     assert_eq!(
-        stats["cache_hits_memory"]
-            .as_u64()
-            .expect("memory hits"),
+        stats["cache_hits_memory"].as_u64().expect("memory hits"),
         5,
         "{stats}"
     );
@@ -310,7 +323,10 @@ fn unreadable_graph_fails_closed_with_a_nonzero_exit_code() {
     let text = std::fs::read_to_string(&manifest).expect("manifest");
     std::fs::write(
         &manifest,
-        text.replace("path = \"../crate_a\"", "path = \"../crate_does_not_exist\""),
+        text.replace(
+            "path = \"../crate_a\"",
+            "path = \"../crate_does_not_exist\"",
+        ),
     )
     .expect("broken manifest");
 
@@ -344,7 +360,10 @@ fn a_textually_accepted_change_that_fails_analysis_exits_nonzero_and_reports_it(
     // Compute the real base identity/hashes of the fixture (single content
     // engine: ravum-snapshot), exactly like a collaborating agent would.
     let snapshot = SourceSnapshot::from_directory(&fixture_workspace(), |path| {
-        let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
         name == "Cargo.toml" || path.extension().map(|ext| ext == "rs").unwrap_or(false)
     })
     .expect("fixture snapshot");
@@ -390,7 +409,10 @@ fn a_textually_accepted_change_that_fails_analysis_exits_nonzero_and_reports_it(
     );
     let report = read_report(&report_path);
     assert_eq!(report["exit_code"].as_u64(), Some(3));
-    assert_eq!(report["decisions"][0]["decision"].as_str(), Some("AUTO_SAFE"));
+    assert_eq!(
+        report["decisions"][0]["decision"].as_str(),
+        Some("AUTO_SAFE")
+    );
     let violations = report["violations"].as_array().expect("violations");
     assert!(
         violations

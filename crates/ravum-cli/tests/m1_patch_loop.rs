@@ -17,7 +17,8 @@ fn fixtures() -> PathBuf {
 
 fn fixture(rel: &str) -> SourceSnapshot {
     let path = fixtures().join(rel);
-    SourceSnapshot::from_file(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+    SourceSnapshot::from_file(&path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
 }
 
 fn work(name: &str) -> PathBuf {
@@ -61,9 +62,17 @@ fn compatible_patch_changes_behaviour_without_restart() {
     assert_eq!(host.active_verification(), VerificationStatus::Assumed);
 
     let report = pipeline.run_once(&host, &v2, &|| v2.id().clone());
-    assert!(report.activated(), "expected activation, got {:?}", report.outcome);
+    assert!(
+        report.activated(),
+        "expected activation, got {:?}",
+        report.outcome
+    );
 
-    assert_eq!(host.call(2.0), 5.0, "v2 behaviour must be visible without restart");
+    assert_eq!(
+        host.call(2.0),
+        5.0,
+        "v2 behaviour must be visible without restart"
+    );
     let status = host.status();
     assert_eq!(status.patch_id, "calculator-v2");
     assert_eq!(status.activations, 1);
@@ -86,7 +95,10 @@ fn invalid_source_is_refused_before_any_build() {
         LoopOutcome::RefusedByCheck { errors } => assert!(errors > 0),
         other => panic!("expected RefusedByCheck, got {other:?}"),
     }
-    assert!(report.build.is_none(), "nothing may be built on a failed check");
+    assert!(
+        report.build.is_none(),
+        "nothing may be built on a failed check"
+    );
     assert_eq!(host.call(2.0), 4.0, "the active version must be untouched");
     assert_eq!(host.status().activations, 0);
 }
@@ -103,7 +115,13 @@ fn incompatible_native_abi_is_refused() {
 
     let reason = prepare(&bad_artifact, &ExpectedAbi::default()).unwrap_err();
     assert!(
-        matches!(reason, RejectReason::AbiMismatch { expected: 1, found: 999 }),
+        matches!(
+            reason,
+            RejectReason::AbiMismatch {
+                expected: 1,
+                found: 999
+            }
+        ),
         "unexpected reason: {reason:?}"
     );
 
@@ -223,7 +241,11 @@ fn result_built_from_a_superseded_snapshot_is_never_activated() {
     // While v2 is being analysed/built, someone edits again: `current` moves on.
     let newer = fixture("calculator/v2.rs").with_overlay([(
         "v2.rs".to_string(),
-        fixture("calculator/v2.rs").content_of("v2.rs").unwrap().to_string() + "\n",
+        fixture("calculator/v2.rs")
+            .content_of("v2.rs")
+            .unwrap()
+            .to_string()
+            + "\n",
     )]);
     let report = pipeline.run_once(&host, &v2, &|| newer.id().clone());
 
@@ -277,7 +299,10 @@ fn in_flight_call_keeps_the_old_module_loaded() {
     assert_eq!(host.call(2.0), 1004.0, "new calls use the new version");
 
     let old_value = caller.join().expect("in-flight call panicked");
-    assert_eq!(old_value, 198.0, "the in-flight call finished on the OLD code");
+    assert_eq!(
+        old_value, 198.0,
+        "the in-flight call finished on the OLD code"
+    );
 
     let deadline = Instant::now() + Duration::from_secs(5);
     while weak.upgrade().is_some() && Instant::now() < deadline {

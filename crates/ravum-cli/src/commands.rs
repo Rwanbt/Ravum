@@ -112,7 +112,10 @@ pub fn check(args: &[String]) -> u8 {
         }
     };
     if has(args, "--json") {
-        println!("{}", serde_json::to_string_pretty(&outcome.diagnostics).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&outcome.diagnostics).unwrap()
+        );
     } else {
         println!(
             "snapshot {}  check {} ms\n{}",
@@ -172,8 +175,7 @@ fn check_with_daemon(file: &str, json_out: bool) -> u8 {
     if json_out {
         println!(
             "{}",
-            serde_json::to_string_pretty(&report.to_json())
-                .unwrap_or_else(|_| "{}".to_owned())
+            serde_json::to_string_pretty(&report.to_json()).unwrap_or_else(|_| "{}".to_owned())
         );
     } else {
         println!(
@@ -329,7 +331,10 @@ pub fn run(args: &[String]) -> u8 {
     } else {
         pipeline.prepare_candidate(&snapshot, &|| snapshot.id().clone())
     };
-    if !matches!(report.outcome, ravum_coordinator::LoopOutcome::CandidateReady) {
+    if !matches!(
+        report.outcome,
+        ravum_coordinator::LoopOutcome::CandidateReady
+    ) {
         eprintln!("cannot start the demo host: {:?}", report.outcome);
         return 1;
     }
@@ -347,7 +352,10 @@ pub fn run(args: &[String]) -> u8 {
     eprintln!(
         "demo host pid={} artifact={} (Ctrl+C to stop)",
         host.pid(),
-        report.artifact_id().map(|a| a.short().to_owned()).unwrap_or_default()
+        report
+            .artifact_id()
+            .map(|a| a.short().to_owned())
+            .unwrap_or_default()
     );
     let mut ticks = 0u64;
     loop {
@@ -561,7 +569,8 @@ pub fn artifacts(args: &[String]) -> u8 {
 }
 
 pub fn status(args: &[String]) -> u8 {
-    let path = state_path();    let Ok(text) = std::fs::read_to_string(&path) else {
+    let path = state_path();
+    let Ok(text) = std::fs::read_to_string(&path) else {
         eprintln!("no recorded state at {}", path.display());
         return 1;
     };

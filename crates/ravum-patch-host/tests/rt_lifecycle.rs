@@ -22,8 +22,7 @@
 //! device, no RT priority, no WCET, no page-fault measurement).
 
 use ravum_dsp_harness::{
-    allocations_on_this_thread, block_evidence, deallocations_on_this_thread,
-    reset_thread_counters,
+    allocations_on_this_thread, block_evidence, deallocations_on_this_thread, reset_thread_counters,
 };
 use ravum_patch_host::{
     live_modules, pending_reclamations, prepare_block, wait_until_idle, BlockHost, ExpectedAbi,
@@ -41,7 +40,9 @@ use std::time::{Duration, Instant};
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn serial() -> std::sync::MutexGuard<'static, ()> {
-    SERIAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Drain any deferred unload before reading the process-wide module counters.
@@ -186,7 +187,9 @@ fn audio_loop(host: &BlockHost, campaign: &Campaign) -> AudioResult {
             "dsp-gain-v2" => saw_v2 = true,
             _ => {}
         }
-        program.current.process_block(&input, &mut output, &mut state);
+        program
+            .current
+            .process_block(&input, &mut output, &mut state);
         blocks += 1;
         campaign.blocks.fetch_add(1, Ordering::SeqCst);
         std::hint::black_box(output[0]);
@@ -238,7 +241,11 @@ fn audio_thread_neither_allocates_nor_frees_during_repeated_swaps() {
         audio.join().expect("audio thread")
     });
 
-    assert!(result.blocks >= 50, "the callback ran only {} blocks", result.blocks);
+    assert!(
+        result.blocks >= 50,
+        "the callback ran only {} blocks",
+        result.blocks
+    );
     assert!(
         result.allocations == 0,
         "the audio thread allocated {} time(s) during {} blocks",
@@ -264,7 +271,10 @@ fn audio_thread_neither_allocates_nor_frees_during_repeated_swaps() {
         result.blocks, result.allocations, result.deallocations, result.versions_seen
     );
     drop(host);
-    assert!(wait_until_idle(Duration::from_secs(20)), "reclaimer backlog");
+    assert!(
+        wait_until_idle(Duration::from_secs(20)),
+        "reclaimer backlog"
+    );
 }
 
 /// Every retired native library must be released off the callback, and closing the host
@@ -379,9 +389,8 @@ fn a_long_block_delays_publication_but_the_audio_path_never_waits_on_the_writer(
     let started = Instant::now();
     let report = std::thread::scope(|scope| {
         let writer = scope.spawn(|| {
-            let prepared =
-                prepare_block(Path::new(&v2.build.artifact_path), &ExpectedAbi::dsp())
-                    .expect("prepare");
+            let prepared = prepare_block(Path::new(&v2.build.artifact_path), &ExpectedAbi::dsp())
+                .expect("prepare");
             host.apply(
                 prepared,
                 &v2.build,

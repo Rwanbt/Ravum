@@ -19,8 +19,13 @@ pub const SCHEMA_VERSION: i32 = 2;
 pub enum StoreError {
     Sqlite(String),
     /// The database was written by a newer build: refuse rather than guess.
-    SchemaTooNew { found: i32, supported: i32 },
-    NegativeSchema { found: i32 },
+    SchemaTooNew {
+        found: i32,
+        supported: i32,
+    },
+    NegativeSchema {
+        found: i32,
+    },
 }
 
 impl fmt::Display for StoreError {
@@ -118,9 +123,9 @@ impl Db {
     }
 
     pub fn tasks(&self) -> Result<Vec<Task>, StoreError> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, title, done, due_date, created_at FROM tasks ORDER BY id ASC",
-        )?;
+        let mut statement = self
+            .conn
+            .prepare("SELECT id, title, done, due_date, created_at FROM tasks ORDER BY id ASC")?;
         let rows = statement.query_map([], row_to_task)?;
         let mut out = Vec::new();
         for row in rows {
@@ -130,9 +135,9 @@ impl Db {
     }
 
     pub fn task(&self, id: i64) -> Result<Option<Task>, StoreError> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, title, done, due_date, created_at FROM tasks WHERE id = ?1",
-        )?;
+        let mut statement = self
+            .conn
+            .prepare("SELECT id, title, done, due_date, created_at FROM tasks WHERE id = ?1")?;
         Ok(statement.query_row([id], row_to_task).optional()?)
     }
 
@@ -143,7 +148,8 @@ impl Db {
             rusqlite::params![new.title.trim(), created_at, new.due_date],
         )?;
         let id = self.conn.last_insert_rowid();
-        self.task(id)?.ok_or_else(|| StoreError::Sqlite("inserted task vanished".to_owned()))
+        self.task(id)?
+            .ok_or_else(|| StoreError::Sqlite("inserted task vanished".to_owned()))
     }
 
     pub fn patch_task(&self, id: i64, patch: &TaskPatch) -> Result<Option<Task>, StoreError> {
@@ -292,7 +298,13 @@ mod tests {
     fn patching_a_missing_task_returns_none() {
         let db = Db::open_in_memory().unwrap();
         assert!(db
-            .patch_task(42, &TaskPatch { done: Some(true), ..TaskPatch::default() })
+            .patch_task(
+                42,
+                &TaskPatch {
+                    done: Some(true),
+                    ..TaskPatch::default()
+                }
+            )
             .unwrap()
             .is_none());
     }
@@ -302,7 +314,13 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA user_version = 99").unwrap();
         let err = Db::prepare(conn).unwrap_err();
-        assert!(matches!(err, StoreError::SchemaTooNew { found: 99, supported: 2 }));
+        assert!(matches!(
+            err,
+            StoreError::SchemaTooNew {
+                found: 99,
+                supported: 2
+            }
+        ));
     }
 
     #[test]
@@ -331,7 +349,10 @@ mod tests {
         let updated = db
             .patch_task(
                 tasks[0].id,
-                &TaskPatch { due_date: Some("2026-12-01".to_owned()), ..TaskPatch::default() },
+                &TaskPatch {
+                    due_date: Some("2026-12-01".to_owned()),
+                    ..TaskPatch::default()
+                },
             )
             .unwrap()
             .expect("task");

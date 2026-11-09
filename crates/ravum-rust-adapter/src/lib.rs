@@ -190,13 +190,9 @@ impl RustAdapter {
         ));
 
         if self.artifact_cache {
-            if let Some(cached) = self.reuse_cached(
-                &cache_path,
-                snapshot,
-                &build_context_id,
-                &toolchain,
-                &flags,
-            )? {
+            if let Some(cached) =
+                self.reuse_cached(&cache_path, snapshot, &build_context_id, &toolchain, &flags)?
+            {
                 return Ok(cached);
             }
         }
@@ -318,11 +314,7 @@ impl RustAdapter {
                 flags: flags.to_vec(),
                 build_ms,
                 cached_build: true,
-                diagnostics: DiagnosticSet::new(
-                    snapshot.id().clone(),
-                    "rustc",
-                    &toolchain.release,
-                ),
+                diagnostics: DiagnosticSet::new(snapshot.id().clone(), "rustc", &toolchain.release),
             },
             success: true,
         }))
@@ -341,7 +333,11 @@ impl RustAdapter {
         ]
     }
 
-    fn write_source(&self, snapshot: &SourceSnapshot, phase: &str) -> Result<PathBuf, AdapterError> {
+    fn write_source(
+        &self,
+        snapshot: &SourceSnapshot,
+        phase: &str,
+    ) -> Result<PathBuf, AdapterError> {
         let dir = self.work_dir.join(phase);
         std::fs::create_dir_all(&dir)?;
         let path_name = snapshot

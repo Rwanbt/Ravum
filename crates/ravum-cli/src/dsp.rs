@@ -66,7 +66,12 @@ pub fn dsp(args: &[String]) -> u8 {
                 return 1;
             }
         };
-        let report = host.apply(prepared, &second, Some(&evidence), &second.source_snapshot_id);
+        let report = host.apply(
+            prepared,
+            &second,
+            Some(&evidence),
+            &second.source_snapshot_id,
+        );
         swap_report = serde_json::to_value(&report).unwrap_or(serde_json::Value::Null);
         if report.status != ravum_protocol::ActivationStatus::Activated {
             eprintln!("activation refused: {:?}", report.reject_reason);
@@ -90,10 +95,15 @@ pub fn dsp(args: &[String]) -> u8 {
     }
 
     let unloaded = host.status().unloaded_modules;
-    let report_before = before.measurement.clone().into_report("session-before", 0, unloaded);
-    let report_after = after
-        .as_ref()
-        .map(|o| o.measurement.clone().into_report("session-after", swaps, unloaded));
+    let report_before = before
+        .measurement
+        .clone()
+        .into_report("session-before", 0, unloaded);
+    let report_after = after.as_ref().map(|o| {
+        o.measurement
+            .clone()
+            .into_report("session-after", swaps, unloaded)
+    });
 
     if json_out {
         let payload = json!({

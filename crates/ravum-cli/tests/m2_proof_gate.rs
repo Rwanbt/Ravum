@@ -15,7 +15,8 @@ fn root() -> PathBuf {
 
 fn fixture(rel: &str) -> SourceSnapshot {
     let path = root().join("fixtures").join(rel);
-    SourceSnapshot::from_file(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+    SourceSnapshot::from_file(&path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
 }
 
 fn work(name: &str) -> PathBuf {
@@ -39,9 +40,16 @@ fn obligation(inputs: Vec<f64>) -> Obligation {
 
 fn bootstrap(pipeline: &Pipeline, source: &SourceSnapshot) -> PatchHost {
     let built = pipeline.build(source).expect("adapter");
-    assert!(built.success, "fixture must compile: {:?}", built.build.diagnostics);
-    PatchHost::bootstrap(ExpectedAbi::default(), Path::new(&built.build.artifact_path))
-        .expect("bootstrap")
+    assert!(
+        built.success,
+        "fixture must compile: {:?}",
+        built.build.diagnostics
+    );
+    PatchHost::bootstrap(
+        ExpectedAbi::default(),
+        Path::new(&built.build.artifact_path),
+    )
+    .expect("bootstrap")
 }
 
 #[test]
@@ -50,9 +58,8 @@ fn an_unsatisfied_obligation_blocks_activation_and_keeps_the_old_version() {
     let positive = fixture("proof/positive.rs");
     let negative = fixture("proof/negative.rs");
 
-    let pipeline = Pipeline::new("rustc", &dir).with_obligations(vec![obligation(vec![
-        0.0, 1.0, 2.0,
-    ])]);
+    let pipeline =
+        Pipeline::new("rustc", &dir).with_obligations(vec![obligation(vec![0.0, 1.0, 2.0])]);
     let host = bootstrap(&pipeline, &positive);
     assert_eq!(host.call(2.0), 4.0);
 
@@ -74,7 +81,10 @@ fn an_unsatisfied_obligation_blocks_activation_and_keeps_the_old_version() {
     assert_eq!(host.call(2.0), 4.0, "the previous version must stay active");
     assert_eq!(host.status().activations, 0);
     assert_eq!(report.proofs.len(), 1);
-    let counterexample = report.proofs[0].counterexample.clone().expect("counterexample");
+    let counterexample = report.proofs[0]
+        .counterexample
+        .clone()
+        .expect("counterexample");
     assert!(counterexample.contains("f(2)"), "got: {counterexample}");
     assert!(!report.proofs[0].authorizes_activation());
 }
@@ -96,7 +106,11 @@ fn a_narrower_declared_domain_lets_the_same_artifact_through() {
         Some(&mut broker),
     );
 
-    assert!(report.activated(), "expected activation, got {:?}", report.outcome);
+    assert!(
+        report.activated(),
+        "expected activation, got {:?}",
+        report.outcome
+    );
     assert_eq!(report.proofs[0].status, VerificationStatus::Proved);
     // Honest consequence: the gate is exactly as wide as the declared domain.
     assert_eq!(host.call(1.0), 1.0);
@@ -162,7 +176,10 @@ fn a_repeated_request_inside_the_pipeline_reuses_the_cached_verdict() {
         first.build.as_ref().unwrap().artifact_id
     );
     assert!(matches!(
-        second.activation.as_ref().and_then(|a| a.reject_reason.clone()),
+        second
+            .activation
+            .as_ref()
+            .and_then(|a| a.reject_reason.clone()),
         Some(RejectReason::AlreadyActive { .. })
     ));
 }

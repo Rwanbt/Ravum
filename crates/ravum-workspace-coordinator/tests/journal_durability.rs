@@ -1,6 +1,8 @@
 //! The journal must be durable per decision, not flushed at the end.
 
-use ravum_protocol::{ChangeProposal, DecisionKind, JournalEntry, SnapshotId, COLLAB_SCHEMA_VERSION};
+use ravum_protocol::{
+    ChangeProposal, DecisionKind, JournalEntry, SnapshotId, COLLAB_SCHEMA_VERSION,
+};
 use ravum_snapshot::SourceSnapshot;
 use ravum_workspace_coordinator::Coordinator;
 use std::path::{Path, PathBuf};
@@ -56,10 +58,16 @@ fn lines(path: &Path) -> Vec<JournalEntry> {
 fn every_decision_is_on_disk_before_the_next_one() {
     let dir = dir("journal-durable");
     let path = dir.join("journal.jsonl");
-    let mut coordinator = Coordinator::new(base()).with_journal(&path).expect("journal");
+    let mut coordinator = Coordinator::new(base())
+        .with_journal(&path)
+        .expect("journal");
 
     coordinator.submit(&proposal(&coordinator, "agent-a", PATCH_ALPHA));
-    assert_eq!(lines(&path).len(), 1, "the first decision must already be durable");
+    assert_eq!(
+        lines(&path).len(),
+        1,
+        "the first decision must already be durable"
+    );
 
     coordinator.submit(&proposal(&coordinator, "agent-b", "not a diff"));
     let written = lines(&path);
@@ -81,7 +89,9 @@ fn every_decision_is_on_disk_before_the_next_one() {
 fn a_journal_that_cannot_be_written_is_reported_not_ignored() {
     let dir = dir("journal-broken");
     let path = dir.join("journal.jsonl");
-    let mut coordinator = Coordinator::new(base()).with_journal(&path).expect("journal");
+    let mut coordinator = Coordinator::new(base())
+        .with_journal(&path)
+        .expect("journal");
     // Replace the file with a directory: appending must now fail.
     std::fs::remove_file(&path).unwrap();
     std::fs::create_dir(&path).unwrap();

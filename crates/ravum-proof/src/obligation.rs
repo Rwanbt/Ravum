@@ -172,8 +172,12 @@ mod tests {
     }
 
     fn obligation() -> Obligation {
-        Obligation::new("compute.non_negative", Claim::NonNegative, vec![0.0, 1.0, 2.0])
-            .with_assumption("single-threaded call")
+        Obligation::new(
+            "compute.non_negative",
+            Claim::NonNegative,
+            vec![0.0, 1.0, 2.0],
+        )
+        .with_assumption("single-threaded call")
     }
 
     #[test]
@@ -219,12 +223,8 @@ mod tests {
 
     #[test]
     fn assumption_order_does_not_matter() {
-        let a = obligation()
-            .with_assumption("a")
-            .with_assumption("b");
-        let b = obligation()
-            .with_assumption("b")
-            .with_assumption("a");
+        let a = obligation().with_assumption("a").with_assumption("b");
+        let b = obligation().with_assumption("b").with_assumption("a");
         assert_eq!(verification_key(&a, &ctx()), verification_key(&b, &ctx()));
     }
 }

@@ -95,7 +95,10 @@ pub enum RejectReason {
     /// Manifest declares another logical signature than the host supports.
     SignatureMismatch { expected: String, found: String },
     /// The build was produced from a snapshot that is no longer current.
-    StaleBuild { built_from: SnapshotId, expected: SnapshotId },
+    StaleBuild {
+        built_from: SnapshotId,
+        expected: SnapshotId,
+    },
     /// The operating system refused to load the module.
     LoadFailed { detail: String },
     /// No version is active yet, so "keep the previous version" is impossible.
@@ -103,7 +106,10 @@ pub enum RejectReason {
     /// The module is already the active one.
     AlreadyActive { artifact_id: ArtifactId },
     /// Artifact bytes do not match the `ArtifactId` recorded by the build.
-    ArtifactMismatch { expected: ArtifactId, found: ArtifactId },
+    ArtifactMismatch {
+        expected: ArtifactId,
+        found: ArtifactId,
+    },
     /// The required verification did not reach a passing `tested` status.
     NotVerified { verification_status: String },
 }
@@ -210,7 +216,11 @@ mod tests {
 
     #[test]
     fn reject_reason_is_serializable_with_tag() {
-        let json = serde_json::to_value(RejectReason::AbiMismatch { expected: 1, found: 2 }).unwrap();
+        let json = serde_json::to_value(RejectReason::AbiMismatch {
+            expected: 1,
+            found: 2,
+        })
+        .unwrap();
         assert_eq!(json["kind"], "abi_mismatch");
         assert_eq!(json["found"], 2);
     }

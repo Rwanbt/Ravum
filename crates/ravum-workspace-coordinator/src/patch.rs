@@ -62,14 +62,24 @@ pub fn parse(patch: &str) -> Result<Vec<FilePatch>, PatchError> {
 
     for raw in patch.lines() {
         if raw.starts_with("diff --git") {
-            flush_hunk(&mut current, &mut pending_hunk, &mut old_remaining, &mut new_remaining)?;
+            flush_hunk(
+                &mut current,
+                &mut pending_hunk,
+                &mut old_remaining,
+                &mut new_remaining,
+            )?;
             if let Some(p) = current.take() {
                 files.push(p);
             }
             continue;
         }
         if let Some(rest) = raw.strip_prefix("--- ") {
-            flush_hunk(&mut current, &mut pending_hunk, &mut old_remaining, &mut new_remaining)?;
+            flush_hunk(
+                &mut current,
+                &mut pending_hunk,
+                &mut old_remaining,
+                &mut new_remaining,
+            )?;
             if let Some(p) = current.take() {
                 files.push(p);
             }
@@ -85,7 +95,12 @@ pub fn parse(patch: &str) -> Result<Vec<FilePatch>, PatchError> {
             continue;
         }
         if raw.starts_with("@@") {
-            flush_hunk(&mut current, &mut pending_hunk, &mut old_remaining, &mut new_remaining)?;
+            flush_hunk(
+                &mut current,
+                &mut pending_hunk,
+                &mut old_remaining,
+                &mut new_remaining,
+            )?;
             let (old_start, old_len) = parse_range(raw)?;
             old_remaining = old_len;
             new_remaining = parse_new_len(raw)?;
@@ -126,10 +141,20 @@ pub fn parse(patch: &str) -> Result<Vec<FilePatch>, PatchError> {
             }
         }
         if old_remaining == 0 && new_remaining == 0 {
-            flush_hunk(&mut current, &mut pending_hunk, &mut old_remaining, &mut new_remaining)?;
+            flush_hunk(
+                &mut current,
+                &mut pending_hunk,
+                &mut old_remaining,
+                &mut new_remaining,
+            )?;
         }
     }
-    flush_hunk(&mut current, &mut pending_hunk, &mut old_remaining, &mut new_remaining)?;
+    flush_hunk(
+        &mut current,
+        &mut pending_hunk,
+        &mut old_remaining,
+        &mut new_remaining,
+    )?;
     if let Some(p) = current.take() {
         files.push(p);
     }
@@ -227,7 +252,11 @@ pub fn apply(file_patch: &FilePatch, original: &str) -> Result<String, PatchErro
                 line: hunk.old_start,
             });
         }
-        out.extend(src[cursor..start.min(src.len())].iter().map(|s| s.to_string()));
+        out.extend(
+            src[cursor..start.min(src.len())]
+                .iter()
+                .map(|s| s.to_string()),
+        );
         let mut idx = start;
         for line in &hunk.lines {
             match line {
@@ -288,7 +317,11 @@ pub fn touched_ranges(files: &[FilePatch]) -> Vec<(String, usize, usize)> {
             }
             // A replacement occupies the lines it removed; a pure insertion
             // competes for the position it inserts at.
-            let touched = if removed.is_empty() { inserted } else { removed };
+            let touched = if removed.is_empty() {
+                inserted
+            } else {
+                removed
+            };
             for line in touched {
                 out.push((file.path.clone(), line, line));
             }
@@ -348,7 +381,10 @@ mod tests {
         let p = patch_of("+++ b/x.rs\n@@ -1,3 +1,3 @@\n fn a() -> u32 {\n-    1\n+    10\n }\n");
         let applied = apply(&p[0], &crlf).expect("apply on CRLF source");
         assert!(applied.contains("\r\n"));
-        assert_eq!(applied.matches("\r\n").count(), crlf.matches("\r\n").count());
+        assert_eq!(
+            applied.matches("\r\n").count(),
+            crlf.matches("\r\n").count()
+        );
         assert!(applied.contains("    10"));
     }
 

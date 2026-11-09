@@ -145,5 +145,8 @@ fn main() {
         ],
     });
     let _ = timer;
-    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&payload).unwrap_or_default()
+    );
 }

@@ -50,8 +50,12 @@ fn proves_a_bounded_property_and_then_serves_the_cache() {
     let artifact = build("positive-prove", "positive.rs");
     let mut broker = broker("positive-prove", Duration::from_secs(10));
     let ctx = broker.context_for(&artifact);
-    let obligation = Obligation::new("compute.non_negative", Claim::NonNegative, vec![0.0, 1.0, 2.0, 3.0, 4.0])
-        .with_assumption("inputs are the exact domain enumerated by the verifier");
+    let obligation = Obligation::new(
+        "compute.non_negative",
+        Claim::NonNegative,
+        vec![0.0, 1.0, 2.0, 3.0, 4.0],
+    )
+    .with_assumption("inputs are the exact domain enumerated by the verifier");
 
     let first = broker
         .prove(Path::new(&artifact.artifact_path), &obligation, &ctx)
@@ -79,8 +83,11 @@ fn a_single_bad_input_yields_a_precise_counterexample() {
     let artifact = build("negative-ce", "negative.rs");
     let mut broker = broker("negative-ce", Duration::from_secs(10));
     let ctx = broker.context_for(&artifact);
-    let obligation =
-        Obligation::new("compute.non_negative", Claim::NonNegative, vec![0.0, 1.0, 2.0, 3.0]);
+    let obligation = Obligation::new(
+        "compute.non_negative",
+        Claim::NonNegative,
+        vec![0.0, 1.0, 2.0, 3.0],
+    );
 
     let result = broker
         .prove(Path::new(&artifact.artifact_path), &obligation, &ctx)
@@ -132,7 +139,10 @@ fn mutating_the_artifact_invalidates_the_cache() {
     let bad = broker
         .prove(Path::new(&negative.artifact_path), &obligation, &ctx_neg)
         .expect("prove negative");
-    assert!(!bad.from_cache, "a different artifact must not reuse a verdict");
+    assert!(
+        !bad.from_cache,
+        "a different artifact must not reuse a verdict"
+    );
     assert!(!bad.record.passed);
     assert_eq!(broker.stats().verifier_runs, 2);
 }
@@ -143,13 +153,25 @@ fn mutating_the_domain_or_the_assumptions_invalidates_the_cache() {
     let mut broker = broker("mut-obligation", Duration::from_secs(10));
     let ctx = broker.context_for(&artifact);
     let base = Obligation::new("compute.finite", Claim::Finite, vec![0.0, 1.0]);
-    broker.prove(Path::new(&artifact.artifact_path), &base, &ctx).unwrap();
+    broker
+        .prove(Path::new(&artifact.artifact_path), &base, &ctx)
+        .unwrap();
 
     let wider_domain = Obligation::new("compute.finite", Claim::Finite, vec![0.0, 1.0, 2.0]);
-    assert!(!broker.prove(Path::new(&artifact.artifact_path), &wider_domain, &ctx).unwrap().from_cache);
+    assert!(
+        !broker
+            .prove(Path::new(&artifact.artifact_path), &wider_domain, &ctx)
+            .unwrap()
+            .from_cache
+    );
 
     let stricter = base.clone().with_assumption("f is pure");
-    assert!(!broker.prove(Path::new(&artifact.artifact_path), &stricter, &ctx).unwrap().from_cache);
+    assert!(
+        !broker
+            .prove(Path::new(&artifact.artifact_path), &stricter, &ctx)
+            .unwrap()
+            .from_cache
+    );
 
     assert_eq!(broker.stats().verifier_runs, 3);
 }
@@ -171,7 +193,10 @@ fn mutating_the_toolchain_invalidates_and_marks_the_old_verdict_stale() {
     let second = broker
         .prove(Path::new(&artifact.artifact_path), &obligation, &upgraded)
         .unwrap();
-    assert!(!second.from_cache, "another toolchain must not reuse a verdict");
+    assert!(
+        !second.from_cache,
+        "another toolchain must not reuse a verdict"
+    );
     assert_ne!(first.key, second.key);
 
     // The old key is still in the ledger, but not valid for the new context.
@@ -206,7 +231,10 @@ fn an_absent_external_prover_is_unsupported_not_proved() {
         kani.name(),
         kani.version(),
     );
-    let outcome = kani.check(Path::new(&artifact.artifact_path), &Obligation::new("o", Claim::Finite, vec![0.0]));
+    let outcome = kani.check(
+        Path::new(&artifact.artifact_path),
+        &Obligation::new("o", Claim::Finite, vec![0.0]),
+    );
     assert!(
         matches!(outcome, ravum_proof::VerifierOutcome::Unsupported { .. }),
         "unexpected outcome: {outcome}"
@@ -253,7 +281,10 @@ fn verdicts_are_reused_after_a_broker_restart() {
     let result = reopened
         .prove(Path::new(&artifact.artifact_path), &obligation, &ctx)
         .unwrap();
-    assert!(result.from_cache, "the ledger must survive a process restart");
+    assert!(
+        result.from_cache,
+        "the ledger must survive a process restart"
+    );
     assert_eq!(result.key, key);
     assert_eq!(reopened.stats().verifier_runs, 0);
 }

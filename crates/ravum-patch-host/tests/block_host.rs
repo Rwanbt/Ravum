@@ -54,15 +54,24 @@ fn a_gain_patch_replaces_the_processing_at_a_block_boundary() {
     let mut out = vec![0f32; 128];
 
     host.process_rt(&constant_block(1.0, 128), &mut out, &mut state);
-    assert!(out.iter().all(|s| (*s - 0.5).abs() < 1e-6), "v1 gain is 0.5");
+    assert!(
+        out.iter().all(|s| (*s - 0.5).abs() < 1e-6),
+        "v1 gain is 0.5"
+    );
     assert_eq!(host.active_verification(), VerificationStatus::Assumed);
 
     let v2 = build(&dir, "gain_v2.rs");
     let evidence = block_evidence(&v2).expect("evidence");
     assert_eq!(evidence.status, VerificationStatus::Tested);
-    let prepared = prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
+    let prepared =
+        prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
     let report = host.apply(prepared, &v2, Some(&evidence), &v2.source_snapshot_id);
-    assert_eq!(report.status, ravum_protocol::ActivationStatus::Activated, "{:?}", report.reject_reason);
+    assert_eq!(
+        report.status,
+        ravum_protocol::ActivationStatus::Activated,
+        "{:?}",
+        report.reject_reason
+    );
 
     // The whole block uses exactly one version: no half-swapped buffer.
     host.process_rt(&constant_block(1.0, 128), &mut out, &mut state);
@@ -82,13 +91,22 @@ fn an_incompatible_dsp_abi_is_refused_before_any_call() {
 
     let reason = prepare_block(Path::new(&bad.artifact_path), &ExpectedAbi::dsp()).unwrap_err();
     assert!(
-        matches!(reason, RejectReason::AbiMismatch { expected: 2, found: 1 }),
+        matches!(
+            reason,
+            RejectReason::AbiMismatch {
+                expected: 2,
+                found: 1
+            }
+        ),
         "unexpected: {reason:?}"
     );
 
     let mut out = vec![0f32; 64];
     host.process_rt(&constant_block(1.0, 64), &mut out, &mut DspState::default());
-    assert!(out.iter().all(|s| (*s - 0.5).abs() < 1e-6), "v1 still active");
+    assert!(
+        out.iter().all(|s| (*s - 0.5).abs() < 1e-6),
+        "v1 still active"
+    );
 }
 
 #[test]
@@ -104,7 +122,13 @@ fn a_scalar_module_cannot_be_loaded_as_a_dsp_module() {
 
     let reason = prepare_block(Path::new(&build.artifact_path), &ExpectedAbi::dsp()).unwrap_err();
     assert!(
-        matches!(reason, RejectReason::AbiMismatch { expected: 2, found: 1 }),
+        matches!(
+            reason,
+            RejectReason::AbiMismatch {
+                expected: 2,
+                found: 1
+            }
+        ),
         "unexpected: {reason:?}"
     );
 }
@@ -127,9 +151,15 @@ fn compatible_iir_swap_keeps_the_host_owned_state_and_the_signal_continuous() {
 
     let v2 = build(&dir, "iir_v2.rs");
     let evidence = block_evidence(&v2).expect("evidence");
-    let prepared = prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
+    let prepared =
+        prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
     let report = host.apply(prepared, &v2, Some(&evidence), &v2.source_snapshot_id);
-    assert_eq!(report.status, ravum_protocol::ActivationStatus::Activated, "{:?}", report.reject_reason);
+    assert_eq!(
+        report.status,
+        ravum_protocol::ActivationStatus::Activated,
+        "{:?}",
+        report.reject_reason
+    );
 
     // The host owns the state, so the swap cannot reset it.
     assert_eq!(state, state_before);
@@ -143,7 +173,10 @@ fn compatible_iir_swap_keeps_the_host_owned_state_and_the_signal_continuous() {
     );
     // And the new coefficient is really in use: 0.5*1 + 0.5*z1, not 0.5*1.
     let expected = 0.5 * 1.0 + 0.5 * state_before.z1;
-    assert!((first_after - expected).abs() < 1e-5, "got {first_after}, expected {expected}");
+    assert!(
+        (first_after - expected).abs() < 1e-5,
+        "got {first_after}, expected {expected}"
+    );
 }
 
 #[test]
@@ -185,7 +218,8 @@ fn an_in_flight_block_keeps_the_retired_module_alive() {
 
     let v2 = build(&dir, "gain_v2.rs");
     let evidence = block_evidence(&v2).expect("evidence");
-    let prepared = prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
+    let prepared =
+        prepare_block(Path::new(&v2.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
     host.apply(prepared, &v2, Some(&evidence), &v2.source_snapshot_id);
 
     let mut out = vec![0f32; 32];
@@ -212,7 +246,8 @@ fn republishing_the_active_module_is_refused() {
     let dir = work("dsp-redundant");
     let (host, build) = host(&dir, "gain_v1.rs");
     let evidence = block_evidence(&build).expect("evidence");
-    let prepared = prepare_block(Path::new(&build.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
+    let prepared =
+        prepare_block(Path::new(&build.artifact_path), &ExpectedAbi::dsp()).expect("prepare");
     let report = host.apply(prepared, &build, Some(&evidence), &build.source_snapshot_id);
     assert!(matches!(
         report.reject_reason,

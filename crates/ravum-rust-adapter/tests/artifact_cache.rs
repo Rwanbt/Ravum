@@ -27,13 +27,20 @@ fn the_same_snapshot_is_built_once_and_then_reused() {
     let adapter = RustAdapter::new("rustc", dir.join("work"));
     let snapshot = snapshot();
 
-    let first = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let first = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
     assert!(first.success);
     assert!(!first.build.cached_build);
 
-    let second = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let second = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
     assert!(second.success);
-    assert!(second.build.cached_build, "second build must be a cache hit");
+    assert!(
+        second.build.cached_build,
+        "second build must be a cache hit"
+    );
     assert_eq!(first.build.artifact_id, second.build.artifact_id);
     assert_eq!(first.build.artifact_path, second.build.artifact_path);
     assert!(
@@ -49,13 +56,17 @@ fn a_tampered_cached_artifact_is_rebuilt_not_trusted() {
     let dir = work("cache-tamper");
     let adapter = RustAdapter::new("rustc", dir.join("work"));
     let snapshot = snapshot();
-    let first = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let first = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
 
     let mut bytes = std::fs::read(&first.build.artifact_path).expect("read artifact");
     bytes.push(0);
     std::fs::write(&first.build.artifact_path, &bytes).expect("tamper");
 
-    let second = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let second = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
     assert!(
         !second.build.cached_build,
         "a modified artifact must never be served from cache"
@@ -69,10 +80,17 @@ fn the_cache_can_be_disabled_for_measurement() {
     let adapter = RustAdapter::new("rustc", dir.join("work")).with_artifact_cache(false);
     let snapshot = snapshot();
 
-    let first = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
-    let second = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let first = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
+    let second = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
     assert!(!first.build.cached_build);
-    assert!(!second.build.cached_build, "measurement mode must really rebuild");
+    assert!(
+        !second.build.cached_build,
+        "measurement mode must really rebuild"
+    );
     assert!(
         Path::new(&first.build.artifact_path).is_file()
             && Path::new(&second.build.artifact_path).is_file(),
@@ -91,8 +109,12 @@ fn msvc_output_is_not_byte_reproducible_which_is_why_the_cache_exists() {
     let adapter = RustAdapter::new("rustc", dir.join("work")).with_artifact_cache(false);
     let snapshot = snapshot();
 
-    let first = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
-    let second = adapter.build_cdylib(&snapshot, &dir.join("artifacts")).expect("build");
+    let first = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
+    let second = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("build");
     assert_ne!(
         first.build.artifact_path, second.build.artifact_path,
         "cold builds use distinct paths"

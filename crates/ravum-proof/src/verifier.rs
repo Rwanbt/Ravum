@@ -111,7 +111,8 @@ impl Verifier for ExhaustiveVerifier {
             }
             let first = prepared.module.call(*input);
             let second = prepared.module.call(*input);
-            if let Some(counterexample) = evaluate(&obligation.claim, *input, first, second, previous)
+            if let Some(counterexample) =
+                evaluate(&obligation.claim, *input, first, second, previous)
             {
                 return VerifierOutcome::Failed { counterexample };
             }
@@ -212,9 +213,7 @@ impl Verifier for KaniVerifier {
     }
 
     fn version(&self) -> String {
-        self.detected
-            .clone()
-            .unwrap_or_else(|| "absent".to_owned())
+        self.detected.clone().unwrap_or_else(|| "absent".to_owned())
     }
 
     fn check(&self, _artifact: &Path, obligation: &Obligation) -> VerifierOutcome {

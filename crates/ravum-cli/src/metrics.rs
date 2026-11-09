@@ -64,7 +64,11 @@ mod win {
 
     #[link(name = "psapi")]
     extern "system" {
-        fn GetProcessMemoryInfo(process: isize, counters: *mut ProcessMemoryCounters, cb: u32) -> i32;
+        fn GetProcessMemoryInfo(
+            process: isize,
+            counters: *mut ProcessMemoryCounters,
+            cb: u32,
+        ) -> i32;
     }
 
     /// Working set of the current process, in bytes.

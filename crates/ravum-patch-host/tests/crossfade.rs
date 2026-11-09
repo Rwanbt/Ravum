@@ -29,7 +29,9 @@ use std::time::Duration;
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn serial() -> std::sync::MutexGuard<'static, ()> {
-    SERIAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn root() -> PathBuf {
@@ -96,18 +98,32 @@ fn config(blocks: u64) -> SessionConfig {
 
 /// Render a session, swap, then render the continuation from the same state and signal
 /// so `max_sample_delta` really covers the swap boundary.
-fn measure_swap_boundary(host: &BlockHost, candidate: &Built, blocks: u64) -> (SessionOutcome, SessionOutcome) {
-    let before = measure_from(config(blocks), DspState::default(), 0.0, |input, output, state| {
-        host.process_rt(input, output, state);
-    });
+fn measure_swap_boundary(
+    host: &BlockHost,
+    candidate: &Built,
+    blocks: u64,
+) -> (SessionOutcome, SessionOutcome) {
+    let before = measure_from(
+        config(blocks),
+        DspState::default(),
+        0.0,
+        |input, output, state| {
+            host.process_rt(input, output, state);
+        },
+    );
     swap(host, candidate);
     let continued = SessionConfig {
         start_sample: config(blocks).blocks * config(blocks).frames as u64,
         ..config(blocks)
     };
-    let after = measure_from(continued, before.final_state, before.last_sample, |input, output, state| {
-        host.process_rt(input, output, state);
-    });
+    let after = measure_from(
+        continued,
+        before.final_state,
+        before.last_sample,
+        |input, output, state| {
+            host.process_rt(input, output, state);
+        },
+    );
     (before, after)
 }
 
@@ -131,8 +147,9 @@ fn a_crossfaded_gain_swap_removes_the_click() {
     let mut immediate_worst = 0f32;
     let mut faded_worst = 0f32;
     for blocks in configs {
-        let immediate = BlockHost::bootstrap(ExpectedAbi::dsp(), Path::new(&v1.build.artifact_path))
-            .expect("bootstrap");
+        let immediate =
+            BlockHost::bootstrap(ExpectedAbi::dsp(), Path::new(&v1.build.artifact_path))
+                .expect("bootstrap");
         let faded = BlockHost::bootstrap_with_crossfade(
             ExpectedAbi::dsp(),
             Path::new(&v1.build.artifact_path),
@@ -183,8 +200,9 @@ fn a_crossfaded_iir_swap_removes_the_click() {
     let mut immediate_worst = 0f32;
     let mut faded_worst = 0f32;
     for blocks in configs {
-        let immediate = BlockHost::bootstrap(ExpectedAbi::dsp(), Path::new(&v1.build.artifact_path))
-            .expect("bootstrap");
+        let immediate =
+            BlockHost::bootstrap(ExpectedAbi::dsp(), Path::new(&v1.build.artifact_path))
+                .expect("bootstrap");
         let faded = BlockHost::bootstrap_with_crossfade(
             ExpectedAbi::dsp(),
             Path::new(&v1.build.artifact_path),
@@ -262,7 +280,10 @@ fn the_crossfade_path_does_not_allocate_or_free_on_the_audio_thread() {
     });
 
     assert_eq!(swaps.load(Ordering::SeqCst), 8);
-    assert_eq!(allocations, 0, "the crossfade allocated on the audio thread");
+    assert_eq!(
+        allocations, 0,
+        "the crossfade allocated on the audio thread"
+    );
     assert_eq!(deallocations, 0, "the crossfade freed on the audio thread");
 
     drop(host);

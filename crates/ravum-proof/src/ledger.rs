@@ -60,7 +60,8 @@ impl EvidenceLedger {
         }
         let mut lines = Vec::new();
         if path.is_file() {
-            let text = std::fs::read_to_string(&path).map_err(|e| LedgerError::Io(e.to_string()))?;
+            let text =
+                std::fs::read_to_string(&path).map_err(|e| LedgerError::Io(e.to_string()))?;
             for (index, raw) in text.lines().enumerate() {
                 let raw = raw.trim();
                 if raw.is_empty() {
@@ -206,7 +207,10 @@ mod tests {
             ledger.lookup(&VerificationKey::new("k1"), &ctx("b")),
             Lookup::Stale(_)
         ));
-        assert_eq!(ledger.lookup(&VerificationKey::new("other"), &ctx("a")), Lookup::Missing);
+        assert_eq!(
+            ledger.lookup(&VerificationKey::new("other"), &ctx("a")),
+            Lookup::Missing
+        );
     }
 
     #[test]

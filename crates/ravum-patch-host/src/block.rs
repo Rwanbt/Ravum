@@ -25,7 +25,7 @@ use crate::host::{evaluate_gates, validate_loaded, ExpectedAbi};
 use crate::reclaimer::{init_reclaimer, live_modules, unloaded_modules, DeferredLibrary};
 use crate::slot::ArcSlot;
 use ravum_protocol::{
-    ActiveVersionId, ActivationReport, ActivationStatus, ArtifactId, BuildOutput, DspState,
+    ActivationReport, ActivationStatus, ActiveVersionId, ArtifactId, BuildOutput, DspState,
     EvidenceRecord, HostStatus, PatchManifest, RejectReason, SnapshotId, StageTimings,
     VerificationStatus, DSP_EXPORT, PATCH_SCHEMA_VERSION,
 };
@@ -153,7 +153,8 @@ impl BlockProgram {
     }
 
     fn record_fade_progress(&self, frames: usize) {
-        self.fade_rendered.fetch_add(frames as u32, Ordering::SeqCst);
+        self.fade_rendered
+            .fetch_add(frames as u32, Ordering::SeqCst);
     }
 }
 
@@ -179,11 +180,12 @@ pub fn prepare_block(path: &Path, expected: &ExpectedAbi) -> Result<PreparedBloc
     let started = Instant::now();
     let lib = DeferredLibrary::open(path).map_err(|detail| RejectReason::LoadFailed { detail })?;
     let validated = validate_loaded(lib, path, expected)?;
-    let process: BlockFn = unsafe { validated.lib.symbol(b"ravum_process_block\0") }.map_err(|_| {
-        RejectReason::MissingExport {
-            symbol: DSP_EXPORT.to_owned(),
-        }
-    })?;
+    let process: BlockFn =
+        unsafe { validated.lib.symbol(b"ravum_process_block\0") }.map_err(|_| {
+            RejectReason::MissingExport {
+                symbol: DSP_EXPORT.to_owned(),
+            }
+        })?;
     Ok(PreparedBlock {
         module: Arc::new(BlockModule {
             process,
