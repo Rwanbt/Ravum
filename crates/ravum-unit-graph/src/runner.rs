@@ -284,6 +284,15 @@ pub fn run_chain(graph: &UnitGraph, options: &ChainOptions) -> Result<RunReport,
             "-o".to_owned(),
             out_file.display().to_string(),
         ];
+        // Activated Cargo features must be visible to rustc exactly as Cargo
+        // passes them. Without these `--cfg` flags the targeted build would not
+        // be the unit Cargo builds: a `#[cfg(feature = "…")]` API could silently
+        // disappear and the verified interface would be wrong. Units whose
+        // activation set is unknown never reach this point.
+        for feature in &unit.activated_features {
+            args.push("--cfg".to_owned());
+            args.push(format!("feature=\"{feature}\""));
+        }
         for extern_artifact in &externs {
             let artifact_path = match artifacts.load_verified(&extern_artifact.interface_id) {
                 Some(bytes) => {
@@ -632,8 +641,14 @@ fn load_unit_files(graph: &UnitGraph, unit: &Unit) -> Result<Vec<(String, Vec<u8
                 format!("cannot read {}: {error}", path.display()),
             )
         })?;
+        // The content identity must be relative to the workspace: an absolute path
+        // would make two identical trees at different locations look different. A
+        // second, normalized root comparison covers a metadata call that returned
+        // paths in another representable form (8.3 name, verbatim prefix).
+        let normalized_root = crate::graph::normalize_path(graph.root());
         let relative = path
             .strip_prefix(graph.root())
+            .or_else(|_| path.strip_prefix(&normalized_root))
             .map(|relative| relative.to_string_lossy().replace('\\', "/"))
             .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"));
         files.push((relative, bytes));

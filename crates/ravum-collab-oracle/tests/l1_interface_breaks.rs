@@ -138,12 +138,12 @@ fn a_symbol_removal_used_by_api_is_a_blocking_interface_break() {
 #[test]
 fn a_changed_unit_compiled_through_a_cargo_fallback_is_unavailable_never_clear() {
     let before = fixture_snapshot();
-    let after = apply_patch(&before, FEATURES_FALLBACK_CHANGE);
+    let after = apply_patch(&before, BUILDSCRIPT_FALLBACK_CHANGE);
     let request = request(
         before,
         after,
-        FEATURES_FALLBACK_CHANGE,
-        &[FEATURES_PATH],
+        BUILDSCRIPT_FALLBACK_CHANGE,
+        &[BUILDSCRIPT_PATH],
         &[],
     );
     let oracle = UnitGraphOracle::new(state_dir("l1-fallback-uncertain"));
@@ -159,6 +159,31 @@ fn a_changed_unit_compiled_through_a_cargo_fallback_is_unavailable_never_clear()
     assert!(
         !matches!(verdict, OracleVerdict::Clear { .. }),
         "uncertainty must never be reported as Clear"
+    );
+}
+
+#[test]
+fn a_changed_feature_unit_is_verifiable_when_its_activation_set_is_resolved() {
+    // MVP-0d: the activation set of `features` is resolved and passed to rustc,
+    // so this unit no longer hides behind a Cargo fallback. The change compiles
+    // and touches no public interface, so the verdict must not be Unavailable.
+    let before = fixture_snapshot();
+    let after = apply_patch(&before, FEATURES_BODY_CHANGE);
+    let request = request(before, after, FEATURES_BODY_CHANGE, &[FEATURES_PATH], &[]);
+    let oracle = UnitGraphOracle::new(state_dir("l1-features-resolved"));
+    let verdict = oracle.evaluate(&request);
+
+    assert!(
+        unavailable_reason(&verdict).is_none(),
+        "a resolved feature unit must be verifiable: {verdict:?}"
+    );
+    assert!(
+        !matches!(verdict, OracleVerdict::Unavailable { .. }),
+        "no fallback uncertainty should remain for this unit: {verdict:?}"
+    );
+    assert!(
+        blocking(&verdict).is_empty(),
+        "a body change that still compiles must not be blocking: {verdict:?}"
     );
 }
 

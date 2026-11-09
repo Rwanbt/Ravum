@@ -221,7 +221,10 @@ fn v2_with_unit_graph_oracle_is_never_auto_safe_on_an_interface_break() {
         "unexpected decision: {decision}"
     );
     assert_eq!(decision["evaluation_level"], "TEXTUALLY_APPLICABLE");
-    assert_eq!(decision["oracle_blocking"], true);
+    assert_eq!(
+        decision["oracle_blocking"], true,
+        "oracle_blocking must be true: {decision}"
+    );
     let oracle_report = &decision["evaluation"]["oracle"];
     assert_eq!(
         oracle_report["oracle"], "unit-graph-l1",

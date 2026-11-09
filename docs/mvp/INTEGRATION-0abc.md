@@ -88,12 +88,23 @@ introduit par `16b1ff2`.
 
 | Étape | Résultat |
 |---|---|
-| Baseline avant intégration (`cargo test --workspace --offline -- --test-threads=1` sur l'ancien HEAD MVP-0c) | **495 réussis / 0 échec / 78 suites**, reproductible localement |
+| Baseline avant intégration (`cargo test --workspace --offline -- --test-threads=1` sur l'ancien HEAD MVP-0c `2f92c24`) | **495 réussis / 0 échec / 78 suites** |
 | CI produit et impact sur les PR d'origine #78/#80/#82 | vertes (runs `42552560527`, `42552554186`, `42557619322`) |
-| Validation post-fusion sur `dev` | voir `docs/mvp/MVP-0d-integration-report.md` et la CI de la PR |
+| CI des PR d'intégration #83, #84, #85 | **vertes** : `mvp`, `impact`, `docs`, soak auto-GC borné |
+| Suite complète sur `dev` (`6b0ac7b`, `cargo test --workspace --offline -- --test-threads=1`) | **496 réussis / 0 échec / 79 suites** |
+| `cargo fmt --all -- --check` sur `dev` | **0** |
+| `cargo build --workspace --offline` sur `dev` | **0** |
+| Démonstrations M1, COLLAB-1 (`-Commit`), preuve bornée M2, DSP M3 (IIR + gain, 200 blocs) | **0** |
+| Démo M4 (UI + API + SQLite) et **E2E navigateur réel** (`demo-m4-browser.ps1 -RequireBrowser -Screenshots`) | **0** |
+
+Le compteur `dev` est supérieur d'une unité à la baseline : un test parcourt les
+documents du dépôt et prend en compte le présent fichier. Les 63 binaires de test sont
+identiques entre les deux exécutions.
 
 La validation des branches d'origine **ne remplace pas** la validation du code réellement
-fusionné : la suite est rejouée sur `dev` après chaque fusion.
+fusionné : la suite ci-dessus a été exécutée sur `dev` après les trois fusions, et la CI
+de chaque PR d'intégration a été verte avant fusion.
+
 
 ## 6. Ce qui reste décidé par le responsable
 

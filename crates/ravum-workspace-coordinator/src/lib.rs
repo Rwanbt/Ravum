@@ -43,6 +43,7 @@ mod coordinator;
 pub mod evaluation;
 mod git_writer;
 pub mod oracle;
+pub mod overlay;
 pub mod patch;
 mod path_policy;
 mod publication_journal;
@@ -63,6 +64,10 @@ pub use git_writer::{
 pub use oracle::{
     BoundedProof, OracleFinding, OracleFindingKind, OracleReport, OracleRequest, OracleSeverity,
     OracleVerdict, SemanticOracle, TextualSemanticsOracle,
+};
+pub use overlay::{
+    validate_relative_path, BaseSnapshot, ChangeCoordinator, IntegrationOutcome, Overlay,
+    OverlayError, StorageReport, OVERLAY_SCHEMA_VERSION,
 };
 pub use patch::{apply, parse, touched_ranges, FilePatch, Hunk, PatchError};
 pub use publication_journal::{

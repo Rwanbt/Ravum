@@ -211,7 +211,7 @@ fn central_case_and_evidence() {
     }
     assert!(
         deterministic,
-        "the .rmeta of the targeted units must be deterministic on this toolchain"
+        "the .rmeta of the targeted units must be deterministic on this toolchain: {determinism:?}"
     );
     evidence["determinism"] = json!({
         "identical_compilations_same_sha256": deterministic,

@@ -9,6 +9,7 @@ description = "COLLAB-1/2/3 multi-agent proposal coordinator (single Git writer,
 [dependencies]
 ravum-protocol = { workspace = true }
 ravum-snapshot = { workspace = true }
+sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Used only by the `ravum-collab` / `collab2-lab` binaries to inject the real

@@ -123,16 +123,31 @@ pub fn content_id(files: &[(String, Vec<u8>)]) -> String {
 }
 
 /// Context identity of one unit: toolchain + target + edition + crate name +
-/// features + flags. Never mixed with the content identity.
+/// activated features + crate types + build script + flags. Never mixed with
+/// the content identity.
+///
+/// The activated feature set belongs here, not to the content: enabling a
+/// feature changes no source byte yet changes the compiled unit (`--cfg
+/// feature="…"`). A unit whose activation set is unknown never reaches this
+/// function, because it is reported as a conservative fallback first.
 pub fn context_id(context: &ContextSpec, unit: &Unit) -> String {
+    let mut features = unit.activated_features.clone();
+    features.sort();
+    features.dedup();
+    let mut crate_types = unit.crate_types.clone();
+    crate_types.sort();
+    crate_types.dedup();
     let canonical = serde_json::json!({
-        "v": 1,
+        "v": 2,
         "toolchain_id": context.toolchain_id,
         "host_target": context.host_target,
         "target": context.target,
         "edition": unit.edition,
         "crate_name": unit.crate_name,
-        "features": Vec::<String>::new(),
+        "features": features,
+        "crate_types": crate_types,
+        "build_script": unit.build_script,
+        "kind": unit.kind.as_str(),
         "flags": context.flags,
     });
     let bytes = serde_json::to_vec(&canonical).unwrap_or_default();
