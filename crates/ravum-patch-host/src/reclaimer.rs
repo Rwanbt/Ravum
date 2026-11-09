@@ -175,6 +175,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(windows),
+        ignore = "Linux test binaries are PIEs and cannot be dlopen'd; the reclaimer unload path is exercised on Windows and by the cdylib fixtures"
+    )]
     fn unloading_happens_off_the_dropping_thread() {
         let _serial = serialize();
         // The test binary itself is a valid module handle to open.
@@ -192,6 +196,10 @@ mod tests {
     /// The queue is unbounded and must drain a burst: a callback that retires many
     /// modules (or a long campaign) may leave a backlog, never a leak.
     #[test]
+    #[cfg_attr(
+        not(windows),
+        ignore = "Linux test binaries are PIEs and cannot be dlopen'd; the reclaimer drain path is exercised on Windows and by the cdylib fixtures"
+    )]
     fn a_burst_of_retired_libraries_is_drained_and_accounted_for() {
         let _serial = serialize();
         let exe = std::env::current_exe().expect("current exe");
