@@ -4,7 +4,7 @@
 > commande exécutée sur cette machine et à un état de travail non encore gelé par
 > un SHA de commit final. Aucun `PROVED`, aucune maturité « production ».
 > Dernière mesure : 2026-11-09, Windows 11 x86-64, rustc 1.95.0. Tests
-> workspace : **987 passés / 0 échec / 8 ignorés / 80 suites**. Smoke des
+> workspace : **993 passés / 0 échec / 2 ignorés / 80 suites**. Smoke des
 > exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
 > Conformance : **107 cas, 106 PASS / 0 FAIL / 1 SKIP**. **Linux qualifié** sur
 > runner GitHub `ubuntu-latest` (run
@@ -84,7 +84,7 @@ exécuté par le job Linux.
 
 | Campagne | Commande | Résultat exact |
 |---|---|---|
-| Workspace complet | `cargo test --workspace --all-targets -- --test-threads=2` | **987 passés / 0 échec / 8 ignorés / 80 suites** |
+| Workspace complet | `cargo test --workspace --all-targets -- --test-threads=2` | **993 passés / 0 échec / 2 ignorés / 80 suites** |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | 249 054 entrées, 5 216 641 tokens, **0 échec**, digest stable |
 | Fuzz frontend sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check -- --ignored` | 120 300 itérations cumulées, **0 panic / 0 diagnostic vide / 0 non-déterminisme** |
 | Miri | `MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests` | **153 tests PASS** (65 syntax + 87 sema + 1 fuzz), ≈ 5 min 53 s ; exclusions fs Windows documentées |
@@ -97,7 +97,7 @@ exécuté par le job Linux.
 
 | Gate | État | Preuve / limite |
 |---|---|---|
-| T0 | **PASS** | baseline 511/0/80 sur `5408d9b` ; 4 défauts P0 corrigés, 208 tests ; workspace final 987/0 |
+| T0 | **PASS** | baseline 511/0/80 sur `5408d9b` ; 4 défauts P0 corrigés, 208 tests ; workspace final 993/0 |
 | T1 | **PARTIAL** | chaîne B réelle (`check→build→run`) ; M5 A/B mesuré et parité MATCH ; **C `NOT_IMPLEMENTED`**, décision non ratifiée |
 | T2 | **PARTIAL** | spec DRAFT 15 fichiers + conformance 106/107 (1 skip OS) ; `features.md` encore majoritairement `NOT_COVERED`, aucun PASS revendiqué |
 | T3 | **PARTIAL** | 69 tests syntaxe, fuzz 249 k entrées, Miri syntax PASS ; LSP absent (outil, pas frontend) |
