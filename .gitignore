@@ -23,3 +23,5 @@ venv/
 # Measurements and local machine state
 bench-local/
 evidence/local/
+# Sortie locale du calcul d'impact (outil tools/impact/impact.mjs)
+impact.json

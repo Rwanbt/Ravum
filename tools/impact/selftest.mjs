@@ -309,27 +309,77 @@ function testImpactCorpus(workspace) {
     check(transitivelyDepends, 'ravum-store ne déclare plus ravum-todo-core: la preuve doit être revue');
   });
 
-  runCase('dépendant transitif et précision: ravum-snapshot', () => {
+  runCase('dépendant transitif et dev-dépendant direct: ravum-snapshot', () => {
     const result = analyze(workspace, [M('crates/ravum-snapshot/src/lib.rs')]);
     const expected = referenceClosure(workspace, ['ravum-snapshot']);
     assertSetEqual(result.packages, expected, 'fermeture snapshot');
     for (const packageName of ['ravum-rust-adapter', 'ravum-coordinator', 'ravum-cli', 'ravum-workspace-coordinator']) {
       check(result.packages.includes(packageName), `${packageName} devrait être affecté par ravum-snapshot`);
     }
-    for (const packageName of ['ravum-daemon', 'ravum-todo', 'ravum-store', 'ravum-todo-core', 'ravum-dsp-harness']) {
+    for (const packageName of ['ravum-daemon', 'ravum-todo', 'ravum-store', 'ravum-todo-core']) {
       check(!result.packages.includes(packageName), `${packageName} ne dépend pas de ravum-snapshot et ne devrait pas être testé`);
     }
+    // c86d1f0 : dsp-harness déclare une dev-dependency DIRECTE vers snapshot (le test
+    // de stress DSP compile de vraies fixtures). Son test doit donc tourner.
+    check(result.packages.includes('ravum-dsp-harness'), 'dsp-harness (dev-dépendant direct de snapshot) doit être testé');
+    const provenance = result.provenance['ravum-dsp-harness'];
+    check(provenance && provenance.type === 'dev-dependent', `dsp-harness doit être dev-dependent, obtenu ${JSON.stringify(provenance)}`);
+    check(
+      expected.has(provenance.via),
+      `la provenance dev-hop doit être un paquet affecté, obtenu ${provenance.via}`,
+    );
+    check(
+      workspace.deps.get('ravum-dsp-harness').dev.includes('ravum-snapshot'),
+      'ravum-dsp-harness ne déclare plus de dev-dependency vers ravum-snapshot (manifeste à revoir)',
+    );
+    // Pas de propagation transitive arbitraire depuis ce saut dev : demo-host dépend
+    // normalement de patch-host (lui-même dev-hop) et ne doit PAS être ajouté.
+    check(!result.packages.includes('ravum-demo-host'), 'demo-host ne doit pas être propagé depuis un dev-hop');
     check(expected.has('ravum-proof') && expected.has('ravum-patch-host'), 'les dev-dépendants de snapshot doivent être inclus (un saut)');
   });
 
-  runCase('dev-dependency: un saut, pas de propagation arbitraire (rust-adapter)', () => {
+  runCase('dev-dependency directe: dépendant testé, pas de propagation transitive (rust-adapter)', () => {
     const result = analyze(workspace, [M('crates/ravum-rust-adapter/src/lib.rs')]);
     const expected = referenceClosure(workspace, ['ravum-rust-adapter']);
     assertSetEqual(result.packages, expected, 'fermeture rust-adapter');
     check(result.packages.includes('ravum-patch-host'), 'patch-host (dev-dépendant) doit être testé');
     check(result.packages.includes('ravum-proof'), 'proof (dev-dépendant) doit être testé');
     check(result.packages.includes('ravum-cli'), 'cli (dépendant normal) doit être testé');
-    check(!result.packages.includes('ravum-dsp-harness'), 'dsp-harness ne dépend pas de rust-adapter et ne doit pas être testé');
+    // c86d1f0 : dev-dependency DIRECTE dsp-harness -> rust-adapter.
+    check(result.packages.includes('ravum-dsp-harness'), 'dsp-harness (dev-dépendant direct) doit être testé');
+    const provenance = result.provenance['ravum-dsp-harness'];
+    check(provenance && provenance.type === 'dev-dependent', `dsp-harness doit être dev-dependent, obtenu ${JSON.stringify(provenance)}`);
+    check(
+      workspace.deps.get('ravum-dsp-harness').dev.includes('ravum-rust-adapter'),
+      'ravum-dsp-harness ne déclare plus de dev-dependency vers ravum-rust-adapter (manifeste à revoir)',
+    );
+    // Aucune propagation au-delà d'un saut : demo-host (dépendant normal du dev-hop
+    // patch-host) ne doit pas être testé pour un changement de rust-adapter.
+    check(!result.packages.includes('ravum-demo-host'), 'aucune propagation transitive via un dev-hop: demo-host ne doit pas être testé');
+    check(result.provenance['ravum-demo-host'] === undefined, 'demo-host ne doit avoir aucune provenance dev-hop');
+  });
+
+  runCase('règle dev-dependency: directe => testée, jamais propagée au-delà d’un saut', () => {
+    const cases = [
+      ['crates/ravum-snapshot/src/lib.rs', 'ravum-snapshot'],
+      ['crates/ravum-rust-adapter/src/lib.rs', 'ravum-rust-adapter'],
+    ];
+    for (const [filePath, direct] of cases) {
+      const result = analyze(workspace, [M(filePath)]);
+      const expected = referenceClosure(workspace, [direct]);
+      const provenance = result.provenance['ravum-dsp-harness'];
+      check(Boolean(provenance), `dsp-harness absent de la décision pour ${direct}`);
+      check(provenance.type === 'dev-dependent', `dsp-harness doit être dev-dependent pour ${direct}, obtenu ${provenance.type}`);
+      // Le « via » peut être n'importe quel paquet affecté dont dsp-harness est une
+      // dev-dependency directe (ici snapshot ou rust-adapter, tous deux affectés).
+      check(expected.has(provenance.via), `via doit être un paquet affecté (${direct}), obtenu ${provenance.via}`);
+      check(
+        workspace.deps.get('ravum-dsp-harness').dev.includes(provenance.via),
+        `via doit être une dev-dependency déclarée de dsp-harness, obtenu ${provenance.via}`,
+      );
+      check(!result.packages.includes('ravum-demo-host'), `demo-host ne doit pas être propagé depuis le dev-hop (${direct})`);
+      check(result.provenance['ravum-demo-host'] === undefined, `demo-host ne doit avoir aucune provenance dev-hop (${direct})`);
+    }
   });
 
   runCase('nouveau crate ravum-unit-graph: suite propre + dépendants (MVP-0c L1)', () => {
@@ -456,6 +506,52 @@ function testImpactCorpus(workspace) {
       !workspace.byDirLower.has('fixtures/multicrate'.toLowerCase()),
       'fixtures/multicrate ne doit pas être un member du workspace (sinon cargo test --workspace le compilerait)',
     );
+  });
+
+  runCase('benchmarks/** => FULL conservateur, jamais de décision vide', () => {
+    // Les benchmarks contiennent des fixtures non membres et des scripts non
+    // mappés : toute modification doit être FULL conservatrice, JAMAIS une
+    // décision vide (aucune commande) ni une erreur de mapping.
+    const fixtureManifest = 'benchmarks/s8-mvp0c/fixture/Cargo.toml';
+    const fixtureSource = 'benchmarks/s8-mvp0c/fixture/src/lib.rs';
+    const script = 'benchmarks/s8/run-s8.mjs';
+    for (const filePath of [fixtureManifest, fixtureSource, script]) {
+      const result = analyze(workspace, [M(filePath)]);
+      check(result.full === true, `${filePath} doit être FULL conservateur`);
+      check(result.decision === 'full-conservative', `${filePath}: décision ${result.decision} au lieu de full-conservative`);
+      check(result.uncertain === false, `${filePath}: un FULL conservateur ne doit pas être incertain`);
+      check(result.commands.length >= 1, `${filePath}: décision vide (aucune commande)`);
+      check(
+        commandArgs(result).some((argv) => argv.join(' ') === FULL_TEST_ARGV.join(' ')),
+        `${filePath}: commande de suite complète absente`,
+      );
+      check(result.reasons.length > 0, `${filePath}: aucune raison dans la décision`);
+    }
+    const manifest = analyze(workspace, [M(fixtureManifest)]);
+    check(
+      manifest.reasons.some((reason) => reason.includes('manifest') || reason.includes('benchmarks')),
+      'benchmark fixture: raison manifeste/benchmarks absente',
+    );
+    const scriptResult = analyze(workspace, [M(script)]);
+    check(scriptResult.unknown_paths.includes(script), 'script benchmark non listé comme chemin inconnu (fail-closed attendu)');
+  });
+
+  runCase('diff mixte docs + benchmarks => FULL + check docs (décision non vide)', () => {
+    const result = analyze(workspace, [
+      M('docs/mvp/MVP-0c-qualification.md'),
+      M('benchmarks/s8-mvp0c/fixture/Cargo.toml'),
+    ]);
+    check(result.full === true, 'mixte docs+benchmarks doit être FULL');
+    check(result.decision === 'full-conservative', `décision attendue full-conservative, obtenue ${result.decision}`);
+    check(result.uncertain === false, 'mixte docs+benchmarks ne doit pas être incertain');
+    check(result.docs_required === true, 'le check docs doit rester exigé');
+    const argv = commandArgs(result);
+    check(argv.some((entry) => entry.join(' ') === FULL_TEST_ARGV.join(' ')), 'suite complète absente du diff mixte');
+    check(
+      argv.some((entry) => entry[0] === 'python' && entry[1] === 'tools/validate_repo_docs.py'),
+      'check docs absent du diff mixte',
+    );
+    check(result.commands.length >= 2, `décision mixte incomplète: ${result.commands.length} commande(s)`);
   });
 
   runCase('scripts d’orchestration => FULL', () => {
@@ -727,6 +823,16 @@ function testCli() {
     check(decision.unknown_paths.includes('zorglub/data.bin'), 'chemin inconnu non listé');
   });
 
+  runCase('CLI --files: benchmark fixture => FULL conservateur, JSON valide (exit 0)', () => {
+    const run = runCli(['--files', 'benchmarks/s8-mvp0c/fixture/Cargo.toml', '--json']);
+    check(run.code === 0, `code attendu 0, obtenu ${run.code} (stderr: ${run.stderr.slice(0, 300)})`);
+    const decision = parseCliJson(run, 'CLI benchmark fixture');
+    check(decision.full === true, 'FULL attendu pour une fixture de benchmark');
+    check(decision.uncertain === false, 'FULL conservateur ne doit pas être incertain');
+    check(decision.decision === 'full-conservative', `décision attendue full-conservative, obtenue ${decision.decision}`);
+    check(Array.isArray(decision.commands) && decision.commands.length >= 1, 'décision JSON vide (aucune commande)');
+  });
+
   runCase('INCERTAIN: statut U => FULL + INCERTAIN, exit 2 (seul cas d’échec mapping)', () => {
     const run = runCli(['--files', 'U:crates/ravum-snapshot/src/lib.rs', '--json']);
     check(run.code === 2, `code attendu 2, obtenu ${run.code}`);
@@ -874,6 +980,22 @@ function testWorkflowIntegrity() {
     for (const forbidden of ['--exclude', '--skip', '--ignore']) {
       check(!text.includes(forbidden), `token neutralisant interdit dans le workflow: ${forbidden}`);
     }
+
+    // Robustesse CI : la garde du mapping est identifiée, et les étapes
+    // conditionnelles n'exécutent des tests que si le selftest est vert. Cela
+    // évite la cascade trompeuse « aucune décision d'impact » quand le selftest
+    // échoue (le job doit échouer une seule fois, explicitement).
+    check(text.includes('id: mapping_selftest'), 'la garde selftest doit avoir un id stable (mapping_selftest)');
+    const selftestGateUses = (text.match(/steps\.mapping_selftest\.outcome == 'success'/g) || []).length;
+    check(selftestGateUses >= 3, `garde selftest attendue sur au moins 3 étapes conditionnelles, trouvée ${selftestGateUses} fois`);
+    check(
+      /Verify the impact mapping itself \(Node selftest, no cargo\)/.test(text),
+      'le step de selftest mapping doit rester présent',
+    );
+    check(
+      text.indexOf('id: mapping_selftest') < text.indexOf('Compute impact mapping'),
+      'le selftest du mapping doit précéder le calcul d’impact',
+    );
   });
 }
 
