@@ -205,6 +205,11 @@ l'évidence) : suite négative ≈ 63 s, évidence centrale ≈ 30 s, suite daem
 ≈ 43 s. Les fallbacks Cargo dominent le coût : chaque paquet en fallback relance
 `cargo check`, c'est le prix de la conservation (jamais de HIT inventé).
 
+L'évidence n'est réécrite dans le dépôt que si `RAVUM_WRITE_EVIDENCE=1`
+(`$env:RAVUM_WRITE_EVIDENCE='1'; cargo test -p ravum-unit-graph --test central_evidence -- --nocapture`) ;
+par défaut le même JSON est écrit sous `target/ravum-evidence/`, pour qu'une
+exécution de tests ne salisse jamais l'arbre de travail.
+
 ## 9. Limites et non-claims
 
 - **Pas de preuve** : `targeted_ok` signifie « chaîne `--extern` vérifiée par
@@ -219,6 +224,14 @@ l'évidence) : suite négative ≈ 63 s, évidence centrale ≈ 30 s, suite daem
   cache corrompu est traité comme vide (jamais approuvé).
 - La détection `include!`/`env!` est textuelle et volontairement sur-conservative
   (faux positifs possibles → fallback, jamais l'inverse).
+- **Portabilité des identités** : `interface_id` est le SHA-256 du `.rmeta`, qui
+  embarque le chemin absolu du workspace temporaire. Les identités sont donc
+  stables pour un même chemin (test de déterminisme) mais **non portables entre
+  checkouts/machines** ; c'est conservateur (aucun HIT inventé) mais limite la
+  reproduction de l'évidence. Expérience du Lead : `rustc --remap-path-prefix=<racine>=/virtual`
+  produit des `.rmeta` **identiques** dans deux répertoires différents (vérifié le
+  2026-11-09) → piste d'amélioration mesurée, non implémentée dans ce lot
+  (à faire avec régénération de l'évidence et nouveau calcul des identités).
 - La chaîne L1 n'est pas encore branchée dans `ravum-cli` ni dans
   `daemon.analyze` ; l'intégration CLI/daemon reste un travail de Lead/worker L2.
 - Aucun gain de performance n'est revendiqué dans ce lot : L1 est un lot de
