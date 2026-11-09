@@ -162,3 +162,99 @@ des verdicts par identité complète. Aucun gain n'est revendiqué.
 | `crates/ravum-daemon/tests/externs_integration.rs` | 7 tests d'intégration réels (nouveau fichier) |
 | `crates/ravum-daemon/src/bin/ravum-daemon-bench/{main,cross_crate}.rs` | suite `cross-crate` + preuve JSON |
 | `docs/mvp/MVP-0c-cross-crate-daemon.md` | ce rapport |
+
+## 8. Externs dans le protocole JSON-lines (L1.3)
+
+> **Statut : branché, testé de bout en bout (stdio + TCP), compatible legacy.**
+> `AnalysisRequest` n'a **pas** changé : le protocole accepte un champ optionnel
+> `externs` au niveau de la requête wire, et le serveur appelle
+> `Daemon::analyze_with_externs`. Aucun littéral Rust ni client existant n'est
+> cassé. Preuve brute :
+> [`evidence/mvp0c-daemon-wire-externs-2026-11-09.json`](../../evidence/mvp0c-daemon-wire-externs-2026-11-09.json).
+
+### 8.1 Schéma JSON exact
+
+Requête legacy (inchangée, `externs` absent = liste vide) :
+
+```json
+{ "id":"1", "cmd":"analyze", "revision":1, "label":"api", "root":"src/lib.rs",
+  "files":[{"path":"src/lib.rs","content":"pub fn scaled(x: f64) -> f64 { core::scale(x) }\n"}],
+  "context":{"edition":"2021","crate_name":"api","crate_type":"lib","flags":[]} }
+```
+
+Requête avec externs (champ additionnel optionnel) :
+
+```json
+{ "id":"2", "cmd":"analyze", "revision":2, "label":"api", "root":"src/lib.rs",
+  "files":[{"path":"src/lib.rs","content":"pub fn scaled(x: f64) -> f64 { core::scale(x) }\n"}],
+  "context":{"edition":"2021","crate_name":"api","crate_type":"lib","flags":[]},
+  "externs":[ { "name":"core", "crate_name":"core",
+                "interface_id":"e32c9adbd78ce1ca…(64 hex)",
+                "bytes_hex":"7f454c46…(le .rmeta encodé en hexadécimal)" } ] }
+```
+
+Réponse (enveloppe existante) : `{"id","ok":true,"wall_ms","report"}` où `report`
+contient `externs` (nom, crate, `interface_id`, `rmeta_sha256`, `validates`),
+`artifact_sha256` (interface produite/réutilisée, réutilisable comme
+`interface_id` d'une analyse dépendante) et, comme avant, `snapshot_id`,
+`cache`, `diagnostics`, `timings`.
+
+Erreur (même enveloppe, aucun panic, aucun état partiel) :
+
+```json
+{"id":"3","ok":false,"error":{"kind":"invalid_request","message":"extern \"core\": interface_id does not match the SHA-256 of bytes_hex"}}
+```
+
+Types Rust (dans `snapshot.rs`, ré-exportés) :
+`WireAnalyzeRequest { #[serde(flatten)] request: AnalysisRequest, #[serde(default)] externs: Vec<WireExtern> }`
+et `WireExtern { name, crate_name, interface_id, bytes_hex }` (`deny_unknown_fields`).
+`WireAnalyzeRequest::into_parts()` valide et convertit en `Vec<ExternInput>`.
+Le serveur stdio et le serveur TCP utilisent le même chemin de parsing, donc le
+résultat est identique sur les deux transports.
+
+### 8.2 Validation fail-closed (avant toute compilation)
+
+- `externs` absent → `Vec::new()` : comportement legacy strictement identique
+  (`snapshot_id` inchangé pour un même contenu).
+- `externs` non-tableau → `invalid_request`.
+- élément non conforme au schéma (champ inconnu, `bytes_hex` non-hex, longueur
+  impaire) → `invalid_request`.
+- `interface_id` ≠ SHA-256 des octets décodés → `invalid_request`.
+- nom/crate non identifiant Rust, octets vides, > `MAX_EXTERN_BYTES` (8 Mio),
+  > `MAX_EXTERNS_PER_UNIT` (64), noms dupliqués → `invalid_request`.
+- une requête invalide ne modifie pas la révision courante observée par les
+  requêtes suivantes et le daemon continue de servir (testé).
+
+### 8.3 Résultats mesurés (évidence, rustc 1.95.0, machine partagée)
+
+| Étape protocole | Résultat |
+|---|---|
+| stdio, analyse legacy | `ok`, `fresh`, `success`, miss, `snapshot_id=ad9071c6f8b4…`, 110 ms |
+| stdio, même requête legacy répétée | **HIT**, `snapshot_id` identique, 1 ms |
+| stdio, `api` **sans** externs | miss, `success=false`, `snapshot_id=4f6ff34f341d…` |
+| stdio, `api` **avec** extern `core` v1 | miss, `success=true`, `snapshot_id=c25092c7f388…` (**différent**), 109 ms, `externs=1` |
+| stdio, même requête avec extern répétée | **HIT**, `snapshot_id` identique, 5 ms |
+| stdio, hex invalide / SHA incohérent / nom dupliqué | 3 × `ok=false`, `error.kind=invalid_request`, aucun crash |
+| stdio, requête valide après les erreurs | `ok`, `success=true` (daemon opérationnel) |
+| TCP, `api` + extern v1 | HIT (cache du work_dir partagé), `snapshot_id` identique |
+| TCP, même requête répétée | HIT, 1 ms |
+| TCP, extern **compatible** v2 (mêmes sources) | **miss réel**, `success=true`, nouveau `snapshot_id=eec5d12d22f0…`, 126 ms |
+| TCP, extern **cassant** v3 (mêmes sources) | miss réel, `success=false`, diagnostic rustc réel `E0061`, 131 ms |
+
+Conclusion : le protocole expose bien l'analyse inter-crates (un client
+stdio/TCP peut fournir un `.rmeta` réel et compiler un dépendant), l'identité
+complète est respectée (un changement d'extern = miss, jamais HIT périmé), la
+compatibilité ascendante est prouvée, et les erreurs sont explicites.
+
+### 8.4 Limites et non-claims
+
+- `bytes_hex` transporte le `.rmeta` complet : la taille est bornée à 8 Mio par
+  extern et 64 externs par unité ; au-delà, refus explicite.
+- Un extern fourni par un tiers n'a pas de sidecar `artifacts/*.externs.json` :
+  ses propres dépendances transitives doivent être fournies explicitement, sinon
+  rustc produit un diagnostic réel (jamais une interface inventée par le daemon).
+- Le protocole reste **loopback/stdin** ; pas de TLS, pas d'authentification, pas
+  de multi-machine.
+- Aucun `PROVED` ; pas de test multi-heure ; un seul toolchain/target mesuré.
+- Deux tests d'intégration protocolaires ajoutés (`wire_externs.rs`), stdio et TCP
+  réels ; la suite daemon passe de 113 à **115 tests verts**.

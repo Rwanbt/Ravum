@@ -370,8 +370,61 @@ fn handle<W: Write>(daemon: &Daemon, value: &Value, out: &mut W) -> bool {
                     return false;
                 }
             };
+            // Optional content-addressed externs (wire schema: bytes_hex). Absent
+            // means the exact legacy request path; any invalid extern is refused
+            // before compilation.
+            let externs = match value.get("externs") {
+                None => Vec::new(),
+                Some(serde_json::Value::Array(items)) => {
+                    let mut parsed = Vec::with_capacity(items.len());
+                    for item in items {
+                        let wire = match serde_json::from_value::<ravum_daemon::WireExtern>(
+                            item.clone(),
+                        ) {
+                            Ok(wire) => wire,
+                            Err(error) => {
+                                write_json(
+                                    out,
+                                    &json!({
+                                        "id": id,
+                                        "ok": false,
+                                        "error": {"kind": "invalid_request", "message": format!("invalid extern: {error}")},
+                                    }),
+                                );
+                                return false;
+                            }
+                        };
+                        match wire.into_extern_input() {
+                            Ok(extern_input) => parsed.push(extern_input),
+                            Err(error) => {
+                                write_json(
+                                    out,
+                                    &json!({
+                                        "id": id,
+                                        "ok": false,
+                                        "error": {"kind": error.kind.as_str(), "message": error.message},
+                                    }),
+                                );
+                                return false;
+                            }
+                        }
+                    }
+                    parsed
+                }
+                Some(_) => {
+                    write_json(
+                        out,
+                        &json!({
+                            "id": id,
+                            "ok": false,
+                            "error": {"kind": "invalid_request", "message": "`externs` must be an array of {name, crate_name, interface_id, bytes_hex}"},
+                        }),
+                    );
+                    return false;
+                }
+            };
             let started = Instant::now();
-            match daemon.analyze(&request) {
+            match daemon.analyze_with_externs(&request, &externs) {
                 Ok(report) => {
                     let wall_ms = started.elapsed().as_millis() as u64;
                     write_json(

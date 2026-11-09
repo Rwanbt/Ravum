@@ -1,0 +1,559 @@
+{
+  "assertions": [
+    "legacy request without externs still analyses",
+    "legacy repeat is a HIT with the same snapshot_id",
+    "wire externs: success, real miss, snapshot_id differs, usage reported",
+    "identical wire request is a HIT and serves the same artifact",
+    "invalid hex/SHA/duplicate externs are explicit errors",
+    "daemon remains functional after invalid extern requests",
+    "stdio daemon shuts down cleanly",
+    "TCP identical extern request is a HIT",
+    "extern change at constant sources is a real miss with a new snapshot_id",
+    "breaking extern yields a real rustc diagnostic over TCP",
+    "TCP daemon shuts down cleanly"
+  ],
+  "commands": [
+    "cargo test -p ravum-daemon --test wire_externs -- --test-threads=1 --nocapture"
+  ],
+  "generated_unix": 1794189500,
+  "interfaces": {
+    "v1": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+    "v2_compatible": "ba9fb388795825d62db903498d2cc1bfe43b601f90fa231c6237aa6631e3ffb2",
+    "v3_breaking": "95112bd2fc3de51dbc75d1a33a53e3b59bdf63e6d5690515278d18734db1227d"
+  },
+  "kind": "mvp0c-daemon-wire-externs-2026-11-09",
+  "limits": [
+    "local loopback/stdio only, one daemon work_dir, one toolchain",
+    "bytes_hex is bounded by MAX_EXTERN_BYTES (8 MiB) and MAX_EXTERNS_PER_UNIT (64)",
+    "an extern supplied by a third party has no transitive sidecar; its own dependencies must be provided explicitly",
+    "no PROVED: these are bounded protocol observations"
+  ],
+  "protocol": {
+    "request": "legacy AnalysisRequest fields + optional externs: [{name, crate_name, interface_id, bytes_hex}]",
+    "responses": "existing JSON-lines envelope; errors are {ok:false,error:{kind,message}}",
+    "serde_default": "externs absent => empty list, legacy identity unchanged"
+  },
+  "rustc_vV": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "schema_version": 1,
+  "transcript": [
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "legacy_unit",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "files": [
+          {
+            "content": "pub fn legacy() {}\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "legacy",
+        "priority": "normal",
+        "revision": 1,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": "d20ed3ebb66badb2573acffe62b032d28d860fa01536b9c0a794b652b1d8f4bc",
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [],
+        "ok": true,
+        "snapshot_id": "ad9071c6f8b4c4809e09452a0be2da2c4f1858ba9fbcd7cc8a070ed939a6e0fb",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 213
+      },
+      "step": "stdio/legacy-analyze"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "legacy_unit",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "files": [
+          {
+            "content": "pub fn legacy() {}\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "legacy",
+        "priority": "normal",
+        "revision": 1,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": "d20ed3ebb66badb2573acffe62b032d28d860fa01536b9c0a794b652b1d8f4bc",
+        "cache_hit": true,
+        "cache_kind": "memory",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [],
+        "ok": true,
+        "snapshot_id": "ad9071c6f8b4c4809e09452a0be2da2c4f1858ba9fbcd7cc8a070ed939a6e0fb",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 3
+      },
+      "step": "stdio/legacy-repeat"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 3,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": null,
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 3,
+        "error": null,
+        "externs": [],
+        "ok": true,
+        "snapshot_id": "4f6ff34f341d2ddf2184574a93bd941d072168e825240383bb1887fe72211278",
+        "status": "fresh",
+        "success": false,
+        "wall_ms": 238
+      },
+      "step": "stdio/dependent-without-externs"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "externs": [
+          {
+            "bytes_hex": "727573740000000a6407000000000000… (4516 hex chars)",
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core"
+          }
+        ],
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 4,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": "d6153ff3914ddb5ce52669eea6cd798acd8d54fe543e330e27ffab32d14f4ba8",
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core",
+            "rmeta_sha256": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "32d5f113d5366b23aa9b4761d02c546ba81f95e55a3dc9ff52c37c342f105aef",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 247
+      },
+      "step": "stdio/dependent-with-externs"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "externs": [
+          {
+            "bytes_hex": "727573740000000a6407000000000000… (4516 hex chars)",
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core"
+          }
+        ],
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 4,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": "d6153ff3914ddb5ce52669eea6cd798acd8d54fe543e330e27ffab32d14f4ba8",
+        "cache_hit": true,
+        "cache_kind": "memory",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core",
+            "rmeta_sha256": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "32d5f113d5366b23aa9b4761d02c546ba81f95e55a3dc9ff52c37c342f105aef",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 6
+      },
+      "step": "stdio/dependent-repeat"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "externs": [
+          {
+            "bytes_hex": "zz… (2 hex chars)",
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core"
+          }
+        ],
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 4,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": null,
+        "cache_hit": null,
+        "cache_kind": null,
+        "diagnostics": null,
+        "error": {
+          "kind": "invalid_request",
+          "message": "rmeta_hex contains a non-hex character 'z'"
+        },
+        "externs": null,
+        "ok": false,
+        "snapshot_id": null,
+        "status": null,
+        "success": null,
+        "wall_ms": null
+      },
+      "step": "stdio/invalid-hex"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "externs": [
+          {
+            "bytes_hex": "727573740000000a6407000000000000… (4516 hex chars)",
+            "crate_name": "core",
+            "interface_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "name": "core"
+          }
+        ],
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 4,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": null,
+        "cache_hit": null,
+        "cache_kind": null,
+        "diagnostics": null,
+        "error": {
+          "kind": "invalid_request",
+          "message": "extern \"core\": interface_id does not match the SHA-256 of bytes_hex"
+        },
+        "externs": null,
+        "ok": false,
+        "snapshot_id": null,
+        "status": null,
+        "success": null,
+        "wall_ms": null
+      },
+      "step": "stdio/invalid-sha"
+    },
+    {
+      "request": {
+        "cmd": "analyze",
+        "context": {
+          "crate_name": "api",
+          "crate_type": "lib",
+          "edition": "2021",
+          "flags": []
+        },
+        "externs": [
+          {
+            "bytes_hex": "727573740000000a6407000000000000… (4516 hex chars)",
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core"
+          },
+          {
+            "bytes_hex": "727573740000000ac507000000000000… (4710 hex chars)",
+            "crate_name": "core",
+            "interface_id": "ba9fb388795825d62db903498d2cc1bfe43b601f90fa231c6237aa6631e3ffb2",
+            "name": "core"
+          }
+        ],
+        "files": [
+          {
+            "content": "pub fn scaled(x: f64) -> f64 { core::scale(x) }\n",
+            "path": "src/lib.rs"
+          }
+        ],
+        "label": "api",
+        "priority": "normal",
+        "revision": 4,
+        "root": "src/lib.rs"
+      },
+      "response": {
+        "artifact_sha256": null,
+        "cache_hit": null,
+        "cache_kind": null,
+        "diagnostics": null,
+        "error": {
+          "kind": "invalid_request",
+          "message": "duplicate extern name \"core\""
+        },
+        "externs": null,
+        "ok": false,
+        "snapshot_id": null,
+        "status": null,
+        "success": null,
+        "wall_ms": null
+      },
+      "step": "stdio/duplicate-extern"
+    },
+    {
+      "request": {
+        "id": null,
+        "ok": true,
+        "report": {
+          "artifact_sha256": "2e56b232b601ec8eaec152f25c5d7e012a9b0cfef89c9a553704bda937f004ff",
+          "cache": {
+            "entries": 4,
+            "hit": false,
+            "kind": "miss"
+          },
+          "context_id": "9a6fff926eaddc59455db832127cf7181314b0ab42278e3419852e46c110f9e3",
+          "current_revision": 6,
+          "daemon_version": "0.1.0",
+          "diagnostics": [],
+          "exit_code": 0,
+          "externs": [],
+          "incremental_dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-daemon-wire-protocol-19252-1794189497327540600\\incremental\\9a6fff926ead",
+          "message": null,
+          "revision": 6,
+          "root": "src/lib.rs",
+          "schema_version": 1,
+          "snapshot": {
+            "bytes": 29,
+            "dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-daemon-wire-protocol-19252-1794189497327540600\\snapshots\\8419f8d335c21580de67c615d311f9e4559c5b99458a14a932ff12ec46321a60",
+            "externs": 0,
+            "files": 1,
+            "removed_files": 0,
+            "verified_files": 1,
+            "written_files": 1
+          },
+          "snapshot_id": "8419f8d335c21580de67c615d311f9e4559c5b99458a14a932ff12ec46321a60",
+          "status": "fresh",
+          "success": true,
+          "timings": {
+            "accept_ms": 10,
+            "analysis_ms": 258,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "total_ms": 277
+          },
+          "toolchain": {
+            "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+            "host": "x86_64-pc-windows-msvc",
+            "release": "1.95.0"
+          },
+          "unit": "legacy-after-errors"
+        },
+        "wall_ms": 280
+      },
+      "response": {
+        "artifact_sha256": "2e56b232b601ec8eaec152f25c5d7e012a9b0cfef89c9a553704bda937f004ff",
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [],
+        "ok": true,
+        "snapshot_id": "8419f8d335c21580de67c615d311f9e4559c5b99458a14a932ff12ec46321a60",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 280
+      },
+      "step": "stdio/still-works-after-errors"
+    },
+    {
+      "request": {
+        "transport": "tcp"
+      },
+      "response": {
+        "artifact_sha256": "d6153ff3914ddb5ce52669eea6cd798acd8d54fe543e330e27ffab32d14f4ba8",
+        "cache_hit": true,
+        "cache_kind": "disk",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core",
+            "rmeta_sha256": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "32d5f113d5366b23aa9b4761d02c546ba81f95e55a3dc9ff52c37c342f105aef",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 3
+      },
+      "step": "tcp/extern-v1"
+    },
+    {
+      "request": {
+        "transport": "tcp"
+      },
+      "response": {
+        "artifact_sha256": "d6153ff3914ddb5ce52669eea6cd798acd8d54fe543e330e27ffab32d14f4ba8",
+        "cache_hit": true,
+        "cache_kind": "memory",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303",
+            "name": "core",
+            "rmeta_sha256": "4351b1ebdd0f158906d746d1bc5b8ac01a811d747c9bd9d036121e4641f23303"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "32d5f113d5366b23aa9b4761d02c546ba81f95e55a3dc9ff52c37c342f105aef",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 3
+      },
+      "step": "tcp/extern-v1-repeat"
+    },
+    {
+      "request": {
+        "transport": "tcp"
+      },
+      "response": {
+        "artifact_sha256": "c1c7e40e3b13c7698b6ca0099f990911cfd6c5582ba188dfa58234dd3c085725",
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 0,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "ba9fb388795825d62db903498d2cc1bfe43b601f90fa231c6237aa6631e3ffb2",
+            "name": "core",
+            "rmeta_sha256": "ba9fb388795825d62db903498d2cc1bfe43b601f90fa231c6237aa6631e3ffb2"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "fb6b7a5fd4a921412afc9ee325d665f1a5ac79a21506794ae11405c709ead772",
+        "status": "fresh",
+        "success": true,
+        "wall_ms": 250
+      },
+      "step": "tcp/extern-v2-compatible"
+    },
+    {
+      "request": {
+        "transport": "tcp"
+      },
+      "response": {
+        "artifact_sha256": null,
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 3,
+        "error": null,
+        "externs": [
+          {
+            "crate_name": "core",
+            "interface_id": "95112bd2fc3de51dbc75d1a33a53e3b59bdf63e6d5690515278d18734db1227d",
+            "name": "core",
+            "rmeta_sha256": "95112bd2fc3de51dbc75d1a33a53e3b59bdf63e6d5690515278d18734db1227d"
+          }
+        ],
+        "ok": true,
+        "snapshot_id": "404efafce8e186982c1dcc52540b5d488cee7dcd2823fd8877f272cb58187687",
+        "status": "fresh",
+        "success": false,
+        "wall_ms": 246
+      },
+      "step": "tcp/extern-v3-breaking"
+    }
+  ],
+  "valid": true
+}
