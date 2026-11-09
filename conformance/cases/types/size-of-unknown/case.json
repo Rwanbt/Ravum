@@ -1,0 +1,8 @@
+{
+  "id": "types/size-of-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-TYP-018 (TYP-12.2): no size_of intrinsic exists in Core 1.0."
+}

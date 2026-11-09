@@ -179,6 +179,9 @@ impl Server {
                     )
                 })
             }
+            "textDocument/prepareRename" => self.with_document(params, |analysis, file, offset| {
+                Ok(features::prepare_rename(analysis, file, offset).unwrap_or(Value::Null))
+            }),
             "textDocument/rename" => {
                 let new_name = params
                     .get("newName")
@@ -258,7 +261,7 @@ impl Server {
                 "hoverProvider": true,
                 "definitionProvider": true,
                 "referencesProvider": true,
-                "renameProvider": true,
+                "renameProvider": { "prepareProvider": true },
                 "completionProvider": { "triggerCharacters": [".", ":"] },
                 "documentSymbolProvider": true,
                 "workspaceSymbolProvider": true,

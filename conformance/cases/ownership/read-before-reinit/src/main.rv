@@ -1,0 +1,10 @@
+fn f() -> usize {
+    let mut s = String::from("a");
+    let t = s;
+    let n = s.len();
+    s = String::from("b");
+    return n;
+}
+
+fn main() {
+}

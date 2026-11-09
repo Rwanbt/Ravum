@@ -1,0 +1,6 @@
+struct N {
+    next: Option<N>,
+}
+
+fn main() {
+}

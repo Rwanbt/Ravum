@@ -1,0 +1,5 @@
+{
+  "id": "modules/single-root",
+  "mode": "compile-pass",
+  "notes": "F-MOD-013 / MOD-1.8: a package with a single root (src/main.rv) is accepted."
+}

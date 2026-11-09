@@ -1,0 +1,6 @@
+{
+  "id": "run/option-methods",
+  "mode": "run-pass",
+  "stdout_contains": "true true 7 0 true",
+  "notes": "F-STD-026 / STD-11: is_some, is_none, unwrap, unwrap_or, ok_or."
+}

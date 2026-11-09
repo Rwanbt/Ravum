@@ -1,0 +1,8 @@
+{
+  "id": "modules/std-module-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-MOD-012 / STD-1.3: the std module list is closed; use std::convert is E-RES-UNKNOWN."
+}

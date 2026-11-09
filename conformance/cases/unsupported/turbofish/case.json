@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/turbofish",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-UNEXPECTED"
+  ],
+  "notes": "Turbofish is E-PARSE-UNEXPECTED (UNS-3, F-UNS-019)."
+}

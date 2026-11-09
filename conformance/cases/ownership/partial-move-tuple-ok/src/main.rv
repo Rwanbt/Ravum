@@ -1,0 +1,10 @@
+fn first(t: (String, i32)) -> String {
+    return t.0;
+}
+
+fn second(a: [String; 2]) -> String {
+    return a[1];
+}
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/array-repeat-noncopy-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARRAY-REPEAT"
+  ],
+  "notes": "F-SYN-025 (G-6.27): `[s; 2]` with a non-`Copy` element is E-TYP-ARRAY-REPEAT per features.md. (Implementation emits E-OWN-NOT-COPY, absent from the registry.)"
+}

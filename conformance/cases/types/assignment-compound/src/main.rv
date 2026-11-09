@@ -1,0 +1,10 @@
+use std::io;
+
+struct Point { x: f64, y: f64 }
+
+fn main() {
+    let mut p = Point { x: 1.0, y: 2.0 };
+    p.x = 3.0;
+    p.x += 1.0;
+    io::println(&p.x.to_string());
+}

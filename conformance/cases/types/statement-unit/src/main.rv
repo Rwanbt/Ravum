@@ -1,0 +1,8 @@
+use std::io;
+
+fn main() {
+    let c = true;
+    if c {
+        io::println("x");
+    }
+}

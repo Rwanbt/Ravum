@@ -1,0 +1,8 @@
+{
+  "id": "types/option-partial-match",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-NONEXHAUSTIVE"
+  ],
+  "notes": "F-TYP-014 (TYP-10.4): a match without None is non-exhaustive."
+}

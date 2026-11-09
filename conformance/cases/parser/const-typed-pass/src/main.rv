@@ -1,0 +1,7 @@
+const N: i32 = 10;
+const M: i32 = (2 + 3) * 4;
+
+fn main() {
+    let x = N + M;
+}
+

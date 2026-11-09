@@ -1,0 +1,5 @@
+{
+  "id": "parser/match-literal-binding-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-029 (G-6.36-6.37): literal, `_` and binding patterns are accepted in a match."
+}

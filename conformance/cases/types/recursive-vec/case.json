@@ -1,0 +1,5 @@
+{
+  "id": "types/recursive-vec",
+  "mode": "compile-pass",
+  "notes": "F-TYP-024 (TYP-10.7): Vec<T> provides indirection, so Node is not infinitely sized."
+}

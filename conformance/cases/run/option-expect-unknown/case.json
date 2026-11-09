@@ -1,0 +1,8 @@
+{
+  "id": "run/option-expect-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-026 / STD-11.4: Option::expect does not exist; E-RES-UNKNOWN."
+}

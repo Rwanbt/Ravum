@@ -1,0 +1,8 @@
+{
+  "id": "run/math-min-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-STD-011 / STD-6.5: min/max take f64 only; integer arguments are E-TYP-MISMATCH (no implicit numeric conversion)."
+}

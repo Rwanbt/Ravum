@@ -1,0 +1,5 @@
+[package]
+name = "meta-edition"
+version = "0.1.0"
+edition = "core-9.0"
+

@@ -1,0 +1,6 @@
+{
+  "id": "run/vec-as-slice",
+  "mode": "run-pass",
+  "stdout_contains": "4 2",
+  "notes": "F-STD-032 / STD-10.7: as_slice yields a &[T] usable in the instruction (argument and len)."
+}

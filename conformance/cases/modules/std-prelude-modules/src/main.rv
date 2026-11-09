@@ -1,0 +1,16 @@
+use std::env;
+use std::fs;
+use std::io;
+use std::math;
+use std::panic;
+use std::process;
+use std::string;
+
+fn main() {
+    io::println("std");
+    let x = math::sqrt(4.0);
+    let s = string::from("ok");
+    let a = env::args();
+    let e = fs::exists("absent.txt");
+    io::println(&a.len().to_string());
+}

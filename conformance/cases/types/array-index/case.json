@@ -1,0 +1,5 @@
+{
+  "id": "types/array-index",
+  "mode": "compile-pass",
+  "notes": "F-TYP-008 (TYP-5.1-5.2): [T; N] with N >= 1 and a checked a[0] read."
+}

@@ -80,3 +80,33 @@
   `cases/types/ffi-bad-type`, `cases/types/ffi-outside-unsafe`.
 - **Sans décision** : FFI utilisable en interne, jamais présentée comme certifiée
   mémoire, jamais dans un profil `pure`/`rt`.
+
+## D8 — Arbitrage des codes de diagnostic émis hors spécification
+
+- **Constat mesuré** (2026-11-09, `docs/qualification/T2-FINDINGS.md`) : la passe
+  de traçabilité T2 a produit **268 cas** de conformance dont **30 échouent**
+  parce que le compilateur ne fait pas ce que la spécification écrit. Dans
+  **13 cas**, le code émis par le compilateur n'apparaît **dans aucun** document
+  de `spec/language/` : `E-OWN-MOVE-BORROWED`, `E-OWN-MOVE-INDEXED`,
+  `E-OWN-NOT-COPY`, `E-RES-IMPL-FOREIGN`, `E-RES-VARIANT-UNQUALIFIED`,
+  `E-TYP-ARRAY-LEN`, `E-UNSUPPORTED-GLOB`, `E-UNSUPPORTED-LET-PATTERN`,
+  `E-UNSUPPORTED-OR-PAT`, `E-UNSUPPORTED-REF-PAT`, `E-UNSUPPORTED-TRAIT-IMPL`,
+  `E-UNSUPPORTED-TURBOFISH`, `E-UNSUPPORTED-TYPE`.
+- **Question posée** : pour chaque condition concernée, quel nom est
+  **canonique** ? Deux options, exclusives :
+  - **(a) le nom émis gagne** : l'enregistrer dans `diagnostics.md` §3 (le code
+    est plus spécifique) et mettre à jour la colonne `Pass / Fail` de
+    `features.md` ;
+  - **(b) le nom spécifié gagne** : renommer le code dans le compilateur et
+    mettre à jour les tests qui l'assertent.
+- **Pourquoi ce n'est pas une décision d'agent** : les deux options sont
+  défendables, elles touchent une interface publique stable
+  (`diagnostics.md` §3 se déclare registre canonique) et changent le contrat
+  observable pour tout outil consommateur. Choisir revient à trancher un point
+  d'API, pas à corriger un bug.
+- **Conséquence d'une non-décision** : le corpus de conformance reste **rouge**
+  (30 FAIL), le gate T2 reste `FAIL` et la CI de conformance reste rouge. C'est
+  l'état exact, pas une régression : avant cette passe, les divergences existaient
+  mais n'étaient pas mesurées.
+- **Preuves** : `target/conformance-after-t2.json`,
+  `python tools/triage_conformance.py target/conformance-after-t2.json`.

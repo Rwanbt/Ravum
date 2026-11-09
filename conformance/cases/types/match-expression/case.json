@@ -1,0 +1,6 @@
+{
+  "id": "types/match-expression",
+  "mode": "run-pass",
+  "stdout_contains": "8\n",
+  "notes": "F-EXPR-012 (EXPR-5.1-5.2): match and if are expressions producing i32 values."
+}

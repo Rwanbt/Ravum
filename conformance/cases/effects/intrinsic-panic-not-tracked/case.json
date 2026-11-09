@@ -1,0 +1,5 @@
+{
+  "id": "effects/intrinsic-panic-not-tracked",
+  "mode": "compile-pass",
+  "notes": "Intrinsic panics (division by zero, overflow, out-of-bounds) are not tracked as the `panic` effect, so `effects()` on a division is accepted (EFF-6.4)."
+}

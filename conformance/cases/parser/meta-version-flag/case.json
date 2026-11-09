@@ -1,0 +1,9 @@
+{
+  "id": "parser/meta-version-flag",
+  "mode": "cli",
+  "args": [
+    "--version"
+  ],
+  "stdout_contains": "core-1.0",
+  "notes": "F-META-007 / COMPAT-1.1: artifacts declare the toolchain and language edition; --version prints the edition core-1.0."
+}

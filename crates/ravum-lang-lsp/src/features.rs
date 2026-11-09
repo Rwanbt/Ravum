@@ -35,6 +35,24 @@ fn facts(analysis: &Analysis) -> Option<&CheckedProgram> {
     analysis.checked.as_ref()
 }
 
+/// Resolution of the symbol under the cursor.
+///
+/// A cursor on a *use* goes through `Facts::resolutions`, which is the checker's
+/// own answer. A cursor on the *declaration name* has no path node, so the item
+/// itself is the resolution target: rename and references from a declaration are
+/// what every editor exposes, and refusing them would be a bug, not a
+/// limitation.
+fn resolution_at(analysis: &Analysis, file: u32, offset: u32) -> Option<Resolution> {
+    let checked = facts(analysis)?;
+    if let Some(node) = analysis.index.path_at(file, offset) {
+        if let Some(resolution) = checked.facts.resolutions.get(&node) {
+            return Some(resolution.clone());
+        }
+    }
+    let item = analysis.index.item_name_at(file, offset)?;
+    Some(Resolution::Item { item })
+}
+
 /// Absolute path for a display path recorded by the loader.
 pub fn document_path(analysis: &Analysis, display: &str) -> Option<std::path::PathBuf> {
     let root = &analysis.root;
@@ -256,14 +274,31 @@ pub fn hover(analysis: &Analysis, file: u32, offset: u32) -> Option<Value> {
             return Some(value);
         }
     }
+
+    // Cursor on a declaration name: show the item's own signature.
+    if let Some(item) = analysis.index.item_name_at(file, offset) {
+        if let Some(markdown) = signature_markdown(analysis, item) {
+            let mut value = json!({
+                "contents": { "kind": "markdown", "value": markdown },
+            });
+            if let Some(range) = analysis
+                .index
+                .item_name_spans
+                .get(&item)
+                .copied()
+                .and_then(|span| span_range(sources, span))
+            {
+                value["range"] = range;
+            }
+            return Some(value);
+        }
+    }
     None
 }
 
 pub fn definition(analysis: &Analysis, file: u32, offset: u32) -> Option<Value> {
-    let checked = facts(analysis)?;
-    let node = analysis.index.path_at(file, offset)?;
-    let resolution = checked.facts.resolutions.get(&node)?;
-    let span = target_span(analysis, resolution, file, offset)?;
+    let resolution = resolution_at(analysis, file, offset)?;
+    let span = target_span(analysis, &resolution, file, offset)?;
     let location = location(analysis, span)?;
     Some(json!([location]))
 }
@@ -304,8 +339,7 @@ pub fn references(
     include_declaration: bool,
 ) -> Option<Value> {
     let checked = facts(analysis)?;
-    let node = analysis.index.path_at(file, offset)?;
-    let target = checked.facts.resolutions.get(&node)?.clone();
+    let target = resolution_at(analysis, file, offset)?;
     if matches!(target, Resolution::Error) {
         return None;
     }
@@ -366,6 +400,28 @@ pub fn is_identifier(name: &str) -> bool {
     chars.all(|ch| ch.is_alphanumeric() || ch == '_')
 }
 
+/// Span of the renameable symbol under the cursor, if any.
+fn symbol_span(analysis: &Analysis, file: u32, offset: u32) -> Option<Span> {
+    if let Some(node) = analysis.index.path_at(file, offset) {
+        if let Some(span) = analysis.index.paths.get(&node).copied() {
+            return Some(span);
+        }
+    }
+    let item = analysis.index.item_name_at(file, offset)?;
+    analysis.index.item_name_spans.get(&item).copied()
+}
+
+/// `textDocument/prepareRename`: clients such as VS Code query this before
+/// showing the rename box. Without an answer the whole rename command fails,
+/// even when the edit itself would be valid.
+pub fn prepare_rename(analysis: &Analysis, file: u32, offset: u32) -> Option<Value> {
+    let span = symbol_span(analysis, file, offset)?;
+    // The result is a bare `Range`: that is the LSP variant every client
+    // understands. Returning `{ range, defaultBehavior }` makes clients such as
+    // VS Code fail to recognise the answer and refuse the rename outright.
+    span_range(analysis.sources(), span)
+}
+
 pub fn rename(
     analysis: &Analysis,
     file: u32,
@@ -380,10 +436,7 @@ pub fn rename(
     let Some(checked) = facts(analysis) else {
         return Ok(None);
     };
-    let Some(node) = analysis.index.path_at(file, offset) else {
-        return Ok(None);
-    };
-    let Some(target) = checked.facts.resolutions.get(&node).cloned() else {
+    let Some(target) = resolution_at(analysis, file, offset) else {
         return Ok(None);
     };
     if matches!(target, Resolution::Error) {

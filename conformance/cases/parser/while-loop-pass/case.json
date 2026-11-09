@@ -1,0 +1,5 @@
+{
+  "id": "parser/while-loop-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-019 (G-6.19, EXPR-6.1): a `while` counter loop is accepted (type `()`)."
+}

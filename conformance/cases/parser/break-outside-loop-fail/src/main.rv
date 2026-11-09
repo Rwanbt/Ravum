@@ -1,0 +1,7 @@
+fn f() {
+    break;
+}
+
+fn main() {
+}
+

@@ -1,0 +1,8 @@
+fn first<T, U>(a: T, b: U) -> T {
+    return a;
+}
+
+fn main() {
+    let x = first(1, true);
+}
+

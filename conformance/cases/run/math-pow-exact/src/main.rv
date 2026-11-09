@@ -1,0 +1,9 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let base: f64 = 2.0;
+    let exp: f64 = 10.0;
+    let p = math::pow(base, exp);
+    io::println(&p.to_string());
+}

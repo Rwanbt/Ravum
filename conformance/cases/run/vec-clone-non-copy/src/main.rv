@@ -1,0 +1,6 @@
+fn f(v: Vec<String>) -> Vec<String> {
+    return v.clone();
+}
+
+fn main() {
+}

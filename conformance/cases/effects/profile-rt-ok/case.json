@@ -1,0 +1,9 @@
+{
+  "id": "effects/profile-rt-ok",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "notes": "Under the experimental `rt` profile a scalar function with `effects()` is accepted (EFF-4.6, EFF-4.7). This is EXPERIMENTAL, never a real-time certification."
+}

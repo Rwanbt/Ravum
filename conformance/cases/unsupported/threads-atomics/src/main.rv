@@ -1,0 +1,5 @@
+fn f(m: Mutex<i32>) {
+}
+
+fn main() {
+}

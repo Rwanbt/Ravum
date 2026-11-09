@@ -1,0 +1,5 @@
+{
+  "id": "unsupported/dyn-identifier",
+  "mode": "compile-pass",
+  "notes": "`dyn` is a valid identifier (Q-LEX-1 / Q-UNS-2); the OBJECT form `dyn T` is E-RES-UNKNOWN, but the word itself is not a keyword (F-UNS-002 accepted behaviour)."
+}

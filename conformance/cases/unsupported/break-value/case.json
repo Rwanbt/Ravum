@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/break-value",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "`break` with a value is E-PARSE-EXPECTED (UNS-3, F-UNS-017)."
+}

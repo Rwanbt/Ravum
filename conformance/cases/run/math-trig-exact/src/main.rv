@@ -1,0 +1,25 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let zero: f64 = 0.0;
+    let one: f64 = 1.0;
+    let c = math::cos(zero) == one;
+    let s = math::sin(zero) == zero;
+    let t = math::tan(zero) == zero;
+    let e = math::exp(zero) == one;
+    let l = math::ln(one) == zero;
+    let g = math::log10(one) == zero;
+    let mut out = c.to_string();
+    out.push_str(" ");
+    out.push_str(&s.to_string());
+    out.push_str(" ");
+    out.push_str(&t.to_string());
+    out.push_str(" ");
+    out.push_str(&e.to_string());
+    out.push_str(" ");
+    out.push_str(&l.to_string());
+    out.push_str(" ");
+    out.push_str(&g.to_string());
+    io::println(out.as_str());
+}

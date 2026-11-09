@@ -20,7 +20,8 @@ des octets de protocole n'est écrit sur `stdout` ; les erreurs vont sur `stderr
 | `textDocument/hover` | Implémenté | `hover_shows_the_builtin_signature` |
 | `textDocument/definition` | Implémenté | `definition_and_references_find_the_declaration` |
 | `textDocument/references` | Implémenté | idem |
-| `textDocument/rename` | Implémenté | `rename_rewrites_declaration_and_uses` |
+| `textDocument/rename` | Implémenté (depuis un usage **et** depuis la déclaration) | `rename_rewrites_declaration_and_uses` |
+| `textDocument/prepareRename` | Implémenté (requis par VS Code) | `navigation_from_the_declaration_name_works` |
 | `textDocument/completion` | Implémenté | `symbols_completion_and_formatting_answer` |
 | `textDocument/documentSymbol` | Implémenté | idem |
 | `workspace/symbol` | Implémenté | requête couverte par le dispatch ; pas d'assertion dédiée |

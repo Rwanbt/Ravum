@@ -1,0 +1,6 @@
+use std::io;
+use util::helper;
+
+fn main() {
+    io::println(&helper().to_string());
+}

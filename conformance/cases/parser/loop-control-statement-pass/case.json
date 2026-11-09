@@ -1,0 +1,5 @@
+{
+  "id": "parser/loop-control-statement-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-033 (G-6.19, EXPR-5.11): while, for and loop used as control expressions in statement position are accepted."
+}

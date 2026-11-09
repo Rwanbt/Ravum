@@ -1,0 +1,6 @@
+{
+  "id": "types/division-signs",
+  "mode": "run-pass",
+  "stdout_contains": "-3\n-1\n",
+  "notes": "F-EXPR-006 (EXPR-3.5): integer division truncates toward zero and the remainder keeps the dividend sign."
+}

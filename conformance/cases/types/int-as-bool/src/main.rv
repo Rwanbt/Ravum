@@ -1,0 +1,6 @@
+fn f(x: i32) -> bool {
+    return x as bool;
+}
+
+fn main() {
+}

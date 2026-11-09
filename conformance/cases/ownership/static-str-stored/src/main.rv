@@ -1,0 +1,17 @@
+struct S {
+    text: &str,
+}
+
+fn lit() -> &str {
+    return "a";
+}
+
+fn f() -> &str {
+    let text = "ravum";
+    return text;
+}
+
+fn main() {
+    let l = "littéral";
+    let s = S { text: l };
+}

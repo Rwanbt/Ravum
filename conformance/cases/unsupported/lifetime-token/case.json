@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/lifetime-token",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "unsupported": true,
+  "notes": "Lifetimes and loop labels are E-UNSUPPORTED-TOKEN (F-UNS-013)."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/math-float-ops",
+  "mode": "run-pass",
+  "stdout_contains": "2 1 2 -1 2.5",
+  "notes": "F-STD-009 / STD-6.2-6.4: sqrt exact, floor/ceil exact, round half away from zero, abs."
+}

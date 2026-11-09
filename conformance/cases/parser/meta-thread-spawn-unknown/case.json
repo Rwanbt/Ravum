@@ -1,0 +1,8 @@
+{
+  "id": "parser/meta-thread-spawn-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-META-005 / CONC-1.2: no concurrency primitive exists; thread::spawn is E-RES-UNKNOWN."
+}

@@ -1,0 +1,6 @@
+fn f(n: usize) {
+    let m: u32 = n;
+}
+
+fn main() {
+}

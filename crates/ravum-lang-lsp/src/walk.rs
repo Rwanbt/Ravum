@@ -377,6 +377,12 @@ impl AstIndex {
         smallest(&self.exprs, file, offset)
     }
 
+    /// Item whose *declared name* contains `offset`, so navigation and rename
+    /// also work when the cursor sits on the declaration rather than on a use.
+    pub fn item_name_at(&self, file: u32, offset: u32) -> Option<NodeId> {
+        smallest(&self.item_name_spans, file, offset)
+    }
+
     /// Smallest indexed pattern whose span contains `offset` in `file`.
     pub fn pat_at(&self, file: u32, offset: u32) -> Option<NodeId> {
         smallest(&self.pats, file, offset)

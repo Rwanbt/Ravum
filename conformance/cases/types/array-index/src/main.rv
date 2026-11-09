@@ -1,0 +1,6 @@
+fn at(a: [i32; 3]) -> i32 {
+    return a[0];
+}
+
+fn main() {
+}

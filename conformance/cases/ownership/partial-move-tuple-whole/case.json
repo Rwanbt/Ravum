@@ -1,0 +1,8 @@
+{
+  "id": "ownership/partial-move-tuple-whole",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-PARTIAL-MOVE"
+  ],
+  "notes": "After moving element 0, using the whole tuple is E-OWN-PARTIAL-MOVE (OWN-5.4). NOTE: the F-OWN-005 row also lists `let s = t.0; t.1` as a failure, which contradicts OWN-5.4 (other elements remain readable); this case uses the aggregate-whole form both documents mandate."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/meta-abi-native-boundary",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ABI"
+  ],
+  "notes": "F-META-004 / ABI-3.1-3.2: any attempt to express a native boundary is refused at parse/resolve with an E-UNSUPPORTED-* code; extern \"system\" is E-UNSUPPORTED-ABI."
+}

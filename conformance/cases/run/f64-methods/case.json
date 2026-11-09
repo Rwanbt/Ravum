@@ -1,0 +1,6 @@
+{
+  "id": "run/f64-methods",
+  "mode": "run-pass",
+  "stdout_contains": "4 2 2 9 4",
+  "notes": "F-STD-029 / STD-12.3: f64 methods abs/sqrt/powf/min/max. powf is only asserted on an exactly representable square root (STD-6.6 excludes bit-exact libm results)."
+}

@@ -1,0 +1,7 @@
+fn letter() -> char {
+    return 'é';
+}
+
+fn main() {
+    let c = letter();
+}

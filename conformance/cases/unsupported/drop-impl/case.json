@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/drop-impl",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-DROP-IMPL"
+  ],
+  "unsupported": true,
+  "notes": "`impl Drop for T` is refused with E-UNSUPPORTED-DROP-IMPL (UNS-2, F-UNS-010)."
+}

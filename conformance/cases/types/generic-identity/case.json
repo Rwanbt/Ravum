@@ -1,0 +1,5 @@
+{
+  "id": "types/generic-identity",
+  "mode": "compile-pass",
+  "notes": "F-TYP-016 (TYP-11.1-11.2): an unbounded T can be bound, moved and returned."
+}

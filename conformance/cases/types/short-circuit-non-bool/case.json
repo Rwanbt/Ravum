@@ -1,0 +1,8 @@
+{
+  "id": "types/short-circuit-non-bool",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-EXPR-002 (EXPR-2.3): the operands of && must be exactly bool."
+}

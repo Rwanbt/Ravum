@@ -1,0 +1,17 @@
+enum Shape {
+    Rect { w: f64, h: f64 },
+    Empty,
+}
+
+fn width(s: Shape) -> f64 {
+    match s {
+        Shape::Rect { w, h: _ } => w,
+        Shape::Empty => 0.0,
+    }
+}
+
+fn main() {
+    let s = Shape::Rect { w: 1.0, h: 2.0 };
+    let x = width(s);
+}
+

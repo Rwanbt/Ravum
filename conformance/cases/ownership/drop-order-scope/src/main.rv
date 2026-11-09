@@ -1,0 +1,29 @@
+fn build() -> String {
+    let s = String::from("a");
+    return s;
+}
+
+fn moved_value_not_destroyed_at_source() -> String {
+    let s = String::from("a");
+    let t = s;
+    return t;
+}
+
+fn nested() {
+    let a = String::from("a");
+    let b = String::from("b");
+    {
+        let c = String::from("c");
+    }
+    let d = String::from("d");
+    let e = build();
+}
+
+fn shadowed() {
+    let x = String::from("first");
+    let x = String::from("second");
+    let y = x;
+}
+
+fn main() {
+}

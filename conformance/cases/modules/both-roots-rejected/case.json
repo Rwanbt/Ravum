@@ -1,0 +1,8 @@
+{
+  "id": "modules/both-roots-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-BOTH-ROOTS"
+  ],
+  "notes": "F-MOD-013 / MOD-1.8 + diagnostics Q-MOD-1: src/main.rv and src/lib.rv cannot coexist, E-MOD-BOTH-ROOTS."
+}

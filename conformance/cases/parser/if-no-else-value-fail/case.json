@@ -1,0 +1,8 @@
+{
+  "id": "parser/if-no-else-value-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-IF-NO-ELSE"
+  ],
+  "notes": "F-SYN-017 (G-6.20): `let x = if c { 1 };` without `else` is E-TYP-IF-NO-ELSE."
+}

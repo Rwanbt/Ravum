@@ -1,0 +1,213 @@
+# T2 — traçabilité des règles et divergences spec ↔ implémentation
+
+> **Statut : `FAIL`.** Ce document n'est pas un certificat : il enregistre le
+> résultat mesuré d'une passe de qualification de la spécification contre
+> l'implémentation, à un SHA et sur une toolchain donnés.
+>
+> Un `FAIL` est ici une **information**, pas un échec de procédure : chaque ligne
+> du tableau §4 est un cas de conformance **exécutable et reproductible** qui
+> échoue parce que le compilateur ne fait pas ce que la spécification écrit. Le
+> cas reste fidèle à la spécification ; aucun `expect_codes` n'a été aligné sur
+> le comportement observé.
+
+| Élément | Valeur |
+|---|---|
+| Branche | `feat/lang-core-1.0-rc` |
+| Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
+| Date de la passe | 2026-11-09 (Europe/Paris) |
+| Corpus | **268 cas** (`conformance/cases/`) |
+| Résultat corpus | **237 PASS / 30 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Règles de `features.md` | **188** |
+| Règles tracées vers ≥ 1 cas existant | **187 / 188** |
+| Règles satisfaisant le critère strict §2 | **87 / 188** |
+| Rapport machine | `target/conformance-after-t2.json` |
+
+## 1. Méthode
+
+Quatre lots disjoints de règles ont été traités en parallèle (§17 du mandat),
+chacun produisant des répertoires de cas **neufs** et n'écrasant aucun cas
+existant :
+
+| Lot | Règles | Nouveaux cas | Taxonomies |
+|---|---|---|---|
+| A | `F-SYN-*` (20) | 40 | `parser` |
+| B | `F-TYP-*` (14), `F-EXPR-*` (10) | 44 | `types` |
+| C | `F-OWN-*` (8), `F-EFF-*` (3), `F-UNS-*` (12) | 32 | `ownership`, `effects`, `unsupported` |
+| D | `F-STD-*` (13), `F-MOD-*` (4), `F-META-*` (4), `F-LEX-004` | 45 | `run`, `modules`, `parser`, `lexer` |
+
+Chaque cas a été exécuté individuellement
+(`cargo run -p ravum-conformance -- run --filter <taxonomie>/<cas>`) avant
+d'être retenu. Le code attendu provient **de la colonne `Pass / Fail` de
+`features.md`**, jamais de la sortie du compilateur.
+
+Deux outils durables ont été ajoutés pour que la mesure soit reproductible sans
+relecture manuelle :
+
+- `tools/features_coverage.py` — parse les tableaux de `features.md`, résout
+  chaque référence `cases/…` vers un répertoire réel (une référence morte est un
+  `dangling`), et calcule en `--strict` le critère §2.
+- `tools/triage_conformance.py` — croise le rapport `ravum-conformance` avec les
+  codes documentés dans `spec/language/*.md` et signale tout code **émis mais
+  non documenté**.
+
+## 2. Critère de traçabilité mesuré
+
+Une règle est **tracée** si elle cite au moins un cas existant. Elle est
+**satisfaite au sens strict** si, en plus :
+
+1. au moins un cas cité a un mode d'acceptation (`compile-pass`, `run-pass`,
+   `cli`, `fmt-idempotent`) ;
+2. si sa colonne `Pass / Fail` impose un code `E-*`, au moins un cas cité en
+   `compile-fail` porte ce code dans `expect_codes`.
+
+Le lien est **déclaré** par la spécification et vérifié ici pour l'existence, le
+mode et l'accord sur les codes. Le harnais refuse tout champ inconnu dans
+`case.json`, donc un cas ne peut pas déclarer lui-même la règle qu'il couvre :
+la traçabilité est unidirectionnelle par construction, et ce document le dit
+plutôt que de le laisser croire.
+
+Résultat : **187/188** règles citent un cas réel, **87/188** satisfont le
+critère strict. Le déficit restant n'est pas du même ordre qu'avant : il vient
+des **30 divergences** ci-dessous, pas d'un manque de cas.
+
+## 3. Ce qui a été corrigé pendant la passe
+
+- `features.md` : quatre lignes de tableau contenaient un `|` non échappé
+  (`F-SYN-014`, `F-EXPR-002`, `F-UNS-003`, `F-UNS-018`) qui décalait toutes
+  leurs colonnes ; `F-OWN-016` n'avait que huit cellules pour neuf colonnes.
+  Ce sont des défauts de rendu du document, pas des exigences modifiées.
+- `F-LEX-001` citait `cases/lexer/bom-rejected`, **inexistant** ; le cas réel est
+  `cases/lexer/bom-accepted` (le BOM est accepté, c'est la règle). Référence
+  morte corrigée vers le cas qui existe.
+- Aucune exigence n'a été supprimée, abaissée ou marquée `PASS` par décret.
+
+## 4. Les 30 divergences mesurées
+
+| Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
+|---|---|---|---|---|
+| `lexer/contextual-effects-ident` | - | — | — | — |
+| `parser/array-repeat-noncopy-fail` | - | `E-TYP-ARRAY-REPEAT` | `E-OWN-NOT-COPY` | `E-OWN-NOT-COPY` |
+| `parser/impl-foreign-type-fail` | - | `E-RES-IMPL-SELF-TYPE` | `E-RES-IMPL-FOREIGN` | `E-RES-IMPL-FOREIGN` |
+| `parser/let-pattern-fail` | - | `E-PARSE-EXPECTED` | `E-UNSUPPORTED-LET-PATTERN` | `E-UNSUPPORTED-LET-PATTERN` |
+| `parser/loop-control-as-value-fail` | - | `E-TYP-STATEMENT-VALUE` | — | — |
+| `parser/prelude-variant-user-enum-fail` | - | `E-RES-UNKNOWN` | `E-RES-VARIANT-UNQUALIFIED` | `E-RES-VARIANT-UNQUALIFIED` |
+| `parser/test-fn-pub-fail` | - | `E-PARSE-EXPECTED` | — | — |
+| `parser/tuple-pattern-arity-fail` | - | `E-TYP-ARITY` | `E-TYP-MISMATCH` | — |
+| `parser/variant-pattern-ref-fail` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-REF-PAT` | `E-UNSUPPORTED-REF-PAT` |
+| `parser/while-value-nonunit-fail` | - | `E-TYP-STATEMENT-VALUE` | — | — |
+| `types/array-zero-length` | - | `E-TYP-ARRAY-REPEAT` | `E-TYP-ARRAY-LEN` | `E-TYP-ARRAY-LEN` |
+| `types/never-field` | - | `E-TYP-MISMATCH` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
+| `types/never-return-body` | - | `E-TYP-RETURN` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
+| `types/place-non-place-assign` | - | `E-PARSE-EXPECTED` | `E-TYP-FIELD` | — |
+| `types/size-of-unknown` | - | `E-RES-UNKNOWN` | `E-UNSUPPORTED-TURBOFISH` | `E-UNSUPPORTED-TURBOFISH` |
+| `ownership/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
+| `ownership/move-out-of-mut-borrow` | - | `E-OWN-MOVE-OUT-OF-BORROW` | `E-OWN-MOVE-BORROWED` | `E-OWN-MOVE-BORROWED` |
+| `ownership/vec-index-move` | - | `E-OWN-PARTIAL-MOVE` | `E-OWN-MOVE-INDEXED` | `E-OWN-MOVE-INDEXED` |
+| `run/int-abs-signed` | - | — | — | — |
+| `run/math-max-signed-zero` | - | — | — | — |
+| `run/string-parse-method-no-call` | - | `E-RES-UNKNOWN` | `E-TYP-FIELD` | — |
+| `run/vec-clone-non-copy` | - | `E-RES-UNKNOWN` | — | — |
+| `unsupported/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
+| `unsupported/glob-import` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-GLOB` | `E-UNSUPPORTED-GLOB` |
+| `unsupported/lifetime-token` | - | `E-UNSUPPORTED-TOKEN` | `E-LEX-CHAR`, `E-PARSE-EXPECTED`, `E-PARSE-UNCLOSED`, `E-PARSE-UNEXPECTED` | — |
+| `unsupported/or-pattern` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-OR-PAT` | `E-UNSUPPORTED-OR-PAT` |
+| `unsupported/range-value` | - | `E-UNSUPPORTED-RANGE` | `E-TYP-RANGE` | — |
+| `unsupported/raw-string` | - | `E-UNSUPPORTED-TOKEN` | `E-PARSE-EXPECTED` | — |
+| `unsupported/ref-identifier` | - | — | — | — |
+| `unsupported/turbofish` | - | `E-PARSE-UNEXPECTED` | `E-UNSUPPORTED-TURBOFISH` | `E-UNSUPPORTED-TURBOFISH` |
+
+Lecture : une colonne « Code attendu » à `—` signifie que la spécification
+n'impose **aucun** code pour cette règle (comportement d'exécution ou
+acceptation) ; l'échec porte alors sur le comportement observable.
+
+### 4.1 Codes émis mais absents de la spécification
+
+13 codes sont produits par le compilateur et **n'apparaissent dans aucun
+document de `spec/language/`** :
+
+`E-OWN-MOVE-BORROWED`, `E-OWN-MOVE-INDEXED`, `E-OWN-NOT-COPY`, `E-RES-IMPL-FOREIGN`, `E-RES-VARIANT-UNQUALIFIED`, `E-TYP-ARRAY-LEN`, `E-UNSUPPORTED-GLOB`, `E-UNSUPPORTED-LET-PATTERN`, `E-UNSUPPORTED-OR-PAT`, `E-UNSUPPORTED-REF-PAT`, `E-UNSUPPORTED-TRAIT-IMPL`, `E-UNSUPPORTED-TURBOFISH`, `E-UNSUPPORTED-TYPE`
+
+C'est un défaut de spécification **dans les deux sens** : soit le code émis est
+le bon et il doit être enregistré dans `diagnostics.md` §3, soit le code de la
+table est le bon et le compilateur doit être aligné. Trancher est une décision de
+nommage qui appartient au responsable du projet : elle est inscrite comme **D8**
+dans `DECISIONS_REQUIRED.md`. Tant qu'elle n'est pas prise, le corpus reste
+rouge — c'est le signal exact, pas un artefact.
+
+### 4.2 Divergences qui ne sont pas des noms de codes
+
+Ces cas échouent sur le **comportement**, pas sur un identifiant :
+
+| Cas | Attendu par la spécification | Observé |
+|---|---|---|
+| `parser/while-value-nonunit-fail` | `let x = while c { 1 };` refusé (`E-TYP-STATEMENT-VALUE`) | accepté, `check` exit 0 |
+| `parser/loop-control-as-value-fail` | `while`/`loop`/`for` utilisés comme valeur refusés | acceptés, `check` exit 0 |
+| `parser/test-fn-pub-fail` | `pub test fn` refusé (`E-PARSE-EXPECTED`) | accepté et compté comme test |
+| `unsupported/ref-identifier` | `let ref = 1;` **accepté** (`ref` est un identifiant valide) | refusé, `E-UNSUPPORTED-REF-PAT` |
+| `run/vec-clone-non-copy` | `Vec<String>::clone()` refusé (`E-RES-UNKNOWN`) | accepté |
+| `run/math-max-signed-zero` | `max(-0.0, +0.0)` vaut `+0.0`, affiché `0` | affiche `-0` |
+| `run/int-abs-signed` | `i32::abs()` accepté | refusé à la génération de code |
+| `lexer/contextual-effects-ident` | `let effects = 1;` accepté (`effects` n'est pas réservé) | refusé par le parseur |
+
+### 4.3 Défauts observés hors périmètre des 30 cas
+
+Constatés pendant la rédaction des cas, non encodés (ils ne relèvent pas des
+règles traitées) :
+
+- **Tuples hétérogènes** : `(i32, bool)` ne fonctionne pas, seul l'homogène
+  passe (`E-TYP-MISMATCH` sur le second élément).
+- **Exhaustivité des tuples** : `match t { (a, b) => … }` est jugé
+  non-exhaustif alors que `(a, b)` couvre le tuple entier.
+- **`mut` sur paramètre** : `fn f(mut n: i32)` est refusé (`E-OWN-IMMUTABLE`)
+  alors que `grammar.md` G-6.4/G-6.9 et `types.md` §2/§3 le documentent.
+- **Type `!`** : `grammar.md` G-5.11 et `types.md` TYP-1.6 le décrivent avec
+  restrictions ; le parseur le refuse dans **toute** position de type.
+- **Littéraux flottants en récepteur** : `math::sqrt(2.0)` passe `check` mais
+  échoue à `rustc` (`can't call method 'sqrt' on ambiguous numeric type
+  '{float}'`) : la génération perd l'annotation `f64`.
+- **Génériques à deux types** : `fn pair<A, B>(a: A, b: B) -> (A, B)` est refusé
+  (`E-TYP-MISMATCH`).
+
+## 5. Règles non couvrables en l'état
+
+**`F-META-006`** reste `NOT_COVERED`. Sa colonne « pass » vaut explicitement
+*« aucun (oracle absent) »* et sa colonne « fail » *« citer un résultat comme
+preuve »* : `core-machine.md` MACH-1.4 fixe l'état de l'interpréteur à
+`NOT_IMPLEMENTED` et interdit de citer un résultat machine comme preuve. Aucune
+forme de programme accepté ni aucun refus n'existe, donc tout cas inventerait
+une exigence. Le harnais n'a pas de mode « preuve non exécutable ». La règle est
+donc laissée non couverte **et documentée comme telle**, ce qui est la seule
+issue honnête.
+
+## 6. Repro
+
+```powershell
+# Construire la toolchain
+cargo build -p ravum-lang-cli
+
+# Corpus complet (attendu : 237 PASS / 30 FAIL / 1 SKIP)
+cargo run -p ravum-conformance -- run --json target/conformance-after-t2.json
+
+# Traçabilité des règles
+python tools/features_coverage.py --strict --json target/features-coverage.json
+python tools/apply_coverage_map.py target/coverage-maps/*.json --dry-run
+
+# Triage codes attendus / émis / documentés
+python tools/triage_conformance.py target/conformance-after-t2.json
+
+# Un cas isolé
+cargo run -p ravum-conformance -- run --filter ownership/vec-index-move
+```
+
+## 7. Conséquence sur les gates
+
+- **T2 `FAIL`** : la traçabilité est désormais quasi complète (187/188) mais
+  **30 exigences ne sont pas satisfaites par l'implémentation**, et 13 codes
+  émis ne sont pas documentés. Un `PARTIAL` masquerait un déficit désormais
+  quantifié ; `FAIL` est l'état exact.
+- **T3 reste dépendant de T2** pour la partie « spec ↔ frontend » : les
+  divergences §4.1/§4.2 sont des défauts du frontend et du checker, pas du
+  corpus.
+- Le corpus **reste rouge volontairement** : supprimer ou assouplir ces cas
+  reviendrait à effacer les défauts qu'ils documentent, ce que le mandat
+  interdit explicitement.

@@ -1,0 +1,5 @@
+{
+  "id": "lexer/contextual-str-ident",
+  "mode": "compile-pass",
+  "notes": "F-LEX-004 / LEX-4.5: `str` is a contextual keyword (LEX-5.6 forbids it as a standalone type, not as an identifier); outside its type position it is an ordinary identifier."
+}

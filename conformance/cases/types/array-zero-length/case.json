@@ -1,0 +1,8 @@
+{
+  "id": "types/array-zero-length",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARRAY-REPEAT"
+  ],
+  "notes": "F-TYP-008 (TYP-5.1, G-5.5): [T; 0] is refused."
+}

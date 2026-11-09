@@ -1,0 +1,5 @@
+{
+  "id": "types/int-add",
+  "mode": "compile-pass",
+  "notes": "F-TYP-022 (TYP-7.1): + accepts two operands of the same integer type."
+}

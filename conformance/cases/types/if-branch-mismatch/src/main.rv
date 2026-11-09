@@ -1,0 +1,6 @@
+fn j(c: bool) {
+    let x = if c { 1 } else { "a" };
+}
+
+fn main() {
+}

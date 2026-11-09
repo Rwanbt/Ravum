@@ -1,0 +1,7 @@
+fn process(x: f64, y: f64) -> f64 effects() {
+    return x * 0.5 + y * 0.5;
+}
+
+fn main() {
+    let v = process(1.0, 2.0);
+}

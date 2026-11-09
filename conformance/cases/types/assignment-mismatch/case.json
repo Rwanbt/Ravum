@@ -1,0 +1,8 @@
+{
+  "id": "types/assignment-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-EXPR-015 (EXPR-9.1): assignment requires the exact same type, with no conversion."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/statement-unit",
+  "mode": "run-pass",
+  "stdout_contains": "x\n",
+  "notes": "F-EXPR-013 (EXPR-5.6): an expression-statement must have type (); if c { io::println(...); } is accepted."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "ownership/as-str-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "`String::as_str()` yields a non-static `&str` and cannot be stored (OWN-6.3)."
+}

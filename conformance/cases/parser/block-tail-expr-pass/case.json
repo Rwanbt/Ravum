@@ -1,0 +1,5 @@
+{
+  "id": "parser/block-tail-expr-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-016 (G-6.1, G-6.5): a block whose tail expression is its value, with a block-like statement without `;`, is accepted."
+}

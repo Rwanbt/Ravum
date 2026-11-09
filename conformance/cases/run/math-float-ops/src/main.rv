@@ -1,0 +1,20 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let four: f64 = 4.0;
+    let dec: f64 = 1.7;
+    let low: f64 = 1.2;
+    let half: f64 = -0.5;
+    let neg: f64 = -2.5;
+    let mut out = math::sqrt(four).to_string();
+    out.push_str(" ");
+    out.push_str(&math::floor(dec).to_string());
+    out.push_str(" ");
+    out.push_str(&math::ceil(low).to_string());
+    out.push_str(" ");
+    out.push_str(&math::round(half).to_string());
+    out.push_str(" ");
+    out.push_str(&math::abs(neg).to_string());
+    io::println(out.as_str());
+}

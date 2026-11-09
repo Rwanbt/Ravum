@@ -1,0 +1,5 @@
+{
+  "id": "ownership/static-str-stored",
+  "mode": "compile-pass",
+  "notes": "`&'static str` is the only storable reference: a literal is Copy, storable, returnable and usable as a struct field (OWN-6.2)."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/block-statement-value-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-STATEMENT-VALUE"
+  ],
+  "notes": "F-SYN-016 (G-6.5): a non-`()` expression in statement position (`1;`) is E-TYP-STATEMENT-VALUE."
+}

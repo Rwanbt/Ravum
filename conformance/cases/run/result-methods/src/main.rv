@@ -1,0 +1,22 @@
+use std::io;
+use std::string;
+
+fn main() {
+    let okv = string::parse_i64("42");
+    let errv = string::parse_i64("nope");
+    let mut out = String::new();
+    out.push_str(&okv.is_ok().to_string());
+    out.push_str(" ");
+    out.push_str(&errv.is_err().to_string());
+    out.push_str(" ");
+    out.push_str(&okv.unwrap().to_string());
+    out.push_str(" ");
+    out.push_str(&errv.unwrap_or(0).to_string());
+    let opt = string::parse_i64("7").ok();
+    out.push_str(" ");
+    out.push_str(&opt.is_some().to_string());
+    let oe = string::parse_i64("bad").err();
+    out.push_str(" ");
+    out.push_str(&oe.is_some().to_string());
+    io::println(out.as_str());
+}

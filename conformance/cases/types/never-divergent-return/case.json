@@ -1,0 +1,5 @@
+{
+  "id": "types/never-divergent-return",
+  "mode": "compile-pass",
+  "notes": "F-TYP-026 (TYP-1.6, EXPR-11.3): a divergent tail expression is compatible with i32."
+}

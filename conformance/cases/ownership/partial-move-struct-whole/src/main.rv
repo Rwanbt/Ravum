@@ -1,0 +1,12 @@
+struct Doc {
+    titre: String,
+    n: i32,
+}
+
+fn f(d: Doc) -> Doc {
+    let t = d.titre;
+    return d;
+}
+
+fn main() {
+}

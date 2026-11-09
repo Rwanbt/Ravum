@@ -1,0 +1,6 @@
+{
+  "id": "run/math-trig-exact",
+  "mode": "run-pass",
+  "stdout_contains": "true true true true true true",
+  "notes": "F-STD-031 / STD-6.6: sin/cos/tan/exp/ln/log10 asserted only at exactly representable identities (libm bit-exact results are excluded)."
+}

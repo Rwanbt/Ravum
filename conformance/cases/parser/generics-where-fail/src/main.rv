@@ -1,0 +1,7 @@
+fn id<T>(x: T) -> T where T: Copy {
+    return x;
+}
+
+fn main() {
+}
+

@@ -1,0 +1,7 @@
+fn vide(v: &mut Vec<i32>) -> Vec<i32> {
+    let w = *v;
+    return w;
+}
+
+fn main() {
+}

@@ -1,0 +1,5 @@
+{
+  "id": "types/usize-len",
+  "mode": "compile-pass",
+  "notes": "F-TYP-002 (TYP-1.2): Vec::len() yields usize; a usize binding and a usize return are accepted."
+}

@@ -278,7 +278,10 @@ fn initialize_advertises_a_real_language_server() {
     assert_eq!(result["capabilities"]["hoverProvider"], true);
     assert_eq!(result["capabilities"]["definitionProvider"], true);
     assert_eq!(result["capabilities"]["referencesProvider"], true);
-    assert_eq!(result["capabilities"]["renameProvider"], true);
+    assert_eq!(
+        result["capabilities"]["renameProvider"]["prepareProvider"], true,
+        "rename advertises prepareRename, which VS Code requires before showing the box"
+    );
     assert_eq!(result["capabilities"]["documentSymbolProvider"], true);
     assert_eq!(result["capabilities"]["documentFormattingProvider"], true);
     assert_eq!(result["positionEncoding"], "utf-16");
@@ -488,6 +491,87 @@ fn rename_rewrites_declaration_and_uses() {
     assert!(
         response.get("error").is_some(),
         "renaming to a keyword must be an error: {response}"
+    );
+    client.shutdown_and_exit();
+}
+
+#[test]
+fn navigation_from_the_declaration_name_works() {
+    let package = TempPackage::new("decl", SOURCE);
+    let mut client = LspClient::start();
+    client.initialize(package.dir());
+    client.open(&package.main_uri(), SOURCE);
+    let _ = client.wait_notification("textDocument/publishDiagnostics");
+
+    // `fn add` starts at column 0; column 3 is inside the declared name.
+    let mut declaration = position_of(SOURCE, "fn add");
+    declaration["character"] = json!(declaration["character"].as_u64().unwrap() + 3);
+
+    let response = client.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": package.main_uri() },
+            "position": declaration,
+            "context": { "includeDeclaration": true },
+        }),
+    );
+    let references = response["result"]
+        .as_array()
+        .unwrap_or_else(|| panic!("references must return an array, got {response}"));
+    assert_eq!(
+        references.len(),
+        2,
+        "declaration + one call, from the declaration site: {references:?}"
+    );
+
+    let response = client.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": package.main_uri() },
+            "position": declaration,
+            "newName": "sum",
+        }),
+    );
+    let edits = response["result"]["changes"]
+        .as_object()
+        .unwrap_or_else(|| panic!("rename must return a WorkspaceEdit, got {response}"));
+    let all: Vec<&Value> = edits
+        .values()
+        .flat_map(|list| list.as_array().unwrap())
+        .collect();
+    assert_eq!(all.len(), 2, "declaration + call must both be renamed");
+    assert!(all.iter().all(|edit| edit["newText"] == "sum"));
+
+    // `textDocument/prepareRename` must answer on the declaration name too: a
+    // client that sends it and gets `null` refuses the rename outright.
+    let response = client.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": package.main_uri() },
+            "position": declaration,
+        }),
+    );
+    let range = &response["result"];
+    assert_eq!(
+        range["start"]["character"].as_u64(),
+        Some(3),
+        "prepareRename must cover the declared name: {response}"
+    );
+
+    // Negative: a cursor with no symbol must yield `null`, never a fabricated
+    // edit that would rename nothing (or the wrong thing).
+    let blank = json!({ "line": 3, "character": 0 });
+    let response = client.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": package.main_uri() },
+            "position": blank,
+            "newName": "sum",
+        }),
+    );
+    assert!(
+        response["result"].is_null(),
+        "a blank line has no symbol to rename: {response}"
     );
     client.shutdown_and_exit();
 }

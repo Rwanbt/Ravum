@@ -1,0 +1,6 @@
+{
+  "id": "run/vec-clone-copy",
+  "mode": "run-pass",
+  "stdout_contains": "4",
+  "notes": "F-STD-024 / STD-10.4: Vec<i32>::clone is available because i32 is Copy; both vectors stay usable."
+}

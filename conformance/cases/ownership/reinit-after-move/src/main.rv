@@ -1,0 +1,17 @@
+fn i() -> String {
+    let mut s = String::from("a");
+    let t = s;
+    s = String::from("b");
+    return s;
+}
+
+fn g() -> String {
+    let mut u: String;
+    u = String::from("a");
+    let v = u;
+    u = String::from("c");
+    return u;
+}
+
+fn main() {
+}
