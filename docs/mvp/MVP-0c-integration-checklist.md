@@ -257,8 +257,13 @@ fichier par fichier, à l'exception du nom `mvp0c-pr-audit-2026-11-09.json` sign
 
 - **Formatage** : résolu — workspace formaté avec rustfmt 1.95, toolchain épinglée
   `1.95.0` (`rust-toolchain.toml`, CI `dtolnay/rust-toolchain@1.95.0`) et gate
-  `cargo fmt --all -- --check` ; suite 491/0/77 après formatage. L'écart CI
-  (rustc 1.99.1 vs 1.95.0 documenté) est supprimé par l'épinglage.
+  `cargo fmt --all -- --check` ; suite **495/0/78** après formatage et ajout des
+  4 tests `batch-check`. L'écart CI (rustc 1.99.1 vs 1.95.0 documenté) est supprimé
+  par l'épinglage.
+- **Collecteur** : résolu au niveau CLI — `ravum batch-check` branche `ravum-batch`
+  sur un vrai `cargo test --offline` (repli N+1, 4 tests, démonstration 1 lot/
+  1 analyse/2 acceptées, `no_loss=true`) ; l'intégration directe au daemon n'est
+  pas faite (non requise par le gate L2).
 - **Chemins personnels** : résolu — 63 preuves JSON anonymisées (124 chemins
   utilisateur, 739 chemins de dépôt, 124 chemins temporaires), aucune occurrence du
   nom d'utilisateur dans les fichiers suivis ; manifeste

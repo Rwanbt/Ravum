@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "task": "MVP-0c L2.4 — integration CLI batch-check",
+  "generated_at": "2026-11-09T03:33:12.720Z",
+  "command": "ravum batch-check <workspace> --proposals proposals.json --state state --json",
+  "report": {
+    "analysis_copy": "target\\ravum-tests\\batch-check\\demo\\state\\workspaces\\7f5abc452b9f\\work",
+    "base_id": "demo-2026-11-09",
+    "batches": [
+      {
+        "accepted_ids": [
+          "agent-1/t1",
+          "agent-2/t2"
+        ],
+        "analyses_used": 1,
+        "batch_id": 1,
+        "batch_verdict": {
+          "ok": true
+        },
+        "closed_ms": 53,
+        "opened_ms": 0,
+        "outcome": "accepted_all",
+        "proposal_ids": [
+          "agent-1/t1",
+          "agent-2/t2"
+        ],
+        "reason": "flush",
+        "rejected_ids": [],
+        "wait_ms": 53
+      }
+    ],
+    "command": "batch-check",
+    "config": {
+      "granularity": "symbols",
+      "max_batch": 6,
+      "window_ms": 50
+    },
+    "limits": [
+      "la copie du workspace est refaite depuis la copie vierge pour chaque analyse ; le cache Cargo est partagé via CARGO_TARGET_DIR",
+      "`cargo test --offline` est la seule vérification : pas de preuve formelle (aucun PROVED)",
+      "le pré-vol est textuel : un conflit sémantique imprévu est détecté par le cargo test puis replié proposition par proposition",
+      "granularity=symbols déclare des chemins vides au collecteur (sûreté par test) ; granularity=files isole les éditions d'un même fichier"
+    ],
+    "proposals": [
+      {
+        "edits": 1,
+        "files": [
+          "src/lib.rs"
+        ],
+        "id": "agent-1/t1",
+        "symbols": [
+          "alpha"
+        ]
+      },
+      {
+        "edits": 1,
+        "files": [
+          "src/lib.rs"
+        ],
+        "id": "agent-2/t2",
+        "symbols": [
+          "beta"
+        ]
+      }
+    ],
+    "proposals_file": "target\\ravum-tests\\batch-check\\demo\\proposals.json",
+    "schema_version": 1,
+    "summary": {
+      "accepted": 2,
+      "accepted_ids": [
+        "agent-1/t1",
+        "agent-2/t2"
+      ],
+      "analyses_saved_net": 1,
+      "analyses_used": 1,
+      "batches": 1,
+      "fell_back": 0,
+      "individual_analyses": 0,
+      "proposed": 2,
+      "rejected": 0,
+      "rejected_ids": []
+    },
+    "telemetry": {
+      "analyses_saved_net": 1,
+      "analyses_used": 1,
+      "base_mismatches": 0,
+      "batches_accepted_all": 1,
+      "batches_fell_back": 0,
+      "batches_formed": 1,
+      "duplicates_rejected": 0,
+      "feedback_calls": 0,
+      "individual_analyses": 0,
+      "items_reported": 2,
+      "path_conflicts": 0,
+      "preflight_isolations": 0,
+      "proposals_received": 2,
+      "proposals_rejected": 0,
+      "queue_full_rejected": 0,
+      "symbol_conflicts": 0,
+      "wait_samples_ms": [
+        53
+      ]
+    },
+    "validation": {
+      "all_accepted": true,
+      "fingerprint_after": "7f5abc452b9f96b099ac6e4225cb82b0d05ae50f9d5c47b60f969c5dcfd79c24",
+      "fingerprint_before": "7f5abc452b9f96b099ac6e4225cb82b0d05ae50f9d5c47b60f969c5dcfd79c24",
+      "no_loss": true,
+      "submitted": [
+        "agent-1/t1",
+        "agent-2/t2"
+      ],
+      "workspace_unchanged": true
+    },
+    "workspace": "D:\\App\\Ravum\\target\\ravum-tests\\batch-check\\demo\\workspace"
+  }
+}

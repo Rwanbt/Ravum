@@ -41,7 +41,7 @@ const EXIT_UNCERTAIN: u8 = 3;
 
 const REPORT_SCHEMA_VERSION: u32 = 1;
 
-const SKIPPED_DIRS: &[&str] = &[".git", "target", "node_modules", ".cache"];
+pub(crate) const SKIPPED_DIRS: &[&str] = &[".git", "target", "node_modules", ".cache"];
 
 /// Entry point for `ravum unit-check`.
 pub fn unit_check(args: &[String]) -> u8 {
@@ -513,7 +513,7 @@ fn render_human(payload: &serde_json::Value, exit_code: u8) -> String {
 // Workspace copy + fingerprint (read-only with respect to the user workspace)
 // ---------------------------------------------------------------------------
 
-fn walk_files(root: &Path, excluded: &Path) -> io::Result<Vec<PathBuf>> {
+pub(crate) fn walk_files(root: &Path, excluded: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(directory) = stack.pop() {
@@ -554,7 +554,7 @@ fn walk_files(root: &Path, excluded: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// Windows canonical paths carry a `\\?\` verbatim prefix; reports keep the
 /// user-facing form.
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let text = path.display().to_string();
     match text.strip_prefix(r"\\?\") {
         Some(stripped) => stripped.to_owned(),
@@ -562,14 +562,14 @@ fn display_path(path: &Path) -> String {
     }
 }
 
-fn relative_path(root: &Path, path: &Path) -> String {
+pub(crate) fn relative_path(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"))
 }
 
 /// Content fingerprint of the user workspace: sorted `(relative path, sha256)`.
-fn workspace_fingerprint(root: &Path, state_dir: &Path) -> io::Result<String> {
+pub(crate) fn workspace_fingerprint(root: &Path, state_dir: &Path) -> io::Result<String> {
     let mut canonical = String::from("ravum-unit-check-workspace-v1\0");
     for path in walk_files(root, state_dir)? {
         let bytes = std::fs::read(&path)?;
@@ -581,7 +581,7 @@ fn workspace_fingerprint(root: &Path, state_dir: &Path) -> io::Result<String> {
     Ok(sha256_hex(canonical.as_bytes()))
 }
 
-fn copy_workspace(root: &Path, destination: &Path, state_dir: &Path) -> io::Result<()> {
+pub(crate) fn copy_workspace(root: &Path, destination: &Path, state_dir: &Path) -> io::Result<()> {
     if destination.is_dir() {
         return Ok(());
     }

@@ -247,3 +247,28 @@ Un `unit-check` exit 3 (incertain) ne doit jamais être interprété comme un su
 * `evidence/mvp0c-cli-2026-11-09.json`.
 
 Aucun autre crate modifié par ce lot ; `Cargo.toml` racine non modifié par ce lot.
+
+## 9. `ravum batch-check` — collecteur de propositions (L2.4 → produit)
+
+```
+ravum batch-check <workspace> --proposals <file>
+  [--state <dir>] [--window-ms <0..100>] [--max-batch <1..8>]
+  [--granularity symbols|files] [--json] [--out <file>]
+```
+
+Regroupe des propositions multi-agents compatibles, les applique sur une copie du
+workspace et vérifie chaque lot avec un **vrai `cargo test --offline`** (repli
+proposition par proposition si le lot échoue). Le workspace utilisateur n'est
+jamais modifié ; la copie et le `CARGO_TARGET_DIR` vivent dans `--state`.
+
+- `--granularity symbols` (défaut) : pré-vol par symboles, sûreté par le test.
+- `--granularity files` : deux éditions d'un même fichier sont isolées.
+- Rapport JSON : lots, verdicts, télémétrie, `no_loss`, `workspace_unchanged`.
+- Codes : `0` tout accepté, `1` au moins un refus, `2` usage invalide,
+  `3` incertain (workspace modifié, copie/cargo impossible).
+
+Tests : `cargo test -p ravum-cli --test batch_check -- --test-threads=1` (4 tests,
+crate Cargo temporaire réelle). Démonstration :
+`evidence/mvp0c-batch-cli-2026-11-09.json` (2 propositions → 1 lot/1 analyse,
+2 acceptées, 0 perdue). Fichiers du lot : `crates/ravum-cli/src/batch_check.rs`,
+`crates/ravum-cli/tests/batch_check.rs`, dépendance path `ravum-batch`.
