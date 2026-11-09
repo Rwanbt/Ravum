@@ -560,3 +560,90 @@ Nouveaux cas : règle navigateur (true/false/incertain/FULL+manifeste/unit-graph
 
 **Preuve JSON** : [`evidence/mvp0c-impact-e2e-2026-11-09.json`](../../evidence/mvp0c-impact-e2e-2026-11-09.json).
 
+
+---
+
+## 12. Vérification CI réelle de la règle E2E (2026-11-09)
+
+### 12.1 Runs d'intégration : les étapes navigateur ont bien tourné
+
+Règle committée dans `5aa18af` ; HEAD vérifié : `24d92b1`.
+
+| Run | Head | Event | Conclusion | Étapes navigateur (n°) | Durées | Artefact | Rapport |
+|---|---|---|---|---|---|---|---|
+| **42550250227** | `51a1bae` | push | **success** | 12 Setup Node **success**, 13 Browser E2E **success**, 14 Upload **success** | 5 s / 23 s / 1 s | `browser-e2e-evidence`, **155 290 o**, non expiré | `scenarios=10, pass=10, fail=0, documentedChecks=44` |
+| **42551014585** | `24d92b1` | push | **success** | 12 **success**, 13 **success**, 14 **success** | 5 s / 21 s / 1 s | `browser-e2e-evidence`, **155 290 o**, non expiré | `10/10`, 44 vérifications |
+
+Logs du calcul d'impact (les deux runs) :
+`Décision: full=true uncertain=false docs=true browser=true (exit outil=0)`.
+Les étapes 11 (`Run exactly the required Rust tests`) et 15 (`Fail explicitly on an
+uncertain mapping`) sont **skipped** — attendu : décision FULL et mapping certain.
+Le contenu de l'artefact confirme le navigateur réel (`Chrome/156.0.8078.80`, navigateur
+système du runner Windows Server 2025) et `harnessError = null`.
+
+### 12.2 Dispatch réel (`base=origin/dev`)
+
+```bash
+gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening -f base=origin/dev
+```
+
+| Champ | Valeur |
+|---|---|
+| Run | **42551717472** — https://github.com/Rwanbt/Ravum/actions/runs/42551717472 |
+| Event / ref / head | `workflow_dispatch` / `feat/mvp0c-hardening` / `24d92b1` |
+| Entrée | `base=origin/dev` |
+| Conclusion | **success** (job `impact` success, 297 s) |
+| Décision loggée | `full=true uncertain=false docs=true browser=true (exit outil=0)` |
+| Étapes | 6 selftest success 4 s ; 8 compute success 1 s ; 10 **FULL suite success 232 s** ; 11 sélectif **skipped** (FULL) ; **12 Setup Node success 4 s ; 13 Browser E2E success 21 s ; 14 Upload success 1 s** ; 15 incertain **skipped** (certain) |
+| Log E2E | `Résultat: 10/10 scénarios réussis, 0 échec(s), durée 14.8 s` |
+| Artefact | `browser-e2e-evidence`, **155 331 o**, non expiré |
+| Rapport | `scenarios=10, pass=10, fail=0, documentedChecks=44, harnessError=null`, `durationMs=14772` |
+
+### 12.3 Coût observé (étapes réelles)
+
+| Run | Décision | Job total | FULL suite | Setup Node | Browser E2E | Upload | Ajout navigateur |
+|---|---|---|---|---|---|---|---|
+| 42546044539 (`486d4c8`, **avant 5aa18af**) | FULL | **211 s** | 178 s | — | — | — | **0 s** |
+| 42550250227 (`51a1bae`) | FULL | 308 s | 233 s | 5 s | 23 s | 1 s | **29 s** |
+| 42551014585 (`24d92b1`) | FULL | 283 s | 216 s | 5 s | 21 s | 1 s | **27 s** |
+| 42551717472 (dispatch `origin/dev`) | FULL | 297 s | 232 s | 4 s | 21 s | 1 s | **26 s** |
+
+Le coût ajouté observé est **26–29 s** (setup 4–5 s + E2E 21–23 s + upload 1 s), dans la
+fourchette annoncée de 25–65 s (bas de fourchette). Le run reste dominé par la suite FULL
+(216–233 s). Ces trois runs résolvent en **FULL** (diff vs `origin/dev`) : ils prouvent le
+chemin FULL + E2E, pas un run sélectif UI avec navigateur.
+
+### 12.4 Décisions locales (`browser_e2e_required`) — 4/4 conformes
+
+| Diff | Décision | `browser_e2e_required` | Attendu | Raison |
+|---|---|---|---|---|
+| `apps/ravum-todo/src/routes.rs` | sélective | **true** | true | `application/UI modifiée: …` |
+| `docs/mvp/MVP-0c-qualification.md` | sélective | **false** | false | — |
+| `crates/ravum-unit-graph/src/lib.rs` | sélective | **false** | false | — |
+| `Cargo.toml` | FULL conservateur | **true** | true | `décision FULL + manifeste de construction modifié` |
+
+`node tools/impact/impact.mjs --files 'apps/ravum-todo/src/routes.rs' --explain` affiche
+`E2E NAVIGATEUR: REQUIS — application/UI modifiée: apps/ravum-todo/src/routes.rs`.
+
+### 12.5 Aucun faux vert
+
+- Les trois étapes navigateur sont **success** sur les 3 runs ; l'artefact existe (155 290 /
+  155 331 o) et son rapport contient 10/10 scénarios et 44 vérifications.
+- Les seules étapes sautées sont **attendues** (sélectif quand FULL, incertain quand mapping
+  certain) ; aucune étape navigateur n'est sautée.
+- Aucune étape navigateur n'a été transformée en vert silencieux : `-RequireBrowser` rend
+  l'absence de navigateur fatale, et le rapport du harnais reste `harnessError=null`.
+
+### 12.6 Limites
+
+1. Un seul navigateur observé (Chrome système 156 du runner) ; pas de diversité de navigateur.
+2. Les runs observés sont **FULL** : le dispatch prouve FULL + E2E, pas le chemin sélectif UI
+   (les décisions sélectives locales sont couvertes §12.4 et par le selftest).
+3. Duplication possible avec `mvp.yml` sur `push feat/**` (10 E2E deux fois) — documentée,
+   assumée pour l'autosuffisance de la CI par impact.
+4. Un chemin inconnu (FULL) exige le navigateur par prudence → exécution plus fréquente.
+5. Une seule exécution `workflow_dispatch` observée : pas une preuve de stabilité temporelle.
+6. Le rapport du harnais porte sa propre mise en garde (`TESTED/PENDING`, jamais `PROVED`) ;
+   aucun résultat CI ne qualifie le produit.
+
+**Preuve JSON** : [`evidence/mvp0c-impact-e2e-ci-2026-11-09.json`](../../evidence/mvp0c-impact-e2e-ci-2026-11-09.json).
