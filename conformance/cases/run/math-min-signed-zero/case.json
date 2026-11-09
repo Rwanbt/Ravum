@@ -1,0 +1,6 @@
+{
+  "id": "run/math-min-signed-zero",
+  "mode": "run-pass",
+  "stdout_contains": "min-negative",
+  "notes": "F-STD-011 / STD-6.5: min(-0.0, +0.0) MUST be -0.0 (Display \"-0\") and max(-0.0, +0.0) MUST be +0.0 (Display \"0\"). The two signed zeros have distinct Display output, so this case locks both halves of the rule; the implementation emits an explicit tie-break because f64::min/max lower to an LLVM intrinsic whose answer for that tie depends on the optimisation level."
+}

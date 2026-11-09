@@ -15,8 +15,8 @@
 | Branche | `feat/lang-core-1.0-rc` |
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
-| Corpus | **268 cas** (`conformance/cases/`) |
-| Résultat corpus | **243 PASS / 24 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
+| Corpus | **269 cas** (`conformance/cases/`) |
+| Résultat corpus | **245 PASS / 23 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
 | Règles satisfaisant le critère strict §2 | **87 / 188** |
@@ -206,11 +206,11 @@ cargo run -p ravum-conformance -- run --filter ownership/vec-index-move
   reviendrait à effacer les défauts qu'ils documentent, ce que le mandat
   interdit explicitement.
 
-## 8. Correctifs appliqués après la passe (six cas sortis du rouge)
+## 8. Correctifs appliqués après la passe (sept cas sortis du rouge)
 
 Chaque correctif est un changement de **comportement**, pas d'`expect_codes` :
 le cas reste écrit comme la spécification l'exige, c'est le compilateur qui a
-été aligné. Corpus après correctifs : **268 cas, 243 PASS / 24 FAIL / 1 SKIP** ;
+été aligné. Corpus après correctifs : **269 cas, 245 PASS / 23 FAIL / 1 SKIP** ;
 tests workspace **82 suites, 1019 passés / 0 échec / 2 ignorés** (aucune
 régression).
 
@@ -223,22 +223,27 @@ régression).
 | `parser/loop-control-as-value-fail` | idem, y compris `let b = loop { break; };` et `let d = for i in 0..2 {};` |
 | `run/int-abs-signed` | le checker canonicalise tous les entiers en `int` ; le codegen ne connaissait que `i8`…`isize` et refusait `int::abs` (F-STD-029) |
 
-### 8.4 Constat de codegen ouvert — `math::max` et le zéro signé
+### 8.4 `math::min`/`max` et le zéro signé — corrigé
 
-`run/math-max-signed-zero` reste rouge pour une raison **différente d'un nom de
-code** : `math::max(a, b)` est émis comme `(a).max(b)`, c'est-à-dire
+`run/math-max-signed-zero` échouait pour une raison **différente d'un nom de
+code** : `math::max(a, b)` était émis comme `(a).max(b)`, c'est-à-dire
 `f64::max`. Or le résultat de `f64::max(-0.0, 0.0)` dépend de l'abaissement LLVM :
 
 - `rustc -C opt-level=3` → `0.0`, donc `"0"` (attendu par STD-6.5/12.2) ;
-- `rustc -C opt-level=0` (ce que la CLI utilise et ce que la conformance exécute)
-  → `-0.0`, donc `"-0"`.
+- `rustc -C opt-level=0` (le niveau que la CLI utilise et que la conformance
+  exécute) → `-0.0`, donc `"-0"`.
 
-Vérifié sur la machine de mesure : le fichier Rust généré, **compilé à la main
-avec `-O`**, affiche `positive` ; le binaire produit par `ravum-lang build`
-(même fichier, `-C opt-level=0`) affiche `negative`. Autrement dit la sémantique
-observable de `math::max` **dépend du niveau d'optimisation** : c'est un défaut
-de génération, pas un défaut de test. La correction demandée est d'émettre une
-comparaison explicite qui départage `+0.0`/`-0.0`, pas de changer le cas.
+Mesure : le fichier Rust généré, **compilé à la main avec `-O`**, affiche
+`positive` ; le binaire produit par `ravum-lang build` (même fichier,
+`-C opt-level=0`) affiche `negative`. La sémantique observable de `math::max`
+**dépendait donc du niveau d'optimisation**.
+
+Correctif : le codegen n'émet l'intrinsèque que hors du cas d'égalité à zéro, et
+départage explicitement `+0.0`/`-0.0` conformément à STD-6.5 (le comportement
+NaN est laissé à l'intrinsèque, qui implémente déjà « si un opérande est NaN,
+rendre l'autre »). Deux cas verrouillent désormais la règle dans les deux sens :
+`run/math-max-signed-zero` et le nouveau `run/math-min-signed-zero`
+(`min(-0.0, +0.0) = -0.0`, `max(-0.0, +0.0) = +0.0`).
 
 ### 8.5 Ce que la passe n'a pas touché
 
@@ -247,6 +252,6 @@ Les 24 échecs restants se répartissent en :
 - **13 codes émis hors spécification** (arbitrage **D8**) ;
 - **8 divergences de nom** entre la table et le compilateur, sur des codes qui
   *sont* documentés (D8 également : deux noms existent, il faut choisir) ;
-- **3 défauts de comportement** : `Vec<String>::clone()` accepté,
-  `math::max` dépendant de `-O` (§8.4), et le token `lifetime` qui produit une
-  cascade de quatre erreurs de parse au lieu d'un `E-UNSUPPORTED-TOKEN` unique.
+- **2 défauts de comportement** : `Vec<String>::clone()` accepté et le token
+  `lifetime` qui produit une cascade de quatre erreurs de parse au lieu d'un
+  `E-UNSUPPORTED-TOKEN` unique.

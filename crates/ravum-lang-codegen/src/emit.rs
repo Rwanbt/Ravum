@@ -2364,11 +2364,29 @@ impl<'a> Emitter<'a> {
                 "({}).{method}()",
                 self.nth_arg(args, 0, indent)?
             )),
-            FreeBuiltin::MathBinary(method) => Ok(format!(
-                "({}).{method}({})",
-                self.nth_arg(args, 0, indent)?,
-                self.nth_arg(args, 1, indent)?
-            )),
+            FreeBuiltin::MathBinary(method) => {
+                let a = self.nth_arg(args, 0, indent)?;
+                let b = self.nth_arg(args, 1, indent)?;
+                // STD-6.5 fixes the observable result on signed zeros:
+                // `max(-0.0, +0.0) = +0.0` and `min(-0.0, +0.0) = -0.0`.
+                // `f64::max`/`min` lower to an LLVM intrinsic whose answer for
+                // that tie depends on the optimisation level (`-O3` and
+                // `-C opt-level=0` disagree), so the tie is emitted explicitly.
+                // NaN is left to the intrinsic, which already implements
+                // "if one operand is NaN, return the other".
+                let is_float = matches!(
+                    args.first()
+                        .and_then(|argument| self.facts().expr_types.get(&argument.id)),
+                    Some(Type::F32) | Some(Type::F64)
+                );
+                if is_float && (method == "max" || method == "min") {
+                    let tie = if method == "max" { "0.0" } else { "-0.0" };
+                    return Ok(format!(
+                        "(if ({a}) == 0.0 && ({b}) == 0.0 {{ {tie} }} else {{ ({a}).{method}({b}) }})"
+                    ));
+                }
+                Ok(format!("({a}).{method}({b})"))
+            }
             FreeBuiltin::VariantCtor => {
                 let segments: Vec<&str> = path
                     .strip_prefix("std::")
