@@ -24,11 +24,18 @@ use crate::error::{DaemonError, Result};
 use crate::fsutil::safe_join;
 use crate::gate::JobGate;
 use crate::gc::{GcMode, GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState};
-use crate::report::{AnalysisReport, DaemonStats, ReportStatus, SnapshotReport, Timings};
+use crate::report::{
+    AnalysisReport, DaemonStats, ExternUsageReport, ReportStatus, SnapshotReport, Timings,
+};
 use crate::revision::{CancelToken, RevisionTracker, RunningJobs};
-use crate::rustc_driver::{incremental_dir, out_dir, unit_dir, DriverOptions, RustcDriver};
-use crate::snapshot::{sync_unit_dir, AnalysisRequest, SnapshotIdentity, SnapshotStore};
-use std::collections::HashMap;
+use crate::rustc_driver::{
+    incremental_dir, out_dir, unit_dir, CompiledExtern, DriverOptions, RustcDriver,
+};
+use crate::snapshot::{
+    externs_digest, sync_unit_dir, validate_externs, AnalysisRequest, ExternInput, SnapshotExtern,
+    SnapshotIdentity, SnapshotStore,
+};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock, TryLockError, Weak};
@@ -94,7 +101,14 @@ impl Daemon {
     /// querying the toolchain identity once.
     pub fn open(config: DaemonConfig) -> Result<Self> {
         let work_dir = config.work_dir.clone();
-        for sub in ["snapshots", "cache", "incremental", "units", "out"] {
+        for sub in [
+            "snapshots",
+            "cache",
+            "incremental",
+            "units",
+            "out",
+            "artifacts",
+        ] {
             std::fs::create_dir_all(work_dir.join(sub))?;
         }
         let toolchain = match config.toolchain_override.clone() {
@@ -433,11 +447,25 @@ impl Daemon {
     /// `check_every_requests`); the threshold scan and collection run in the
     /// maintenance thread, never inside this call.
     pub fn analyze(&self, request: &AnalysisRequest) -> Result<AnalysisReport> {
+        self.analyze_with_externs(request, &[])
+    }
+
+    /// Analyses one request with content-addressed direct externs (MVP-0c L1.2).
+    ///
+    /// The extern bytes are validated fail-closed, mixed into the snapshot identity
+    /// (and into the cache key via the externs digest), stored content-addressed in
+    /// the immutable snapshot, and passed to rustc as `--extern NAME=<.rmeta>`. An
+    /// empty list is byte-for-byte the legacy [`Daemon::analyze`] path.
+    pub fn analyze_with_externs(
+        &self,
+        request: &AnalysisRequest,
+        externs: &[ExternInput],
+    ) -> Result<AnalysisReport> {
         let result = {
             // Count the in-flight analysis only for its duration, so `idle_only`
             // sees a genuinely idle daemon after the answer is produced.
             let _active = ActiveAnalysisGuard::new(&self.inner.active_analyses);
-            self.analyze_impl(request)
+            self.analyze_impl(request, externs)
         };
         if let Some(runtime) = &self.inner.auto_gc {
             let _ = runtime.note_request();
@@ -446,7 +474,11 @@ impl Daemon {
     }
 
     /// Analyses one request (inner implementation, see [`Daemon::analyze`]).
-    fn analyze_impl(&self, request: &AnalysisRequest) -> Result<AnalysisReport> {
+    fn analyze_impl(
+        &self,
+        request: &AnalysisRequest,
+        externs: &[ExternInput],
+    ) -> Result<AnalysisReport> {
         let started = Instant::now();
         // Shared side of the retention lock: analyses run concurrently with each
         // other but never with an explicit GC pass.
@@ -456,6 +488,7 @@ impl Daemon {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         request.validate()?;
+        validate_externs(externs)?;
         self.bump(|stats| stats.requests += 1);
         let context_id = request.context.id(&self.inner.toolchain);
 
@@ -486,12 +519,20 @@ impl Daemon {
         let running = self.inner.running.register(request.revision);
         let token = running.token();
         let accept_started = Instant::now();
-        let identity = request.identity(&self.inner.toolchain)?;
+        let identity = request.identity_with_externs(&self.inner.toolchain, externs)?;
+        // The zero-extern path keeps the legacy cache key and verdict digest
+        // exactly (no behavioural change for existing clients/tests).
+        let externs_hash = if identity.externs.is_empty() {
+            String::new()
+        } else {
+            externs_digest(&identity.externs)
+        };
         let mut accept_ms = accept_started.elapsed().as_millis() as u64;
-        let key = CacheLookupKey::new(
+        let key = CacheLookupKey::new_with_externs(
             &identity.snapshot_id,
             &identity.context_id,
             &identity.toolchain_id,
+            &externs_hash,
         );
 
         // L1/L2 cache lookup.
@@ -528,7 +569,8 @@ impl Daemon {
                     self.bump(|stats| stats.superseded += 1);
                     return Ok(report);
                 }
-                let report = self.fresh_report_from_cache(
+                let cached_artifact = verdict.artifact_sha256.clone();
+                let mut report = self.fresh_report_from_cache(
                     request,
                     &identity,
                     &context_id,
@@ -542,6 +584,7 @@ impl Daemon {
                         total_ms: started.elapsed().as_millis() as u64,
                     },
                 );
+                report.artifact_sha256 = cached_artifact;
                 self.bump(|stats| stats.fresh += 1);
                 self.record_served(
                     request.revision,
@@ -606,7 +649,13 @@ impl Daemon {
 
         // Immutable snapshot + stable compile unit.
         let files = request.normalized_files()?;
-        let materialized = self.inner.snapshots.materialize(&identity, &files)?;
+        let materialized = if externs.is_empty() {
+            self.inner.snapshots.materialize(&identity, &files)?
+        } else {
+            self.inner
+                .snapshots
+                .materialize_with_externs(&identity, &files, externs)?
+        };
         if materialized.created {
             self.bump(|stats| stats.snapshots_created += 1);
         } else {
@@ -650,7 +699,81 @@ impl Daemon {
             poll_interval_ms: self.inner.config.poll_interval_ms,
             timeout_ms: self.inner.config.analysis_timeout_ms,
         };
-        let output = self.inner.driver.run(&options, &token)?;
+        // rustc requires the `--extern` artifact to be named `lib<name>.rmeta`
+        // (a bare `<sha>.rmeta` is rejected as "unknown type"). Direct artifacts
+        // come from the immutable snapshot; the transitive interface closure comes
+        // from the daemon's content-addressed artifact store, so a dependent can
+        // decode re-exports of its externs.
+        let mut compiled_externs: Vec<CompiledExtern> = Vec::new();
+        if !materialized.externs.is_empty() {
+            let closure = self.extern_closure(&materialized.externs)?;
+            let extern_links = self
+                .inner
+                .config
+                .work_dir
+                .join("externs")
+                .join(&identity.snapshot_id);
+            std::fs::create_dir_all(&extern_links).map_err(|error| {
+                DaemonError::io(format!(
+                    "cannot create extern link dir {}: {error}",
+                    extern_links.display()
+                ))
+            })?;
+            let mut by_name: std::collections::BTreeMap<String, String> =
+                std::collections::BTreeMap::new();
+            for extern_ref in &closure {
+                if let Some(existing) = by_name.get(&extern_ref.name) {
+                    if existing != &extern_ref.interface_id {
+                        return Err(DaemonError::invalid(format!(
+                            "ambiguous extern name {:?}: two interfaces in the closure",
+                            extern_ref.name
+                        )));
+                    }
+                    continue;
+                }
+                by_name.insert(extern_ref.name.clone(), extern_ref.interface_id.clone());
+                let bytes = if let Some(direct) = materialized
+                    .externs
+                    .iter()
+                    .find(|direct| direct.interface_id == extern_ref.interface_id)
+                {
+                    std::fs::read(
+                        materialized
+                            .externs_dir
+                            .join(format!("{}.rmeta", direct.interface_id)),
+                    )
+                    .map_err(|error| {
+                        DaemonError::io(format!(
+                            "cannot read verified extern {}: {error}",
+                            extern_ref.name
+                        ))
+                    })?
+                } else {
+                    self.artifact(&extern_ref.interface_id)?
+                };
+                let link = extern_links.join(format!("lib{}.rmeta", extern_ref.name));
+                if std::fs::read(&link).ok().as_deref() != Some(bytes.as_slice()) {
+                    std::fs::write(&link, &bytes).map_err(|error| {
+                        DaemonError::io(format!(
+                            "cannot materialize extern {} at {}: {error}",
+                            extern_ref.name,
+                            link.display()
+                        ))
+                    })?;
+                }
+                compiled_externs.push(CompiledExtern {
+                    name: extern_ref.name.clone(),
+                    rmeta: link,
+                });
+            }
+        }
+        let output = if compiled_externs.is_empty() {
+            self.inner.driver.run(&options, &token)?
+        } else {
+            self.inner
+                .driver
+                .run_with_externs(&options, &compiled_externs, &token)?
+        };
         self.bump(|stats| {
             stats.rustc_runs += 1;
             stats.rustc_ms_total += output.analysis_ms;
@@ -712,6 +835,7 @@ impl Daemon {
                 written_files: sync.written_files,
                 removed_files: sync.removed_files,
                 verified_files: materialized.verified_files,
+                externs: identity.externs.len(),
                 dir: materialized.dir.display().to_string(),
             });
             return Ok(report);
@@ -719,6 +843,15 @@ impl Daemon {
 
         let parsed = parse_rustc_json(&output.stderr, Some(&unit), output.success);
         let success = output.success && !parsed.has_errors();
+        let artifact_sha256 = if success {
+            self.store_artifact(
+                &context_out_dir,
+                &request.context.crate_name,
+                &identity.externs,
+            )
+        } else {
+            None
+        };
         let verdict = CachedVerdict::new(
             key.key.clone(),
             identity.snapshot_id.clone(),
@@ -728,7 +861,9 @@ impl Daemon {
             output.exit_code,
             parsed.diagnostics.clone(),
             output.analysis_ms,
-        );
+        )
+        .with_externs_digest(externs_hash.clone())
+        .with_artifact_sha256(artifact_sha256.clone());
         // Cache the verdict by content identity even if this revision was
         // superseded meanwhile: the content-addressed answer stays valid for any
         // caller that submits the same bytes.
@@ -766,6 +901,7 @@ impl Daemon {
         report.success = success;
         report.exit_code = output.exit_code;
         report.diagnostics = parsed.diagnostics;
+        report.artifact_sha256 = artifact_sha256;
         report.cache = CacheReport::miss(self.inner.cache.entries());
         report.timings = Timings {
             accept_ms,
@@ -780,6 +916,7 @@ impl Daemon {
             written_files: sync.written_files,
             removed_files: sync.removed_files,
             verified_files: materialized.verified_files,
+            externs: identity.externs.len(),
             dir: materialized.dir.display().to_string(),
         });
         self.bump(|stats| stats.fresh += 1);
@@ -792,6 +929,129 @@ impl Daemon {
         Ok(report)
     }
 
+    /// Reads one content-addressed interface artifact (`<work>/artifacts/<sha>.rmeta`)
+    /// produced by a previous successful analysis. The bytes are SHA-256 verified
+    /// before being returned: a tampered or foreign artifact is an error, never a
+    /// dependency interface.
+    pub fn artifact(&self, interface_id: &str) -> Result<Vec<u8>> {
+        crate::config::validate_interface_id(interface_id)?;
+        let path = self
+            .inner
+            .config
+            .work_dir
+            .join("artifacts")
+            .join(format!("{interface_id}.rmeta"));
+        let bytes = std::fs::read(&path).map_err(|error| {
+            DaemonError::io(format!(
+                "artifact {interface_id} is unavailable at {}: {error}",
+                path.display()
+            ))
+        })?;
+        if bytes.is_empty() || bytes.len() > crate::config::MAX_EXTERN_BYTES {
+            return Err(DaemonError::snapshot_corrupt(format!(
+                "artifact {interface_id} has invalid size {}",
+                bytes.len()
+            )));
+        }
+        if crate::hash::sha256_hex(&bytes) != interface_id {
+            return Err(DaemonError::snapshot_corrupt(format!(
+                "artifact {interface_id} does not match its recorded SHA-256"
+            )));
+        }
+        Ok(bytes)
+    }
+
+    /// Direct externs recorded for one interface artifact: a dependent analysis
+    /// needs the interface closure, not just its immediate externs.
+    fn record_artifact_externs(&self, interface_id: &str, externs: &[SnapshotExtern]) {
+        if externs.is_empty() {
+            return;
+        }
+        let artifacts = self.inner.config.work_dir.join("artifacts");
+        let sidecar = artifacts.join(format!("{interface_id}.externs.json"));
+        if sidecar.is_file() {
+            return;
+        }
+        if let Ok(bytes) = serde_json::to_vec(externs) {
+            let temporary = artifacts.join(format!(".tmp-{interface_id}.externs.json"));
+            if std::fs::write(&temporary, bytes).is_ok() {
+                let _ = std::fs::rename(&temporary, &sidecar);
+            }
+        }
+    }
+
+    fn artifact_externs(&self, interface_id: &str) -> Vec<SnapshotExtern> {
+        let sidecar = self
+            .inner
+            .config
+            .work_dir
+            .join("artifacts")
+            .join(format!("{interface_id}.externs.json"));
+        std::fs::read(&sidecar)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    /// Transitive interface closure of the direct externs: rustc needs the
+    /// dependency metadata of an extern's own dependencies to decode re-exports
+    /// (e.g. `api` re-exporting `core::Point`). Missing/ambiguous entries are a
+    /// real error, never an invented interface.
+    fn extern_closure(&self, direct: &[SnapshotExtern]) -> Result<Vec<SnapshotExtern>> {
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut queue: Vec<SnapshotExtern> = direct.to_vec();
+        let mut closure: Vec<SnapshotExtern> = Vec::new();
+        while let Some(extern_ref) = queue.pop() {
+            if !seen.insert(extern_ref.interface_id.clone()) {
+                continue;
+            }
+            let nested = self.artifact_externs(&extern_ref.interface_id);
+            queue.extend(nested);
+            closure.push(extern_ref);
+        }
+        closure.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(closure)
+    }
+
+    /// Stores the `.rmeta` interface produced by one successful analysis in the
+    /// daemon's content-addressed artifact store and returns its SHA-256.
+    fn store_artifact(
+        &self,
+        context_out_dir: &std::path::Path,
+        crate_name: &str,
+        direct_externs: &[SnapshotExtern],
+    ) -> Option<String> {
+        let produced = context_out_dir.join(format!("lib{crate_name}.rmeta"));
+        let bytes = std::fs::read(&produced).ok()?;
+        if bytes.is_empty() || bytes.len() > crate::config::MAX_EXTERN_BYTES {
+            return None;
+        }
+        let sha256 = crate::hash::sha256_hex(&bytes);
+        let artifacts = self.inner.config.work_dir.join("artifacts");
+        std::fs::create_dir_all(&artifacts).ok()?;
+        let final_path = artifacts.join(format!("{sha256}.rmeta"));
+        if final_path.is_file() {
+            self.record_artifact_externs(&sha256, direct_externs);
+            return Some(sha256);
+        }
+        let temporary = artifacts.join(format!(".tmp-{sha256}-{}", std::process::id()));
+        std::fs::write(&temporary, &bytes).ok()?;
+        match std::fs::rename(&temporary, &final_path) {
+            Ok(()) => {
+                self.record_artifact_externs(&sha256, direct_externs);
+                Some(sha256)
+            }
+            Err(_) => {
+                let _ = std::fs::remove_file(&temporary);
+                if final_path.is_file() {
+                    self.record_artifact_externs(&sha256, direct_externs);
+                    Some(sha256)
+                } else {
+                    None
+                }
+            }
+        }
+    }
     fn is_superseded(&self, request: &AnalysisRequest) -> bool {
         self.inner.revisions.is_superseded(request.revision)
     }
@@ -869,6 +1129,17 @@ impl Daemon {
             diagnostics: Vec::new(),
             timings: Timings::default(),
             snapshot: None,
+            externs: identity
+                .externs
+                .iter()
+                .map(|extern_ref| ExternUsageReport {
+                    name: extern_ref.name.clone(),
+                    crate_name: extern_ref.crate_name.clone(),
+                    interface_id: extern_ref.interface_id.clone(),
+                    rmeta_sha256: extern_ref.interface_id.clone(),
+                })
+                .collect(),
+            artifact_sha256: None,
             daemon_version: env!("CARGO_PKG_VERSION").to_owned(),
             message: None,
         }
@@ -914,6 +1185,7 @@ impl Daemon {
                 root: request.root.clone(),
                 files: Vec::new(),
                 total_bytes: 0,
+                externs: Vec::new(),
             },
             context_id,
         );

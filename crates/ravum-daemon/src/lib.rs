@@ -77,6 +77,6 @@ pub use report::{
     Timings,
 };
 pub use snapshot::{
-    sync_unit_dir, AnalysisRequest, MaterializedSnapshot, SnapshotIdentity, SnapshotStore,
-    SourceFile, SyncStats,
+    externs_digest, sync_unit_dir, validate_externs, AnalysisRequest, ExternInput,
+    MaterializedSnapshot, SnapshotExtern, SnapshotIdentity, SnapshotStore, SourceFile, SyncStats,
 };

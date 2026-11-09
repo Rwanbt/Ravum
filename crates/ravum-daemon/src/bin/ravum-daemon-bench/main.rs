@@ -15,6 +15,7 @@
 
 mod campaign;
 mod compaction;
+mod cross_crate;
 mod edits;
 mod gc;
 mod grouping;
@@ -42,6 +43,8 @@ struct Args {
     out_compaction: PathBuf,
     compaction_edits: usize,
     out_multi: PathBuf,
+    out_cross_crate: PathBuf,
+    cross_crate_rounds: usize,
     multi_clients: usize,
     multi_seconds: u64,
     multi_pace_ms: u64,
@@ -66,9 +69,10 @@ fn main() {
         Err(message) => {
             eprintln!("ravum-daemon-bench: {message}");
             eprintln!(
-                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate|grouping] \
+                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate|grouping|cross-crate] \
                  [--samples N] [--scale-reps N] [--work-dir PATH] [--out PATH] \
-                 [--out-scale PATH] [--out-invariants PATH] [--out-grouping PATH] [--grouping-reps N] [--no-clean]"
+                 [--out-scale PATH] [--out-invariants PATH] [--out-grouping PATH] [--grouping-reps N] \
+                 [--out-cross-crate PATH] [--cross-crate-rounds N] [--no-clean]"
             );
             std::process::exit(2);
         }
@@ -150,6 +154,16 @@ fn main() {
             Ok(valid) => invalid |= !valid,
             Err(error) => {
                 eprintln!("soak suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "cross-crate" | "all" => match cross_crate_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("cross-crate suite failed: {error}");
                 std::process::exit(1);
             }
         },
@@ -489,6 +503,42 @@ fn grouping_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     Ok(value["valid"].as_bool().unwrap_or(false))
 }
 
+fn cross_crate_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "cross-crate: isolated vs chained daemon analysis, {} rounds, fixture fixtures/multicrate",
+        args.cross_crate_rounds
+    );
+    let value = cross_crate::run(&cross_crate::CrossCrateOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("cross-crate-suite"),
+        rounds: args.cross_crate_rounds,
+    })?;
+    cross_crate::write(&args.out_cross_crate, &value)?;
+    println!(
+        "  isolated: {} rustc invocations, total p50={}ms mean={:.1}ms snapshot_bytes p50={}",
+        value["isolated"]["rustc_invocations"],
+        value["isolated"]["total_ms"]["p50"],
+        value["isolated"]["total_ms"]["mean"]
+            .as_f64()
+            .unwrap_or(0.0),
+        value["isolated"]["snapshot_bytes"]["p50"]
+    );
+    println!(
+        "  chained: {} rustc invocations, phase total p50={}ms mean={:.1}ms",
+        value["chained"]["rustc_invocations"],
+        value["chained"]["phase_total_ms"]["p50"],
+        value["chained"]["phase_total_ms"]["mean"]
+            .as_f64()
+            .unwrap_or(0.0)
+    );
+    println!(
+        "  extern change: api_is_miss={} api_snapshot_changed={}",
+        value["extern_change"]["api_is_miss"], value["extern_change"]["api_snapshot_changed"]
+    );
+    println!("written: {}", args.out_cross_crate.display());
+    Ok(value["valid"].as_bool().unwrap_or(false))
+}
+
 fn invariants_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     println!("invariants: negative/boundary checks");
     let value = invariants::run(&invariants::InvariantOptions {
@@ -610,6 +660,10 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
         out_multi: repo_root
             .join("evidence")
             .join("mvp0b-daemon-soak-multi-2026-11-08.json"),
+        out_cross_crate: repo_root
+            .join("evidence")
+            .join("mvp0c-cross-crate-daemon-2026-11-09.json"),
+        cross_crate_rounds: 3,
         multi_clients: 3,
         multi_seconds: 120,
         multi_pace_ms: 300,
@@ -663,6 +717,12 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
                 args.grouping_reps = take("--grouping-reps")?
                     .parse()
                     .map_err(|_| "--grouping-reps must be an integer".to_owned())?
+            }
+            "--out-cross-crate" => args.out_cross_crate = PathBuf::from(take("--out-cross-crate")?),
+            "--cross-crate-rounds" => {
+                args.cross_crate_rounds = take("--cross-crate-rounds")?
+                    .parse()
+                    .map_err(|_| "--cross-crate-rounds must be an integer".to_owned())?
             }
             "--out-soak" => args.out_soak = PathBuf::from(take("--out-soak")?),
             "--out-compaction" => args.out_compaction = PathBuf::from(take("--out-compaction")?),
@@ -761,6 +821,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             | "compaction"
             | "multi-soak"
             | "grouping"
+            | "cross-crate"
             | "validate"
     ) {
         return Err(format!("unknown suite {:?}", args.suite));

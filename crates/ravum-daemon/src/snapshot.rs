@@ -116,7 +116,23 @@ impl AnalysisRequest {
     }
 
     /// Content identity of the request: source bytes + build context + toolchain.
+    /// No externs: equivalent to [`AnalysisRequest::identity_with_externs`] with an
+    /// empty extern list (legacy behaviour preserved byte-for-byte).
     pub fn identity(&self, toolchain: &ToolchainInfo) -> Result<SnapshotIdentity> {
+        self.identity_with_externs(toolchain, &[])
+    }
+
+    /// Content identity including the content-addressed externs: two requests with
+    /// identical sources but different extern bytes/interfaces get different
+    /// `snapshot_id`s, so every cache keyed by it (memory, disk, snapshot store)
+    /// misses when an extern changes. The hash of the zero-extern case is
+    /// unchanged, preserving legacy snapshot ids.
+    pub fn identity_with_externs(
+        &self,
+        toolchain: &ToolchainInfo,
+        externs: &[ExternInput],
+    ) -> Result<SnapshotIdentity> {
+        validate_externs(externs)?;
         let files = self.normalized_files()?;
         let context_id = self.context.id(toolchain);
         let mut hasher = Sha256::new();
@@ -138,6 +154,18 @@ impl AnalysisRequest {
                 len: content.len() as u64,
             });
         }
+        let mut extern_refs: Vec<SnapshotExtern> =
+            externs.iter().map(ExternInput::reference).collect();
+        if !extern_refs.is_empty() {
+            extern_refs.sort_by(|a, b| a.name.cmp(&b.name));
+            push_field(&mut hasher, b"ravum-daemon-externs-v1");
+            for extern_ref in &extern_refs {
+                push_field(&mut hasher, extern_ref.name.as_bytes());
+                push_field(&mut hasher, extern_ref.crate_name.as_bytes());
+                push_field(&mut hasher, extern_ref.interface_id.as_bytes());
+                push_field(&mut hasher, &extern_ref.len.to_le_bytes());
+            }
+        }
         Ok(SnapshotIdentity {
             snapshot_id: hex(&hasher.finalize()),
             context_id,
@@ -145,6 +173,7 @@ impl AnalysisRequest {
             root: validate_logical_path(&self.root)?,
             files: file_ids,
             total_bytes,
+            externs: extern_refs,
         })
     }
 }
@@ -158,6 +187,26 @@ pub struct SnapshotIdentity {
     pub root: String,
     pub files: Vec<SnapshotFileId>,
     pub total_bytes: u64,
+    /// Content-addressed direct externs of this snapshot (empty for legacy/no-extern
+    /// requests). Mixed into `snapshot_id`, never kept outside it.
+    #[serde(default)]
+    pub externs: Vec<SnapshotExtern>,
+}
+
+/// Ordered digest of the extern set; used by the verdict cache in addition to the
+/// snapshot id (defence in depth: an extern change can never be a HIT).
+pub fn externs_digest(externs: &[SnapshotExtern]) -> String {
+    let mut ordered: Vec<&SnapshotExtern> = externs.iter().collect();
+    ordered.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut hasher = Sha256::new();
+    hasher.update(b"ravum-daemon-externs-digest-v1\0");
+    for extern_ref in ordered {
+        push_field(&mut hasher, extern_ref.name.as_bytes());
+        push_field(&mut hasher, extern_ref.crate_name.as_bytes());
+        push_field(&mut hasher, extern_ref.interface_id.as_bytes());
+        push_field(&mut hasher, &extern_ref.len.to_le_bytes());
+    }
+    hex(&hasher.finalize())
 }
 
 impl SnapshotIdentity {
@@ -189,12 +238,105 @@ pub struct SnapshotExtern {
 }
 
 /// Caller-provided extern artifact bytes for one materialization.
+///
+/// Wire format (JSON-lines clients): `{ "name", "crate_name", "interface_id",
+/// "len", "rmeta_hex" }`. Deserialization is fail-closed: the interface id must
+/// be the exact SHA-256 of the decoded bytes, names must be Rust identifiers and
+/// the size is bounded. Rust callers use [`ExternInput::new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternInput {
     pub name: String,
     pub crate_name: String,
     pub interface_id: String,
     pub bytes: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExternInputWire {
+    name: String,
+    crate_name: String,
+    interface_id: String,
+    len: u64,
+    rmeta_hex: String,
+}
+
+impl Serialize for ExternInput {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        ExternInputWire {
+            name: self.name.clone(),
+            crate_name: self.crate_name.clone(),
+            interface_id: self.interface_id.clone(),
+            len: self.bytes.len() as u64,
+            rmeta_hex: hex_encode(&self.bytes),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ExternInput {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        use serde::de::Error as DeError;
+        let wire = ExternInputWire::deserialize(deserializer)?;
+        let bytes = hex_decode(&wire.rmeta_hex).map_err(DeError::custom)?;
+        if bytes.len() as u64 != wire.len {
+            return Err(DeError::custom(format!(
+                "extern {:?}: len {} does not match {} decoded bytes",
+                wire.name,
+                wire.len,
+                bytes.len()
+            )));
+        }
+        let input = ExternInput {
+            name: wire.name,
+            crate_name: wire.crate_name,
+            interface_id: wire.interface_id,
+            bytes,
+        };
+        validate_extern_one(&input).map_err(DeError::custom)?;
+        Ok(input)
+    }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        text.push_str(&format!("{byte:02x}"));
+    }
+    text
+}
+
+fn hex_decode(text: &str) -> Result<Vec<u8>> {
+    if text.len() % 2 != 0 {
+        return Err(DaemonError::invalid("rmeta_hex has an odd length"));
+    }
+    let mut bytes = Vec::with_capacity(text.len() / 2);
+    let raw = text.as_bytes();
+    let mut index = 0;
+    while index < raw.len() {
+        let high = hex_digit(raw[index])?;
+        let low = hex_digit(raw[index + 1])?;
+        bytes.push((high << 4) | low);
+        index += 2;
+    }
+    Ok(bytes)
+}
+
+fn hex_digit(byte: u8) -> Result<u8> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ => Err(DaemonError::invalid(format!(
+            "rmeta_hex contains a non-hex character {:?}",
+            byte as char
+        ))),
+    }
 }
 
 impl ExternInput {
@@ -312,7 +454,7 @@ impl SnapshotStore {
         externs: &[ExternInput],
     ) -> Result<MaterializedSnapshot> {
         validate_snapshot_id(&identity.snapshot_id)?;
-        validate_extern_set(externs)?;
+        validate_externs(externs)?;
         let extern_refs: Vec<SnapshotExtern> = externs.iter().map(ExternInput::reference).collect();
         let final_dir = self.root.join(&identity.snapshot_id);
         let checkout = final_dir.join("checkout");
@@ -407,7 +549,29 @@ impl SnapshotStore {
     }
 }
 
-fn validate_extern_set(externs: &[ExternInput]) -> Result<()> {
+fn validate_extern_one(extern_input: &ExternInput) -> Result<()> {
+    validate_extern_name(&extern_input.name)?;
+    validate_extern_name(&extern_input.crate_name)?;
+    validate_interface_id(&extern_input.interface_id)?;
+    if extern_input.bytes.is_empty() || extern_input.bytes.len() > MAX_EXTERN_BYTES {
+        return Err(DaemonError::invalid(format!(
+            "extern {:?} has invalid size {} (1..={MAX_EXTERN_BYTES})",
+            extern_input.name,
+            extern_input.bytes.len()
+        )));
+    }
+    if sha256_hex(&extern_input.bytes) != extern_input.interface_id {
+        return Err(DaemonError::invalid(format!(
+            "extern {:?} interface_id is not the SHA-256 of its bytes",
+            extern_input.name
+        )));
+    }
+    Ok(())
+}
+
+/// Validates a whole extern set (names, sizes, interface ids, uniqueness).
+/// Public so callers (daemon, tests) can fail before touching the filesystem.
+pub fn validate_externs(externs: &[ExternInput]) -> Result<()> {
     if externs.len() > MAX_EXTERNS_PER_UNIT {
         return Err(DaemonError::invalid(format!(
             "snapshot has too many externs ({} > {MAX_EXTERNS_PER_UNIT})",
@@ -416,22 +580,7 @@ fn validate_extern_set(externs: &[ExternInput]) -> Result<()> {
     }
     let mut names: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for extern_input in externs {
-        validate_extern_name(&extern_input.name)?;
-        validate_extern_name(&extern_input.crate_name)?;
-        validate_interface_id(&extern_input.interface_id)?;
-        if extern_input.bytes.is_empty() || extern_input.bytes.len() > MAX_EXTERN_BYTES {
-            return Err(DaemonError::invalid(format!(
-                "extern {:?} has invalid size {} (1..={MAX_EXTERN_BYTES})",
-                extern_input.name,
-                extern_input.bytes.len()
-            )));
-        }
-        if sha256_hex(&extern_input.bytes) != extern_input.interface_id {
-            return Err(DaemonError::invalid(format!(
-                "extern {:?} interface_id is not the SHA-256 of its bytes",
-                extern_input.name
-            )));
-        }
+        validate_extern_one(extern_input)?;
         if !names.insert(extern_input.name.as_str()) {
             return Err(DaemonError::invalid(format!(
                 "duplicate extern name {:?}",
@@ -497,6 +646,7 @@ fn verify_snapshot_internal(
         || manifest.toolchain_id != identity.toolchain_id
         || manifest.total_bytes != identity.total_bytes
         || manifest.files != identity.files
+        || manifest.externs != identity.externs
     {
         return Err(DaemonError::snapshot_corrupt(format!(
             "snapshot {} manifest does not match the requested identity",
@@ -859,10 +1009,18 @@ mod tests {
         let root = temp_root("schema2");
         let store = SnapshotStore::new(root.join("snapshots")).unwrap();
         let request = request("src/lib.rs", "pub fn a() {}");
-        let identity = request.identity(&toolchain()).unwrap();
-        let files = request.normalized_files().unwrap();
         let extern_input = make_extern(b"dep-rmeta-bytes-1");
         let extern_ref = extern_input.reference();
+        let identity = request
+            .identity_with_externs(&toolchain(), &[extern_input.clone()])
+            .unwrap();
+        assert_eq!(identity.externs, vec![extern_ref.clone()]);
+        let plain_identity = request.identity(&toolchain()).unwrap();
+        assert_ne!(
+            plain_identity.snapshot_id, identity.snapshot_id,
+            "the snapshot identity must include the externs"
+        );
+        let files = request.normalized_files().unwrap();
         let materialized = store
             .materialize_with_externs(&identity, &files, &[extern_input.clone()])
             .unwrap();
@@ -930,10 +1088,12 @@ mod tests {
         let root = temp_root("tamper");
         let store = SnapshotStore::new(root.join("snapshots")).unwrap();
         let request = request("src/lib.rs", "pub fn a() {}");
-        let identity = request.identity(&toolchain()).unwrap();
-        let files = request.normalized_files().unwrap();
         let extern_input = make_extern(b"dep-rmeta-bytes");
         let extern_ref = extern_input.reference();
+        let identity = request
+            .identity_with_externs(&toolchain(), &[extern_input.clone()])
+            .unwrap();
+        let files = request.normalized_files().unwrap();
         let materialized = store
             .materialize_with_externs(&identity, &files, &[extern_input])
             .unwrap();
