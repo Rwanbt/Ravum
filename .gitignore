@@ -29,3 +29,6 @@ tools/ai_docs/config.sh
 .ai-native/lifecycle/update-cache.json
 .ai-native/state/
 # <<< END ai-native-dev-stack
+
+# Sortie locale du calcul d'impact (outil tools/impact/impact.mjs)
+impact.json

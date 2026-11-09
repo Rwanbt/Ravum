@@ -82,6 +82,7 @@ jobs:
       # It includes the INVENTORY case: a workspace crate/app without a test
       # mapping fails here instead of being silently ignored.
       - name: Verify the impact mapping itself (Node selftest, no cargo)
+        id: mapping_selftest
         shell: pwsh
         run: |
           node tools/impact/selftest.mjs
@@ -162,7 +163,7 @@ jobs:
       #    jamais à la place des tests Rust.
       # ---------------------------------------------------------------------
       - name: Documentation integrity check (only when docs changed)
-        if: always() && steps.impact.outputs.docs == 'true'
+        if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.docs == 'true'
         shell: pwsh
         run: |
           if (-not (Test-Path impact.json)) {
@@ -189,7 +190,7 @@ jobs:
       #     passent, échoue s'ils échouent — aucun échec artificiel.
       # ---------------------------------------------------------------------
       - name: Run the FULL workspace suite (legitimate conservative mapping)
-        if: always() && steps.impact.outputs.full == 'true'
+        if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.full == 'true'
         shell: pwsh
         run: |
           Write-Host "::notice::Mapping FULL par règle conservatrice : la suite complète est l'exigence de ce diff (issue légitime)."
@@ -209,7 +210,7 @@ jobs:
       #     échoue, pour ne pas masquer les autres échecs.
       # ---------------------------------------------------------------------
       - name: Run exactly the required Rust tests (serialized)
-        if: always() && steps.impact.outputs.full != 'true'
+        if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.full != 'true'
         shell: pwsh
         run: |
           if (-not (Test-Path impact.json)) {

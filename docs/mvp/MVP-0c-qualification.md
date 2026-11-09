@@ -322,3 +322,129 @@ gh run list --workflow mvp-impact.yml --limit 3
   restent à valider après commit par le Lead.
 
 **Preuves JSON** : [`evidence/mvp0c-impact-2026-11-09.json`](../../evidence/mvp0c-impact-2026-11-09.json).
+
+---
+
+## 10. Correctif CI du 2026-11-09 — dev-deps DSP et décisions `benchmarks/**`
+
+### 10.1 Panne observée
+
+Depuis le commit `c86d1f0` (stress DSP), le job `impact` échouait à l'étape
+« Verify the impact mapping itself (Node selftest, no cargo) » :
+
+- run **[42543351783](https://github.com/Rwanbt/Ravum/actions/runs/42543351783)** (`push`, head
+  `c86d1f0`) : `failure` ;
+- `SELFTEST FAIL — 52 cas, 524 assertions, 2 échec(s)` :
+  - `dépendant transitif et précision: ravum-snapshot: ravum-dsp-harness ne dépend pas de ravum-snapshot et ne devrait pas être testé` ;
+  - `dev-dependency: un saut, pas de propagation arbitraire (rust-adapter): dsp-harness ne dépend pas de rust-adapter et ne doit pas être testé` ;
+- cascade trompeuse : le step de calcul était sauté (selftest rouge) mais les étapes
+  conditionnelles `always()` lisaient des sorties vides, d'où un second échec
+  `::error::aucune décision d'impact`.
+
+### 10.2 Cause racine (changement de manifeste légitime)
+
+`crates/ravum-dsp-harness/Cargo.toml` (commit `c86d1f0`) déclare désormais :
+
+```toml
+[dev-dependencies]
+ravum-rust-adapter = { workspace = true }
+ravum-snapshot = { workspace = true }
+```
+
+Le graphe d'impact le voit correctement : `ravum-dsp-harness` est **dev-dépendant direct**
+de `ravum-snapshot` et de `ravum-rust-adapter`. Les deux cas du selftest codaient l'ancien
+graphe (exclusion explicite de `ravum-dsp-harness`) : ce n'était **pas** un bug de l'outil,
+mais des attentes périmées par un changement de manifeste légitime. Le `Cargo.toml` de
+`dsp-harness` n'a **pas** été modifié.
+
+### 10.3 Règle dev-dependency : inchangée et vérifiée
+
+Règle (aucun affaiblissement) : une **dev-dependency directe** exige les tests du dépendant ;
+la propagation s'arrête à **un seul saut** (pas de transitivité arbitraire).
+
+| Scénario | `ravum-dsp-harness` | `ravum-demo-host` (dépendant normal du dev-hop `ravum-patch-host`) | Provenance dev-hop |
+|---|---|---|---|
+| changement `ravum-snapshot` | **inclus** (dev-dep directe) | **exclu** (pas de propagation) | `dev-dependent` via un paquet affecté qui est bien une dev-dep déclarée (`snapshot` ou `rust-adapter`) |
+| changement `ravum-rust-adapter` | **inclus** (dev-dep directe) | **exclu** (pas de propagation) | `dev-dependent` via un paquet affecté dev-dep déclaré (`rust-adapter`) |
+
+Le `via` de provenance peut désigner n'importe quel paquet affecté dont `dsp-harness` est
+une dev-dependency directe (ici `snapshot` ou `rust-adapter`, tous deux affectés) : le
+selftest vérifie la règle (via ∈ dev-deps déclarées ∧ via ∈ paquets affectés), pas un ordre
+de parcours.
+
+### 10.4 Correctif du selftest : 52/524 (FAIL) → 56/583 (PASS)
+
+| | Cas | Assertions | Résultat |
+|---|---|---|---|
+| Avant correctif (run rouge) | 52 | 524 | **FAIL** (2 échecs) |
+| Après correctif | **56** | **583** | **`SELFTEST PASS`** |
+
+Cas mis à jour :
+
+- `dépendant transitif et dev-dépendant direct: ravum-snapshot` : `ravum-dsp-harness`
+  désormais **inclus** comme dev-dépendant direct, provenance `dev-dependent` vérifiée,
+  `ravum-demo-host` explicitement **exclu** (preuve d'absence de propagation) ;
+- `dev-dependency directe: dépendant testé, pas de propagation transitive (rust-adapter)` :
+  idem pour `ravum-rust-adapter`.
+
+Cas ajoutés :
+
+1. `règle dev-dependency: directe => testée, jamais propagée au-delà d'un saut` (les deux
+   paquets, provenance, exclusion de `demo-host`) ;
+2. `benchmarks/** => FULL conservateur, jamais de décision vide` ;
+3. `diff mixte docs + benchmarks => FULL + check docs (décision non vide)` ;
+4. `CLI --files: benchmark fixture => FULL conservateur, JSON valide (exit 0)`.
+
+### 10.5 Décisions `benchmarks/**` (aucune décision vide)
+
+| Diff | Décision | Commande(s) |
+|---|---|---|
+| `benchmarks/s8-mvp0c/fixture/Cargo.toml` | **FULL conservateur** (manifeste) | `cargo test --workspace -- --test-threads=1` |
+| `benchmarks/s8/run-s8.mjs` | **FULL conservateur** (chemin inconnu listé) | suite complète |
+| `docs/... + benchmarks/s8-mvp0c/fixture/Cargo.toml` | **FULL conservateur + docs** | suite complète **+** `python tools/validate_repo_docs.py` |
+
+Dans tous les cas : `uncertain=false`, JSON valide, au moins une commande (jamais `commands: []`).
+
+### 10.6 Décision réelle `origin/dev..HEAD`
+
+```powershell
+node tools/impact/impact.mjs --base origin/dev --head HEAD --json
+# exit 0 ; decision=full-conservative ; uncertain=false ; 595 fichiers ; 2 commandes
+#   cargo test --workspace -- --test-threads=1
+#   python tools/validate_repo_docs.py
+```
+
+Décision valide et conservative (le diff touche de nombreux chemins hors graphe, dont
+`.agents/**`), sans incertitude. Le commit DSP `c86d1f0^..c86d1f0` donne aussi
+`full-conservative` (manifeste `dsp-harness` + docs), exit 0.
+
+### 10.7 Robustesse du workflow
+
+`mvp-impact.yml` (YAML validé, 13 steps) :
+
+- la garde porte `id: mapping_selftest` ;
+- les 3 étapes conditionnelles (docs, FULL, sélectif) exigent
+  `steps.mapping_selftest.outcome == 'success'` : si le selftest échoue, le job échoue
+  **une seule fois, explicitement**, sans cascade trompeuse « aucune décision » et sans
+  prétendre exécuter des tests.
+
+Simulation locale des corps de steps extraits du YAML :
+
+- garde : **exit 0**, `SELFTEST PASS — 56 cas, 583 assertions, 0 échec` ;
+- calcul (`BASE_REF=origin/dev`) : **exit 0**, `Décision: full=true uncertain=false docs=true (exit outil=0)`.
+
+La CI GitHub redeviendra verte après le commit de ce correctif par le Lead (le run rouge
+portait l'ancien selftest).
+
+### 10.8 Limites
+
+1. Aucun commit (le Lead est seul écrivain Git) : la CI ne peut pas être re-déclenchée avec
+   le correctif avant son commit ; le run vert est attendu, pas encore observé.
+2. Aucun test cargo local exécuté (workspace partagé, durée bornée) : la simulation couvre
+   la garde et la décision, pas l'exécution des suites.
+3. Les cas `benchmarks/**` vérifient des chemins réels mais ne compilent/lancent pas les
+   benchmarks.
+4. Aucune règle conservatrice n'a été affaiblie ; `tools/impact/impact.mjs` et
+   `scripts/impact.ps1` sont inchangés.
+
+**Preuve JSON** : [`evidence/mvp0c-impact-dev-dep-2026-11-09.json`](../../evidence/mvp0c-impact-dev-dep-2026-11-09.json).
