@@ -72,7 +72,7 @@ présenté comme un succès.
 | T0 | **PASS** | baseline 511/0/80 sur `5408d9b` ; 4 défauts P0 corrigés, 208 tests sur les crates concernés, 0 échec (`target/p0-tests-lead.log`) ; limites TOCTOU documentées |
 | T1 | **PARTIAL** | chaîne B réelle (`check→build→run` sur `.rv`) ; harness M5 écrit, mesures comparatives A/B pas encore exécutées ; C `NOT_IMPLEMENTED` |
 | T2 | **PARTIAL** | spec candidate 15 fichiers + conformance 103/104 (1 skip OS) ; `features.md` majoritairement `NOT_COVERED`, aucun PASS revendiqué |
-| T3 | **PARTIAL** | parser/formatter 56 tests verts, corpus hostile (profondeur, 100k tokens, troncatures), 307 tests langage au total ; fuzz long et LSP non exécutés |
+| T3 | **PARTIAL** | parser/formatter 56 tests verts, corpus hostile (profondeur, 100k tokens, troncatures), 312 tests langage au total ; fuzz long et LSP non exécutés |
 | T4 | **PARTIAL** | typechecker + borrow checker implémentés et testés unitairement ; corpus négatif conformance encore partiel ; limite non-échappement des références documentée |
 | T5 | **PARTIAL** | binaires natifs Windows réels ; Linux `NOT_RUN` ; parité debug/release non mesurée |
 | T6 | **PARTIAL** | stdlib core/io/fs/string/vec/math disponible et utilisée par les exemples ; FFI/unsafe `UNSUPPORTED` |
@@ -105,6 +105,7 @@ target\debug\ravum-lang.exe run examples\hello
 pwsh -File scripts\lang-smoke.ps1 -SkipBuild
 cargo run -p ravum-conformance -- run --json target/conformance-report.json
 ```
+
 
 
 

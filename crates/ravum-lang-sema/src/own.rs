@@ -49,11 +49,15 @@
 //!   champ hors de `self` possédé (`fn into_titre(self) -> String`) est accepté.
 //! * **Moves interdits** : le move à travers une référence (`*r` mobile) est
 //!   `E-OWN-MOVE-BORROWED` ; le move d'un élément de `Vec` par indexation est
-//!   `E-OWN-MOVE-INDEXED` (`spec/language/ownership.md` §5.5).
-//! * **Non couvert volontairement** : mutabilité des places (`E-OWN-IMMUTABLE`),
-//!   `E-OWN-NOT-COPY` (pas de nœud AST pour `[e; n]`), l'ordre de destruction
-//!   (non observable en Core 1.0), et la vérification des signatures de retour
-//!   de référence (déléguée au type-checker ; le corps est vérifié).
+//!   `E-OWN-MOVE-INDEXED` (`spec/language/ownership.md` §5.5). Le code retenu
+//!   est celui du contrat (`E-OWN-MOVE-BORROWED`) ; `E-OWN-MOVE-OUT-OF-BORROW`,
+//!   cité par la mission, n'est pas émis pour ne pas dupliquer un code.
+//! * **Répétition de tableau** : `[e; n]` exige une valeur `Copy`, sinon
+//!   `E-OWN-NOT-COPY` (OWN-2.5).
+//! * **Non couvert volontairement** : mutabilité des places (`E-OWN-IMMUTABLE`,
+//!   émise par le type-checker), l'ordre de destruction (non observable en
+//!   Core 1.0), et la vérification des signatures de retour de référence
+//!   (déléguée au type-checker ; le corps est vérifié).
 //!
 //! Robustesse : profondeur bornée, budget de diagnostics par fonction
 //! (`E-OWN-LIMIT`), aucune panique sur un AST incomplet (les faits manquants
@@ -2050,11 +2054,12 @@ fn builtin_method_is_mutating(path: &str) -> bool {
     )
 }
 
+/// Builtin methods that store their argument *value* in the receiver, and can
+/// therefore make a reference escape. Methods like `String::push_str`,
+/// `Vec::extend` or `slice::fill` copy the pointee and must NOT be listed here:
+/// `s.push_str(t.as_str())` is valid (`spec/language/ownership.md` OWN-6.3).
 fn builtin_method_stores_refs(path: &str) -> bool {
-    matches!(
-        last_path_segment(path),
-        "push" | "push_str" | "insert" | "extend" | "extend_from_slice" | "append" | "resize" | "fill"
-    )
+    matches!(last_path_segment(path), "push" | "insert")
 }
 
 fn field_type(ty: &Type, name: &str, facts: &Facts) -> Type {
@@ -2441,6 +2446,17 @@ fn f() -> &str {
             r#"
 fn f(s: String) {
     io::println(s.as_str());
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn push_str_copies_the_pointee_and_accepts_a_temporary_reference() {
+        accepted(
+            r#"
+fn f(mut s: String, t: String) {
+    s.push_str(t.as_str());
 }
 "#,
         );
