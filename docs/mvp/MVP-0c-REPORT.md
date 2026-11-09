@@ -17,7 +17,7 @@ PR de travail : **#82** (draft, base `feat/mvp0b-hardening`). Suivi : **#81**.
 | Code | `feat/mvp0b-hardening` @ `ea7200c`, arbre propre, PR #78/#80 `MERGEABLE` | `feat/mvp0c-hardening` @ `5f36475` (21 commits, 162 fichiers, +57 607/−227 au-dessus de `ea7200c`), PR #82 draft |
 | `dev` | `7841102` docs-only (aucun crate, workflow documentaire `docs-check.yml`) | inchangé (aucune fusion) |
 | Vault | `master` propre, 8 sessions Ravum | sessions MVP-0c L0 + L1 + L2 + L3 + L4 + seconde vague, `master` vérifié |
-| Tests | 347/0 (54 suites) | **458/0 (69 suites)**, exit 0, local |
+| Tests | 347/0 (54 suites) | **491/0 (77 suites)**, exit 0, local |
 | ADR/RFC | 42 ADR + 2 RFC `PROPOSED` | inchangé |
 | Issues | 78 ouvertes | 78 ouvertes + #81 (suivi MVP-0c) |
 
@@ -194,10 +194,11 @@ le chemin `live prepare`.
 
 ## 10. Tests réussis / échoués / non exécutés
 
-- **Réussis** : 458 tests, 69 suites, exit 0 (local, `--test-threads=1`,
-  `CARGO_BUILD_JOBS=2`). Répartition : daemon 113 (dont 7 externs), coordinator 137
-  (dont 15 crash + 3 transitoires), collab-oracle 14, unit-graph 19, dsp-harness 24
-  (dont 9 stress), bench 5, cli 33, reste du workspace inchangé.
+- **Réussis** : 491 tests, 77 suites, exit 0 (local, `--test-threads=1`,
+  `CARGO_BUILD_JOBS=2`). Répartition vérifiée : daemon 115 (dont 7 externs + 2 wire),
+  coordinator 137 (dont 15 crash + 3 transitoires), cli 47 (dont 8 nouveaux),
+  ravum-batch 19, ravum-collab-oracle 14, unit-graph 21 (dont 2 rootapp),
+  dsp-harness 24 (dont 9 stress), bench 5, reste du workspace inchangé.
 - **Échoués** : 0 dans la campagne finale locale. **CI** : deux échecs réels
   observés sur `c86d1f0` (watchdog du stress DSP ; selftest impact périmé par les
   dev-deps DSP), tous deux corrigés ; la CI de `5f36475` est vérifiée séparément
@@ -316,3 +317,53 @@ node benchmarks/s8-mvp0c/run.mjs --mode pilot --reps 3     # OK
 Machine : Windows 11 Pro 26100, i7-13620H (10 cœurs/16 threads), 15,7 Go RAM,
 rustc/cargo 1.95.0, Node 26.13.0, Python 3.13.7. Machine partagée avec d'autres
 agents : les durées incluent la charge ambiante, déclarée dans chaque preuve.
+
+## 19. Mise à jour du 9 novembre — seconde intégration (CLI, batch, S8 réel)
+
+Cette section s'ajoute au rapport sans réécrire les résultats précédents ; elle
+documente les lots livrés après le premier jalon.
+
+### 19.1 Nouveaux lots livrés et vérifiés
+
+| Lot | Contenu | Vérification |
+|---|---|---|
+| **L1.3** | externs contenu-adressés dans le **protocole JSON-lines** du daemon (stdio + TCP) : `WireExtern`/`WireAnalyzeRequest`, legacy inchangé, invalides refusés | daemon **115** tests (2 wire), stdio+TCP réels, `extern` changé ⇒ miss réel, `E0061` |
+| **L1.4** | `content_id` du root package n'agrège plus les sources des membres (attribution par manifeste le plus proche) | unit-graph **21** tests (2 nouveaux), reproduction avant/après, CLI vérifié |
+| **L2.3** | crate `ravum-batch` : collecteur borné (fenêtre 50 ms/max 100, N 6/max 8), pré-vol de conflits sans rustc, repli N+1 sans perte, télémétrie | **19** tests, preuve `mvp0c-batch` (30→5 analyses ; mixte p≈50 % sans perte) |
+| **L4.9** | E2E navigateur déclenchés par la CI par impact (`browser_e2e_required`, étapes conditionnelles, artefact) | selftest **59 cas/655 assertions**, E2E local 10/10 en 24,1 s, fail-closed testé |
+| **L4.10** | flake auto-GC (`runs >= 1` immédiat) → attente bornée 50 ms/10 s, assertions conservées | 5/5 sous charge + 5/5 au repos, 7/7 fichier |
+| **L4.11** | preuves de test écrites uniquement si `RAVUM_WRITE_EVIDENCE=1` (arbre propre après tests) | avant/après `git status`, opt-in vérifié |
+| **L5.1** | CLI : `ravum unit-check` (graphe réel, chaîne `--extern`, codes 0/1/2/3, workspace inchangé) et `collab-cycle --protocol v2 --oracle unit-graph` | cli **47** tests, signatures cassées ⇒ exit 1 + `E0308`, jamais `AUTO_SAFE` |
+
+### 19.2 Campagne S8 réelle (27 subagents DSH, 9 campagnes, tokens mesurés)
+
+Protocole pré-enregistré, ordre `A1 B1 C1 · C2 B2 A2 · A3 B3 C3`, même modèle,
+mêmes tâches, 3/3 agents attribués par marqueur sur chaque campagne.
+
+| Stratégie | Médiane (n=3) | Min–max | Tokens traités (médiane/campagne) | Tests |
+|---|---:|---:|---:|---|
+| A — copies + intégration | **111 110 ms** | 100 664–208 694 | ≈ 3,83 M | 9/9 campagnes 12/12, 0 perte |
+| B — répertoire partagé + garde | 237 674 ms | 126 224–286 275 | ≈ 3,89 M | 9/9 campagnes 12/12, 0 perte |
+| C — séquentiel | 528 481 ms | 269 594–611 003 | ≈ 3,13 M | 9/9 campagnes 12/12, 0 perte |
+
+Verdict : **A < B < C** ; le workspace partagé **n'est pas plus rapide** que les
+copies privées (+114 % médian), C est le plus lent par construction (tours
+sérialisés + supervision). Tokens du même ordre entre stratégies ; aucun coût
+monétaire exposé, aucun chiffre inventé. Détail et limites :
+[`MVP-0c-s8.md`](MVP-0c-s8.md) §9, preuves `evidence/mvp0c-s8-live-*`.
+
+### 19.3 Tests, CI et limites
+
+- Suite locale finale : **491/0 (77 suites)**, exit 0, après tous les lots.
+- CI sur le commit d'intégration `51a1bae` : produit **42550250213 succès**,
+  impact **42550250227 succès** (incluant la nouvelle règle E2E) ; le commit
+  documentaire suivant déclenche un nouveau run, vérifié séparément.
+- Limites : S8 n=3, une fixture, un modèle, machine partagée, supervision du Lead
+  incluse dans le temps ; le pré-vol du collecteur est textuel (conflit sémantique
+  imprévu ⇒ repli) ; `unit-check` copie le workspace (coût IO) ; E2E impact peut
+  doubler les E2E quand `mvp.yml` tourne aussi (coût ~25–65 s, documenté) ;
+  identités `.rmeta` dépendantes du chemin ; aucun `PROVED`.
+- Reste ouvert (inchangé) : décision humaine #78/#80/#82, CI par impact sur une
+  vraie PR vers `dev`, formatage global + gate fmt, Kani (Linux/WSL2), ASIO/CLAP,
+  implémentation du groupement conditionnel en production (le collecteur existe mais
+  n'est pas encore branché au daemon/CLI).
