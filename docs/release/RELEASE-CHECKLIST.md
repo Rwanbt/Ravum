@@ -82,11 +82,12 @@
 
 | Case | Condition | Preuve attendue |
 |---|---|---|
-| [ ] | Décision de licence prise (humaine) | `LICENSE-DECISION.md` statut `DECIDED` |
-| [ ] | Fichier `LICENSE` ajouté à la racine | **absent aujourd'hui** |
-| [ ] | Champ `license` renseigné dans `Cargo.toml` (workspace + crates) | `cargo metadata` non nul |
-| [ ] | Notices tierces générées depuis le SBOM | fichier `THIRD-PARTY-NOTICES` |
-| [ ] | `scripts/licence-audit.ps1` exécuté et résultat rapporté | sortie JSON |
+| [x] | Décision de licence prise (humaine) | `LICENSE-DECISION.md` statut `DECIDED` — `MIT OR Apache-2.0` |
+| [x] | Fichiers `LICENSE-MIT` et `LICENSE-APACHE` à la racine | présents (repris de `dev`, commit `fbaa506`, PR #103) |
+| [x] | Champ `license` renseigné dans `Cargo.toml` (workspace + crates) | `cargo metadata --locked` → `MIT OR Apache-2.0` pour les **23** membres |
+| [x] | SBOM régénéré : `licenseDeclared` cesse d'être `NOASSERTION` | `scripts/sbom.ps1` → 23/23 membres `MIT OR Apache-2.0` |
+| [ ] | Notices tierces générées depuis le SBOM | `THIRD-PARTY-NOTICES` — `NOT_DONE` |
+| [ ] | `scripts/licence-audit.ps1` exécuté et résultat rapporté | sortie JSON — `NOT_RUN` cette session |
 
 ## 8. Documentation
 

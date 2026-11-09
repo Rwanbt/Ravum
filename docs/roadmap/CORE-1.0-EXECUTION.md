@@ -1,22 +1,24 @@
 # Ravum Core 1.0 — index d'exécution (source unique de suivi)
 
-> Document d'index, **pas** un tableau de statut parallèle. La vérité de
-> l'avancement est dans les issues GitHub liées ci-dessous, les PR et les
+> Document d'index, **pas** un tableau de statut parallèle. Le registre de suivi
+> canonique des gates est
+> [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md) ; la vérité de
+> l'avancement reste dans les issues GitHub liées ci-dessous, les PR et les
 > rapports de preuve. Aucun statut « Done » n'est écrit ici sans lien de preuve.
-> Dernière mise à jour : 2026-11-09 (itération langage).
+> Dernière mise à jour : 2026-11-09 (session LSP + réconciliation licence).
 
 ## Jalons et issues canoniques
 
-| Jalon | Issue | Objet | Statut (2026-11-09) |
+| Jalon | Issue | Objet | Statut (voir la [matrice](CORE-1.0-GATE-MATRIX.md)) |
 |---|---|---|---|
 | T0 | [#88](https://github.com/Rwanbt/Ravum/issues/88) | Audit, durcissement P0, baseline reproductible | **PASS** — 4 défauts P0 corrigés (208 tests), workspace final 987/0 |
 | T1 | [#89](https://github.com/Rwanbt/Ravum/issues/89) | Gate M5 : comparaison A/B/C, choix bootstrap | **PARTIAL** — B mesuré (parité MATCH), **C `NOT_IMPLEMENTED`**, décision non ratifiée |
 | T2 | [#90](https://github.com/Rwanbt/Ravum/issues/90) | Spécification candidate Core 1.0 + conformance | **PARTIAL** — spec DRAFT 15 fichiers, conformance 106/107, `features.md` incomplet |
-| T3 | [#91](https://github.com/Rwanbt/Ravum/issues/91) | Frontend : lexer, parser, diagnostics, formatter | **PARTIAL** — 69 tests + fuzz 249 k + Miri PASS ; LSP absent |
+| T3 | [#91](https://github.com/Rwanbt/Ravum/issues/91) | Frontend : lexer, parser, diagnostics, formatter | **PARTIAL** — 69 tests + fuzz 249 k + Miri PASS ; interfaces LSP désormais livrées ; fuzz/Miri à rejouer sur le SHA final |
 | T4 | [#92](https://github.com/Rwanbt/Ravum/issues/92) | Typage, ownership, borrows, effets | **PARTIAL** — 133 + 85 tests, finding CRITICAL corrigé ; pas d'audit externe |
 | T5 | [#93](https://github.com/Rwanbt/Ravum/issues/93) | Backend natif, ABI, exécution | **PASS** — binaires natifs Windows + Linux (CI), FFI `abs` sur les deux ; pas d'ABI stable revendiquée |
 | T6 | [#94](https://github.com/Rwanbt/Ravum/issues/94) | Runtime, stdlib Core 1.0, FFI | **PARTIAL** — stdlib + FFI primitive `extern "C"`/`unsafe` ; threads/net/async `UNSUPPORTED` |
-| T7 | [#95](https://github.com/Rwanbt/Ravum/issues/95) | CLI, packages, LSP, outils | **PARTIAL** — CLI complète + `watch` + WASM WASI ; LSP `UNSUPPORTED` |
+| T7 | [#95](https://github.com/Rwanbt/Ravum/issues/95) | CLI, packages, LSP, outils | **PARTIAL** — CLI complète + `watch` + WASM WASI + **LSP réel** (9 tests client bout en bout) ; pas de session VS Code réelle |
 | T8 | [#96](https://github.com/Rwanbt/Ravum/issues/96) | Compilation continue, hot reload, collaboration | **PARTIAL** — `watch` = rebuild+restart (pas d'état préservé) ; collaboration non qualifiée |
 | T9 | [#97](https://github.com/Rwanbt/Ravum/issues/97) | Applications réelles `.rv` | **PARTIAL** — 9 verticales exécutées (dont FFI et WASM) ; HTTP/SQLite/GPU absents |
 | T10 | [#98](https://github.com/Rwanbt/Ravum/issues/98) | Conformance, fuzz, sanitizers, audits | **PARTIAL** — fuzz + Miri + 2 audits internes (Windows et Linux) ; **TSan `NOT_RUN`/`NOT_APPLICABLE`**, audit externe absent |

@@ -4,16 +4,19 @@
 > avec recommandation, preuves disponibles, alternatives et conséquence d'une
 > non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-09.
 
-## D1 — Licence du code et gouvernance (#34)
+## D1 — Licence du code et gouvernance (#34) — **RÉSOLUE**
 
-- **Recommandation** : ne rien publier/distribuer tant que la licence n'est pas
-  choisie ; conserver le dépôt privé/interne et compiler localement.
-- **Preuves** : `docs/mvp/MVP-0b-licence-analysis.md` (analyse existante, aucune
-  licence choisie) ; aucun fichier `LICENSE` ajouté par cette itération.
-- **Alternatives** : permissive (MIT/Apache-2.0), copyleft, licence propriétaire,
-  double licence.
-- **Sans décision** : pas de diffusion publique, pas de publication de paquets,
-  mais le développement/test interne continue.
+- **Décision appliquée** : **`MIT OR Apache-2.0`** (double licence, au choix du
+  preneur). Fichiers [`LICENSE-MIT`](LICENSE-MIT) et
+  [`LICENSE-APACHE`](LICENSE-APACHE) à la racine ; `license =
+  "MIT OR Apache-2.0"` dans `[workspace.package]`, hérité par **les 23 membres**
+  (`cargo metadata --locked`, SBOM régénéré : 23/23 `MIT OR Apache-2.0`).
+- **Origine** : décision du responsable, appliquée sur `main` (`ca675497`) et
+  `dev` (`fbaa506`, PR #103), puis répercutée sur la branche du langage (les 4
+  crates `ravum-lang-*` et `ravum-conformance` n'avaient pas le champ).
+- **Reste ouvert (outillage, pas décision)** : `THIRD-PARTY-NOTICES` dérivé du
+  SBOM ; politique de contributions (DCO/CLA) ; marque « Ravum ».
+- **Registre** : [`LICENSE-DECISION.md`](LICENSE-DECISION.md) (`DECIDED`).
 
 ## D2 — Ratification des ADR (000…041 + RFC de cette itération)
 

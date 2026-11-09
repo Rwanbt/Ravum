@@ -1,28 +1,48 @@
-# Décision de licence — dossier (PENDING_HUMAN)
+# Décision de licence — `MIT OR Apache-2.0` (DÉCIDÉE)
 
-> **Statut : `PENDING_HUMAN`.** Ce document **ne choisit aucune licence** et ne recommande
-> aucune option. La décision appartient au responsable du projet ; aucun agent ne peut
-> l'accepter à sa place (`AGENTS.md`, INV-02). Ce texte n'est **pas un avis juridique** :
-> toute décision engageante doit être validée par un conseil compétent.
+> **Statut : `DECIDED` le 2026-11-09** — la licence **`MIT OR Apache-2.0`** est
+> appliquée au workspace Ravum. Les fichiers [`LICENSE-MIT`](LICENSE-MIT) et
+> [`LICENSE-APACHE`](LICENSE-APACHE) sont à la racine, et `license =
+> "MIT OR Apache-2.0"` est déclaré dans `[workspace.package]` puis hérité par
+> **les 22 membres** via `license.workspace = true`.
+>
+> **Origine de la décision** : décision du responsable du projet, appliquée sur
+> `main` (`ca675497`) et `dev` (`fbaa506`, PR #103), puis répercutée sur la
+> branche de développement du langage. Ce document **enregistre** la décision ;
+> il ne la prend pas. Ce texte n'est **pas un avis juridique**.
+>
+> Les sections 2 et 3 ci-dessous conservent l'analyse qui a servi à instruire le
+> choix : elles sont gardées pour la traçabilité, pas comme une question ouverte.
 
-## 1. État constaté (2026-11-09, branche `feat/lang-core-1.0-rc`, HEAD `8fd1547`)
+## 1. État constaté et vérifié (2026-11-09, branche `feat/lang-core-1.0-rc`)
 
 | Constat | Vérification |
 |---|---|
-| Aucun fichier `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, `UNLICENSE` à la racine | `scripts/licence-audit.ps1` → `implicit_licence: []` |
-| Aucun champ `license` dans `Cargo.toml` (workspace et crates) | `cargo metadata` → `license: null` pour les 22 membres ; SBOM : 22 `NOASSERTION` |
+| Fichiers `LICENSE-MIT` et `LICENSE-APACHE` présents à la racine | `git ls-tree origin/dev` / racine du dépôt |
+| Champ `license` dans `Cargo.toml` (workspace) | `license = "MIT OR Apache-2.0"` |
+| Héritage par les **22** membres du workspace | `cargo metadata --locked` → `license = MIT OR Apache-2.0` pour chacun |
 | Dépendances : 41 packages résolus | `cargo metadata --locked` / SBOM |
-| Licences des dépendances : **toutes permissives** | `scripts/licence-audit.ps1 -Json` : `dependency_count: 41`, `denied: []`, `unlicensed: []`, `weaker_copyleft: []` (MIT OR Apache-2.0, MIT/Apache-2.0, …) |
-| Aucune décision antérieure enregistrée | `docs/` (ADR/RFC) ne tranche pas la licence ; ce dossier est le premier |
+| Licences des dépendances : **toutes permissives** | `scripts/licence-audit.ps1 -Json` : `dependency_count: 41`, `denied: []`, `unlicensed: []` |
 
-**Conséquence juridique par défaut (à confirmer par un juriste)** : en l'absence de licence,
-le code reste protégé par le droit d'auteur et **aucun droit d'utilisation, de copie ou de
-redistribution n'est accordé** au-delà de ce que la loi permet. Un dépôt public sans licence
-n'est donc pas « libre » : c'est « tous droits réservés » dans la plupart des juridictions.
+**Conséquence** : le code peut être utilisé, copié, modifié et redistribué selon
+l'option retenue par le preneur (MIT **ou** Apache-2.0), sous réserve de
+conserver les mentions de copyright et, pour Apache-2.0, le fichier `NOTICE`
+s'il existe.
 
-## 2. Options soumises à décision
+## 2. Contraintes découlant de l'option retenue
 
-Aucune option n'est choisie ni classée par préférence. Les impacts sont décrits, pas évalués.
+1. **Deux fichiers de licence** fournis : `LICENSE-MIT` et `LICENSE-APACHE`.
+2. **Champs `license`** cohérents dans `Cargo.toml` — fait, vérifié par
+   `cargo metadata`.
+3. **Notices tierces** : les dépendances doivent être créditées (MIT et/ou
+   Apache-2.0) ; `THIRD-PARTY-NOTICES` peut être dérivé du SBOM.
+4. **Contributions** : à encadrer (DCO ou CLA) avant d'accepter du code externe.
+5. **Marque** : la licence logicielle n'accorde aucun droit sur le nom
+   « Ravum » ; une politique de marque reste distincte.
+6. **Cohérence SBOM/provenance** : régénérer le SBOM après décision pour que
+   `licenseDeclared` cesse d'être `NOASSERTION` pour les 22 membres.
+7. **Pas de rétroactivité automatique** : la licence s'applique aux versions
+   distribuées après la décision.
 
 ### A. Apache-2.0
 
@@ -122,24 +142,21 @@ Aucune option n'est choisie ni classée par préférence. Les impacts sont décr
    la décision ; les copies déjà distribuées restent sous les termes applicables au moment de
    leur distribution.
 
-## 4. Décision requise
+## 4. Décision enregistrée
 
-Le responsable doit :
-
-- [ ] choisir **une** option (A–F) ou une combinaison explicitement motivée ;
-- [ ] enregistrer la décision (ADR/RFC accepté ou document de gouvernance daté) ;
-- [ ] créer `LICENSE` (et `NOTICE` si Apache-2.0) à la racine ;
-- [ ] renseigner `license` dans `Cargo.toml` (workspace + crates) ;
-- [ ] ajouter les notices tierces (`THIRD-PARTY-NOTICES`) générées depuis le SBOM ;
-- [ ] mettre à jour `docs/release/SBOM.md`, `PROVENANCE.md`, `RELEASE-CHECKLIST.md` ;
-- [ ] régénérer le SBOM et vérifier `licenseDeclared` pour les 22 membres ;
-- [ ] statuer sur les contributions (DCO/CLA) et la marque.
-
-Tant que ces cases ne sont pas cochées, l'état reste : **aucune licence accordée**, aucune
-redistribution autorisée, aucune décision prise.
+- [x] option retenue : **MIT OR Apache-2.0** (double licence, au choix du preneur) ;
+- [x] décision enregistrée dans ce document et appliquée par PR #103 sur `dev` ;
+- [x] `LICENSE-MIT` et `LICENSE-APACHE` à la racine ;
+- [x] `license` renseigné dans `Cargo.toml` (workspace + 22 membres) ;
+- [ ] `THIRD-PARTY-NOTICES` généré depuis le SBOM (`NOT_DONE`) ;
+- [ ] `docs/release/SBOM.md`, `PROVENANCE.md`, `RELEASE-CHECKLIST.md` mis à jour
+      pour la licence (`PARTIAL` : la section 7 de la checklist est réconciliée,
+      le SBOM doit être régénéré) ;
+- [ ] SBOM régénéré et `licenseDeclared` vérifié pour les 22 membres (`NOT_DONE`) ;
+- [ ] contributions (DCO/CLA) et marque statuées (`PENDING_HUMAN`).
 
 ## 5. Statut
 
-**`PENDING_HUMAN`** — dossier complet, décision non prise, aucune option sélectionnée,
-aucune recommandation formulée par un agent. Toute publication d'artefact avant décision
-doit être présentée comme « usage interne / évaluation », jamais comme un logiciel licencié.
+**`DECIDED`** — la licence `MIT OR Apache-2.0` s'applique. Ce qui reste ouvert est
+**l'outillage de conformité** (notices tierces, régénération du SBOM) et la
+**gouvernance des contributions**, pas le choix de licence.

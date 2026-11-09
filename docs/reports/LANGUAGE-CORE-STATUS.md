@@ -1,16 +1,19 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
 > **Document de situation, pas un certificat.** Chaque chiffre est lié à une
-> commande exécutée sur cette machine et à un état de travail non encore gelé par
-> un SHA de commit final. Aucun `PROVED`, aucune maturité « production ».
-> Dernière mesure : 2026-11-09, Windows 11 x86-64, rustc 1.95.0. Tests
-> workspace : **993 passés / 0 échec / 2 ignorés / 80 suites**. Smoke des
-> exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
-> Conformance : **107 cas, 106 PASS / 0 FAIL / 1 SKIP**. **Linux qualifié** sur
-> runner GitHub `ubuntu-latest` (run
-> [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985), SHA
-> `78c8f72`) : workspace, conformance, smoke, install, Miri, fuzz et WASM verts ;
-> TSan explicitement `NOT_APPLICABLE`.
+> commande exécutée sur cette machine. Le registre canonique des gates est
+> [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
+> Aucun `PROVED`, aucune maturité « production ».
+> Dernière mesure : 2026-11-09 (session LSP + réconciliation licence),
+> Windows 11 x86-64, rustc 1.95.0. Tests workspace :
+> **1018 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des exemples :
+> **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`). Conformance :
+> **107 cas, 106 PASS / 0 FAIL / 1 SKIP** (`skip_on: windows`).
+> Licence : **`MIT OR Apache-2.0`** sur les 23 membres (SBOM régénéré).
+> **Serveur LSP réel** : 9 tests client bout en bout
+> ([`docs/qualification/LSP.md`](../qualification/LSP.md)).
+> La qualification **Linux** reste celle d'un run antérieur (`78c8f72`) et doit
+> être rejouée sur le SHA final avant d'être citée comme preuve courante.
 
 ## 1. Ce qui fonctionne réellement (vérifié)
 
@@ -32,6 +35,7 @@
 | FFI minimale | `ravum-lang run examples/ffi-abs` | `extern "C"` + `unsafe { }`, `abs(-42)` → `42` |
 | Hot reload | `ravum-lang watch --run` | rebuild + redémarrage sur modification (v1→v2), échec non fatal |
 | Cible WASM | `ravum-lang run --target wasm32-wasip1 examples/hello` | `hello, ravum` via Node WASI preview1 |
+| **Serveur LSP** | `ravum-lang lsp` | JSON-RPC sur stdio ; diagnostics, hover, definition, references, rename, completion, symboles, formatage (**9 tests client réels**) |
 | M5 | `scripts/m5-bench.ps1` | A/B parité MATCH sur 4 programmes, B +12 à +31 % de compilation, C `NOT_IMPLEMENTED` |
 
 ## 2. Composants livrés dans cette itération
@@ -51,8 +55,15 @@
   local des wrappers avec FFI), prélude safe, runner de tests, déterminisme.
   **29 tests unitaires + 21 tests d'audit backend** (dont exécutions rustc
   réelles).
+- `crates/ravum-lang-lsp` : **serveur de langage réel** (JSON-RPC 2.0 sur
+  stdio, base protocol LSP, synchronisation incrémentale, diagnostics sur buffers
+  non sauvegardés, hover, definition, references, rename, completion, document
+  et workspace symbols, formatage). Le loader accepte des **overlays en mémoire**
+  (`LoadOptions::overrides`) : le buffer est analysé sans jamais écrire le
+  fichier de l'utilisateur. **9 tests client bout en bout** + tests unitaires de
+  positions UTF-16 / URI / changements incrémentaux.
 - `crates/ravum-lang-cli` : `ravum-lang` (`init`, `check`, `build`, `run`,
-  `watch`/`dev`, `test`, `fmt`, `lint`, `doc`, `cache`, `doctor`,
+  `watch`/`dev`, `test`, `fmt`, `lint`, `doc`, `cache`, `doctor`, `lsp`,
   `--version`), cible `wasm32-wasip1`, loader de packages (`ravum.toml`,
   modules, lockfile/hash, dépendances locales, chemins validés), JSON stable.
   **57 tests** (14 unitaires + 43 intégration).
@@ -84,14 +95,22 @@ exécuté par le job Linux.
 
 | Campagne | Commande | Résultat exact |
 |---|---|---|
-| Workspace complet | `cargo test --workspace --all-targets -- --test-threads=2` | **993 passés / 0 échec / 2 ignorés / 80 suites** |
-| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | 249 054 entrées, 5 216 641 tokens, **0 échec**, digest stable |
-| Fuzz frontend sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check -- --ignored` | 120 300 itérations cumulées, **0 panic / 0 diagnostic vide / 0 non-déterminisme** |
-| Miri | `MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests` | **153 tests PASS** (65 syntax + 87 sema + 1 fuzz), ≈ 5 min 53 s ; exclusions fs Windows documentées |
-| Audit borrow checker | `cargo test -p ravum-lang-sema --test own_audit` | **85 passés / 0 échec** ; finding F2 (référence à un temporaire) corrigé + régression de conformance |
-| Audit backend | `cargo test -p ravum-lang-codegen --test backend_audit` | **21 passés** ; F0/F0b/F2 corrigés, F1/F3–F6 documentés |
-| Installateur | `scripts/install.ps1 -Prefix <tmp>` | install/uninstall réels, hash manifeste = hash binaire, PATH idempotent |
-| SBOM | `scripts/sbom.ps1` / `sbom.sh` | SPDX-2.3, 63 composants, 165 relations, SHA-256 identique entre runs |
+| Workspace complet | `cargo test --workspace --all-targets -- --test-threads=2` | **1018 passés / 0 échec / 2 ignorés / 82 suites** (2026-11-09) |
+| Client LSP bout en bout | `cargo test -p ravum-lang-cli --test lsp_client` | **9 passés / 0 échec** (initialize, diagnostics buffer non sauvegardé, édition incrémentale, hover, definition, references, rename, symboles/completion/formatage, méthode inconnue) |
+| Conformance | `cargo run -p ravum-conformance -- run --json target/conformance-after-lsp.json` | **107 cas : 106 PASS, 0 FAIL, 1 SKIP** |
+| Smoke | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
+| SBOM | `pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, 23/23 membres `MIT OR Apache-2.0` |
+| Fuzz lexer/parser (**antérieur**) | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | 249 054 entrées, 5 216 641 tokens, **0 échec** — à rejouer sur le SHA final |
+| Fuzz frontend sema (**antérieur**) | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check -- --ignored` | 120 300 itérations cumulées, **0 panic / 0 diagnostic vide / 0 non-déterminisme** — à rejouer |
+| Miri (**antérieur**) | `MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests` | **153 tests PASS** — à rejouer |
+| Audit borrow checker (**antérieur**) | `cargo test -p ravum-lang-sema --test own_audit` | **85 passés / 0 échec** |
+| Audit backend (**antérieur**) | `cargo test -p ravum-lang-codegen --test backend_audit` | **21 passés** |
+| Installateur (**antérieur**) | `scripts/install.ps1 -Prefix <tmp>` | install/uninstall réels, hash manifeste = hash binaire |
+| SBOM (**antérieur**) | `scripts/sbom.ps1` / `sbom.sh` | SPDX-2.3, déterministe, SHA-256 identique entre runs |
+
+Les lignes marquées **antérieur** ne sont pas des preuves de cette session : elles
+restent liées à un SHA plus ancien et doivent être rejouées avant tout `PASS`
+(voir la [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md)).
 
 ## 5. Gates (état honnête)
 
@@ -99,16 +118,16 @@ exécuté par le job Linux.
 |---|---|---|
 | T0 | **PASS** | baseline 511/0/80 sur `5408d9b` ; 4 défauts P0 corrigés, 208 tests ; workspace final 993/0 |
 | T1 | **PARTIAL** | chaîne B réelle (`check→build→run`) ; M5 A/B mesuré et parité MATCH ; **C `NOT_IMPLEMENTED`**, décision non ratifiée |
-| T2 | **PARTIAL** | spec DRAFT 15 fichiers + conformance 106/107 (1 skip OS) ; `features.md` encore majoritairement `NOT_COVERED`, aucun PASS revendiqué |
-| T3 | **PARTIAL** | 69 tests syntaxe, fuzz 249 k entrées, Miri syntax PASS ; LSP absent (outil, pas frontend) |
+| T2 | **PARTIAL** | spec DRAFT 15 fichiers + conformance 106/107 (1 skip OS) ; `features.md` : 188 règles dont 99 tracées vers un cas, **92 sans référence de test** ; aucun PASS revendiqué |
+| T3 | **PARTIAL** | 69 tests syntaxe, corpus négatif ; interfaces LSP livrées et testées ; fuzz/Miri à rejouer sur le SHA final |
 | T4 | **PARTIAL** | typechecker + borrow checker testés (133 + 85 cas), finding CRITICAL corrigé ; **pas d'audit externe**, pas de preuve formelle |
-| T5 | **PASS** | binaires natifs réels sur **Windows et Linux** (CI) ; FFI `abs` exécutée sur les deux ; pas d'ABI stable revendiquée |
+| T5 | **PARTIAL** | binaires natifs réels **Windows** (smoke 31 PASS, cette session) ; FFI `abs` exécutée ; run **Linux à rejouer** sur le SHA final ; pas d'ABI stable revendiquée |
 | T6 | **PARTIAL** | stdlib core/io/fs/string/vec/math + **FFI minimale** (`extern "C"`, primitives, `unsafe`) ; threads/net/async `UNSUPPORTED` |
-| T7 | **PARTIAL** | CLI complète (`watch` inclus), WASM WASI preview1 ; **LSP `UNSUPPORTED` explicite** ; binaire nommé `ravum-lang` |
+| T7 | **PARTIAL** | CLI complète (`watch` inclus), WASM WASI preview1, **serveur LSP réel** (9 tests client) ; manque une session VS Code réelle |
 | T8 | **PARTIAL** | hot reload = rebuild + redémarrage (pas de préservation d'état) ; collaboration/overlays non qualifiés ici |
 | T9 | **PARTIAL** | 9 verticales `.rv` exécutées (dont FFI et WASM) ; HTTP/SQLite/GPU `NOT_RUN`/`UNSUPPORTED` |
 | T10 | **PARTIAL** | fuzz + Miri + audits internes exécutés sur Windows **et** Linux ; **TSan `NOT_RUN`/`NOT_APPLICABLE`**, audit externe absent |
-| T11 | **PARTIAL** | installateur, SBOM, provenance, checksums ; **pas de signature**, **pas de build bit-à-bit**, licence `PENDING_HUMAN` |
+| T11 | **PARTIAL** | installateur, SBOM régénéré, provenance, checksums, **licence `MIT OR Apache-2.0` sur 23/23 membres** ; **pas de signature**, **pas de build bit-à-bit** |
 | T12 | **PARTIAL** | PR/rapports/décisions prêts ; dogfood indépendant et Go/No-Go humain absents |
 
 ## 6. Limites structurelles à ne pas oublier
@@ -118,6 +137,11 @@ exécuté par le job Linux.
   prouvée formellement par Ravum.
 - Le modèle d'emprunt est volontairement conservateur : pas de références
   stockées/retournées en général, pas de lifetimes explicites.
+- Le **LSP est fonctionnel mais partiel** : pas de code actions, pas de
+  semantic tokens, pas de signature help ; `references`/`rename` sur une locale
+  refusés en cas de shadowing ; **aucune session VS Code réelle** exécutée
+  (preuve = client LSP sur tubes). Voir
+  [`docs/qualification/LSP.md`](../qualification/LSP.md).
 - La FFI est **expérimentale** : primitives seulement, `unsafe` obligatoire,
   aucune garantie sur la bibliothèque C appelée ; le profil `pure` la refuse.
 - Le profil `pure` ne suit pas les traps intrinsèques (overflow, division, index).
@@ -125,7 +149,8 @@ exécuté par le job Linux.
   sans preopen ; hot reload sans préservation d'état.
 - Un seul OS testé localement (Windows) ; Linux dépend du run CI, les autres
   cibles ne sont pas annoncées.
-- Aucune ratification d'ADR, aucune licence, aucune release, aucun audit externe.
+- Aucune ratification d'ADR, aucune release, aucun audit externe. La licence est
+  en revanche tranchée (`MIT OR Apache-2.0`).
 
 ## 7. Reproduction
 
@@ -136,7 +161,11 @@ target\debug\ravum-lang.exe build examples\hello
 target\debug\ravum-lang.exe run examples\hello
 target\debug\ravum-lang.exe run examples\ffi-abs
 target\debug\ravum-lang.exe run --target wasm32-wasip1 examples\hello
+target\debug\ravum-lang.exe lsp
 pwsh -File scripts\lang-smoke.ps1 -SkipBuild
 cargo run -p ravum-conformance -- run --json target/conformance-report.json
 cargo test --workspace --all-targets -- --test-threads=2
+cargo test -p ravum-lang-cli --test lsp_client
+pwsh -File scripts\sbom.ps1
+python tools\validate_repo_docs.py
 ```
