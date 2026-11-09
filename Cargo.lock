@@ -195,6 +195,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-collab-oracle"
+version = "0.1.0"
+dependencies = [
+ "ravum-protocol",
+ "ravum-snapshot",
+ "ravum-unit-graph",
+ "ravum-workspace-coordinator",
+ "serde",
+]
+
+[[package]]
 name = "ravum-coordinator"
 version = "0.1.0"
 dependencies = [
@@ -231,6 +242,8 @@ version = "0.1.0"
 dependencies = [
  "ravum-patch-host",
  "ravum-protocol",
+ "ravum-rust-adapter",
+ "ravum-snapshot",
  "serde_json",
 ]
 
