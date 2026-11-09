@@ -364,9 +364,9 @@ monétaire exposé, aucun chiffre inventé. Détail et limites :
   doubler les E2E quand `mvp.yml` tourne aussi (coût ~25–65 s, documenté) ;
   identités `.rmeta` dépendantes du chemin ; aucun `PROVED`.
 - Reste ouvert (inchangé) : décision humaine #78/#80/#82, CI par impact sur une
-  vraie PR vers `dev`, formatage global + gate fmt, Kani (Linux/WSL2), ASIO/CLAP,
-  implémentation du groupement conditionnel en production (le collecteur existe mais
-  n'est pas encore branché au daemon/CLI).
+  vraie PR vers `dev`, Kani (Linux/WSL2), ASIO/CLAP, implémentation du groupement
+  conditionnel en production (le collecteur existe mais n'est pas encore branché au
+  daemon/CLI). Le formatage global et le gate `fmt` ont été corrigés depuis (§20.5).
 
 ## 20. Mise à jour du 9 novembre — gate L2 franchi, audit final et E2E CI vérifiés
 
@@ -430,9 +430,30 @@ Décisions locales 4/4 conformes ; **coût observé +26 à 29 s** (bas de la fou
 
 - **Kani / prouveur externe** : toujours bloqué — `wsl -l -v` ne répond pas (>120 s)
   sur cette machine, aucun prouveur externe exécuté ; documenté, aucun faux vert.
-- **Formatage** : ~240 fichiers non conformes à rustfmt 1.95, aucun gate `fmt` ;
-  recommandation d'un commit de formatage dédié + gate avec toolchain épinglée
-  (décision humaine), pas d'exécution pour ne pas gonfler la revue.
 - **CI par impact sur `dev`** : toujours bloquée tant que `dev` ne contient pas les
   crates (décision humaine sur #78).
 - Le collecteur `ravum-batch` reste non câblé au daemon/CLI ; aucun `PROVED`.
+- La duplication possible des E2E entre `mvp.yml` et `mvp-impact.yml` reste un coût
+  accepté (~25–65 s), documenté, sans faux vert possible.
+- La couverture features/targets/options de compilation du graphe inter-crates reste
+  partielle (limite connue de `ravum-unit-graph`).
+
+### 20.5 Dette technique corrigée (9 novembre)
+
+- **Formatage** : le workspace a été formaté avec **rustfmt 1.95** (52 fichiers,
+  +1 337/−409) ; la toolchain est épinglée par `rust-toolchain.toml` (`1.95.0`) et la
+  CI installe `dtolnay/rust-toolchain@1.95.0` (au lieu de `stable`, qui exécutait
+  rustc 1.99.1). Un step **`cargo fmt --all -- --check`** échoue désormais si le
+  formatage dérive. Vérifications : `cargo fmt --all -- --check` exit 0 sur la
+  toolchain épinglée, suite complète **491/0/77** après formatage.
+- **Chemins personnels** : 63 preuves JSON ont été anonymisées (124 chemins
+  utilisateur, 739 chemins de dépôt, 124 chemins temporaires) ; plus aucune
+  occurrence du nom d'utilisateur dans les fichiers suivis. Manifeste :
+  `evidence/mvp0c-evidence-sanitization-2026-11-09.json` ; aucun résultat, chiffre
+  ou conclusion modifié (seuls les chemins d'environnement changent).
+- **Simulation de fusion re-jouée** sur les bases actuelles (`dev` `045b285`, tête
+  #78 `550847e`, tête #80 `45d8434`, tête #82 `e9f5aab`) : `git merge-tree` renvoie
+  **0 conflit** pour les trois paires ; arbres simulés `975fecb9…` (dev+#78),
+  `dbb0a69d…` (#78+#80), `5617d996…` (#80+#82). Ces arbres changeront encore avec
+  les prochains commits : les rejouer au moment de la fusion avec les commandes de
+  la checklist.

@@ -252,3 +252,23 @@ existence de fichier (pas de titres/ancres) ; les secrets sont recherchés sur l
 avec les motifs listés (§3) ; la répartition des tests par crate n'est pas re-mesurée
 (seul le total 492/0 est vérifié) ; les preuves JSON citées par le rapport sont vérifiées
 fichier par fichier, à l'exception du nom `mvp0c-pr-audit-2026-11-09.json` signalé.
+
+## 10. Résolutions post-audit (9 novembre, Lead)
+
+- **Formatage** : résolu — workspace formaté avec rustfmt 1.95, toolchain épinglée
+  `1.95.0` (`rust-toolchain.toml`, CI `dtolnay/rust-toolchain@1.95.0`) et gate
+  `cargo fmt --all -- --check` ; suite 491/0/77 après formatage. L'écart CI
+  (rustc 1.99.1 vs 1.95.0 documenté) est supprimé par l'épinglage.
+- **Chemins personnels** : résolu — 63 preuves JSON anonymisées (124 chemins
+  utilisateur, 739 chemins de dépôt, 124 chemins temporaires), aucune occurrence du
+  nom d'utilisateur dans les fichiers suivis ; manifeste
+  `evidence/mvp0c-evidence-sanitization-2026-11-09.json`. Les tailles de preuves
+  citées au §4 peuvent avoir légèrement diminué ; l'ordre de grandeur et les
+  conclusions sont inchangés.
+- **Fusion re-simulée** : `git merge-tree` avec les bases actuelles (`dev`
+  `045b285`, #78 `550847e`, #80 `45d8434`, #82 `e9f5aab`) → **0 conflit** ;
+  arbres `975fecb9…`, `dbb0a69d…`, `5617d996…`. Ces arbres doivent être rejoués si
+  `dev`/les têtes bougent encore ; la séquence §6 reste valable.
+- **Verdict inchangé** : `READY_FOR_HUMAN_REVIEW` ; restent ouverts la décision
+  humaine de fusion, la protection `dev`, le câblage produit du collecteur, Kani et
+  ASIO/CLAP.
