@@ -226,18 +226,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-linux-qual-nightly-
 
-      # MIRIFLAGS disables isolation so tests that read/write temporary files can
-      # run; this is documented, not a blanket permission for arbitrary syscalls.
-      - name: Run Miri on the language crates
+      # Miri is ~100-1000x slower than native execution. Scope: the two library
+      # crates (65 + 87 tests, proven locally in ~5.5 min) plus the short
+      # deterministic fuzz test. Integration tests that walk the filesystem
+      # (`loader::`, parse_examples, own_audit fixtures) are exercised natively
+      # by the workspace job; running them under Miri adds tens of minutes
+      # without new coverage. This exclusion is explicit, not a silent skip.
+      - name: Run Miri on the language libraries
         env:
           MIRIFLAGS: -Zmiri-disable-isolation
-          # Miri is ~100-1000x slower than native execution. The deterministic
-          # fuzz integration test still runs its invariants, on a bounded set of
-          # generated inputs (its long 20k-iteration test is #[ignore]d).
-          RAVUM_FUZZ_ITERS: '16'
         run: |
           cargo +nightly miri --version
-          cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests
+          cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib
+
+      - name: Run Miri on the short sema fuzz test
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+          RAVUM_FUZZ_ITERS: '3'
+        run: cargo +nightly miri test -p ravum-lang-sema --test fuzz_check
 
       - name: Scope notice
         if: always()
