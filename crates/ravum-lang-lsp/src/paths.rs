@@ -96,7 +96,10 @@ mod tests {
 
     #[test]
     fn posix_path_keeps_its_root() {
-        assert_eq!(uri_to_path("file:///home/user/x.rv").unwrap(), PathBuf::from("/home/user/x.rv"));
+        assert_eq!(
+            uri_to_path("file:///home/user/x.rv").unwrap(),
+            PathBuf::from("/home/user/x.rv")
+        );
     }
 
     #[test]

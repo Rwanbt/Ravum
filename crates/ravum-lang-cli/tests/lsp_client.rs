@@ -327,7 +327,9 @@ fn unsaved_buffer_is_analysed_without_touching_the_file() {
         "an unsaved type error must produce a diagnostic"
     );
     assert!(
-        diagnostics.iter().any(|diagnostic| diagnostic["severity"] == 1),
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["severity"] == 1),
         "the diagnostic must be an error"
     );
     // The file on disk is untouched: the server never writes the user's source.
@@ -466,7 +468,10 @@ fn rename_rewrites_declaration_and_uses() {
     let edits = response["result"]["changes"]
         .as_object()
         .unwrap_or_else(|| panic!("rename must return a WorkspaceEdit, got {response}"));
-    let all: Vec<&Value> = edits.values().flat_map(|list| list.as_array().unwrap()).collect();
+    let all: Vec<&Value> = edits
+        .values()
+        .flat_map(|list| list.as_array().unwrap())
+        .collect();
     assert_eq!(all.len(), 2, "declaration + call must both be renamed");
     assert!(all.iter().all(|edit| edit["newText"] == "sum"));
 
@@ -544,7 +549,10 @@ fn symbols_completion_and_formatting_answer() {
     let edits = response["result"].as_array().expect("formatting edits");
     assert_eq!(edits.len(), 1, "formatting must rewrite the document once");
     let new_text = edits[0]["newText"].as_str().expect("newText");
-    assert_ne!(new_text, ugly, "the formatter must change unformatted source");
+    assert_ne!(
+        new_text, ugly,
+        "the formatter must change unformatted source"
+    );
     assert!(new_text.contains("fn main()"));
     client.shutdown_and_exit();
 }

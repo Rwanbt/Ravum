@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use ravum_lang_sema::Profile;
 use serde_json::{json, Value};
 
-use crate::analysis::{package_root, override_key, Analysis};
+use crate::analysis::{override_key, package_root, Analysis};
 use crate::convert::{diagnostic_json, TextIndex};
 use crate::features;
 use crate::paths::{path_to_uri, uri_to_path};
@@ -173,7 +173,10 @@ impl Server {
                     .and_then(Value::as_bool)
                     .unwrap_or(true);
                 self.with_document(params, |analysis, file, offset| {
-                    Ok(features::references(analysis, file, offset, include).unwrap_or(Value::Null))
+                    Ok(
+                        features::references(analysis, file, offset, include)
+                            .unwrap_or(Value::Null),
+                    )
                 })
             }
             "textDocument/rename" => {
@@ -192,9 +195,9 @@ impl Server {
                     }
                 })
             }
-            "textDocument/completion" => self.with_analysis(params, |analysis| {
-                Ok(features::completion(analysis))
-            }),
+            "textDocument/completion" => {
+                self.with_analysis(params, |analysis| Ok(features::completion(analysis)))
+            }
             "textDocument/documentSymbol" => {
                 let uri = uri_parameter(params)?;
                 let analysis = self.analysis_for_uri(&uri)?;

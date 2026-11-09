@@ -471,7 +471,8 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
 
     // 3. Crate roots. Errors above make the program unusable; skip parsing then.
     if !diags.has_errors() {
-        let (program, lib_program, kind) = load_crates(&root, &graph, &mut sources, &mut diags, options);
+        let (program, lib_program, kind) =
+            load_crates(&root, &graph, &mut sources, &mut diags, options);
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
         if !diags.has_errors() {
@@ -3167,7 +3168,13 @@ mod tests {
         let temp = TempDir::new("locked");
         temp.file("ravum.toml", &manifest("app", ""));
         temp.file("src/main.rv", "fn main() { }\n");
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                locked: true,
+                ..Default::default()
+            },
+        );
         assert_eq!(loaded.lockfile_state, LockfileState::Missing);
         assert!(codes(&loaded.diags).contains(&"E-MOD-MISSING".to_string()));
     }
@@ -3178,7 +3185,13 @@ mod tests {
         temp.file("ravum.toml", &manifest("app", ""));
         temp.file("src/main.rv", "fn main() { }\n");
         let _ = load_package(&temp.path);
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                locked: true,
+                ..Default::default()
+            },
+        );
         assert_eq!(loaded.lockfile_state, LockfileState::Current);
         assert!(!codes(&loaded.diags).contains(&"E-MOD-LOCK".to_string()));
     }
@@ -3234,7 +3247,11 @@ mod tests {
         // point is that the override path adds no diagnostic and no extra file.
         assert_eq!(clean.dependencies_digest, overridden.dependencies_digest);
         assert_eq!(clean.loaded_files, overridden.loaded_files);
-        assert!(!overridden.diags.has_errors(), "{:?}", codes(&overridden.diags));
+        assert!(
+            !overridden.diags.has_errors(),
+            "{:?}",
+            codes(&overridden.diags)
+        );
     }
 
     #[test]
@@ -3260,7 +3277,13 @@ mod tests {
         temp.file("src/main.rv", "fn main() { }\n");
         let _ = load_package(&temp.path);
         temp.file("src/main.rv", "fn main() { let x = 1; }\n");
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                locked: true,
+                ..Default::default()
+            },
+        );
         assert_eq!(loaded.lockfile_state, LockfileState::Stale);
         assert!(codes(&loaded.diags).contains(&"E-MOD-LOCK".to_string()));
     }

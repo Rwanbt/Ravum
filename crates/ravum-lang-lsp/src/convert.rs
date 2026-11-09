@@ -43,11 +43,7 @@ impl TextIndex {
             return None;
         }
         let start = self.line_starts[index];
-        let raw_end = self
-            .line_starts
-            .get(index + 1)
-            .copied()
-            .unwrap_or(self.len);
+        let raw_end = self.line_starts.get(index + 1).copied().unwrap_or(self.len);
         let mut end = raw_end;
         while end > start {
             match text.as_bytes().get((end - 1) as usize) {
@@ -162,7 +158,9 @@ pub fn file_id_for_path(sources: &SourceMap, path: &str) -> Option<u32> {
         .iter()
         .find(|file| {
             let candidate = normalize_path(&file.path);
-            candidate == normalized || candidate.ends_with(&normalized) || normalized.ends_with(&candidate)
+            candidate == normalized
+                || candidate.ends_with(&normalized)
+                || normalized.ends_with(&candidate)
         })
         .map(|file| file.id)
 }

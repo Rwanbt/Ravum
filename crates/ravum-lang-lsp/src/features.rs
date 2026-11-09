@@ -89,7 +89,9 @@ fn target_span(
                 .filter(|binding| binding.name == *name && binding.span.file == file)
                 .count();
             if occurrences == 1 {
-                index.local_declaration(name, file, u32::MAX).map(|b| b.span)
+                index
+                    .local_declaration(name, file, u32::MAX)
+                    .map(|b| b.span)
             } else {
                 index.local_declaration(name, file, offset).map(|b| b.span)
             }
@@ -108,10 +110,7 @@ fn signature_markdown(analysis: &Analysis, item: NodeId) -> Option<String> {
             .map(|param| format!("{}: {}", param.name, param.ty))
             .collect::<Vec<_>>()
             .join(", ");
-        let mut body = format!(
-            "fn {}({}) -> {}",
-            signature.name, params, signature.ret
-        );
+        let mut body = format!("fn {}({}) -> {}", signature.name, params, signature.ret);
         if signature.is_unsafe {
             body = format!("unsafe {body}");
         }
@@ -161,10 +160,7 @@ fn signature_markdown(analysis: &Analysis, item: NodeId) -> Option<String> {
 fn describe(analysis: &Analysis, resolution: &Resolution) -> Option<String> {
     match resolution {
         Resolution::Item { item } => signature_markdown(analysis, *item),
-        Resolution::Variant {
-            enum_item,
-            variant,
-        } => {
+        Resolution::Variant { enum_item, variant } => {
             let checked = facts(analysis)?;
             let definition = checked.facts.enums.get(enum_item)?;
             let info = definition.variants.get(*variant)?;
@@ -396,7 +392,9 @@ pub fn rename(
 
     let mut edits: std::collections::BTreeMap<String, Vec<Value>> =
         std::collections::BTreeMap::new();
-    let push = |analysis: &Analysis, span: Span, edits: &mut std::collections::BTreeMap<String, Vec<Value>>| {
+    let push = |analysis: &Analysis,
+                span: Span,
+                edits: &mut std::collections::BTreeMap<String, Vec<Value>>| {
         let sources = analysis.sources();
         let Some(source) = sources.file(span.file) else {
             return;

@@ -10,8 +10,8 @@
 //! parser produced.
 
 use ravum_lang_syntax::ast::{
-    Block, Expr, ExprKind, FieldPat, Item, ItemKind, Module, Pat, PatKind, Program, Stmt,
-    StmtKind, Type, VariantDefFields, VariantPatFields,
+    Block, Expr, ExprKind, FieldPat, Item, ItemKind, Module, Pat, PatKind, Program, Stmt, StmtKind,
+    Type, VariantDefFields, VariantPatFields,
 };
 use ravum_lang_syntax::span::Span;
 use ravum_lang_syntax::NodeId;
@@ -91,8 +91,7 @@ impl AstIndex {
         match &item.kind {
             ItemKind::Fn(function) => {
                 self.items.insert(item.id, item.span);
-                self.item_names
-                    .insert(item.id, function.name.name.clone());
+                self.item_names.insert(item.id, function.name.name.clone());
                 self.item_name_spans.insert(item.id, function.name.span);
                 self.item_kinds.insert(item.id, symbol_kind::FUNCTION);
                 for param in &function.params {
@@ -102,22 +101,21 @@ impl AstIndex {
             }
             ItemKind::Struct(definition) => {
                 self.items.insert(item.id, item.span);
-                self.item_names.insert(item.id, definition.name.name.clone());
-                self.item_name_spans
-                    .insert(item.id, definition.name.span);
+                self.item_names
+                    .insert(item.id, definition.name.name.clone());
+                self.item_name_spans.insert(item.id, definition.name.span);
                 self.item_kinds.insert(item.id, symbol_kind::STRUCT);
                 for field in &definition.fields {
                     self.items.insert(field.id, field.span);
-                    self.item_names
-                        .insert(field.id, field.name.name.clone());
+                    self.item_names.insert(field.id, field.name.name.clone());
                     self.item_kinds.insert(field.id, symbol_kind::FIELD);
                 }
             }
             ItemKind::Enum(definition) => {
                 self.items.insert(item.id, item.span);
-                self.item_names.insert(item.id, definition.name.name.clone());
-                self.item_name_spans
-                    .insert(item.id, definition.name.span);
+                self.item_names
+                    .insert(item.id, definition.name.name.clone());
+                self.item_name_spans.insert(item.id, definition.name.span);
                 self.item_kinds.insert(item.id, symbol_kind::ENUM);
                 let mut variants = BTreeMap::new();
                 for (position, variant) in definition.variants.iter().enumerate() {
@@ -125,14 +123,12 @@ impl AstIndex {
                     self.items.insert(variant.id, variant.span);
                     self.item_names
                         .insert(variant.id, variant.name.name.clone());
-                    self.item_name_spans
-                        .insert(variant.id, variant.name.span);
+                    self.item_name_spans.insert(variant.id, variant.name.span);
                     self.item_kinds.insert(variant.id, symbol_kind::ENUM_MEMBER);
                     if let VariantDefFields::Struct(fields) = &variant.fields {
                         for field in fields {
                             self.items.insert(field.id, field.span);
-                            self.item_names
-                                .insert(field.id, field.name.name.clone());
+                            self.item_names.insert(field.id, field.name.name.clone());
                             self.item_kinds.insert(field.id, symbol_kind::FIELD);
                         }
                     }
@@ -147,8 +143,7 @@ impl AstIndex {
             ItemKind::Const(constant) => {
                 self.items.insert(item.id, item.span);
                 self.item_names.insert(item.id, constant.name.name.clone());
-                self.item_name_spans
-                    .insert(item.id, constant.name.span);
+                self.item_name_spans.insert(item.id, constant.name.span);
                 self.item_kinds.insert(item.id, symbol_kind::CONSTANT);
                 self.walk_expr(&constant.value);
             }
@@ -397,9 +392,7 @@ impl AstIndex {
         self.bindings
             .iter()
             .filter(|binding| {
-                binding.name == name
-                    && binding.span.file == file
-                    && binding.span.start <= offset
+                binding.name == name && binding.span.file == file && binding.span.start <= offset
             })
             .max_by_key(|binding| binding.span.start)
     }
@@ -427,11 +420,7 @@ pub fn type_text(ty: &Type) -> String {
         }
         TypeKind::Tuple(items) => format!(
             "({})",
-            items
-                .iter()
-                .map(type_text)
-                .collect::<Vec<_>>()
-                .join(", ")
+            items.iter().map(type_text).collect::<Vec<_>>().join(", ")
         ),
         TypeKind::Array { elem, len } => {
             let length = match &len.kind {

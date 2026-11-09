@@ -91,7 +91,10 @@ impl Analysis {
             let Some(file) = self.package.sources.file(diagnostic.span.file) else {
                 continue;
             };
-            grouped.entry(file.path.clone()).or_default().push(diagnostic);
+            grouped
+                .entry(file.path.clone())
+                .or_default()
+                .push(diagnostic);
         }
         grouped
     }

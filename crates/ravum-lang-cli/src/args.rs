@@ -722,7 +722,10 @@ mod tests {
         assert!(text.contains("lsp"));
         assert!(text.contains("language server"));
         assert!(text.contains("NOT IMPLEMENTED"));
-        assert_eq!(parse(&args(&["lsp"])).unwrap(), Invocation::Command(Command::Lsp));
+        assert_eq!(
+            parse(&args(&["lsp"])).unwrap(),
+            Invocation::Command(Command::Lsp)
+        );
         assert!(parse(&args(&["lsp", "--json"])).is_err());
     }
 }
