@@ -24,6 +24,8 @@ ravum-workspace-coordinator = { workspace = true }
 # dependencies keep the root workspace manifest untouched.
 ravum-unit-graph = { path = "../ravum-unit-graph" }
 ravum-collab-oracle = { path = "../ravum-collab-oracle" }
+# MVP-0c L2.4 → produit : collecteur de propositions pour `ravum batch-check`.
+ravum-batch = { path = "../ravum-batch" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

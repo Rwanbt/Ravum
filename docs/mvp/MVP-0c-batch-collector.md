@@ -221,3 +221,63 @@ cargo build --workspace --offline
 Fichiers : `crates/ravum-batch/{Cargo.toml,src/lib.rs,src/bin/ravum-batch-measure.rs,tests/collector.rs}`,
 une ligne member dans `Cargo.toml` racine (+ `Cargo.lock`), ce document et la
 preuve JSON.
+
+## 11. Intégration CLI — `ravum batch-check` (L2.4 → produit)
+
+Le collecteur n'est plus seulement un bench : la commande
+`ravum batch-check <workspace> --proposals <file>` l'utilise sur un **vrai
+workspace Cargo** et vérifie chaque lot avec `cargo test --offline`.
+
+### Format des propositions
+
+```json
+{
+  "base_id": "identité-de-base",
+  "proposals": [
+    {
+      "id": "agent-1/t1",
+      "files": ["src/lib.rs"],
+      "symbols": ["alpha"],
+      "edits": [
+        { "path": "src/lib.rs", "old": "pub fn alpha() -> i32 { 0 }", "new": "pub fn alpha() -> i32 { 1 }" }
+      ]
+    }
+  ]
+}
+```
+
+Les `edits` sont des remplacements textuels exigeant **exactement une**
+occurrence de `old` ; un chemin doit être relatif, sans `..`, et les fichiers
+sont déduits des éditions si `files` est absent.
+
+### Sémantique
+
+1. Copie du workspace dans `--state` (défaut `target/ravum/batch-check`) ; le
+   workspace utilisateur n'est jamais écrit.
+2. Soumission des propositions au collecteur (`BatchConfig` : fenêtre 0..=100 ms,
+   lot 1..=8).
+3. Pré-vol : en `--granularity symbols` (défaut), les chemins sont déclarés vides
+   et la séparation se fait par symboles — la sûreté vient du `cargo test` de
+   l'analyseur. En `--granularity files`, deux éditions d'un même fichier sont
+   isolées (aucun gain, mais aucun risque de fusion textuelle).
+4. Analyse : copie vierge restaurée, éditions appliquées, `cargo test --offline`
+   avec `CARGO_TARGET_DIR` partagé (cache incrémental). Lot refusé ⇒ repli
+   proposition par proposition (N+1), sans acceptation partielle.
+5. Rapport JSON : lots, verdicts, télémétrie, `no_loss`, `workspace_unchanged`,
+   identité de la copie. Codes : `0` tout accepté, `1` au moins un refus,
+   `2` usage invalide, `3` incertain (workspace modifié, copie/cargo impossible).
+
+### Démonstration vérifiée
+
+`evidence/mvp0c-batch-cli-2026-11-09.json` : 2 propositions sur le même fichier,
+granularité `symbols` → **1 lot, 1 analyse, 2 acceptées, 0 refusée**,
+`no_loss=true`, `workspace_unchanged=true`.
+
+### Limites
+
+`cargo test --offline` est la seule vérification (aucun `PROVED`) ; le pré-vol
+reste textuel ; la copie du workspace a un coût IO proportionnel ; la commande ne
+réécrit pas le workspace produit (elle produit un verdict, pas un patch).
+
+Lancer les tests : `cargo test -p ravum-cli --test batch_check -- --test-threads=1`
+(4 tests, vrai cargo dans une crate temporaire).

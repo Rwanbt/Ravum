@@ -189,6 +189,7 @@ dependencies = [
 name = "ravum-cli"
 version = "0.1.0"
 dependencies = [
+ "ravum-batch",
  "ravum-collab-oracle",
  "ravum-coordinator",
  "ravum-daemon",

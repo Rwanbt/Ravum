@@ -17,7 +17,7 @@ PR de travail : **#82** (draft, base `feat/mvp0b-hardening`). Suivi : **#81**.
 | Code | `feat/mvp0b-hardening` @ `ea7200c`, arbre propre, PR #78/#80 `MERGEABLE` | `feat/mvp0c-hardening` @ `5f36475` (21 commits, 162 fichiers, +57 607/−227 au-dessus de `ea7200c`), PR #82 draft |
 | `dev` | `7841102` docs-only (aucun crate, workflow documentaire `docs-check.yml`) | inchangé (aucune fusion) |
 | Vault | `master` propre, 8 sessions Ravum | sessions MVP-0c L0 + L1 + L2 + L3 + L4 + seconde vague, `master` vérifié |
-| Tests | 347/0 (54 suites) | **491/0 (77 suites)**, exit 0, local |
+| Tests | 347/0 (54 suites) | **495/0 (78 suites)**, exit 0, local |
 | ADR/RFC | 42 ADR + 2 RFC `PROPOSED` | inchangé |
 | Issues | 78 ouvertes | 78 ouvertes + #81 (suivi MVP-0c) |
 
@@ -194,9 +194,9 @@ le chemin `live prepare`.
 
 ## 10. Tests réussis / échoués / non exécutés
 
-- **Réussis** : 491 tests, 77 suites, exit 0 (local, `--test-threads=1`,
+- **Réussis** : 495 tests, 78 suites, exit 0 (local, `--test-threads=1`,
   `CARGO_BUILD_JOBS=2`). Répartition vérifiée : daemon 115 (dont 7 externs + 2 wire),
-  coordinator 137 (dont 15 crash + 3 transitoires), cli 47 (dont 8 nouveaux),
+  coordinator 137 (dont 15 crash + 3 transitoires), cli 51 (dont 8 nouveaux),
   ravum-batch 19, ravum-collab-oracle 14, unit-graph 21 (dont 2 rootapp),
   dsp-harness 24 (dont 9 stress), bench 5, reste du workspace inchangé.
 - **Échoués** : 0 dans la campagne finale locale. **CI** : deux échecs réels
@@ -354,7 +354,7 @@ monétaire exposé, aucun chiffre inventé. Détail et limites :
 
 ### 19.3 Tests, CI et limites
 
-- Suite locale finale : **491/0 (77 suites)**, exit 0, après tous les lots.
+- Suite locale finale : **495/0 (78 suites)**, exit 0, après tous les lots et le câblage CLI du collecteur.
 - CI sur le commit d'intégration `51a1bae` : produit **42550250213 succès**,
   impact **42550250227 succès** (incluant la nouvelle règle E2E) ; le commit
   documentaire suivant déclenche un nouveau run, vérifié séparément.
@@ -432,7 +432,7 @@ Décisions locales 4/4 conformes ; **coût observé +26 à 29 s** (bas de la fou
   sur cette machine, aucun prouveur externe exécuté ; documenté, aucun faux vert.
 - **CI par impact sur `dev`** : toujours bloquée tant que `dev` ne contient pas les
   crates (décision humaine sur #78).
-- Le collecteur `ravum-batch` reste non câblé au daemon/CLI ; aucun `PROVED`.
+- Le collecteur `ravum-batch` est désormais **câblé au CLI** (`ravum batch-check`, 4 tests) ; l'intégration directe au daemon n'est pas faite (non requise par le gate L2) ; aucun `PROVED`.
 - La duplication possible des E2E entre `mvp.yml` et `mvp-impact.yml` reste un coût
   accepté (~25–65 s), documenté, sans faux vert possible.
 - La couverture features/targets/options de compilation du graphe inter-crates reste
@@ -445,12 +445,13 @@ Décisions locales 4/4 conformes ; **coût observé +26 à 29 s** (bas de la fou
   CI installe `dtolnay/rust-toolchain@1.95.0` (au lieu de `stable`, qui exécutait
   rustc 1.99.1). Un step **`cargo fmt --all -- --check`** échoue désormais si le
   formatage dérive. Vérifications : `cargo fmt --all -- --check` exit 0 sur la
-  toolchain épinglée, suite complète **491/0/77** après formatage.
+  toolchain épinglée, suite complète **495/0/78** après formatage et ajout des 4 tests `batch-check`.
 - **Chemins personnels** : 63 preuves JSON ont été anonymisées (124 chemins
   utilisateur, 739 chemins de dépôt, 124 chemins temporaires) ; plus aucune
   occurrence du nom d'utilisateur dans les fichiers suivis. Manifeste :
   `evidence/mvp0c-evidence-sanitization-2026-11-09.json` ; aucun résultat, chiffre
   ou conclusion modifié (seuls les chemins d'environnement changent).
+- **Collecteur câblé au CLI** : `ravum batch-check` regroupe les propositions via `ravum-batch`, applique les éditions sur une copie et vérifie chaque lot avec un vrai `cargo test --offline` (repli N+1). 4 tests d'intégration, démonstration `evidence/mvp0c-batch-cli-2026-11-09.json` (2 propositions, même fichier, granularité symboles → 1 lot, 1 analyse, 2 acceptées, `no_loss=true`). L'intégration directe au daemon n'est pas faite (non requise par le gate L2).
 - **Simulation de fusion re-jouée** sur les bases actuelles (`dev` `045b285`, tête
   #78 `550847e`, tête #80 `45d8434`, tête #82 `e9f5aab`) : `git merge-tree` renvoie
   **0 conflit** pour les trois paires ; arbres simulés `975fecb9…` (dev+#78),

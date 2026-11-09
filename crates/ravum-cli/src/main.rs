@@ -3,6 +3,7 @@
 //! Only the commands implemented here are advertised in the README:
 //! `check`, `build`, `patch`, `run`, `watch`, `status`, `bench`.
 
+mod batch_check;
 mod bench;
 mod collab_cycle;
 mod commands;
@@ -36,6 +37,7 @@ fn main() -> ExitCode {
         "dsp" => dsp::dsp(rest),
         "collab-cycle" => collab_cycle::collab_cycle(rest),
         "unit-check" => unit_check::unit_check(rest),
+        "batch-check" => batch_check::batch_check(rest),
         "--help" | "-h" | "help" => {
             usage();
             0
@@ -68,6 +70,7 @@ fn usage() {
          \x20 ravum collab-cycle <workspace> [options]   targeted daemon analysis of accepted collaborative changes\n\
          \x20   options: [--protocol v1|v2] [--oracle unit-graph --oracle-state <dir>] [--proposals <dir>]\n\
          \x20 ravum unit-check <workspace> [options]      real unit graph + chained rustc campaign (no file writes)\n\
+         \x20 ravum batch-check <workspace> --proposals <file>  group proposals, real cargo test per batch\n\
          \x20   options: [--changed <path>]... [--state <dir>] [--json] [--out <file>]\n\
          \n\
          ENV: RAVUM_HOST_BIN overrides the demo-host binary path.\n\
