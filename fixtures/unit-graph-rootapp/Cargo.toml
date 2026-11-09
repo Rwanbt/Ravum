@@ -1,0 +1,14 @@
+[package]
+name = "root_app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core = { path = "core" }
+
+[workspace]
+members = ["core"]
+resolver = "2"
+
+[lib]
+path = "src/lib.rs"

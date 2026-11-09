@@ -1,0 +1,95 @@
+{
+  "baseline": {
+    "core_content_id": "40d270079c709b57d8f7d8f556146422ba1783519fadfc3c7635a8d6e981f167",
+    "core_files": [
+      "core/Cargo.toml",
+      "core/src/lib.rs"
+    ],
+    "core_status": "targeted_ok",
+    "root_app_content_id": "de73cd037d6bf034102ceb20d25f28110d4430285d1ed217f3c34cdd7414a954",
+    "root_app_files": [
+      "Cargo.toml",
+      "src/lib.rs"
+    ],
+    "root_app_status": "targeted_ok"
+  },
+  "commands": [
+    "cargo test -p ravum-unit-graph --test rootapp_attribution -- --test-threads=1 --nocapture",
+    "cargo test -p ravum-unit-graph -- --test-threads=1"
+  ],
+  "final": {
+    "core_files": [
+      "core/Cargo.toml",
+      "core/src/lib.rs"
+    ],
+    "root_app_files": [
+      "Cargo.toml",
+      "src/lib.rs"
+    ]
+  },
+  "limits": [
+    "tiny fixture, one toolchain; body-only member change may revalidate the dependent only if rustc's rmeta changes (observed status is recorded, not assumed)",
+    "files outside every unit root remain ignored (pre-existing behaviour); every file below a package root is now attributed exactly once",
+    "no PROVED: these are bounded observations"
+  ],
+  "reproduction_before_fix": {
+    "assertion_failed": "root package must not own member sources: [\"Cargo.toml\", \"core/Cargo.toml\", \"core/src/lib.rs\", \"src/lib.rs\"]",
+    "cause": "UnitGraph::collect_source_files walked root_dir recursively and did not stop at nested manifests/members",
+    "command": "cargo test -p ravum-unit-graph --test rootapp_attribution -- --test-threads=1 root_package_does_not_aggregate_member_sources",
+    "observed_root_app_files": [
+      "Cargo.toml",
+      "core/Cargo.toml",
+      "core/src/lib.rs",
+      "src/lib.rs"
+    ]
+  },
+  "steps": [
+    {
+      "core_content_id": "1d9c99e6d4a02eb652cbf709aed663c2f185c4141e3e8325dc444345c00f24bd",
+      "core_hit": false,
+      "core_status": "targeted_ok",
+      "root_app_content_id": "de73cd037d6bf034102ceb20d25f28110d4430285d1ed217f3c34cdd7414a954",
+      "root_app_hit": false,
+      "root_app_status": "targeted_ok",
+      "step": "member-private-body-change"
+    },
+    {
+      "core_content_id": "cc4505e8a4b8a61f0df258fb1ee84e23002accba05453627c14b6bb7821f4f37",
+      "core_status": "targeted_ok",
+      "root_app_content_id": "de73cd037d6bf034102ceb20d25f28110d4430285d1ed217f3c34cdd7414a954",
+      "root_app_hit": false,
+      "root_app_status": "targeted_ok",
+      "step": "member-interface-change"
+    },
+    {
+      "core_content_id": "cc4505e8a4b8a61f0df258fb1ee84e23002accba05453627c14b6bb7821f4f37",
+      "core_hit": true,
+      "core_status": "targeted_ok",
+      "root_app_content_id": "589bee8fbf2d8e91ff78e294aad8112eee5351d3249a3b4076d9eecec4eeaf04",
+      "root_app_hit": false,
+      "root_app_status": "targeted_ok",
+      "step": "root-change"
+    }
+  ],
+  "valid": true,
+  "cli_unit_check": {
+    "command": "cargo run -q -p ravum-cli -- unit-check fixtures/unit-graph-rootapp --changed core/src/lib.rs --state target/ravum/rootapp-unit-check --json",
+    "exit_code": 0,
+    "changed": [
+      "core/src/lib.rs"
+    ],
+    "affected_units": [
+      "core",
+      "root_app"
+    ],
+    "scope_rule": "changed units + transitive path dependents (or every unit without --changed)",
+    "content_ids": {
+      "core": "40d270079c709b57d8f7d8f556146422ba1783519fadfc3c7635a8d6e981f167",
+      "root_app": "de73cd037d6bf034102ceb20d25f28110d4430285d1ed217f3c34cdd7414a954"
+    },
+    "root_app_content_id_equals_baseline": true,
+    "valid": true,
+    "workspace_unchanged": true,
+    "note": "root_app is affected because it is a real path dependent of the changed member; its own content_id stayed at the baseline value (no source aggregation)."
+  }
+}

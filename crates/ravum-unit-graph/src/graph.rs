@@ -413,12 +413,9 @@ impl UnitGraph {
                 });
             }
             dependencies.sort_by(|a, b| a.extern_name.cmp(&b.extern_name));
-            let source_files = collect_source_files(&root_dir).map_err(|error| {
-                GraphError::new(
-                    DiscoverError::ManifestInvalid,
-                    format!("cannot enumerate sources of {name}: {error}"),
-                )
-            })?;
+            // Filled after every unit root is known: attribution must stop at
+            // nested manifests/members (nearest-manifest rule, no double count).
+            let source_files = Vec::new();
             units.insert(
                 name.clone(),
                 Unit {
@@ -436,6 +433,20 @@ impl UnitGraph {
                     source_files,
                 },
             );
+        }
+
+        // Attribute every source file to exactly one package (nearest manifest):
+        // a root package with `[workspace]` must not own its members' files.
+        let all_roots: BTreeSet<PathBuf> =
+            units.values().map(|unit| unit.root_dir.clone()).collect();
+        for unit in units.values_mut() {
+            unit.source_files =
+                collect_source_files(&unit.root_dir, &all_roots).map_err(|error| {
+                    GraphError::new(
+                        DiscoverError::ManifestInvalid,
+                        format!("cannot enumerate sources of {}: {error}", unit.name),
+                    )
+                })?;
         }
 
         // Validate path dependencies and fill reverse edges.
@@ -639,7 +650,13 @@ fn source_uses_macro(unit: &Unit, needle: &str) -> bool {
     false
 }
 
-fn collect_source_files(root_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+/// Enumerates the files of one package, stopping at every nested manifest or
+/// workspace member: files belong to the nearest package (never to a parent root
+/// package too). `target`, VCS and daemon state directories are skipped.
+fn collect_source_files(
+    root_dir: &Path,
+    all_roots: &BTreeSet<PathBuf>,
+) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut stack = vec![root_dir.to_path_buf()];
     while let Some(current) = stack.pop() {
@@ -650,6 +667,12 @@ fn collect_source_files(root_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
             let name = entry.file_name().to_string_lossy().to_string();
             if path.is_dir() {
                 if matches!(name.as_str(), "target" | ".git" | ".ravum" | "node_modules") {
+                    continue;
+                }
+                if path != *root_dir
+                    && (all_roots.contains(&path) || path.join("Cargo.toml").is_file())
+                {
+                    // A nested package/member owns its own files.
                     continue;
                 }
                 stack.push(path);

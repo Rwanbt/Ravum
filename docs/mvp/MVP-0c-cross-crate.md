@@ -249,3 +249,112 @@ exécution de tests ne salisse jamais l'arbre de travail.
 | `crates/ravum-daemon/src/{snapshot,rustc_driver,config,report}.rs` | extension externs schéma 2 |
 | `evidence/mvp0c-cross-crate-2026-11-09.json` | preuves brutes (traces réelles) |
 | `Cargo.toml` (racine) | une ligne membre (tolérance de périmètre demandée au Lead) |
+
+## 11. Attribution des sources : root package et membres imbriqués (L1.4)
+
+> **Statut : bug reproduit, corrigé, testé.** Fixture minimale :
+> [`fixtures/unit-graph-rootapp`](../../fixtures/unit-graph-rootapp) (root package
+> `root_app` qui déclare aussi `[workspace]`, avec le membre imbriqué `core`).
+> Preuve brute :
+> [`evidence/mvp0c-unit-graph-rootapp-2026-11-09.json`](../../evidence/mvp0c-unit-graph-rootapp-2026-11-09.json).
+
+### 11.1 Symptôme et reproduction
+
+Sur un workspace dont le `Cargo.toml` racine est à la fois `[package]` et
+`[workspace]`, `content_id` du root package incluait les sources des membres :
+le root apparaissait modifié quand seul un membre changeait (« changed unit(s):
+core, root_app »), invalidant inutilement le root.
+
+Reproduction (avant correction) :
+
+```powershell
+cargo test -p ravum-unit-graph --test rootapp_attribution -- --test-threads=1 \
+  root_package_does_not_aggregate_member_sources
+```
+
+Sortie observée :
+
+```text
+root_app files: [".../Cargo.toml", ".../core/Cargo.toml", ".../core/src/lib.rs", ".../src/lib.rs"]
+core files:     [".../core/Cargo.toml", ".../core/src/lib.rs"]
+assertion failed: root package must not own member sources
+```
+
+Cause racine : `UnitGraph::collect_source_files(root_dir)` parcourait récursivement
+tout `root_dir` sans s'arrêter aux manifestes imbriqués ; le root package
+agrégeait donc `core/**` en plus de ses propres fichiers (double attribution avec
+le membre).
+
+### 11.2 Correction (nearest manifest, sans double attribution)
+
+Deux passes dans `UnitGraph::from_metadata` :
+
+1. construire toutes les unités et l'ensemble de leurs `root_dir` ;
+2. attribuer les fichiers avec `collect_source_files(root_dir, all_roots)` :
+   - un répertoire imbriqué qui est une racine d'unité **ou** qui contient son
+     propre `Cargo.toml` n'est jamais traversé (il appartient au paquet le plus
+     proche) ;
+   - seuls `Cargo.toml`, `build.rs` et `*.rs` sont retenus ; `target`, `.git`,
+     `.ravum`, `node_modules` sont ignorés ;
+   - chaque fichier est attribué à exactement une unité.
+
+Le root package ne possède donc que son `Cargo.toml`, son `build.rs` et ses
+`.rs` hors sous-paquets. `content_id` reste `SHA-256(Cargo.toml + build.rs +
+.rs du paquet)` (aucun changement d'algorithme). Le fail-closed de découverte
+(manifeste illisible, dépendance `path` invalide, cycle) est inchangé. Limite
+honnête conservée : un `.rs` situé hors de toute racine d'unité reste ignoré
+(comportement antérieur, pas une erreur) ; les fichiers d'un sous-paquet exclu du
+workspace sont attribués à ce sous-paquet (jamais au parent), donc jamais
+comptés deux fois.
+
+### 11.3 Tests de régression
+
+Nouveau fichier `crates/ravum-unit-graph/tests/rootapp_attribution.rs`
+(2 tests réels, fixture copiée en répertoire temporaire, rustc réel) :
+
+| Test | Vérification |
+|---|---|
+| `root_package_does_not_aggregate_member_sources` | `root_app.source_files = [Cargo.toml, src/lib.rs]`, `core.source_files = [core/Cargo.toml, core/src/lib.rs]`, aucun fichier attribué deux fois, le `Cargo.toml` racine n'a qu'un propriétaire |
+| `member_change_keeps_root_content_id_and_root_change_keeps_member_content_id` | modification du membre ⇒ son `content_id` change, celui du root **ne change pas** ; modification du root ⇒ son `content_id` change, celui du membre ne change pas |
+
+Chiffres mesurés (évidence, rustc 1.95.0) :
+
+| Étape | `root_app.content_id` | `core.content_id` | Statuts |
+|---|---|---|---|
+| baseline | `de73cd037d6b…` | `40d270079c70…` | root `targeted_ok`, core `targeted_ok` |
+| corps privé du membre modifié | `de73cd037d6b…` (**inchangé**) | `1d9c99e6d4a0…` (changé) | root revalidé comme dépendant, core recompilé |
+| interface du membre modifiée (ajout public) | `de73cd037d6b…` (**inchangé**) | `cc4505e8a4b8…` (changé) | root revalidé (interface de dépendance changée), core recompilé |
+| source du root modifiée | `589bee8fbf2d…` (changé) | `cc4505e8a4b8…` (inchangé) | root recompilé, **core HIT** |
+
+Nuance honnête : le root est un **dépendant réel** du membre. Même avec un
+`content_id` minimal, il est revalidé lorsque l'artefact d'interface du membre
+change (c'est le comportement conservateur correct de L1) ; ce qui est corrigé,
+c'est que le `content_id` du root ne dépend plus des fichiers du membre. Le
+« changed » du root ne vient plus de ses sources.
+
+### 11.4 Vérification CLI (`ravum unit-check`)
+
+```powershell
+cargo run -q -p ravum-cli -- unit-check fixtures/unit-graph-rootapp \
+  --changed core/src/lib.rs --state target/ravum/rootapp-unit-check --json
+```
+
+Résultat (exit 0, `valid=true`, `workspace_unchanged=true`) :
+
+- `changed = ["core/src/lib.rs"]` ;
+- `affected` = `core` et `root_app` (règle « changed + dépendants transitifs ») ;
+- `core.content_id = 40d270079c70…` (baseline) et
+  `root_app.content_id = de73cd037d6b…` (**identique à la baseline**, plus de
+  source de membre agrégée) ;
+- les deux unités sont `targeted_ok`.
+
+### 11.5 Limites et non-claims
+
+- Fixture minuscule (2 unités) et un seul toolchain ; pas de `PROVED`.
+- Le root peut toujours être revalidé en tant que dépendant si l'interface du
+  membre change : c'est correct et conservateur, pas une régression.
+- Les fichiers `.rs` hors de toute unité ne sont pas attribués (comportement
+  antérieur) ; un sous-paquet non membre possède ses propres fichiers.
+- La détection `include!`/`env!` reste textuelle et sur-conservative (L1).
+- Aucun fichier CLI/daemon/coordinator modifié ; seuls `graph.rs`, le nouveau test,
+  la fixture, cette section et l'évidence JSON.
