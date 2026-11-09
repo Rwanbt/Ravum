@@ -81,7 +81,7 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
   morte corrigée vers le cas qui existe.
 - Aucune exigence n'a été supprimée, abaissée ou marquée `PASS` par décret.
 
-## 4. Les 30 divergences mesurées
+## 4. Les 23 divergences restantes
 
 | Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
 |---|---|---|---|---|
@@ -113,7 +113,7 @@ Lecture : une colonne « Code attendu » à `—` signifie que la spécification
 n'impose **aucun** code pour cette règle (comportement d'exécution ou
 acceptation) ; l'échec porte alors sur le comportement observable.
 
-### 4.1 Codes émis mais absents de la spécification
+### 4.1 Codes émis mais absents de la spécification (13)
 
 13 codes sont produits par le compilateur et **n'apparaissent dans aucun
 document de `spec/language/`** :
