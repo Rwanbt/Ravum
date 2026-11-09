@@ -686,3 +686,151 @@ node benchmarks/grouping-multiagent/run.mjs --reps 5
 Fichiers ajoutés par la section 9 : `benchmarks/grouping-multiagent/investigate-transient.mjs`,
 `evidence/mvp0c-verification-transient-2026-11-09.json`, la présente section ;
 `evidence/mvp0c-grouping-multiagent-2026-11-09.json` régénérée (`valid=true`).
+
+---
+
+## 10. L2.4 — gate de bout en bout : groupement + `cargo test` réel
+
+Section **ajoutée** après la campagne L2.4 (2026-11-09) ; elle ne modifie aucun
+résultat des sections 1–9. Preuve brute :
+[`../evidence/mvp0c-batch-e2e-2026-11-09.json`](../../evidence/mvp0c-batch-e2e-2026-11-09.json)
+(`valid: true`, 135,8 s de campagne). Suite de bench :
+`ravum-daemon-bench --suite batch-e2e` (module `batch.rs`). HEAD au moment des
+mesures : `24d92b1`. Aucun réseau (`cargo test --offline`), `CARGO_BUILD_JOBS=2`.
+
+### 10.1 Question et protocole
+
+Les sections 1–9 mesuraient `rustc --emit=metadata` ; la question du gate L2 est
+de savoir si le gain survit à un **vrai build/test Rust**. Protocole gelé :
+
+- **Fixture** `fixtures/grouping` : 6 éditions compatibles (`edits.json`, corps
+  de fonctions disjoints) + 1 édition incompatible (signature de `scale`
+  cassée). La fixture exécute **12 tests** : 5 unitaires (`src/lib.rs`) +
+  7 d'intégration ajoutés (`tests/e2e.rs`) qui restent verts pour la base et
+  pour toutes les éditions compatibles cumulées. *Note honnête* : la fixture
+  contenait un test unitaire préexistant en échec (`to_kebab_case` produisait
+  « mon--texte ») et des assertions exactes incompatibles avec les éditions ;
+  ils ont été corrigés dans `fixtures/grouping/**` (périmètre autorisé) pour
+  obtenir 12/12 à chaque étape. Les mesures L2.1/L2.2 restent des mesures
+  historiques de l'état antérieur de la fixture.
+- **Modes**, 5 répétitions, **ordre tourné** d'un cran par répétition :
+  1. `sequential` — les 6 éditions appliquées une par une, `cargo test` après
+     chaque (6 invocations) ;
+  2. `grouped` — les 6 éditions fusionnées, **1** `cargo test` (+ une
+     ré-exécution identique pour la mesure « warm ») ;
+  3. `collector-w0` / `collector-w50` — les 6 propositions passent par le
+     **vrai `BatchCollector`** (`ravum_batch`) avec un `Analyzer` qui écrit le
+     contenu fusionné et exécute `cargo test --offline` ; fenêtres 0 et 50 ms ;
+  4. `incompatible` — 6 compatibles + l'incompatible dans un lot via le
+     collecteur : le lot doit être refusé, puis repli individuel N+1 (8
+     analyses), 6 acceptés / 1 rejeté, aucun résultat incorrect accepté.
+- **Cold/warm** : chaque mode et répétition démarre avec un
+  `CARGO_TARGET_DIR` neuf ; la 1re invocation est **froide**, les suivantes
+  **chaudes** (cache incrémental cargo). Le mode groupé et les modes collecteur
+  mesurent aussi une ré-exécution identique (warm).
+- **Politique de l'adaptateur L2.4** : les 6 éditions sont des hunks disjoints
+  du **même** fichier. L'adaptateur déclare `paths = []` et des `symbols`
+  distincts ; le pré-vol du collecteur est file-granulaire quand un chemin est
+  déclaré, la sécurité réelle étant le `cargo test` de l'analyseur. Une **sonde
+  de politique** (sans cargo) mesure le comportement si `paths=["src/lib.rs"]`
+  était déclaré : 6 lots isolés (`preflight_isolations=5`, 6 analyses).
+- **Mesures** : wall-clock par invocation, passed/failed, nombre d'invocations
+  `cargo test`, lignes `Compiling` (proxy des invocations rustc), CPU processus
+  harnais (`GetProcessTimes`, hors enfants cargo/rustc), RSS pic du processus
+  harnais (working set, échantillonné 5 ms), taille du `CARGO_TARGET_DIR`,
+  digests SHA-256 du contenu final, télémétrie du collecteur (latence d'attente
+  p50/p95).
+
+### 10.2 Résultats mesurés (p50 sur 5 répétitions, ordre alterné)
+
+| Mode | cold | warm | total | `cargo test` | tests | CPU harnais | RSS pic | disque target |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `sequential` (6 tests) | 2 512 ms | 1 290 ms | **8 960 ms** | 6 | 12/12 | 156 ms | 7,5 Mo | 25,6 Mo |
+| `grouped` (1 test) | 2 520 ms | 271 ms | **2 765 ms** | 2 (dont 1 warm) | 12/12 | 47 ms | 7,5 Mo | 17,7 Mo |
+| `collector-w0` | 2 492 ms | 276 ms | **2 777 ms** | 2 | 12/12 | 47 ms | 7,5 Mo | 17,7 Mo |
+| `collector-w50` | 2 582 ms | 270 ms | **2 893 ms** | 2 | 12/12 | 46 ms | 7,5 Mo | 17,7 Mo |
+| `incompatible` (refus + N+1) | 534 ms | 1 303 ms | **9 861 ms** | 8 | 6 acceptés / 1 rejeté | 125 ms | 7,5 Mo | 28,2 Mo |
+
+- **Correction identique prouvée** : les 12 tests passent dans tous les modes,
+  et le **digest SHA-256 du contenu final est identique** pour les cinq modes
+  (`cddae95b87c1…`) ; le mode incompatible a 2 échecs durs (compilation du lot
+  puis de l'item seul), 6 propositions acceptées, 1 rejetée, `no_loss=true`.
+- **Gain** : séquentiel `8 960 ms` → groupé `2 765 ms`, soit **−6 195 ms
+  (−69,1 %)**. Le collecteur réel retrouve ce gain : `collector-w0`
+  `2 777 ms` (**−6 183 ms, −69,0 %**), `collector-w50` `2 893 ms`
+  (**−6 067 ms, −67,7 %**, attente p50 = 50 ms). Les builds froids sont
+  équivalents (2 492–2 582 ms) : le gain vient de **l'élimination des
+  recompilations chaudes** (5 × ~1 290 ms en séquentiel contre ~270 ms en
+  groupé), pas du build initial.
+- **Point d'équilibre réel** : le gain de 6 195 ms correspond à une attente
+  supplémentaire tolérable de **6 195 ms** avant que le groupement ne devienne
+  neutre ; les fenêtres mesurées (0 et 50 ms) sont ~100× en-dessous. Un lot
+  incompatible, lui, coûte **9 861 ms** (8 `cargo test`) ≈ le séquentiel
+  (8 960 ms) : le repli ne gagne rien, il garantit seulement la correction.
+- La sonde de politique confirme que si l'adaptateur déclare le fichier commun,
+  le pré-vol isole chaque proposition (6 lots, 6 analyses) : le gain du
+  collecteur dépend donc de la granularité déclarée.
+
+### 10.3 Verdict
+
+**Le gate L2 passe avec un vrai `cargo test`** : sur des modifications réelles,
+le groupement conserve une correction identique (12/12, digest identique) et
+réduit le temps total jusqu'à tests verts de **69 %** (p50), y compris via le
+collecteur `ravum-batch` réel (fenêtres 0/50 ms). Le gain est porté par la
+suppression des recompilations intermédiaires (éditions séquentielles), pas par
+un build initial plus rapide (cold identique).
+
+Mais le verdict reste conditionnel et honnête :
+
+- le gain suppose que les propositions sont **réellement disjointes** ; avec un
+  adaptateur qui déclare le fichier commun, le pré-vol file-granulaire du
+  collecteur isole tout et le gain retombe à zéro (sonde) — la granularité de
+  conflit doit être le **hunk/symbole**, pas le fichier, ou l'adaptateur doit
+  déclarer `paths=[]` avec des symboles disjoints et s'appuyer sur l'analyseur ;
+- un lot contenant une édition invalide coûte N+1 analyses et ≈ le séquentiel :
+  à forte fréquence de conflits, le groupement n'est pas rentable (cohérent avec
+  les seuils `p*` des sections 8–9) ;
+- fenêtre 50 ms : +116 ms p50 vs fenêtre 0, soit ~2 % du gain, acceptable pour
+  la collecte ; fenêtre 100 ms non mesurée ici (les mesures L2.1/L2.2 restent la
+  référence pour ce point).
+
+### 10.4 Limites
+
+- Une seule fixture, 6 éditions, 12 tests ; aucune extrapolation à des crates
+  plus grosses, à d'autres types d'éditions ou à un workspace multi-crates.
+- Le « cold » est un `CARGO_TARGET_DIR` neuf par mode/répétition ; il inclut le
+  build de la crate de test (cargo/rustc), pas un cache partagé entre modes.
+- Les wall-clocks sont mesurés sur une machine partagée (autres workers) :
+  les valeurs absolues varient ; les écarts cold (~2,5 s) et warm (1,29 s vs
+  0,27 s) sont néanmoins stables sur les 5 répétitions et cohérents avec la
+  suppression de 5 recompilations.
+- CPU/RSS sont ceux du processus harnais : le CPU des enfants `cargo`/`rustc`
+  n'est pas attribué (RSS pic ~7,5 Mo pour tous les modes, non discriminant) ;
+  le disque est la taille du `CARGO_TARGET_DIR` après le mode.
+- Le mode `grouped` et les modes collecteur incluent une ré-exécution identique
+  (warm) dans leur total ; c'est explicite dans le protocole et appliqué à tous
+  les modes comparables.
+- Les échecs de compilation ne produisent pas de ligne `test result` : le mode
+  incompatible est compté via `hard_failures` (2) et non via `failed` (0 test
+  échoué) ; la preuve JSON conserve les deux compteurs.
+- Aucun `PROVED` : 12/12 tests verts et digest identique prouvent la correction
+  observée pour ce corpus, pas la correction générale.
+
+### 10.5 Reproduire
+
+```powershell
+# build du bench (une fois)
+cargo build -p ravum-daemon --bin ravum-daemon-bench
+# campagne complète (5 répétitions, 5 modes, ordre alterné)
+target\debug\ravum-daemon-bench.exe --suite batch-e2e `
+  --work-dir target\ravum-daemon-bench `
+  --out-batch-e2e evidence/mvp0c-batch-e2e-2026-11-09.json `
+  --batch-e2e-reps 5
+# fixtures seules : 12 tests
+cargo test --offline --manifest-path fixtures/grouping/Cargo.toml
+```
+
+Fichiers de la section 10 : `crates/ravum-daemon/Cargo.toml` (dépendance path
+`ravum-batch`), `crates/ravum-daemon/src/bin/ravum-daemon-bench/{main.rs,batch.rs}`,
+`fixtures/grouping/{src/lib.rs,tests/e2e.rs}` (12 tests), la présente section,
+`evidence/mvp0c-batch-e2e-2026-11-09.json` (+ `Cargo.lock` régénéré).

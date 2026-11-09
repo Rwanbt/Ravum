@@ -13,6 +13,7 @@
 //! All modes use the same public `rustc` CLI arguments and the same fixture
 //! content. Nothing here is a mock: every measurement spawns a real compiler.
 
+mod batch;
 mod campaign;
 mod compaction;
 mod cross_crate;
@@ -39,6 +40,8 @@ struct Args {
     gc_edits: usize,
     out_grouping: PathBuf,
     grouping_reps: usize,
+    out_batch_e2e: PathBuf,
+    batch_e2e_reps: usize,
     out_soak: PathBuf,
     out_compaction: PathBuf,
     compaction_edits: usize,
@@ -69,9 +72,9 @@ fn main() {
         Err(message) => {
             eprintln!("ravum-daemon-bench: {message}");
             eprintln!(
-                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate|grouping|cross-crate] \
+                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate|grouping|cross-crate|batch-e2e] \
                  [--samples N] [--scale-reps N] [--work-dir PATH] [--out PATH] \
-                 [--out-scale PATH] [--out-invariants PATH] [--out-grouping PATH] [--grouping-reps N] \
+                 [--out-scale PATH] [--out-invariants PATH] [--out-grouping PATH] [--grouping-reps N] [--out-batch-e2e PATH] [--batch-e2e-reps N] \
                  [--out-cross-crate PATH] [--cross-crate-rounds N] [--no-clean]"
             );
             std::process::exit(2);
@@ -164,6 +167,16 @@ fn main() {
             Ok(valid) => invalid |= !valid,
             Err(error) => {
                 eprintln!("cross-crate suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "batch-e2e" | "all" => match batch_e2e_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("batch-e2e suite failed: {error}");
                 std::process::exit(1);
             }
         },
@@ -434,6 +447,56 @@ fn soak_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     Ok(value["valid"].as_bool().unwrap_or(false))
 }
 
+fn batch_e2e_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "batch-e2e: 5 modes x {} recorded reps, real cargo test (fixture grouping, 12 tests)",
+        args.batch_e2e_reps
+    );
+    let value = batch::run(&batch::BatchE2eOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("batch-e2e"),
+        reps: args.batch_e2e_reps,
+    })?;
+    batch::write(&args.out_batch_e2e, &value)?;
+    let gain = &value["summary"]["gain"];
+    println!(
+        "  sequential p50 total={} ms | grouped p50 total={} ms | gain={} ms ({}%) | break-even wait={} ms",
+        gain["sequential_total_ms_p50"].as_u64().unwrap_or(0),
+        gain["grouped_total_ms_p50"].as_u64().unwrap_or(0),
+        gain["gain_ms"].as_i64().unwrap_or(0),
+        gain["gain_percent"].as_f64().unwrap_or(0.0),
+        gain["break_even_added_wait_ms"].as_i64().unwrap_or(0),
+    );
+    for mode in &[
+        "sequential",
+        "grouped",
+        "collector-w0",
+        "collector-w50",
+        "incompatible",
+    ] {
+        if let Some(entry) = value["summary"]["modes"]
+            .as_array()
+            .and_then(|modes| modes.iter().find(|entry| entry["mode"] == *mode))
+        {
+            println!(
+                "  {:<14} cold p50={} ms warm p50={} ms total p50={} ms cargo_runs={} failed={}",
+                mode,
+                entry["cold_ms"]["p50"].as_u64().unwrap_or(0),
+                entry["warm_ms"]["p50"].as_u64().unwrap_or(0),
+                entry["total_ms"]["p50"].as_u64().unwrap_or(0),
+                entry["cargo_runs"]["p50"].as_u64().unwrap_or(0),
+                entry["failed_total"]["p50"].as_u64().unwrap_or(0),
+            );
+        }
+    }
+    println!(
+        "  valid={}",
+        value["summary"]["valid"].as_bool().unwrap_or(false)
+    );
+    println!("written: {}", args.out_batch_e2e.display());
+    Ok(value["summary"]["valid"].as_bool().unwrap_or(false))
+}
+
 fn grouping_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     println!(
         "grouping: 6 modes (sequential, grouped windows 0/25/50/100 ms, incompatible) x {} recorded reps",
@@ -650,6 +713,10 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             .join("evidence")
             .join("mvp0c-grouping-2026-11-09.json"),
         grouping_reps: 5,
+        out_batch_e2e: repo_root
+            .join("evidence")
+            .join("mvp0c-batch-e2e-2026-11-09.json"),
+        batch_e2e_reps: 5,
         out_soak: repo_root
             .join("evidence")
             .join("mvp0b-daemon-gc-auto-2026-11-08.json"),
@@ -717,6 +784,12 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
                 args.grouping_reps = take("--grouping-reps")?
                     .parse()
                     .map_err(|_| "--grouping-reps must be an integer".to_owned())?
+            }
+            "--out-batch-e2e" => args.out_batch_e2e = PathBuf::from(take("--out-batch-e2e")?),
+            "--batch-e2e-reps" => {
+                args.batch_e2e_reps = take("--batch-e2e-reps")?
+                    .parse()
+                    .map_err(|_| "--batch-e2e-reps must be an integer".to_owned())?
             }
             "--out-cross-crate" => args.out_cross_crate = PathBuf::from(take("--out-cross-crate")?),
             "--cross-crate-rounds" => {
@@ -821,6 +894,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             | "compaction"
             | "multi-soak"
             | "grouping"
+            | "batch-e2e"
             | "cross-crate"
             | "validate"
     ) {
