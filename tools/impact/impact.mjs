@@ -673,6 +673,25 @@ export function classifyPath(relPath, workspace) {
     };
   }
 
+  // 6bis. Harnais de conformance du langage : paquet du workspace sous tools/,
+  //       mappé explicitement à sa propre suite (comme un crate), pas à un FULL
+  //       d'outillage non modélisé.
+  if (under(rel, 'tools/conformance')) {
+    return {
+      components: [packageComponent('ravum-conformance')],
+      packages: ['ravum-conformance'],
+      full: null,
+      rule: null,
+      docs: false,
+      unknown: false,
+      evidence: false,
+      testFile: /(^|\/)tests\//.test(rel) || /(^|\/)tests?\.rs$/.test(base),
+      notes: [
+        'harnais de conformance Ravum modifié: sa propre suite est exigée (cargo test -p ravum-conformance)',
+      ],
+    };
+  }
+
   // 7. Autres outils : sémantique inconnue du graphe.
   if (under(rel, 'tools')) {
     return fullResult(
