@@ -1,0 +1,674 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-impact-qualification",
+  "date": "2026-11-09",
+  "branch": "feat/mvp0c-hardening",
+  "head_at_mission_start": "95069fd",
+  "head_after_lead_commits": "11b5e9e",
+  "remote_branch_head_used_by_dispatches": "54177dd",
+  "mvp0b_baseline_commit": "ea7200c",
+  "objective": "Renforcer la CI par impact (outil, selftest, workflow) et prouver la conservation des tests sans affaiblir les règles conservatrices.",
+  "selftest": {
+    "before": {
+      "cases": 48,
+      "assertions": 388,
+      "result": "SELFTEST PASS",
+      "at_head": "95069fd"
+    },
+    "after": {
+      "cases": 52,
+      "assertions": 491,
+      "exit_code": 0,
+      "result_line": "SELFTEST PASS — 52 cas, 491 assertions, 0 échec."
+    },
+    "new_cases": [
+      "nouveau crate ravum-unit-graph: suite propre + dépendants (MVP-0c L1)",
+      "suppression dans ravum-unit-graph: fermeture conservée",
+      "fixture multi-crates fixtures/multicrate => FULL conservateur",
+      "INVENTAIRE: chaque crate/app du workspace a un mapping de test (aucun crate silencieux)",
+      "docs-only renforcé: exactement 1 commande (check docs)"
+    ],
+    "inventory_case_semantics": [
+      "tout manifeste sous crates/ ou apps/ doit être membre de [workspace].members (sinon non testé)",
+      "chaque paquet du workspace doit produire sa propre suite sélective ou un FULL conservateur explicite",
+      "les seuls FULL attendus par paquet sont ravum-protocol et ravum-patch-host (règles critiques)",
+      "toute commande de test doit viser un paquet du workspace"
+    ]
+  },
+  "suite_inventory": {
+    "source": "cargo metadata --no-deps --format-version 1 --offline (lecture seule, sans compilation)",
+    "worktree_packages": 15,
+    "head_committed_packages": 14,
+    "worktree_test_targets": 44,
+    "worktree_doctest_harnesses": 13,
+    "worktree_total_suites": 57,
+    "head_committed_total_suites": 54,
+    "explanation": "Le plan MVP-0c (§7/audit) dénombre 54 suites : 42 cibles de test + 12 harnais doc-test au HEAD commité. Le worktree local contient en plus le crate ravum-unit-graph (Worker B, non commité) avec 3 suites => 57 suites locales.",
+    "per_package_worktree": {
+      "ravum-cli": 5,
+      "ravum-coordinator": 2,
+      "ravum-daemon": 8,
+      "ravum-demo-host": 1,
+      "ravum-dsp-harness": 4,
+      "ravum-patch-host": 5,
+      "ravum-proof": 3,
+      "ravum-protocol": 2,
+      "ravum-rust-adapter": 3,
+      "ravum-snapshot": 2,
+      "ravum-store": 2,
+      "ravum-todo": 4,
+      "ravum-todo-core": 2,
+      "ravum-unit-graph": 3,
+      "ravum-workspace-coordinator": 11
+    },
+    "per_package_head_committed": {
+      "ravum-cli": 5,
+      "ravum-coordinator": 2,
+      "ravum-daemon": 8,
+      "ravum-demo-host": 1,
+      "ravum-dsp-harness": 4,
+      "ravum-patch-host": 5,
+      "ravum-proof": 3,
+      "ravum-protocol": 2,
+      "ravum-rust-adapter": 3,
+      "ravum-snapshot": 2,
+      "ravum-store": 2,
+      "ravum-todo": 4,
+      "ravum-todo-core": 2,
+      "ravum-workspace-coordinator": 11
+    },
+    "suite_rows": [
+      {
+        "package": "ravum-cli",
+        "kind": "test",
+        "suite": "collab_daemon_bridge"
+      },
+      {
+        "package": "ravum-cli",
+        "kind": "test",
+        "suite": "collab_flow"
+      },
+      {
+        "package": "ravum-cli",
+        "kind": "test",
+        "suite": "m1_patch_loop"
+      },
+      {
+        "package": "ravum-cli",
+        "kind": "test",
+        "suite": "m2_proof_gate"
+      },
+      {
+        "package": "ravum-cli",
+        "kind": "bin",
+        "suite": "ravum"
+      },
+      {
+        "package": "ravum-coordinator",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-coordinator"
+      },
+      {
+        "package": "ravum-coordinator",
+        "kind": "lib",
+        "suite": "ravum_coordinator"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "test",
+        "suite": "auto_gc_integration"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "test",
+        "suite": "daemon_integration"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-daemon"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "test",
+        "suite": "gc_integration"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "lib",
+        "suite": "ravum_daemon"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "bin",
+        "suite": "ravum-daemon"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "bin",
+        "suite": "ravum-daemon-bench"
+      },
+      {
+        "package": "ravum-daemon",
+        "kind": "test",
+        "suite": "tcp_multi_client"
+      },
+      {
+        "package": "ravum-demo-host",
+        "kind": "bin",
+        "suite": "ravum-demo-host"
+      },
+      {
+        "package": "ravum-dsp-harness",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-dsp-harness"
+      },
+      {
+        "package": "ravum-dsp-harness",
+        "kind": "lib",
+        "suite": "ravum_dsp_harness"
+      },
+      {
+        "package": "ravum-dsp-harness",
+        "kind": "bin",
+        "suite": "ravum-audio-probe"
+      },
+      {
+        "package": "ravum-dsp-harness",
+        "kind": "bin",
+        "suite": "ravum-jitter"
+      },
+      {
+        "package": "ravum-patch-host",
+        "kind": "test",
+        "suite": "block_host"
+      },
+      {
+        "package": "ravum-patch-host",
+        "kind": "test",
+        "suite": "crossfade"
+      },
+      {
+        "package": "ravum-patch-host",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-patch-host"
+      },
+      {
+        "package": "ravum-patch-host",
+        "kind": "lib",
+        "suite": "ravum_patch_host"
+      },
+      {
+        "package": "ravum-patch-host",
+        "kind": "test",
+        "suite": "rt_lifecycle"
+      },
+      {
+        "package": "ravum-proof",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-proof"
+      },
+      {
+        "package": "ravum-proof",
+        "kind": "test",
+        "suite": "proof_cache"
+      },
+      {
+        "package": "ravum-proof",
+        "kind": "lib",
+        "suite": "ravum_proof"
+      },
+      {
+        "package": "ravum-protocol",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-protocol"
+      },
+      {
+        "package": "ravum-protocol",
+        "kind": "lib",
+        "suite": "ravum_protocol"
+      },
+      {
+        "package": "ravum-rust-adapter",
+        "kind": "test",
+        "suite": "artifact_cache"
+      },
+      {
+        "package": "ravum-rust-adapter",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-rust-adapter"
+      },
+      {
+        "package": "ravum-rust-adapter",
+        "kind": "lib",
+        "suite": "ravum_rust_adapter"
+      },
+      {
+        "package": "ravum-snapshot",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-snapshot"
+      },
+      {
+        "package": "ravum-snapshot",
+        "kind": "lib",
+        "suite": "ravum_snapshot"
+      },
+      {
+        "package": "ravum-store",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-store"
+      },
+      {
+        "package": "ravum-store",
+        "kind": "lib",
+        "suite": "ravum_store"
+      },
+      {
+        "package": "ravum-todo",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-todo"
+      },
+      {
+        "package": "ravum-todo",
+        "kind": "test",
+        "suite": "e2e"
+      },
+      {
+        "package": "ravum-todo",
+        "kind": "lib",
+        "suite": "ravum_todo"
+      },
+      {
+        "package": "ravum-todo",
+        "kind": "bin",
+        "suite": "ravum-todo"
+      },
+      {
+        "package": "ravum-todo-core",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-todo-core"
+      },
+      {
+        "package": "ravum-todo-core",
+        "kind": "lib",
+        "suite": "ravum_todo_core"
+      },
+      {
+        "package": "ravum-unit-graph",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-unit-graph"
+      },
+      {
+        "package": "ravum-unit-graph",
+        "kind": "test",
+        "suite": "negative_cases"
+      },
+      {
+        "package": "ravum-unit-graph",
+        "kind": "lib",
+        "suite": "ravum_unit_graph"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "collab1_non_regression"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "collab2_two_functions"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "bin",
+        "suite": "collab2-lab"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "collab3_semantic"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "doc-test",
+        "suite": "Doc-tests ravum-workspace-coordinator"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "git_publication"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "git_writer"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "journal_durability"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "test",
+        "suite": "merge_strategies"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "lib",
+        "suite": "ravum_workspace_coordinator"
+      },
+      {
+        "package": "ravum-workspace-coordinator",
+        "kind": "bin",
+        "suite": "ravum-collab"
+      }
+    ]
+  },
+  "e2e_browser": {
+    "source": "apps/ravum-todo/e2e/browser_e2e.mjs (tableau SCENARIOS)",
+    "scenario_count": 10,
+    "ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "titles": {
+      "1": "chargement de l'interface (titre, formulaire, version de contrat)",
+      "2": "création d'une tâche et affichage dans le DOM",
+      "3": "modification du titre et mise à jour du DOM",
+      "4": "suppression et disparition du DOM",
+      "5": "erreur de validation (titre vide) affichée dans le DOM",
+      "6": "erreur d'autorisation (401) affichée sans casser l'UI",
+      "7": "incompatibilité de contrat (v2 côté serveur) → message UI explicite",
+      "8": "persistance: redémarrage du serveur sur la même base et rechargement",
+      "9": "migration v1 → v2: UI fonctionnelle et données v1 visibles",
+      "10": "erreur réseau (serveur arrêté) visible, aucune exception non capturée"
+    },
+    "coverage": "Exécutés par le job mvp de .github/workflows/mvp.yml (step Browser E2E, -RequireBrowser) ; PAS exécutés par mvp-impact.yml (limite documentée, aucun diff de cette mission ne touche apps/)."
+  },
+  "selection_table": {
+    "note": "Diffs réels = commits de feat/mvp0c-hardening au-dessus de origin/feat/mvp0b-hardening (ea7200c). E/F = chemins réels des cibles L1 non commitées (Worker B) ; G = fail-closed base introuvable. 57 suites = worktree, 54 au HEAD commité.",
+    "entries": [
+      {
+        "id": "A-commit-19ce0ab-docs-plan",
+        "args": [
+          "--base",
+          "ea7200c",
+          "--head",
+          "19ce0ab"
+        ],
+        "exit_code": 0,
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": true,
+        "changed": [
+          "A docs/mvp/MVP-0c-plan.md"
+        ],
+        "packages": [],
+        "commands": [
+          "python tools/validate_repo_docs.py"
+        ],
+        "covered_suites": 0,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "docs — documentation modifiée: vérification d’intégrité des documents requise"
+        ]
+      },
+      {
+        "id": "B-commit-9c02f2f-scripts-run-tests",
+        "args": [
+          "--base",
+          "19ce0ab",
+          "--head",
+          "9c02f2f"
+        ],
+        "exit_code": 0,
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "changed": [
+          "M scripts/run-tests.ps1"
+        ],
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ],
+        "covered_suites": 57,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "full:orchestration-scripts — scripts/run-tests.ps1 :: FULL: scripts/ modifié — orchestration démo/tests sans mapping statique; la suite complète est exigée (les scripts eux-mêmes restent couverts par mvp.yml)"
+        ]
+      },
+      {
+        "id": "C-commit-95069fd-docs-plan",
+        "args": [
+          "--base",
+          "9c02f2f",
+          "--head",
+          "95069fd"
+        ],
+        "exit_code": 0,
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": true,
+        "changed": [
+          "M docs/mvp/MVP-0c-plan.md"
+        ],
+        "packages": [],
+        "commands": [
+          "python tools/validate_repo_docs.py"
+        ],
+        "covered_suites": 0,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "docs — documentation modifiée: vérification d’intégrité des documents requise"
+        ]
+      },
+      {
+        "id": "D-branche-agregee-ea7200c..95069fd",
+        "args": [
+          "--base",
+          "ea7200c",
+          "--head",
+          "95069fd"
+        ],
+        "exit_code": 0,
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": true,
+        "changed": [
+          "A docs/mvp/MVP-0c-plan.md",
+          "M scripts/run-tests.ps1"
+        ],
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1",
+          "python tools/validate_repo_docs.py"
+        ],
+        "covered_suites": 57,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "full:orchestration-scripts — scripts/run-tests.ps1 :: FULL: scripts/ modifié — orchestration démo/tests sans mapping statique; la suite complète est exigée (les scripts eux-mêmes restent couverts par mvp.yml)",
+          "docs — documentation modifiée: vérification d’intégrité des documents requise"
+        ]
+      },
+      {
+        "id": "E-worktree-unit-graph",
+        "args": [
+          "--files",
+          "crates/ravum-unit-graph/src/graph.rs"
+        ],
+        "exit_code": 0,
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "changed": [
+          "M crates/ravum-unit-graph/src/graph.rs"
+        ],
+        "packages": [
+          "ravum-unit-graph"
+        ],
+        "commands": [
+          "cargo test -p ravum-unit-graph -- --test-threads=1"
+        ],
+        "covered_suites": 3,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "direct — paquet(s) directement modifié(s): ravum-unit-graph"
+        ]
+      },
+      {
+        "id": "F-worktree-fixtures-multicrate",
+        "args": [
+          "--files",
+          "fixtures/multicrate/core/src/lib.rs"
+        ],
+        "exit_code": 0,
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "changed": [
+          "M fixtures/multicrate/core/src/lib.rs"
+        ],
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ],
+        "covered_suites": 57,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "full:shared-fixtures — fixtures/multicrate/core/src/lib.rs :: FULL: fixtures/ modifié — données consommées par plusieurs crates de test, aucun mapping statique sûr vers une seule suite"
+        ]
+      },
+      {
+        "id": "G-failclosed-base-introuvable",
+        "args": [
+          "--base",
+          "refs/heads/base-qui-nexiste-pas",
+          "--json"
+        ],
+        "exit_code": 2,
+        "decision": "full-uncertain",
+        "full": true,
+        "uncertain": true,
+        "docs_required": false,
+        "changed": [],
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ],
+        "covered_suites": 57,
+        "total_suites_worktree": 57,
+        "reasons": [
+          "full:fallback — aucune base Git résolvable parmi [refs/heads/base-qui-nexiste-pas] (essayées: refs/heads/base-qui-nexiste-pas)",
+          "uncertain:mapping — décision FULL de secours, la CI doit échouer explicitement"
+        ]
+      }
+    ],
+    "non_skipping_analysis": {
+      "A_19ce0ab_docs_only": "aucun fichier Rust modifié => 0 suite Rust concernée ; le check docs est exécuté (pas de saut silencieux).",
+      "B_9c02f2f_scripts": "FULL conservateur (règle scripts/) => les 57 suites du worktree (54 au HEAD) sont exigées.",
+      "C_95069fd_docs_only": "idem A : 0 suite Rust, check docs exécuté.",
+      "D_branche_agregee": "FULL (scripts) + docs => 57/57 suites + check docs.",
+      "E_unit_graph": "sélectif : les 3 suites de ravum-unit-graph exigées (lib unit, tests/negative_cases, doc-test) ; aucun dépendant existant à ce HEAD.",
+      "F_fixtures_multicrate": "FULL conservateur (fixtures/) => 57/57 suites.",
+      "G_base_introuvable": "FULL + INCERTAIN => 57/57 suites exécutées par sécurité puis échec explicite (exit 2).",
+      "mapping_weakened": false,
+      "tests_removed": false
+    }
+  },
+  "workflow_dispatch_runs": [
+    {
+      "run_id": 42537476826,
+      "event": "workflow_dispatch",
+      "ref": "feat/mvp0c-hardening",
+      "head_sha": "54177dd",
+      "base_input": "9c02f2f",
+      "decision_in_log": "full=true uncertain=false docs=true (exit outil=0)",
+      "decision_kind": "full-conservative (tools/agent-usage non mappé + docs)",
+      "conclusion": "success",
+      "started_utc": "2026-11-08T23:55:33Z",
+      "completed_utc": "2026-11-08T23:57:59Z",
+      "duration_s": 146,
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42537476826",
+      "log_highlights": [
+        "Base du diff: 9c02f2f",
+        "Décision: full=true uncertain=false docs=true (exit outil=0)",
+        "Documentation-only check PASS: 42 proposed ADRs and required files present.",
+        "OK: suite complète exécutée et verte (FULL légitime)."
+      ]
+    },
+    {
+      "run_id": 42537714614,
+      "event": "workflow_dispatch",
+      "ref": "feat/mvp0c-hardening",
+      "head_sha": "54177dd",
+      "base_input": "refs/heads/base-qui-nexiste-pas",
+      "decision_in_log": "full=true uncertain=true (exit outil=2)",
+      "decision_kind": "full-uncertain (fail-closed)",
+      "conclusion": "failure",
+      "started_utc": "2026-11-08T23:58:36Z",
+      "completed_utc": "2026-11-09T00:00:44Z",
+      "duration_s": 128,
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42537714614",
+      "log_highlights": [
+        "Base du diff: refs/heads/base-qui-nexiste-pas",
+        "Décision: full=true uncertain=true docs=false (exit outil=2)",
+        "::error::Mapping d'impact INCERTAIN ou erreur interne (exit outil 2). La suite complète de secours a été exécutée, mais ce job échoue explicitement."
+      ]
+    }
+  ],
+  "fail_closed_local": {
+    "command": "node tools/impact/impact.mjs --base refs/heads/base-qui-nexiste-pas --json",
+    "exit_code": 2,
+    "decision": "full-uncertain",
+    "full_command": "cargo test --workspace -- --test-threads=1"
+  },
+  "tool_changes": {
+    "impact_mjs_modified": false,
+    "mapping_rules_changed": false,
+    "conservative_rules_weakened": false,
+    "selftest_cases_added": 4,
+    "selftest_case_modified": 1,
+    "assertions_before": 388,
+    "assertions_after": 491,
+    "workflow_gate_added": "mvp-impact.yml: step \"Verify the impact mapping itself (Node selftest, no cargo)\" (échoue explicitement si le mapping régresse, y compris l'inventaire)",
+    "workflow_yaml_steps_after": 13,
+    "yaml_validated": true
+  },
+  "files_modified_by_worker_e": [
+    "tools/impact/selftest.mjs (modifié, non commité)",
+    ".github/workflows/mvp-impact.yml (modifié, non commité: garde selftest)",
+    "docs/mvp/MVP-0c-qualification.md (nouveau)",
+    "evidence/mvp0c-impact-2026-11-09.json (nouveau)"
+  ],
+  "machine": {
+    "os": "Microsoft Windows NT 10.0.26100.0",
+    "node": "v26.13.0",
+    "load_note": "Machine partagée (autres workers compilent) ; aucun test cargo local lancé par cette mission (limite ~10 min et workspace en cours de modification). Cargo metadata uniquement (lecture seule, sans compilation).",
+    "cargo_tests_run_locally": 0
+  },
+  "limits": [
+    "Aucune PR créée : la CI par impact n'a pas été exercée sur une vraie PR vers dev (blocage documenté dans le plan §7 : dev ne contient pas encore les crates).",
+    "Les runs workflow_dispatch portent sur la tête distante 54177dd ; le worktree local a ensuite avancé (HEAD 11b5e9e) et mes modifications de selftest/workflow ne sont PAS incluses dans ces runs — le Lead doit les committer pour qu'elles s'appliquent.",
+    "La garde selftest ajoutée à mvp-impact.yml n'a donc pas encore été exécutée par GitHub Actions.",
+    "Les 10 scénarios E2E navigateur ne sont PAS exécutés par mvp-impact.yml (seulement par mvp.yml) : aucun diff de cette mission ne touche apps/, mais c'est une limite du chemin sélectif pour une future PR UI.",
+    "Aucun test cargo local exécuté (workspace en cours de modification par Worker B, limite de temps) : l'inventaire des suites vient de cargo metadata (lecture seule) et l'inventaire E2E de la lecture du source, pas d'une exécution.",
+    "Le compte 54 suites est celui du HEAD commité (cargo metadata sans unit-graph WIP) ; le worktree en contient 57 avec le crate non commité de Worker B.",
+    "Le diff D agrégé exécute FULL (scripts) : il ne prouve pas une sélectivité sur ce contenu, seulement la conservation intégrale."
+  ]
+}
