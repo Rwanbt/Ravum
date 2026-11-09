@@ -912,7 +912,7 @@ impl<'a> Parser<'a> {
             TokenKind::Kw(Kw::Const) => self.parse_const_item(),
             TokenKind::Kw(Kw::Trait) => self.unsupported_item("E-UNSUPPORTED-TRAIT", "`trait`"),
             TokenKind::Kw(Kw::Where) => self.unsupported_item("E-UNSUPPORTED-WHERE", "`where`"),
-            TokenKind::Kw(Kw::Extern) => self.unsupported_item("E-UNSUPPORTED-EXTERN", "`extern`"),
+            TokenKind::Kw(Kw::Extern) => self.parse_extern_block(),
             TokenKind::Kw(Kw::Async) => self.unsupported_item("E-UNSUPPORTED-ASYNC", "`async`"),
             TokenKind::Kw(Kw::Unsafe) => self.unsupported_item("E-UNSUPPORTED-UNSAFE", "`unsafe`"),
             TokenKind::Kw(Kw::Move) => self.unsupported_item("E-UNSUPPORTED-MOVE", "`move`"),
@@ -1220,6 +1220,96 @@ impl<'a> Parser<'a> {
                 Some(at),
             ),
         );
+    }
+
+    /// `extern "C" { fn f(x: i32) -> i32; ... }`.
+    ///
+    /// Core 1.0 accepts only the `"C"` ABI and declarations ending in `;`.
+    /// `extern "C" fn f() { ... }` (a definition) remains
+    /// `E-UNSUPPORTED-EXTERN`.
+    fn parse_extern_block(&mut self) -> Option<ItemKind> {
+        let start = self.cur_span();
+        self.bump(); // `extern`
+        let abi = if let TokenKind::Str(value) = self.kind().clone() {
+            let span = self.cur_span();
+            self.bump();
+            Ident::new(value, span)
+        } else {
+            self.expected("ABI string after `extern` (only \"C\")");
+            Ident::new("C".to_string(), self.zero_span())
+        };
+        if abi.name != "C" {
+            self.diags.error(
+                "E-UNSUPPORTED-ABI",
+                abi.span,
+                format!(
+                    "`extern \"{}\"` is not supported in Ravum Core 1.0 (only `extern \"C\"`)",
+                    abi.name
+                ),
+            );
+        }
+        if self.at_kw(Kw::Fn) {
+            self.diags.error(
+                "E-UNSUPPORTED-EXTERN",
+                start,
+                "`extern` function definitions are not supported in Ravum Core 1.0; declare them in an `extern \"C\" { ... }` block",
+            );
+            self.recover_item();
+            return None;
+        }
+        if !self.at(Punct::LBrace) {
+            self.expected("`{`");
+            self.recover_item();
+            return None;
+        }
+        self.bump(); // `{`
+        let mut fns = Vec::new();
+        while !self.at(Punct::RBrace) && !self.at_eof() && !self.fatal {
+            if !self.at_kw(Kw::Fn) {
+                let found = self.describe_token();
+                self.unexpected(format!(
+                    "expected `fn` or `}}` in `extern` block, found {found}"
+                ));
+                self.bump();
+                continue;
+            }
+            let fn_start = self.cur_span();
+            self.bump(); // `fn`
+            let name = self.parse_ident("function name");
+            let mut params = Vec::new();
+            if self.at(Punct::LParen) {
+                params = self.parse_params();
+            } else {
+                self.expected("`(`");
+            }
+            let ret = if self.eat(Punct::Arrow) {
+                self.parse_type()
+            } else {
+                let span = self.zero_span();
+                self.unit_type(span)
+            };
+            if !self.eat(Punct::Semi) {
+                self.expected("`;` after `extern` function declaration");
+            }
+            fns.push(ExternFn {
+                id: self.id(),
+                name,
+                params,
+                ret,
+                span: self.span_from(fn_start),
+            });
+        }
+        if self.at(Punct::RBrace) {
+            self.bump();
+        } else {
+            self.diags
+                .error("E-PARSE-UNCLOSED", start, "unclosed `extern` block");
+        }
+        Some(ItemKind::Extern(ExternBlock {
+            abi,
+            fns,
+            span: self.span_from(start),
+        }))
     }
 
     fn parse_fn_item(&mut self, is_test: bool) -> Option<ItemKind> {
@@ -3298,18 +3388,17 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Kw(Kw::Unsafe) => {
                 self.bump();
-                self.diags.error(
-                    "E-UNSUPPORTED-UNSAFE",
-                    start,
-                    "`unsafe` blocks are not supported in Ravum Core 1.0",
-                );
-                let inner = if self.starts_expr() {
-                    self.parse_expr(true)
-                } else {
-                    self.unit_expr(self.zero_span())
-                };
-                let span = start.join(inner.span);
-                self.unit_expr(span)
+                if !self.at(Punct::LBrace) {
+                    self.expected("`{` after `unsafe`");
+                    return self.unit_expr(self.span_from(start));
+                }
+                let block = self.parse_block();
+                let id = self.id();
+                Expr {
+                    id,
+                    kind: ExprKind::Unsafe(block),
+                    span: self.span_from(start),
+                }
             }
             TokenKind::Kw(Kw::Async) => {
                 self.bump();
@@ -4484,6 +4573,25 @@ impl S {
     }
 
     #[test]
+    fn unsafe_block_and_extern_block_parse() {
+        let program = parse_ok(
+            "extern \"C\" {\n    fn abs(x: i32) -> i32;\n}\nfn main() { let v = unsafe { abs(-1) }; }",
+        );
+        let items = top(&program);
+        match &items[0].kind {
+            ItemKind::Extern(block) => {
+                assert_eq!(block.abi.name, "C");
+                assert_eq!(block.fns.len(), 1);
+                assert_eq!(block.fns[0].name.name, "abs");
+                assert_eq!(block.fns[0].params.len(), 1);
+            }
+            other => panic!("expected an extern block, got {other:?}"),
+        }
+        let main = as_fn(&items[1]);
+        assert!(matches!(&let_init(main, 0).kind, ExprKind::Unsafe(_)));
+    }
+
+    #[test]
     fn ranges_try_and_return() {
         let program =
             parse_ok("fn f() -> u8 { let r = 0..n; let s = 0..=n; let t = g()?; return t; }");
@@ -4728,6 +4836,18 @@ mod inner {
             ItemKind::Use(u) => collect_path(&u.path, out),
             ItemKind::Mod(module) => collect_module(module, out),
             ItemKind::ModDecl(_) => {}
+            ItemKind::Extern(block) => {
+                for f in &block.fns {
+                    out.push(f.id);
+                    for param in &f.params {
+                        out.push(param.id);
+                        if let ParamKind::Binding { ty, .. } = &param.kind {
+                            collect_type(ty, out);
+                        }
+                    }
+                    collect_type(&f.ret, out);
+                }
+            }
         }
     }
 
@@ -4884,6 +5004,7 @@ mod inner {
                 collect_block(body, out);
             }
             ExprKind::Block(block) => collect_block(block, out),
+            ExprKind::Unsafe(block) => collect_block(block, out),
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
                 for item in items {
                     collect_expr(item, out);

@@ -3,6 +3,8 @@
 use ravum_lang_sema::Profile;
 use std::path::PathBuf;
 
+use crate::pipeline::BuildTarget;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheAction {
     Status,
@@ -27,10 +29,19 @@ pub enum Command {
         release: bool,
         emit_rust: Option<PathBuf>,
         emit_ir: bool,
+        target: BuildTarget,
     },
     Run {
         path: PathBuf,
         args: Vec<String>,
+        target: BuildTarget,
+    },
+    Watch {
+        path: PathBuf,
+        run: bool,
+        release: bool,
+        /// Internal test hook: stop after N change-triggered rebuilds.
+        max_rebuilds: Option<u64>,
     },
     Test {
         path: PathBuf,
@@ -96,6 +107,7 @@ fn parse_command(name: &str, rest: &[String]) -> Result<Command, String> {
         "check" => parse_check(rest),
         "build" => parse_build(rest),
         "run" => parse_run(rest),
+        "watch" | "dev" => parse_watch(rest),
         "test" => parse_test(rest),
         "fmt" => parse_fmt(rest),
         "lint" => parse_lint(rest),
@@ -187,11 +199,21 @@ fn parse_profile(value: &str) -> Result<Profile, String> {
         .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure` or `rt`"))
 }
 
+fn parse_target(value: &str, command: &str) -> Result<BuildTarget, String> {
+    BuildTarget::parse(value).ok_or_else(|| {
+        format!(
+            "unknown target `{value}` for `{command}`; supported target: `wasm32-wasip1` \
+             (native is the default)"
+        )
+    })
+}
+
 fn parse_build(rest: &[String]) -> Result<Command, String> {
     let mut path: Option<PathBuf> = None;
     let mut release = false;
     let mut emit_rust: Option<PathBuf> = None;
     let mut emit_ir = false;
+    let mut target = BuildTarget::Native;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
@@ -202,9 +224,16 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
                 let value = option_value(rest, &mut i, "--emit-rust")?;
                 emit_rust = Some(PathBuf::from(value));
             }
+            "--target" => {
+                let value = option_value(rest, &mut i, "--target")?;
+                target = parse_target(&value, "build")?;
+            }
             other if other.starts_with("--emit-rust=") => {
                 let value = other.trim_start_matches("--emit-rust=");
                 emit_rust = Some(PathBuf::from(value));
+            }
+            other if other.starts_with("--target=") => {
+                target = parse_target(other.trim_start_matches("--target="), "build")?;
             }
             other if other.starts_with('-') && other != "-" => {
                 return Err(format!("unknown option `{other}` for `build`"))
@@ -218,29 +247,83 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         release,
         emit_rust,
         emit_ir,
+        target,
     })
 }
 
 fn parse_run(rest: &[String]) -> Result<Command, String> {
     let mut path: Option<PathBuf> = None;
     let mut child: Vec<String> = Vec::new();
-    let mut after_separator = false;
-    for arg in rest {
-        if after_separator {
-            child.push(arg.clone());
-        } else if arg == "--" {
-            after_separator = true;
-        } else if arg.starts_with('-') && arg != "-" && path.is_none() && child.is_empty() {
-            return Err(format!(
-                "unknown option `{arg}` for `run`; child arguments go after `--`"
-            ));
-        } else {
-            parse_path_argument(arg, &mut path)?;
+    let mut target = BuildTarget::Native;
+    let mut i = 0;
+    while i < rest.len() {
+        let arg = rest[i].as_str();
+        match arg {
+            "--" => {
+                child.extend(rest[i + 1..].iter().cloned());
+                break;
+            }
+            "--target" => {
+                let value = option_value(rest, &mut i, "--target")?;
+                target = parse_target(&value, "run")?;
+            }
+            other if other.starts_with("--target=") => {
+                target = parse_target(other.trim_start_matches("--target="), "run")?;
+            }
+            other if other.starts_with('-') && other != "-" => {
+                return Err(format!(
+                    "unknown option `{other}` for `run`; child arguments go after `--`"
+                ));
+            }
+            other => parse_path_argument(other, &mut path)?,
         }
+        i += 1;
     }
     Ok(Command::Run {
         path: path.unwrap_or_else(default_path),
         args: child,
+        target,
+    })
+}
+
+fn parse_watch(rest: &[String]) -> Result<Command, String> {
+    let mut path: Option<PathBuf> = None;
+    let mut run = false;
+    let mut release = false;
+    let mut max_rebuilds: Option<u64> = None;
+    let mut i = 0;
+    while i < rest.len() {
+        let arg = rest[i].as_str();
+        match arg {
+            "--run" => run = true,
+            "--release" => release = true,
+            "--max-rebuilds" => {
+                let value = option_value(rest, &mut i, "--max-rebuilds")?;
+                max_rebuilds = Some(parse_max_rebuilds(&value)?);
+            }
+            other if other.starts_with("--max-rebuilds=") => {
+                max_rebuilds = Some(parse_max_rebuilds(
+                    other.trim_start_matches("--max-rebuilds="),
+                )?);
+            }
+            other if other.starts_with('-') && other != "-" => {
+                return Err(format!("unknown option `{other}` for `watch`"))
+            }
+            other => parse_path_argument(other, &mut path)?,
+        }
+        i += 1;
+    }
+    Ok(Command::Watch {
+        path: path.unwrap_or_else(default_path),
+        run,
+        release,
+        max_rebuilds,
+    })
+}
+
+fn parse_max_rebuilds(value: &str) -> Result<u64, String> {
+    value.parse::<u64>().map_err(|_| {
+        format!("invalid `--max-rebuilds` value `{value}`; expected a non-negative integer")
     })
 }
 
@@ -397,9 +480,11 @@ COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
     check [PATH] [--json] [--profile core|pure|rt] [--locked]
                                         Load, resolve and check a package or a `.rv` file
-    build [PATH] [--release] [--emit-rust FILE] [--emit-ir]
+    build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]
                                         Check, generate Rust and compile it with `rustc`
-    run [PATH] [-- ARGS...]             Build, then run the binary (args/stdin/stdout/stderr forwarded)
+    run [PATH] [--target TRIPLE] [-- ARGS...]
+                                        Build, then run the binary (args/stdin/stdout/stderr forwarded)
+    watch [PATH] [--run] [--release]    Poll sources and rebuild on change (alias: `dev`)
     test [PATH] [--filter TEXT] [--json]
                                         Build the test runner, run it, parse `test ... ok/FAILED`
     fmt [PATH] [--check]                Format every `.rv` file, or verify with `--check`
@@ -416,6 +501,10 @@ UNSUPPORTED (explicit, never a fake success):
 PATHS:
     PATH defaults to the current directory. A directory must contain `ravum.toml`;
     a single `.rv` file is loaded as a standalone program (no manifest, no lockfile).
+
+TARGETS (build/run):
+    native (default)        host executable
+    wasm32-wasip1           `.wasm` via `rustc --target`, run through Node.js WASI
 
 EXIT CODES:
     0  success
@@ -447,15 +536,26 @@ pub fn help_for(topic: &str) -> String {
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\
                     not fail unless a later lint --deny turns them into errors.\n",
-        "build" => "USAGE: ravum-lang build [PATH] [--release] [--emit-rust FILE] [--emit-ir]\n\n\
+        "build" => "USAGE: ravum-lang build [PATH] [--release] [--target TRIPLE] \
+                    [--emit-rust FILE] [--emit-ir]\n\n\
                     Checks the package, generates safe Rust and compiles it with\n\
                     `rustc --edition 2021 -C overflow-checks=on -C debuginfo=2`.\n\
                     Artifacts: `<package>/.ravum/gen/main.rs`, `<package>/.ravum/bin/<name>`\n\
-                    (library packages: `.ravum/lib/<name>.rlib`). --emit-ir dumps the checked\n\
-                    facts; it is not a stable IR.\n",
-        "run" => "USAGE: ravum-lang run [PATH] [-- ARGS...]\n\n\
+                    (library packages: `.ravum/lib/<name>.rlib`).\n\
+                    `--target wasm32-wasip1` writes `.ravum/bin/<name>.wasm`; it requires the\n\
+                    `wasm32-wasip1` rustc target. --emit-ir dumps the checked facts; it is not\n\
+                    a stable IR.\n",
+        "run" => "USAGE: ravum-lang run [PATH] [--target TRIPLE] [-- ARGS...]\n\n\
                   Builds the binary crate, then executes it from the package root with stdin,\n\
-                  stdout, stderr and the exit code forwarded. Child arguments must follow `--`.\n",
+                  stdout, stderr and the exit code forwarded. Child arguments must follow `--`.\n\
+                  `--target wasm32-wasip1` runs the `.wasm` artifact through Node.js WASI\n\
+                  (Node.js 22+; `RAVUM_NODE` overrides the executable).\n",
+        "watch" => "USAGE: ravum-lang watch [PATH] [--run] [--release]   (alias: dev)\n\n\
+                    Polls `.rv`, `ravum.toml` and `ravum.lock` (250 ms, no external dependency),\n\
+                    ignoring `.ravum/`, `target/` and `*.ravum-tmp`. Rebuilds on change; with\n\
+                    `--run` the previous child is killed before the new binary is launched.\n\
+                    A build failure is reported and polling continues. Ctrl+C stops cleanly.\n\
+                    Internal test hook: `--max-rebuilds N` stops after N rebuilds.\n",
         "test" => "USAGE: ravum-lang test [PATH] [--filter TEXT] [--json]\n\n\
                    Builds the generated test runner and executes it (`test <name> ... ok/FAILED`).\n\
                    --filter is forwarded to the runner as `--filter <TEXT>`. Exit 1 if any test\n\
@@ -537,12 +637,68 @@ mod tests {
     fn run_separates_child_arguments() {
         let parsed = parse(&args(&["run", "pkg", "--", "--flag", "x"])).unwrap();
         match parsed {
-            Invocation::Command(Command::Run { path, args }) => {
+            Invocation::Command(Command::Run { path, args, .. }) => {
                 assert_eq!(path, PathBuf::from("pkg"));
                 assert_eq!(args, vec!["--flag".to_string(), "x".to_string()]);
             }
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    #[test]
+    fn watch_and_dev_parse_flags() {
+        for command in ["watch", "dev"] {
+            let parsed = parse(&args(&[
+                command,
+                "pkg",
+                "--run",
+                "--release",
+                "--max-rebuilds",
+                "2",
+            ]))
+            .unwrap();
+            match parsed {
+                Invocation::Command(Command::Watch {
+                    path,
+                    run,
+                    release,
+                    max_rebuilds,
+                }) => {
+                    assert_eq!(path, PathBuf::from("pkg"));
+                    assert!(run);
+                    assert!(release);
+                    assert_eq!(max_rebuilds, Some(2));
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn watch_rejects_invalid_max_rebuilds() {
+        assert!(parse(&args(&["watch", "--max-rebuilds", "nope"])).is_err());
+        assert!(parse(&args(&["watch", "--max-rebuilds"])).is_err());
+    }
+
+    #[test]
+    fn build_and_run_parse_wasm_target() {
+        match parse(&args(&["build", "pkg", "--target", "wasm32-wasip1"])).unwrap() {
+            Invocation::Command(Command::Build { target, path, .. }) => {
+                assert_eq!(target, BuildTarget::Wasm32WasiP1);
+                assert_eq!(path, PathBuf::from("pkg"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        match parse(&args(&["run", "--target=wasm32-wasip1", "pkg", "--", "a"])).unwrap() {
+            Invocation::Command(Command::Run { target, args, path }) => {
+                assert_eq!(target, BuildTarget::Wasm32WasiP1);
+                assert_eq!(path, PathBuf::from("pkg"));
+                assert_eq!(args, vec!["a".to_string()]);
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(parse(&args(&["build", "--target", "x86_64-unknown-none"])).is_err());
+        assert!(parse(&args(&["run", "--target", "wasm32-wasi"])).is_err());
     }
 
     #[test]

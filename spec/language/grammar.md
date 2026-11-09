@@ -25,7 +25,8 @@ item           = fn_item
                | impl_item
                | const_item
                | mod_item
-               | use_item ;
+               | use_item
+               | extern_item ;
 
 visibility     = [ "pub" ] ;
 ```
@@ -33,7 +34,7 @@ visibility     = [ "pub" ] ;
 | ID | Règle | Niveau |
 |---|---|---|
 | G-2.1 | Un fichier contient zéro ou plusieurs items, dans n'importe quel ordre. L'ordre de déclaration n'a **aucun** effet sémantique (pas d'ordre d'initialisation). | MUST |
-| G-2.2 | Tout `item` commence par un token de tête non ambigu : `pub`, `fn`, `test`, `struct`, `enum`, `impl`, `const`, `mod`, `use`. Tout autre token en position d'item produit `E-PARSE-EXPECTED`. | MUST |
+| G-2.2 | Tout `item` commence par un token de tête non ambigu : `pub`, `fn`, `test`, `struct`, `enum`, `impl`, `const`, `mod`, `use`, `extern`. Tout autre token en position d'item produit `E-PARSE-EXPECTED`. | MUST |
 | G-2.3 | Il n'y a **pas** de `;` après un item. Un `;` isolé en position d'item produit `E-PARSE-EXPECTED`. | MUST |
 | G-2.4 | `pub` n'est valide que sur `fn`, `struct`, `enum`, `const`, `mod`, `use` et sur les champs/variantes (§4.2, §4.3). `pub impl` est refusé (`E-PARSE-EXPECTED`). | MUST |
 | G-2.5 | Les attributs `#[...]` produisent `E-UNSUPPORTED-ATTR` en toute position ; ils ne sont jamais ignorés. | MUST |
@@ -43,6 +44,8 @@ visibility     = [ "pub" ] ;
 
 ```ebnf
 fn_item        = visibility "fn" IDENT [ generic_params ] "(" [ params ] ")" [ "->" type ] [ effects_clause ] block ;
+extern_item    = visibility "extern" STR "{" { extern_fn } "}" ;
+extern_fn      = "fn" IDENT "(" [ params ] ")" [ "->" type ] ";" ;
 params         = param { "," param } [ "," ] ;
 param          = IDENT ":" type ;
 effects_clause = "effects" "(" [ effect_list ] ")" ;
@@ -68,7 +71,8 @@ self_param     = "&" [ "mut" ] "self" | "self" ;
 | G-3.7 | `self_param` est obligatoire en premier paramètre d'une méthode d'`impl` qui porte `self` ; une fonction associée n'a pas de `self`. Un `self` hors `impl` produit `E-RES-SELF`. | MUST |
 | G-3.8 | Aucune valeur de retour « nulle part » : `->` sans type est `E-PARSE-EXPECTED`. | MUST |
 | G-3.9 | Le corps d'un `fn` est **toujours** un bloc `{ ... }`. `fn f();` (déclaration sans corps) est `E-PARSE-EXPECTED`. | MUST |
-| G-3.10 | `unsafe fn`, `extern fn`, `async fn` sont reconnus puis refusés : `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`, `E-UNSUPPORTED-ASYNC`. | MUST |
+| G-3.10 | `unsafe fn`, `extern "C" fn` (définition avec corps) et `async fn` sont reconnus puis refusés : `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`, `E-UNSUPPORTED-ASYNC`. En revanche `extern "C" { fn f(...); }` est accepté (ABI `"C"` seulement, `E-UNSUPPORTED-ABI` sinon ; paramètres/retour FFI-sûrs, `E-FFI-TYPE` sinon). | MUST |
+| G-3.11 | `extern_item` n'est valide qu'au niveau module (pas dans un `impl`, pas dans un `fn`). Chaque `extern_fn` se termine par `;`, sans corps. | MUST |
 
 ```rv
 // POSITIF
@@ -357,6 +361,7 @@ primary        = literal
                | array_expr
                | struct_expr
                | block
+               | unsafe_expr
                | if_expr
                | match_expr
                | while_expr
@@ -364,6 +369,7 @@ primary        = literal
                | for_expr ;
 
 tuple_expr     = "(" expr "," [ expr { "," expr } [ "," ] ] ")" ;
+unsafe_expr    = "unsafe" block ;
 array_expr     = "[" [ expr { "," expr } [ "," ] ] "]"
                | "[" expr ";" INT_LIT "]" ;
 
@@ -399,6 +405,7 @@ for_iterable   = or_expr ".." or_expr        (* plage entière exclusive *)
 | G-6.28 | Un tuple à un élément exige la virgule : `(1,)` est un tuple, `(1)` est un groupement. | MUST |
 | G-6.29 | Un `path_expr` peut désigner une fonction, une constante, un type (pour `new`/variante), ou une variante d'enum. Les quatre constructeurs du **prélude** (`Some`, `None`, `Ok`, `Err`) sont acceptés **qualifiés ou non** (`Option::Some(x)` ≡ `Some(x)`). Pour un enum utilisateur, la forme qualifiée est obligatoire (`E-RES-UNKNOWN` sinon). | MUST |
 | G-6.30 | L'appel de méthode `receiver.m(args)` est un `postfix_op` ; le receiver peut être une expression arbitraire, y compris un temporaire. L'accès `t.0` est un `field` avec `INT_LIT` uniquement (pas `t.x` sur un tuple, pas `t.0.1` : voir LEX-8.9 et G-6.31). | MUST |
+| G-6.40 | `unsafe { ... }` est une expression de bloc : son type est celui du bloc et son exécution ajoute l'effet `unsafe`. Les appels de fonctions `extern` y sont autorisés ; hors d'un tel bloc, ils produisent `E-UNSAFE-CONTEXT`. L'ownership s'applique à l'intérieur comme à l'extérieur. | MUST |
 | G-6.31 | `t.0.1` est refusé (`E-PARSE-UNEXPECTED`) : il faut `(t.0).0`. Les indices de champ ne se chaînent pas sans parenthèses. | MUST |
 | G-6.32 | Un appel de fonction ordinaire ne peut pas être suivi d'un littéral de bloc ambigu : `f { x }` n'est pas une syntaxe de Core 1.0. Un `struct_expr` exige qu'un type soit identifiable ; dans `if x { }`, `x` n'est jamais traité comme un type de struct. Le parser **désactive** la lecture de `struct_expr` dans la condition d'un `if`/`while`/`match` (règle de lookahead 2, G-6.35). | MUST |
 | G-6.33 | Il n'y a **aucune** expression de fermeture (`|x| x + 1`) : `E-UNSUPPORTED-CLOSURE`. | MUST |

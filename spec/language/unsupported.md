@@ -59,11 +59,14 @@ struct P { x: i32 }
 |---|---|---|---|---|
 | Closures | `|x| x + 1`, `move |x| ...` | `E-UNSUPPORTED-CLOSURE` | parse | fonction nommée ; pas de capture |
 | `async`/`await` | `async fn`, `.await` | `E-UNSUPPORTED-ASYNC` | parse | aucune |
-| `unsafe` | `unsafe { }`, `unsafe fn` | `E-UNSUPPORTED-UNSAFE` | parse | aucune |
+| `unsafe fn` | `unsafe fn f() {}` | `E-UNSUPPORTED-UNSAFE` | parse | bloc `unsafe { }` + `extern "C"` |
 | Pointeurs bruts | `*const T`, `*mut T`, `&raw` | `E-UNSUPPORTED-UNSAFE` | parse | références `&T`/`&mut T` |
 | Décalage de pointeur | `ptr.offset(n)` | `E-RES-UNKNOWN` | resolve | indexation |
 | `transmute` | `transmute(a)`, `as` interdit entre agrégats | `E-TYP-CAST` | types | aucune |
-| `extern` / FFI | `extern "C"`, `#[no_mangle]`, `libc` | `E-UNSUPPORTED-EXTERN` | parse | aucune |
+| `extern "C" fn` avec corps | `extern "C" fn f() {}` | `E-UNSUPPORTED-EXTERN` | parse | `extern "C" { ... }` |
+| ABI non-C | `extern "system"`, `extern "Rust"` | `E-UNSUPPORTED-ABI` | parse | `extern "C"` |
+| FFI composée | `fn f(s: String, r: &str)` dans `extern` | `E-FFI-TYPE` | resolve | primitives FFI-sûres |
+| `#[no_mangle]`, `#[link]` | attributs FFI | `E-UNSUPPORTED-ATTR` | parse | aucune |
 | Ranges hors `for` | `let r = 0..n;`, `..=`, `&v[1..2]`, `..base` | `E-UNSUPPORTED-RANGE` | parse | `for i in a..b` uniquement |
 
 | `break` avec valeur | `break e;` | `E-PARSE-EXPECTED` | parse | `loop` + variable mutable |
@@ -110,8 +113,6 @@ fn f(v: Vec<i32>) {
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
 | Effet `net` | `effects(net)`, toute API réseau | `E-UNSUPPORTED-EFFECT` | effects | aucune |
-| Effet `unsafe` | `effects(unsafe)` | `E-UNSUPPORTED-EFFECT` | effects | aucune |
-| Effet `ffi` | `effects(ffi)` | `E-UNSUPPORTED-EFFECT` | effects | aucune |
 | Effet `async` | `effects(async)`, `async fn` | `E-UNSUPPORTED-EFFECT` / `E-UNSUPPORTED-ASYNC` | effects/parse | aucune |
 | Threads | `thread::spawn`, `JoinHandle` | `E-RES-UNKNOWN` | resolve | mono-thread |
 | Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | aucune |
@@ -179,6 +180,8 @@ Ces éléments sont souvent supposés `UNSUPPORTED` à tort :
 | Patterns de littéraux flottants | supporté |
 | `test fn` avec `-> Result<(), Error>` | supporté (G-3.6) |
 | `drop(x)` | supporté (intrinsèque) |
+| Bloc `unsafe { ... }` | supporté, effet `unsafe` ; appels `extern` autorisés à l'intérieur (FFI-1..7) |
+| `extern "C" { fn f(x: i32) -> i32; }` | supporté (primitives FFI-sûres uniquement), effet `ffi` |
 | `pub` sur une variante d'enum | accepté sans effet (G-4.2) |
 | `//!` et `///` | acceptés (trivia, `doc`) |
 

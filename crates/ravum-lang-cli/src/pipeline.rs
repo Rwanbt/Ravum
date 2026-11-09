@@ -261,11 +261,44 @@ pub fn text_summary(frontend: &Frontend, profile: Profile) -> String {
 // Code generation and rustc
 // ---------------------------------------------------------------------------
 
+/// Compilation target selected by `--target`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BuildTarget {
+    /// Host binary (default).
+    #[default]
+    Native,
+    /// WebAssembly with WASI preview 1, executed through Node.js.
+    Wasm32WasiP1,
+}
+
+impl BuildTarget {
+    /// Only the canonical triple is accepted; anything else is a CLI usage
+    /// error (exit 2) so a typo never silently builds for the host.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "wasm32-wasip1" => Some(BuildTarget::Wasm32WasiP1),
+            _ => None,
+        }
+    }
+
+    pub fn rustc_triple(self) -> Option<&'static str> {
+        match self {
+            BuildTarget::Native => None,
+            BuildTarget::Wasm32WasiP1 => Some("wasm32-wasip1"),
+        }
+    }
+
+    pub fn is_wasm(self) -> bool {
+        matches!(self, BuildTarget::Wasm32WasiP1)
+    }
+}
+
 #[derive(Debug)]
 pub struct BuildOptions {
     pub release: bool,
     pub test_mode: bool,
     pub emit_rust: Option<PathBuf>,
+    pub target: BuildTarget,
 }
 
 impl Default for BuildOptions {
@@ -274,6 +307,7 @@ impl Default for BuildOptions {
             release: false,
             test_mode: false,
             emit_rust: None,
+            target: BuildTarget::Native,
         }
     }
 }
@@ -282,6 +316,7 @@ impl Default for BuildOptions {
 pub struct Artifacts {
     pub binary: PathBuf,
     pub generated: PathBuf,
+    pub target: BuildTarget,
 }
 
 #[derive(Debug)]
@@ -292,6 +327,7 @@ pub enum BuildError {
     ToolMissing(String),
     CompileFailed(String),
     Cache(String),
+    Unsupported(String),
 }
 
 impl BuildError {
@@ -317,6 +353,7 @@ impl BuildError {
                 format!("rustc failed:\n{output}")
             }
             BuildError::Cache(message) => message.clone(),
+            BuildError::Unsupported(message) => message.clone(),
         }
     }
 
@@ -332,6 +369,20 @@ pub fn rustc_command() -> String {
 pub fn rustc_version() -> Option<String> {
     let rustc = rustc_command();
     let output = Command::new(&rustc).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Node.js executable used to run `wasm32-wasip1` programs (`RAVUM_NODE` overrides).
+pub fn node_command() -> String {
+    std::env::var("RAVUM_NODE").unwrap_or_else(|_| "node".to_string())
+}
+
+pub fn node_version() -> Option<String> {
+    let node = node_command();
+    let output = Command::new(&node).arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -366,7 +417,20 @@ pub fn compile_program(
     util::write_bytes_atomic(&generated, rust.as_bytes()).map_err(BuildError::Write)?;
 
     let is_library = !options.test_mode && frontend.pkg.crate_kind == Some(CrateKind::Lib);
-    let output_path = if options.test_mode {
+    if options.target.is_wasm() && is_library {
+        return Err(BuildError::Unsupported(
+            "`--target wasm32-wasip1` is only supported for binary crates; \
+             library packages build for the host"
+                .to_string(),
+        ));
+    }
+    let output_path = if options.target.is_wasm() {
+        cache.join("bin").join(if options.test_mode {
+            format!("{crate_name}-tests.wasm")
+        } else {
+            format!("{crate_name}.wasm")
+        })
+    } else if options.test_mode {
         cache
             .join("bin")
             .join(format!("{crate_name}-tests{}", exe_suffix()))
@@ -400,6 +464,9 @@ pub fn compile_program(
         })
         .arg("--crate-name")
         .arg(&crate_name);
+    if let Some(triple) = options.target.rustc_triple() {
+        command.arg("--target").arg(triple);
+    }
     if is_library {
         command.arg("--crate-type").arg("lib");
     }
@@ -429,6 +496,7 @@ pub fn compile_program(
     Ok(Artifacts {
         binary: output_path,
         generated,
+        target: options.target,
     })
 }
 

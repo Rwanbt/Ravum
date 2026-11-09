@@ -3,10 +3,16 @@
 use ravum_lang_sema::Profile;
 use std::path::{Path, PathBuf};
 
-use crate::pipeline::{self, BuildOptions};
+use crate::pipeline::{self, BuildOptions, BuildTarget};
 use crate::util;
 
-pub fn run(path: &Path, release: bool, emit_rust: Option<PathBuf>, emit_ir: bool) -> i32 {
+pub fn run(
+    path: &Path,
+    release: bool,
+    emit_rust: Option<PathBuf>,
+    emit_ir: bool,
+    target: BuildTarget,
+) -> i32 {
     let frontend = pipeline::analyze(path, Profile::Core, false);
     if !frontend.success() {
         eprint!("{}", pipeline::render_diags(&frontend));
@@ -25,6 +31,7 @@ pub fn run(path: &Path, release: bool, emit_rust: Option<PathBuf>, emit_ir: bool
         release,
         test_mode: false,
         emit_rust,
+        target,
     };
     match pipeline::compile_program(&frontend, &options) {
         Ok(artifacts) => {

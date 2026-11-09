@@ -4,9 +4,10 @@ Harnais déclaratif et corpus de cas pour Ravum Core 1.0.
 
 > **Statut : corpus candidat.** Chaque cas est une **exigence** dérivée de
 > `docs/architecture/RAVUM-CORE-DESIGN.md` et de `spec/language/`, pas un
-> enregistrement du comportement actuel. Le compilateur étant en cours
-> d'implémentation, la majorité des cas échouent aujourd'hui : c'est le
-> résultat honnête, pas une régression du harnais.
+> enregistrement du comportement actuel. Le corpus compte **107 cas** ; au
+> 2026-11-09 il donne **106 PASS / 0 FAIL / 1 SKIP** sur Windows (le skip est
+> un cas Unix de symlink). Un résultat reste une observation liée à un SHA et
+> à un hôte, jamais un `PROVED`.
 
 Le harnais juge la toolchain, il ne la remplace pas : il ne prétend jamais
 `PROVED`, ne masque aucun cas, et n'invente aucun succès. Un cas dont le

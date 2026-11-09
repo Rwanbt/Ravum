@@ -18,11 +18,16 @@ Neuf groupes, exactement ceux du design §3.6 :
 | `nondet` | non-déterminisme (réservé) | **non** (aucune source en Core 1.0) | oui, sans effet |
 | `rt` | appartenance à un contexte temps réel (réservé) | **non** | oui, sans effet |
 | `net` | réseau | **non implémenté** | refusé : `E-UNSUPPORTED-EFFECT` |
-| `unsafe` | code non vérifié | **non implémenté** | refusé : `E-UNSUPPORTED-EFFECT` |
-| `ffi` | frontière étrangère | **non implémenté** | refusé : `E-UNSUPPORTED-EFFECT` |
+| `unsafe` | code non vérifié (bloc `unsafe`) | **oui** (bloc `unsafe`) | oui |
+| `ffi` | frontière étrangère (appel `extern`) | **oui** (appel `extern`) | oui |
 | `async` | exécution asynchrone | **non implémenté** | refusé : `E-UNSUPPORTED-EFFECT` |
 
-> Le design §3.6 énumère `io fs net alloc panic unsafe ffi async rt nondet` (9 groupes) et précise que « `unsafe`/`ffi`/`net`/`async` ne sont pas implémentés en Core 1.0 : les déclarer est `E-UNSUPPORTED-EFFECT` ». `nondet` et `rt` ne sont pas dans cette liste d'exclusion ; ils sont donc **déclarables mais jamais inférés** (voir Q-EFF-3).
+> `unsafe` et `ffi` sont désormais **inférés** : un bloc `unsafe { ... }` ajoute
+> `unsafe`, un appel de fonction `extern` ajoute `unsafe` + `ffi`. Ils restent
+> interdits par les profils `pure` et `rt`, et ne peuvent donc pas apparaître dans
+> une entrée certifiée sans effet. `net`/`async` restent non implémentés :
+> les déclarer est `E-UNSUPPORTED-EFFECT`. `nondet` et `rt` sont déclarables mais
+> jamais inférés (voir Q-EFF-3).
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -46,9 +51,18 @@ fn reservé() effects(fs, rt) { }          // `rt` déclarable, jamais inféré
 fn f() effects(network) { }
 // NÉGATIF — E-UNSUPPORTED-EFFECT (groupe non implémenté)
 fn g() effects(net) { }
-fn h() effects(unsafe) { }
-fn i() effects(ffi) { }
 fn j() effects(async) { }
+```
+
+```rv
+// POSITIF — unsafe/ffi inférés et déclarables
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+
+fn magnitude(x: i32) -> i32 effects(unsafe, ffi) {
+    unsafe { abs(x) }
+}
 ```
 
 ## 2. Inférence transitive
@@ -63,6 +77,7 @@ fn j() effects(async) { }
 | EFF-2.6 | Une fonction **générique** infère l'union des effets sur toutes ses instanciations monomorphisées ; une instanciation qui appelle une fonction à effet `io` contamine l'instanciation, pas la définition générique abstraite. Le fait exposé est l'union par `FnId`. | MUST |
 | EFF-2.7 | `drop(x)` n'ajoute **aucun** effet. Sont **purs** : `math::*` (y compris `sin`, `cos`, `tan`, `exp`, `ln`, `log10`), `len`, `is_empty`, `as_slice`, `contains`, `starts_with`, `ends_with`, `is_some`, `is_none`, `is_ok`, `is_err`, `pop`, `unwrap_or`, `ok`, `err`, `ok_or`. Ajoutent `alloc` : `String::new/from/clone/push/push_str`, `Vec::new/with_capacity/push/clone`, `to_string` (méthodes primitives), `string::from`, `parse_*`, `trim`/`to_uppercase`/`to_lowercase`/`replace`/`lines`, `Error::new`, `fs::read_to_string`, `env::args`/`env::var`, `io::read_line`. Ajoutent `panic` : `panic`, `assert`, `assert_eq`, `unwrap`, `unwrap_err`. `io` : `print`, `println`, `eprintln`, `read_line`, `exit`, `args`, `var`. `fs` : les trois fonctions `fs`. | MUST |
 | EFF-2.8 | L'inférence est **indépendante de l'ordre des déclarations** et **déterministe** : deux exécutions produisent le même `EffectSet`. | MUST |
+| EFF-2.9 | Un bloc `unsafe { ... }` ajoute directement `unsafe` ; un appel de fonction `extern` ajoute `unsafe` + `ffi`. Ces effets se composent transitivement comme les autres. | MUST |
 
 ```rv
 // POSITIF — transitivité

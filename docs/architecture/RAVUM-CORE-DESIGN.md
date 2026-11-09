@@ -98,8 +98,11 @@ const N: i32 = 10;
 - `impl` : méthodes inhérentes uniquement (`&self`, `&mut self`, `self`) et
   fonctions associées sans `self`. Pas de `trait` en Core 1.0
   (`E-UNSUPPORTED-TRAIT`) ; les génériques n'ont pas de bornes (`where` interdit).
-- `unsafe`, `extern`, `async`, `move`, `trait`, `where`, `impl Trait` : mots-clés
-  réservés, rejetés avec `E-UNSUPPORTED-*` — jamais exécutés par accident du backend.
+- `unsafe { ... }` et `extern "C" { ... }` sont supportés dans un cadre étroit et
+  explicite (§3.7 bis) ; les pointeurs bruts, `unsafe fn`, `extern "C" fn` avec
+  corps, les ABI autres que `"C"` restent refusés (`E-UNSUPPORTED-*`).
+- `async`, `move`, `trait`, `where`, `impl Trait` : mots-clés réservés, rejetés
+  avec `E-UNSUPPORTED-*` — jamais exécutés par accident du backend.
 
 ### 3.2 Types Core 1.0
 
@@ -142,7 +145,10 @@ Opérateurs par précédence décroissante : postfixes (`()`, `[]`, `.`, `?`) ;
 unaires `- ! & &mut *` ; `as` ; `* / %` ; `+ -` ; `<< >>` ; `&` ; `^` ; `|` ;
 comparaisons ; `&&` ; `||` ; `..` (uniquement dans `for`) ; affectation.
 `&&`/`||` court-circuitent. Évaluation de gauche à droite, arguments de gauche à
-droite. Débordement entier : **panic contrôlé** dans tous les profils
+droite. Exception documentée (audit backend F3) : pour `place = valeur`, la
+valeur est évaluée avant la place, comme en Rust ; ce n'est observable que si la
+place a des effets de bord (`a[f()] = g()`), cas non interdit par le checker.
+Débordement entier : **panic contrôlé** dans tous les profils
 (`-C overflow-checks=on`), division par zéro et reste par zéro : panic, index
 hors bornes : panic, décalage ≥ largeur : panic. Flottants : IEEE-754, NaN
 documenté, `0.0/-0.0`, pas de piège. `panic`, `assert`, `assert_eq` sont des
@@ -199,8 +205,10 @@ Sans déclaration, l'ensemble inféré est public. Profils :
   encore arrêter un programme `pure`.
 - `rt` : **expérimental** — interdit `io fs net alloc panic unsafe ffi async rt`
   dans le corps, vérifié transitivement ; ne certifie **pas** le hard-RT.
-`unsafe`/`ffi`/`net`/`async` ne sont pas implémentés en Core 1.0 : les déclarer
-est `E-UNSUPPORTED-EFFECT`. `alloc` est approché à la granularité fonction :
+`unsafe`, `ffi`, `net`, `async` : `unsafe` et `ffi` sont **inférés** par les
+blocs `unsafe` et les appels `extern` (jamais déclarés silencieusement) ;
+`net` et `async` ne sont pas implémentés, les déclarer reste
+`E-UNSUPPORTED-EFFECT`. `alloc` est approché à la granularité fonction :
 toute construction `String`/`Vec`/appel de fonction allouante marque `alloc`
 (il n'y a pas de `Box` en Core 1.0).
 
@@ -235,9 +243,26 @@ Règles vérifiées (et non déléguées à rustc) :
    du bloc ; `drop(x)` du prélude force la destruction ; un mobile déplacé n'est
    pas détruit. Pas de `Drop` utilisateur ni de destructeur personnalisé en Core 1.0
    (`E-UNSUPPORTED-DROP-IMPL`).
-6. **unsafe/pointeurs bruts** : absents de Core 1.0 (`E-UNSUPPORTED-UNSAFE`).
-   Aucun programme safe accepté ne peut donc reposer sur de l'aliasing non
-   vérifié : le code émis n'utilise que des constructions Rust sûres équivalentes.
+6. **unsafe/FFI** : les blocs `unsafe { ... }` sont des blocs ordinaires pour
+   l'ownership ; ils ajoutent l'effet `unsafe` et autorisent l'appel de
+   fonctions `extern`. Les pointeurs bruts restent absents : un appel `extern`
+   ne peut passer que des primitives FFI-sûres (entiers, flottants, `bool`,
+   `()`), jamais une référence, `String`, `Vec` ou un type nominal. Le code émis
+   reste `#![forbid(unsafe_code)]` pour tout programme sans `extern` ; sinon la
+   seule construction `unsafe` est le wrapper généré autour de la déclaration
+   `extern "C"`, jamais du code recopié de la source Ravum (§3.7 bis).
+
+### 3.7 bis FFI et `unsafe` (sous-ensemble explicite)
+
+| ID | Règle | Niveau |
+|---|---|---|
+| FFI-1 | `extern "C" { fn f(x: i32) -> i32; }` déclare des fonctions sans corps, au niveau module uniquement. Seule l'ABI `"C"` est acceptée ; une autre ABI est `E-UNSUPPORTED-ABI`. | MUST |
+| FFI-2 | Les paramètres et le retour d'une fonction `extern` doivent être FFI-sûrs : `i8..i128`, `u8..u128`, `isize`, `usize`, `f32`, `f64`, `bool`, `()`. Toute autre type est `E-FFI-TYPE`. | MUST |
+| FFI-3 | Un appel de fonction `extern` hors d'un bloc `unsafe` est `E-UNSAFE-CONTEXT` ; dans un bloc `unsafe`, il est accepté et produit les effets `unsafe` + `ffi`. | MUST |
+| FFI-4 | Un bloc `unsafe` produit l'effet `unsafe` ; le profil `pure` le refuse donc (`E-EFF-PROFILE`). Le profil `rt` le refuse également (profil expérimental inchangé). | MUST |
+| FFI-5 | Les pointeurs bruts, `unsafe fn`, `extern "C" fn` avec corps, les attributs `#[no_mangle]`/`#[link]` et les types FFI composés restent `UNSUPPORTED`. | MUST |
+| FFI-6 | Le codegen émet `extern "C" { #[link_name = "..."] fn rvm_ffi_<id>(...); }` puis un wrapper `pub fn rvm_ffi_wrap_<id>(...) -> T { unsafe { rvm_ffi_<id>(...) } }` ; les sites d'appel Ravum restent du Rust sûr. Un programme sans `extern` conserve `#![forbid(unsafe_code)]` ; un programme avec `extern` porte `#![deny(unsafe_code)]` et un `#[allow(unsafe_code)]` **local à chaque wrapper** — tout autre `unsafe` fait échouer le build. Le backend rejette aussi toute signature `extern` non primitive (`CodegenError`), même si le checker a été contourné. | MUST |
+| FFI-7 | La frontière FFI n'est pas certifiée mémoire : un pointeur invalide fourni par la bibliothèque C reste possible. Toute utilisation FFI doit être auditée et reste hors du profil `pure`. | MUST |
 
 Le modèle est **plus restrictif** que Rust (pas de références stockées/retournées,
 pas de lifetimes explicites) : il est sound par construction et documenté comme

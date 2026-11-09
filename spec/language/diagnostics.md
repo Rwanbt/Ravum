@@ -54,8 +54,11 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSUPPORTED-ATTR` | parse | attribut `#[...]` / `#![...]` |
 | `E-UNSUPPORTED-MACRO` | parse | `nom!(...)` / `macro_rules!` |
 | `E-UNSUPPORTED-ASYNC` | parse | `async`, `await` |
-| `E-UNSUPPORTED-UNSAFE` | parse | `unsafe`, pointeurs bruts, opérations non vérifiées |
-| `E-UNSUPPORTED-EXTERN` | parse | `extern`, frontière FFI |
+| `E-UNSUPPORTED-UNSAFE` | parse | `unsafe fn`, pointeurs bruts, opérations non vérifiées (le bloc `unsafe { }` est supporté) |
+| `E-UNSUPPORTED-EXTERN` | parse | `extern "C" fn` avec corps (le bloc `extern "C" { ... }` est supporté) |
+| `E-UNSUPPORTED-ABI` | parse | ABI autre que `"C"` dans un bloc `extern` |
+| `E-FFI-TYPE` | resolve | paramètre/retour `extern` non FFI-sûr |
+| `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
 | `E-UNSUPPORTED-EFFECT` | sema | déclaration d'un effet non implémenté (`net`, `unsafe`, `ffi`, `async`) |

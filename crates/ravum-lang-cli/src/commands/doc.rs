@@ -146,7 +146,9 @@ fn render_module(md: &mut String, module: &Module, path: &str, level: usize) {
                     modules.push(inner);
                 }
             }
-            ItemKind::Use(_) | ItemKind::ModDecl(_) => {}
+            // `extern` blocks are an FFI surface outside Core 1.0's documented
+            // public API; the parser/checker own their diagnostics.
+            ItemKind::Use(_) | ItemKind::ModDecl(_) | ItemKind::Extern(_) => {}
         }
     }
 

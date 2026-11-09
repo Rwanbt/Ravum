@@ -57,14 +57,286 @@ pub(crate) fn typecheck_with_world(
         current_fn: None,
         scopes: Vec::new(),
         loop_depth: 0,
+        unsafe_depth: 0,
         in_const: false,
         variant_pats: BTreeMap::new(),
         vars: Vec::new(),
         var_spans: Vec::new(),
     };
     checker.run(sources);
+    compute_static_str_fns(program, &mut *checker.facts);
     resolve::emit_unused_import_warnings(world, checker.diags);
     !checker.diags.has_errors()
+}
+
+// ----------------------------------------------------------------------
+// Provenance interprocédurale du texte statique (`&'static str`)
+// ----------------------------------------------------------------------
+//
+// Ferme le finding d'audit F1 : une fonction `fn lit() -> &str { "a" }` ne
+// peut retourner qu'un texte statique en Core 1.0 (retourner un paramètre
+// `&str` est `E-OWN-REF-ESCAPE`). On calcule par point fixe l'ensemble des
+// fonctions dont le corps retourne *certainement* un texte statique, pour que
+// `own::is_static_ref` puisse accepter `let t = lit();`. Le calcul est
+// volontairement conservateur : toute construction non reconnue fait échouer
+// la classification (mieux vaut un faux positif qu'une référence pendante).
+//
+// Règles de classification :
+// * ne considérer que les fonctions dont le type de retour est exactement
+//   `&str` ;
+// * tous les `return` explicites du corps doivent être statiques ;
+// * si le corps a une expression de queue, elle doit être statique ; sinon il
+//   faut au moins un `return` explicite (une fonction `&str` valide ne peut pas
+//   retomber sur `()`);
+// * une expression statique est : un littéral `Str`, un `if`/`match`/bloc dont
+//   toutes les branches et la queue sont statiques, ou un appel à une fonction
+//   déjà présente dans l'ensemble (fixpoint ; aucun builtin).
+// Limite assumée : les variables locales (`let t = "a"; return t;`) ne sont pas
+// suivies ici ; leur usage *interne* reste accepté par `own.rs`, mais une telle
+// fonction n'est pas classée statique pour ses appelants.
+
+/// Calcule `Facts::static_str_fns` par point fixe (monotone, borné par le
+/// nombre de candidats).
+fn compute_static_str_fns(program: &ast::Program, facts: &mut Facts) {
+    let mut candidates: Vec<(&FnItem, NodeId)> = Vec::new();
+    collect_static_str_candidates(&program.root, facts, &mut candidates);
+    facts.static_str_fns.clear();
+    let mut changed = true;
+    let mut rounds = 0usize;
+    while changed && rounds <= candidates.len() {
+        changed = false;
+        for (f, id) in &candidates {
+            if facts.static_str_fns.contains(id) {
+                continue;
+            }
+            if fn_returns_static_text(f, facts) {
+                facts.static_str_fns.insert(*id);
+                changed = true;
+            }
+        }
+        rounds += 1;
+    }
+}
+
+fn collect_static_str_candidates<'a>(
+    module: &'a Module,
+    facts: &Facts,
+    out: &mut Vec<(&'a FnItem, NodeId)>,
+) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Fn(f) => {
+                if fn_sig_returns_static_str(item.id, f, facts) {
+                    out.push((f, item.id));
+                }
+            }
+            ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
+            ItemKind::Impl(imp) => {
+                for sub in &imp.items {
+                    match &sub.kind {
+                        ItemKind::Fn(f) => {
+                            if fn_sig_returns_static_str(sub.id, f, facts) {
+                                out.push((f, sub.id));
+                            }
+                        }
+                        ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn fn_sig_returns_static_str(item: NodeId, f: &FnItem, facts: &Facts) -> bool {
+    let ret = facts
+        .fn_sigs
+        .get(&item)
+        .map(|sig| sig.ret.clone())
+        .or_else(|| facts.type_nodes.get(&f.ret.id).cloned());
+    matches!(ret, Some(ty) if is_static_str_type(&ty))
+}
+
+fn is_static_str_type(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Ref {
+            mutable: false,
+            inner,
+        } if matches!(**inner, Type::Str)
+    )
+}
+
+/// `true` when every path returning from the function yields a static text.
+fn fn_returns_static_text(f: &FnItem, facts: &Facts) -> bool {
+    let mut seen_return = false;
+    if !block_returns_are_static(&f.body, facts, &mut seen_return) {
+        return false;
+    }
+    match &f.body.tail {
+        Some(tail) => is_static_text_expr(tail, facts),
+        // No tail: a well-typed `&str` function must return explicitly on every
+        // path; all those returns were checked above.
+        None => seen_return,
+    }
+}
+
+/// Checks every explicit `return` reachable in the block (including nested
+/// blocks and expressions) and records that at least one exists.
+fn block_returns_are_static(block: &Block, facts: &Facts, seen: &mut bool) -> bool {
+    for stmt in &block.stmts {
+        let ok = match &stmt.kind {
+            StmtKind::Let(l) => l
+                .init
+                .as_ref()
+                .map(|init| expr_returns_are_static(init, facts, seen))
+                .unwrap_or(true),
+            StmtKind::Expr { expr, .. } => expr_returns_are_static(expr, facts, seen),
+        };
+        if !ok {
+            return false;
+        }
+    }
+    match &block.tail {
+        Some(tail) => expr_returns_are_static(tail, facts, seen),
+        None => true,
+    }
+}
+
+fn expr_returns_are_static(expr: &Expr, facts: &Facts, seen: &mut bool) -> bool {
+    match &expr.kind {
+        ExprKind::Return(Some(value)) => {
+            *seen = true;
+            is_static_text_expr(value, facts) && expr_returns_are_static(value, facts, seen)
+        }
+        ExprKind::Return(None) => false,
+        ExprKind::Call { callee, args } => {
+            expr_returns_are_static(callee, facts, seen)
+                && args
+                    .iter()
+                    .all(|arg| expr_returns_are_static(arg, facts, seen))
+        }
+        ExprKind::MethodCall { receiver, args, .. } => {
+            expr_returns_are_static(receiver, facts, seen)
+                && args
+                    .iter()
+                    .all(|arg| expr_returns_are_static(arg, facts, seen))
+        }
+        ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
+            expr_returns_are_static(base, facts, seen)
+        }
+        ExprKind::Index { base, index } => {
+            expr_returns_are_static(base, facts, seen)
+                && expr_returns_are_static(index, facts, seen)
+        }
+        ExprKind::Unary { expr, .. } | ExprKind::Cast { expr, .. } | ExprKind::Try(expr) => {
+            expr_returns_are_static(expr, facts, seen)
+        }
+        ExprKind::Binary { lhs, rhs, .. } => {
+            expr_returns_are_static(lhs, facts, seen) && expr_returns_are_static(rhs, facts, seen)
+        }
+        ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+            expr_returns_are_static(target, facts, seen)
+                && expr_returns_are_static(value, facts, seen)
+        }
+        ExprKind::If {
+            cond,
+            then_block,
+            else_branch,
+        } => {
+            expr_returns_are_static(cond, facts, seen)
+                && block_returns_are_static(then_block, facts, seen)
+                && else_branch
+                    .as_ref()
+                    .map(|branch| expr_returns_are_static(branch, facts, seen))
+                    .unwrap_or(true)
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            expr_returns_are_static(scrutinee, facts, seen)
+                && arms
+                    .iter()
+                    .all(|arm| expr_returns_are_static(&arm.body, facts, seen))
+        }
+        ExprKind::While { cond, body } => {
+            expr_returns_are_static(cond, facts, seen)
+                && block_returns_are_static(body, facts, seen)
+        }
+        ExprKind::Loop { body } => block_returns_are_static(body, facts, seen),
+        ExprKind::For { iter, body, .. } => {
+            expr_returns_are_static(iter, facts, seen)
+                && block_returns_are_static(body, facts, seen)
+        }
+        ExprKind::Block(block) | ExprKind::Unsafe(block) => {
+            block_returns_are_static(block, facts, seen)
+        }
+        ExprKind::Tuple(items) | ExprKind::Array(items) => items
+            .iter()
+            .all(|item| expr_returns_are_static(item, facts, seen)),
+        ExprKind::ArrayRepeat { value, len } => {
+            expr_returns_are_static(value, facts, seen) && expr_returns_are_static(len, facts, seen)
+        }
+        ExprKind::StructLit { fields, .. } => fields
+            .iter()
+            .all(|field| expr_returns_are_static(&field.value, facts, seen)),
+        ExprKind::Range { start, end, .. } => {
+            start
+                .as_ref()
+                .map(|start| expr_returns_are_static(start, facts, seen))
+                .unwrap_or(true)
+                && end
+                    .as_ref()
+                    .map(|end| expr_returns_are_static(end, facts, seen))
+                    .unwrap_or(true)
+        }
+        // No `return` can hide in these, and they are never a static text.
+        ExprKind::Unit
+        | ExprKind::Int { .. }
+        | ExprKind::Float { .. }
+        | ExprKind::Bool(_)
+        | ExprKind::Char(_)
+        | ExprKind::Str(_)
+        | ExprKind::SelfValue
+        | ExprKind::Path(_)
+        | ExprKind::Break
+        | ExprKind::Continue => true,
+    }
+}
+
+/// `true` when the expression certainly evaluates to a `'static` text value.
+fn is_static_text_expr(expr: &Expr, facts: &Facts) -> bool {
+    match &expr.kind {
+        ExprKind::Str(_) => true,
+        // Interprocedural propagation: only user functions classified by the
+        // fixpoint; never a builtin (`as_str` and friends must stay non-static).
+        ExprKind::Call { .. } => matches!(
+            facts.calls.get(&expr.id),
+            Some(CallTarget::UserFn { item }) if facts.static_str_fns.contains(item)
+        ),
+        ExprKind::If {
+            then_block,
+            else_branch: Some(else_branch),
+            ..
+        } => block_value_is_static(then_block, facts) && is_static_text_expr(else_branch, facts),
+        ExprKind::Match { arms, .. } => {
+            !arms.is_empty() && arms.iter().all(|arm| is_static_text_expr(&arm.body, facts))
+        }
+        ExprKind::Block(block) | ExprKind::Unsafe(block) => block_value_is_static(block, facts),
+        // A diverging branch that returns a static text contributes a static
+        // value on every path that actually produces one.
+        ExprKind::Return(Some(value)) => is_static_text_expr(value, facts),
+        _ => false,
+    }
+}
+
+/// The value of a block is its tail expression; a block with no tail produces
+/// `()` (never a static text). Conservative by design.
+fn block_value_is_static(block: &Block, facts: &Facts) -> bool {
+    block
+        .tail
+        .as_ref()
+        .map(|tail| is_static_text_expr(tail, facts))
+        .unwrap_or(false)
 }
 
 #[derive(Clone, Debug)]
@@ -113,6 +385,8 @@ struct TypeChecker<'p, 'w, 'f> {
     current_fn: Option<NodeId>,
     scopes: Vec<BTreeMap<String, Local>>,
     loop_depth: usize,
+    /// Profondeur d'imbrication des blocs `unsafe` (>= 1 = contexte unsafe).
+    unsafe_depth: usize,
     in_const: bool,
     /// Variante résolue pour chaque pattern (`pat.id -> (enum, index)`), utilisé
     /// par l'analyse d'exhaustivité.
@@ -825,6 +1099,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ExprKind::Loop { body } => self.check_loop(body),
             ExprKind::For { pat, iter, body } => self.check_for(pat, iter, body),
             ExprKind::Block(block) => self.check_block(block, expected),
+            ExprKind::Unsafe(block) => {
+                self.unsafe_depth += 1;
+                let ty = self.check_block(block, expected);
+                self.unsafe_depth -= 1;
+                ty
+            }
             ExprKind::Tuple(items) => {
                 let types = self.check_expr_list(items, expected.and_then(|_| None));
                 Type::Tuple(types)
@@ -1258,7 +1538,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
         let result = match &target {
             ValuePath::Item(id) => {
-                if self.world.fns.contains_key(id) {
+                let is_extern = self
+                    .facts
+                    .fn_sigs
+                    .get(id)
+                    .map(|signature| signature.is_extern)
+                    .unwrap_or(false);
+                if self.world.fns.contains_key(id) || is_extern {
                     self.check_user_fn_call(*id, args, expected, expr.span, None)
                 } else {
                     self.error(
@@ -1372,6 +1658,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             return Type::Error;
         };
+        if sig.is_extern && self.unsafe_depth == 0 {
+            self.error(
+                "E-UNSAFE-CONTEXT",
+                span,
+                format!(
+                    "extern function `{}` can only be called inside an `unsafe {{ ... }}` block",
+                    sig.name
+                ),
+            );
+        }
         if sig.receiver.is_some() {
             self.error(
                 "E-UNSUPPORTED-UFCS",

@@ -59,10 +59,7 @@ impl Effect {
 
     /// Effects that are declared but cannot be produced in Core 1.0.
     pub fn is_unsupported(&self) -> bool {
-        matches!(
-            self,
-            Effect::Unsafe | Effect::Ffi | Effect::Async | Effect::Net
-        )
+        matches!(self, Effect::Async | Effect::Net)
     }
 }
 
@@ -186,6 +183,10 @@ pub struct FnSig {
     pub declared_effects: Option<EffectSet>,
     pub is_test: bool,
     pub is_unsafe: bool,
+    /// `true` for a function declared in an `extern "C" { ... }` block: it has
+    /// no Ravum body, is callable only inside `unsafe`, and carries the `ffi`
+    /// and `unsafe` effects.
+    pub is_extern: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,6 +319,8 @@ pub struct Facts {
     pub methods: BTreeMap<NodeId, MethodTarget>,
     /// Signatures of every function, keyed by the function item id.
     pub fn_sigs: BTreeMap<NodeId, FnSig>,
+    /// C symbol linked for each extern function (keyed by its item id).
+    pub extern_symbols: BTreeMap<NodeId, String>,
     pub structs: BTreeMap<NodeId, StructInfo>,
     pub enums: BTreeMap<NodeId, EnumInfo>,
     pub consts: BTreeMap<NodeId, ConstInfo>,
@@ -327,6 +330,17 @@ pub struct Facts {
     pub item_paths: BTreeMap<NodeId, String>,
     /// Module path (Ravum names joined by `::`) per module node id.
     pub module_paths: BTreeMap<NodeId, String>,
+    /// Functions whose return type is exactly `&str` and whose body certainly
+    /// returns a `'static` text: a string literal, an `if`/`match`/block whose
+    /// every branch (and tail) is static, or a call to another function already
+    /// in this set. Computed by a fixpoint at the end of type checking.
+    ///
+    /// Soundness: a function is only added when *every* explicit `return` is
+    /// static and, if it has a tail expression, that tail is static too. A
+    /// recursive cycle without a static base is never added. This set is the
+    /// only interprocedural provenance `own::is_static_ref` accepts; no builtin
+    /// (notably `String::as_str`) is ever a member.
+    pub static_str_fns: BTreeSet<NodeId>,
     /// Test functions in declaration order.
     pub test_fns: Vec<NodeId>,
     pub main_fn: Option<NodeId>,

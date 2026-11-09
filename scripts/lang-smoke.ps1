@@ -90,6 +90,7 @@ Run-Example "calculator" "8" @("5", "+", "3")
 Run-Example "stats" "2.5" @((Join-Path $root "examples\stats\sample.txt"))
 Run-Example "dsp-gain-iir" "0.1264" @()
 Run-Example "package-demo\app" "42"
+Run-Example "ffi-abs" "42"
 Invoke-Case "test:tests-demo" (Join-Path $root "examples\tests-demo") @("test") "passed" 0 | Out-Null
 Invoke-Case "fmt-check:hello" (Join-Path $root "examples\hello") @("fmt", "--check") "" 0 | Out-Null
 

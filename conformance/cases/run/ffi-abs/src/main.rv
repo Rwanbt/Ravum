@@ -1,0 +1,10 @@
+use std::io;
+
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+
+fn main() {
+    let value = unsafe { abs(-7) };
+    io::println(&value.to_string());
+}

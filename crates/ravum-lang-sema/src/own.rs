@@ -663,6 +663,7 @@ impl<'a> OwnChecker<'a> {
             ExprKind::Loop { body } => self.eval_loop(body),
             ExprKind::For { pat, iter, body } => self.eval_for(pat, iter, body),
             ExprKind::Block(block) => self.analyze_block(block, false),
+            ExprKind::Unsafe(block) => self.analyze_block(block, false),
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
                 for item in items {
                     self.eval_value(item);
@@ -1601,10 +1602,12 @@ impl<'a> OwnChecker<'a> {
     fn is_static_ref(&self, expr: &Expr) -> bool {
         match &expr.kind {
             ExprKind::Str(_) => true,
-            ExprKind::Unary {
-                op: UnOp::Ref,
-                expr: inner,
-            } => matches!(inner.kind, ExprKind::Str(_)) || self.is_static_ref(inner),
+            // `&e` always borrows a *place* (a variable, a temporary, or the
+            // temporary holding a `&'static str` value). It never produces a
+            // `'static` reference itself: `let r = &"a";` has type `&&str` and
+            // stores a reference to a temporary, which must be rejected like any
+            // other escaping borrow (F2 audit finding).
+            ExprKind::Unary { op: UnOp::Ref, .. } => false,
             ExprKind::Path(_) | ExprKind::SelfValue => {
                 if let Some(slot) = self.path_local_slot(expr) {
                     self.slot_info(slot).map(|s| s.static_ref).unwrap_or(false)
@@ -1612,11 +1615,39 @@ impl<'a> OwnChecker<'a> {
                     false
                 }
             }
-            ExprKind::Block(block) => block
+            ExprKind::Block(block) | ExprKind::Unsafe(block) => block
                 .tail
                 .as_ref()
                 .map(|tail| self.is_static_ref(tail))
                 .unwrap_or(false),
+            // A `&str` produced by `if`/`match` is static only when every
+            // branch is itself static; this removes the F1 false positives
+            // without weakening the non-escape rule.
+            ExprKind::If {
+                then_block,
+                else_branch,
+                ..
+            } => {
+                then_block
+                    .tail
+                    .as_ref()
+                    .map(|tail| self.is_static_ref(tail))
+                    .unwrap_or(false)
+                    && else_branch
+                        .as_ref()
+                        .map(|branch| self.is_static_ref(branch))
+                        .unwrap_or(false)
+            }
+            ExprKind::Match { arms, .. } => {
+                !arms.is_empty() && arms.iter().all(|arm| self.is_static_ref(&arm.body))
+            }
+            // Interprocedural provenance (audit finding F1): a call to a user
+            // function classified as always returning `&'static str` is static.
+            // A builtin (notably `String::as_str`) is never accepted.
+            ExprKind::Call { .. } => matches!(
+                self.facts.calls.get(&expr.id),
+                Some(CallTarget::UserFn { item }) if self.facts.static_str_fns.contains(item)
+            ),
             _ => false,
         }
     }
@@ -2450,6 +2481,99 @@ fn f(mut s: String, t: String) {
     s.push_str(t.as_str());
 }
 "#,
+        );
+    }
+
+    // -- Provenance interprocédurale du texte statique (finding F1) -----------
+
+    #[test]
+    fn static_text_from_function_is_storable() {
+        accepted(
+            r#"
+fn lit() -> &str { "a" }
+fn f() -> &str {
+    let text = lit();
+    return text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_from_return_only_function_is_storable() {
+        // The `lit` body has no tail expression: every explicit return is
+        // static, which is enough for the fixpoint.
+        accepted(
+            r#"
+fn lit() -> &str { return "a"; }
+fn f() -> &str {
+    let text = lit();
+    return text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_from_function_with_if_is_storable() {
+        accepted(
+            r#"
+fn via_if(c: bool) -> &str {
+    if c { "a" } else { "b" }
+}
+fn f(c: bool) -> &str {
+    let text = via_if(c);
+    return text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_from_function_with_match_is_storable() {
+        accepted(
+            r#"
+fn via_match(c: bool) -> &str {
+    match c {
+        true => "a",
+        false => "b",
+    }
+}
+fn f(c: bool) -> &str {
+    let text = via_match(c);
+    return text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn non_static_text_function_stays_refused() {
+        rejected(
+            r#"
+fn bad(s: &str) -> &str { s }
+fn f(s: &str) -> &str {
+    let text = bad(s);
+    return text;
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    #[test]
+    fn recursive_text_function_is_not_classified_static() {
+        // No static base: the fixpoint must never add `rec`, so both its own
+        // return and the caller's `let` are conservatively refused.
+        rejected(
+            r#"
+fn rec() -> &str { rec() }
+fn f() -> &str {
+    let text = rec();
+    return text;
+}
+"#,
+            "E-OWN-REF-ESCAPE",
         );
     }
 

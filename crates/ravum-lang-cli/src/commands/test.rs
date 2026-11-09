@@ -61,6 +61,7 @@ pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
         release: false,
         test_mode: true,
         emit_rust: None,
+        target: crate::pipeline::BuildTarget::Native,
     };
     let artifacts = match pipeline::compile_program(&frontend, &options) {
         Ok(artifacts) => artifacts,

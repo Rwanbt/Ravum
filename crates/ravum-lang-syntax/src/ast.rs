@@ -198,6 +198,30 @@ pub enum ItemKind {
     Mod(Module),
     /// Déclaration de module fichier : `mod foo;` (résolue par le loader).
     ModDecl(ModDecl),
+    /// Bloc FFI : `extern "C" { fn f(x: i32) -> i32; }`.
+    ///
+    /// Core 1.0 n'accepte que l'ABI `"C"` et des signatures composées de
+    /// primitives FFI-sûres (entiers, flottants, `bool`, `()`). Les fonctions
+    /// déclarées ne sont appelables que dans un bloc `unsafe` et produisent les
+    /// effets `unsafe` + `ffi`.
+    Extern(ExternBlock),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternBlock {
+    /// Nom de l'ABI (`C` uniquement en Core 1.0).
+    pub abi: Ident,
+    pub fns: Vec<ExternFn>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternFn {
+    pub id: NodeId,
+    pub name: Ident,
+    pub params: Vec<Param>,
+    pub ret: Type,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -537,6 +561,9 @@ pub enum ExprKind {
         body: Block,
     },
     Block(Block),
+    /// `unsafe { ... }` — même sémantique de bloc, mais introduit l'effet
+    /// `unsafe` et autorise l'appel de fonctions `extern`.
+    Unsafe(Block),
     Tuple(Vec<Expr>),
     /// `[a, b, c]`
     Array(Vec<Expr>),

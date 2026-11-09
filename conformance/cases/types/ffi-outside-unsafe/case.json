@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-outside-unsafe",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSAFE-CONTEXT"
+  ],
+  "notes": "An extern function is only callable from an `unsafe { ... }` block; calling it from safe code is refused at the call site."
+}

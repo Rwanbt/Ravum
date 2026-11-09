@@ -7,21 +7,21 @@
 
 ## Jalons et issues canoniques
 
-| Jalon | Issue | Objet | Statut de départ |
+| Jalon | Issue | Objet | Statut (2026-11-09) |
 |---|---|---|---|
-| T0 | [#88](https://github.com/Rwanbt/Ravum/issues/88) | Audit, durcissement P0, baseline reproductible | PARTIAL — baseline 511/0/80 sur `5408d9b`, correctifs P0 en cours |
-| T1 | [#89](https://github.com/Rwanbt/Ravum/issues/89) | Gate M5 : comparaison A/B/C, choix bootstrap | PARTIAL — B en construction, C `NOT_IMPLEMENTED` |
-| T2 | [#90](https://github.com/Rwanbt/Ravum/issues/90) | Spécification candidate Core 1.0 + conformance | PARTIAL — spec DRAFT en rédaction |
-| T3 | [#91](https://github.com/Rwanbt/Ravum/issues/91) | Frontend : lexer, parser, diagnostics, formatter | PARTIAL — lexer vert, parser/formatter en cours |
-| T4 | [#92](https://github.com/Rwanbt/Ravum/issues/92) | Typage, ownership, borrows, effets | PARTIAL |
-| T5 | [#93](https://github.com/Rwanbt/Ravum/issues/93) | Backend natif, ABI, exécution | PARTIAL |
-| T6 | [#94](https://github.com/Rwanbt/Ravum/issues/94) | Runtime, stdlib Core 1.0, FFI | PARTIAL |
-| T7 | [#95](https://github.com/Rwanbt/Ravum/issues/95) | CLI, packages, LSP, outils | PARTIAL |
-| T8 | [#96](https://github.com/Rwanbt/Ravum/issues/96) | Compilation continue, hot reload, collaboration | NOT_RUN (fondations T0) |
-| T9 | [#97](https://github.com/Rwanbt/Ravum/issues/97) | Applications réelles `.rv` | PARTIAL — exemples écrits |
-| T10 | [#98](https://github.com/Rwanbt/Ravum/issues/98) | Conformance, fuzz, sanitizers, audits | NOT_RUN/PARTIAL |
-| T11 | [#99](https://github.com/Rwanbt/Ravum/issues/99) | Performance, supply chain, distribution | NOT_RUN/PARTIAL |
-| T12 | [#100](https://github.com/Rwanbt/Ravum/issues/100) | RC, dogfood, Go/No-Go | NOT_RUN |
+| T0 | [#88](https://github.com/Rwanbt/Ravum/issues/88) | Audit, durcissement P0, baseline reproductible | **PASS** — 4 défauts P0 corrigés (208 tests), workspace final 987/0 |
+| T1 | [#89](https://github.com/Rwanbt/Ravum/issues/89) | Gate M5 : comparaison A/B/C, choix bootstrap | **PARTIAL** — B mesuré (parité MATCH), **C `NOT_IMPLEMENTED`**, décision non ratifiée |
+| T2 | [#90](https://github.com/Rwanbt/Ravum/issues/90) | Spécification candidate Core 1.0 + conformance | **PARTIAL** — spec DRAFT 15 fichiers, conformance 106/107, `features.md` incomplet |
+| T3 | [#91](https://github.com/Rwanbt/Ravum/issues/91) | Frontend : lexer, parser, diagnostics, formatter | **PARTIAL** — 69 tests + fuzz 249 k + Miri PASS ; LSP absent |
+| T4 | [#92](https://github.com/Rwanbt/Ravum/issues/92) | Typage, ownership, borrows, effets | **PARTIAL** — 133 + 85 tests, finding CRITICAL corrigé ; pas d'audit externe |
+| T5 | [#93](https://github.com/Rwanbt/Ravum/issues/93) | Backend natif, ABI, exécution | **PARTIAL** — Windows réel, Linux sur runner CI ; parité debug/release non mesurée |
+| T6 | [#94](https://github.com/Rwanbt/Ravum/issues/94) | Runtime, stdlib Core 1.0, FFI | **PARTIAL** — stdlib + FFI primitive `extern "C"`/`unsafe` ; threads/net/async `UNSUPPORTED` |
+| T7 | [#95](https://github.com/Rwanbt/Ravum/issues/95) | CLI, packages, LSP, outils | **PARTIAL** — CLI complète + `watch` + WASM WASI ; LSP `UNSUPPORTED` |
+| T8 | [#96](https://github.com/Rwanbt/Ravum/issues/96) | Compilation continue, hot reload, collaboration | **PARTIAL** — `watch` = rebuild+restart (pas d'état préservé) ; collaboration non qualifiée |
+| T9 | [#97](https://github.com/Rwanbt/Ravum/issues/97) | Applications réelles `.rv` | **PARTIAL** — 9 verticales exécutées (dont FFI et WASM) ; HTTP/SQLite/GPU absents |
+| T10 | [#98](https://github.com/Rwanbt/Ravum/issues/98) | Conformance, fuzz, sanitizers, audits | **PARTIAL** — fuzz + Miri + 2 audits internes ; **TSan `NOT_RUN`**, audit externe absent |
+| T11 | [#99](https://github.com/Rwanbt/Ravum/issues/99) | Performance, supply chain, distribution | **PARTIAL** — installateur + SBOM + provenance ; pas de signature ni build bit-à-bit |
+| T12 | [#100](https://github.com/Rwanbt/Ravum/issues/100) | RC, dogfood, Go/No-Go | **PARTIAL** — RC interne non publiée ; Go/No-Go humain absent |
 
 ## Documents de référence (à lire dans cet ordre)
 

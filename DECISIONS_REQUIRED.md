@@ -42,15 +42,32 @@
 
 ## D5 — Cibles Tier 1 et qualification Linux
 
-- **Recommandation** : Windows x86-64 = testé localement ; Linux x86-64 =
-  `NOT_RUN` tant qu'aucun runner/CI n'exécute réellement les E2E sur le SHA.
-  Ne pas annoncer Linux Tier 1 sans exécution réelle.
-- **Sans décision** : les gates multi-OS restent `PARTIAL/NOT_RUN`.
+- **Recommandation** : Windows x86-64 = testé localement ; Linux x86-64 = qualifié
+  par un runner GitHub Actions `ubuntu-latest` sur le SHA de la PR (machine
+  indépendante). Le WSL local de la machine de développement est hors service
+  (service non réactif, pas d'admin) : il n'est **pas** une preuve.
+- **Preuves** : `.github/workflows/linux-qual.yml`, artefact
+  `evidence/linux/` après exécution réelle du workflow.
+- **Sans décision** : annoncer Linux Tier 1 seulement si le run CI est vert sur
+  le SHA final ; sinon `PARTIAL/NOT_RUN`.
 
 ## D6 — Périmètre des fonctionnalités universelles (T8-T11)
 
-- Trajectoire : Core 1.0 RC limité au sous-ensemble documenté ; hot reload,
-  WASM/WASI, FFI, threads, GPU/mobile, hard-RT restent `UNSUPPORTED` ou
-  expérimentaux jusqu'à qualification dédiée.
-- **Sans décision** : pas d'extension de promesse ; le langage reste honnête sur
-  ses limites.
+- Trajectoire : Core 1.0 RC limité au sous-ensemble documenté. **FFI minimale**
+  (`extern "C"` + `unsafe { }`, signatures primitives) est désormais supportée et
+  testée ; hot reload et WASM/WASI sont qualifiés séparément ; threads,
+  GPU/mobile, hard-RT restent `UNSUPPORTED`.
+- **Sans décision** : pas d'extension de promesse au-delà de ce qui est prouvé
+  par la conformance et la CI.
+
+## D7 — Ratification de la frontière `unsafe`/FFI
+
+- **Recommandation** : considérer la FFI Core 1.0 comme **expérimentale** tant que
+  (a) l'audit interne du codegen n'est pas revu humainement, (b) aucun audit
+  externe n'a couvert la frontière C, (c) la politique de sûreté mémoire des
+  bibliothèques C appelées n'est pas écrite. Le profil `pure` la refuse déjà.
+- **Preuves** : `docs/architecture/RAVUM-CORE-DESIGN.md` §3.7 bis, tests
+  `crates/ravum-lang-sema/tests/ffi.rs`, cas `conformance/cases/run/ffi-abs`,
+  `cases/types/ffi-bad-type`, `cases/types/ffi-outside-unsafe`.
+- **Sans décision** : FFI utilisable en interne, jamais présentée comme certifiée
+  mémoire, jamais dans un profil `pure`/`rt`.

@@ -11,6 +11,7 @@ pub mod lint;
 pub mod lsp;
 pub mod run;
 pub mod test;
+pub mod watch;
 
 use crate::args::Command;
 
@@ -28,8 +29,15 @@ pub fn dispatch(command: Command) -> i32 {
             release,
             emit_rust,
             emit_ir,
-        } => build::run(&path, release, emit_rust, emit_ir),
-        Command::Run { path, args } => run::run(&path, &args),
+            target,
+        } => build::run(&path, release, emit_rust, emit_ir, target),
+        Command::Run { path, args, target } => run::run(&path, &args, target),
+        Command::Watch {
+            path,
+            run,
+            release,
+            max_rebuilds,
+        } => watch::run(&path, run, release, max_rebuilds),
         Command::Test { path, filter, json } => test::run(&path, filter.as_deref(), json),
         Command::Fmt { path, check } => fmt::run(&path, check),
         Command::Lint { path, deny } => lint::run(&path, &deny),

@@ -36,10 +36,10 @@ use ravum_lang_sema::facts::{
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
-    Block, EnumItem, Expr, ExprKind, FloatTy, FnItem, GenericParam, Ident, ImplItem, IntTy, Item,
-    ItemKind, LitPat, MatchArm, Module, NodeId, ParamKind, Pat, PatKind, Path, PathRoot, Receiver,
-    Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp, VariantDefFields,
-    VariantPatFields,
+    Block, EnumItem, Expr, ExprKind, ExternBlock, FloatTy, FnItem, GenericParam, Ident, ImplItem,
+    IntTy, Item, ItemKind, LitPat, MatchArm, Module, NodeId, ParamKind, Pat, PatKind, Path,
+    PathRoot, Receiver, Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp,
+    VariantDefFields, VariantPatFields,
 };
 use ravum_lang_syntax::span::Span;
 use std::collections::{BTreeMap, BTreeSet};
@@ -51,6 +51,37 @@ const GENERATED_MAIN: &str = "rv_user_main";
 fn err(message: impl Into<String>) -> CodegenError {
     CodegenError {
         message: message.into(),
+    }
+}
+
+/// Types the backend accepts at the C ABI boundary in Core 1.0, checked on the
+/// syntax tree so a hand-built `CheckedProgram` cannot smuggle an ABI-unsafe
+/// signature into the output.
+fn ast_ffi_safe(ty: &AstType) -> bool {
+    match &ty.kind {
+        TypeKind::Unit => true,
+        TypeKind::Path(path) => {
+            path.segments.len() == 1
+                && path.segments[0].args.is_empty()
+                && matches!(
+                    path.segments[0].name.name.as_str(),
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "isize"
+                        | "usize"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                )
+        }
+        _ => false,
     }
 }
 
@@ -401,7 +432,7 @@ impl Index {
                     let child_rust = format!("{rust_path}::rvm_{}", sanitize_segment(&name));
                     self.walk_module(checked, inner, &child_ravum, &child_rust, raws);
                 }
-                ItemKind::Use(_) | ItemKind::ModDecl(_) => {}
+                ItemKind::Use(_) | ItemKind::ModDecl(_) | ItemKind::Extern(_) => {}
             }
         }
     }
@@ -903,8 +934,17 @@ impl<'a> Emitter<'a> {
         if let Some(first) = self.checked.files.first() {
             buf.line(&format!("// rv source: {}", first.path));
         }
-        buf.line("#![allow(dead_code, unused_variables, unused_mut, unused_assignments, unused_imports, unused_parens, unused_braces, unused_labels, unused_must_use, unused_comparisons, non_snake_case, non_camel_case_types, non_upper_case_globals, unreachable_code, unreachable_patterns)]");
-        buf.line("#![forbid(unsafe_code)]");
+        buf.line("#![allow(dead_code, unused_variables, unused_mut, unused_assignments, unused_imports, unused_parens, unused_braces, unused_labels, unused_must_use, unused_comparisons, non_snake_case, non_camel_case_types, non_upper_case_globals, unreachable_code, unreachable_patterns, arithmetic_overflow, unconditional_panic)]");
+        if self.program_uses_extern() {
+            // FFI programs need `unsafe` for the generated extern wrappers only.
+            // `deny` (not `allow`) keeps the guarantee "zero unsafe outside the
+            // generated wrappers": each wrapper carries a local
+            // `#[allow(unsafe_code)]`, and any other `unsafe` would fail the
+            // build. A program without `extern` keeps `forbid`.
+            buf.line("#![deny(unsafe_code)]");
+        } else {
+            buf.line("#![forbid(unsafe_code)]");
+        }
         buf.blank();
         buf.raw(PRELUDE);
         buf.blank();
@@ -1024,6 +1064,97 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    /// `true` when the program declares at least one `extern "C"` block. Such a
+    /// program needs the generated wrappers' `unsafe` block, so the file-level
+    /// `forbid(unsafe_code)` is relaxed to `allow(unsafe_code)`; the generator
+    /// still never copies `unsafe` from Ravum source.
+    fn program_uses_extern(&self) -> bool {
+        fn scan(module: &Module) -> bool {
+            module.items.iter().any(|item| match &item.kind {
+                ItemKind::Extern(_) => true,
+                ItemKind::Mod(inner) => scan(inner),
+                _ => false,
+            })
+        }
+        scan(&self.checked.program.root)
+    }
+
+    /// Emits one `extern "C"` declaration plus a safe wrapper per function.
+    ///
+    /// The wrapper is the only place where generated code uses `unsafe`; Ravum
+    /// call sites go through the wrapper and remain safe Rust. `link_name`
+    /// binds the Ravum declaration to the real C symbol, while the Rust-side
+    /// identifier is derived from the node id to avoid collisions.
+    fn emit_extern_block(&self, buf: &mut Buf, block: &ExternBlock) -> Result<(), CodegenError> {
+        for f in &block.fns {
+            let symbol = self
+                .facts()
+                .extern_symbols
+                .get(&f.id)
+                .ok_or_else(|| err(format!("missing extern symbol for node {}", f.id)))?;
+            // Defence in depth: the checker already rejects non-FFI-safe
+            // signatures (`E-FFI-TYPE`), but the generator must never emit an
+            // ABI-unsafe declaration even when it is driven from a hand-built
+            // `CheckedProgram` (audit finding F0b).
+            let mut decls = Vec::new();
+            let mut args = Vec::new();
+            for param in &f.params {
+                match &param.kind {
+                    ParamKind::Binding { name, ty } => {
+                        if !ast_ffi_safe(ty) {
+                            return Err(err(format!(
+                                "extern function `{}` parameter `{}` has a non-FFI-safe type",
+                                f.name.name, name.name
+                            )));
+                        }
+                        let name = mangle_ident(&name.name);
+                        decls.push(format!("{name}: {}", self.type_node(ty)?));
+                        args.push(name);
+                    }
+                    ParamKind::Receiver(_) => {
+                        return Err(err(format!(
+                            "`self` is not allowed in an extern function (node {})",
+                            f.id
+                        )));
+                    }
+                }
+            }
+            if !ast_ffi_safe(&f.ret) {
+                return Err(err(format!(
+                    "extern function `{}` returns a non-FFI-safe type",
+                    f.name.name
+                )));
+            }
+            let ret = self.type_node(&f.ret)?;
+            let ret_suffix = if ret == "()" {
+                String::new()
+            } else {
+                format!(" -> {ret}")
+            };
+            let params = decls.join(", ");
+            buf.line("extern \"C\" {");
+            buf.indent += 1;
+            buf.line(&format!("#[link_name = {}]", string_literal(symbol)));
+            buf.line(&format!("fn rvm_ffi_{}({params}){ret_suffix};", f.id));
+            buf.indent -= 1;
+            buf.line("}");
+            buf.line("#[allow(unsafe_code)]");
+            buf.line(&format!(
+                "pub fn rvm_ffi_wrap_{}({params}){ret_suffix} {{",
+                f.id
+            ));
+            buf.indent += 1;
+            buf.line(&format!(
+                "unsafe {{ rvm_ffi_{}({}) }}",
+                f.id,
+                args.join(", ")
+            ));
+            buf.indent -= 1;
+            buf.line("}");
+        }
+        Ok(())
+    }
+
     fn emit_item(&self, buf: &mut Buf, item: &Item) -> Result<(), CodegenError> {
         match &item.kind {
             ItemKind::Fn(fun) => self.emit_fn(buf, item, fun),
@@ -1032,6 +1163,7 @@ impl<'a> Emitter<'a> {
             ItemKind::Impl(implementation) => self.emit_impl(buf, implementation),
             ItemKind::Const(constant) => self.emit_const(buf, item, constant),
             ItemKind::Mod(module) => self.emit_module(buf, module),
+            ItemKind::Extern(block) => self.emit_extern_block(buf, block),
             ItemKind::Use(_) => Ok(()),
             ItemKind::ModDecl(declaration) => Err(err(format!(
                 "unresolved `mod {};` declaration: the loader must expand file modules before code generation",
@@ -1442,6 +1574,7 @@ impl<'a> Emitter<'a> {
                 self.block_text(indent, body)?
             )),
             ExprKind::Block(block) => self.block_text(indent, block),
+            ExprKind::Unsafe(block) => self.block_text(indent, block),
             ExprKind::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
@@ -3692,6 +3825,74 @@ mod tests {
                 "example `{name}` exit code mismatch (stderr: {stderr})"
             );
         }
+    }
+
+    /// End-to-end FFI: `extern "C"` declaration, `unsafe { ... }` call, real
+    /// C runtime symbol, generated extern wrapper compiled by rustc.
+    #[test]
+    fn e2e_extern_ffi_compiles_and_runs() {
+        if !rustc_available() {
+            eprintln!("SKIP e2e_extern_ffi_compiles_and_runs: rustc not available");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("ravum-ffi-e2e-{}", std::process::id()));
+        let src = dir.join("src");
+        std::fs::create_dir_all(&src).expect("cannot create FFI test package");
+        std::fs::write(
+            dir.join("ravum.toml"),
+            "[package]\nname = \"ffi-abs\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+        )
+        .expect("cannot write manifest");
+        std::fs::write(
+            src.join("main.rv"),
+            r#"use std::io;
+
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+
+fn main() {
+    let value = unsafe { abs(-9) };
+    io::println(&value.to_string());
+}
+"#,
+        )
+        .expect("cannot write source");
+
+        let loaded = ravum_lang_sema::load_package(&dir);
+        assert!(
+            loaded.diags.is_empty(),
+            "loader diagnostics:\n{}",
+            loaded.diags.render(&loaded.sources)
+        );
+        let program = loaded.program.expect("no program for the FFI package");
+        let options = ravum_lang_sema::facts::CheckOptions::default();
+        let checked = ravum_lang_sema::check(&program, &loaded.sources, &options);
+        assert!(
+            checked.diags.is_empty(),
+            "checker diagnostics:\n{}",
+            checked.diags.render(&loaded.sources)
+        );
+        let checked = checked.checked.expect("no CheckedProgram");
+        let code = generate_ok(&checked, &GenOptions::default());
+        assert!(
+            code.contains("#![deny(unsafe_code)]"),
+            "FFI programs must keep `deny(unsafe_code)` at crate level:\n{code}"
+        );
+        assert!(
+            code.contains("#[allow(unsafe_code)]"),
+            "the generated wrapper must carry the only local `allow(unsafe_code)`:\n{code}"
+        );
+        assert!(
+            code.contains("unsafe { rvm_ffi_"),
+            "the generated extern wrapper must contain the unsafe call:\n{code}"
+        );
+
+        let binary = compile(&code, "ffi-abs");
+        let (stdout, stderr, status) = run(&binary);
+        assert_eq!(stdout, "9\n", "stderr: {stderr}\n--- generated ---\n{code}");
+        assert_eq!(status, 0, "stderr: {stderr}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // -- program E: broad language surface, compiled and executed -----------

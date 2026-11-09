@@ -23,8 +23,9 @@ The binary is `target/debug/ravum-lang` (`ravum-lang.exe` on Windows). It uses
 | `doctor [--json]` | implemented; probes parser/checker/codegen and prints ready/pending/error |
 | `init <dir> [--lib] [--force]` | implemented |
 | `check [PATH] [--json] [--profile core\|pure\|rt] [--locked]` | implemented |
-| `build [PATH] [--release] [--emit-rust FILE] [--emit-ir]` | implemented (needs `rustc`) |
-| `run [PATH] [-- ARGS...]` | implemented (needs `rustc`) |
+| `build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]` | implemented (needs `rustc`) |
+| `run [PATH] [--target TRIPLE] [-- ARGS...]` | implemented (needs `rustc`; `wasm32-wasip1` needs Node.js) |
+| `watch [PATH] [--run] [--release]` (alias `dev`) | implemented; polling restart loop (see `docs/CLI-WATCH-WASM.md`) |
 | `test [PATH] [--filter S] [--json]` | implemented (needs `rustc`) |
 | `fmt [PATH] [--check]` | implemented |
 | `lint [PATH] [--deny CODE]...` | implemented; reports checker warnings (`W-*`) only |
@@ -238,6 +239,10 @@ digest, `MAX_LOCKFILE_SIZE = 1 MiB`. Non-UTF-8 sources are `E-IO-INVALID-UTF8`.
   are printed unchanged and exit 1. A missing `rustc` exits 3.
 * `--emit-ir` prints a readable dump of the checked facts (functions, types,
   effects, constants, dependencies). It is explicitly **not** a stable IR.
+* `--target wasm32-wasip1` (build/run) writes `.ravum/bin/<name>.wasm` and runs
+  it through a generated Node.js WASI preview1 launcher; see
+  `docs/CLI-WATCH-WASM.md` for prerequisites and limits (no preopened host
+  directory, no threads/FFI, Node.js 22+).
 * `run` executes from the package root and forwards args (after `--`), stdin,
   stdout, stderr and the exit code.
 * `test` forwards `--filter <S>` to the generated runner, parses
@@ -287,3 +292,6 @@ of hello, `test` runner pass/fail parsing, `fmt --check` idempotence, `doc`,
 No test is ignored: every test exercises the real binary. `check_warnings_do_not_fail`
 uses the documented `W-RES-UNUSED-IMPORT` warning (exit 0) and
 `lint_deny_turns_warning_into_error` verifies `--deny CODE`/`--deny all` exit 1.
+Watch tests read stdout through bounded channels/timeouts (rebuild, failure
+recovery, child reaping); WASM tests skip explicitly when the `wasm32-wasip1`
+rustc target or Node.js is missing. Current total: 14 unit + 43 integration.

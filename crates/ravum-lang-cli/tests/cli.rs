@@ -1,14 +1,19 @@
 //! End-to-end tests for the `ravum-lang` binary.
 //!
-//! Tests that depend on a frontend stage still owned by another worker are
-//! marked `#[ignore = "waiting for ..."]` with the exact blocker; they are
-//! real tests, never fake passes.
+//! Every test exercises the real binary; watch tests read the child output
+//! through a bounded channel (timeouts, no fixed-sleep-only assertions) and
+//! WASM tests skip explicitly when the `wasm32-wasip1` rustc target or Node.js
+//! is unavailable.
 
 use serde_json::Value;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
+use std::time::{Duration, Instant};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -170,7 +175,7 @@ fn version_and_help_are_stable() {
     assert!(output.status.success());
     let text = stdout(&output);
     for command in [
-        "init", "check", "build", "run", "test", "fmt", "lint", "doc", "cache", "doctor",
+        "init", "check", "build", "run", "watch", "test", "fmt", "lint", "doc", "cache", "doctor",
     ] {
         assert!(text.contains(command), "help must mention `{command}`");
     }
@@ -961,4 +966,429 @@ fn lsp_is_explicitly_unsupported() {
     assert_json_envelope(&value, "lsp");
     assert_eq!(value["success"], false);
     assert_eq!(value["summary"]["status"], "UNSUPPORTED");
+}
+
+// ---------------------------------------------------------------------------
+// watch / dev (polling, restart, failure recovery, no leaked child)
+// ---------------------------------------------------------------------------
+
+/// Kills the watched process if a test panics or times out.
+struct WatchChild {
+    child: Option<Child>,
+}
+
+impl WatchChild {
+    fn wait_exit(&mut self, timeout: Duration) -> Option<i32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(child) = self.child.as_mut() {
+                match child.try_wait().expect("try_wait on watch") {
+                    Some(status) => {
+                        self.child.take();
+                        return status.code();
+                    }
+                    None => {}
+                }
+            } else {
+                return None;
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+impl Drop for WatchChild {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+fn spawn_watch(dir: &Path, args: &[&str]) -> (WatchChild, Receiver<String>) {
+    let mut child = Command::new(binary())
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn ravum-lang watch");
+    let stdout = child.stdout.take().expect("watch stdout");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    (WatchChild { child: Some(child) }, receiver)
+}
+
+fn wait_watch_line(
+    receiver: &Receiver<String>,
+    what: &str,
+    timeout: Duration,
+    predicate: impl Fn(&str) -> bool,
+) -> String {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            panic!("timeout waiting for watch output: {what}");
+        }
+        match receiver.recv_timeout(remaining) {
+            Ok(line) => {
+                if predicate(&line) {
+                    return line;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                panic!("timeout waiting for watch output: {what}")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("watch output closed before: {what}")
+            }
+        }
+    }
+}
+
+fn watch_timeout() -> Duration {
+    Duration::from_secs(20)
+}
+
+#[test]
+fn watch_rebuilds_on_source_change_and_restarts_child() {
+    let temp = TempDir::new("watch-rebuild");
+    let package = temp.path().join("app");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    fs::write(
+        package.join("src/main.rv"),
+        "use std::io;\nfn main() {\n    io::println(\"v1\");\n}\n",
+    )
+    .unwrap();
+
+    let (mut watch, receiver) =
+        spawn_watch(&package, &["watch", ".", "--run", "--max-rebuilds", "1"]);
+    wait_watch_line(&receiver, "watching", watch_timeout(), |line| {
+        line.contains("[ravum] watching")
+    });
+    wait_watch_line(&receiver, "initial build ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+    wait_watch_line(&receiver, "v1 output", watch_timeout(), |line| line == "v1");
+
+    fs::write(
+        package.join("src/main.rv"),
+        "use std::io;\nfn main() {\n    io::println(\"v2\");\n}\n",
+    )
+    .unwrap();
+    wait_watch_line(&receiver, "change detected", watch_timeout(), |line| {
+        line.contains("[ravum] change detected")
+    });
+    wait_watch_line(&receiver, "rebuild ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+    wait_watch_line(&receiver, "v2 output", watch_timeout(), |line| line == "v2");
+
+    assert_eq!(
+        watch.wait_exit(watch_timeout()),
+        Some(0),
+        "watch must exit 0 after --max-rebuilds"
+    );
+}
+
+#[test]
+fn watch_continues_after_compile_failure() {
+    let temp = TempDir::new("watch-failure");
+    let package = temp.path().join("app");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    fs::write(
+        package.join("src/main.rv"),
+        "use std::io;\nfn main() {\n    io::println(\"ok\");\n}\n",
+    )
+    .unwrap();
+
+    let (mut watch, receiver) = spawn_watch(&package, &["dev", ".", "--max-rebuilds", "2"]);
+    wait_watch_line(&receiver, "watching", watch_timeout(), |line| {
+        line.contains("[ravum] watching")
+    });
+    wait_watch_line(&receiver, "initial build ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+
+    fs::write(package.join("src/main.rv"), "fn main( {\n").unwrap();
+    wait_watch_line(&receiver, "change detected", watch_timeout(), |line| {
+        line.contains("[ravum] change detected")
+    });
+    wait_watch_line(&receiver, "build failed", watch_timeout(), |line| {
+        line.contains("[ravum] build failed (exit 1)")
+    });
+
+    fs::write(
+        package.join("src/main.rv"),
+        "use std::io;\nfn main() {\n    io::println(\"fixed\");\n}\n",
+    )
+    .unwrap();
+    wait_watch_line(&receiver, "second change", watch_timeout(), |line| {
+        line.contains("[ravum] change detected")
+    });
+    wait_watch_line(&receiver, "recovery build ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+
+    assert_eq!(watch.wait_exit(watch_timeout()), Some(0));
+}
+
+#[test]
+fn watch_reaps_the_child_process() {
+    let temp = TempDir::new("watch-reap");
+    let package = temp.path().join("loopapp");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    let busy = "fn main() {\n    loop {\n    }\n}\n";
+    fs::write(package.join("src/main.rv"), busy).unwrap();
+
+    let (mut watch, receiver) =
+        spawn_watch(&package, &["watch", ".", "--run", "--max-rebuilds", "1"]);
+    wait_watch_line(&receiver, "watching", watch_timeout(), |line| {
+        line.contains("[ravum] watching")
+    });
+    wait_watch_line(&receiver, "initial build ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+    wait_watch_line(&receiver, "child spawn", watch_timeout(), |line| {
+        line.contains("[ravum] running")
+    });
+
+    fs::write(
+        package.join("src/main.rv"),
+        "fn main() {\n    loop {\n    }\n}\n// touched\n",
+    )
+    .unwrap();
+    wait_watch_line(&receiver, "change detected", watch_timeout(), |line| {
+        line.contains("[ravum] change detected")
+    });
+    wait_watch_line(&receiver, "rebuild ok", watch_timeout(), |line| {
+        line == "[ravum] build ok"
+    });
+    assert_eq!(watch.wait_exit(watch_timeout()), Some(0));
+
+    // On Windows a still-running child keeps the executable locked, so a
+    // successful removal proves the process tree was reaped.
+    let bin_dir = package.join(".ravum/bin");
+    let executable = fs::read_dir(&bin_dir)
+        .expect("cache bin dir")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().and_then(|ext| ext.to_str()) != Some("cjs"))
+        .expect("built executable");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match fs::remove_file(&executable) {
+            Ok(()) => break,
+            Err(error) => {
+                if Instant::now() >= deadline {
+                    panic!(
+                        "executable is still locked after watch exit (leaked child?): \
+                         {} ({error})",
+                        executable.display()
+                    );
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WASM target (wasm32-wasip1 via Node.js WASI preview1)
+// ---------------------------------------------------------------------------
+
+fn rustc_wasm_ready() -> bool {
+    let rustc = std::env::var("RAVUM_RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let output = Command::new(rustc).args(["--print", "sysroot"]).output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let sysroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Path::new(&sysroot)
+                .join("lib/rustlib/wasm32-wasip1/lib")
+                .is_dir()
+        }
+        _ => false,
+    }
+}
+
+fn node_ready() -> bool {
+    let node = std::env::var("RAVUM_NODE").unwrap_or_else(|_| "node".to_string());
+    Command::new(node)
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+#[test]
+fn wasm_build_and_run_hello() {
+    if !rustc_wasm_ready() {
+        eprintln!("SKIP: rustc target wasm32-wasip1 is not installed");
+        return;
+    }
+    if !node_ready() {
+        eprintln!("SKIP: Node.js is not available");
+        return;
+    }
+    let temp = TempDir::new("wasm-hello");
+    let package = temp.path().join("hello");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+
+    let output = run(&[
+        "build",
+        package.to_str().unwrap(),
+        "--target",
+        "wasm32-wasip1",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}\nstdout: {}",
+        stderr(&output),
+        stdout(&output)
+    );
+    let wasm = package.join(".ravum/bin/hello.wasm");
+    assert!(wasm.is_file(), "missing {}", wasm.display());
+    let bytes = fs::read(&wasm).expect("read wasm");
+    assert_eq!(&bytes[..4], b"\0asm", "not a WebAssembly module");
+
+    let output = run(&[
+        "run",
+        package.to_str().unwrap(),
+        "--target",
+        "wasm32-wasip1",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}\nstdout: {}",
+        stderr(&output),
+        stdout(&output)
+    );
+    assert!(stdout(&output).contains("hello, ravum"));
+}
+
+#[test]
+fn wasm_run_fib_example() {
+    if !rustc_wasm_ready() || !node_ready() {
+        eprintln!("SKIP: wasm32-wasip1 rustc target or Node.js is unavailable");
+        return;
+    }
+    let fib = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/fib");
+    if !fib.join("ravum.toml").is_file() {
+        eprintln!("SKIP: examples/fib is not present");
+        return;
+    }
+    let output = run(&["run", fib.to_str().unwrap(), "--target", "wasm32-wasip1"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}\nstdout: {}",
+        stderr(&output),
+        stdout(&output)
+    );
+    assert!(stdout(&output).contains("55"));
+}
+
+#[test]
+fn wasm_forwards_arguments() {
+    if !rustc_wasm_ready() || !node_ready() {
+        eprintln!("SKIP: wasm32-wasip1 rustc target or Node.js is unavailable");
+        return;
+    }
+    let calculator = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/calculator");
+    if !calculator.join("ravum.toml").is_file() {
+        eprintln!("SKIP: examples/calculator is not present");
+        return;
+    }
+    let output = run(&[
+        "run",
+        calculator.to_str().unwrap(),
+        "--target",
+        "wasm32-wasip1",
+        "--",
+        "5",
+        "+",
+        "3",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}\nstdout: {}",
+        stderr(&output),
+        stdout(&output)
+    );
+    assert!(stdout(&output).contains('8'));
+}
+
+#[test]
+fn wasm_forwards_exit_code_and_stderr() {
+    if !rustc_wasm_ready() || !node_ready() {
+        eprintln!("SKIP: wasm32-wasip1 rustc target or Node.js is unavailable");
+        return;
+    }
+    let temp = TempDir::new("wasm-exit");
+    let package = temp.path().join("failing");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    fs::write(
+        package.join("src/main.rv"),
+        "fn main() -> Result<(), Error> {\n    return Err(Error::new(\"boom\"));\n}\n",
+    )
+    .unwrap();
+    let output = run(&[
+        "run",
+        package.to_str().unwrap(),
+        "--target",
+        "wasm32-wasip1",
+    ]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("error: boom"));
+}
+
+#[test]
+fn wasm_unknown_target_is_usage_error() {
+    let temp = TempDir::new("wasm-target");
+    let package = temp.path().join("hello");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    let output = run(&[
+        "build",
+        package.to_str().unwrap(),
+        "--target",
+        "x86_64-unknown-none",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("unknown target"));
+
+    let output = run(&["run", package.to_str().unwrap(), "--target", "wasm32-wasi"]);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn wasm_missing_node_reports_runtime_error() {
+    let temp = TempDir::new("wasm-node");
+    let package = temp.path().join("hello");
+    assert!(run(&["init", package.to_str().unwrap()]).status.success());
+    let output = Command::new(binary())
+        .args([
+            "run",
+            package.to_str().unwrap(),
+            "--target",
+            "wasm32-wasip1",
+        ])
+        .env("RAVUM_NODE", "ravum-node-that-does-not-exist-xyz")
+        .output()
+        .expect("run ravum-lang");
+    assert_eq!(output.status.code(), Some(3));
+    assert!(
+        stderr(&output).contains("E-CLI-WASM-RUNTIME"),
+        "stderr: {}",
+        stderr(&output)
+    );
 }

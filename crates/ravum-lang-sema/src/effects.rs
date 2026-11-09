@@ -218,7 +218,23 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
     match &expr.kind {
         ExprKind::Call { callee, args } => {
             match facts.calls.get(&expr.id) {
-                Some(crate::facts::CallTarget::UserFn { item }) => out.edges.push(*item),
+                Some(crate::facts::CallTarget::UserFn { item }) => {
+                    if facts
+                        .fn_sigs
+                        .get(item)
+                        .map(|signature| signature.is_extern)
+                        .unwrap_or(false)
+                    {
+                        out.direct.insert(Effect::Ffi);
+                        out.sources
+                            .push((Effect::Ffi, format!("extern call (item #{item})")));
+                        out.direct.insert(Effect::Unsafe);
+                        out.sources
+                            .push((Effect::Unsafe, format!("extern call (item #{item})")));
+                    } else {
+                        out.edges.push(*item);
+                    }
+                }
                 Some(crate::facts::CallTarget::BuiltinFn { path }) => add_builtin_path(path, out),
                 Some(crate::facts::CallTarget::VariantCtor { .. })
                 | Some(crate::facts::CallTarget::Error)
@@ -284,6 +300,12 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             walk_block(body, facts, out);
         }
         ExprKind::Block(block) => walk_block(block, facts, out),
+        ExprKind::Unsafe(block) => {
+            out.direct.insert(Effect::Unsafe);
+            out.sources
+                .push((Effect::Unsafe, "unsafe block".to_string()));
+            walk_block(block, facts, out);
+        }
         ExprKind::Tuple(items) | ExprKind::Array(items) => {
             for item in items {
                 walk_expr(item, facts, out);

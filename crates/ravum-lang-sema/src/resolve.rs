@@ -181,6 +181,8 @@ pub(crate) struct World<'a> {
     pub modules: Vec<ModuleInfo>,
     pub module_asts: Vec<&'a Module>,
     pub fns: BTreeMap<NodeId, &'a FnItem>,
+    /// Fonctions déclarées dans un bloc `extern "C" { ... }` (sans corps).
+    pub extern_fns: BTreeMap<NodeId, &'a ast::ExternFn>,
     pub structs: BTreeMap<NodeId, &'a StructItem>,
     pub enums: BTreeMap<NodeId, &'a EnumItem>,
     pub consts: BTreeMap<NodeId, &'a ConstItem>,
@@ -203,6 +205,7 @@ impl<'a> World<'a> {
             modules: Vec::new(),
             module_asts: Vec::new(),
             fns: BTreeMap::new(),
+            extern_fns: BTreeMap::new(),
             structs: BTreeMap::new(),
             enums: BTreeMap::new(),
             consts: BTreeMap::new(),
@@ -322,6 +325,13 @@ impl<'a> World<'a> {
                 }
                 ItemKind::Impl(imp) => {
                     self.impl_items.push((id, item, imp));
+                }
+                ItemKind::Extern(block) => {
+                    for f in &block.fns {
+                        self.item_module.insert(f.id, id);
+                        self.extern_fns.insert(f.id, f);
+                        self.register(id, Ns::Value, &f.name.name, Sym::Fn(f.id), item.vis, f.span);
+                    }
                 }
                 ItemKind::Use(u) => {
                     self.use_items.push((id, item, u));
@@ -1426,6 +1436,9 @@ fn resolve_headers(world: &mut World, facts: &mut Facts, diags: &mut DiagnosticB
                             HeaderCtx::new(world, facts, diags, *module, Vec::new(), None);
                         ctx.resolve_type(&c.ty);
                     }
+                    ItemKind::Extern(block) => {
+                        resolve_extern_block(world, facts, diags, *module, block);
+                    }
                     ItemKind::Impl(_)
                     | ItemKind::Use(_)
                     | ItemKind::Mod(_)
@@ -1648,9 +1661,120 @@ fn resolve_fn_header(
         declared_effects,
         is_test: f.is_test,
         is_unsafe: false,
+        is_extern: false,
     };
     facts.fn_sigs.insert(item.id, sig.clone());
     sig
+}
+
+/// Résout un bloc `extern "C" { ... }` : signatures, effets et contrôle des
+/// types FFI. Les fonctions externes n'ont pas de corps Ravum ; le codegen
+/// émet une déclaration `extern "C"` plus un wrapper sûr, et le checker exige
+/// un bloc `unsafe` à chaque appel.
+fn resolve_extern_block(
+    world: &World,
+    facts: &mut Facts,
+    diags: &mut DiagnosticBag,
+    module: ModuleId,
+    block: &ast::ExternBlock,
+) {
+    for f in &block.fns {
+        let (params, ret) = {
+            let mut ctx = HeaderCtx::new(world, facts, diags, module, Vec::new(), None);
+            let mut params: Vec<ParamSig> = Vec::with_capacity(f.params.len());
+            for param in &f.params {
+                match &param.kind {
+                    ast::ParamKind::Receiver(_) => {
+                        ctx.error(
+                            "E-RES-SELF",
+                            param.span,
+                            "`self` is not allowed in an `extern` function declaration".to_string(),
+                        );
+                    }
+                    ast::ParamKind::Binding { name, ty } => {
+                        if params.iter().any(|p| p.name == name.name) {
+                            ctx.error(
+                                "E-RES-DUPLICATE",
+                                name.span,
+                                format!("duplicate parameter `{}`", name.name),
+                            );
+                        }
+                        let resolved = ctx.resolve_type(ty);
+                        if !ffi_safe(&resolved) {
+                            ctx.error(
+                                "E-FFI-TYPE",
+                                ty.span,
+                                format!(
+                                    "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be integers, floats, `bool` or `()`",
+                                    resolved.display()
+                                ),
+                            );
+                        }
+                        params.push(ParamSig {
+                            name: name.name.clone(),
+                            ty: resolved,
+                            is_receiver: false,
+                        });
+                    }
+                }
+            }
+            let ret = ctx.resolve_type(&f.ret);
+            if !ffi_safe(&ret) {
+                ctx.error(
+                    "E-FFI-TYPE",
+                    f.ret.span,
+                    format!(
+                        "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be integers, floats, `bool` or `()`",
+                        ret.display()
+                    ),
+                );
+            }
+            (params, ret)
+        };
+        let rust_path = format!("crate::rvm_ffi_wrap_{}", f.id);
+        facts.item_paths.insert(f.id, rust_path.clone());
+        facts.extern_symbols.insert(f.id, f.name.name.clone());
+        let sig = FnSig {
+            item: f.id,
+            rust_path,
+            name: f.name.name.clone(),
+            generics: Vec::new(),
+            params,
+            ret,
+            receiver: None,
+            effects: EffectSet::new([Effect::Unsafe, Effect::Ffi]),
+            declared_effects: None,
+            is_test: false,
+            is_unsafe: true,
+            is_extern: true,
+        };
+        facts.fn_sigs.insert(f.id, sig);
+    }
+}
+
+/// Types acceptés à la frontière FFI en Core 1.0. Volontairement restrictif :
+/// pas de références, pas de `String`/`Vec`, pas de types nominaux, pas de
+/// `char` (largeur C non portable).
+fn ffi_safe(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::Isize
+            | Type::Usize
+            | Type::F32
+            | Type::F64
+            | Type::Bool
+            | Type::Unit
+    )
 }
 
 fn resolve_struct(

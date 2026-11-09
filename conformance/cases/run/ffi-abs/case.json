@@ -1,0 +1,6 @@
+{
+  "id": "run/ffi-abs",
+  "mode": "run-pass",
+  "stdout_contains": "7\n",
+  "notes": "extern \"C\" declaration + call inside unsafe; links the host C runtime `abs`. Core 1.0 FFI surface: numeric signatures only, unsafe context required."
+}

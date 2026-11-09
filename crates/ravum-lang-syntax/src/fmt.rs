@@ -532,6 +532,16 @@ impl<'a> Formatter<'a> {
     }
 
     fn space_between(&self, p: usize, c: usize) -> bool {
+        // Never let two `&` tokens merge into the `&&` operator: `& &str` is a
+        // valid type (reference to a reference) while `&&str` is a different
+        // token stream and breaks idempotence (fuzz finding FZ-1).
+        if matches!(
+            (&self.tokens[p].kind, &self.tokens[c].kind),
+            (TokenKind::Punct(Punct::Amp), TokenKind::Punct(Punct::Amp))
+                | (TokenKind::Punct(Punct::Pipe), TokenKind::Punct(Punct::Pipe))
+        ) {
+            return true;
+        }
         // Rule 1: a previous token that glues to what follows.
         match &self.tokens[p].kind {
             TokenKind::Punct(
@@ -633,7 +643,10 @@ impl<'a> Formatter<'a> {
 
     fn emit_comment(&mut self, text: &str) {
         if text.starts_with("//") {
-            let text = text.trim_end_matches('\r');
+            // Strip trailing horizontal whitespace *including* a CR before a
+            // space (`//x\r `): otherwise the first pass keeps the CR, the
+            // second pass trims it, and `fmt(fmt(x)) != fmt(x)` (FZ-2).
+            let text = text.trim_end_matches([' ', '\t', '\r']);
             if !self.line_empty {
                 self.newline();
             }
@@ -954,6 +967,32 @@ mod tests {
         assert_eq!(once, twice, "formatting is not idempotent for {src:?}");
         assert_meaning_preserved(src, &once);
         once
+    }
+
+    #[test]
+    fn consecutive_amp_tokens_are_not_merged() {
+        // Fuzz finding FZ-1: `& &str` must stay `& &str`, never `&&str`.
+        let src = "fn log(s:& &str) effects() { }\n";
+        let once = fmt(src);
+        assert!(
+            once.contains("& &str"),
+            "formatter merged two `&` tokens into `&&`: {once:?}"
+        );
+        let twice = fmt(&once);
+        assert_eq!(once, twice, "formatting is not idempotent");
+    }
+
+    #[test]
+    fn line_comment_with_trailing_cr_is_idempotent() {
+        // Fuzz finding FZ-2: `//<$a\r ` must normalize in one pass.
+        let src = "//<$a\r \n";
+        let once = fmt(src);
+        assert!(
+            !once.contains('\r'),
+            "formatter kept a CR in the line comment: {once:?}"
+        );
+        let twice = fmt(&once);
+        assert_eq!(once, twice, "formatting is not idempotent");
     }
 
     #[test]

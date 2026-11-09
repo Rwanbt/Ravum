@@ -18,7 +18,7 @@
 | `Pass` / `Fail` | cas attendus : `pass` = programme accepté et résultat attendu ; `fail` = diagnostic attendu |
 | `Backend` | `B` = voie B (`rustc` généré, design §1) ; `—` = non supporté |
 | `Statut` | `candidate-stable` \| `experimental` \| `unsupported` |
-| `Conformance` | présence **réelle** d'un cas dans `conformance/cases/` (le corpus existe : **95 cas**, worker qa). La présence d'un cas n'est **pas** un `PASS` : le statut d'exécution est tenu par `ravum-conformance run`. |
+| `Conformance` | présence **réelle** d'un cas dans `conformance/cases/` (le corpus existe : **106 cas**, worker qa). La présence d'un cas n'est **pas** un `PASS` : le statut d'exécution est tenu par `ravum-conformance run`. |
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -158,7 +158,7 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | F-OWN-013 | `drop(x)` intrinsèque | OWN-9 | — | destruction immédiate | pass : `drop(s)` ; fail : `drop(s); s.len()` → `E-OWN-USE-AFTER-MOVE` | B | candidate-stable | cases/ownership/drop-then-use |
 | F-OWN-014 | Ordre de drop inverse, valeurs déplacées non détruites | OWN-8 | — | non observable (pas de `Drop`) | pass : blocs imbriqués ; fail : double destruction (détecté par instrumentation) | B | candidate-stable | NOT_COVERED |
 | F-OWN-015 | Pas de `Drop` utilisateur | OWN-9.5 | E-UNSUPPORTED-DROP-IMPL | — | pass : aucune ; fail : `impl Drop for T` → `E-UNSUPPORTED-DROP-IMPL` | B | unsupported | NOT_COVERED |
-| F-OWN-016 | Pas d'`unsafe` / pointeurs bruts | OWN-10 | E-UNSUPPORTED-UNSAFE | — | pass : aucune ; fail : `unsafe { }`, `*const T` → `E-UNSUPPORTED-UNSAFE` | — | unsupported | cases/unsupported/unsafe, cases/unsupported/raw-pointer |
+| F-OWN-016 | Bloc `unsafe` transparent pour l'ownership | OWN-10 | — | pass : move/emprunt dans `unsafe { }` suivent les règles du bloc ; fail : `*const T` → `E-UNSUPPORTED-UNSAFE` | B | candidate-stable | cases/unsupported/raw-pointer |
 
 ## 7. Effets (`F-EFF`)
 
@@ -170,7 +170,11 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | F-EFF-004 | Profil `core` | EFF-4.1 | — | aucune restriction | pass : tout programme | B | candidate-stable | NOT_COVERED |
 | F-EFF-005 | Profil `pure` | EFF-4.2–4.5 | E-EFF-PROFILE | entrée sans effet | pass : arithmétique pure ; fail : `io::println` sous `pure` → `E-EFF-PROFILE` | B | candidate-stable | cases/effects/pure-main-ok, cases/effects/pure-profile-violated |
 | F-EFF-006 | Profil `rt` (expérimental, non certifié) | EFF-4.6–4.7 | E-EFF-PROFILE | — | pass : `effects()` sans `io`/`alloc`/`panic` ; fail : `alloc` sous `rt` → `E-EFF-PROFILE` | B | experimental | NOT_COVERED |
-| F-EFF-007 | Groupes non implémentés refusés | EFF-1, UNS-5 | E-UNSUPPORTED-EFFECT | — | pass : `effects(io)` ; fail : `effects(net)`/`unsafe`/`ffi`/`async` → `E-UNSUPPORTED-EFFECT` | — | unsupported | cases/effects/unsupported-net |
+| F-EFF-007 | Groupes non implémentés refusés | EFF-1, UNS-5 | E-UNSUPPORTED-EFFECT | — | pass : `effects(io)` ; fail : `effects(net)`/`effects(async)` → `E-UNSUPPORTED-EFFECT` | — | unsupported | cases/effects/unsupported-net |
+| F-EFF-009 | `unsafe`/`ffi` inférés par bloc `unsafe` et appel `extern` | FFI-3, FFI-4 | E-UNSAFE-CONTEXT | — | pass : `unsafe { abs(-1) }` ; fail : appel `extern` hors `unsafe` → `E-UNSAFE-CONTEXT` ; `pure` → `E-EFF-PROFILE` | B | candidate-stable | cases/run/ffi-abs, cases/types/ffi-outside-unsafe |
+| F-FFI-001 | Déclaration `extern "C" { fn f(...); }` (module uniquement) | FFI-1 | primitives FFI-sûres | symbole C lié | pass : `fn abs(x: i32) -> i32;` ; fail : `extern "system"` → `E-UNSUPPORTED-ABI` | B | candidate-stable | cases/run/ffi-abs |
+| F-FFI-002 | Appel `extern` uniquement dans `unsafe { }` | FFI-3 | — | — | pass : `unsafe { abs(-7) }` ; fail : `abs(-1)` hors `unsafe` → `E-UNSAFE-CONTEXT` | B | candidate-stable | cases/types/ffi-outside-unsafe |
+| F-FFI-003 | Signatures FFI-sûres seulement | FFI-2 | `E-FFI-TYPE` | — | pass : entiers/flottants/`bool`/`()` ; fail : `String`, `&str`, struct → `E-FFI-TYPE` | B | candidate-stable | cases/types/ffi-bad-type |
 | F-EFF-008 | Panics intrinsèques non suivis (approximation) | EFF-6.4 | — | panic possible sous `effects()` | pass : `a / b` en `effects()` ; fail : documenter comme absence de panic (faux) | B | candidate-stable | NOT_COVERED |
 
 ## 8. Modules et packages (`F-MOD`)
@@ -237,8 +241,8 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | F-UNS-003 | Closures et captures | `|x| e`, `move |x|` | `E-UNSUPPORTED-CLOSURE`, `E-UNSUPPORTED-TOKEN` | unsupported | cases/unsupported/closure |
 | F-UNS-004 | `async`/`await` | `async fn`, `.await` | `E-UNSUPPORTED-ASYNC` | unsupported | cases/unsupported/async |
 | F-UNS-005 | Threads, atomiques, locks, canaux | `thread::spawn`, `Mutex`, `Atomic*` | `E-RES-UNKNOWN` | unsupported | NOT_COVERED |
-| F-UNS-006 | `unsafe`, pointeurs bruts, `transmute` | `unsafe {}`, `*const T` | `E-UNSUPPORTED-UNSAFE`, `E-TYP-CAST` | unsupported | cases/unsupported/unsafe, cases/unsupported/raw-pointer |
-| F-UNS-007 | FFI, `extern`, `#[no_mangle]` | `extern "C"` | `E-UNSUPPORTED-EXTERN` | unsupported | NOT_COVERED |
+| F-UNS-006 | `unsafe fn`, pointeurs bruts, `transmute` | `unsafe fn f()`, `*const T` | `E-UNSUPPORTED-UNSAFE`, `E-TYP-CAST` | unsupported | cases/unsupported/raw-pointer |
+| F-UNS-007 | FFI hors cadre Core 1.0 (ABI non-C, types composés, `#[no_mangle]`, `extern fn` avec corps) | `extern "system"`, `fn f(s: String)`, `#[no_mangle]` | `E-UNSUPPORTED-ABI`, `E-FFI-TYPE`, `E-UNSUPPORTED-ATTR`, `E-UNSUPPORTED-EXTERN` | unsupported | cases/types/ffi-bad-type |
 | F-UNS-008 | Macros (décl. et proc.) | `m!()`, `macro_rules!` | `E-UNSUPPORTED-MACRO` | unsupported | cases/unsupported/macro |
 | F-UNS-009 | Attributs, `derive`, `repr` | `#[...]` | `E-UNSUPPORTED-ATTR` | unsupported | cases/unsupported/attribute |
 | F-UNS-010 | `impl Drop`, destructeur utilisateur | `impl Drop for T` | `E-UNSUPPORTED-DROP-IMPL` (R) | unsupported | NOT_COVERED |
