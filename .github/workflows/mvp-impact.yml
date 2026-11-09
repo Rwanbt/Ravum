@@ -117,7 +117,7 @@ jobs:
           $ErrorActionPreference = 'Continue'
           # The integration branch must be resolvable for push-triggered runs.
           git fetch origin dev main 2>$null | Out-Null
-          $fallbackJson = '{"schema":"ravum-impact/1","full":true,"uncertain":true,"packages":[],"packages_scope":"workspace","direct_packages":[],"naive_packages":[],"commands":[{"id":"cargo-test-workspace","kind":"cargo","argv":["cargo","test","--workspace","--","--test-threads=1"],"reason":"fallback: aucune décision produite par impact.mjs","package":null}],"reasons":["full:fallback — aucune décision produite par impact.mjs","uncertain:mapping — la CI doit échouer explicitement"],"unknown_paths":[],"notes":[],"limits":[],"docs_required":false,"changed":[],"components":{},"provenance":{}}'
+          $fallbackJson = '{"schema":"ravum-impact/1","full":true,"uncertain":true,"packages":[],"packages_scope":"workspace","direct_packages":[],"naive_packages":[],"browser_e2e_required":true,"browser_e2e_reason":"fallback: décision impossible — E2E navigateur exigés par prudence (fail-closed)","browser_e2e_reasons":["fallback: décision impossible — E2E navigateur exigés par prudence (fail-closed)"],"commands":[{"id":"cargo-test-workspace","kind":"cargo","argv":["cargo","test","--workspace","--","--test-threads=1"],"reason":"fallback: aucune décision produite par impact.mjs","package":null}],"reasons":["full:fallback — aucune décision produite par impact.mjs","uncertain:mapping — la CI doit échouer explicitement"],"unknown_paths":[],"notes":[],"limits":[],"docs_required":false,"changed":[],"components":{},"provenance":{}}'
 
           Write-Host "Base du diff: $env:BASE_REF"
           $raw = (& node tools/impact/impact.mjs --base "$env:BASE_REF" --json 2> impact.stderr.txt) -join "`n"
@@ -148,14 +148,19 @@ jobs:
           if ($decision.full -eq $false) { $fullFlag = 'false' }
           $docsFlag = 'false'
           if ($decision.docs_required -eq $true) { $docsFlag = 'true' }
+          # Fail-closed : exigence navigateur absente/indéterminée => REQUISE
+          # (jamais de skip navigateur transformé en vert silencieux).
+          $browserFlag = 'true'
+          if ($decision.browser_e2e_required -eq $false) { $browserFlag = 'false' }
 
           "full=$fullFlag" >> $env:GITHUB_OUTPUT
           "uncertain=$uncertainFlag" >> $env:GITHUB_OUTPUT
           "docs=$docsFlag" >> $env:GITHUB_OUTPUT
+          "browser=$browserFlag" >> $env:GITHUB_OUTPUT
           "tool_exit=$toolExit" >> $env:GITHUB_OUTPUT
           "base=$($decision.base)" >> $env:GITHUB_OUTPUT
 
-          Write-Host "Décision: full=$fullFlag uncertain=$uncertainFlag docs=$docsFlag (exit outil=$toolExit)"
+          Write-Host "Décision: full=$fullFlag uncertain=$uncertainFlag docs=$docsFlag browser=$browserFlag (exit outil=$toolExit)"
           Write-Host ($raw | ConvertFrom-Json | ConvertTo-Json -Depth 4 -Compress)
 
       # ---------------------------------------------------------------------
@@ -245,7 +250,40 @@ jobs:
           Write-Host "OK: $($cargoCommands.Count) suite(s) impactée(s) exécutée(s) SÉRIALISÉMENT (--test-threads=1), aucune exclue."
 
       # ---------------------------------------------------------------------
-      # 4. Garde d'incertitude : seule catégorie qui échoue POUR RAISON DE
+      # 4. E2E navigateur : requis quand le mapping voit une surface
+      #    applicative/UI (apps/**, ravum-todo-core, ravum-store, script E2E),
+      #    une incertitude, un chemin inconnu, ou un FULL+manifeste/UI.
+      #    -RequireBrowser : absence de navigateur = échec, jamais un skip vert.
+      # ---------------------------------------------------------------------
+      - name: Setup Node.js for the browser E2E (impact-selected)
+        if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Browser E2E - real Chromium/Edge via CDP (impact-selected)
+        if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::notice::E2E navigateur requis par le mapping : exécution des 10 scénarios réels (script partagé avec mvp.yml)."
+          powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::E2E navigateur exigés par le mapping et en échec (exit $LASTEXITCODE) — aucun skip transformé en vert"
+            exit $LASTEXITCODE
+          }
+          Write-Host "OK: 10 scénarios E2E navigateur exécutés et verts."
+
+      - name: Upload browser E2E evidence (impact-selected)
+        if: always() && steps.impact.outputs.browser == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-evidence
+          path: target/ravum/browser-e2e
+          if-no-files-found: warn
+          retention-days: 7
+
+      # ---------------------------------------------------------------------
+      # 5. Garde d'incertitude : seule catégorie qui échoue POUR RAISON DE
       #    MAPPING. La suite complète de secours (step 3a, car full=true) a déjà
       #    été exécutée ; ce step rend l'incertitude visible et non contournable.
       # ---------------------------------------------------------------------
@@ -262,7 +300,7 @@ jobs:
           exit 1
 
       # ---------------------------------------------------------------------
-      # 5. Traçabilité.
+      # 6. Traçabilité.
       # ---------------------------------------------------------------------
       - name: Impact summary
         if: always()
@@ -283,8 +321,10 @@ jobs:
             default             { 'INCONNUE (champ decision absent)' }
           }
           $uncertainLabel = if ($d.uncertain -eq $true) { 'OUI — échec explicite après exécution de secours' } else { 'non' }
+          $browserLabel = if ($d.browser_e2e_required -eq $true) { 'OUI — ' + $d.browser_e2e_reason } else { 'non' }
           $lines += "- Décision: $decisionLabel"
           $lines += "- Mapping incertain: $uncertainLabel"
+          $lines += "- E2E navigateur requis: $browserLabel"
           $lines += '- Politique: un FULL conservateur est évalué par le résultat réel des tests ; seul l''incertain/erreur interne fait échouer le job pour raison de mapping.'
           $lines += "- Base: $($d.base)"
           $lines += "- Fichiers modifiés: $($d.changed.Count)"
