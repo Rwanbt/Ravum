@@ -3683,8 +3683,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             PatKind::Tuple(items) => {
                 if let Type::Tuple(types) = expected {
                     if types.len() != items.len() {
+                        // Arity, not a type mismatch: every other arity check in
+                        // this file (calls, variants, other patterns) reports
+                        // `E-TYP-ARITY`, and `spec/language/features.md`
+                        // F-SYN-030 mandates that code here too.
                         self.error(
-                            "E-TYP-MISMATCH",
+                            "E-TYP-ARITY",
                             pat.span,
                             format!(
                                 "tuple pattern has {} element(s), type has {}",

@@ -16,7 +16,7 @@
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
 | Corpus | **269 cas** (`conformance/cases/`) |
-| Résultat corpus | **245 PASS / 23 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
+| Résultat corpus | **246 PASS / 22 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
 | Règles satisfaisant le critère strict §2 | **87 / 188** |
@@ -81,7 +81,7 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
   morte corrigée vers le cas qui existe.
 - Aucune exigence n'a été supprimée, abaissée ou marquée `PASS` par décret.
 
-## 4. Les 23 divergences restantes
+## 4. Les 22 divergences restantes
 
 | Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
 |---|---|---|---|---|
@@ -89,7 +89,6 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 | `parser/impl-foreign-type-fail` | - | `E-RES-IMPL-SELF-TYPE` | `E-RES-IMPL-FOREIGN` | `E-RES-IMPL-FOREIGN` |
 | `parser/let-pattern-fail` | - | `E-PARSE-EXPECTED` | `E-UNSUPPORTED-LET-PATTERN` | `E-UNSUPPORTED-LET-PATTERN` |
 | `parser/prelude-variant-user-enum-fail` | - | `E-RES-UNKNOWN` | `E-RES-VARIANT-UNQUALIFIED` | `E-RES-VARIANT-UNQUALIFIED` |
-| `parser/tuple-pattern-arity-fail` | - | `E-TYP-ARITY` | `E-TYP-MISMATCH` | — |
 | `parser/variant-pattern-ref-fail` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-REF-PAT` | `E-UNSUPPORTED-REF-PAT` |
 | `types/array-zero-length` | - | `E-TYP-ARRAY-REPEAT` | `E-TYP-ARRAY-LEN` | `E-TYP-ARRAY-LEN` |
 | `types/never-field` | - | `E-TYP-MISMATCH` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
@@ -205,11 +204,11 @@ cargo run -p ravum-conformance -- run --filter ownership/vec-index-move
   reviendrait à effacer les défauts qu'ils documentent, ce que le mandat
   interdit explicitement.
 
-## 8. Correctifs appliqués après la passe (sept cas sortis du rouge)
+## 8. Correctifs appliqués après la passe (huit cas sortis du rouge)
 
 Chaque correctif est un changement de **comportement**, pas d'`expect_codes` :
 le cas reste écrit comme la spécification l'exige, c'est le compilateur qui a
-été aligné. Corpus après correctifs : **269 cas, 245 PASS / 23 FAIL / 1 SKIP** ;
+été aligné. Corpus après correctifs : **269 cas, 246 PASS / 22 FAIL / 1 SKIP** ;
 tests workspace **82 suites, 1019 passés / 0 échec / 2 ignorés** (aucune
 régression).
 
@@ -221,6 +220,7 @@ régression).
 | `parser/while-value-nonunit-fail` | `let x = while c { 1 };`, `loop` et `for` en position de valeur produisent `E-TYP-STATEMENT-VALUE` (F-SYN-019/033) |
 | `parser/loop-control-as-value-fail` | idem, y compris `let b = loop { break; };` et `let d = for i in 0..2 {};` |
 | `run/int-abs-signed` | le checker canonicalise tous les entiers en `int` ; le codegen ne connaissait que `i8`…`isize` et refusait `int::abs` (F-STD-029) |
+| `parser/tuple-pattern-arity-fail` | une arité de motif tuple fausse produisait `E-TYP-MISMATCH` alors que **toutes** les autres vérifications d'arité du même fichier émettent `E-TYP-ARITY` et que F-SYN-030 l'exige |
 
 ### 8.4 `math::min`/`max` et le zéro signé — corrigé
 
