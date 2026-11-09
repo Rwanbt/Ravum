@@ -62,10 +62,10 @@ pub const CORE_SYMBOL_REMOVAL: &str = "\
 -}
 ";
 
-/// A change inside a unit that always compiles through a conservative Cargo
-/// fallback (`features` declares features): its interface identity is not
-/// observable, so the oracle must not claim anything (fail-closed).
-pub const FEATURES_FALLBACK_CHANGE: &str = "\
+/// A body change inside the feature-bearing unit. Since MVP-0d resolves the
+/// activation set, this unit is compiled by the targeted chain, so the change is
+/// verifiable; it compiles and changes no interface.
+pub const FEATURES_BODY_CHANGE: &str = "\
 +++ b/features/src/lib.rs
 @@ -9,4 +9,4 @@
  #[cfg(not(feature = \"extra\"))]
@@ -77,6 +77,23 @@ pub const FEATURES_FALLBACK_CHANGE: &str = "\
 
 pub const CORE_PATH: &str = "core/src/lib.rs";
 pub const FEATURES_PATH: &str = "features/src/lib.rs";
+pub const BUILDSCRIPT_PATH: &str = "buildscript/src/lib.rs";
+
+/// A change inside a unit that still compiles through a conservative Cargo
+/// fallback (`buildscript` runs a build script): its interface identity is not
+/// observable, so the oracle must not claim anything (fail-closed).
+///
+/// `features` used to play this role, but MVP-0d resolves its activation set and
+/// verifies it through the targeted chain; the fallback invariant is kept on a
+/// unit that genuinely still falls back.
+pub const BUILDSCRIPT_FALLBACK_CHANGE: &str = "\
++++ b/buildscript/src/lib.rs
+@@ -4,3 +4,3 @@
+ pub fn build_marker() -> &'static str {
+-    option_env!(\"RAVUM_FIXTURE_BUILD\").unwrap_or(\"missing\")
++    option_env!(\"RAVUM_FIXTURE_BUILD\").unwrap_or(\"present\")
+ }
+";
 
 /// Dependents of `core` in the fixture (transitive closure).
 pub const CORE_DEPENDENTS: &[&str] = &["api", "consumer", "application"];

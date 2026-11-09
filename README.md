@@ -41,7 +41,8 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Revue multi-IA | Réalisée sur documents, résultats contradictoires conservés |
 | Architecture F → D | **Hypothèse candidate**, à comparer |
 | Compilateur Ravum / langage exécutable | **Non implémenté** |
-| Intégration `dev` | **MVP-0a/0b/0c présents sur `dev`** (9 novembre 2026, `6b0ac7b`) via une chaîne propre : outillage d'agents local exclu, provenance auditée, 495 tests rejoués — [docs/mvp/INTEGRATION-0abc.md](docs/mvp/INTEGRATION-0abc.md) |
+| MVP-0d — incrémentalité et collaboration | **En cours, expérimental** : features Cargo dans l'identité de contexte, overlays privés avec intégration tout ou rien, fenêtre de groupement adaptative ; gates `PARTIAL` documentés — [rapport](docs/mvp/MVP-0d-REPORT.md) |
+| Intégration `dev` | **MVP-0a/0b/0c présents sur `dev`** (9 novembre 2026, `6b0ac7b`) via une chaîne propre : outillage d'agents local exclu, provenance auditée, 496 tests rejoués — [docs/mvp/INTEGRATION-0abc.md](docs/mvp/INTEGRATION-0abc.md) |
 | Outil Rust MVP-0a (M1) | **Implémenté et testé localement** : boucle `check → build → verify → hot patch`, voir [docs/mvp/architecture.md](docs/mvp/architecture.md) |
 | Hot swap natif | **Démontré** sur une entrée `f64 -> f64` à ABI vérifiée ; migration d'état **non** implémentée |
 | Moteur de preuve Ravum / qualification RT | **Non implémentés** ; vérification bornée M2 présente, aucun PROVED général, aucun prouveur externe installé |

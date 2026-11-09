@@ -11,6 +11,10 @@
 | ADR-000 à ADR-041 | 42 propositions originales ; **toutes PROPOSED** |
 | Consolidation v0.3 | Revue multi-IA ; **REVIEW CANDIDATE**, non ratifiée |
 | Intégration `dev` | **MVP-0a, 0b et 0c présents sur `dev`** le 9 novembre 2026 (`6b0ac7b`) via une chaîne d'intégration propre : 114 commits produit rejoués, outillage d'agents local exclu, arbres vérifiés identiques hors outillage — [intégration](../mvp/INTEGRATION-0abc.md) |
+| MVP-0d / Lot A — incrémentalité | **Implémenté et testé** : activation Cargo résolue (`cargo metadata`), `context_id` v2 (features, crate types, build script, kind), `--cfg feature` transmis à rustc, chemins normalisés (déterminisme du `.rmeta`) ; **replis conservateurs maintenus** pour build scripts et dépendances optionnelles — [MVP-0d-incremental](../mvp/MVP-0d-incremental.md) |
+| MVP-0d / Lot B — overlays | **Prototype testé, partiel** : `BaseSnapshot` content-adressée, overlays privés, intégration tout ou rien, CAS de base, conflits de chemin refusés, 9 tests dont concurrence 8 threads ; stockage mesuré −92,0 % vs 8 copies complètes ; **publication Git non branchée**, campagne A/B/C/D non exécutée — [MVP-0d-overlays](../mvp/MVP-0d-overlays.md) |
+| MVP-0d / Lot C — groupement adaptatif | **Implémenté et mesuré** (trace synthétique) : fenêtre bornée 10–100 ms, croissance sur densité, rétrécissement sur rareté ; fixe 0/50/100 = 12/4/4 lots, attente 200/360/510 ms ; adaptative = 4 lots / 450 ms — [MVP-0d-batch-window](../mvp/MVP-0d-batch-window.md) |
+| MVP-0d / Lot D — projets représentatifs | **`NOT_RUN`** : aucun corpus externe exécuté pendant ce cycle — [rapport](../mvp/MVP-0d-REPORT.md) |
 | Compilateur Ravum / frontend / runtime | Non implémentés |
 | Outil Rust MVP-0a (M1) | **Implémenté, expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
