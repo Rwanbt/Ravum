@@ -67,9 +67,7 @@ pub enum Command {
     Doctor {
         json: bool,
     },
-    Lsp {
-        json: bool,
-    },
+    Lsp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -455,14 +453,12 @@ fn parse_doctor(rest: &[String]) -> Result<Command, String> {
 }
 
 fn parse_lsp(rest: &[String]) -> Result<Command, String> {
-    let mut json = false;
-    for arg in rest {
-        match arg.as_str() {
-            "--json" => json = true,
-            other => return Err(format!("unknown option `{other}` for `lsp`")),
-        }
+    if let Some(other) = rest.first() {
+        return Err(format!(
+            "`lsp` takes no arguments (it speaks LSP on stdin/stdout); got `{other}`"
+        ));
     }
-    Ok(Command::Lsp { json })
+    Ok(Command::Lsp)
 }
 
 // ---------------------------------------------------------------------------
@@ -491,12 +487,15 @@ COMMANDS:
     lint [PATH] [--deny CODE]...        Report checker warnings; `--deny` turns one into an error
     doc [PATH] [--out DIR]              Generate Markdown API documentation for public items
     cache status|clean [PATH]           Inspect or remove the package `.ravum/` cache
+    lsp                                 Start the language server on stdin/stdout (LSP 3.17)
     doctor [--json]                     Diagnose rustc, paths, cache and frontend stages
     help [COMMAND]                      Show this help or one command
     --version, -V                       Print the toolchain and language edition
 
-UNSUPPORTED (explicit, never a fake success):
-    lsp                                 No language server is implemented in this build (exit 3)
+NOT IMPLEMENTED (explicit, never a fake success):
+    (none)                              Every documented command runs the real pipeline.
+                                        Unsupported *language* features are rejected by the
+                                        checker with a stable `E-UNSUPPORTED-*` code.
 
 PATHS:
     PATH defaults to the current directory. A directory must contain `ravum.toml`;
@@ -578,8 +577,17 @@ pub fn help_for(topic: &str) -> String {
                      parser/checker/codegen stages are ready or still stubs. Exit 3 if rustc\n\
                      is missing.\n",
         "lsp" => "USAGE: ravum-lang lsp\n\n\
-                  UNSUPPORTED: no language server is implemented in this build. Exits 3 and\n\
-                  is listed under UNSUPPORTED in `--help`; it is not advertised as available.\n",
+                  Starts the Ravum language server on stdin/stdout (JSON-RPC 2.0, LSP 3.17\n\
+                  base protocol, `Content-Length` framing). Nothing but protocol bytes is\n\
+                  written to stdout; diagnostics and errors go to stderr.\n\n\
+                  Implemented: initialize/shutdown/exit, incremental document sync\n\
+                  (`didOpen`/`didChange`/`didSave`/`didClose`, unsaved buffers analysed from\n\
+                  memory), publishDiagnostics (syntax + semantic, same codes as `check`),\n\
+                  hover, go to definition, find references, rename, completion, document\n\
+                  symbols, workspace symbols, and whole-document formatting.\n\n\
+                  Not implemented (the server answers with a JSON-RPC error, never a fake\n\
+                  success): code actions, semantic tokens, inlay hints, signature help,\n\
+                  workspace file edits. See docs/qualification/LSP.md.\n",
         other => {
             return format!(
                 "ravum-lang: unknown help topic `{other}`\n\n{}",
@@ -709,10 +717,12 @@ mod tests {
     }
 
     #[test]
-    fn help_is_honest_about_lsp() {
+    fn lsp_is_advertised_and_takes_no_options() {
         let text = help_text();
-        assert!(text.contains("UNSUPPORTED"));
         assert!(text.contains("lsp"));
-        assert!(text.contains("exit 3"));
+        assert!(text.contains("language server"));
+        assert!(text.contains("NOT IMPLEMENTED"));
+        assert_eq!(parse(&args(&["lsp"])).unwrap(), Invocation::Command(Command::Lsp));
+        assert!(parse(&args(&["lsp", "--json"])).is_err());
     }
 }

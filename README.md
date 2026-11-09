@@ -3,14 +3,21 @@
 
 # Ravum
 
-> **Projet de recherche et d'ingénierie — état : cadrage architectural / pré-MVP (8 novembre 2026).**  
-> **Aucun compilateur Ravum, runtime, moteur de preuves ni chaîne de hot reload Ravum n'est encore implémenté ou qualifié.** Les ADR sont des **propositions**, les benchmarks sont des **objectifs à mesurer**, et aucun logiciel n'est actuellement « production-ready ».
+> **Projet de recherche et d'ingénierie — état : Core 1.0 *Release Candidate* interne, non publiée (9 novembre 2026).**  
+> Un **compilateur Ravum expérimental existe et fonctionne** : frontend, typechecker,
+> borrow checker, codegen Rust, CLI, conformance et cibles natives Windows/Linux. Il
+> n'est **ni stable, ni audité à l'extérieur, ni « production-ready »** : voir la
+> [matrice des gates T0–T12](docs/roadmap/CORE-1.0-GATE-MATRIX.md) pour la liste
+> exacte de ce qui passe, de ce qui reste partiel et de ce qui est bloqué. Les ADR
+> restent des **propositions**, et aucune garantie n'est annoncée sans preuve liée.
+> Il n'existe **aucun moteur de preuves Ravum** ni chaîne de hot reload à état
+> préservé : ces deux capacités ne sont pas implémentées.
 
 **Ravum** est un projet de **langage de programmation universel** et d'**environnement de développement continu**, conçu pour raccourcir le temps nécessaire à la création d'applications sûres, performantes et maintenables — du frontend et du backend jusqu'au DSP temps réel, aux applications natives et aux systèmes embarqués.
 
 Le projet explore une boucle où l'édition humaine ou la génération par agent IA déclenche l'analyse incrémentale, la vérification, la compilation ciblée et une **prévisualisation actualisée à chaud**. La dernière version valide reste active si une modification est incomplète ou incorrecte. Le code de production doit rester performant et les garanties ne doivent jamais être inventées.
 
-**English:** Ravum is an exploratory universal programming language and continuous development platform. It aims for safe, high-performance native/full-stack code, explicit verifiable guarantees and fast incremental edit-to-preview cycles. **There is no working compiler yet.**
+**English:** Ravum is an exploratory universal programming language and continuous development platform. It aims for safe, high-performance native/full-stack code, explicit verifiable guarantees and fast incremental edit-to-preview cycles. **An experimental Ravum compiler exists and works on a documented Core 1.0 subset** (`ravum-lang check/build/run/test/fmt/lint`); it is a non-published release candidate, not a stable or externally audited compiler.
 
 ## Principes fondateurs (P0)
 
@@ -40,7 +47,8 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | ADR-000 à ADR-041 | **PROPOSED** ; aucun accepté automatiquement |
 | Revue multi-IA | Réalisée sur documents, résultats contradictoires conservés |
 | Architecture F → D | **Hypothèse candidate**, à comparer |
-| Compilateur Ravum / langage exécutable | **Non implémenté** |
+| Compilateur Ravum / langage exécutable | **Implémenté sur un sous-ensemble Core 1.0 documenté** (`crates/ravum-lang-*`, binaire `ravum-lang`) : lexer/parser, typechecker, ownership, codegen Rust, conformance, exécution native Windows/Linux, WASI, FFI minimale. Voir [état du langage](docs/reports/LANGUAGE-CORE-STATUS.md) et [matrice des gates](docs/roadmap/CORE-1.0-GATE-MATRIX.md). |
+| LSP / serveur de langage | **Implémenté** (`crates/ravum-lang-lsp`, `ravum-lang lsp`) : JSON-RPC sur stdio, diagnostics, hover, définition, références, rename, completion, symboles, formatage. Interopérabilité vérifiée par un client de test intégré, **pas encore par VS Code en usage réel**. |
 | MVP-0d — incrémentalité et collaboration | **En cours, expérimental** : features Cargo dans l'identité de contexte, overlays privés avec intégration tout ou rien, fenêtre de groupement adaptative ; gates `PARTIAL` documentés — [rapport](docs/mvp/MVP-0d-REPORT.md) |
 | Intégration `dev` | **MVP-0a/0b/0c présents sur `dev`** (9 novembre 2026, `6b0ac7b`) via une chaîne propre : outillage d'agents local exclu, provenance auditée, 496 tests rejoués — [docs/mvp/INTEGRATION-0abc.md](docs/mvp/INTEGRATION-0abc.md) |
 | Outil Rust MVP-0a (M1) | **Implémenté et testé localement** : boucle `check → build → verify → hot patch`, voir [docs/mvp/architecture.md](docs/mvp/architecture.md) |
@@ -57,7 +65,12 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | MVP-0b : P0-H — rétention du daemon | **GC borné** : politique explicite (`keep_recent`, plafonds, `dry_run`), protections du contenu vivant, −66 % de disque sur 40 éditions réelles, aucun résultat valide invalidé ; **GC automatique opt-in** (12 collectes, disque borné à ~70 Ko contre 210 Ko sans collecte) |
 | CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
-Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
+Licence : [`MIT OR Apache-2.0`](LICENSE-MIT) au choix du preneur (décision
+appliquée sur `main` et `dev`, répercutée sur cette branche).
+
+Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**,
+pas du code compilable. Les programmes **`.rv`** du dossier [`examples/`](examples/)
+sont, eux, réellement compilés et exécutés par `ravum-lang`.
 
 ## MVP-0a : ce qui fonctionne réellement
 

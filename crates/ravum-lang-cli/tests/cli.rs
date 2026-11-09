@@ -179,9 +179,9 @@ fn version_and_help_are_stable() {
     ] {
         assert!(text.contains(command), "help must mention `{command}`");
     }
-    assert!(text.contains("UNSUPPORTED"));
+    assert!(text.contains("NOT IMPLEMENTED"));
     assert!(text.contains("lsp"));
-    assert!(text.contains("exit 3"));
+    assert!(text.contains("language server"));
 
     let output = run(&["help", "check"]);
     assert!(output.status.success());
@@ -955,17 +955,12 @@ fn doctor_json_is_valid_and_honest() {
 }
 
 #[test]
-fn lsp_is_explicitly_unsupported() {
-    let output = run(&["lsp"]);
-    assert_eq!(output.status.code(), Some(3));
-    assert!(stderr(&output).contains("UNSUPPORTED"));
-
+fn lsp_rejects_arguments_instead_of_pretending() {
+    // The protocol arrives on stdin, so any argument is a usage error (exit 2).
+    // The served protocol itself is covered end-to-end by `tests/lsp_client.rs`.
     let output = run(&["lsp", "--json"]);
-    assert_eq!(output.status.code(), Some(3));
-    let value = json(&output);
-    assert_json_envelope(&value, "lsp");
-    assert_eq!(value["success"], false);
-    assert_eq!(value["summary"]["status"], "UNSUPPORTED");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("lsp"));
 }
 
 // ---------------------------------------------------------------------------

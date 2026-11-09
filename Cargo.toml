@@ -20,6 +20,7 @@ members = [
   "crates/ravum-lang-sema",
   "crates/ravum-lang-codegen",
   "crates/ravum-lang-cli",
+  "crates/ravum-lang-lsp",
   "tools/conformance",
   "apps/ravum-demo-host",
   "apps/ravum-todo",
@@ -52,6 +53,7 @@ ravum-daemon = { path = "crates/ravum-daemon" }
 ravum-lang-syntax = { path = "crates/ravum-lang-syntax" }
 ravum-lang-sema = { path = "crates/ravum-lang-sema" }
 ravum-lang-codegen = { path = "crates/ravum-lang-codegen" }
+ravum-lang-lsp = { path = "crates/ravum-lang-lsp" }
 
 # Keep debug info minimal: the reference machine has ~16 Go RAM and the
 # permanent-build pipeline measures wall time, so link time matters.

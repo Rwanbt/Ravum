@@ -44,6 +44,6 @@ pub fn dispatch(command: Command) -> i32 {
         Command::Doc { path, out } => doc::run(&path, out.as_deref()),
         Command::Cache { action, path } => cache::run(action, &path),
         Command::Doctor { json } => doctor::run(json),
-        Command::Lsp { json } => lsp::run(json),
+        Command::Lsp => lsp::run(),
     }
 }

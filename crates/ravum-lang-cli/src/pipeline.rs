@@ -48,7 +48,13 @@ impl Frontend {
 
 /// Load a package and run the checker on every crate root it contains.
 pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
-    let mut pkg = load_package_with_options(path, &LoadOptions { locked });
+    let mut pkg = load_package_with_options(
+        path,
+        &LoadOptions {
+            locked,
+            overrides: std::collections::BTreeMap::new(),
+        },
+    );
     let mut diags = std::mem::take(&mut pkg.diags);
     let options = CheckOptions {
         profile,

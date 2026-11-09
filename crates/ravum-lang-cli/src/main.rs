@@ -6,8 +6,9 @@
 //! * `2` invalid command line;
 //! * `3` external tool missing (`rustc`) or an explicitly UNSUPPORTED command.
 //!
-//! A command that is not implemented is never advertised as functional; `lsp`
-//! is listed under `UNSUPPORTED` and exits 3.
+//! A command that is not implemented is never advertised as functional. Every
+//! documented command runs the real pipeline; `lsp` starts a real language
+//! server on stdio (`crates/ravum-lang-lsp`).
 
 mod args;
 mod commands;

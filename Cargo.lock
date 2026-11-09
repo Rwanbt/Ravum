@@ -268,6 +268,7 @@ name = "ravum-lang-cli"
 version = "0.1.0"
 dependencies = [
  "ravum-lang-codegen",
+ "ravum-lang-lsp",
  "ravum-lang-sema",
  "ravum-lang-syntax",
  "serde",
@@ -280,6 +281,15 @@ version = "0.1.0"
 dependencies = [
  "ravum-lang-sema",
  "ravum-lang-syntax",
+]
+
+[[package]]
+name = "ravum-lang-lsp"
+version = "0.1.0"
+dependencies = [
+ "ravum-lang-sema",
+ "ravum-lang-syntax",
+ "serde_json",
 ]
 
 [[package]]

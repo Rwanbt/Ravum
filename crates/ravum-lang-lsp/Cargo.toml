@@ -1,0 +1,13 @@
+[package]
+name = "ravum-lang-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Ravum Core 1.0 language server (LSP over stdio: diagnostics, hover, navigation, rename, completion, symbols, formatting)."
+
+[dependencies]
+ravum-lang-syntax = { workspace = true }
+ravum-lang-sema = { workspace = true }
+serde_json = { workspace = true }

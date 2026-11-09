@@ -171,6 +171,14 @@ pub struct LoadOptions {
     /// Refuse to create or rewrite `ravum.lock`; a missing or different lockfile
     /// is an error (exit code 1 in the CLI).
     pub locked: bool,
+    /// In-memory source overrides, keyed by **canonicalized** file path.
+    ///
+    /// A file present here is read from the map instead of the filesystem. This
+    /// is what lets the language server analyse an editor buffer that is not
+    /// saved yet (`textDocument/didChange`) without ever writing the user's
+    /// file. An override never creates a file, never changes a digest of the
+    /// package on disk, and is ignored for paths the loader does not load.
+    pub overrides: BTreeMap<PathBuf, String>,
 }
 
 /// Everything the CLI needs after a successful (or failed) load.
@@ -216,7 +224,7 @@ pub fn load_package(path: &Path) -> LoadedPackage {
 /// Load a package with explicit options (currently `--locked`).
 pub fn load_package_with_options(path: &Path, options: &LoadOptions) -> LoadedPackage {
     match fs::metadata(path) {
-        Ok(meta) if meta.is_file() => load_single_file(path),
+        Ok(meta) if meta.is_file() => load_single_file(path, options),
         Ok(meta) if meta.is_dir() => load_package_dir(path, options),
         Ok(_) => {
             let mut out = LoadedPackage::empty(path);
@@ -265,7 +273,7 @@ impl LoadedPackage {
 // Single-file mode
 // ---------------------------------------------------------------------------
 
-fn load_single_file(path: &Path) -> LoadedPackage {
+fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
     let mut out = LoadedPackage::empty(path);
     let canonical = match fs::canonicalize(path) {
         Ok(p) => p,
@@ -317,6 +325,7 @@ fn load_single_file(path: &Path) -> LoadedPackage {
             file_ids: &mut file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut synthetic,
+            overrides: &options.overrides,
         };
         load_crate_root(&mut ctx, &canonical).map(|module| Program {
             file: ctx.file_ids.get(&canonical).copied().unwrap_or(0),
@@ -364,7 +373,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
         // single-file mode. More than one is ambiguous and stays an error.
         match top_level_rv_files(&root) {
             Ok(mut files) if files.len() == 1 => {
-                return load_single_file(&files.remove(0));
+                return load_single_file(&files.remove(0), options);
             }
             Ok(files) if files.len() > 1 => {
                 err(
@@ -462,7 +471,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
 
     // 3. Crate roots. Errors above make the program unusable; skip parsing then.
     if !diags.has_errors() {
-        let (program, lib_program, kind) = load_crates(&root, &graph, &mut sources, &mut diags);
+        let (program, lib_program, kind) = load_crates(&root, &graph, &mut sources, &mut diags, options);
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
         if !diags.has_errors() {
@@ -1957,6 +1966,8 @@ struct CrateCtx<'a> {
     /// Files already included once in *this* crate (duplicate detection).
     loaded: BTreeSet<PathBuf>,
     synthetic: &'a mut u32,
+    /// Canonical path -> in-memory text (editor buffers not yet saved).
+    overrides: &'a BTreeMap<PathBuf, String>,
 }
 
 fn load_crates(
@@ -1964,6 +1975,7 @@ fn load_crates(
     graph: &DepGraph,
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
+    options: &LoadOptions,
 ) -> (Option<Program>, Option<Program>, Option<CrateKind>) {
     let src = root.join("src");
     let main_path = src.join("main.rv");
@@ -2022,6 +2034,7 @@ fn load_crates(
         diags,
         &mut file_ids,
         &mut synthetic,
+        options,
     );
     (program, None, Some(kind))
 }
@@ -2036,6 +2049,7 @@ fn load_crate_program(
     diags: &mut DiagnosticBag,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
     synthetic: &mut u32,
+    options: &LoadOptions,
 ) -> Option<Program> {
     let mut ctx = CrateCtx {
         src_root: src_root.to_path_buf(),
@@ -2046,6 +2060,7 @@ fn load_crate_program(
         file_ids,
         loaded: BTreeSet::new(),
         synthetic,
+        overrides: &options.overrides,
     };
     let module = load_crate_root(&mut ctx, root_file)?;
     let file = module.span.file;
@@ -2366,7 +2381,29 @@ fn ensure_source(ctx: &mut CrateCtx<'_>, canonical: &Path) -> Option<FileId> {
         );
         return None;
     }
-    let text = read_text_limited(canonical, MAX_FILE_SIZE, "E-IO", ctx.diags)?;
+    let text = match ctx.overrides.get(canonical) {
+        // Editor buffer not saved yet: the overlay is analysed in place, never
+        // written. The same size limit applies as for a real file so an
+        // adversarial buffer cannot exhaust memory.
+        Some(text) => {
+            if text.len() as u64 > MAX_FILE_SIZE {
+                err(
+                    ctx.diags,
+                    "E-LIMIT-FILE-SIZE",
+                    Span::dummy(),
+                    format!(
+                        "`{}` is {} bytes, above the {} byte limit",
+                        canonical.display(),
+                        text.len(),
+                        MAX_FILE_SIZE
+                    ),
+                );
+                return None;
+            }
+            text.clone()
+        }
+        None => read_text_limited(canonical, MAX_FILE_SIZE, "E-IO", ctx.diags)?,
+    };
     let display = format!(
         "{}{}",
         ctx.display_prefix,
@@ -2423,6 +2460,7 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
             file_ids: &mut *ctx.file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut *ctx.synthetic,
+            overrides: ctx.overrides,
         };
         let module = load_crate_root(&mut dep_ctx, &lib_root);
         if let Some(module) = module {
@@ -3129,7 +3167,7 @@ mod tests {
         let temp = TempDir::new("locked");
         temp.file("ravum.toml", &manifest("app", ""));
         temp.file("src/main.rv", "fn main() { }\n");
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true });
+        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
         assert_eq!(loaded.lockfile_state, LockfileState::Missing);
         assert!(codes(&loaded.diags).contains(&"E-MOD-MISSING".to_string()));
     }
@@ -3140,9 +3178,79 @@ mod tests {
         temp.file("ravum.toml", &manifest("app", ""));
         temp.file("src/main.rv", "fn main() { }\n");
         let _ = load_package(&temp.path);
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true });
+        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
         assert_eq!(loaded.lockfile_state, LockfileState::Current);
         assert!(!codes(&loaded.diags).contains(&"E-MOD-LOCK".to_string()));
+    }
+
+    #[test]
+    fn override_is_analysed_instead_of_the_file_on_disk() {
+        let temp = TempDir::new("override");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file("src/main.rv", "fn main() { }\n");
+        let source = std::fs::canonicalize(temp.path.join("src").join("main.rv"))
+            .expect("canonical source path");
+
+        let buffered = "fn main() { let unsaved = 1; }\n";
+        let options = LoadOptions {
+            locked: false,
+            overrides: std::iter::once((source.clone(), buffered.to_string())).collect(),
+        };
+        let loaded = load_package_with_options(&temp.path, &options);
+        assert!(!loaded.diags.has_errors(), "{:?}", codes(&loaded.diags));
+        let program = loaded.program.expect("program");
+        let text = loaded
+            .sources
+            .file(program.file)
+            .expect("root source")
+            .text
+            .clone();
+        assert_eq!(
+            text, buffered,
+            "the loader must analyse the in-memory buffer"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&source).expect("read disk"),
+            "fn main() { }\n",
+            "an override must never write the user's file"
+        );
+    }
+
+    #[test]
+    fn override_does_not_change_the_package_digest_on_disk() {
+        let temp = TempDir::new("override-digest");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file("src/main.rv", "fn main() { }\n");
+        let source = std::fs::canonicalize(temp.path.join("src").join("main.rv"))
+            .expect("canonical source path");
+        let clean = load_package(&temp.path);
+        let options = LoadOptions {
+            locked: false,
+            overrides: std::iter::once((source, "fn main() { let x = 2; }\n".to_string()))
+                .collect(),
+        };
+        let overridden = load_package_with_options(&temp.path, &options);
+        // A package with no dependency has the empty digest either way; the
+        // point is that the override path adds no diagnostic and no extra file.
+        assert_eq!(clean.dependencies_digest, overridden.dependencies_digest);
+        assert_eq!(clean.loaded_files, overridden.loaded_files);
+        assert!(!overridden.diags.has_errors(), "{:?}", codes(&overridden.diags));
+    }
+
+    #[test]
+    fn override_above_the_file_size_limit_is_refused() {
+        let temp = TempDir::new("override-limit");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file("src/main.rv", "fn main() { }\n");
+        let source = std::fs::canonicalize(temp.path.join("src").join("main.rv"))
+            .expect("canonical source path");
+        let huge = "x".repeat(MAX_FILE_SIZE as usize + 1);
+        let options = LoadOptions {
+            locked: false,
+            overrides: std::iter::once((source, huge)).collect(),
+        };
+        let loaded = load_package_with_options(&temp.path, &options);
+        assert!(codes(&loaded.diags).contains(&"E-LIMIT-FILE-SIZE".to_string()));
     }
 
     #[test]
@@ -3152,7 +3260,7 @@ mod tests {
         temp.file("src/main.rv", "fn main() { }\n");
         let _ = load_package(&temp.path);
         temp.file("src/main.rv", "fn main() { let x = 1; }\n");
-        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true });
+        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true, ..Default::default() });
         assert_eq!(loaded.lockfile_state, LockfileState::Stale);
         assert!(codes(&loaded.diags).contains(&"E-MOD-LOCK".to_string()));
     }
