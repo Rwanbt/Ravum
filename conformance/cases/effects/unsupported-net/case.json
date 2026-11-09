@@ -1,0 +1,9 @@
+{
+  "id": "effects/unsupported-net",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EFFECT"
+  ],
+  "unsupported": true,
+  "notes": "net/unsafe/ffi/async are known groups but not implemented in Core 1.0 (design 3.6)."
+}

@@ -1,0 +1,7 @@
+use std::env;
+use std::io;
+
+fn main() {
+    let a = env::args();
+    io::println(&a[1]);
+}

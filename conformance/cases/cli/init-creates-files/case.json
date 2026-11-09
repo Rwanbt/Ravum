@@ -1,0 +1,14 @@
+{
+  "id": "cli/init-creates-files",
+  "mode": "cli",
+  "args": [
+    "init",
+    "proj"
+  ],
+  "exit_code": 0,
+  "expect_files": [
+    "proj/ravum.toml",
+    "proj/src/main.rv"
+  ],
+  "notes": "`init <dir>` creates the package manifest and the default source file."
+}

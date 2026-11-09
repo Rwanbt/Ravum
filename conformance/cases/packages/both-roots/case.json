@@ -1,0 +1,8 @@
+{
+  "id": "packages/both-roots",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-BOTH-ROOTS"
+  ],
+  "notes": "diagnostics.md declares src/main.rv + src/lib.rv in the same package as E-MOD-BOTH-ROOTS (Q-MOD-1 resolved). modules.md MOD-1.8 still allows coexistence; the registry ruling is followed here."
+}

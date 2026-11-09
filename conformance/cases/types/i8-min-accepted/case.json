@@ -1,0 +1,5 @@
+{
+  "id": "types/i8-min-accepted",
+  "mode": "compile-pass",
+  "notes": "The sign is applied by unary minus after lexing (LEX-8.5); -128 must be accepted for i8, while bare 128i8 is out of range."
+}

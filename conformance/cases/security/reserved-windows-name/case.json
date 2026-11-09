@@ -1,0 +1,13 @@
+{
+  "id": "security/reserved-windows-name",
+  "mode": "compile-fail",
+  "project": "app",
+  "skip_on": [
+    "linux",
+    "macos"
+  ],
+  "expect_codes": [
+    "E-MOD-RESERVED-NAME"
+  ],
+  "notes": "Windows reserved device names (CON, PRN, AUX, NUL, COM1...) are refused with E-MOD-RESERVED-NAME (Lead ruling; the loader must implement it). This case runs on Windows only."
+}

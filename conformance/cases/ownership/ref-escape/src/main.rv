@@ -1,0 +1,6 @@
+fn bad(v: &Vec<i32>) -> &Vec<i32> {
+    return v;
+}
+
+fn main() {
+}

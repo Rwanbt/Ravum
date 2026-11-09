@@ -1,0 +1,8 @@
+{
+  "id": "ownership/double-move",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-DOUBLE-MOVE"
+  ],
+  "notes": "No use occurs between the two moves, so the diagnostic is DOUBLE-MOVE, not USE-AFTER-MOVE (OWN-5.2)."
+}

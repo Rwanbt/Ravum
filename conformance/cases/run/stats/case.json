@@ -1,0 +1,9 @@
+{
+  "id": "run/stats",
+  "mode": "run-pass",
+  "args": [
+    "sample.txt"
+  ],
+  "stdout_contains": "2.5\n",
+  "notes": "Mean of 1.5, 2.5, 3.5 is 2.5; f64_to_string uses the shortest round-trip representation."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/dsp-gain-iir",
+  "mode": "run-pass",
+  "stdout_contains": "2\n1\n-0.5\n0\n---\n0.2\n0.26\n",
+  "notes": "Gain doubles samples; the IIR filter output is printed as f64 (shortest round-trip form)."
+}

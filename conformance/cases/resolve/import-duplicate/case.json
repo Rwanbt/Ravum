@@ -1,0 +1,7 @@
+{
+  "id": "resolve/import-duplicate",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-DUPLICATE"
+  ]
+}

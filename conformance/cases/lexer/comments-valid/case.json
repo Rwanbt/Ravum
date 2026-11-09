@@ -1,0 +1,5 @@
+{
+  "id": "lexer/comments-valid",
+  "mode": "compile-pass",
+  "notes": "Line and block comments are trivia; non-ASCII is allowed inside comments (LEX-6, LEX-7.4)."
+}

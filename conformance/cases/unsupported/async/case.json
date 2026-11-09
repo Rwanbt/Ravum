@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/async",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ASYNC"
+  ],
+  "unsupported": true
+}

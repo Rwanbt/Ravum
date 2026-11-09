@@ -1,0 +1,9 @@
+{
+  "id": "run/args",
+  "mode": "run-pass",
+  "args": [
+    "bonjour"
+  ],
+  "stdout_contains": "bonjour\n",
+  "notes": "args()[0] is the program name and args()[1] the first user argument (STD-4.1)."
+}

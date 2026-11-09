@@ -1,0 +1,8 @@
+{
+  "id": "effects/unknown-group",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNKNOWN"
+  ],
+  "notes": "An effect name outside the nine groups is E-EFF-UNKNOWN (canonical), not a parse error (G-3.3)."
+}

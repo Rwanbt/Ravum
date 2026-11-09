@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/unsafe",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-UNSAFE"
+  ],
+  "unsupported": true
+}

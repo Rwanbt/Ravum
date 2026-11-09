@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/raw-pointer",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-UNSAFE"
+  ],
+  "unsupported": true,
+  "notes": "Raw pointers are part of the unsafe surface: E-UNSUPPORTED-UNSAFE (canonical registry folds raw pointers into unsafe)."
+}

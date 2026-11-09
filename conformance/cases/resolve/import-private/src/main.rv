@@ -1,0 +1,9 @@
+mod a {
+    fn cache() {
+    }
+}
+
+use crate::a::cache;
+
+fn main() {
+}

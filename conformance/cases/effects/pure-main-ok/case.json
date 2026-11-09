@@ -1,0 +1,9 @@
+{
+  "id": "effects/pure-main-ok",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "notes": "Under --profile pure the entry point may use no effect: arithmetic on scalars only (EFF-4.4)."
+}

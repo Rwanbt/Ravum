@@ -36,3 +36,6 @@ impact.json
 .ai-native/
 tools/ai_docs/
 conventions.json
+
+# Ravum language build outputs (generated per package)
+.ravum/

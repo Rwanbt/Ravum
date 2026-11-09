@@ -16,6 +16,11 @@ members = [
   "crates/ravum-unit-graph",
   "crates/ravum-collab-oracle",
   "crates/ravum-batch",
+  "crates/ravum-lang-syntax",
+  "crates/ravum-lang-sema",
+  "crates/ravum-lang-codegen",
+  "crates/ravum-lang-cli",
+  "tools/conformance",
   "apps/ravum-demo-host",
   "apps/ravum-todo",
 ]
@@ -43,6 +48,9 @@ ravum-store = { path = "crates/ravum-store" }
 ravum-todo-core = { path = "crates/ravum-todo-core" }
 ravum-workspace-coordinator = { path = "crates/ravum-workspace-coordinator" }
 ravum-daemon = { path = "crates/ravum-daemon" }
+ravum-lang-syntax = { path = "crates/ravum-lang-syntax" }
+ravum-lang-sema = { path = "crates/ravum-lang-sema" }
+ravum-lang-codegen = { path = "crates/ravum-lang-codegen" }
 
 # Keep debug info minimal: the reference machine has ~16 Go RAM and the
 # permanent-build pipeline measures wall time, so link time matters.

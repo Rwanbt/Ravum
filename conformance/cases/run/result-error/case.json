@@ -1,0 +1,7 @@
+{
+  "id": "run/result-error",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "error: ",
+  "notes": "An unhandled Err in main prints `error: <message>` on stderr and exits 1 (STD-12.6)."
+}

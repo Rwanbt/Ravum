@@ -1,0 +1,5 @@
+{
+  "id": "run/unicode",
+  "mode": "run-pass",
+  "stdout_contains": "héllo 😀\n"
+}

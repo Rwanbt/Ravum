@@ -217,6 +217,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-conformance"
+version = "0.1.0"
+
+[[package]]
 name = "ravum-coordinator"
 version = "0.1.0"
 dependencies = [
@@ -256,6 +260,42 @@ dependencies = [
  "ravum-protocol",
  "ravum-rust-adapter",
  "ravum-snapshot",
+ "serde_json",
+]
+
+[[package]]
+name = "ravum-lang-cli"
+version = "0.1.0"
+dependencies = [
+ "ravum-lang-codegen",
+ "ravum-lang-sema",
+ "ravum-lang-syntax",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ravum-lang-codegen"
+version = "0.1.0"
+dependencies = [
+ "ravum-lang-sema",
+ "ravum-lang-syntax",
+]
+
+[[package]]
+name = "ravum-lang-sema"
+version = "0.1.0"
+dependencies = [
+ "ravum-lang-syntax",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ravum-lang-syntax"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "serde_json",
 ]
 

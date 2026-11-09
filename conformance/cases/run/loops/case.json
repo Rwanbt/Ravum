@@ -1,0 +1,6 @@
+{
+  "id": "run/loops",
+  "mode": "run-pass",
+  "stdout_contains": "19\n",
+  "notes": "while sum 0..4 = 10, for sum 0..3 = 6, loop stops at k = 3; total 19."
+}

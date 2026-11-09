@@ -1,0 +1,11 @@
+use std::io;
+use std::string;
+
+fn main() -> Result<(), Error> {
+    let first = io::read_line()?;
+    let second = io::read_line()?;
+    let a = string::parse_i64(&first)?;
+    let b = string::parse_i64(&second)?;
+    io::println(&(a + b).to_string());
+    Ok(())
+}

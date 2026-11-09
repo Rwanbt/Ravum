@@ -1,0 +1,9 @@
+{
+  "id": "cli/unknown-command",
+  "mode": "cli",
+  "args": [
+    "frobnicate"
+  ],
+  "exit_code": 2,
+  "notes": "An unknown command is a usage error: exit code 2 (design 2)."
+}

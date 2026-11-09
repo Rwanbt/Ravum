@@ -1,0 +1,5 @@
+{
+  "id": "lexer/empty-file",
+  "mode": "compile-pass",
+  "notes": "An empty library root is valid (G-2.1); no main is required for src/lib.rv."
+}

@@ -1,0 +1,7 @@
+use std::io;
+
+fn main() {
+    let s = String::from("a");
+    drop(s);
+    io::println(s.as_str());
+}

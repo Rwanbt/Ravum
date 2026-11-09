@@ -1,0 +1,10 @@
+{
+  "id": "cli/test-demo",
+  "mode": "cli",
+  "args": [
+    "test",
+    "."
+  ],
+  "exit_code": 0,
+  "notes": "`ravum-lang test` runs the three `test fn` items of examples/tests-demo; the exact report format is not specified, so only exit 0 is asserted."
+}

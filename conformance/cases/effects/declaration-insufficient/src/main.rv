@@ -1,0 +1,9 @@
+use std::io;
+
+fn log() effects(io) {
+    let s = String::from("x");
+    io::println(s.as_str());
+}
+
+fn main() {
+}

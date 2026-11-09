@@ -1,0 +1,10 @@
+use std::io;
+
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    let x = add(2147483647, 1);
+    io::println(&x.to_string());
+}

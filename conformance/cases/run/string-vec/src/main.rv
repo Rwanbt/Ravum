@@ -1,0 +1,13 @@
+use std::io;
+
+fn main() {
+    let mut s = String::new();
+    s.push_str("héllo");
+    s.push('!');
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.push(2);
+    v.push(3);
+    let total = v.len() + s.len();
+    io::println(&total.to_string());
+}

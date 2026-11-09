@@ -1,0 +1,7 @@
+{
+  "id": "types/literal-range",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-LITERAL-RANGE"
+  ]
+}

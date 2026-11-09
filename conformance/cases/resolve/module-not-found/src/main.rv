@@ -1,0 +1,4 @@
+mod absent;
+
+fn main() {
+}

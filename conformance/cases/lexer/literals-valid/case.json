@@ -1,0 +1,5 @@
+{
+  "id": "lexer/literals-valid",
+  "mode": "compile-pass",
+  "notes": "Decimal/hex/octal/binary integers, suffixes, separators, floats, exponents, char/string literals."
+}

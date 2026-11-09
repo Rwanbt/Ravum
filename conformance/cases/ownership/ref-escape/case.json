@@ -1,0 +1,7 @@
+{
+  "id": "ownership/ref-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ]
+}

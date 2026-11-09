@@ -1,0 +1,8 @@
+{
+  "id": "security/manifest-build-script",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-BUILD-SCRIPT"
+  ],
+  "notes": "There is no build script and no code execution at import/resolve time (MOD-5.10)."
+}

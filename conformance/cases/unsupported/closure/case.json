@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/closure",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-CLOSURE"
+  ],
+  "unsupported": true
+}

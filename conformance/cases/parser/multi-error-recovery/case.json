@@ -1,0 +1,9 @@
+{
+  "id": "parser/multi-error-recovery",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED",
+    "E-PARSE-UNEXPECTED"
+  ],
+  "notes": "Two independent parse errors must both be reported: a const without a type (E-PARSE-EXPECTED) and a chained comparison (E-PARSE-UNEXPECTED). Recovery must not stop at the first one (T3, DIAG-1.8)."
+}

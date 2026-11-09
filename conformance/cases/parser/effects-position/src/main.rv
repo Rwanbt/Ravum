@@ -1,0 +1,6 @@
+fn f() effects(io) -> i32 {
+    return 0;
+}
+
+fn main() {
+}

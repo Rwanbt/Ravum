@@ -1,0 +1,8 @@
+{
+  "id": "parser/assign-in-condition",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-UNEXPECTED"
+  ],
+  "notes": "Assignment is a statement, never an expression (G-6.8): E-PARSE-UNEXPECTED."
+}

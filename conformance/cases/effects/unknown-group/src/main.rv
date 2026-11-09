@@ -1,0 +1,5 @@
+fn f() effects(network) {
+}
+
+fn main() {
+}

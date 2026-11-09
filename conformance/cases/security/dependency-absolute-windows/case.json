@@ -1,0 +1,13 @@
+{
+  "id": "security/dependency-absolute-windows",
+  "mode": "compile-fail",
+  "project": "app",
+  "skip_on": [
+    "linux",
+    "macos"
+  ],
+  "expect_codes": [
+    "E-MOD-PATH-ESCAPE"
+  ],
+  "notes": "Dependency paths are validated (MOD-5.6). Lead ruling: E-MOD-PATH-ESCAPE covers absolute paths, `..` escapes and depth violations. diagnostics.md 3.3 currently lists only E-MOD-PATH; the registry must add PATH-ESCAPE."
+}

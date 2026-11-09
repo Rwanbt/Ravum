@@ -1,0 +1,8 @@
+{
+  "id": "lexer/invalid-char",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-CHAR"
+  ],
+  "notes": "An unexpected character outside any literal is E-LEX-CHAR (the code the canonical lexer emits). `@` is consumed by the lexer, so the remaining block still parses and only the lexer code is expected."
+}

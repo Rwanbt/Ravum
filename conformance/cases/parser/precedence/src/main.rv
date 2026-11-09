@@ -1,0 +1,15 @@
+use std::io;
+
+fn main() {
+    let a = 2 + 3 * 4;
+    let b = (2 + 3) * 4;
+    let c = 1 << 2 + 1;
+    let d = 1 + 2 << 3;
+    let e = 10 - 2 - 3;
+    let f = 2 * 3 % 4;
+    let g = true || false && false;
+    io::println(&(a + b + c + d + e + f).to_string());
+    if g {
+        io::println("ok");
+    }
+}

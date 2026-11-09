@@ -1,0 +1,8 @@
+{
+  "id": "resolve/dependency-undeclared",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "A dependency that is not declared in ravum.toml cannot be resolved: E-RES-UNKNOWN (there is no separate E-RES-DEPENDENCY-* code in the canonical registry)."
+}

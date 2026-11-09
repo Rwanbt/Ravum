@@ -1,0 +1,36 @@
+// Tests unitaires Ravum : `ravum-lang test` exécute les fonctions `test fn`.
+use std::io;
+
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+test fn addition_works() {
+    assert_eq(add(1, 1), 2);
+    assert_eq(add(-2, 2), 0);
+}
+
+test fn strings_work() {
+    let s = String::from("ravum");
+    assert_eq(s.len(), 5);
+    assert(s.starts_with("ra"));
+    assert_eq(s.to_uppercase(), "RAVUM");
+}
+
+test fn result_propagation_works() -> Result<(), Error> {
+    let value = parse_positive("42")?;
+    assert_eq(value, 42);
+    Ok(())
+}
+
+fn parse_positive(text: &str) -> Result<i64, Error> {
+    let value = string::parse_i64(text)?;
+    if value < 0 {
+        return Err(Error::new("negative value"));
+    }
+    Ok(value)
+}
+
+fn main() {
+    io::println("run `ravum-lang test` to execute the tests");
+}

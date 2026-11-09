@@ -1,0 +1,11 @@
+[package]
+name = "ravum-lang-codegen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Ravum language: auditable Rust code generation (reference backend B)."
+
+[dependencies]
+ravum-lang-syntax = { workspace = true }
+ravum-lang-sema = { workspace = true }

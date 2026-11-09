@@ -1,0 +1,10 @@
+{
+  "id": "cli/version-flag",
+  "mode": "cli",
+  "args": [
+    "--version"
+  ],
+  "exit_code": 0,
+  "stdout_contains": "ravum-lang",
+  "notes": "`ravum-lang --version` exits 0 and names the toolchain (design 2)."
+}

@@ -1,0 +1,18 @@
+// Récursion, type de retour explicite, cast `as` et boucle while.
+use std::io;
+
+fn fibonacci(n: u32) -> u64 {
+    if n < 2 {
+        return n as u64;
+    }
+    fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+fn main() -> Result<(), Error> {
+    let mut i: u32 = 0;
+    while i <= 10 {
+        io::println(&fibonacci(i).to_string());
+        i += 1;
+    }
+    Ok(())
+}

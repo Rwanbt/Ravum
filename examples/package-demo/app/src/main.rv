@@ -1,0 +1,12 @@
+// Package multi-module : dépendance locale `util`.
+use std::io;
+use util::clamp;
+use util::double;
+
+fn main() -> Result<(), Error> {
+    let value = double(21);
+    io::println(&value.to_string());
+    let bounded = clamp(value, 0, 40);
+    io::println(&bounded.to_string());
+    Ok(())
+}
