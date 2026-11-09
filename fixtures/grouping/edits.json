@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source": "src/lib.rs",
+  "description": "Editions compatibles (corps de fonctions distinctes) et une edition incompatible consommee par la fixture grouping",
+  "compatible": [
+    {
+      "name": "edit-01-add-plus-one",
+      "find": "pub fn add(a: i64, b: i64) -> i64 {\n    a + b\n}",
+      "replace": "pub fn add(a: i64, b: i64) -> i64 {\n    a + b + 1\n}",
+      "expect_marker": "a + b + 1"
+    },
+    {
+      "name": "edit-02-mul-plus-two",
+      "find": "pub fn mul(a: i64, b: i64) -> i64 {\n    a.wrapping_mul(b)\n}",
+      "replace": "pub fn mul(a: i64, b: i64) -> i64 {\n    a.wrapping_mul(b).wrapping_add(2)\n}",
+      "expect_marker": "wrapping_add(2)"
+    },
+    {
+      "name": "edit-03-is-even-bitwise",
+      "find": "pub fn is_even(n: i64) -> bool {\n    n % 2 == 0\n}",
+      "replace": "pub fn is_even(n: i64) -> bool {\n    n & 1 == 0\n}",
+      "expect_marker": "n & 1 == 0"
+    },
+    {
+      "name": "edit-04-factorial-range",
+      "find": "pub fn factorial(n: u64) -> u64 {\n    (2..=n).product::<u64>()\n}",
+      "replace": "pub fn factorial(n: u64) -> u64 {\n    (1..=n).product::<u64>()\n}",
+      "expect_marker": "(1..=n).product::<u64>()"
+    },
+    {
+      "name": "edit-05-checksum-mix",
+      "find": "pub fn checksum(bytes: &[u8]) -> u32 {\n    bytes.iter().fold(2166136261u32, |acc, byte| {\n        (acc ^ u32::from(*byte)).wrapping_mul(16777619)\n    })\n}",
+      "replace": "pub fn checksum(bytes: &[u8]) -> u32 {\n    bytes.iter().fold(2166136261u32, |acc, byte| {\n        (acc ^ u32::from(*byte)).wrapping_mul(16777631)\n    })\n}",
+      "expect_marker": "16777631"
+    },
+    {
+      "name": "edit-06-lerp-formula",
+      "find": "pub fn lerp(a: f64, b: f64, t: f64) -> f64 {\n    a + (b - a) * t\n}",
+      "replace": "pub fn lerp(a: f64, b: f64, t: f64) -> f64 {\n    a * (1.0 - t) + b * t\n}",
+      "expect_marker": "a * (1.0 - t) + b * t"
+    }
+  ],
+  "incompatible": {
+    "name": "edit-07-scale-signature",
+    "find": "pub fn scale(x: u32) -> u32 {\n    x * 2\n}",
+    "replace": "pub fn scale(x: u32, factor: u32) -> u32 {\n    x * factor\n}",
+    "expect_diagnostic_code": "E0061"
+  }
+}
