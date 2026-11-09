@@ -33,8 +33,8 @@
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
 | Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 250 PASS / 18 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
-| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0x9ca81d63781e9d75`, 23,2 s |
-| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 003 it/s, 20,0 s |
+| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
+| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
 | SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, **digest reproductible `21ee4d00…526db`** (deux runs identiques) |
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 75786AEF…33EEB` (racines et `target/` différents) |
@@ -124,10 +124,13 @@ Passe de traçabilité complète dans
 
 - **Prouvé** : lexer/parser/AST réels, récupération, garde-fous, formateur
   idempotent, corpus négatif, interfaces LSP effectives.
-- **Fuzz complet rejoué sur ce SHA** : 249 054 entrées lexer/parser
-  (0 échec, digest `0x9ca81d63781e9d75`, identique à la campagne antérieure) et
-  100 000 itérations `sema` (0 échec, 5 003 it/s). Les deux bugs de formateur
-  trouvés par la campagne initiale restent couverts par des tests de régression.
+- **Fuzz complet rejoué après les correctifs** : 249 054 entrées lexer/parser
+  (**0 échec**, digest `0xcb1740aef51d2879`) et 100 000 itérations `sema`
+  (**0 échec**). Le digest a changé par rapport à la campagne précédente
+  (`0x9ca81d63…`), ce qui est attendu — les correctifs modifient quels programmes
+  sont acceptés — et confirme que l'empreinte est bien liée au compilateur, pas
+  une constante. Les deux bugs de formateur trouvés par la campagne initiale
+  restent couverts par des tests de régression.
 - **Trois défauts frontend reproduits puis corrigés** : `let effects = 1;` refusé
   alors que `effects` est contextuel (LEX-4.5), `pub test fn` accepté au lieu de
   `E-PARSE-EXPECTED`, et `while`/`loop`/`for` acceptés comme valeurs
@@ -186,8 +189,8 @@ redémarrage automatique ne satisfait pas une exigence de préservation d'état.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
-1019 tests, 268 cas de conformance, 31 smoke, **fuzz complet rejoué sur ce
-SHA**, et **Miri rejoué en CI sur `4980355`** : 65 + 93 + 1 = **159 tests,
+1019 tests, 269 cas de conformance, 31 smoke, **fuzz complet rejoué après les
+correctifs (0 échec sur les deux campagnes)**, et **Miri rejoué en CI** : 65 + 93 + 1 = **159 tests,
 0 échec** (respectivement 225,8 s / 142,4 s / 18,5 s). TSan `NOT_APPLICABLE`
 justifié (aucun thread/async exposé). **Audit externe absent** — c'est ce qui
 empêche `PASS`.
