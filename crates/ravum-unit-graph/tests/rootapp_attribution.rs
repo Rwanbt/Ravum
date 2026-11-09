@@ -71,11 +71,36 @@ fn edit(workspace: &Path, relative: &str, old: &str, new: &str) {
     std::fs::write(&path, content.replacen(old, new, 1)).expect("write source");
 }
 
+/// Strips the Windows verbatim prefix, exactly like the graph does: comparison
+/// must be about the same file, not about the same spelling of its path.
+fn normalize(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy().to_string();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest.to_string());
+    }
+    path
+}
+
 fn rel(workspace: &Path, path: &Path) -> String {
-    let canonical = std::fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
+    let canonical = std::fs::canonicalize(workspace)
+        .map(normalize)
+        .unwrap_or_else(|_| workspace.to_path_buf());
     for base in [workspace, canonical.as_path()] {
         if let Ok(relative) = path.strip_prefix(base) {
             return relative.to_string_lossy().replace('\\', "/");
+        }
+    }
+    // A short (8.3) `%TEMP%` name on a CI runner does not match the long canonical
+    // path discovery reports: compare canonical forms before giving up.
+    if let Ok(file_canonical) = std::fs::canonicalize(path) {
+        let file_canonical = normalize(file_canonical);
+        for base in [workspace, canonical.as_path()] {
+            if let Ok(relative) = file_canonical.strip_prefix(base) {
+                return relative.to_string_lossy().replace('\\', "/");
+            }
         }
     }
     path.to_string_lossy().replace('\\', "/")

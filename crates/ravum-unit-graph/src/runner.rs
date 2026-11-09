@@ -641,8 +641,14 @@ fn load_unit_files(graph: &UnitGraph, unit: &Unit) -> Result<Vec<(String, Vec<u8
                 format!("cannot read {}: {error}", path.display()),
             )
         })?;
+        // The content identity must be relative to the workspace: an absolute path
+        // would make two identical trees at different locations look different. A
+        // second, normalized root comparison covers a metadata call that returned
+        // paths in another representable form (8.3 name, verbatim prefix).
+        let normalized_root = crate::graph::normalize_path(graph.root());
         let relative = path
             .strip_prefix(graph.root())
+            .or_else(|_| path.strip_prefix(&normalized_root))
             .map(|relative| relative.to_string_lossy().replace('\\', "/"))
             .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"));
         files.push((relative, bytes));

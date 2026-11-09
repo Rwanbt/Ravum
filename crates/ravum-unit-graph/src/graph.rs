@@ -177,7 +177,7 @@ impl FallbackReason {
 /// unstable prefix silently makes two identical builds produce different
 /// `.rmeta` bytes and different interface identities. Normalizing once, here,
 /// keeps the content identity and the interface identity stable.
-fn normalize_path(path: &Path) -> PathBuf {
+pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let text = canonical.to_string_lossy().to_string();
     if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
