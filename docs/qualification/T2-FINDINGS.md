@@ -142,7 +142,7 @@ Ces cas échouent sur le **comportement**, pas sur un identifiant :
 | `run/int-abs-signed` | `i32::abs()` accepté | refusé à la génération de code |
 | `lexer/contextual-effects-ident` | `let effects = 1;` accepté (`effects` n'est pas réservé) | refusé par le parseur |
 
-### 4.3 Défauts observés hors périmètre des 30 cas
+### 4.3 Défauts observés hors périmètre des cas de cette passe
 
 Constatés pendant la rédaction des cas, non encodés (ils ne relèvent pas des
 règles traitées) :
