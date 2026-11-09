@@ -1,0 +1,769 @@
+{
+  "chained": {
+    "description": "core then api with core .rmeta extern, then consumer with api .rmeta extern",
+    "per_unit": [
+      {
+        "analysis_ms": {
+          "count": 3,
+          "max": 257,
+          "mean": 85.66666666666667,
+          "min": 0,
+          "p50": 0,
+          "p95": 257,
+          "samples": [
+            257,
+            0,
+            0
+          ]
+        },
+        "cache_hits": 2,
+        "cache_misses": 1,
+        "records": [
+          {
+            "analysis_ms": 257,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 1231,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 266,
+            "unit": "core"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "core"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "core"
+          }
+        ],
+        "snapshot_bytes_miss_rounds": {
+          "count": 1,
+          "max": 1231,
+          "mean": 1231.0,
+          "min": 1231,
+          "p50": 1231,
+          "p95": 1231,
+          "samples": [
+            1231
+          ]
+        },
+        "total_ms": {
+          "count": 3,
+          "max": 266,
+          "mean": 88.66666666666667,
+          "min": 0,
+          "p50": 0,
+          "p95": 266,
+          "samples": [
+            266,
+            0,
+            0
+          ]
+        },
+        "unit": "core"
+      },
+      {
+        "analysis_ms": {
+          "count": 3,
+          "max": 185,
+          "mean": 61.666666666666664,
+          "min": 0,
+          "p50": 0,
+          "p95": 185,
+          "samples": [
+            185,
+            0,
+            0
+          ]
+        },
+        "cache_hits": 2,
+        "cache_misses": 1,
+        "records": [
+          {
+            "analysis_ms": 185,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 6224,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 196,
+            "unit": "api"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "api"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 1,
+            "unit": "api"
+          }
+        ],
+        "snapshot_bytes_miss_rounds": {
+          "count": 1,
+          "max": 6224,
+          "mean": 6224.0,
+          "min": 6224,
+          "p50": 6224,
+          "p95": 6224,
+          "samples": [
+            6224
+          ]
+        },
+        "total_ms": {
+          "count": 3,
+          "max": 196,
+          "mean": 65.66666666666667,
+          "min": 0,
+          "p50": 1,
+          "p95": 196,
+          "samples": [
+            196,
+            0,
+            1
+          ]
+        },
+        "unit": "api"
+      },
+      {
+        "analysis_ms": {
+          "count": 3,
+          "max": 183,
+          "mean": 61.0,
+          "min": 0,
+          "p50": 0,
+          "p95": 183,
+          "samples": [
+            183,
+            0,
+            0
+          ]
+        },
+        "cache_hits": 2,
+        "cache_misses": 1,
+        "records": [
+          {
+            "analysis_ms": 183,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 3399,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 202,
+            "unit": "consumer"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "consumer"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "consumer"
+          }
+        ],
+        "snapshot_bytes_miss_rounds": {
+          "count": 1,
+          "max": 3399,
+          "mean": 3399.0,
+          "min": 3399,
+          "p50": 3399,
+          "p95": 3399,
+          "samples": [
+            3399
+          ]
+        },
+        "total_ms": {
+          "count": 3,
+          "max": 202,
+          "mean": 67.33333333333333,
+          "min": 0,
+          "p50": 0,
+          "p95": 202,
+          "samples": [
+            202,
+            0,
+            0
+          ]
+        },
+        "unit": "consumer"
+      }
+    ],
+    "phase_total_ms": {
+      "count": 3,
+      "max": 681,
+      "mean": 232.66666666666666,
+      "min": 8,
+      "p50": 9,
+      "p95": 681,
+      "samples": [
+        681,
+        8,
+        9
+      ]
+    },
+    "rounds": [
+      {
+        "all_success": true,
+        "phase_total_ms": 681,
+        "round": 1,
+        "steps": [
+          {
+            "analysis_ms": 257,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 1231,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 266,
+            "unit": "core"
+          },
+          {
+            "analysis_ms": 185,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 6224,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 196,
+            "unit": "api"
+          },
+          {
+            "analysis_ms": 183,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": false,
+            "cache_kind": "miss",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 3399,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 202,
+            "unit": "consumer"
+          }
+        ]
+      },
+      {
+        "all_success": true,
+        "phase_total_ms": 8,
+        "round": 2,
+        "steps": [
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "core"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "api"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "consumer"
+          }
+        ]
+      },
+      {
+        "all_success": true,
+        "phase_total_ms": 9,
+        "round": 3,
+        "steps": [
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [],
+            "externs": 0,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "core"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "e4ab6c94373921563ccfb219589014d1e18a1303c125751fd6cac4589568db6b",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "core"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "a478ac83ba1204a44ef33031136765fbaef4af5973177254f05e279ff70316b3",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 1,
+            "unit": "api"
+          },
+          {
+            "analysis_ms": 0,
+            "artifact_sha256": "9e1f99ee890d49b3c3273e759232a810a01f2f1eb4e554df7222eaae83683ec5",
+            "cache_hit": true,
+            "cache_kind": "memory",
+            "diagnostics": 0,
+            "extern_names": [
+              "api"
+            ],
+            "externs": 1,
+            "lookup_ms": 0,
+            "queue_ms": 0,
+            "snapshot_bytes": 0,
+            "snapshot_id": "4f6f743dbd1efdc3de5957e47603fa1d39177bd87cb7a21123768b14ab93a5b5",
+            "status": "fresh",
+            "success": true,
+            "total_ms": 0,
+            "unit": "consumer"
+          }
+        ]
+      }
+    ],
+    "rustc_invocations": 3
+  },
+  "commands": [
+    "cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite cross-crate"
+  ],
+  "comparison": {
+    "chained_phase_total_ms_mean": 232.66666666666666,
+    "chained_rustc_invocations": 3,
+    "isolated_rustc_invocations": 1,
+    "isolated_total_ms_mean": 79.0,
+    "note": "chained analysis requires dependency artifacts and extern linkage; it is not expected to be faster than a single isolated unit and no speed-up is claimed"
+  },
+  "extern_change": {
+    "api_after": {
+      "analysis_ms": 228,
+      "artifact_sha256": "0ea74cf1ff1ff445cf877258c84bde84614a8be06045539969c762bcaa4edc83",
+      "cache_hit": false,
+      "cache_kind": "miss",
+      "diagnostics": 0,
+      "extern_names": [
+        "core"
+      ],
+      "externs": 1,
+      "lookup_ms": 0,
+      "queue_ms": 0,
+      "snapshot_bytes": 6357,
+      "snapshot_id": "e67a82d123f7d12a34cfda6ada89a7ea76b2ce265d4532e2c39fdaf19dba8fd1",
+      "status": "fresh",
+      "success": true,
+      "total_ms": 241,
+      "unit": "api-after-extern-change"
+    },
+    "api_is_miss": true,
+    "api_snapshot_changed": true,
+    "core_after": {
+      "analysis_ms": 205,
+      "artifact_sha256": "40472ce2d7b4e28dbc186cce392f239e98789f6c6498c1a2524f0d271ed5f3d6",
+      "cache_hit": false,
+      "cache_kind": "miss",
+      "diagnostics": 0,
+      "extern_names": [],
+      "externs": 0,
+      "lookup_ms": 0,
+      "queue_ms": 0,
+      "snapshot_bytes": 1275,
+      "snapshot_id": "04e1e08c05091e36749b9a3ff518b04f72eef0ea41ad23eab8886e9d12334948",
+      "status": "fresh",
+      "success": true,
+      "total_ms": 214,
+      "unit": "core-v2"
+    },
+    "core_before": {
+      "analysis_ms": 0,
+      "artifact_sha256": "92b9028f4e6db798375030e74302616724d901fccfdf11e0ca13e4f2e2d1eb4e",
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "diagnostics": 0,
+      "extern_names": [],
+      "externs": 0,
+      "lookup_ms": 0,
+      "queue_ms": 0,
+      "snapshot_bytes": 0,
+      "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+      "status": "fresh",
+      "success": true,
+      "total_ms": 0,
+      "unit": "core"
+    },
+    "note": "same api sources, different core interface artifact: the extern identity is part of the snapshot and cache key, so the dependent is really recompiled (miss), never a stale HIT"
+  },
+  "fixture": "fixtures/multicrate core -> api -> consumer (real sources, real .rmeta artifacts)",
+  "generated_unix": 1794184231,
+  "git": {
+    "branch": "feat/mvp0c-hardening",
+    "dirty_files": 21,
+    "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+    "head": "6fcabe3c504d856b29339e0048e18e25bb5fafd6"
+  },
+  "isolated": {
+    "analysis_ms": {
+      "count": 3,
+      "max": 228,
+      "mean": 76.0,
+      "min": 0,
+      "p50": 0,
+      "p95": 228,
+      "samples": [
+        228,
+        0,
+        0
+      ]
+    },
+    "description": "one self-contained unit analysed alone, no externs (legacy path)",
+    "records": [
+      {
+        "analysis_ms": 228,
+        "artifact_sha256": "d3f633d259c19689202a40870f89cf44d63a3e56eb6a7243b9eccee3167d0d77",
+        "cache_hit": false,
+        "cache_kind": "miss",
+        "diagnostics": 0,
+        "extern_names": [],
+        "externs": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "snapshot_bytes": 1231,
+        "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+        "status": "fresh",
+        "success": true,
+        "total_ms": 237,
+        "unit": "core"
+      },
+      {
+        "analysis_ms": 0,
+        "artifact_sha256": "d3f633d259c19689202a40870f89cf44d63a3e56eb6a7243b9eccee3167d0d77",
+        "cache_hit": true,
+        "cache_kind": "memory",
+        "diagnostics": 0,
+        "extern_names": [],
+        "externs": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "snapshot_bytes": 0,
+        "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+        "status": "fresh",
+        "success": true,
+        "total_ms": 0,
+        "unit": "core"
+      },
+      {
+        "analysis_ms": 0,
+        "artifact_sha256": "d3f633d259c19689202a40870f89cf44d63a3e56eb6a7243b9eccee3167d0d77",
+        "cache_hit": true,
+        "cache_kind": "memory",
+        "diagnostics": 0,
+        "extern_names": [],
+        "externs": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "snapshot_bytes": 0,
+        "snapshot_id": "ffbf8568f081aae97a5a6beb41428f1d8ed82016e0bf42e247140dd1526e3d37",
+        "status": "fresh",
+        "success": true,
+        "total_ms": 0,
+        "unit": "core"
+      }
+    ],
+    "rustc_invocations": 1,
+    "snapshot_bytes": {
+      "count": 1,
+      "max": 1231,
+      "mean": 1231.0,
+      "min": 1231,
+      "p50": 1231,
+      "p95": 1231,
+      "samples": [
+        1231
+      ]
+    },
+    "total_ms": {
+      "count": 3,
+      "max": 237,
+      "mean": 79.0,
+      "min": 0,
+      "p50": 0,
+      "p95": 237,
+      "samples": [
+        237,
+        0,
+        0
+      ]
+    }
+  },
+  "kind": "mvp0c-cross-crate-daemon-2026-11-09",
+  "limits": [
+    "tiny fixture, one machine, one local toolchain (rustc 1.95.0)",
+    "only lib targets are chained; binaries/features/build scripts still require the Cargo fallback path",
+    "the cache is local and content-addressed; first round is cold, later rounds are hits",
+    "an extern is a .rmeta interface artifact: its change invalidates dependents by design, which costs a real recompilation",
+    "no whole-program correctness claim: reports are bounded observations, never PROVED"
+  ],
+  "load_end": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        122,
+        94,
+        106
+      ],
+      "stats": {
+        "count": 3,
+        "max": 122,
+        "mean": 107.33333333333333,
+        "min": 94,
+        "p50": 106,
+        "p95": 122
+      }
+    },
+    "system": {
+      "captured_unix": 1794184233,
+      "cpu_busy_percent": 61.71875,
+      "daemon_working_set_bytes": 7340032,
+      "memory_available_bytes": 2030264320,
+      "memory_total_bytes": 16868962304,
+      "process_count": 376
+    }
+  },
+  "load_start": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        190,
+        184,
+        175
+      ],
+      "stats": {
+        "count": 3,
+        "max": 190,
+        "mean": 183.0,
+        "min": 175,
+        "p50": 184,
+        "p95": 190
+      }
+    },
+    "system": {
+      "captured_unix": 1794184231,
+      "cpu_busy_percent": 90.234375,
+      "daemon_working_set_bytes": 6053888,
+      "memory_available_bytes": 1927970816,
+      "memory_total_bytes": 16868962304,
+      "process_count": 382
+    }
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows",
+    "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+  },
+  "rounds": 3,
+  "schema_version": 1,
+  "toolchain": {
+    "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "host": "x86_64-pc-windows-msvc",
+    "release": "1.95.0"
+  },
+  "toolchain_evidence": {
+    "repo_root": "D:\\App\\Ravum",
+    "rustc_path": "rustc",
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  },
+  "valid": true
+}

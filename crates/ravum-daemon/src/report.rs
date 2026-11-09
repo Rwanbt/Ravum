@@ -58,6 +58,9 @@ pub struct SnapshotReport {
     pub written_files: usize,
     pub removed_files: usize,
     pub verified_files: usize,
+    /// Number of content-addressed extern artifacts stored in the snapshot.
+    #[serde(default)]
+    pub externs: usize,
     /// Immutable snapshot directory (daemon-private, never a user path).
     pub dir: String,
 }
@@ -82,6 +85,14 @@ pub struct AnalysisReport {
     pub diagnostics: Vec<Diagnostic>,
     pub timings: Timings,
     pub snapshot: Option<SnapshotReport>,
+    /// Content-addressed direct externs actually used by this analysis (empty on
+    /// the legacy no-extern path).
+    #[serde(default)]
+    pub externs: Vec<ExternUsageReport>,
+    /// SHA-256 of the `.rmeta` interface produced (or reused from the cache) by
+    /// this analysis; a dependent analysis can feed it back via `ExternInput`.
+    #[serde(default)]
+    pub artifact_sha256: Option<String>,
     pub daemon_version: String,
     /// Human-readable reason for a non-fresh status; `None` when fresh.
     pub message: Option<String>,

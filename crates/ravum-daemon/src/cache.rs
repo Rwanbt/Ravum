@@ -82,6 +82,14 @@ pub struct CachedVerdict {
     pub diagnostics: Vec<Diagnostic>,
     pub analysis_ms: u64,
     pub created_at_unix: u64,
+    /// Ordered digest of the content-addressed externs used by the analysis
+    /// (empty when none). Part of the cache identity, never optional.
+    #[serde(default)]
+    pub externs_digest: String,
+    /// SHA-256 of the produced `.rmeta` artifact, so a cache HIT can still serve
+    /// the exact interface to a dependent analysis.
+    #[serde(default)]
+    pub artifact_sha256: Option<String>,
     /// SHA-256 of every other field, canonicalized field by field.
     pub payload_digest: String,
 }
@@ -109,10 +117,26 @@ impl CachedVerdict {
             diagnostics,
             analysis_ms,
             created_at_unix: now_unix(),
+            externs_digest: String::new(),
+            artifact_sha256: None,
             payload_digest: String::new(),
         };
         verdict.payload_digest = verdict.compute_digest();
         verdict
+    }
+
+    /// Adds the extern identity to a verdict and recomputes its payload digest.
+    pub fn with_externs_digest(mut self, externs_digest: impl Into<String>) -> Self {
+        self.externs_digest = externs_digest.into();
+        self.payload_digest = self.compute_digest();
+        self
+    }
+
+    /// Records the content-addressed interface artifact of a successful analysis.
+    pub fn with_artifact_sha256(mut self, artifact_sha256: Option<String>) -> Self {
+        self.artifact_sha256 = artifact_sha256;
+        self.payload_digest = self.compute_digest();
+        self
     }
 
     /// Recomputes the payload digest and checks every identity field.
@@ -127,6 +151,7 @@ impl CachedVerdict {
             || self.snapshot_id != expected.snapshot_id
             || self.context_id != expected.context_id
             || self.toolchain_id != expected.toolchain_id
+            || self.externs_digest != expected.externs_digest
         {
             return Err("cache entry identity does not match the lookup key".to_owned());
         }
@@ -152,6 +177,11 @@ impl CachedVerdict {
         );
         push_field(&mut hasher, &self.analysis_ms.to_le_bytes());
         push_field(&mut hasher, &self.created_at_unix.to_le_bytes());
+        push_field(&mut hasher, self.externs_digest.as_bytes());
+        push_field(
+            &mut hasher,
+            self.artifact_sha256.as_deref().unwrap_or("").as_bytes(),
+        );
         push_field(&mut hasher, &(self.diagnostics.len() as u64).to_le_bytes());
         for diagnostic in &self.diagnostics {
             push_field(&mut hasher, diagnostic.signature().as_bytes());
@@ -172,9 +202,13 @@ pub struct CacheLookupKey {
     pub snapshot_id: String,
     pub context_id: String,
     pub toolchain_id: String,
+    /// Ordered digest of the content-addressed externs (defence in depth: even a
+    /// bug in snapshot identity cannot make an extern change a HIT).
+    pub externs_digest: String,
 }
 
 impl CacheLookupKey {
+    /// Legacy lookup without externs (empty digest); byte-for-byte v1 key.
     pub fn new(snapshot_id: &str, context_id: &str, toolchain_id: &str) -> Self {
         let mut hasher = Sha256::new();
         hasher.update(b"ravum-daemon-cache-key-v1");
@@ -187,6 +221,35 @@ impl CacheLookupKey {
             snapshot_id: snapshot_id.to_owned(),
             context_id: context_id.to_owned(),
             toolchain_id: toolchain_id.to_owned(),
+            externs_digest: String::new(),
+        }
+    }
+
+    /// Lookup including the extern identity of the request. The zero-extern case
+    /// keeps the legacy v1 key byte-for-byte (existing caches/tests unchanged);
+    /// a non-empty extern digest switches to v2, which adds that digest to the key.
+    pub fn new_with_externs(
+        snapshot_id: &str,
+        context_id: &str,
+        toolchain_id: &str,
+        externs_digest: &str,
+    ) -> Self {
+        if externs_digest.is_empty() {
+            return Self::new(snapshot_id, context_id, toolchain_id);
+        }
+        let mut hasher = Sha256::new();
+        hasher.update(b"ravum-daemon-cache-key-v2");
+        push_field(&mut hasher, &DAEMON_SCHEMA_VERSION.to_le_bytes());
+        push_field(&mut hasher, snapshot_id.as_bytes());
+        push_field(&mut hasher, context_id.as_bytes());
+        push_field(&mut hasher, toolchain_id.as_bytes());
+        push_field(&mut hasher, externs_digest.as_bytes());
+        Self {
+            key: hex(&hasher.finalize()),
+            snapshot_id: snapshot_id.to_owned(),
+            context_id: context_id.to_owned(),
+            toolchain_id: toolchain_id.to_owned(),
+            externs_digest: externs_digest.to_owned(),
         }
     }
 }
