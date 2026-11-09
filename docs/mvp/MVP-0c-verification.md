@@ -198,3 +198,63 @@ Fichiers du correctif :
 - `crates/ravum-workspace-coordinator/src/coordinator.rs` et `verifier.rs` :
   **non modifiés** — le mapping existant (`Failed → REJECT`,
   `Unavailable → MANUAL_REQUIRED`) était déjà correct.
+
+## Instabilité CI : auto-GC asynchrone (task-35, L4.10)
+
+> **Statut : flake reproduit sous charge, corrigé dans le test uniquement, 5/5
+> sous charge + 5/5 au repos, fichier 7/7 vert.** Aucun code produit modifié
+> (aucun bug produit prouvé). Preuve :
+> [`evidence/mvp0c-auto-gc-flake-2026-11-09.json`](../../evidence/mvp0c-auto-gc-flake-2026-11-09.json).
+
+### Symptôme observé
+
+En suite complète sous charge, `crates/ravum-daemon/tests/auto_gc_integration.rs::auto_gc_journal_and_stats_are_bounded_and_coherent`
+échouait à `assert!(stats.auto_gc.runs >= 1)` alors qu'il passait 3/3 isolément.
+Cause racine : l'auto-GC est déclenché par un **thread de maintenance
+asynchrone** (seuil tous les N appels, réveil par condition variable). Le test
+appelait `wait_auto_gc_idle`, puis lisait les stats et affirmait immédiatement
+`runs >= 1` ; `wait_auto_gc_idle` garantit que rien n'est « busy/pending », mais
+pas que le déclenchement dû a déjà été planifié/traité sous charge. Ce n'est pas
+un bug produit : c'est une attente manquante dans le test (les deux autres tests
+du même fichier utilisaient déjà une boucle bornée).
+
+### Correction (test uniquement)
+
+Helper `wait_for_auto_gc_run(&Daemon)` :
+
+- poll de `stats().auto_gc.runs` toutes les **50 ms**, timeout **10 s** ;
+- entre deux polls, `wait_auto_gc_idle(500)` pour laisser le thread avancer ;
+- si le timeout expire : `panic!` explicite avec `runs`, `failures`, `checks`,
+  `busy`, `pending`, `requests_since_check`, chemin du journal, nombre de lignes
+  du journal et `work_dir` — un test **échoue toujours** si l'auto-GC ne tourne
+  jamais ;
+- ensuite : `assert!(daemon.wait_auto_gc_idle(15_000))` puis relecture des stats ;
+- **aucune assertion retirée ou affaiblie** : journal borné/cohérent
+  (`journal_entries` == lignes, `runs + failures == journal_entries`,
+  `at_unix` du dernier essai présent), `runs >= 1` conservé, disque sous la
+  cible, hit récent conservé.
+
+### Vérification exécutée
+
+Commande par exécution :
+`cargo test -q -p ravum-daemon --offline --test auto_gc_integration -- --test-threads=1 --exact auto_gc_journal_and_stats_are_bounded_and_coherent`
+Charge simulée : **2 boucles CPU bornées** (PowerShell `Start-Job`, plafonnées à
+300 s, arrêtées après les 5 runs), machine partagée.
+
+| Contexte | Runs | Résultat | Durées observées |
+|---|---|---|---|
+| sous charge (2 boucles CPU) | 5/5 | **5 succès, 0 échec** | 6 746 / 5 956 / 5 480 / 5 079 / 5 256 ms |
+| au repos | 5/5 | **5 succès, 0 échec** | 3 563 / 3 600 / 3 810 / 4 100 / 4 157 ms |
+| fichier complet (`--test-threads=1`) | 1 | **7 tests passés, 0 échec** | 16 762 ms |
+
+### Limites et non-claims
+
+- Le test reste **temporel mais borné** : timeout 10 s, poll 50 ms ; ce n'est pas
+  une garantie temps réel, seulement un échec explicite en cas de non-déclenchement.
+- La charge est simulée (2 boucles CPU) sur une machine partagée, pas un
+  ordonnanceur contrôlé ; 5 répétitions par contexte, pas une campagne longue.
+- Aucun code produit modifié et **aucun bug produit** identifié : le comportement
+  asynchrone est attendu (déclenchement par seuil/période), c'est le test qui
+  était trop pressé.
+- Aucun autre test instable traité dans cette session ; un seul toolchain/OS
+  (rustc 1.95.0, Windows x86_64-pc-windows-msvc).
