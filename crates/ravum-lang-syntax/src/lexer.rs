@@ -136,6 +136,19 @@ impl<'a> Lexer<'a> {
             }
         }
         let text = &self.src[start..self.pos];
+        // `r"…"`, `b"…"`, `br"…"` are raw/byte string prefixes: recognised by the
+        // lexer (so the meaning is unambiguous) and refused with the documented
+        // lexical code instead of a parse cascade. The prefix token is not
+        // pushed, so the following string literal is lexed normally and the
+        // parser sees a plain string expression.
+        if matches!(text, "r" | "b" | "br") && self.peek_char() == Some('"') {
+            self.error(
+                "E-UNSUPPORTED-TOKEN",
+                start,
+                format!("`{text}\"…\"` strings are not supported in Ravum Core 1.0"),
+            );
+            return;
+        }
         let kind = match Kw::from_str(text) {
             Some(kw) => TokenKind::Kw(kw),
             None => TokenKind::Ident(text.to_string()),

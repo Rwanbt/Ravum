@@ -3136,11 +3136,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             self.check_expr(end, None);
         }
         let _ = inclusive;
-        self.error(
-            "E-TYP-RANGE",
-            expr.span,
-            "a range is only allowed in a `for` clause in Core 1.0".to_string(),
-        );
+        let _ = expr;
+        // The parser already rejects a range outside a `for` clause with
+        // E-UNSUPPORTED-RANGE (parse phase); the checker must not add a second
+        // code for the same construct.
         Type::Error
     }
 

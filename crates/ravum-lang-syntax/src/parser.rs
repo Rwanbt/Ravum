@@ -306,6 +306,9 @@ struct Parser<'a> {
     /// `(a < b) < c` (allowed) from `a < b < c` (E-PARSE-UNEXPECTED) and
     /// `(t.0).0` (allowed) from `t.0.1` (E-PARSE-UNEXPECTED).
     paren_exprs: BTreeSet<NodeId>,
+    /// True only while parsing the iterator of a `for`: a range is legal there
+    /// and nowhere else (E-UNSUPPORTED-RANGE, parse phase).
+    in_for_iter: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -330,6 +333,7 @@ impl<'a> Parser<'a> {
             nodes_reported: false,
             forbid_assign: 0,
             paren_exprs: BTreeSet::new(),
+            in_for_iter: false,
         }
     }
 
@@ -2801,6 +2805,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// A range is a `for`-clause construct in Core 1.0. Report it in the parse
+    /// phase (E-UNSUPPORTED-RANGE, per `diagnostics.md` §3) instead of letting
+    /// the checker reclassify it as a type error.
+    fn reject_range_outside_for(&mut self, span: Span) {
+        if self.in_for_iter {
+            return;
+        }
+        self.diags.error(
+            "E-UNSUPPORTED-RANGE",
+            span,
+            "a range is only allowed in a `for` clause in Ravum Core 1.0",
+        );
+    }
+
     fn parse_range(&mut self, allow_struct: bool) -> Expr {
         if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
             let start = self.cur_span();
@@ -2812,6 +2830,7 @@ impl<'a> Parser<'a> {
                 None
             };
             let id = self.id();
+            self.reject_range_outside_for(start);
             return Expr {
                 id,
                 kind: ExprKind::Range {
@@ -2833,6 +2852,7 @@ impl<'a> Parser<'a> {
                 None
             };
             let id = self.id();
+            self.reject_range_outside_for(start);
             return Expr {
                 id,
                 kind: ExprKind::Range {
@@ -3772,7 +3792,10 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("`in`");
         }
+        let outer = self.in_for_iter;
+        self.in_for_iter = true;
         let iter = self.parse_condition();
+        self.in_for_iter = outer;
         let body = self.parse_block();
         let span = self.span_from(start);
         let id = self.id();
@@ -4646,8 +4669,20 @@ impl S {
 
     #[test]
     fn ranges_try_and_return() {
-        let program =
-            parse_ok("fn f() -> u8 { let r = 0..n; let s = 0..=n; let t = g()?; return t; }");
+        // A range is a `for`-clause construct (diagnostics.md §3,
+        // E-UNSUPPORTED-RANGE, parse phase). The AST is still produced so the
+        // rest of the function parses, but the construct must be reported here
+        // and not reclassified later as a type error.
+        let source = "fn f() -> u8 { let r = 0..n; let s = 0..=n; let t = g()?; return t; }";
+        let result = parse(source);
+        let codes: Vec<&str> = result.diags.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(
+            codes,
+            vec!["E-UNSUPPORTED-RANGE", "E-UNSUPPORTED-RANGE"],
+            "a range outside a `for` clause is refused in the parse phase: {}",
+            dump_diags(&result)
+        );
+        let program = result.program;
         let f = as_fn(&top(&program)[0]);
         match &let_init(f, 0).kind {
             ExprKind::Range {
