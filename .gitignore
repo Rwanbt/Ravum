@@ -23,5 +23,16 @@ venv/
 # Measurements and local machine state
 bench-local/
 evidence/local/
+
 # Sortie locale du calcul d'impact (outil tools/impact/impact.mjs)
 impact.json
+
+# Outillage d'agents installé localement (ai-native-dev-stack, MIT, même titulaire).
+# Volontairement NON versionné ici : état d'installation propre au poste, doublons
+# .agents/.claude, chemins absolus. Voir docs/mvp/INTEGRATION-0abc.md §2 et §6.
+# Pour versionner un jour un sous-ensemble, ajouter une exception explicite `!`.
+.agents/
+.claude/
+.ai-native/
+tools/ai_docs/
+conventions.json
