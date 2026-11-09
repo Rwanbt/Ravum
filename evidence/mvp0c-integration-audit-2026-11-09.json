@@ -1,0 +1,2234 @@
+{
+  "schema": "ravum-mvp0c-integration-audit/1",
+  "task": "task-38 — MVP-0c L5.2 audit final d integration",
+  "generated_at_local": "2026-11-09T03:40:14.6017808+01:00",
+  "mode": "read-only (aucune commande git mutante, aucun build, aucun fichier deplace)",
+  "repository": "Rwanbt/Ravum",
+  "workspace": {
+    "path": "D:\\App\\Ravum",
+    "branch": "feat/mvp0c-hardening",
+    "head": "24d92b1319112425aa690c0d3dff5df372ddfbf1",
+    "head_equals_origin_0c": true,
+    "worktree_clean_at_audit_start": true,
+    "worktree_changed_during_audit": [
+      "M fixtures/grouping/src/lib.rs",
+      "?? fixtures/grouping/Cargo.lock",
+      "?? fixtures/grouping/tests/",
+      "?? crates/ravum-daemon/src/bin/ravum-daemon-bench/batch.rs",
+      "?? evidence/mvp0c-impact-e2e-ci-2026-11-09.json"
+    ],
+    "worktree_change_note": "Modifications locales apparues pendant l audit, produites par d autres acteurs du workspace, hors PR #82; a verifier/nettoyer avant la fusion. Les deux livrables de cet audit sont les seuls fichiers ecrits par l auditeur."
+  },
+  "refs": {
+    "origin/dev": "78411024e2665dafce31b029786ef56d400bdab2",
+    "origin/main": "78411024e2665dafce31b029786ef56d400bdab2",
+    "origin/feat/3-mvp0a-continuous-loop": "6b37ad3f22bce0ef0f30735ba0a4e32b6a31eda8",
+    "origin/feat/mvp0b-hardening": "ea7200c47991bc17044cf3cb50cbdd78c20005f9",
+    "origin/feat/mvp0c-hardening": "24d92b1319112425aa690c0d3dff5df372ddfbf1"
+  },
+  "commits": {
+    "above_78": 22,
+    "above_80": 54,
+    "above_0c": 31,
+    "above_dev": 107
+  },
+  "trees": {
+    "dev": "28cde4676207178a21e8f4cdc2a735af81a60d46",
+    "after_78": "64bd3ad235d2846702ab5487c358df104e391712",
+    "after_80": "030e6b0e9c690d6e88cf865f4ceef9b8bebb5bc8",
+    "after_82": "b62b9ae9ca104c6ed53c5e5f6d349748fccd9d7e"
+  },
+  "tracked_files": {
+    "dev": 78,
+    "after_78": 261,
+    "after_80": 530,
+    "after_82": 704
+  },
+  "prs": {
+    "78": {
+      "number": 78,
+      "state": "OPEN",
+      "isDraft": false,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "head": "feat/3-mvp0a-continuous-loop@6b37ad3f22bce0ef0f30735ba0a4e32b6a31eda8",
+      "base": "dev",
+      "files": 186,
+      "additions": 25528,
+      "deletions": 6,
+      "commits": 22
+    },
+    "80": {
+      "number": 80,
+      "state": "OPEN",
+      "isDraft": false,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "head": "feat/mvp0b-hardening@ea7200c47991bc17044cf3cb50cbdd78c20005f9",
+      "base": "feat/3-mvp0a-continuous-loop",
+      "files": 304,
+      "additions": 128220,
+      "deletions": 304,
+      "commits": 54
+    },
+    "82": {
+      "number": 82,
+      "state": "OPEN",
+      "isDraft": true,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "head": "feat/mvp0c-hardening@24d92b1319112425aa690c0d3dff5df372ddfbf1",
+      "base": "feat/mvp0b-hardening",
+      "files": 202,
+      "additions": 71322,
+      "deletions": 273,
+      "commits": 31,
+      "checks": [
+        {
+          "name": "Bounded automatic GC (opt-in path, bounded soak)",
+          "result": "pass",
+          "duration": "50s",
+          "url": "https://github.com/Rwanbt/Ravum/actions/runs/42551014521/job/128946376491"
+        },
+        {
+          "name": "impact",
+          "result": "pass",
+          "duration": "4m43s",
+          "url": "https://github.com/Rwanbt/Ravum/actions/runs/42551014585/job/128946375773"
+        },
+        {
+          "name": "mvp",
+          "result": "pass",
+          "duration": "4m58s",
+          "url": "https://github.com/Rwanbt/Ravum/actions/runs/42551014521/job/128946376135"
+        }
+      ]
+    }
+  },
+  "ci_runs": [
+    {
+      "id": 42551014521,
+      "name": "MVP product checks (build, tests, demos)",
+      "status": "completed",
+      "conclusion": "success",
+      "head": "24d92b1319112425aa690c0d3dff5df372ddfbf1",
+      "created": "2026-11-09T02:27:12Z"
+    },
+    {
+      "id": 42551014585,
+      "name": "MVP impact-selected checks (conservative, fail-closed)",
+      "status": "completed",
+      "conclusion": "success",
+      "head": "24d92b1319112425aa690c0d3dff5df372ddfbf1",
+      "created": "2026-11-09T02:27:12Z"
+    }
+  ],
+  "diff_vs_80": {
+    "base": "origin/feat/mvp0b-hardening",
+    "head": "24d92b1",
+    "files": 202,
+    "additions": 71322,
+    "deletions": 273,
+    "bytes": 3227814,
+    "statuses": {
+      "added": 174,
+      "modified": 28,
+      "deleted": 0
+    },
+    "renames": 0,
+    "binaries": 0,
+    "commands": [
+      "git diff --name-status origin/feat/mvp0b-hardening origin/feat/mvp0c-hardening",
+      "git diff --numstat --no-renames origin/feat/mvp0b-hardening origin/feat/mvp0c-hardening",
+      "git ls-tree -r -l origin/feat/mvp0c-hardening"
+    ],
+    "categories": [
+      {
+        "category": "Benchmarks / harness",
+        "files": 17,
+        "bytes": 191327,
+        "additions": 4491,
+        "deletions": 0,
+        "statuses": {
+          "A": 17
+        }
+      },
+      {
+        "category": "CI / workflows",
+        "files": 1,
+        "bytes": 18172,
+        "additions": 61,
+        "deletions": 7,
+        "statuses": {
+          "M": 1
+        }
+      },
+      {
+        "category": "Code produit Rust",
+        "files": 30,
+        "bytes": 762620,
+        "additions": 11171,
+        "deletions": 252,
+        "statuses": {
+          "M": 16,
+          "A": 14
+        }
+      },
+      {
+        "category": "Config / scripts divers",
+        "files": 1,
+        "bytes": 560,
+        "additions": 3,
+        "deletions": 0,
+        "statuses": {
+          "M": 1
+        }
+      },
+      {
+        "category": "Documentation",
+        "files": 20,
+        "bytes": 391612,
+        "additions": 6418,
+        "deletions": 0,
+        "statuses": {
+          "M": 1,
+          "A": 19
+        }
+      },
+      {
+        "category": "Fixtures",
+        "files": 69,
+        "bytes": 36355,
+        "additions": 1268,
+        "deletions": 0,
+        "statuses": {
+          "A": 69
+        }
+      },
+      {
+        "category": "Lockfile (généré)",
+        "files": 1,
+        "bytes": 11808,
+        "additions": 32,
+        "deletions": 0,
+        "statuses": {
+          "M": 1
+        }
+      },
+      {
+        "category": "Manifests Cargo",
+        "files": 6,
+        "bytes": 4589,
+        "additions": 58,
+        "deletions": 0,
+        "statuses": {
+          "M": 3,
+          "A": 3
+        }
+      },
+      {
+        "category": "Outils build/impact",
+        "files": 3,
+        "bytes": 125142,
+        "additions": 620,
+        "deletions": 11,
+        "statuses": {
+          "M": 2,
+          "A": 1
+        }
+      },
+      {
+        "category": "Preuves (evidence)",
+        "files": 33,
+        "bytes": 1333162,
+        "additions": 38485,
+        "deletions": 0,
+        "statuses": {
+          "A": 33
+        }
+      },
+      {
+        "category": "Scripts / outillage",
+        "files": 3,
+        "bytes": 16719,
+        "additions": 138,
+        "deletions": 2,
+        "statuses": {
+          "M": 2,
+          "A": 1
+        }
+      },
+      {
+        "category": "Tests Rust",
+        "files": 18,
+        "bytes": 335748,
+        "additions": 8577,
+        "deletions": 1,
+        "statuses": {
+          "M": 1,
+          "A": 17
+        }
+      }
+    ],
+    "top_15_bytes": [
+      {
+        "path": "evidence/mvp0c-s8-pilot-2026-11-09.json",
+        "status": "A",
+        "category": "Preuves (evidence)",
+        "bytes": 226569
+      },
+      {
+        "path": "evidence/mvp0c-verification-transient-2026-11-09.json",
+        "status": "A",
+        "category": "Preuves (evidence)",
+        "bytes": 194895
+      },
+      {
+        "path": "evidence/mvp0c-grouping-2026-11-09.json",
+        "status": "A",
+        "category": "Preuves (evidence)",
+        "bytes": 164327
+      },
+      {
+        "path": "evidence/mvp0c-grouping-multiagent-2026-11-09.json",
+        "status": "A",
+        "category": "Preuves (evidence)",
+        "bytes": 148531
+      },
+      {
+        "path": "evidence/mvp0c-pr-audit.json",
+        "status": "A",
+        "category": "Preuves (evidence)",
+        "bytes": 146562
+      },
+      {
+        "path": "crates/ravum-workspace-coordinator/src/coordinator.rs",
+        "status": "M",
+        "category": "Code produit Rust",
+        "bytes": 87825
+      },
+      {
+        "path": "crates/ravum-cli/src/collab_cycle.rs",
+        "status": "M",
+        "category": "Code produit Rust",
+        "bytes": 77908
+      },
+      {
+        "path": "crates/ravum-daemon/src/bin/ravum-daemon-bench/grouping.rs",
+        "status": "A",
+        "category": "Code produit Rust",
+        "bytes": 62022
+      },
+      {
+        "path": "tools/impact/selftest.mjs",
+        "status": "M",
+        "category": "Outils build/impact",
+        "bytes": 61880
+      },
+      {
+        "path": "crates/ravum-dsp-harness/tests/dsp_stress.rs",
+        "status": "A",
+        "category": "Tests Rust",
+        "bytes": 58038
+      },
+      {
+        "path": "tools/impact/impact.mjs",
+        "status": "M",
+        "category": "Outils build/impact",
+        "bytes": 54947
+      },
+      {
+        "path": "crates/ravum-workspace-coordinator/tests/git_publication_crash.rs",
+        "status": "A",
+        "category": "Tests Rust",
+        "bytes": 54877
+      },
+      {
+        "path": "crates/ravum-daemon/src/daemon.rs",
+        "status": "M",
+        "category": "Code produit Rust",
+        "bytes": 51470
+      },
+      {
+        "path": "crates/ravum-daemon/src/snapshot.rs",
+        "status": "M",
+        "category": "Code produit Rust",
+        "bytes": 45849
+      },
+      {
+        "path": "docs/mvp/MVP-0c-pr-audit.md",
+        "status": "A",
+        "category": "Documentation",
+        "bytes": 43681
+      }
+    ],
+    "over_300kb": [],
+    "over_1mb": [],
+    "generated_tracked": [],
+    "duplicate_groups": [
+      {
+        "files": [
+          "fixtures/collab5/cases/01_same_function_twice/src/lib.rs",
+          "fixtures/collab5/cases/08_lockfile/src/lib.rs",
+          "fixtures/collab5/cases/10_stale_snapshot/src/lib.rs"
+        ],
+        "note": "fixture identique volontaire (meme source, cas differents)"
+      },
+      {
+        "files": [
+          "fixtures/multicrate/core/Cargo.toml",
+          "fixtures/unit-graph-rootapp/core/Cargo.toml"
+        ],
+        "note": "manifeste fixture identique volontaire"
+      },
+      {
+        "files": [
+          "fixtures/collab5/cases/01_same_function_twice/a.patch",
+          "fixtures/collab5/cases/10_stale_snapshot/a.patch"
+        ],
+        "note": "patch fixture identique volontaire"
+      }
+    ]
+  },
+  "diff_vs_dev": {
+    "files": 630,
+    "additions": 224500,
+    "deletions": 13,
+    "note": "cumul #78+#80+#82; les sommes par PR (225070 lignes ajoutees) different du cumul car des fichiers sont modifies par plusieurs PR.",
+    "sums_individual": {
+      "p78": 25528,
+      "p80": 128220,
+      "p82": 71322,
+      "total": 225070
+    }
+  },
+  "hygiene": {
+    "secrets": {
+      "patterns": [
+        "ghp_/gho_/ghs_/ghu_/ghr_",
+        "github_pat_",
+        "sk-/sk-ant-",
+        "AKIA",
+        "xox/AIza",
+        "PRIVATE KEY",
+        "JWT",
+        "secret/password assignments",
+        "${{ secrets. }}"
+      ],
+      "hits": 0,
+      "note": "les seules occurrences de \"${{ secrets.\" sont du texte de documentation (audit PR) et non des workflows."
+    },
+    "personal_paths": {
+      "user_home_occurrences": 201,
+      "user_home_files": 14,
+      "app_path_occurrences": 11,
+      "app_path_files": 7,
+      "example_files": [
+        "evidence/mvp0c-e2e-2026-11-09.json",
+        "evidence/mvp0c-s8-live-*.json",
+        "evidence/mvp0c-verification-transient-2026-11-09.json"
+      ],
+      "severity": "non-bloquant"
+    },
+    "workflows_changed": [
+      {
+        "path": ".github/workflows/mvp-impact.yml",
+        "additions": 61,
+        "deletions": 7,
+        "summary": "selftest Node obligatoire avant mapping; E2E navigateur requis fail-closed (browser_e2e_required) + upload artifact; fallback JSON etendu; permissions contents:read inchangees; aucun secret."
+      }
+    ],
+    "ai_tooling": "Aucun fichier d outillage IA dans le diff #82 (herite de #78: 47 fichiers/337775 B, skills tiers gstack sans notice de licence, duplication .claude/.agents) — voir docs/mvp/MVP-0c-pr-audit.md §4.4/4.5.",
+    "destructifs": "Aucun script destructif nouveau dans #82; scripts/outillage 3 fichiers A1/M2 (modifications)."
+  },
+  "docs_evidence": {
+    "markdown_changed": 21,
+    "relative_links_checked": 76,
+    "relative_links_broken": 0,
+    "evidence_json_changed": 33,
+    "evidence_json_invalid": 0,
+    "evidence_over_100kb": 5,
+    "evidence_sizes_over_100kb": [
+      {
+        "path": "evidence/mvp0c-s8-pilot-2026-11-09.json",
+        "bytes": 226569
+      },
+      {
+        "path": "evidence/mvp0c-verification-transient-2026-11-09.json",
+        "bytes": 194895
+      },
+      {
+        "path": "evidence/mvp0c-grouping-2026-11-09.json",
+        "bytes": 164327
+      },
+      {
+        "path": "evidence/mvp0c-grouping-multiagent-2026-11-09.json",
+        "bytes": 148531
+      },
+      {
+        "path": "evidence/mvp0c-pr-audit.json",
+        "bytes": 146562
+      }
+    ],
+    "report_cited_evidence": 16,
+    "cited_evidence_missing": 1,
+    "missing": [
+      "evidence/mvp0c-pr-audit-2026-11-09.json"
+    ],
+    "note": "le fichier reel est evidence/mvp0c-pr-audit.json (sans suffixe de date): reference textuelle du rapport a corriger, non bloquant."
+  },
+  "tests": {
+    "files_deleted_under_tests": 0,
+    "removed_test_attributes": 0,
+    "added_ignore": 0,
+    "added_todo_unimplemented": 0,
+    "removed_assert_lines": 11,
+    "added_assert_lines": 988,
+    "removed_assert_contexts": [
+      "crates/ravum-daemon/tests/auto_gc_integration.rs (remplace par attente bornee + assert de settle)",
+      "crates/ravum-workspace-coordinator/src/coordinator.rs (tests reorganises, 75 assertions ajoutees dans le fichier)",
+      "crates/ravum-cli/src/collab_cycle.rs (1 assertion remplacee dans un test reecrit)"
+    ],
+    "documented_suite": "491 tests / 0 echec / 77 suites (STATUS.md:32, MVP-0c-REPORT.md:20,197,357)",
+    "observed_ci_suite": {
+      "command": "cargo test --workspace (run 42551014521)",
+      "test_result_lines": 78,
+      "zero_test_suites": 23,
+      "passed": 492,
+      "failed": 0
+    },
+    "discrepancy": "+1 test et +1 ligne de suite entre la documentation et la CI du HEAD audite; aucun test supprime/desactive; ecart de documentation, non bloquant."
+  },
+  "merge_simulation": {
+    "command": "git merge-tree 030e6b0e9c690d6e88cf865f4ceef9b8bebb5bc8 origin/feat/mvp0b-hardening origin/feat/mvp0c-hardening",
+    "note": "merge-tree ancien format, lecture seule; base-tree = tree(80) = merge-base apres fusion #78/#80; aucun objet ecrit.",
+    "output_lines": 73884,
+    "conflict_markers": 0,
+    "changed_in_both_headers": 0,
+    "added_in_both_headers": 0,
+    "result": "clean"
+  },
+  "merge_sequence": [
+    {
+      "step": 1,
+      "action": "merge #78 dans dev",
+      "command": "gh pr merge 78 --merge --match-head-commit 6b37ad3f22bce0ef0f30735ba0a4e32b6a31eda8",
+      "post_check": "tree dev == 64bd3ad235d2846702ab5487c358df104e391712; diff 7841102..dev == 186 files +25528/-6; fichiers = 261"
+    },
+    {
+      "step": 2,
+      "action": "retarget #80 vers dev",
+      "command": "gh pr edit 80 --base dev; gh pr view 80 --json baseRefName,mergeable,mergeStateStatus",
+      "post_check": "base=dev; checks re-evalues"
+    },
+    {
+      "step": 3,
+      "action": "merge #80 dans dev",
+      "command": "gh pr merge 80 --merge --match-head-commit ea7200c47991bc17044cf3cb50cbdd78c20005f9",
+      "post_check": "tree dev == 030e6b0e9c690d6e88cf865f4ceef9b8bebb5bc8; diff M78..dev == 304 files +128220/-304; fichiers = 530"
+    },
+    {
+      "step": 4,
+      "action": "prete + retarget #82 vers dev",
+      "command": "gh pr ready 82; gh pr edit 82 --base dev; gh pr view 82 --json baseRefName,mergeable,mergeStateStatus",
+      "post_check": "base=dev; draft=false; checks re-evalues"
+    },
+    {
+      "step": 5,
+      "action": "merge #82 dans dev",
+      "command": "gh pr merge 82 --merge --match-head-commit 24d92b1319112425aa690c0d3dff5df372ddfbf1",
+      "post_check": "tree dev == b62b9ae9ca104c6ed53c5e5f6d349748fccd9d7e; diff M80..dev == 202 files +71322/-273; cumul 630 files +224500/-13; fichiers = 704"
+    },
+    {
+      "step": 6,
+      "action": "verification post-fusion",
+      "command": "git fetch origin; git rev-parse origin/dev; gh pr checks 82; gh api \"repos/Rwanbt/Ravum/actions/runs?head_sha=...\"",
+      "post_check": "CI produit+impact vertes sur dev; docs integrite; pas de conflit"
+    }
+  ],
+  "protection_dev": {
+    "required_status_checks": null,
+    "required_approving_review_count": 0,
+    "conversation_resolution": true,
+    "force_push_allowed": false,
+    "deletions_allowed": false,
+    "risk": "aucun status check requis: l humain doit verifier la CI avant fusion"
+  },
+  "risks": [
+    {
+      "id": "R1",
+      "severity": "process",
+      "detail": "PRs empilees: #82 cible la branche de #80, #80 cible celle de #78; #82 est draft. Retarget obligatoire apres chaque fusion.",
+      "mitigation": "appliquer la sequence §6 et verifier baseRefName/mergeable/checks avant chaque merge."
+    },
+    {
+      "id": "R2",
+      "severity": "process",
+      "detail": "La protection de dev n exige aucun required status check.",
+      "mitigation": "verifier manuellement mvp+impact+docs vertes sur la tete avant chaque fusion; envisager de les rendre requis."
+    },
+    {
+      "id": "R3",
+      "severity": "gouvernance",
+      "detail": "Decisions humaines ouvertes: licence (aucune), outillage IA tiers herite de #78, 42 ADR + 2 RFC PROPOSED (43 fichiers dans docs/adr avec le README), ASIO/Kani/S8/release.",
+      "mitigation": "cases a cocher §8 et MVP-0c-REPORT §16."
+    },
+    {
+      "id": "R4",
+      "severity": "taille",
+      "detail": "Diff #82: 202 fichiers/+71322/-273 (3,08 Mo de blobs); cumul dev: 630 fichiers/+224500/-13; preuves 1,33 Mo (33 JSON, 5 >100 Ko, max 226569 B); aucun fichier >300 Ko ni binaire.",
+      "mitigation": "aucune action technique requise; revue humaine par lots si souhaitee."
+    },
+    {
+      "id": "R5",
+      "severity": "hygiene",
+      "detail": "201 occurrences de chemins personnels Windows dans 14 preuves; le rapport cite une preuve au nom legerement faux; compteur 491 documente vs 492 observe en CI.",
+      "mitigation": "nettoyage documentaire optionnel avant/apres fusion."
+    },
+    {
+      "id": "R6",
+      "severity": "CI",
+      "detail": "mvp-impact.yml modifie (selftest mapping, E2E navigateur requis fail-closed); actions epinglees par tag majeur, pas par SHA; duree impact 4m43.",
+      "mitigation": "acceptable; epinglage SHA possible en durcissement ulterieur."
+    },
+    {
+      "id": "R7",
+      "severity": "workspace",
+      "detail": "Modifications locales non liees apparues pendant l audit (fixtures/grouping, batch.rs daemon, une preuve), hors PR.",
+      "mitigation": "verifier git status propre avant la sequence de fusion."
+    }
+  ],
+  "verdict": "READY_FOR_HUMAN_REVIEW",
+  "blockers": [],
+  "non_blocking_findings": [
+    "491 tests documentes (STATUS/REPORT) vs 492 observes en CI sur le HEAD (0 echec): ecart documentaire de +1.",
+    "MVP-0c-REPORT §17 cite evidence/mvp0c-pr-audit-2026-11-09.json; le fichier reel est evidence/mvp0c-pr-audit.json.",
+    "201 occurrences de chemins personnels (C:\\Users, <lecteur>:\\App) dans 14 preuves JSON nouvelles; non bloquant, a redacter si republication.",
+    "Modifications locales de fixtures/grouping apparues pendant l audit (hors PR)."
+  ],
+  "limits": [
+    "Audit read-only: aucun build/test re-execute; les compteurs de tests viennent du log CI du run 42551014521 sur 24d92b1.",
+    "merge-tree simule la fusion au niveau arbre pour les refs actuelles; toute evolution de dev exige de rejouer la commande.",
+    "Les liens Markdown ont ete verifies par resolution relative + git cat-file (fichiers, pas de verification de titre/ancres).",
+    "Secrets recherches sur les lignes ajoutees du diff #82 avec les motifs listes; un format non couvert pourrait echapper au scan.",
+    "Le compteur global 492/0 est verifie dans le log CI; la repartition par crate reste celle du rapport (non re-mesuree)."
+  ],
+  "files": [
+    {
+      "status": "M",
+      "path": ".github/workflows/mvp-impact.yml",
+      "category": "CI / workflows",
+      "bytes": 18172,
+      "additions": 61,
+      "deletions": 7
+    },
+    {
+      "status": "M",
+      "path": ".gitignore",
+      "category": "Config / scripts divers",
+      "bytes": 560,
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "Cargo.lock",
+      "category": "Lockfile (généré)",
+      "bytes": 11808,
+      "additions": 32,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 1524,
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/README.md",
+      "category": "Documentation",
+      "bytes": 4536,
+      "additions": 85,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-a/src/alpha.rs",
+      "category": "Fixtures",
+      "bytes": 96,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-a/src/beta.rs",
+      "category": "Fixtures",
+      "bytes": 94,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-a/src/gamma.rs",
+      "category": "Fixtures",
+      "bytes": 96,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-a/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 79,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-b/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 257,
+      "additions": 21,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-c/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 99,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/fixtures/scenario-d/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 201,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/investigate-transient.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 31203,
+      "additions": 679,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/grouping-multiagent/run.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 39756,
+      "additions": 920,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/README.md",
+      "category": "Documentation",
+      "bytes": 5151,
+      "additions": 101,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/.gitignore",
+      "category": "Fixtures",
+      "bytes": 20,
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 344,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/src/dates.rs",
+      "category": "Fixtures",
+      "bytes": 457,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 419,
+      "additions": 10,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/src/stats.rs",
+      "category": "Fixtures",
+      "bytes": 657,
+      "additions": 24,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/src/text.rs",
+      "category": "Fixtures",
+      "bytes": 435,
+      "additions": 11,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/fixture/tests/behavior.rs",
+      "category": "Fixtures",
+      "bytes": 1827,
+      "additions": 75,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/agent-scripted.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5185,
+      "additions": 133,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/env.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5027,
+      "additions": 143,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/exec.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 4569,
+      "additions": 133,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/fsutil.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5219,
+      "additions": 175,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/merge.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5138,
+      "additions": 150,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/receipt.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 2447,
+      "additions": 65,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/report.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 8711,
+      "additions": 170,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/sampler.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5848,
+      "additions": 150,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/sampler.ps1",
+      "category": "Benchmarks / harness",
+      "bytes": 4855,
+      "additions": 126,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/scenario.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 16185,
+      "additions": 366,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/tasks.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 6957,
+      "additions": 206,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/usage-attribution.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 9012,
+      "additions": 205,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/verify.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 5046,
+      "additions": 137,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/lib/write-receipt.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 1694,
+      "additions": 46,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/results/latest.md",
+      "category": "Documentation",
+      "bytes": 8387,
+      "additions": 205,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "benchmarks/s8-mvp0c/run.mjs",
+      "category": "Benchmarks / harness",
+      "bytes": 34475,
+      "additions": 687,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-batch/Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 412,
+      "additions": 15,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-batch/src/bin/ravum-batch-measure.rs",
+      "category": "Code produit Rust",
+      "bytes": 16055,
+      "additions": 420,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-batch/src/lib.rs",
+      "category": "Code produit Rust",
+      "bytes": 28188,
+      "additions": 819,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-batch/tests/collector.rs",
+      "category": "Tests Rust",
+      "bytes": 15064,
+      "additions": 455,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-cli/Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 1226,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-cli/src/collab_cycle.rs",
+      "category": "Code produit Rust",
+      "bytes": 77908,
+      "additions": 175,
+      "deletions": 40
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-cli/src/main.rs",
+      "category": "Code produit Rust",
+      "bytes": 3554,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-cli/src/unit_check.rs",
+      "category": "Code produit Rust",
+      "bytes": 24040,
+      "additions": 639,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-cli/tests/collab_oracle_cli.rs",
+      "category": "Tests Rust",
+      "bytes": 11801,
+      "additions": 339,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-cli/tests/unit_check.rs",
+      "category": "Tests Rust",
+      "bytes": 10001,
+      "additions": 308,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 475,
+      "additions": 17,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/src/lib.rs",
+      "category": "Code produit Rust",
+      "bytes": 30443,
+      "additions": 721,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/tests/cost.rs",
+      "category": "Tests Rust",
+      "bytes": 3070,
+      "additions": 85,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/tests/end_to_end_v2.rs",
+      "category": "Tests Rust",
+      "bytes": 6820,
+      "additions": 176,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/tests/l1_interface_breaks.rs",
+      "category": "Tests Rust",
+      "bytes": 7323,
+      "additions": 198,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/tests/support/mod.rs",
+      "category": "Tests Rust",
+      "bytes": 7607,
+      "additions": 231,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-collab-oracle/tests/unavailable.rs",
+      "category": "Tests Rust",
+      "bytes": 2979,
+      "additions": 80,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-daemon/src/bin/ravum-daemon-bench/cross_crate.rs",
+      "category": "Code produit Rust",
+      "bytes": 15599,
+      "additions": 409,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-daemon/src/bin/ravum-daemon-bench/grouping.rs",
+      "category": "Code produit Rust",
+      "bytes": 62022,
+      "additions": 1567,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/bin/ravum-daemon-bench/main.rs",
+      "category": "Code produit Rust",
+      "bytes": 33697,
+      "additions": 159,
+      "deletions": 3
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/bin/ravum-daemon.rs",
+      "category": "Code produit Rust",
+      "bytes": 36630,
+      "additions": 54,
+      "deletions": 1
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/cache.rs",
+      "category": "Code produit Rust",
+      "bytes": 20718,
+      "additions": 63,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/config.rs",
+      "category": "Code produit Rust",
+      "bytes": 16246,
+      "additions": 61,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/daemon.rs",
+      "category": "Code produit Rust",
+      "bytes": 51470,
+      "additions": 285,
+      "deletions": 13
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/lib.rs",
+      "category": "Code produit Rust",
+      "bytes": 3522,
+      "additions": 7,
+      "deletions": 3
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/report.rs",
+      "category": "Code produit Rust",
+      "bytes": 10205,
+      "additions": 109,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/rustc_driver.rs",
+      "category": "Code produit Rust",
+      "bytes": 15547,
+      "additions": 217,
+      "deletions": 5
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/src/snapshot.rs",
+      "category": "Code produit Rust",
+      "bytes": 45849,
+      "additions": 566,
+      "deletions": 11
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-daemon/tests/auto_gc_integration.rs",
+      "category": "Tests Rust",
+      "bytes": 20571,
+      "additions": 40,
+      "deletions": 1
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-daemon/tests/externs_integration.rs",
+      "category": "Tests Rust",
+      "bytes": 15788,
+      "additions": 397,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-daemon/tests/wire_externs.rs",
+      "category": "Tests Rust",
+      "bytes": 26007,
+      "additions": 731,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-dsp-harness/Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 625,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-dsp-harness/tests/dsp_stress.rs",
+      "category": "Tests Rust",
+      "bytes": 58038,
+      "additions": 1495,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/Cargo.toml",
+      "category": "Manifests Cargo",
+      "bytes": 327,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/archive.rs",
+      "category": "Code produit Rust",
+      "bytes": 4548,
+      "additions": 140,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/graph.rs",
+      "category": "Code produit Rust",
+      "bytes": 27964,
+      "additions": 737,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/identity.rs",
+      "category": "Code produit Rust",
+      "bytes": 6776,
+      "additions": 182,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/lib.rs",
+      "category": "Code produit Rust",
+      "bytes": 2256,
+      "additions": 59,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/proposals.rs",
+      "category": "Code produit Rust",
+      "bytes": 3620,
+      "additions": 103,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/src/runner.rs",
+      "category": "Code produit Rust",
+      "bytes": 23935,
+      "additions": 664,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/tests/central_evidence.rs",
+      "category": "Tests Rust",
+      "bytes": 17317,
+      "additions": 403,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/tests/negative_cases.rs",
+      "category": "Tests Rust",
+      "bytes": 25101,
+      "additions": 674,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-unit-graph/tests/rootapp_attribution.rs",
+      "category": "Tests Rust",
+      "bytes": 11986,
+      "additions": 290,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-workspace-coordinator/src/bin/common/mod.rs",
+      "category": "Code produit Rust",
+      "bytes": 29490,
+      "additions": 276,
+      "deletions": 43
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-workspace-coordinator/src/bin/ravum-collab.rs",
+      "category": "Code produit Rust",
+      "bytes": 18271,
+      "additions": 65,
+      "deletions": 15
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-workspace-coordinator/src/coordinator.rs",
+      "category": "Code produit Rust",
+      "bytes": 87825,
+      "additions": 1323,
+      "deletions": 107
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-workspace-coordinator/src/evaluation.rs",
+      "category": "Code produit Rust",
+      "bytes": 23348,
+      "additions": 629,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-workspace-coordinator/src/lib.rs",
+      "category": "Code produit Rust",
+      "bytes": 4075,
+      "additions": 34,
+      "deletions": 11
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-workspace-coordinator/src/oracle.rs",
+      "category": "Code produit Rust",
+      "bytes": 24920,
+      "additions": 677,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "crates/ravum-workspace-coordinator/src/records.rs",
+      "category": "Code produit Rust",
+      "bytes": 13899,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-workspace-coordinator/tests/collab5_semantic_statuses.rs",
+      "category": "Tests Rust",
+      "bytes": 21601,
+      "additions": 600,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-workspace-coordinator/tests/git_publication_crash.rs",
+      "category": "Tests Rust",
+      "bytes": 54877,
+      "additions": 1501,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "crates/ravum-workspace-coordinator/tests/transient_verification.rs",
+      "category": "Tests Rust",
+      "bytes": 19797,
+      "additions": 574,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "docs/architecture/STATUS.md",
+      "category": "Documentation",
+      "bytes": 12029,
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-REPORT.md",
+      "category": "Documentation",
+      "bytes": 23457,
+      "additions": 369,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-batch-collector.md",
+      "category": "Documentation",
+      "bytes": 12335,
+      "additions": 223,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-build-performance.md",
+      "category": "Documentation",
+      "bytes": 40546,
+      "additions": 688,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-cli.md",
+      "category": "Documentation",
+      "bytes": 12243,
+      "additions": 249,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-collab-oracle.md",
+      "category": "Documentation",
+      "bytes": 15617,
+      "additions": 255,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-collaboration.md",
+      "category": "Documentation",
+      "bytes": 21939,
+      "additions": 419,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-cross-crate-daemon.md",
+      "category": "Documentation",
+      "bytes": 16595,
+      "additions": 281,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-cross-crate.md",
+      "category": "Documentation",
+      "bytes": 21491,
+      "additions": 380,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-dsp-stress.md",
+      "category": "Documentation",
+      "bytes": 18492,
+      "additions": 255,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-e2e.md",
+      "category": "Documentation",
+      "bytes": 17680,
+      "additions": 286,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-plan.md",
+      "category": "Documentation",
+      "bytes": 22015,
+      "additions": 337,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-pr-audit.md",
+      "category": "Documentation",
+      "bytes": 43681,
+      "additions": 684,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-publication-robustness.md",
+      "category": "Documentation",
+      "bytes": 17729,
+      "additions": 216,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-qualification.md",
+      "category": "Documentation",
+      "bytes": 30231,
+      "additions": 562,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-s8.md",
+      "category": "Documentation",
+      "bytes": 32438,
+      "additions": 540,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "docs/mvp/MVP-0c-verification.md",
+      "category": "Documentation",
+      "bytes": 15020,
+      "additions": 260,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-auto-gc-flake-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 6623,
+      "additions": 181,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-batch-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 14530,
+      "additions": 570,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-cli-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 11119,
+      "additions": 236,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-collab-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 11795,
+      "additions": 256,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-collab-oracle-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 11063,
+      "additions": 236,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-cross-crate-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 32922,
+      "additions": 930,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-cross-crate-daemon-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 22757,
+      "additions": 769,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-daemon-wire-externs-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 17452,
+      "additions": 559,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-dsp-stress-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 6827,
+      "additions": 204,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-dsp-stress-ci-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 4864,
+      "additions": 91,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-e2e-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 23314,
+      "additions": 319,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-evidence-hygiene-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 2954,
+      "additions": 56,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-grouping-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 164327,
+      "additions": 5019,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-grouping-multiagent-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 148531,
+      "additions": 3683,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-impact-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 22151,
+      "additions": 674,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-impact-dev-dep-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 12299,
+      "additions": 289,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-impact-e2e-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 13919,
+      "additions": 319,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-pr-audit.json",
+      "category": "Preuves (evidence)",
+      "bytes": 146562,
+      "additions": 5288,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-publication-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 14274,
+      "additions": 381,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-A1-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 20850,
+      "additions": 584,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-A2-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 20841,
+      "additions": 584,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-A3-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21325,
+      "additions": 596,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-B1-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21231,
+      "additions": 591,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-B2-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21169,
+      "additions": 589,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-B3-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21182,
+      "additions": 589,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-C1-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21228,
+      "additions": 591,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-C2-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 20799,
+      "additions": 581,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-C3-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 21215,
+      "additions": 591,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-live-summary-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 11514,
+      "additions": 426,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-s8-pilot-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 226569,
+      "additions": 7500,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-unit-graph-rootapp-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 3702,
+      "additions": 95,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-verification-retry-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 18359,
+      "additions": 313,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "evidence/mvp0c-verification-transient-2026-11-09.json",
+      "category": "Preuves (evidence)",
+      "bytes": 194895,
+      "additions": 4795,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/README.md",
+      "category": "Fixtures",
+      "bytes": 2453,
+      "additions": 43,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/01_same_function_twice/a.patch",
+      "category": "Fixtures",
+      "bytes": 72,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/01_same_function_twice/b.patch",
+      "category": "Fixtures",
+      "bytes": 72,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/01_same_function_twice/scenario.json",
+      "category": "Fixtures",
+      "bytes": 628,
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/01_same_function_twice/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 78,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/02_public_signature_used_elsewhere/a.patch",
+      "category": "Fixtures",
+      "bytes": 152,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/02_public_signature_used_elsewhere/scenario.json",
+      "category": "Fixtures",
+      "bytes": 552,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/02_public_signature_used_elsewhere/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 71,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/03_incompatible_caller/a.patch",
+      "category": "Fixtures",
+      "bytes": 146,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/03_incompatible_caller/scenario.json",
+      "category": "Fixtures",
+      "bytes": 671,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/03_incompatible_caller/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 104,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/04_weakened_contract/a.patch",
+      "category": "Fixtures",
+      "bytes": 167,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/04_weakened_contract/scenario.json",
+      "category": "Fixtures",
+      "bytes": 515,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/04_weakened_contract/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 152,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/05_undeclared_dependency/a.patch",
+      "category": "Fixtures",
+      "bytes": 86,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/05_undeclared_dependency/b.patch",
+      "category": "Fixtures",
+      "bytes": 103,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/05_undeclared_dependency/scenario.json",
+      "category": "Fixtures",
+      "bytes": 689,
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/05_undeclared_dependency/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 110,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/06_ambiguous_import/a.patch",
+      "category": "Fixtures",
+      "bytes": 123,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/06_ambiguous_import/scenario.json",
+      "category": "Fixtures",
+      "bytes": 697,
+      "additions": 15,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/06_ambiguous_import/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 97,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/07_abi_change/a.patch",
+      "category": "Fixtures",
+      "bytes": 151,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/07_abi_change/scenario.json",
+      "category": "Fixtures",
+      "bytes": 491,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/07_abi_change/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 100,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/08_lockfile/Cargo.lock",
+      "category": "Fixtures",
+      "bytes": 24,
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/08_lockfile/lock.patch",
+      "category": "Fixtures",
+      "bytes": 79,
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/08_lockfile/scenario.json",
+      "category": "Fixtures",
+      "bytes": 481,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/08_lockfile/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 78,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/09_functional_regression/a.patch",
+      "category": "Fixtures",
+      "bytes": 98,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/09_functional_regression/scenario.json",
+      "category": "Fixtures",
+      "bytes": 619,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/09_functional_regression/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 187,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/10_stale_snapshot/a.patch",
+      "category": "Fixtures",
+      "bytes": 72,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/10_stale_snapshot/scenario.json",
+      "category": "Fixtures",
+      "bytes": 562,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/collab5/cases/10_stale_snapshot/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 78,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/grouping/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 333,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/grouping/edits.json",
+      "category": "Fixtures",
+      "bytes": 2171,
+      "additions": 49,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/grouping/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 14370,
+      "additions": 479,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 122,
+      "additions": 10,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/api/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 129,
+      "additions": 10,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/api/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 398,
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/application/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 169,
+      "additions": 11,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/application/src/main.rs",
+      "category": "Fixtures",
+      "bytes": 134,
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/buildscript/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 112,
+      "additions": 8,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/buildscript/build.rs",
+      "category": "Fixtures",
+      "bytes": 69,
+      "additions": 3,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/buildscript/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 240,
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/consumer/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 132,
+      "additions": 10,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/consumer/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 204,
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/core/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 86,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/core/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 729,
+      "additions": 28,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/features/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 126,
+      "additions": 11,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/multicrate/features/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 271,
+      "additions": 12,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/unit-graph-rootapp/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 178,
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/unit-graph-rootapp/core/Cargo.toml",
+      "category": "Fixtures",
+      "bytes": 86,
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/unit-graph-rootapp/core/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 206,
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "fixtures/unit-graph-rootapp/src/lib.rs",
+      "category": "Fixtures",
+      "bytes": 251,
+      "additions": 10,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "scripts/impact.ps1",
+      "category": "Scripts / outillage",
+      "bytes": 10497,
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "scripts/run-tests.ps1",
+      "category": "Scripts / outillage",
+      "bytes": 1847,
+      "additions": 14,
+      "deletions": 2
+    },
+    {
+      "status": "A",
+      "path": "scripts/s8-mvp0c.ps1",
+      "category": "Scripts / outillage",
+      "bytes": 4375,
+      "additions": 122,
+      "deletions": 0
+    },
+    {
+      "status": "A",
+      "path": "tools/agent-usage/usage.mjs",
+      "category": "Outils build/impact",
+      "bytes": 8315,
+      "additions": 196,
+      "deletions": 0
+    },
+    {
+      "status": "M",
+      "path": "tools/impact/impact.mjs",
+      "category": "Outils build/impact",
+      "bytes": 54947,
+      "additions": 56,
+      "deletions": 1
+    },
+    {
+      "status": "M",
+      "path": "tools/impact/selftest.mjs",
+      "category": "Outils build/impact",
+      "bytes": 61880,
+      "additions": 368,
+      "deletions": 10
+    }
+  ]
+}
