@@ -99,7 +99,6 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 | `ownership/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
 | `ownership/move-out-of-mut-borrow` | - | `E-OWN-MOVE-OUT-OF-BORROW` | `E-OWN-MOVE-BORROWED` | `E-OWN-MOVE-BORROWED` |
 | `ownership/vec-index-move` | - | `E-OWN-PARTIAL-MOVE` | `E-OWN-MOVE-INDEXED` | `E-OWN-MOVE-INDEXED` |
-| `run/math-max-signed-zero` | - | — | — | — |
 | `run/string-parse-method-no-call` | - | `E-RES-UNKNOWN` | `E-TYP-FIELD` | — |
 | `run/vec-clone-non-copy` | - | `E-RES-UNKNOWN` | — | — |
 | `unsupported/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
