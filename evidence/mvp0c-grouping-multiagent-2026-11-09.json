@@ -1,0 +1,3683 @@
+{
+  "schema_version": 1,
+  "suite": "grouping-multiagent",
+  "generated_unix": 1794184565,
+  "duration_ms": 22180,
+  "protocol": {
+    "question": "Quelle fréquence réelle de conflits multi-agents rend le groupement de patches non rentable, et quel seuil de bascule employer ?",
+    "scenarios": [
+      {
+        "id": "a-distinct-files",
+        "label": "fichiers distincts",
+        "n": 3,
+        "fixture": "benchmarks/grouping-multiagent/fixtures/scenario-a",
+        "expectedDecisions": [
+          "AUTO_SAFE",
+          "AUTO_SAFE",
+          "AUTO_SAFE"
+        ],
+        "proposals": [
+          {
+            "proposalId": "agent-a1/alpha",
+            "path": "src/alpha.rs",
+            "symbols": [
+              "alpha"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 2",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-a2/beta",
+            "path": "src/beta.rs",
+            "symbols": [
+              "beta"
+            ],
+            "find": "    x * 2",
+            "replace": "    x * 3",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-a3/gamma",
+            "path": "src/gamma.rs",
+            "symbols": [
+              "gamma"
+            ],
+            "find": "    x - 3",
+            "replace": "    x - 4",
+            "declaredDependencies": []
+          }
+        ]
+      },
+      {
+        "id": "b-distinct-symbols-one-file",
+        "label": "symboles distincts, même fichier",
+        "n": 5,
+        "fixture": "benchmarks/grouping-multiagent/fixtures/scenario-b",
+        "expectedDecisions": [
+          "AUTO_SAFE",
+          "AUTO_SAFE",
+          "AUTO_SAFE",
+          "AUTO_SAFE",
+          "AUTO_SAFE"
+        ],
+        "proposals": [
+          {
+            "proposalId": "agent-b1/f1",
+            "path": "src/lib.rs",
+            "symbols": [
+              "f1"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 2",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-b2/f2",
+            "path": "src/lib.rs",
+            "symbols": [
+              "f2"
+            ],
+            "find": "    x * 2",
+            "replace": "    x * 3",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-b3/f3",
+            "path": "src/lib.rs",
+            "symbols": [
+              "f3"
+            ],
+            "find": "    x + 3",
+            "replace": "    x + 4",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-b4/f4",
+            "path": "src/lib.rs",
+            "symbols": [
+              "f4"
+            ],
+            "find": "    x - 4",
+            "replace": "    x - 5",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-b5/f5",
+            "path": "src/lib.rs",
+            "symbols": [
+              "f5"
+            ],
+            "find": "    x + 5",
+            "replace": "    x + 6",
+            "declaredDependencies": []
+          }
+        ]
+      },
+      {
+        "id": "c-same-function",
+        "label": "même fonction (conflit)",
+        "n": 3,
+        "fixture": "benchmarks/grouping-multiagent/fixtures/scenario-c",
+        "expectedDecisions": [
+          "AUTO_SAFE",
+          "CONFLICT",
+          "CONFLICT"
+        ],
+        "proposals": [
+          {
+            "proposalId": "agent-c1/shared-plus-2",
+            "path": "src/lib.rs",
+            "symbols": [
+              "shared"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 2",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-c2/shared-plus-3",
+            "path": "src/lib.rs",
+            "symbols": [
+              "shared"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 3",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-c3/shared-plus-4",
+            "path": "src/lib.rs",
+            "symbols": [
+              "shared"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 4",
+            "declaredDependencies": []
+          }
+        ]
+      },
+      {
+        "id": "d-undeclared-dependency",
+        "label": "dépendance non déclarée",
+        "n": 3,
+        "fixture": "benchmarks/grouping-multiagent/fixtures/scenario-d",
+        "expectedDecisions": [
+          "AUTO_SAFE",
+          "MANUAL_REQUIRED",
+          "AUTO_SAFE"
+        ],
+        "proposals": [
+          {
+            "proposalId": "agent-d1/helper",
+            "path": "src/lib.rs",
+            "symbols": [
+              "helper"
+            ],
+            "find": "    x + 1",
+            "replace": "    x + 5",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-d2/compose-undeclared",
+            "path": "src/lib.rs",
+            "symbols": [
+              "compose"
+            ],
+            "find": "    helper(x) * 2",
+            "replace": "    helper(x) * 3",
+            "declaredDependencies": []
+          },
+          {
+            "proposalId": "agent-d3/other",
+            "path": "src/lib.rs",
+            "symbols": [
+              "other"
+            ],
+            "find": "    x - 1",
+            "replace": "    x - 2",
+            "declaredDependencies": []
+          }
+        ]
+      }
+    ],
+    "repetitions": 5,
+    "order": "ordre des scénarios tourné d'un cran à chaque répétition (alternance); ordre des propositions = ordre de soumission des fichiers 01..NN",
+    "decisionsSource": "binaire ravum-collab (coordinateur réel, --verify: vérification sémantique rustc opt-in)",
+    "binary": "target\\debug\\ravum-collab.exe",
+    "contentVerification": "digest de snapshot recalculé côté harnais (même formule que ravum-snapshot) comparé au snapshot_after réel; chaîne des accepted_changes; présence des éditions acceptées / absence des refusées; zéro changement perdu",
+    "modelLabel": "MODÈLE CALIBRÉ — coûts unitaires phase 1 + fréquences de conflit mesurées ici",
+    "excluded": "aucun build, lien ni activation mesurés ici; le groupement n'est pas implémenté, il est modélisé"
+  },
+  "machine": {
+    "os": "win32",
+    "release": "10.0.26100",
+    "arch": "x64",
+    "logicalParallelism": 16,
+    "totalMemoryBytes": 16868962304,
+    "node": "v26.13.0",
+    "hostname": "MSI"
+  },
+  "load": {
+    "start": {
+      "freeMemoryBytes": 1123733504,
+      "totalMemoryBytes": 16868962304
+    },
+    "end": {
+      "freeMemoryBytes": 1662492672,
+      "totalMemoryBytes": 16868962304
+    },
+    "calibrationStartMs": [
+      344,
+      255,
+      301
+    ],
+    "calibrationEndMs": [
+      155,
+      180,
+      244
+    ],
+    "note": "machine de référence partagée avec d'autres workers; charge non contrôlée, mono-exécution; mémoire libre et calibration rustc -vV enregistrées avant/après chaque répétition"
+  },
+  "costs": {
+    "cycleMs": 191,
+    "refusalMs": 184,
+    "recoveryMs": 1596,
+    "retryMs": 158,
+    "source": "evidence\\mvp0c-grouping-2026-11-09.json"
+  },
+  "git": {
+    "head": "fdb20cd3b806c6c2d293ba29ea7efa3e27c3594d",
+    "branch": "feat/mvp0c-hardening",
+    "dirtyFiles": 15,
+    "note": "arbre de travail partagé avec les autres workers MVP-0c: un nombre de fichiers dirty non nul est attendu et n'entre pas dans l'identité de la campagne"
+  },
+  "scenarios": [
+    {
+      "id": "a-distinct-files",
+      "label": "fichiers distincts",
+      "n": 3,
+      "expectedDecisions": [
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE"
+      ],
+      "runs": 5,
+      "decisions": [
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE"
+      ],
+      "deterministicAcrossReps": true,
+      "runsWithExpectedDecisions": 5,
+      "runsWithConflict": 0,
+      "batchConflictRate": 0,
+      "proposalConflictRate": 0,
+      "nonAutoSafeDecisions": 0,
+      "totalDecisions": 15,
+      "runsAllChecksOk": 5,
+      "wallMs": {
+        "count": 5,
+        "min": 654,
+        "max": 1558,
+        "mean": 945.8,
+        "p50": 785,
+        "p95": 1558
+      }
+    },
+    {
+      "id": "b-distinct-symbols-one-file",
+      "label": "symboles distincts, même fichier",
+      "n": 5,
+      "expectedDecisions": [
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE"
+      ],
+      "runs": 5,
+      "decisions": [
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE",
+        "AUTO_SAFE"
+      ],
+      "deterministicAcrossReps": true,
+      "runsWithExpectedDecisions": 5,
+      "runsWithConflict": 0,
+      "batchConflictRate": 0,
+      "proposalConflictRate": 0,
+      "nonAutoSafeDecisions": 0,
+      "totalDecisions": 25,
+      "runsAllChecksOk": 5,
+      "wallMs": {
+        "count": 5,
+        "min": 1099,
+        "max": 1965,
+        "mean": 1460,
+        "p50": 1249,
+        "p95": 1965
+      }
+    },
+    {
+      "id": "c-same-function",
+      "label": "même fonction (conflit)",
+      "n": 3,
+      "expectedDecisions": [
+        "AUTO_SAFE",
+        "CONFLICT",
+        "CONFLICT"
+      ],
+      "runs": 5,
+      "decisions": [
+        "AUTO_SAFE",
+        "CONFLICT",
+        "CONFLICT"
+      ],
+      "deterministicAcrossReps": true,
+      "runsWithExpectedDecisions": 5,
+      "runsWithConflict": 5,
+      "batchConflictRate": 1,
+      "proposalConflictRate": 0.6666666666666666,
+      "nonAutoSafeDecisions": 10,
+      "totalDecisions": 15,
+      "runsAllChecksOk": 5,
+      "wallMs": {
+        "count": 5,
+        "min": 388,
+        "max": 701,
+        "mean": 574.2,
+        "p50": 664,
+        "p95": 701
+      }
+    },
+    {
+      "id": "d-undeclared-dependency",
+      "label": "dépendance non déclarée",
+      "n": 3,
+      "expectedDecisions": [
+        "AUTO_SAFE",
+        "MANUAL_REQUIRED",
+        "AUTO_SAFE"
+      ],
+      "runs": 5,
+      "decisions": [
+        "AUTO_SAFE",
+        "MANUAL_REQUIRED",
+        "AUTO_SAFE"
+      ],
+      "deterministicAcrossReps": true,
+      "runsWithExpectedDecisions": 5,
+      "runsWithConflict": 5,
+      "batchConflictRate": 1,
+      "proposalConflictRate": 0.3333333333333333,
+      "nonAutoSafeDecisions": 5,
+      "totalDecisions": 15,
+      "runsAllChecksOk": 5,
+      "wallMs": {
+        "count": 5,
+        "min": 499,
+        "max": 824,
+        "mean": 720.8,
+        "p50": 756,
+        "p95": 824
+      }
+    }
+  ],
+  "aggregate": {
+    "runs": 20,
+    "runsAllChecksOk": 20,
+    "batchConflictRuns": 10,
+    "batchConflictRate": 0.5,
+    "proposalConflictRate": 0.21428571428571427,
+    "wallMs": {
+      "count": 20,
+      "min": 388,
+      "max": 1965,
+      "mean": 925.2,
+      "p50": 756,
+      "p95": 1853
+    }
+  },
+  "repetitions": [
+    {
+      "rep": 1,
+      "order": [
+        "a-distinct-files",
+        "b-distinct-symbols-one-file",
+        "c-same-function",
+        "d-undeclared-dependency"
+      ],
+      "loadBefore": {
+        "freeMemoryBytes": 1123799040,
+        "totalMemoryBytes": 16868962304
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "scenario": "a-distinct-files",
+          "scenarioLabel": "fichiers distincts",
+          "n": 3,
+          "wallMs": 1558,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "baseSnapshotId": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 1122832384,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 618684416,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "taskId": "alpha",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence e081d507fd7cef023a5047a04b484c7acd61843e6d2b30e5bd6f2aebbf21d90d"
+              ],
+              "integratedPaths": [
+                "src/alpha.rs"
+              ],
+              "resultingSnapshotId": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "taskId": "beta",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 343023c0051627138e3ed3cc2fd9f72aac0322a990cafe03798a48502aa0efbf"
+              ],
+              "integratedPaths": [
+                "src/beta.rs"
+              ],
+              "resultingSnapshotId": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "taskId": "gamma",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a841cacebf36029f586a98be65fbc763b87914be83d2c0852ca45f3c15270049"
+              ],
+              "integratedPaths": [
+                "src/gamma.rs"
+              ],
+              "resultingSnapshotId": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+              "snapshotAfter": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "journalSeq": 1,
+              "paths": [
+                "src/alpha.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d"
+            },
+            {
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "snapshotBefore": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "snapshotAfter": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "journalSeq": 2,
+              "paths": [
+                "src/beta.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1"
+            },
+            {
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "snapshotBefore": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+              "journalSeq": 3,
+              "paths": [
+                "src/gamma.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+            "acceptedCount": 3,
+            "autoSafeCount": 3
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+          "summary": {
+            "auto_safe": 3,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 1,
+          "scenario": "b-distinct-symbols-one-file",
+          "scenarioLabel": "symboles distincts, même fichier",
+          "n": 5,
+          "wallMs": 1853,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "baseSnapshotId": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "journalLines": 5,
+          "loadBefore": {
+            "freeMemoryBytes": 681803776,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 517021696,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "taskId": "f1",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 370207fc2be0e6a74a4797a538306be8906c192720c5dc59c5c84fe21e1ee1a2"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "taskId": "f2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence aa426f94be6acb51ca2064089b62d10288b0054d2787a5069e433bb33b4c00b7"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "taskId": "f3",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence f36bfdc8a2fc6666d2213083f2351720112dab88a77e2b1daa39dfabfdc52064"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "taskId": "f4",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 4b5fba59f7f43d6cddd46c14c09b145e034796e2e08e20b4554660081ec6b289"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "taskId": "f5",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence d1ff6fd77ed0ecc68f3246a1930521e76d49172696bba3aecefbf1b073bf4d84"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+              "snapshotAfter": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d"
+            },
+            {
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "snapshotBefore": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "snapshotAfter": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "journalSeq": 2,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9"
+            },
+            {
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "snapshotBefore": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "snapshotAfter": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f"
+            },
+            {
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "snapshotBefore": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "snapshotAfter": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "journalSeq": 4,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78"
+            },
+            {
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "snapshotBefore": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+              "journalSeq": 5,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+            "acceptedCount": 5,
+            "autoSafeCount": 5
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+          "summary": {
+            "auto_safe": 5,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 1,
+          "scenario": "c-same-function",
+          "scenarioLabel": "même fonction (conflit)",
+          "n": 3,
+          "wallMs": 688,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "baseSnapshotId": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 491802624,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 614846464,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "taskId": "shared-plus-2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 40617c0b2fad41fc0375e7b0c6d9875dd8e4f1720cc0d57bad000a7205129a57"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3"
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c2/shared-plus-3",
+              "agentId": "agent-c2",
+              "taskId": "shared-plus-3",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c3/shared-plus-4",
+              "agentId": "agent-c3",
+              "taskId": "shared-plus-4",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+              "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+          "summary": {
+            "auto_safe": 1,
+            "conflict": 2,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 1,
+          "scenario": "d-undeclared-dependency",
+          "scenarioLabel": "dépendance non déclarée",
+          "n": 3,
+          "wallMs": 798,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 642863104,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 584577024,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+              "snapshotAfter": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337"
+            },
+            {
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "snapshotBefore": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+            "acceptedCount": 2,
+            "autoSafeCount": 2
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "summary": {
+            "auto_safe": 2,
+            "conflict": 0,
+            "manual_required": 1,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        }
+      ],
+      "loadAfter": {
+        "freeMemoryBytes": 584306688,
+        "totalMemoryBytes": 16868962304
+      }
+    },
+    {
+      "rep": 2,
+      "order": [
+        "b-distinct-symbols-one-file",
+        "c-same-function",
+        "d-undeclared-dependency",
+        "a-distinct-files"
+      ],
+      "loadBefore": {
+        "freeMemoryBytes": 584294400,
+        "totalMemoryBytes": 16868962304
+      },
+      "runs": [
+        {
+          "rep": 2,
+          "scenario": "b-distinct-symbols-one-file",
+          "scenarioLabel": "symboles distincts, même fichier",
+          "n": 5,
+          "wallMs": 1965,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "baseSnapshotId": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "journalLines": 5,
+          "loadBefore": {
+            "freeMemoryBytes": 566853632,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1771225088,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "taskId": "f1",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 370207fc2be0e6a74a4797a538306be8906c192720c5dc59c5c84fe21e1ee1a2"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "taskId": "f2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence aa426f94be6acb51ca2064089b62d10288b0054d2787a5069e433bb33b4c00b7"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "taskId": "f3",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence f36bfdc8a2fc6666d2213083f2351720112dab88a77e2b1daa39dfabfdc52064"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "taskId": "f4",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 4b5fba59f7f43d6cddd46c14c09b145e034796e2e08e20b4554660081ec6b289"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "taskId": "f5",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence d1ff6fd77ed0ecc68f3246a1930521e76d49172696bba3aecefbf1b073bf4d84"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+              "snapshotAfter": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d"
+            },
+            {
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "snapshotBefore": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "snapshotAfter": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "journalSeq": 2,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9"
+            },
+            {
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "snapshotBefore": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "snapshotAfter": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f"
+            },
+            {
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "snapshotBefore": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "snapshotAfter": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "journalSeq": 4,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78"
+            },
+            {
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "snapshotBefore": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+              "journalSeq": 5,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+            "acceptedCount": 5,
+            "autoSafeCount": 5
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+          "summary": {
+            "auto_safe": 5,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 2,
+          "scenario": "c-same-function",
+          "scenarioLabel": "même fonction (conflit)",
+          "n": 3,
+          "wallMs": 701,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "baseSnapshotId": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 1792282624,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2036187136,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "taskId": "shared-plus-2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 40617c0b2fad41fc0375e7b0c6d9875dd8e4f1720cc0d57bad000a7205129a57"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3"
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c2/shared-plus-3",
+              "agentId": "agent-c2",
+              "taskId": "shared-plus-3",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c3/shared-plus-4",
+              "agentId": "agent-c3",
+              "taskId": "shared-plus-4",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+              "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+          "summary": {
+            "auto_safe": 1,
+            "conflict": 2,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 2,
+          "scenario": "d-undeclared-dependency",
+          "scenarioLabel": "dépendance non déclarée",
+          "n": 3,
+          "wallMs": 727,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2097012736,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2157002752,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+              "snapshotAfter": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337"
+            },
+            {
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "snapshotBefore": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+            "acceptedCount": 2,
+            "autoSafeCount": 2
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "summary": {
+            "auto_safe": 2,
+            "conflict": 0,
+            "manual_required": 1,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 2,
+          "scenario": "a-distinct-files",
+          "scenarioLabel": "fichiers distincts",
+          "n": 3,
+          "wallMs": 980,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "baseSnapshotId": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2129723392,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1991688192,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "taskId": "alpha",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence e081d507fd7cef023a5047a04b484c7acd61843e6d2b30e5bd6f2aebbf21d90d"
+              ],
+              "integratedPaths": [
+                "src/alpha.rs"
+              ],
+              "resultingSnapshotId": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "taskId": "beta",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 343023c0051627138e3ed3cc2fd9f72aac0322a990cafe03798a48502aa0efbf"
+              ],
+              "integratedPaths": [
+                "src/beta.rs"
+              ],
+              "resultingSnapshotId": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "taskId": "gamma",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a841cacebf36029f586a98be65fbc763b87914be83d2c0852ca45f3c15270049"
+              ],
+              "integratedPaths": [
+                "src/gamma.rs"
+              ],
+              "resultingSnapshotId": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+              "snapshotAfter": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "journalSeq": 1,
+              "paths": [
+                "src/alpha.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d"
+            },
+            {
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "snapshotBefore": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "snapshotAfter": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "journalSeq": 2,
+              "paths": [
+                "src/beta.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1"
+            },
+            {
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "snapshotBefore": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+              "journalSeq": 3,
+              "paths": [
+                "src/gamma.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+            "acceptedCount": 3,
+            "autoSafeCount": 3
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+          "summary": {
+            "auto_safe": 3,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        }
+      ],
+      "loadAfter": {
+        "freeMemoryBytes": 1991901184,
+        "totalMemoryBytes": 16868962304
+      }
+    },
+    {
+      "rep": 3,
+      "order": [
+        "c-same-function",
+        "d-undeclared-dependency",
+        "a-distinct-files",
+        "b-distinct-symbols-one-file"
+      ],
+      "loadBefore": {
+        "freeMemoryBytes": 1991933952,
+        "totalMemoryBytes": 16868962304
+      },
+      "runs": [
+        {
+          "rep": 3,
+          "scenario": "c-same-function",
+          "scenarioLabel": "même fonction (conflit)",
+          "n": 3,
+          "wallMs": 430,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "baseSnapshotId": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 1968001024,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1902284800,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "taskId": "shared-plus-2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 40617c0b2fad41fc0375e7b0c6d9875dd8e4f1720cc0d57bad000a7205129a57"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3"
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c2/shared-plus-3",
+              "agentId": "agent-c2",
+              "taskId": "shared-plus-3",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c3/shared-plus-4",
+              "agentId": "agent-c3",
+              "taskId": "shared-plus-4",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+              "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+          "summary": {
+            "auto_safe": 1,
+            "conflict": 2,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 3,
+          "scenario": "d-undeclared-dependency",
+          "scenarioLabel": "dépendance non déclarée",
+          "n": 3,
+          "wallMs": 824,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 1885339648,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2380890112,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+              "snapshotAfter": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337"
+            },
+            {
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "snapshotBefore": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+            "acceptedCount": 2,
+            "autoSafeCount": 2
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "summary": {
+            "auto_safe": 2,
+            "conflict": 0,
+            "manual_required": 1,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 3,
+          "scenario": "a-distinct-files",
+          "scenarioLabel": "fichiers distincts",
+          "n": 3,
+          "wallMs": 785,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "baseSnapshotId": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2378424320,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2393239552,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "taskId": "alpha",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence e081d507fd7cef023a5047a04b484c7acd61843e6d2b30e5bd6f2aebbf21d90d"
+              ],
+              "integratedPaths": [
+                "src/alpha.rs"
+              ],
+              "resultingSnapshotId": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "taskId": "beta",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 343023c0051627138e3ed3cc2fd9f72aac0322a990cafe03798a48502aa0efbf"
+              ],
+              "integratedPaths": [
+                "src/beta.rs"
+              ],
+              "resultingSnapshotId": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "taskId": "gamma",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a841cacebf36029f586a98be65fbc763b87914be83d2c0852ca45f3c15270049"
+              ],
+              "integratedPaths": [
+                "src/gamma.rs"
+              ],
+              "resultingSnapshotId": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+              "snapshotAfter": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "journalSeq": 1,
+              "paths": [
+                "src/alpha.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d"
+            },
+            {
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "snapshotBefore": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "snapshotAfter": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "journalSeq": 2,
+              "paths": [
+                "src/beta.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1"
+            },
+            {
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "snapshotBefore": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+              "journalSeq": 3,
+              "paths": [
+                "src/gamma.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+            "acceptedCount": 3,
+            "autoSafeCount": 3
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+          "summary": {
+            "auto_safe": 3,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 3,
+          "scenario": "b-distinct-symbols-one-file",
+          "scenarioLabel": "symboles distincts, même fichier",
+          "n": 5,
+          "wallMs": 1134,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "baseSnapshotId": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "journalLines": 5,
+          "loadBefore": {
+            "freeMemoryBytes": 2462130176,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2348797952,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "taskId": "f1",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 370207fc2be0e6a74a4797a538306be8906c192720c5dc59c5c84fe21e1ee1a2"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "taskId": "f2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence aa426f94be6acb51ca2064089b62d10288b0054d2787a5069e433bb33b4c00b7"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "taskId": "f3",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence f36bfdc8a2fc6666d2213083f2351720112dab88a77e2b1daa39dfabfdc52064"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "taskId": "f4",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 4b5fba59f7f43d6cddd46c14c09b145e034796e2e08e20b4554660081ec6b289"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "taskId": "f5",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence d1ff6fd77ed0ecc68f3246a1930521e76d49172696bba3aecefbf1b073bf4d84"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+              "snapshotAfter": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d"
+            },
+            {
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "snapshotBefore": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "snapshotAfter": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "journalSeq": 2,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9"
+            },
+            {
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "snapshotBefore": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "snapshotAfter": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f"
+            },
+            {
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "snapshotBefore": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "snapshotAfter": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "journalSeq": 4,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78"
+            },
+            {
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "snapshotBefore": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+              "journalSeq": 5,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+            "acceptedCount": 5,
+            "autoSafeCount": 5
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+          "summary": {
+            "auto_safe": 5,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        }
+      ],
+      "loadAfter": {
+        "freeMemoryBytes": 2348781568,
+        "totalMemoryBytes": 16868962304
+      }
+    },
+    {
+      "rep": 4,
+      "order": [
+        "d-undeclared-dependency",
+        "a-distinct-files",
+        "b-distinct-symbols-one-file",
+        "c-same-function"
+      ],
+      "loadBefore": {
+        "freeMemoryBytes": 2348781568,
+        "totalMemoryBytes": 16868962304
+      },
+      "runs": [
+        {
+          "rep": 4,
+          "scenario": "d-undeclared-dependency",
+          "scenarioLabel": "dépendance non déclarée",
+          "n": 3,
+          "wallMs": 499,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2328023040,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2309726208,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+              "snapshotAfter": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337"
+            },
+            {
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "snapshotBefore": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+            "acceptedCount": 2,
+            "autoSafeCount": 2
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "summary": {
+            "auto_safe": 2,
+            "conflict": 0,
+            "manual_required": 1,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 4,
+          "scenario": "a-distinct-files",
+          "scenarioLabel": "fichiers distincts",
+          "n": 3,
+          "wallMs": 654,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "baseSnapshotId": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2333974528,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2223366144,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "taskId": "alpha",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence e081d507fd7cef023a5047a04b484c7acd61843e6d2b30e5bd6f2aebbf21d90d"
+              ],
+              "integratedPaths": [
+                "src/alpha.rs"
+              ],
+              "resultingSnapshotId": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "taskId": "beta",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 343023c0051627138e3ed3cc2fd9f72aac0322a990cafe03798a48502aa0efbf"
+              ],
+              "integratedPaths": [
+                "src/beta.rs"
+              ],
+              "resultingSnapshotId": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "taskId": "gamma",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a841cacebf36029f586a98be65fbc763b87914be83d2c0852ca45f3c15270049"
+              ],
+              "integratedPaths": [
+                "src/gamma.rs"
+              ],
+              "resultingSnapshotId": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+              "snapshotAfter": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "journalSeq": 1,
+              "paths": [
+                "src/alpha.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d"
+            },
+            {
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "snapshotBefore": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "snapshotAfter": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "journalSeq": 2,
+              "paths": [
+                "src/beta.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1"
+            },
+            {
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "snapshotBefore": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+              "journalSeq": 3,
+              "paths": [
+                "src/gamma.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+            "acceptedCount": 3,
+            "autoSafeCount": 3
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+          "summary": {
+            "auto_safe": 3,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 4,
+          "scenario": "b-distinct-symbols-one-file",
+          "scenarioLabel": "symboles distincts, même fichier",
+          "n": 5,
+          "wallMs": 1099,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "baseSnapshotId": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "journalLines": 5,
+          "loadBefore": {
+            "freeMemoryBytes": 2237956096,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2196082688,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "taskId": "f1",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 370207fc2be0e6a74a4797a538306be8906c192720c5dc59c5c84fe21e1ee1a2"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "taskId": "f2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence aa426f94be6acb51ca2064089b62d10288b0054d2787a5069e433bb33b4c00b7"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "taskId": "f3",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence f36bfdc8a2fc6666d2213083f2351720112dab88a77e2b1daa39dfabfdc52064"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "taskId": "f4",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 4b5fba59f7f43d6cddd46c14c09b145e034796e2e08e20b4554660081ec6b289"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "taskId": "f5",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence d1ff6fd77ed0ecc68f3246a1930521e76d49172696bba3aecefbf1b073bf4d84"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+              "snapshotAfter": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d"
+            },
+            {
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "snapshotBefore": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "snapshotAfter": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "journalSeq": 2,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9"
+            },
+            {
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "snapshotBefore": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "snapshotAfter": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f"
+            },
+            {
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "snapshotBefore": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "snapshotAfter": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "journalSeq": 4,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78"
+            },
+            {
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "snapshotBefore": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+              "journalSeq": 5,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+            "acceptedCount": 5,
+            "autoSafeCount": 5
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+          "summary": {
+            "auto_safe": 5,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 4,
+          "scenario": "c-same-function",
+          "scenarioLabel": "même fonction (conflit)",
+          "n": 3,
+          "wallMs": 388,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "baseSnapshotId": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2248642560,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2239827968,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "taskId": "shared-plus-2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 40617c0b2fad41fc0375e7b0c6d9875dd8e4f1720cc0d57bad000a7205129a57"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3"
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c2/shared-plus-3",
+              "agentId": "agent-c2",
+              "taskId": "shared-plus-3",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c3/shared-plus-4",
+              "agentId": "agent-c3",
+              "taskId": "shared-plus-4",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+              "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+          "summary": {
+            "auto_safe": 1,
+            "conflict": 2,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        }
+      ],
+      "loadAfter": {
+        "freeMemoryBytes": 2239893504,
+        "totalMemoryBytes": 16868962304
+      }
+    },
+    {
+      "rep": 5,
+      "order": [
+        "a-distinct-files",
+        "b-distinct-symbols-one-file",
+        "c-same-function",
+        "d-undeclared-dependency"
+      ],
+      "loadBefore": {
+        "freeMemoryBytes": 2239889408,
+        "totalMemoryBytes": 16868962304
+      },
+      "runs": [
+        {
+          "rep": 5,
+          "scenario": "a-distinct-files",
+          "scenarioLabel": "fichiers distincts",
+          "n": 3,
+          "wallMs": 752,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "baseSnapshotId": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2254413824,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2225516544,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "taskId": "alpha",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence e081d507fd7cef023a5047a04b484c7acd61843e6d2b30e5bd6f2aebbf21d90d"
+              ],
+              "integratedPaths": [
+                "src/alpha.rs"
+              ],
+              "resultingSnapshotId": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "taskId": "beta",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 343023c0051627138e3ed3cc2fd9f72aac0322a990cafe03798a48502aa0efbf"
+              ],
+              "integratedPaths": [
+                "src/beta.rs"
+              ],
+              "resultingSnapshotId": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "taskId": "gamma",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a841cacebf36029f586a98be65fbc763b87914be83d2c0852ca45f3c15270049"
+              ],
+              "integratedPaths": [
+                "src/gamma.rs"
+              ],
+              "resultingSnapshotId": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-a1/alpha",
+              "agentId": "agent-a1",
+              "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+              "snapshotAfter": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "journalSeq": 1,
+              "paths": [
+                "src/alpha.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "8cc766dc22a16fa736ab14c31e89c5721cade269e44442798876a35847fc6c1d"
+            },
+            {
+              "proposalId": "agent-a2/beta",
+              "agentId": "agent-a2",
+              "snapshotBefore": "84903f96eaa2b5cacf9244b3acc15bcfcc7e2ab394f058a69a9dc3b38007329d",
+              "snapshotAfter": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "journalSeq": 2,
+              "paths": [
+                "src/beta.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "79e8a6827fbf729f3edf0867d53a64db0acc712232bb2fd57d147ac00ea565a1"
+            },
+            {
+              "proposalId": "agent-a3/gamma",
+              "agentId": "agent-a3",
+              "snapshotBefore": "f89b62ce09eb2d046e75341ebc79c2c3e3b35272bcb99fc61aab5720096102f9",
+              "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+              "journalSeq": 3,
+              "paths": [
+                "src/gamma.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "65a3517dda1e8a0428c7adf77bd52cafa1d113d180da25c9428484df04c19d12"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+            "acceptedCount": 3,
+            "autoSafeCount": 3
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "49c2ade2301b87ec5a1e75a8923b7ebf57f3fb17624ea720078d1ea0572abab1",
+          "snapshotAfter": "35749dac924ac8d52b59bbc5f06573e1043dab6d8884ac884e6b111459cd38ff",
+          "summary": {
+            "auto_safe": 3,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 5,
+          "scenario": "b-distinct-symbols-one-file",
+          "scenarioLabel": "symboles distincts, même fichier",
+          "n": 5,
+          "wallMs": 1249,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "baseSnapshotId": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "journalLines": 5,
+          "loadBefore": {
+            "freeMemoryBytes": 2208067584,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 2126209024,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "taskId": "f1",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 370207fc2be0e6a74a4797a538306be8906c192720c5dc59c5c84fe21e1ee1a2"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "taskId": "f2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence aa426f94be6acb51ca2064089b62d10288b0054d2787a5069e433bb33b4c00b7"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "taskId": "f3",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence f36bfdc8a2fc6666d2213083f2351720112dab88a77e2b1daa39dfabfdc52064"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "taskId": "f4",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 4b5fba59f7f43d6cddd46c14c09b145e034796e2e08e20b4554660081ec6b289"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd"
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "taskId": "f5",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence d1ff6fd77ed0ecc68f3246a1930521e76d49172696bba3aecefbf1b073bf4d84"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-b1/f1",
+              "agentId": "agent-b1",
+              "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+              "snapshotAfter": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "da7b5d92503e8a5c77413434d9adf71062c3563ad97f72363b0abee4126a689d"
+            },
+            {
+              "proposalId": "agent-b2/f2",
+              "agentId": "agent-b2",
+              "snapshotBefore": "ef6229353f50495dc8b0d2a03095d80f9bb99a4bab952e99911658e84578a0a2",
+              "snapshotAfter": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "journalSeq": 2,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "d0082896637ee39281b95e09438363f08782bed8d7ea73d0a105b88c2ed2eab9"
+            },
+            {
+              "proposalId": "agent-b3/f3",
+              "agentId": "agent-b3",
+              "snapshotBefore": "6e269e931ff68ab8d8e36d6df284b3a228b6f63c7265c9b2ab2e1cac065fbf0d",
+              "snapshotAfter": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "410939542a43576699d445e25afe589236c1201f36b789b194a6da795476507f"
+            },
+            {
+              "proposalId": "agent-b4/f4",
+              "agentId": "agent-b4",
+              "snapshotBefore": "06d0bbeee5031845af29fab2828849dce6a08e2d513769f2215b611e8cd760d2",
+              "snapshotAfter": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "journalSeq": 4,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "9c79666b978e3bf9f314beb21c50c5a5872c2c03c9ec222d2dffe005f94f1f78"
+            },
+            {
+              "proposalId": "agent-b5/f5",
+              "agentId": "agent-b5",
+              "snapshotBefore": "9401d485e362920d5c365b2432c0b7ce2bc3d5f6525f0df3239435c0aebd71dd",
+              "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+              "journalSeq": 5,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "b37a6ad0ab497ec52a37e8846b55067b13d9f814f255e7bd1abe0a4a6386e072"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+            "acceptedCount": 5,
+            "autoSafeCount": 5
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "3c3bcf84bcebb4d2cafa7ed0f7c48902a905b58541bf4c5936852572ba93b680",
+          "snapshotAfter": "d58c9deaa2601633d0c316b577034cb328068f4c14e4c2060016ae814e7084a2",
+          "summary": {
+            "auto_safe": 5,
+            "conflict": 0,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 5,
+          "scenario": "c-same-function",
+          "scenarioLabel": "même fonction (conflit)",
+          "n": 3,
+          "wallMs": 664,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "baseSnapshotId": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 2137804800,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1877561344,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "taskId": "shared-plus-2",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 40617c0b2fad41fc0375e7b0c6d9875dd8e4f1720cc0d57bad000a7205129a57"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3"
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c2/shared-plus-3",
+              "agentId": "agent-c2",
+              "taskId": "shared-plus-3",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "CONFLICT",
+              "proposalId": "agent-c3/shared-plus-4",
+              "agentId": "agent-c3",
+              "taskId": "shared-plus-4",
+              "reasons": [
+                "symbol \"shared\" is already modified by agent-c1/shared-plus-2 (agent agent-c1)"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-c1/shared-plus-2",
+              "agentId": "agent-c1",
+              "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+              "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "1cc412fef8aab3a53c834c65d0c23b90d79692be244ae3acca28eb6a0cda9ee5"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "e4bad1312d46735d527ce03c303b04d31b591e459b1666bd050232ff9de414b4",
+          "snapshotAfter": "6e092fc4a44a9adfaf49db7faeb3fd38f351077a6dd8350c13ff86c543a53ba3",
+          "summary": {
+            "auto_safe": 1,
+            "conflict": 2,
+            "manual_required": 0,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        },
+        {
+          "rep": 5,
+          "scenario": "d-undeclared-dependency",
+          "scenarioLabel": "dépendance non déclarée",
+          "n": 3,
+          "wallMs": 756,
+          "spawnExit": 0,
+          "spawnSignal": null,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseDigestMatches": true,
+          "baseDigest": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "journalLines": 3,
+          "loadBefore": {
+            "freeMemoryBytes": 1861414912,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1658994688,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3"
+            }
+          ],
+          "acceptedChanges": [
+            {
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+              "snapshotAfter": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "journalSeq": 1,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337"
+            },
+            {
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "snapshotBefore": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+              "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+              "journalSeq": 3,
+              "paths": [
+                "src/lib.rs"
+              ],
+              "verificationStatus": "passed",
+              "evidenceId": "433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9"
+            }
+          ],
+          "checks": {
+            "decisionsExpected": true,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+            "acceptedCount": 2,
+            "autoSafeCount": 2
+          },
+          "protocol": "V1_COLLAB_COMPAT",
+          "verificationMode": "semantic",
+          "snapshotBefore": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "summary": {
+            "auto_safe": 2,
+            "conflict": 0,
+            "manual_required": 1,
+            "rebase_revalidate": 0,
+            "reject": 0
+          },
+          "lostDetails": []
+        }
+      ],
+      "loadAfter": {
+        "freeMemoryBytes": 1657434112,
+        "totalMemoryBytes": 16868962304
+      }
+    }
+  ],
+  "model": {
+    "label": "MODÈLE CALIBRÉ — pas une mesure bout en bout du groupement",
+    "disclaimer": "Les coûts unitaires proviennent de la campagne L2 phase 1 (analyse séquentielle réelle de 6 éditions, lot refusé réel, reprise réelle), pas de cette campagne. Les fréquences de conflit proviennent des décisions réelles du binaire ravum-collab mesurées ici. Le modèle suppose: coût d'un lot compatible = 1 cycle; coût d'un lot contenant au moins une proposition non AUTO_SAFE = coût de reprise mesuré (refus + reprise individuelle + re-lot, N+3 analyses à N=6); fenêtre d'attente purement latente; pas d'extrapolation hors N=3..6 et fenêtres 0..100 ms.",
+    "costs": {
+      "cycleMs": 191,
+      "refusalMs": 184,
+      "recoveryMs": 1596,
+      "retryMs": 158,
+      "source": "evidence\\mvp0c-grouping-2026-11-09.json"
+    },
+    "formulas": {
+      "sequential": "E_séquentiel(N) = N × cycle",
+      "grouped": "E_groupé(p, N, w) = w + (1−p) × cycle + p × reprise",
+      "breakEven": "p*(N, w) = ((N−1) × cycle − w) / (reprise − cycle)",
+      "analyses": "E_analyses_groupé(p, N) = (1−p) × 1 + p × (N+3)"
+    },
+    "breakEvenTable": [
+      {
+        "n": 3,
+        "windowMs": 0,
+        "sequentialCostMs": 573,
+        "groupedCostAllCompatibleMs": 191,
+        "groupedCostRecoveryMs": 1596,
+        "breakEvenBatchConflictRate": 0.27188612099644127
+      },
+      {
+        "n": 3,
+        "windowMs": 25,
+        "sequentialCostMs": 573,
+        "groupedCostAllCompatibleMs": 216,
+        "groupedCostRecoveryMs": 1621,
+        "breakEvenBatchConflictRate": 0.25409252669039145
+      },
+      {
+        "n": 3,
+        "windowMs": 50,
+        "sequentialCostMs": 573,
+        "groupedCostAllCompatibleMs": 241,
+        "groupedCostRecoveryMs": 1646,
+        "breakEvenBatchConflictRate": 0.23629893238434163
+      },
+      {
+        "n": 3,
+        "windowMs": 100,
+        "sequentialCostMs": 573,
+        "groupedCostAllCompatibleMs": 291,
+        "groupedCostRecoveryMs": 1696,
+        "breakEvenBatchConflictRate": 0.200711743772242
+      },
+      {
+        "n": 4,
+        "windowMs": 0,
+        "sequentialCostMs": 764,
+        "groupedCostAllCompatibleMs": 191,
+        "groupedCostRecoveryMs": 1596,
+        "breakEvenBatchConflictRate": 0.4078291814946619
+      },
+      {
+        "n": 4,
+        "windowMs": 25,
+        "sequentialCostMs": 764,
+        "groupedCostAllCompatibleMs": 216,
+        "groupedCostRecoveryMs": 1621,
+        "breakEvenBatchConflictRate": 0.3900355871886121
+      },
+      {
+        "n": 4,
+        "windowMs": 50,
+        "sequentialCostMs": 764,
+        "groupedCostAllCompatibleMs": 241,
+        "groupedCostRecoveryMs": 1646,
+        "breakEvenBatchConflictRate": 0.37224199288256227
+      },
+      {
+        "n": 4,
+        "windowMs": 100,
+        "sequentialCostMs": 764,
+        "groupedCostAllCompatibleMs": 291,
+        "groupedCostRecoveryMs": 1696,
+        "breakEvenBatchConflictRate": 0.3366548042704626
+      },
+      {
+        "n": 5,
+        "windowMs": 0,
+        "sequentialCostMs": 955,
+        "groupedCostAllCompatibleMs": 191,
+        "groupedCostRecoveryMs": 1596,
+        "breakEvenBatchConflictRate": 0.5437722419928825
+      },
+      {
+        "n": 5,
+        "windowMs": 25,
+        "sequentialCostMs": 955,
+        "groupedCostAllCompatibleMs": 216,
+        "groupedCostRecoveryMs": 1621,
+        "breakEvenBatchConflictRate": 0.5259786476868328
+      },
+      {
+        "n": 5,
+        "windowMs": 50,
+        "sequentialCostMs": 955,
+        "groupedCostAllCompatibleMs": 241,
+        "groupedCostRecoveryMs": 1646,
+        "breakEvenBatchConflictRate": 0.5081850533807829
+      },
+      {
+        "n": 5,
+        "windowMs": 100,
+        "sequentialCostMs": 955,
+        "groupedCostAllCompatibleMs": 291,
+        "groupedCostRecoveryMs": 1696,
+        "breakEvenBatchConflictRate": 0.47259786476868326
+      },
+      {
+        "n": 6,
+        "windowMs": 0,
+        "sequentialCostMs": 1146,
+        "groupedCostAllCompatibleMs": 191,
+        "groupedCostRecoveryMs": 1596,
+        "breakEvenBatchConflictRate": 0.6797153024911032
+      },
+      {
+        "n": 6,
+        "windowMs": 25,
+        "sequentialCostMs": 1146,
+        "groupedCostAllCompatibleMs": 216,
+        "groupedCostRecoveryMs": 1621,
+        "breakEvenBatchConflictRate": 0.6619217081850534
+      },
+      {
+        "n": 6,
+        "windowMs": 50,
+        "sequentialCostMs": 1146,
+        "groupedCostAllCompatibleMs": 241,
+        "groupedCostRecoveryMs": 1646,
+        "breakEvenBatchConflictRate": 0.6441281138790036
+      },
+      {
+        "n": 6,
+        "windowMs": 100,
+        "sequentialCostMs": 1146,
+        "groupedCostAllCompatibleMs": 291,
+        "groupedCostRecoveryMs": 1696,
+        "breakEvenBatchConflictRate": 0.608540925266904
+      }
+    ],
+    "scenarioEconomics": [
+      {
+        "scenario": "a-distinct-files",
+        "n": 3,
+        "measuredBatchConflictRate": 0,
+        "measuredProposalConflictRate": 0,
+        "breakEvenBatchConflictRateAtWindow0": 0.27188612099644127,
+        "expectedAnalysesSequential": 3,
+        "expectedAnalysesGrouped": 1,
+        "expectedAnalysesSaved": 2,
+        "windows": [
+          {
+            "windowMs": 0,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 191,
+            "gainMs": 382,
+            "gainPercent": 66.66666666666667,
+            "profitable": true
+          },
+          {
+            "windowMs": 25,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 216,
+            "gainMs": 357,
+            "gainPercent": 62.303664921465966,
+            "profitable": true
+          },
+          {
+            "windowMs": 50,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 241,
+            "gainMs": 332,
+            "gainPercent": 57.94066317626527,
+            "profitable": true
+          },
+          {
+            "windowMs": 100,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 291,
+            "gainMs": 282,
+            "gainPercent": 49.21465968586387,
+            "profitable": true
+          }
+        ]
+      },
+      {
+        "scenario": "b-distinct-symbols-one-file",
+        "n": 5,
+        "measuredBatchConflictRate": 0,
+        "measuredProposalConflictRate": 0,
+        "breakEvenBatchConflictRateAtWindow0": 0.5437722419928825,
+        "expectedAnalysesSequential": 5,
+        "expectedAnalysesGrouped": 1,
+        "expectedAnalysesSaved": 4,
+        "windows": [
+          {
+            "windowMs": 0,
+            "sequentialCostMs": 955,
+            "groupedCostMs": 191,
+            "gainMs": 764,
+            "gainPercent": 80,
+            "profitable": true
+          },
+          {
+            "windowMs": 25,
+            "sequentialCostMs": 955,
+            "groupedCostMs": 216,
+            "gainMs": 739,
+            "gainPercent": 77.38219895287958,
+            "profitable": true
+          },
+          {
+            "windowMs": 50,
+            "sequentialCostMs": 955,
+            "groupedCostMs": 241,
+            "gainMs": 714,
+            "gainPercent": 74.76439790575917,
+            "profitable": true
+          },
+          {
+            "windowMs": 100,
+            "sequentialCostMs": 955,
+            "groupedCostMs": 291,
+            "gainMs": 664,
+            "gainPercent": 69.52879581151832,
+            "profitable": true
+          }
+        ]
+      },
+      {
+        "scenario": "c-same-function",
+        "n": 3,
+        "measuredBatchConflictRate": 1,
+        "measuredProposalConflictRate": 0.6666666666666666,
+        "breakEvenBatchConflictRateAtWindow0": 0.27188612099644127,
+        "expectedAnalysesSequential": 3,
+        "expectedAnalysesGrouped": 6,
+        "expectedAnalysesSaved": -3,
+        "windows": [
+          {
+            "windowMs": 0,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1596,
+            "gainMs": -1023,
+            "gainPercent": -178.53403141361255,
+            "profitable": false
+          },
+          {
+            "windowMs": 25,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1621,
+            "gainMs": -1048,
+            "gainPercent": -182.89703315881326,
+            "profitable": false
+          },
+          {
+            "windowMs": 50,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1646,
+            "gainMs": -1073,
+            "gainPercent": -187.26003490401396,
+            "profitable": false
+          },
+          {
+            "windowMs": 100,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1696,
+            "gainMs": -1123,
+            "gainPercent": -195.98603839441535,
+            "profitable": false
+          }
+        ]
+      },
+      {
+        "scenario": "d-undeclared-dependency",
+        "n": 3,
+        "measuredBatchConflictRate": 1,
+        "measuredProposalConflictRate": 0.3333333333333333,
+        "breakEvenBatchConflictRateAtWindow0": 0.27188612099644127,
+        "expectedAnalysesSequential": 3,
+        "expectedAnalysesGrouped": 6,
+        "expectedAnalysesSaved": -3,
+        "windows": [
+          {
+            "windowMs": 0,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1596,
+            "gainMs": -1023,
+            "gainPercent": -178.53403141361255,
+            "profitable": false
+          },
+          {
+            "windowMs": 25,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1621,
+            "gainMs": -1048,
+            "gainPercent": -182.89703315881326,
+            "profitable": false
+          },
+          {
+            "windowMs": 50,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1646,
+            "gainMs": -1073,
+            "gainPercent": -187.26003490401396,
+            "profitable": false
+          },
+          {
+            "windowMs": 100,
+            "sequentialCostMs": 573,
+            "groupedCostMs": 1696,
+            "gainMs": -1123,
+            "gainPercent": -195.98603839441535,
+            "profitable": false
+          }
+        ]
+      }
+    ],
+    "mixEconomics": [
+      {
+        "windowMs": 0,
+        "sequentialCostMsPerMix": 2674,
+        "groupedCostMsPerMix": 3574,
+        "gainMs": -900,
+        "gainPercent": -33.657442034405385,
+        "profitable": false,
+        "details": [
+          {
+            "scenario": "a-distinct-files",
+            "n": 3,
+            "p": 0,
+            "sequential": 573,
+            "grouped": 191
+          },
+          {
+            "scenario": "b-distinct-symbols-one-file",
+            "n": 5,
+            "p": 0,
+            "sequential": 955,
+            "grouped": 191
+          },
+          {
+            "scenario": "c-same-function",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1596
+          },
+          {
+            "scenario": "d-undeclared-dependency",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1596
+          }
+        ]
+      },
+      {
+        "windowMs": 25,
+        "sequentialCostMsPerMix": 2674,
+        "groupedCostMsPerMix": 3674,
+        "gainMs": -1000,
+        "gainPercent": -37.397157816005986,
+        "profitable": false,
+        "details": [
+          {
+            "scenario": "a-distinct-files",
+            "n": 3,
+            "p": 0,
+            "sequential": 573,
+            "grouped": 216
+          },
+          {
+            "scenario": "b-distinct-symbols-one-file",
+            "n": 5,
+            "p": 0,
+            "sequential": 955,
+            "grouped": 216
+          },
+          {
+            "scenario": "c-same-function",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1621
+          },
+          {
+            "scenario": "d-undeclared-dependency",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1621
+          }
+        ]
+      },
+      {
+        "windowMs": 50,
+        "sequentialCostMsPerMix": 2674,
+        "groupedCostMsPerMix": 3774,
+        "gainMs": -1100,
+        "gainPercent": -41.13687359760658,
+        "profitable": false,
+        "details": [
+          {
+            "scenario": "a-distinct-files",
+            "n": 3,
+            "p": 0,
+            "sequential": 573,
+            "grouped": 241
+          },
+          {
+            "scenario": "b-distinct-symbols-one-file",
+            "n": 5,
+            "p": 0,
+            "sequential": 955,
+            "grouped": 241
+          },
+          {
+            "scenario": "c-same-function",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1646
+          },
+          {
+            "scenario": "d-undeclared-dependency",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1646
+          }
+        ]
+      },
+      {
+        "windowMs": 100,
+        "sequentialCostMsPerMix": 2674,
+        "groupedCostMsPerMix": 3974,
+        "gainMs": -1300,
+        "gainPercent": -48.61630516080778,
+        "profitable": false,
+        "details": [
+          {
+            "scenario": "a-distinct-files",
+            "n": 3,
+            "p": 0,
+            "sequential": 573,
+            "grouped": 291
+          },
+          {
+            "scenario": "b-distinct-symbols-one-file",
+            "n": 5,
+            "p": 0,
+            "sequential": 955,
+            "grouped": 291
+          },
+          {
+            "scenario": "c-same-function",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1696
+          },
+          {
+            "scenario": "d-undeclared-dependency",
+            "n": 3,
+            "p": 1,
+            "sequential": 573,
+            "grouped": 1696
+          }
+        ]
+      }
+    ],
+    "verdict": {
+      "compatibleScenariosProfitable": true,
+      "conflictingScenariosProfitable": false,
+      "measuredMixProfitableAtWindow50": false,
+      "measuredMixGainPercentAtWindow50": -41.13687359760658,
+      "breakEvenBatchConflictRate": {
+        "n3_window0": 0.27188612099644127,
+        "n3_window100": 0.200711743772242,
+        "n4_window0": 0.4078291814946619,
+        "n4_window100": 0.3366548042704626,
+        "n5_window0": 0.5437722419928825,
+        "n5_window100": 0.47259786476868326,
+        "n6_window0": 0.6797153024911032,
+        "n6_window100": 0.608540925266904
+      },
+      "statement": "Le groupement n'est rentable que si la part des lots contenant au moins une proposition non AUTO_SAFE reste sous le seuil p*(N, w). Avec le mélange de scénarios mesuré (deux familles sur quatre sont conflictuelles par construction), la fréquence observée est de 50.0 % : le groupement n'est PAS rentable en moyenne. Ces scénarios sont volontairement chargés en conflits : la fréquence réelle en production dépend des agents et n'est pas mesurée ici."
+    }
+  },
+  "checks": {
+    "allRunsHaveExpectedDecisions": true,
+    "allRunsSnapshotChainsOk": true,
+    "allRunsFinalDigestsMatch": true,
+    "allRunsNoLostChanges": true,
+    "allRunsBaseDigestsMatch": true,
+    "allRunsExitZero": true,
+    "allScenariosDeterministic": true,
+    "minimumReps": true
+  },
+  "valid": true
+}

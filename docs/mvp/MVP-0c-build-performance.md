@@ -297,3 +297,392 @@ Fichiers de cette livraison (aucun fichier du cœur du daemon modifié) :
 - `docs/mvp/MVP-0c-build-performance.md` (ce document) ;
 - `evidence/mvp0c-grouping-2026-11-09.json` (valeurs brutes d'une exécution
   réelle, `valid: true`).
+
+---
+
+## 8. L2.2 — fréquence des conflits multi-agents et seuil de rentabilité du groupement
+
+Section **ajoutée** après la campagne L2.2 (2026-11-09) ; elle ne modifie aucun
+résultat des sections 1–7. Question ouverte de la phase 1 : le groupement gagne
+quand les lots sont compatibles, mais un lot invalide coûte 184 ms de refus puis
+~1596 ms de reprise — **quelle fréquence de lots conflictuels annule le gain ?**
+
+Preuve : [`evidence/mvp0c-grouping-multiagent-2026-11-09.json`](../../evidence/mvp0c-grouping-multiagent-2026-11-09.json)
+(`valid: true`, durée 10,5 s). Harnais : `benchmarks/grouping-multiagent/run.mjs`
+(Node 26, zéro dépendance npm, aucune modification de `crates/**`).
+
+### 8.1 Protocole
+
+- **Décisions réelles**, pas inventées : le harnais appelle le binaire
+  `ravum-collab` (`base` puis `integrate --verify --json`) ; les propositions
+  JSON sont générées depuis la base réelle (`snapshot_id` + hashs obtenus par
+  `ravum-collab base`), avec hunks unified-diff exacts ; le coordinateur est en
+  mode vérification sémantique `rustc` opt-in, donc les `AUTO_SAFE` reposent sur
+  une compilation de métadonnées réelle du snapshot candidat.
+- **4 familles de scénarios**, N = 3 à 5 agents, 5 répétitions en ordre alterné
+  (l'ordre des scénarios tourne d'un cran par répétition) :
+  (a) fichiers distincts (N=3), (b) symboles distincts d'un même fichier (N=5),
+  (c) même fonction (N=3), (d) dépendance non déclarée (N=3).
+- **Vérifications de contenu** : digest de snapshot recalculé côté harnais avec
+  la formule exacte de `ravum-snapshot`, comparé à `snapshot_after` du binaire ;
+  chaîne des `accepted_changes` contiguë ; édition acceptée présente dans le
+  contenu final, marqueur d'édition refusée absent. **20/20 runs conformes,
+  0 changement perdu, décisions identiques sur les 5 répétitions.**
+- **Modèle d'économie** : coûts unitaires lus dans la preuve phase 1
+  (`summary.break_even.per_cycle_analysis_p50_ms = 191`,
+  `summary.incompatible.batch_latency_ms.p50 = 184`,
+  `summary.incompatible.recovery_total_ms.p50 = 1596`), fréquence de conflit
+  injectée = fréquence mesurée ici. Le modèle est étiqueté **MODÈLE CALIBRÉ** :
+  le groupement n'est pas implémenté et n'est donc pas mesuré bout en bout.
+- Machine : Windows 11 26100, 16 processeurs logiques, ~15,7 Go RAM, Node
+  v26.13.0 ; mémoire libre 2,58 → 2,82 Go ; calibration `rustc -vV` début
+  [96, 92, 88] ms, fin [80, 80, 84] ms. Machine partagée avec d'autres workers.
+  Provenance Git enregistrée dans la preuve : HEAD `58220f5`, branche
+  `feat/mvp0c-hardening`, arbre partagé (fichiers dirty attendus).
+
+### 8.2 Décisions réelles du coordinateur (identiques sur les 5 répétitions)
+
+| Scénario | N | Décisions réelles | Durée du run `ravum-collab` p50 [min–max] |
+|---|---:|---|---:|
+| `a-distinct-files` | 3 | `AUTO_SAFE`, `AUTO_SAFE`, `AUTO_SAFE` | 559 ms [361–761] |
+| `b-distinct-symbols-one-file` | 5 | `AUTO_SAFE` ×5 | 694 ms [551–1073] |
+| `c-same-function` | 3 | `AUTO_SAFE`, `CONFLICT`, `CONFLICT` | 233 ms [208–493] |
+| `d-undeclared-dependency` | 3 | `AUTO_SAFE`, `MANUAL_REQUIRED`, `AUTO_SAFE` | 383 ms [310–592] |
+
+Motifs réels observés (extraits des décisions JSON) :
+
+- `c-same-function` : « symbol \"shared\" is already modified by
+  agent-c1/shared-plus-2 » (conflit de symbole, aucune intégration) ;
+- `d-undeclared-dependency` : « undeclared semantic dependency: a changed line
+  references symbol \"helper\", whose definition was modified by
+  agent-d1/helper » (arbitrage requis, aucun `AUTO_SAFE` sur la proposition) ;
+- les `AUTO_SAFE` sont accompagnés de `verification.status = passed` (les
+  `accepted_changes` contiennent le record de vérification sémantique).
+
+Les durées ci-dessus mesurent le processus complet (génération de la base +
+vérifications `rustc` réelles) et **ne servent pas** de coûts au modèle : le
+modèle utilise exclusivement les coûts de la phase 1.
+
+### 8.3 Fréquence de conflits mesurée
+
+- **Lots contenant ≥ 1 proposition non `AUTO_SAFE`** : **50,0 %** (10/20 runs) —
+  par construction du corpus, deux familles sur quatre sont conflictuelles.
+- **Propositions non `AUTO_SAFE`** : **21,4 %** (9 décisions sur 42).
+- Le corpus est **volontairement chargé en conflits** : ce 50 % n'est pas une
+  estimation de la fréquence de conflits en production (non mesurée).
+
+### 8.4 MODÈLE d'économie calibré (explicitement étiqueté MODÈLE)
+
+Hypothèses (frozen) : un lot compatible coûte **1 cycle** (191 ms) ; un lot
+contenant au moins une proposition non `AUTO_SAFE` est invalide et coûte la
+**reprise mesurée** (1596 ms, qui inclut le refus de 184 ms + N+3 analyses à
+N=6) ; la fenêtre de collecte est une latence pure ajoutée. Le coût `p` est la
+probabilité qu'un lot contienne un conflit.
+
+```text
+E_séquentiel(N)       = N × 191 ms
+E_groupé(p, N, w)     = w + (1−p) × 191 + p × 1596      (ms)
+p*(N, w)              = ((N−1) × 191 − w) / (1596 − 191)   ← seuil de bascule
+E_analyses_groupé(p,N)= (1−p) × 1 + p × (N+3)
+```
+
+**Seuil de bascule `p*`** (part maximale de lots conflictuels pour laquelle le
+groupement reste rentable) :
+
+| N | fenêtre 0 ms | fenêtre 25 ms | fenêtre 50 ms | fenêtre 100 ms |
+|---:|---:|---:|---:|---:|
+| 3 | 27,2 % | 25,4 % | 23,6 % | 20,1 % |
+| 4 | 40,8 % | 39,0 % | 37,2 % | 33,7 % |
+| 5 | 54,4 % | 52,6 % | 50,8 % | 47,3 % |
+| 6 | 68,0 % | 66,2 % | 64,4 % | 60,9 % |
+
+**Économie par scénario** (p mesuré = 0 ou 1 ; fenêtre 50 ms entre parenthèses) :
+
+| Scénario | N | p mesuré | séquentiel | groupé attendu | gain | analyses attendues (séq → groupé) | rentable ? |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `a-distinct-files` | 3 | 0 | 573 ms | 191 ms (241) | +382 ms (+332), +66,7 % | 3 → 1 | **oui** |
+| `b-distinct-symbols-one-file` | 5 | 0 | 955 ms | 191 ms (241) | +764 ms (+714), +80,0 % | 5 → 1 | **oui** |
+| `c-same-function` | 3 | 1 | 573 ms | 1596 ms (1646) | −1023 ms (−1073), −178,5 % | 3 → 6 | **non** |
+| `d-undeclared-dependency` | 3 | 1 | 573 ms | 1596 ms (1646) | −1023 ms (−1073), −178,5 % | 3 → 6 | **non** |
+
+**Économie du mélange mesuré** (une famille de scénario = un lot ; total sur
+les quatre familles) :
+
+| Fenêtre | séquentiel | groupé attendu | gain | rentable ? |
+|---:|---:|---:|---:|---|
+| 0 ms | 2674 ms | 3574 ms | **−900 ms (−33,7 %)** | non |
+| 25 ms | 2674 ms | 3674 ms | −1000 ms (−37,4 %) | non |
+| 50 ms | 2674 ms | 3774 ms | **−1100 ms (−41,1 %)** | non |
+| 100 ms | 2674 ms | 3974 ms | −1300 ms (−48,6 %) | non |
+
+Bilan en analyses sur ce mélange : 14 analyses séquentielles contre 14 analyses
+groupées attendues — l'économie d'analyses est **annulée** par le coût des
+reprises ; les reprises coûtent en outre plus cher qu'une analyse (overhead de
+refus + isolement + re-lot).
+
+### 8.5 Verdict (honnête, défavorable au groupement sur ce corpus)
+
+1. **Lots 100 % compatibles** : le groupement reste très rentable, quel que soit
+   N et la fenêtre testés (ex. N=5 : +80 % à fenêtre 0, +74,8 % à 50 ms).
+2. **Un seul lot conflictuel détruit le gain** : à N=3, un lot sur trois
+   conflictuel suffit (seuil 27 %) ; à N=6, il faut rester sous 68 % de lots
+   conflictuels (fenêtre 0). Sur le mélange mesuré (50 %), le groupement
+   **n'est pas rentable** (−33,7 % à −48,6 % selon la fenêtre).
+3. La rentabilité dépend donc **entièrement** de la fréquence de conflits : le
+   groupement n'est pas une accélération inconditionnelle. Le seuil dépend de N
+   et de la fenêtre ; à N=3 il est très bas (20–27 %), c'est le régime le plus
+   fragile.
+4. Ce corpus étant délibérément conflictuel, il ne prouve pas que la fréquence
+   réelle est de 50 %, ni l'inverse : il fournit le **seuil** auquel comparer une
+   fréquence mesurée en production.
+
+### 8.6 Recommandation mise à jour (L2.2)
+
+1. **Ne pas activer le groupement par défaut**. Il doit rester une optimisation
+   conditionnelle, sous seuil : `p_lot_attendu < p*(N, fenêtre)` avec une marge
+   (par exemple viser < 30 % pour N ≥ 4, valeurs sûres sur toutes les fenêtres
+   mesurées ; à N=3 le seuil de 20–27 % rend l'opération hasardeuse).
+2. **Fenêtre par défaut 50 ms conservée** (compromis phase 1), avec pour la
+   version conditionnelle une préférence pour 0–50 ms : à 100 ms tous les seuils
+   baissent de 7 à 10 points relatifs.
+3. **N par défaut 6, maximum 8** (comme phase 1), mais uniquement si le seuil est
+   respecté ; à N=3–4 le groupement est marginal dès que les conflits ne sont
+   pas rares.
+4. **Pré-vol de conflits obligatoire** : avant de grouper, vérifier sans `rustc`
+   que les propositions sont disjointes (chemins, symboles, plages de lignes) et
+   que leurs préconditions CAS portent sur la même base ; les propositions en
+   conflit textuel connu ne doivent jamais entrer dans le même lot. Le modèle
+   suppose que `p` est la part **résiduelle imprévue** après ce pré-vol.
+5. **Repli conservateur inchangé** : lot refusé → jamais de résultat partiel ;
+   analyse individuelle N+1 pour isoler, re-lot des compatibles, journalisation ;
+   coût de reprise mesuré (~1,4× le séquentiel) à budgéter.
+6. **Télémétrie à installer avant activation** : mesurer en continu la part de
+   lots où survient une décision non `AUTO_SAFE` et les décisions par
+   proposition, afin de calibrer `p` réellement ; sans cette mesure, le seuil
+   reste théorique.
+7. Ce qui reste à implémenter (hors de cette tâche) : pré-vol de conflits,
+   construction atomique du snapshot de lot, politique de repli, télémétrie
+   `p`, interactions avec les `externs`/`interface_id` de L1.
+
+### 8.7 Limites de la section 8
+
+- Agents **scriptés déterministes**, pas de LLM : les décisions sont réelles,
+  mais les 5 répétitions ne mesurent que la reproductibilité, pas une
+  distribution d'arrivées.
+- Une petite workspace par scénario, N fixés (3/5/3/3), pas de lot multi-unités,
+  pas de macros procédurales, pas de conflit de hunk partiel (les conflits sont
+  des conflits de symbole/exactitude).
+- Fréquence de conflits 50 % **artefactuelle** (2 familles sur 4 conflictuelles
+  par construction) : elle ne représente pas la production.
+- Le **groupement n'est pas implémenté** : le modèle suppose un lot atomique et
+  une reprise par analyse individuelle ; aucune mesure bout en bout du
+  groupement ni de son intégration au coordinateur.
+- La reprise du modèle est le coût mesuré à N=6 (constante conservatrice pour
+  N<6, non extrapolée au-delà de N=6) ; fenêtres limitées à 0–100 ms.
+- Machine partagée avec d'autres workers (charge non contrôlée, mémoire libre
+  2,6–2,8 Go, calibration 80–96 ms).
+
+### 8.8 Reproduire la section 8
+
+```powershell
+# binaire déjà construit (sinon une seule fois :
+#   cargo build -p ravum-workspace-coordinator --bins)
+node benchmarks/grouping-multiagent/run.mjs --reps 5
+# preuve : evidence/mvp0c-grouping-multiagent-2026-11-09.json
+# lecture : scenarios[] (décisions réelles), aggregate (fréquences mesurées),
+#           model.breakEvenTable / scenarioEconomics / mixEconomics, valid.
+```
+
+Fichiers de la section 8 (aucun fichier de `crates/**` modifié) :
+`benchmarks/grouping-multiagent/run.mjs`, `benchmarks/grouping-multiagent/README.md`,
+`benchmarks/grouping-multiagent/fixtures/scenario-{a,b,c,d}/…`,
+`evidence/mvp0c-grouping-multiagent-2026-11-09.json`, et la présente section.
+
+---
+
+## 9. L4.5 — échec transitoire de la vérification sémantique sous charge
+
+Section **ajoutée** après l'investigation L4.5 (2026-11-09) ; elle ne modifie
+aucun résultat des sections 1–8. Preuve :
+[`evidence/mvp0c-verification-transient-2026-11-09.json`](../../evidence/mvp0c-verification-transient-2026-11-09.json)
+(`valid: true`, investigation 59,4 s) ; script
+`benchmarks/grouping-multiagent/investigate-transient.mjs`. Aucun fichier de
+`crates/**` modifié : l'analyse du vérificateur est en lecture seule.
+
+### 9.1 Incident observé
+
+Ré-exécution du harnais de la section 8 par le Lead sous charge (6 workers,
+RAM libre ~1,1–1,4 Go, calibration `rustc -vV` jusqu'à **441 ms** contre
+~80–120 ms à vide) : **19/20 runs conformes**, 1 run non conforme.
+
+- scénario `d-undeclared-dependency`, répétition 4, temps du run complet 3131 ms ;
+- décisions obtenues : `AUTO_SAFE` (agent-d1), `MANUAL_REQUIRED` (agent-d2),
+  puis **`REJECT`** sur agent-d3 au lieu de `AUTO_SAFE` attendu ;
+- motifs : « semantic verification failed: merged snapshot c77b8f105753 does not
+  compile with rustc 1.95.0 » puis
+  « diagnostic: no-code [error] only metadata stub found for `rlib` dependency
+  `std` please provide path to the corresponding .rmeta file with full metadata »
+  et « diagnostic: no-code [error] cannot resolve a prelude import » ;
+- **aucun E-code**, aucune ligne du contenu candidat citée ; l'échec est
+  fail-closed (rien n'est intégré, le harnais marque `valid=false`) ;
+- l'échec étant survenu au 3e run alors que les 20 autres passaient, il relève
+  d'un état transitoire de la machine et non d'un contenu invalide.
+
+Détail critique : la vérification sémantique exigeait la compilation d'un
+contenu candidat **identique** à celui qui avait compilé dans les autres
+répétitions et qui compile toujours aujourd'hui. Les deux diagnostics sont des
+erreurs du chargeur de métadonnées de `rustc` (chargement de `std`), pas des
+erreurs du programme candidat.
+
+### 9.2 Protocole d'investigation contrôlée
+
+- **Scénario d uniquement** (le seul en échec), exécuté par le binaire réel
+  `ravum-collab integrate --verify --json` (aucun rebuild) ;
+- **3 conditions**, 20 runs réels par condition, 12 compilations `rustc`
+  **directes** par condition avec exactement les arguments du vérificateur
+  (`--edition 2021 --crate-name ravum_merge_check --crate-type lib
+  --emit=metadata --error-format=json --out-dir …`, `RUSTFLAGS`/`RUSTC_WRAPPER`/
+  `RUSTC_WORKSPACE_WRAPPER` retirés comme dans le vérificateur) :
+  - `rest` : aucune charge injectée (machine toujours partagée, RAM libre
+    2,4–2,8 Go) ;
+  - `cpu` : 2 processus Node en boucle CPU, bornés à 120 s puis tués ;
+  - `memio` : 1 processus Node (192 Mo alloués/touchés + écritures/lectures
+    fsync de 4 × 16 Mo en boucle), borné à 120 s puis tué ;
+- captures : décisions et raisons complètes, code de sortie et stderr du
+  binaire, durée, RAM libre avant/après, calibration `rustc -vV`, succès des
+  compilations directes ; le **contenu candidat** exact est haché et archivé.
+
+### 9.3 Résultats contrôlés
+
+| Condition | runs | runs non conformes | probes `rustc` directes | échecs de probe | wall p50 | RAM libre avant |
+|---|---:|---:|---:|---:|---:|---:|
+| `rest` (sans charge injectée) | 20 | **0** | 12 | **0** | 530 ms | 2,52 Go |
+| `cpu` (2 boucles CPU) | 20 | **0** | 12 | **0** | 499 ms | 2,61 Go |
+| `memio` (192 Mo + I/O) | 20 | **0** | 12 | **0** | 433 ms | 2,43 Go |
+
+- **60/60 runs conformes**, **0/36 échec de compilation rustc directe** ; les
+  5 décisions attendues ont été obtenues partout.
+- Compilations de référence du contenu candidat avant la campagne : **3/3
+  succès** (exit 0).
+- Le sysroot contient bien un `libstd-…rmeta` **complet de 9 633 944 octets**
+  (et un `.rlib` de 5 648 528 octets) : au repos, `std` n'est pas un stub —
+  l'erreur « only metadata stub found » ne peut donc pas venir d'un contenu
+  candidat invalide.
+- Échec non reproduit. Taux d'échec mesuré : **0/20 par condition** ; avec 20
+  runs, la borne supérieure « règle de trois » à 95 % est ≈ 15 % — ce qui ne
+  prouve pas l'absence du phénomène, seulement qu'il est rare dans ces
+  conditions.
+
+### 9.4 Cause racine : **UNDETERMINED** (honnête)
+
+Ce qui est établi par les données :
+
+1. Les diagnostics de l'incident ont été émis par `rustc` lui-même
+   (`--error-format=json`) ; ils **ne portent aucun E-code** et ne désignent
+   aucune ligne du contenu candidat : ce ne sont pas des erreurs de compilation
+   du patch, mais des erreurs de chargement des métadonnées du sysroot.
+2. Le même contenu candidat compile (3/3 probes de référence) et le sysroot
+   contient un `std` complet : ni le contenu ni l'installation au repos ne sont
+   en cause.
+3. Le vérificateur **ne conserve ni le code de sortie de `rustc` ni son stderr
+   brut** : seul le diagnostic parsé est archivé (`Probe { diagnostics, success }`
+   dans `crates/ravum-workspace-coordinator/src/bin/common/mod.rs`). L'état
+   exact du processus `rustc` pendant l'incident est donc perdu.
+4. Les charges contrôlées bornées (CPU, mémoire/I/O) **ne reproduisent pas**
+   l'incident ; la charge exacte du run du Lead (6 workers, RAM ~1,1 Go,
+   calibration 318–441 ms) est plus sévère que les conditions reproduites.
+
+Hypothèse la plus probable, **non prouvée** : lecture/chargement transitoire des
+métadonnées du sysroot dégradé par la pression I/O/OS, transformé à tort en
+échec de compilation définitif. **Statut : UNDETERMINED** — déclencheur exact
+non capturé, non reproductible dans les conditions contrôlées.
+
+### 9.5 Lacune de classification (établie, indépendante de la cause exacte)
+
+Dans le code actuel (`crates/ravum-workspace-coordinator/src/bin/common/mod.rs`,
+`RustcMergeVerifier::metadata_check` via `compile_metadata`) :
+
+- une **erreur de spawn** de `rustc` → `Err` → `VerificationOutcome::Unavailable`
+  → `MANUAL_REQUIRED` (correct : fail-closed, non définitif) ;
+- un **processus `rustc` qui sort non-zéro**, *quel que soit le diagnostic* →
+  `MergeCheckStatus::Failed` → `VerificationOutcome::Failed` → **`REJECT`** ;
+- aucun **retry** ; seul le timeout d'exécution des tests est traité en
+  `Unavailable`.
+
+Conséquence : un incident transitoire d'infrastructure (sans E-code) est
+aujourd'hui indistinguable d'un vrai échec de compilation et devient une
+décision **définitive** `REJECT`. Le fail-closed est préservé (rien n'est
+intégré), mais la sémantique de décision est fausse : un incident transitoire ne
+prouve pas que le patch est invalide.
+
+### 9.6 Recommandation (correctif non appliqué, pour décision du Lead)
+
+1. **Conserver le code de sortie et un extrait borné du stderr brut** dans
+   `MergeCheck` (champ d'évidence ; ≤ 2 Ko) : sans cela tout incident futur
+   reste `UNDETERMINED` et non auditable.
+2. **Retry borné (1 tentative) puis `Unavailable`** au lieu de `Failed` quand
+   `rustc` sort non-zéro **sans E-code** (et *a fortiori* sur les motifs
+   « only metadata stub found », « cannot resolve a prelude import » ou sans
+   aucun diagnostic parsé) → décision `MANUAL_REQUIRED`/`UNKNOWN`, jamais
+   `REJECT`. Un **vrai** échec de compilation garde son E-code et reste
+   `Failed → REJECT`.
+3. **Test à écrire** (non écrit ici) : wrapper `rustc` factice via `RAVUM_RUSTC` —
+   (a) 1er appel émet le JSON « only metadata stub found … » + exit 101, 2e
+   appel réussit ⇒ après correctif : `MANUAL_REQUIRED`/`AUTO_SAFE` après retry,
+   jamais `REJECT` ; (b) wrapper émettant un vrai `E0061` ⇒ `REJECT` conservé ;
+   (c) wrapper qui échoue toujours avec le motif transitoire ⇒
+   `MANUAL_REQUIRED`, pas `REJECT`. Fichiers probables :
+   `crates/ravum-workspace-coordinator/tests/` (nouveau) ; tests existants
+   `semantic_mode_*` conservés.
+   Risque : un vrai échec sans E-code serait reclassé `MANUAL_REQUIRED` au lieu
+   de `REJECT` ; le retry unique + distinction E-code + journalisation bornent
+   ce risque, et le fail-closed reste garanti (aucune intégration).
+
+### 9.7 Impact sur l'interprétation L2.2
+
+- La preuve principale L2.2 a été **régénérée après l'investigation** dans une
+  fenêtre plus calme : **20/20 runs conformes, `valid=true`**, 13,5 s, RAM libre
+  2,0 → 2,4 Go, calibration 100–141 ms (contre 3131 ms pour le run incriminé et
+  29,2 s pour la campagne sous charge). Les chiffres des sections 8.2–8.4
+  (décisions, fréquence de conflits, modèle) restent valides **en régime
+  contrôlé**.
+- La campagne L2.2 sous charge a produit un **faux lot conflictuel** : si le
+  modèle utilise une fréquence `p` mesurée en régime non contrôlé, un
+  `REJECT` transitoire gonfle artificiellement `p` et surestime le coût du
+  groupement. Les mesures de fréquence de conflits doivent donc : (a) consigner
+  la charge, (b) exclure/retester les runs non déterministes, ou (c) distinguer
+  explicitement les incidents transitoires (`UNKNOWN`) des conflits réels.
+- Les **seuils `p*`** de la section 8.4 ne sont pas modifiés (ils ne dépendent
+  que des coûts mesurés en phase 1, 191/184/1596 ms) ; c'est la variable `p`
+  mesurée qui est sensible à la charge.
+- Aucune conclusion nouvelle sur la fréquence réelle de conflits en production :
+  un incident unique sous charge extrême ne permet pas d'estimer un taux.
+
+### 9.8 Limites de l'investigation
+
+- Charges contrôlées **plus douces** que l'incident (2 processus CPU / 192 Mo
+  + I/O bornés vs 6 workers et RAM ~1,1 Go) ; « rest » n'est pas un repos absolu
+  (machine partagée, 2,4–2,8 Go libres).
+- Un seul scénario (celui de l'incident), N=20 par condition : borne supérieure
+  de taux ≈ 15 % à 95 % (règle de trois), pas une preuve d'impossibilité.
+- Aucun correctif appliqué (périmètre `crates/**` interdit) ; la proposition de
+  test n'est pas exécutée.
+- L'analyse de l'incident repose sur la preuve L2.2 `valid=false` archivée dans
+  la preuve d'investigation **avant** sa régénération ; le vérificateur ne
+  conserve ni exit code ni stderr brut de `rustc`, ce qui borne la forensique.
+
+### 9.9 Reproduire
+
+```powershell
+# investigation contrôlée (3 conditions x 20 runs + probes rustc)
+node benchmarks/grouping-multiagent/investigate-transient.mjs
+# preuve : evidence/mvp0c-verification-transient-2026-11-09.json
+
+# preuve principale L2.2 régénérée en régime plus calme
+node benchmarks/grouping-multiagent/run.mjs --reps 5
+# preuve : evidence/mvp0c-grouping-multiagent-2026-11-09.json (valid=true)
+```
+
+Fichiers ajoutés par la section 9 : `benchmarks/grouping-multiagent/investigate-transient.mjs`,
+`evidence/mvp0c-verification-transient-2026-11-09.json`, la présente section ;
+`evidence/mvp0c-grouping-multiagent-2026-11-09.json` régénérée (`valid=true`).
