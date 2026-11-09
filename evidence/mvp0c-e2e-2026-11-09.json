@@ -1,0 +1,319 @@
+{
+  "schema": "ravum-mvp0c-e2e/1",
+  "mission": "MVP-0c L4.4 — revalidation des 10 scénarios E2E navigateur, vérification des logs CI et analyse du trou de couverture (apps modifiées => E2E non déclenchés par mvp-impact.yml)",
+  "generatedAt": "2026-11-09T01:55:00+01:00",
+  "provenance": {
+    "repository": "Rwanbt/Ravum",
+    "branch": "feat/mvp0c-hardening",
+    "requestedHead": "58220f5b351668b3d6b2b2ae7772534bb9628a5a",
+    "headObservedDuringLocalRun": "05350c76ba77d48c6142f77daa7c06ee11da4e1f",
+    "headMovedDuringMission": true,
+    "e2eRelevantTreeIdenticalToRequestedHead": true,
+    "e2eRelevantTreeProof": "git diff --stat 58220f5..05350c7 -- apps/ravum-todo .github/workflows tools/impact => sortie vide (aucun changement des fichiers E2E, de l'app, des workflows ou de l'outil d'impact)",
+    "workingTreeNote": "des changements non commités d'un autre chantier MVP-0c (crates/ravum-dsp-harness/Cargo.toml dev-deps + tests/, etc.) étaient présents pendant l'exécution ; ils ne touchent ni apps/ravum-todo, ni .github/workflows, ni tools/impact",
+    "noMutatingGitCommands": true,
+    "noWorkflowModified": true,
+    "noAppSourceModified": true,
+    "noTestRemovedOrDisabled": true
+  },
+  "localRevalidation": {
+    "command": "RAVUM_TODO_BIN=target\\debug\\ravum-todo.exe RAVUM_E2E_REQUIRE_BROWSER=1 NODE_OPTIONS=--require=<temp>\\taskkill-preload.cjs node apps/ravum-todo/e2e/browser_e2e.mjs --screenshots=<temp>\\screenshots --report=<temp>\\local-report.json",
+    "cwd": "D:\\App\\Ravum",
+    "exitCode": 0,
+    "wallClockMs": 12500,
+    "harnessReportedDurationMs": 7420,
+    "browser": {
+      "product": "HeadlessChrome/156.0.8078.4",
+      "protocolVersion": "1.3",
+      "revision": "@f842f52ef39fd97b449eb27cff414bf05a98ddce",
+      "executablePath": "C:\\Users\\barat\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1248\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+      "discoverySource": "ms-playwright chromium_headless_shell-1248 (headless shell)",
+      "launchArguments": [
+        "--headless=new",
+        "--remote-debugging-port=0",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--user-data-dir=<profil temporaire>",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "about:blank"
+      ]
+    },
+    "node": "v26.13.0",
+    "os": {
+      "platform": "win32",
+      "version": "Windows 11 Pro",
+      "release": "10.0.26100",
+      "arch": "x64"
+    },
+    "serverMode": "RAVUM_TODO_BIN=D:\\App\\Ravum\\target\\debug\\ravum-todo.exe (binaire précompilé ; le harnais démarre un vrai serveur par scénario, vrai socket, vrai fichier SQLite)",
+    "totals": {
+      "scenarios": 10,
+      "pass": 10,
+      "fail": 0,
+      "skip": 0,
+      "documentedChecks": 44,
+      "screenshots": 10
+    },
+    "scenarios": [
+      { "id": 1, "name": "chargement de l'interface (titre, formulaire, version de contrat)", "status": "PASS", "durationMs": 500, "checks": 6, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 2, "name": "création d'une tâche et affichage dans le DOM", "status": "PASS", "durationMs": 494, "checks": 3, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 3, "name": "modification du titre et mise à jour du DOM", "status": "PASS", "durationMs": 598, "checks": 4, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 4, "name": "suppression et disparition du DOM", "status": "PASS", "durationMs": 552, "checks": 3, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 1, "note": "EXPECTED: Chromium 156 signale la requête DELETE 204 comme canceled=ERR_ABORTED après réception de la réponse (bookkeeping DevTools, dom/base corrects)" } },
+      { "id": 5, "name": "erreur de validation (titre vide) affichée dans le DOM", "status": "PASS", "durationMs": 429, "checks": 3, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 1, "httpErrors": 1, "networkFailures": 0, "note": "EXPECTED: HTTP 400 validation whitelisté" } },
+      { "id": 6, "name": "erreur d'autorisation (401) affichée sans casser l'UI", "status": "PASS", "durationMs": 476, "checks": 4, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 1, "httpErrors": 1, "networkFailures": 0, "note": "EXPECTED: HTTP 401 whitelisté" } },
+      { "id": 7, "name": "incompatibilité de contrat (v2 côté serveur) => message UI explicite", "status": "PASS", "durationMs": 844, "checks": 5, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 8, "name": "persistance: redémarrage du serveur sur la même base et rechargement", "status": "PASS", "durationMs": 800, "checks": 5, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 9, "name": "migration v1 => v2: UI fonctionnelle et données v1 visibles", "status": "PASS", "durationMs": 501, "checks": 6, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 0, "httpErrors": 0, "networkFailures": 0 } },
+      { "id": 10, "name": "erreur réseau (serveur arrêté) visible, aucune exception non capturée", "status": "PASS", "durationMs": 1082, "checks": 5, "console": { "exceptions": 0, "consoleErrors": 0, "logErrors": 2, "httpErrors": 0, "networkFailures": 2, "note": "EXPECTED: 2 x net::ERR_CONNECTION_REFUSED (GET /api/tasks et POST /api/tasks)" } }
+    ],
+    "environmentWorkaround": {
+      "needed": true,
+      "symptom": "Sur cette machine (charge partagée, 318 processus), taskkill /PID <pid> /T /F prend 61,5 s et échoue (exit 1, processus toujours vivant), y compris sur un simple cmd.exe ; Stop-Process -Force tue en 0,02 s. Sans contournement, chaque scénario coûtait ~2 min (2 tentatives de taskkill) et le run complet dépassait 20 min.",
+      "workaround": "Préchargement Node local (NODE_OPTIONS=--require=<temp>/taskkill-preload.cjs, HORS dépôt) qui remplace spawnSync('taskkill', ...) par process.kill(pid) (TerminateProcess) quand le PID est fourni. Le harnais, les scénarios et l'application ne sont pas modifiés ; le serveur est lancé via RAVUM_TODO_BIN (processus enfant direct, sans descendants), donc la sémantique de nettoyage requise est équivalente.",
+      "transparency": "12 lignes [taskkill-shim] dans le log local : 11 arrêts de serveur + 1 arrêt navigateur. La CI, elle, utilise taskkill normal (voir ciVerification).",
+      "measuredTaskkillBaseline": "61,5 s, exit 1, processus non tué (3 essais : cmd.exe, ravum-todo ; /T ou non)",
+      "measuredStopProcess": "0,02 s"
+    },
+    "artifacts": {
+      "report": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\local-report.json",
+      "consoleLog": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\console.log",
+      "screenshotsDirectory": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\screenshots"
+    }
+  },
+  "coverageAgainstCurrentContract": {
+    "verdict": "Les 10 scénarios couvrent toujours le contrat/API courant ; aucun scénario additionnel n'est nécessaire.",
+    "proof": [
+      "Depuis le commit MVP-0b c2c2ce9, la seule modification de l'application est le signal de disponibilité dans static/app.js (7 lignes ajoutées, commit 7bc128a) ; aucune route, aucun champ, aucune validation, aucun schéma n'a changé.",
+      "git diff --stat c2c2ce9..HEAD -- apps/ravum-todo/src apps/ravum-todo/Cargo.toml crates/ravum-todo-core crates/ravum-store => vide.",
+      "crates/ravum-todo-core: CONTRACT_VERSION = 1 ; crates/ravum-store: SCHEMA_VERSION = 2 (inchangés).",
+      "Routes inchangées : GET /health, GET /api/schema, GET/POST /api/tasks, PATCH/DELETE /api/tasks/{id}, GET /, GET /app.js.",
+      "Le signal de disponibilité (document.documentElement.dataset.ravumReady='1') est déjà consommé par page.waitForReady() dans les scénarios à waitReady=true ; il n'ajoute aucun comportement produit à tester.",
+      "Les 10 scénarios restent exécutés sans suppression ni désactivation ; 44 vérifications décrites."
+    ]
+  },
+  "ciVerification": {
+    "requestedRun": {
+      "runId": 42538867282,
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42538867282",
+      "workflow": ".github/workflows/mvp.yml (MVP product checks)",
+      "event": "push",
+      "headSha": "58220f5b351668b3d6b2b2ae7772534bb9628a5a",
+      "conclusion": "success",
+      "job": { "id": 128909135716, "name": "mvp", "duration": "6 min 8 s" },
+      "e2eStep": {
+        "number": 15,
+        "name": "Browser E2E - real Chromium/Edge via CDP (no npm dependency)",
+        "conclusion": "success",
+        "windowStartUtc": "2026-11-09T00:17:06.8320942Z",
+        "windowEndUtc": "2026-11-09T00:17:52.5271110Z",
+        "wallMs": 45695,
+        "setupNodeStep": { "number": 14, "conclusion": "success", "windowStartUtc": "2026-11-09T00:16:47.8931698Z", "windowEndUtc": "2026-11-09T00:17:06.8320942Z", "wallMs": 18939 },
+        "uploadStep": { "number": 16, "name": "Upload browser E2E evidence", "conclusion": "success" }
+      },
+      "artifact": {
+        "name": "browser-e2e-evidence",
+        "report": {
+          "browserProduct": "Chrome/156.0.8078.80",
+          "browserSource": "navigateur système (Chemin standard Windows) - C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+          "node": "v24.22.2",
+          "os": "Windows Server 2025 Datacenter",
+          "git": "feat/mvp0c-hardening@58220f5b351668b3d6b2b2ae7772534bb9628a5a",
+          "totals": { "scenarios": 10, "pass": 10, "fail": 0, "documentedChecks": 44 },
+          "harnessDurationMs": 39256,
+          "scenarioDurationsMs": [4105, 677, 1813, 1245, 1375, 1158, 1815, 999, 914, 976],
+          "harnessError": null
+        }
+      }
+    },
+    "currentHeadRun": {
+      "runId": 42541321576,
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42541321576",
+      "workflow": ".github/workflows/mvp.yml",
+      "event": "push",
+      "headSha": "05350c76ba77d48c6142f77daa7c06ee11da4e1f",
+      "conclusion": "success",
+      "job": { "id": 128916668995, "name": "mvp", "duration": "4 min 40 s" },
+      "e2eStep": {
+        "number": 15,
+        "conclusion": "success",
+        "windowStartUtc": "2026-11-09T00:43:03.1980290Z",
+        "windowEndUtc": "2026-11-09T00:43:23.8148179Z",
+        "wallMs": 20617,
+        "setupNodeStep": { "number": 14, "conclusion": "success", "wallMs": 4543 }
+      },
+      "artifactReport": {
+        "browserProduct": "Chrome/156.0.8078.80",
+        "node": "v24.22.2",
+        "git": "05350c76ba77d48c6142f77daa7c06ee11da4e1f",
+        "totals": { "scenarios": 10, "pass": 10, "fail": 0, "documentedChecks": 44 },
+        "harnessDurationMs": 14547,
+        "scenarioDurationsMs": [1262, 410, 563, 695, 984, 867, 731, 721, 524, 1021]
+      }
+    },
+    "impactRuns": {
+      "onRequestedHead": {
+        "runId": 42538867273,
+        "url": "https://github.com/Rwanbt/Ravum/actions/runs/42538867273",
+        "headSha": "58220f5b351668b3d6b2b2ae7772534bb9628a5a",
+        "conclusion": "success",
+        "job": { "id": 128909135467, "name": "impact", "duration": "2 min 12 s" },
+        "decision": "full-conservative",
+        "reasonsQuote": "Mapping FULL par règle conservatrice : la suite complète est l'exigence de ce diff (issue légitime).",
+        "browserE2eStep": null,
+        "stepsWithoutBrowser": ["Verify the impact mapping itself (Node selftest, no cargo)", "Compute impact mapping", "Run the FULL workspace suite", "Run exactly the required Rust tests (serialized) - SKIPPED", "Fail explicitly on an uncertain mapping - SKIPPED", "Impact summary"],
+        "note": "Le diff de push est calculé contre origin/dev (tous les commits de la branche) ; les commits de durcissement CI rendent donc la décision FULL. Ce run ne prouve pas le chemin sélectif apps-only ; les simulations locales le font."
+      },
+      "onCurrentHead": {
+        "runId": 42541321622,
+        "headSha": "05350c76ba77d48c6142f77daa7c06ee11da4e1f",
+        "conclusion": "success",
+        "job": { "id": 128916668770, "duration": "3 min 32 s" },
+        "decision": "full-conservative",
+        "browserE2eStep": null
+      }
+    },
+    "impactMappingSelftest": {
+      "cleanHeadExport": "git archive HEAD (05350c7) vers un répertoire temporaire : node tools/impact/selftest.mjs => SELFTEST PASS - 52 cas, 505 assertions, 0 échec.",
+      "workingTreeLocal": "Sur l'arbre de travail partagé, le même selftest échoue sur 2 cas car un autre chantier a ajouté (non commité) ravum-rust-adapter/ravum-snapshot aux dev-dependencies de ravum-dsp-harness ; le mapping lit les manifestes du disque. Ce n'est pas une régression du commit 05350c7 : la CI sur 05350c7 passe le selftest.",
+      "workflowImpactSteps": "Le workflow mvp-impact.yml lance bien node tools/impact/selftest.mjs avant toute décision ; aucune référence navigateur/E2E/setup-node dans ce fichier (vérifié par grep insensible à la casse)."
+    },
+    "localToolingNote": "scripts/impact.ps1 est un lanceur local Windows PowerShell 5.1 : exécuté via powershell.exe il échoue à parser (fichier UTF-8 sans BOM, accents mal décodés). Contournement : appeler node tools/impact/impact.mjs directement (c'est ce que fait la CI). Aucun impact sur la CI."
+  },
+  "coverageGap": {
+    "statement": "Une modification de apps/** (UI, serveur de l'app, harnais E2E) n'exécute PAS les E2E navigateur dans mvp-impact.yml : le workflow n'a aucune étape navigateur et le graphe d'impact ne produit jamais de commande browser. Seul mvp.yml (product checks) exécute script demo-m4-browser.ps1.",
+    "workflowEvidence": {
+      "file": ".github/workflows/mvp-impact.yml",
+      "browserStepPresent": false,
+      "grepResult": "aucune référence browser|e2e|setup-node|playwright|chrome (insensible à la casse)",
+      "impactJobSteps": ["Set up job", "Checkout", "Install Rust", "Install Python", "Show toolchain", "Verify the impact mapping itself (Node selftest, no cargo)", "Cache cargo registry and target", "Compute impact mapping", "Documentation integrity check (only when docs changed)", "Run the FULL workspace suite (legitimate conservative mapping)", "Run exactly the required Rust tests (serialized)", "Fail explicitly on an uncertain mapping", "Impact summary", "Scope notice"]
+    },
+    "toolEvidence": {
+      "file": "tools/impact/impact.mjs",
+      "limitsLine79": "UI statique (apps/*/static/**) et suites E2E navigateur éventuelles : la suite Rust du paquet est exigée, le navigateur n'est pas exécuté ici.",
+      "classifyPathAppsRule": "tout chemin apps/<membre>/** => composant pkg:<membre> (dont apps/ravum-todo/e2e/**) ; aucune commande navigateur n'est émise",
+      "commandsKind": "cargo uniquement (cargo test -p <pkg> -- --test-threads=1 ou cargo test --workspace -- --test-threads=1 pour FULL)"
+    },
+    "documentedAlready": "docs/mvp/MVP-0b-ci.md : table §3 lignes 102-103, règle complémentaire ligne 122-123, limite §7 point 6 ligne 376-380.",
+    "syntheticDiffs": [
+      {
+        "case": "apps-only (UI statique)",
+        "files": ["apps/ravum-todo/static/app.js"],
+        "exitCode": 0,
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "packages": ["ravum-todo"],
+        "components": { "apps/ravum-todo/static/app.js": ["pkg:ravum-todo"] },
+        "commands": ["cargo test -p ravum-todo -- --test-threads=1"],
+        "browserCommand": null,
+        "reasons": ["direct — paquet(s) directement modifié(s): ravum-todo"]
+      },
+      {
+        "case": "apps-only (serveur de l'app + UI)",
+        "files": ["apps/ravum-todo/src/routes.rs", "apps/ravum-todo/static/index.html"],
+        "exitCode": 0,
+        "decision": "selective",
+        "packages": ["ravum-todo"],
+        "commands": ["cargo test -p ravum-todo -- --test-threads=1"],
+        "browserCommand": null
+      },
+      {
+        "case": "apps-only (harnais E2E lui-même)",
+        "files": ["apps/ravum-todo/e2e/browser_e2e.mjs"],
+        "exitCode": 0,
+        "decision": "selective",
+        "packages": ["ravum-todo"],
+        "commands": ["cargo test -p ravum-todo -- --test-threads=1"],
+        "browserCommand": null
+      },
+      {
+        "case": "contrat partagé de l'app (todo-core)",
+        "files": ["crates/ravum-todo-core/src/lib.rs"],
+        "exitCode": 0,
+        "decision": "selective",
+        "packages": ["ravum-todo-core", "ravum-store", "ravum-todo"],
+        "commands": [
+          "cargo test -p ravum-todo-core -- --test-threads=1",
+          "cargo test -p ravum-store -- --test-threads=1",
+          "cargo test -p ravum-todo -- --test-threads=1"
+        ],
+        "browserCommand": null
+      },
+      {
+        "case": "chemin apps inconnu",
+        "files": ["apps/ravum-unknown/x.js"],
+        "exitCode": 0,
+        "decision": "full-conservative",
+        "full": true,
+        "unknown_paths": ["apps/ravum-unknown/x.js"],
+        "commands": ["cargo test --workspace -- --test-threads=1"],
+        "browserCommand": null
+      },
+      {
+        "case": "scripts + apps (mixte)",
+        "files": ["apps/ravum-todo/src/routes.rs", "scripts/demo-m4-browser.ps1"],
+        "exitCode": 0,
+        "decision": "full-conservative",
+        "full": true,
+        "commands": ["cargo test --workspace -- --test-threads=1"],
+        "browserCommand": null
+      }
+    ],
+    "consequences": [
+      "Le job impact peut être vert sans avoir exécuté le JavaScript de l'UI ; sa promesse « exactement les tests requis » est incomplète pour apps/**.",
+      "Aujourd'hui mvp.yml (push feat/**, PR vers main/dev) exécute aussi les E2E : sur ces événements, la couverture UI est assurée par mvp.yml. Le trou devient visible si mvp-impact est le seul check requis (protection de branche), sur un PR de fork, ou si mvp.yml est sauté/conditionnel.",
+      "Un FULL conservateur (ex. scripts/**) exécute cargo test --workspace mais ne rejoue pas les démos/E2E de mvp.yml : FULL ne compense pas ce trou."
+    ],
+    "proposedRule": {
+      "summary": "Ajouter au graphe d'impact un booléen browser_e2e_required et brancher une étape E2E navigateur dans mvp-impact.yml, conditionnée par ce booléen (fail-closed si incertain).",
+      "exactPaths": [
+        "apps/ravum-todo/** (src, static, e2e inclus)",
+        "apps/*/static/** et apps/*/e2e/** (règle générique pour toute app future avec UI)",
+        "crates/ravum-todo-core/** (contrat partagé servi à l'UI)",
+        "crates/ravum-store/** (schéma SQLite observé par l'UI, scénario migration)",
+        "scripts/demo-m4-browser.ps1 (lanceur du harnais)"
+      ],
+      "alsoWhen": [
+        "decision.uncertain === true (fail-closed : si le mapping n'est pas certifié, exécuter aussi le navigateur)",
+        "decision.full === true ET (Cargo.toml|Cargo.lock modifié OU une des paths ci-dessus modifiée) : un changement de manifeste peut changer le binaire de l'app"
+      ],
+      "workflowWiring": [
+        "Compute impact: exposer browser_e2e=steps.impact.outputs.browser_e2e",
+        "Ajouter actions/setup-node@v4 (node-version '24') conditionné à browser_e2e == 'true'",
+        "Ajouter une étape powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots conditionnée ; le script compile ravum-todo (cargo build -q -p ravum-todo) et propage le code de sortie (0 succès, 1 échec, 2 SKIP explicite).",
+        "Ajouter actions/upload-artifact@v4 (target/ravum/browser-e2e, if: always()) pour la preuve.",
+        "Ne rien désactiver : les suites Rust sélectionnées continuent de tourner en parallèle/avant ; aucun test n'est exclu."
+      ],
+      "whyNotAlways": "Une exécution E2E inconditionnelle coûterait 20-65 s sur chaque diff, y compris docs/evidence-only ; la règle ciblée garde le coût uniquement quand l'UI, le contrat de l'app ou son schéma change.",
+      "durationImpact": {
+        "measuredE2eStepMs": { "min": 20617, "max": 45695, "samples": ["run 42541321576 (05350c7)", "run 42538867282 (58220f5)"] },
+        "measuredSetupNodeMs": { "min": 4543, "max": 18939 },
+        "estimatedAddedMsRange": [25160, 64639],
+        "estimatedAdded": "~25 à ~65 s par exécution impact déclenchée (mesuré, pas modélisé)",
+        "currentJobDurations": { "42538867273": "2 min 12 s", "42541321622": "3 min 32 s" },
+        "worstCaseJobDuration": "~4 min 40 s, très en-dessous du timeout 40 min",
+        "costWhenNotTriggered": "0 s (docs/evidence/chemin sans UI)"
+      },
+      "alternativeConsidered": "Conserver les E2E uniquement dans mvp.yml et ne pas ajouter d'étape à mvp-impact. Moins coûteux, mais laisse la promesse de couverture du check impact incomplète et dépend d'un second workflow ; recommandé seulement si mvp-impact n'est jamais le gate unique de l'UI."
+    }
+  },
+  "limits": [
+    "Navigateur headless uniquement : pas de fenêtre réelle, pas de GPU/compositeur visible ; les assertions portent sur le DOM, pas sur le rendu pixel.",
+    "Un seul moteur testé : Chromium 156.0.8078.4 (headless shell Playwright en local) et Chrome 156.0.8078.80 (CI) ; Firefox/WebKit/Safari non testés.",
+    "Pas de mobile, pas de responsive, pas de tactile ; pas de test d'accessibilité (rôles/labels/lecteur d'écran).",
+    "Pas de TLS/HTTPS (le serveur de démonstration ne l'implémente pas), pas de multi-utilisateur concurrent, pas de charge, pas de proxy réseau partiel.",
+    "Pas de régression visuelle (captures = preuves d'exécution, pas de baseline pixel).",
+    "Exécution locale sous charge partagée avec d'autres agents ; un shim taskkill hors dépôt a été nécessaire pour borner la durée (voir localRevalidation.environmentWorkaround). La CI utilise taskkill normal, preuve à l'appui.",
+    "Le run local a eu lieu sur 05350c7 (la branche a avancé pendant la mission) ; le sous-arbre E2E/app/workflows/impact est identique à 58220f5 (diff vide) ; la CI demandée porte sur 58220f5 et un run CI sur 05350c7 est aussi vert.",
+    "Le selftest du mapping échoue sur l'arbre de travail local à cause de changements non commités d'un autre chantier (dsp-harness dev-deps) ; il passe sur l'export propre de HEAD et en CI. Fragilité connue : le selftest local lit le disque, pas le commit.",
+    "scripts/impact.ps1 (lanceur local) échoue sous Windows PowerShell 5.1 à cause de l'encodage UTF-8 sans BOM ; contournement : node tools/impact/impact.mjs. La CI n'utilise pas ce script.",
+    "Aucune preuve CI sur un diff réel purement apps-only (les diffs de push vs origin/dev sont FULL) : le comportement sélectif est prouvé par simulations locales du même binaire impact.mjs et par la lecture des règles."
+  ],
+  "artifacts": {
+    "documentation": "docs/mvp/MVP-0c-e2e.md",
+    "evidenceJson": "evidence/mvp0c-e2e-2026-11-09.json",
+    "ciArtifacts": ["42538867282/browser-e2e-evidence", "42541321576/browser-e2e-evidence"],
+    "localArtifactsTemp": ["ravum-mvp0c-e2e-final/local-report.json", "ravum-mvp0c-e2e-final/screenshots/"]
+  }
+}
