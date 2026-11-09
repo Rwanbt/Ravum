@@ -1,0 +1,11 @@
+[package]
+name = "ravum-snapshot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Immutable content-addressed source snapshots with per-agent overlays."
+
+[dependencies]
+ravum-protocol = { workspace = true }
+serde = { workspace = true }

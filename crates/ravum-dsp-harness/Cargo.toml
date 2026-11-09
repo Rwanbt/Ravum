@@ -1,0 +1,11 @@
+[package]
+name = "ravum-dsp-harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "DSP session harness: allocation counting, block timing, discontinuity measurement (M3)."
+
+[dependencies]
+ravum-protocol = { workspace = true }
+ravum-patch-host = { workspace = true }

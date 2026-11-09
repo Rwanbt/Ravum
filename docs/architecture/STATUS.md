@@ -8,8 +8,13 @@
 | ADR-000 à ADR-041 | 42 propositions originales ; **toutes PROPOSED** |
 | Consolidation v0.3 | Revue multi-IA ; **REVIEW CANDIDATE**, non ratifiée |
 | Compilateur Ravum / frontend / runtime | Non implémentés |
-| Outil Rust MVP-0a | Non implémenté |
-| Benchmark, test de latence ou certification RT Ravum | Aucun réalisé |
+| Outil Rust MVP-0a | **Implémenté (M1), expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
+| Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
+| Prototype COLLAB-1 (multi-agents, écrivain Git unique) | **Implémenté et exécuté** ; ni rebase automatique, ni AST, ni CRDT |
+| Vérification bornée (M2) | **Implémentée** : `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
+| DSP de bloc (M3) | **Démonstrateur** : ABI de bloc, état possédé par l'hôte, swap sans verrou, 0 allocation mesurée ; pas d'hôte audio réel, pas de crossfade |
+| Verticale full-stack (M4) | **Application témoin** : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E réels ; pas de navigateur piloté, pas de TLS |
+| Benchmark, test de latence ou certification RT Ravum | Latence de la boucle M1 **mesurée localement** ; aucune qualification temps réel |
 | Gate M5 pour un nouveau langage | Proposed, **pas accepté** |
 | Code de release | Aucun |
 | Politique de licence | À décider avant toute contribution externe de code |

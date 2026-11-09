@@ -41,12 +41,68 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Revue multi-IA | Réalisée sur documents, résultats contradictoires conservés |
 | Architecture F → D | **Hypothèse candidate**, à comparer |
 | Compilateur Ravum / langage exécutable | **Non implémenté** |
-| Daemon / hot swap / moteur de preuve Ravum | **Non implémentés** |
-| Benchmarks Ravum / qualifications RT | **Aucun résultat mesuré** |
-| MVP-0a | **Planifié, non commencé** |
-| CI produit | **Non qualifiée** ; la CI documentaire éventuelle ne certifie pas du code exécutable |
+| Outil Rust MVP-0a (M1) | **Implémenté et testé localement** : boucle `check → build → verify → hot patch`, voir [docs/mvp/architecture.md](docs/mvp/architecture.md) |
+| Hot swap natif | **Démontré** sur une entrée `f64 -> f64` à ABI vérifiée ; migration d'état **non** implémentée |
+| Moteur de preuve Ravum / qualification RT / full-stack | **Non implémentés** (M2–M4 non commencés) |
+| Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
+| Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
+| DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, **0 allocation** mesurée sur 400 blocs ; aucun périphérique audio, aucun crossfade |
+| Verticale full-stack (M4) | **Application témoin** : UI statique + API HTTP + SQLite, contrat versionné, validation serveur, migrations additives, 10 tests E2E ; aucun navigateur piloté, aucun TLS |
+| Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
+| CI produit | **Ajoutée** (build + tests + démonstrations) ; elle ne certifie ni preuve, ni temps réel, ni stabilité d'ABI |
 
 Les fichiers `.ul` des exemples initiaux illustrent seulement des **idées de syntaxe**, pas du code compilable aujourd'hui.
+
+## MVP-0a : ce qui fonctionne réellement
+
+Une modification de source déclenche l'analyse ciblée, la compilation d'une unité de
+patch, une vérification faible mais honnête (`tested`), puis l'activation à chaud
+dans un **processus déjà en cours d'exécution**, sans redémarrage. Toute étape qui
+échoue laisse la version précédente active.
+
+```text
+ravum check  <fichier.rs>    # analyse seule, diagnostics structurés (JSON)
+ravum build  <fichier.rs>    # cdylib après une analyse propre
+ravum patch  <artefact>      # validation ABI / manifeste / symboles
+ravum run    <fichier.rs>    # application de démonstration
+ravum watch  <fichier.rs>    # boucle complète : édition -> activation
+ravum status                 # dernier état enregistré
+ravum bench  <a.rs> <b.rs>   # mesures par étape, min/p50/p95/p99 + calibration de charge
+ravum prove  <fichier.rs>    # vérifie une obligation bornée et l'enregistre dans le ledger
+ravum artifacts [--prune]    # liste ou élague les artefacts (jamais celui qui est actif)
+ravum dsp    <fichier.rs>    # session DSP mesurée, remplacement à chaud optionnel (--next)
+```
+
+Démonstrations exécutables : `scripts/demo-m1.ps1` (hot patch d'un processus vivant)
+et `scripts/demo-collab.ps1` (propositions multi-agents, conflit explicite, écrivain
+Git unique).
+
+**Limites assumées** : un seul point d'entrée `f64 -> f64` ; une panique dans un
+patch avorte le processus hôte (`panic=abort`) ; aucune migration d'état, aucune
+fusion AST/CRDT, aucune garantie temps réel. Un statut `PROVED` n'est émis que pour
+un **domaine fini explicitement énuméré** (jamais pour une propriété générale), et
+l'absence de prouveur externe produit `Unsupported`, pas un succès.
+
+**Cibles de latence non atteintes** : ni le diagnostic (< 50 ms) ni le patch
+complet (< 500 ms) ne passent de façon reproductible, parce que `rustc` est lancé à
+froid à chaque édition. Mesures et verdict : [docs/mvp/M2-evidence.md](docs/mvp/M2-evidence.md).
+
+**DSP** : le chemin audio est sans verrou et sans allocation (mesuré), mais il n'y a
+**aucun périphérique audio, aucune priorité temps réel et aucun crossfade** — un
+changement de gain ou de coefficient produit un clic, mesuré et publié. Détail :
+[docs/mvp/M3-evidence.md](docs/mvp/M3-evidence.md).
+
+### Application témoin full-stack (M4)
+
+```text
+cargo run -p ravum-todo -- --db target/ravum/todo.db --port 8080 --token dev-token
+```
+
+UI statique (aucune étape de build), API HTTP, SQLite avec migrations versionnées,
+types partagés exposés à `/api/schema`, validation et autorisation côté serveur.
+Les tests E2E démarrent le serveur sur une vraie socket et une vraie base. Limites :
+aucun navigateur piloté, aucun TLS, une seule connexion SQLite. Détail :
+[docs/mvp/M4-evidence.md](docs/mvp/M4-evidence.md).
 
 ## Stratégie d'implémentation : apprendre avant de figer
 

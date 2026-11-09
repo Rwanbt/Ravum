@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "agent_id": "agent-e",
+  "task_id": "change-contract",
+  "base_snapshot_id": "{{BASE}}",
+  "target_paths": ["two_functions.rs"],
+  "target_symbols": ["ravum_compute"],
+  "expected_hashes": { "two_functions.rs": "{{HASH_TWO_FUNCTIONS}}" },
+  "declared_dependencies": [],
+  "impacted_contracts": ["ravum_compute: résultat fini pour toute entrée finie"],
+  "unified_patch": "+++ b/two_functions.rs\n@@ -29,5 +29,5 @@\n /// Point d'entree patchable.\n #[no_mangle]\n pub extern \"C\" fn ravum_compute(x: f64) -> f64 {\n-    helper(x) * 2.0\n+    helper(x) * 4.0\n }\n",
+  "note": "Agent E : touche un contrat -> MANUAL_REQUIRED (INV-02), aucun merge automatique."
+}

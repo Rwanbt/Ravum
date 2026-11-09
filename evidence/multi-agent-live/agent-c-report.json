@@ -1,0 +1,1 @@
+{"agent_id":"agent-c","task_id":"refine-helper-offset-alt","file":"two_functions.rs","target_symbols":["helper"],"declared_dependencies":[],"impacted_contracts":[],"summary":"helper offset 1.0 -> 30.0 (concurrent avec agent-a)"}
