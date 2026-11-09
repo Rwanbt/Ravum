@@ -2,6 +2,7 @@
 name = "ravum-demo-host"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 description = "Long-running demo application whose patchable function is hot-swapped."
