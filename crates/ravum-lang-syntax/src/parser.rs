@@ -682,7 +682,15 @@ impl<'a> Parser<'a> {
     }
 
     fn starts_pattern(&self) -> bool {
-        match self.kind() {
+        Self::starts_pattern_kind(self.kind())
+    }
+
+    fn starts_pattern_at(&self, n: usize) -> bool {
+        Self::starts_pattern_kind(&self.peek_at(n).kind)
+    }
+
+    fn starts_pattern_kind(kind: &TokenKind) -> bool {
+        match kind {
             TokenKind::Ident(_)
             | TokenKind::Int { .. }
             | TokenKind::Str(_)
@@ -984,6 +992,14 @@ impl<'a> Parser<'a> {
                 "restricted visibility `pub(...)` is not supported in Ravum Core 1.0",
             );
             return Vis::Public(pub_span);
+        }
+        if self.at_kw(Kw::Test) {
+            let span = pub_span.join(self.cur_span());
+            self.diags.error(
+                "E-PARSE-EXPECTED",
+                span,
+                "`test fn` is private in Ravum Core 1.0; `pub test fn` is not a valid item",
+            );
         }
         Vis::Public(pub_span)
     }
@@ -2397,7 +2413,7 @@ impl<'a> Parser<'a> {
                     span: self.span_from(start),
                 }
             }
-            TokenKind::Ident(ref name) if name == "ref" => {
+            TokenKind::Ident(ref name) if name == "ref" && self.starts_pattern_at(1) => {
                 let span = start;
                 self.diags.error(
                     "E-UNSUPPORTED-REF-PAT",
@@ -2432,6 +2448,21 @@ impl<'a> Parser<'a> {
                         },
                         span: self.span_from(start),
                     }
+                }
+            }
+            // `effects` is contextual (LEX-5.5): outside a signature clause it is
+            // an ordinary identifier, so `let effects = 1;` binds it.
+            TokenKind::Kw(Kw::Effects) => {
+                let binding_span = start;
+                self.bump();
+                let id = self.id();
+                Pat {
+                    id,
+                    kind: PatKind::Binding {
+                        mutable: false,
+                        name: Ident::new("effects".to_string(), binding_span),
+                    },
+                    span: self.span_from(start),
                 }
             }
             TokenKind::Kw(Kw::True) => {
@@ -3289,6 +3320,28 @@ impl<'a> Parser<'a> {
                 Expr {
                     id,
                     kind: ExprKind::Char(value),
+                    span: self.span_from(start),
+                }
+            }
+            // `effects` is contextual (LEX-5.5): outside a signature clause it is
+            // an ordinary identifier, so it is a plain one-segment path here.
+            TokenKind::Kw(Kw::Effects) => {
+                let segment_span = self.cur_span();
+                self.bump();
+                let path_id = self.id();
+                let path = Path {
+                    id: path_id,
+                    root: PathRoot::Plain,
+                    segments: vec![PathSegment {
+                        name: Ident::new("effects".to_string(), segment_span),
+                        args: Vec::new(),
+                    }],
+                    span: self.span_from(start),
+                };
+                let id = self.id();
+                Expr {
+                    id,
+                    kind: ExprKind::Path(path),
                     span: self.span_from(start),
                 }
             }

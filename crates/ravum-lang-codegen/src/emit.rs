@@ -864,7 +864,7 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "Option" => OPTION.contains(&method),
         "Result" => RESULT.contains(&method),
         "f32" | "f64" => FLOAT.contains(&method),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => SIGNED.contains(&method),
+        "int" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => SIGNED.contains(&method),
         _ => false,
     }
 }

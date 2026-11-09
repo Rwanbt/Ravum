@@ -986,6 +986,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         match &stmt.kind {
             StmtKind::Let(lets) => {
                 let declared = lets.ty.as_ref().map(|t| self.resolve_type(t));
+                // A loop is a statement, never a value (G-6.19, F-SYN-019/033).
+                // Without this check `let x = while c { 1 };` type-checks as `()`
+                // and silently binds a unit, which the specification forbids.
+                if let Some(init) = lets.init.as_ref() {
+                    if matches!(
+                        init.kind,
+                        ExprKind::While { .. } | ExprKind::Loop { .. } | ExprKind::For { .. }
+                    ) {
+                        self.error(
+                            "E-TYP-STATEMENT-VALUE",
+                            init.span,
+                            "a `while`/`loop`/`for` expression is a statement and cannot be \
+                             bound by `let`"
+                                .to_string(),
+                        );
+                    }
+                }
                 let init_ty = lets
                     .init
                     .as_ref()

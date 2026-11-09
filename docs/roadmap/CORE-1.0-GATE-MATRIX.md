@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **10 PASS / 0 FAIL** |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
-| Conformance | `cargo run -p ravum-conformance -- run` | **268 cas : 237 PASS / 30 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **268 cas : 243 PASS / 24 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0x9ca81d63781e9d75`, 23,2 s |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 003 it/s, 20,0 s |
@@ -58,11 +58,11 @@ Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 | ThreadSanitizer | **SKIP explicite** `NOT_APPLICABLE` |
 | **Conformance corpus (Linux)** | **ÉCHEC — `total=268 pass=236 fail=30 skip=2`** |
 
-Les **30 mêmes cas** échouent sur Linux et sur Windows : les divergences
-spec ↔ implémentation ne sont pas spécifiques à une plateforme. La CI de
-conformance est donc rouge **volontairement** ; c'est le signal exact décrit
-dans [`T2-FINDINGS.md`](../qualification/T2-FINDINGS.md), en attente de
-l'arbitrage D8. Les autres workflows (*Documentation integrity*, *MVP*,
+Les **30 mêmes cas** échouaient alors sur Linux et sur Windows : les divergences
+spec ↔ implémentation ne sont pas spécifiques à une plateforme. Six d'entre eux
+ont depuis été corrigés dans le compilateur (mesure locale postérieure :
+**243 PASS / 24 FAIL**) ; la CI de conformance reste rouge **volontairement**
+tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
 ## 2. Matrice
@@ -71,8 +71,8 @@ l'arbitrage D8. Les autres workflows (*Documentation integrity*, *MVP*,
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `FAIL` | 15 documents de spec ; 268 cas ; **187/188 règles tracées** | **30 divergences spec ↔ implémentation** (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
-| T3 | `FAIL` | Lexer/parser/AST réels, 1019 tests, **fuzz complet rejoué sur ce SHA** (2 campagnes, 0 échec), Miri antérieur | **3 défauts frontend reproduits** : `effects` refusé comme identifiant, `pub test fn` accepté, `while`/`loop`/`for` acceptés comme valeur | Défauts à corriger |
+| T2 | `FAIL` | 15 documents de spec ; 268 cas ; **187/188 règles tracées** ; **6 défauts corrigés** dans le compilateur | **24 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
+| T3 | `PARTIAL` | Lexer/parser/AST réels, 1019 tests, **fuzz complet rejoué**, **Miri rejoué (159 tests)** ; **3 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs) | Cascade de 4 erreurs sur le token `lifetime` au lieu d'un `E-UNSUPPORTED-TOKEN` unique | Correction de diagnostic |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
@@ -108,11 +108,12 @@ Passe de traçabilité complète dans
 - **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
   **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
   portant le code exigé).
-- **30 cas échouent**, chacun documenté : 13 codes sont **émis par le
+- **24 cas échouent** après les six correctifs de la seconde passe (§8 de
+  `T2-FINDINGS.md`), chacun documenté : 13 codes sont **émis par le
   compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
-  `E-UNSUPPORTED-TURBOFISH`, …), 9 sont des défauts de comportement (programmes
-  acceptés qui devraient être refusés, ou l'inverse), le reste des noms de codes
-  divergents.
+  `E-UNSUPPORTED-TURBOFISH`, …), 8 sont des divergences de nom sur des codes
+  pourtant documentés, 3 sont des défauts de comportement (dont `math::max`
+  dont le résultat sur `-0.0` dépend de `-O`).
 - **1 règle non couvrable** : `F-META-006` n'a ni forme acceptée ni refus
   exécutable (MACH-1.4 fixe l'interpréteur à `NOT_IMPLEMENTED`).
 - **Aucun cas n'a été assoupli** : `expect_codes` vient de la spec, jamais de la
@@ -127,11 +128,14 @@ Passe de traçabilité complète dans
   (0 échec, digest `0x9ca81d63781e9d75`, identique à la campagne antérieure) et
   100 000 itérations `sema` (0 échec, 5 003 it/s). Les deux bugs de formateur
   trouvés par la campagne initiale restent couverts par des tests de régression.
-- **Échec** : la passe T2 a produit trois défauts frontend **reproduits par des
-  cas** — `let effects = 1;` refusé alors que `effects` n'est pas un mot-clé
-  réservé (LEX-4.5), `pub test fn` accepté alors qu'il doit être un
+- **Trois défauts frontend reproduits puis corrigés** : `let effects = 1;` refusé
+  alors que `effects` est contextuel (LEX-4.5), `pub test fn` accepté au lieu de
   `E-PARSE-EXPECTED`, et `while`/`loop`/`for` acceptés comme valeurs
-  (`E-TYP-STATEMENT-VALUE` attendu). Voir `T2-FINDINGS.md` §4.2.
+  (`E-TYP-STATEMENT-VALUE`). Les cas correspondants sont passés au vert.
+- **Défaut restant** : le token `lifetime` (`'a`) produit une cascade de quatre
+  diagnostics de parse (`E-LEX-CHAR`, `E-PARSE-EXPECTED`, `E-PARSE-UNCLOSED`,
+  `E-PARSE-UNEXPECTED`) au lieu d'un unique `E-UNSUPPORTED-TOKEN` — c'est un
+  défaut de **qualité de diagnostic**, pas de reconnaissance.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 

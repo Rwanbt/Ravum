@@ -16,7 +16,7 @@
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
 | Corpus | **268 cas** (`conformance/cases/`) |
-| Résultat corpus | **237 PASS / 30 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Résultat corpus | **243 PASS / 24 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
 | Règles satisfaisant le critère strict §2 | **87 / 188** |
@@ -85,16 +85,12 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 
 | Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
 |---|---|---|---|---|
-| `lexer/contextual-effects-ident` | - | — | — | — |
 | `parser/array-repeat-noncopy-fail` | - | `E-TYP-ARRAY-REPEAT` | `E-OWN-NOT-COPY` | `E-OWN-NOT-COPY` |
 | `parser/impl-foreign-type-fail` | - | `E-RES-IMPL-SELF-TYPE` | `E-RES-IMPL-FOREIGN` | `E-RES-IMPL-FOREIGN` |
 | `parser/let-pattern-fail` | - | `E-PARSE-EXPECTED` | `E-UNSUPPORTED-LET-PATTERN` | `E-UNSUPPORTED-LET-PATTERN` |
-| `parser/loop-control-as-value-fail` | - | `E-TYP-STATEMENT-VALUE` | — | — |
 | `parser/prelude-variant-user-enum-fail` | - | `E-RES-UNKNOWN` | `E-RES-VARIANT-UNQUALIFIED` | `E-RES-VARIANT-UNQUALIFIED` |
-| `parser/test-fn-pub-fail` | - | `E-PARSE-EXPECTED` | — | — |
 | `parser/tuple-pattern-arity-fail` | - | `E-TYP-ARITY` | `E-TYP-MISMATCH` | — |
 | `parser/variant-pattern-ref-fail` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-REF-PAT` | `E-UNSUPPORTED-REF-PAT` |
-| `parser/while-value-nonunit-fail` | - | `E-TYP-STATEMENT-VALUE` | — | — |
 | `types/array-zero-length` | - | `E-TYP-ARRAY-REPEAT` | `E-TYP-ARRAY-LEN` | `E-TYP-ARRAY-LEN` |
 | `types/never-field` | - | `E-TYP-MISMATCH` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
 | `types/never-return-body` | - | `E-TYP-RETURN` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
@@ -103,7 +99,6 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 | `ownership/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
 | `ownership/move-out-of-mut-borrow` | - | `E-OWN-MOVE-OUT-OF-BORROW` | `E-OWN-MOVE-BORROWED` | `E-OWN-MOVE-BORROWED` |
 | `ownership/vec-index-move` | - | `E-OWN-PARTIAL-MOVE` | `E-OWN-MOVE-INDEXED` | `E-OWN-MOVE-INDEXED` |
-| `run/int-abs-signed` | - | — | — | — |
 | `run/math-max-signed-zero` | - | — | — | — |
 | `run/string-parse-method-no-call` | - | `E-RES-UNKNOWN` | `E-TYP-FIELD` | — |
 | `run/vec-clone-non-copy` | - | `E-RES-UNKNOWN` | — | — |
@@ -113,7 +108,6 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 | `unsupported/or-pattern` | - | `E-UNSUPPORTED-TOKEN` | `E-UNSUPPORTED-OR-PAT` | `E-UNSUPPORTED-OR-PAT` |
 | `unsupported/range-value` | - | `E-UNSUPPORTED-RANGE` | `E-TYP-RANGE` | — |
 | `unsupported/raw-string` | - | `E-UNSUPPORTED-TOKEN` | `E-PARSE-EXPECTED` | — |
-| `unsupported/ref-identifier` | - | — | — | — |
 | `unsupported/turbofish` | - | `E-PARSE-UNEXPECTED` | `E-UNSUPPORTED-TURBOFISH` | `E-UNSUPPORTED-TURBOFISH` |
 
 Lecture : une colonne « Code attendu » à `—` signifie que la spécification
@@ -211,3 +205,48 @@ cargo run -p ravum-conformance -- run --filter ownership/vec-index-move
 - Le corpus **reste rouge volontairement** : supprimer ou assouplir ces cas
   reviendrait à effacer les défauts qu'ils documentent, ce que le mandat
   interdit explicitement.
+
+## 8. Correctifs appliqués après la passe (six cas sortis du rouge)
+
+Chaque correctif est un changement de **comportement**, pas d'`expect_codes` :
+le cas reste écrit comme la spécification l'exige, c'est le compilateur qui a
+été aligné. Corpus après correctifs : **268 cas, 243 PASS / 24 FAIL / 1 SKIP** ;
+tests workspace **82 suites, 1019 passés / 0 échec / 2 ignorés** (aucune
+régression).
+
+| Cas devenu vert | Correctif |
+|---|---|
+| `lexer/contextual-effects-ident` | `effects` est un mot-clé **contextuel** (LEX-5.5) : le parseur l'accepte désormais comme motif et comme chemin d'expression hors position de signature |
+| `unsupported/ref-identifier` | `ref` n'est refusé comme motif `ref` que s'il **est suivi d'un motif** ; `let ref = 1;` redevient une liaison ordinaire (Q-UNS-2) |
+| `parser/test-fn-pub-fail` | `pub test fn` produit `E-PARSE-EXPECTED` (F-SYN-034) au lieu d'être accepté |
+| `parser/while-value-nonunit-fail` | `let x = while c { 1 };`, `loop` et `for` en position de valeur produisent `E-TYP-STATEMENT-VALUE` (F-SYN-019/033) |
+| `parser/loop-control-as-value-fail` | idem, y compris `let b = loop { break; };` et `let d = for i in 0..2 {};` |
+| `run/int-abs-signed` | le checker canonicalise tous les entiers en `int` ; le codegen ne connaissait que `i8`…`isize` et refusait `int::abs` (F-STD-029) |
+
+### 8.4 Constat de codegen ouvert — `math::max` et le zéro signé
+
+`run/math-max-signed-zero` reste rouge pour une raison **différente d'un nom de
+code** : `math::max(a, b)` est émis comme `(a).max(b)`, c'est-à-dire
+`f64::max`. Or le résultat de `f64::max(-0.0, 0.0)` dépend de l'abaissement LLVM :
+
+- `rustc -C opt-level=3` → `0.0`, donc `"0"` (attendu par STD-6.5/12.2) ;
+- `rustc -C opt-level=0` (ce que la CLI utilise et ce que la conformance exécute)
+  → `-0.0`, donc `"-0"`.
+
+Vérifié sur la machine de mesure : le fichier Rust généré, **compilé à la main
+avec `-O`**, affiche `positive` ; le binaire produit par `ravum-lang build`
+(même fichier, `-C opt-level=0`) affiche `negative`. Autrement dit la sémantique
+observable de `math::max` **dépend du niveau d'optimisation** : c'est un défaut
+de génération, pas un défaut de test. La correction demandée est d'émettre une
+comparaison explicite qui départage `+0.0`/`-0.0`, pas de changer le cas.
+
+### 8.5 Ce que la passe n'a pas touché
+
+Les 24 échecs restants se répartissent en :
+
+- **13 codes émis hors spécification** (arbitrage **D8**) ;
+- **8 divergences de nom** entre la table et le compilateur, sur des codes qui
+  *sont* documentés (D8 également : deux noms existent, il faut choisir) ;
+- **3 défauts de comportement** : `Vec<String>::clone()` accepté,
+  `math::max` dépendant de `-O` (§8.4), et le token `lifetime` qui produit une
+  cascade de quatre erreurs de parse au lieu d'un `E-UNSUPPORTED-TOKEN` unique.
