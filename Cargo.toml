@@ -13,6 +13,7 @@ members = [
   "crates/ravum-workspace-coordinator",
   "crates/ravum-daemon",
   "crates/ravum-cli",
+  "crates/ravum-unit-graph",
   "apps/ravum-demo-host",
   "apps/ravum-todo",
 ]

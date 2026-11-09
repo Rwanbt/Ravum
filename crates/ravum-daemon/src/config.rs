@@ -32,6 +32,44 @@ pub const MAX_LOGICAL_PATH_BYTES: usize = 512;
 pub const MAX_FLAGS: usize = 64;
 pub const MAX_FLAG_BYTES: usize = 512;
 
+/// Version of the immutable snapshot manifest. Schema 2 adds content-addressed
+/// extern interface artifacts (`externs/<interface_id>.rmeta`) while remaining
+/// readable for schema 1 snapshots (which simply have no externs).
+pub const SNAPSHOT_MANIFEST_SCHEMA_VERSION: u32 = 2;
+/// Hard bounds for the extern artifacts of one build unit.
+pub const MAX_EXTERNS_PER_UNIT: usize = 64;
+pub const MAX_EXTERN_BYTES: usize = 8 * 1024 * 1024;
+
+/// A rustc extern name is a plain Rust identifier (no `=`/path characters).
+pub fn validate_extern_name(name: &str) -> Result<()> {
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return Err(DaemonError::invalid("extern name is empty"));
+    };
+    if !(first == '_' || first.is_ascii_alphabetic())
+        || !characters.all(|c| c == '_' || c.is_ascii_alphanumeric())
+    {
+        return Err(DaemonError::invalid(format!(
+            "extern name {name:?} is not a Rust identifier"
+        )));
+    }
+    Ok(())
+}
+
+/// An interface identity is the lowercase SHA-256 of the `.rmeta` bytes.
+pub fn validate_interface_id(id: &str) -> Result<()> {
+    if id.len() != 64
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Err(DaemonError::invalid(format!(
+            "interface id {id:?} is not a 64-character lowercase SHA-256"
+        )));
+    }
+    Ok(())
+}
+
 /// Toolchain identity, measured once per daemon through the public `-vV` flag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolchainInfo {
@@ -370,5 +408,28 @@ mod tests {
                 Priority::Interactive
             ]
         );
+    }
+}
+#[cfg(test)]
+mod extern_validation_tests {
+    use super::{validate_extern_name, validate_interface_id};
+
+    #[test]
+    fn extern_names_are_rust_identifiers_only() {
+        assert!(validate_extern_name("core").is_ok());
+        assert!(validate_extern_name("ravum_protocol").is_ok());
+        assert!(validate_extern_name("_api").is_ok());
+        assert!(validate_extern_name("").is_err());
+        assert!(validate_extern_name("a-b").is_err());
+        assert!(validate_extern_name("a=b").is_err());
+        assert!(validate_extern_name("../etc").is_err());
+    }
+
+    #[test]
+    fn interface_ids_are_lowercase_sha256() {
+        assert!(validate_interface_id(&"a".repeat(64)).is_ok());
+        assert!(validate_interface_id(&"A".repeat(64)).is_err());
+        assert!(validate_interface_id(&"a".repeat(63)).is_err());
+        assert!(validate_interface_id(&format!("{}g", "a".repeat(63))).is_err());
     }
 }

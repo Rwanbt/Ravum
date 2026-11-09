@@ -315,6 +315,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-unit-graph"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "ravum-workspace-coordinator"
 version = "0.1.0"
 dependencies = [

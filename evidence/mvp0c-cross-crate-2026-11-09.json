@@ -1,0 +1,930 @@
+{
+  "baseline": {
+    "summary": {
+      "cache_hits": 0,
+      "cargo_invocations": 3,
+      "errors": 0,
+      "fallback": 3,
+      "rustc_invocations": 3,
+      "stale": 0,
+      "units": [
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "361cc6ef5fcafbfa55c4c158238698e50fe918bf2616789e34b8d0752c6c3fdc",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "core"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "3beb05b4c2fdb95c341c780145bd8d3e51b7d75f29fae693fc8c34750f742a30",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "api"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "e0718a115d37a1389e1eb69f7182a04f06ca5bef5e70b5362104a8c05121125f",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "consumer"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "binary_target",
+          "hit": false,
+          "interface_id": null,
+          "kind": "bin",
+          "status": "fallback_package",
+          "unit": "application"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "build_script",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "buildscript"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "features_declared",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "features"
+        }
+      ],
+      "valid": true
+    },
+    "traces": {
+      "cargo": [
+        {
+          "args": [
+            "check",
+            "-p",
+            "application",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+          ],
+          "duration_ms": 639,
+          "exit_code": 0,
+          "unit": "application"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "buildscript",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+          ],
+          "duration_ms": 711,
+          "exit_code": 0,
+          "unit": "buildscript"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "features",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+          ],
+          "duration_ms": 225,
+          "exit_code": 0,
+          "unit": "features"
+        }
+      ],
+      "rustc": [
+        {
+          "args": [
+            "--crate-name",
+            "core",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\core\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\core\\src\\lib.rs"
+          ],
+          "duration_ms": 143,
+          "exit_code": 0,
+          "rmeta_sha256": "361cc6ef5fcafbfa55c4c158238698e50fe918bf2616789e34b8d0752c6c3fdc",
+          "stderr_head": [],
+          "unit": "core"
+        },
+        {
+          "args": [
+            "--crate-name",
+            "api",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\api\\libapi.rmeta",
+            "--extern",
+            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\api\\src\\lib.rs"
+          ],
+          "duration_ms": 134,
+          "exit_code": 0,
+          "rmeta_sha256": "3beb05b4c2fdb95c341c780145bd8d3e51b7d75f29fae693fc8c34750f742a30",
+          "stderr_head": [],
+          "unit": "api"
+        },
+        {
+          "args": [
+            "--crate-name",
+            "consumer",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\consumer\\libconsumer.rmeta",
+            "--extern",
+            "api=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libapi.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\consumer\\src\\lib.rs"
+          ],
+          "duration_ms": 119,
+          "exit_code": 0,
+          "rmeta_sha256": "e0718a115d37a1389e1eb69f7182a04f06ca5bef5e70b5362104a8c05121125f",
+          "stderr_head": [],
+          "unit": "consumer"
+        }
+      ]
+    },
+    "unit_api": {
+      "cache_key": "f66377f3d93d2a87de7cdc79825d2de32f9c9cb9cc41b7199b87cc3d61196b4c",
+      "content_id": "84243481c5a9f40fe428a85ab123db0a43b9bc5fbb321f36f279e2c5615693f3",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "3beb05b4c2fdb95c341c780145bd8d3e51b7d75f29fae693fc8c34750f742a30",
+      "status": "targeted_ok",
+      "unit": "api"
+    },
+    "unit_application": {
+      "cache_key": "",
+      "content_id": "7672877d90bce378e60ef4038b08d9e0d0ddecd304512382c3d376e9358b20e8",
+      "diagnostics": [],
+      "fallback_reason": "binary_target",
+      "hit": false,
+      "interface_id": null,
+      "status": "fallback_package",
+      "unit": "application"
+    },
+    "unit_buildscript": {
+      "cache_key": "",
+      "content_id": "cf431973a5420a9b31ca887520a7896e73e185804b24da91d65a74f43dc19a42",
+      "diagnostics": [],
+      "fallback_reason": "build_script",
+      "hit": false,
+      "interface_id": null,
+      "status": "fallback_package",
+      "unit": "buildscript"
+    },
+    "unit_consumer": {
+      "cache_key": "4136c178231f27176ac5b69071f177c17c8fe46c5094e747d9704f931e9e82d9",
+      "content_id": "7d4b125745b61732ce88a1dd5ce04df1ad0ca5346137c76e63b7e4d0bd7d1f43",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "e0718a115d37a1389e1eb69f7182a04f06ca5bef5e70b5362104a8c05121125f",
+      "status": "targeted_ok",
+      "unit": "consumer"
+    },
+    "unit_core": {
+      "cache_key": "a9cf6bb94321babc8ad55090a5943be14728ae49a5905b28a503ac4bc294bb6e",
+      "content_id": "50e3dd30f3a09f6a33c833ae19916d37882e472ee840a7a4050bd3d5375b6052",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "361cc6ef5fcafbfa55c4c158238698e50fe918bf2616789e34b8d0752c6c3fdc",
+      "status": "targeted_ok",
+      "unit": "core"
+    },
+    "unit_features": {
+      "cache_key": "",
+      "content_id": "c8a7ccad615f7d9511fc1d3099dc2c97c00bade676ddbad0746d1ec6892d109e",
+      "diagnostics": [],
+      "fallback_reason": "features_declared",
+      "hit": false,
+      "interface_id": null,
+      "status": "fallback_package",
+      "unit": "features"
+    }
+  },
+  "central_breaking_signature_change": {
+    "api_content_id_unchanged": true,
+    "api_diagnostics": [
+      "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+      "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+      "error: aborting due to 2 previous errors"
+    ],
+    "api_hit": false,
+    "change": "core::scale(f64) -> core::scale(f64, f64); core internal call site updated",
+    "expected": "core TargetedOk, api ERROR with real diagnostic, downstream rechecked via Cargo, no stale HIT",
+    "summary_after": {
+      "cache_hits": 0,
+      "cargo_invocations": 4,
+      "errors": 3,
+      "fallback": 2,
+      "rustc_invocations": 2,
+      "stale": 0,
+      "units": [
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "05fc369be987d87c8a7a801c87030ec3062806e72c0efe221172f66fd1eb8a1b",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "core"
+        },
+        {
+          "diagnostics": [
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error: aborting due to 2 previous errors"
+          ],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "error",
+          "unit": "api"
+        },
+        {
+          "diagnostics": [
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error: could not compile `api` (lib) due to 2 previous errors"
+          ],
+          "fallback_reason": "dependency_not_targeted",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "error",
+          "unit": "consumer"
+        },
+        {
+          "diagnostics": [
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "error: could not compile `api` (lib) due to 2 previous errors"
+          ],
+          "fallback_reason": "binary_target",
+          "hit": false,
+          "interface_id": null,
+          "kind": "bin",
+          "status": "error",
+          "unit": "application"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "build_script",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "buildscript"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "features_declared",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "features"
+        }
+      ],
+      "valid": false
+    },
+    "summary_before": {
+      "cache_hits": 0,
+      "cargo_invocations": 3,
+      "errors": 0,
+      "fallback": 3,
+      "rustc_invocations": 3,
+      "stale": 0,
+      "units": [
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "c38aca7668c2520e46374398451ad597e45f2f57dd909e72f465f95836e91bac",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "core"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "ba2ec108ea293447fb8b53c1668f7d15e87b4fca81f4d57d6983cc175a09f5fc",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "api"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "a8e45a804d502a13f4a1bb4baa900bb78ef209289ee0229291928df5b56264bd",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "consumer"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "binary_target",
+          "hit": false,
+          "interface_id": null,
+          "kind": "bin",
+          "status": "fallback_package",
+          "unit": "application"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "build_script",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "buildscript"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "features_declared",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "features"
+        }
+      ],
+      "valid": true
+    },
+    "traces_after": {
+      "cargo": [
+        {
+          "args": [
+            "check",
+            "-p",
+            "consumer",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+          ],
+          "duration_ms": 283,
+          "exit_code": 101,
+          "unit": "consumer"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "application",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+          ],
+          "duration_ms": 146,
+          "exit_code": 101,
+          "unit": "application"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "buildscript",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+          ],
+          "duration_ms": 97,
+          "exit_code": 0,
+          "unit": "buildscript"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "features",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+          ],
+          "duration_ms": 77,
+          "exit_code": 0,
+          "unit": "features"
+        }
+      ],
+      "rustc": [
+        {
+          "args": [
+            "--crate-name",
+            "core",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\core\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\core\\src\\lib.rs"
+          ],
+          "duration_ms": 98,
+          "exit_code": 0,
+          "rmeta_sha256": "05fc369be987d87c8a7a801c87030ec3062806e72c0efe221172f66fd1eb8a1b",
+          "stderr_head": [],
+          "unit": "core"
+        },
+        {
+          "args": [
+            "--crate-name",
+            "api",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\api\\libapi.rmeta",
+            "--extern",
+            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs"
+          ],
+          "duration_ms": 85,
+          "exit_code": 1,
+          "rmeta_sha256": null,
+          "stderr_head": [
+            "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+            "  --> \\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs:7:5",
+            "   |",
+            " 7 |     core::scale(x)",
+            "   |     ^^^^^^^^^^^--- argument #2 of type `f64` is missing",
+            "   |"
+          ],
+          "unit": "api"
+        }
+      ]
+    },
+    "unit_api_after": {
+      "cache_key": "3d78fdea992f566f225bb142efe09fc2e3893ca816e0755d6f9da5099c387025",
+      "content_id": "84243481c5a9f40fe428a85ab123db0a43b9bc5fbb321f36f279e2c5615693f3",
+      "diagnostics": [
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error: aborting due to 2 previous errors"
+      ],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": null,
+      "status": "error",
+      "unit": "api"
+    },
+    "unit_application_after": {
+      "cache_key": "",
+      "content_id": "7672877d90bce378e60ef4038b08d9e0d0ddecd304512382c3d376e9358b20e8",
+      "diagnostics": [
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error: could not compile `api` (lib) due to 2 previous errors"
+      ],
+      "fallback_reason": "binary_target",
+      "hit": false,
+      "interface_id": null,
+      "status": "error",
+      "unit": "application"
+    },
+    "unit_consumer_after": {
+      "cache_key": "",
+      "content_id": "7d4b125745b61732ce88a1dd5ce04df1ad0ca5346137c76e63b7e4d0bd7d1f43",
+      "diagnostics": [
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
+        "error: could not compile `api` (lib) due to 2 previous errors"
+      ],
+      "fallback_reason": "dependency_not_targeted",
+      "hit": false,
+      "interface_id": null,
+      "status": "error",
+      "unit": "consumer"
+    },
+    "unit_core_after": {
+      "cache_key": "18fb31344f95c56a69f0dbb1999ba222d486e5ee1b92a6096d1fe2b56a9721ed",
+      "content_id": "341714d18d5738081563d3d4e767c55e9e0f406cb337d3bfe5589964e67c8ba1",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "05fc369be987d87c8a7a801c87030ec3062806e72c0efe221172f66fd1eb8a1b",
+      "status": "targeted_ok",
+      "unit": "core"
+    }
+  },
+  "commands": [
+    "cargo test -p ravum-unit-graph",
+    "cargo test -p ravum-unit-graph --test central_evidence",
+    "cargo run -q -p ravum-unit-graph --example central_case (n/a: evidence is generated by the test)"
+  ],
+  "compatible_interface_addition": {
+    "change": "core gains a new public function `cube`; existing call sites unchanged",
+    "expected": "core, api and consumer really revalidated (not HIT), valid campaign",
+    "summary_after": {
+      "cache_hits": 0,
+      "cargo_invocations": 3,
+      "errors": 0,
+      "fallback": 3,
+      "rustc_invocations": 3,
+      "stale": 0,
+      "units": [
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "e31657b3de69407d40c21b181ff9dff6a86a71143874dc6982b750e8f92986c4",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "core"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "d76da360b845fca35ea2936a4a20a3b986da1da08945e187698e78c2a47cb438",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "api"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": null,
+          "hit": false,
+          "interface_id": "6a77dc2315f4470bd644237e3b1f8ad130d217e986ffedcc265e8695d2358c44",
+          "kind": "lib",
+          "status": "targeted_ok",
+          "unit": "consumer"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "binary_target",
+          "hit": false,
+          "interface_id": null,
+          "kind": "bin",
+          "status": "fallback_package",
+          "unit": "application"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "build_script",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "buildscript"
+        },
+        {
+          "diagnostics": [],
+          "fallback_reason": "features_declared",
+          "hit": false,
+          "interface_id": null,
+          "kind": "lib",
+          "status": "fallback_package",
+          "unit": "features"
+        }
+      ],
+      "valid": true
+    },
+    "traces_after": {
+      "cargo": [
+        {
+          "args": [
+            "check",
+            "-p",
+            "application",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+          ],
+          "duration_ms": 495,
+          "exit_code": 0,
+          "unit": "application"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "buildscript",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+          ],
+          "duration_ms": 95,
+          "exit_code": 0,
+          "unit": "buildscript"
+        },
+        {
+          "args": [
+            "check",
+            "-p",
+            "features",
+            "--manifest-path",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "--offline",
+            "--target-dir",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+          ],
+          "duration_ms": 79,
+          "exit_code": 0,
+          "unit": "features"
+        }
+      ],
+      "rustc": [
+        {
+          "args": [
+            "--crate-name",
+            "core",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\core\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\core\\src\\lib.rs"
+          ],
+          "duration_ms": 102,
+          "exit_code": 0,
+          "rmeta_sha256": "e31657b3de69407d40c21b181ff9dff6a86a71143874dc6982b750e8f92986c4",
+          "stderr_head": [],
+          "unit": "core"
+        },
+        {
+          "args": [
+            "--crate-name",
+            "api",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\api\\libapi.rmeta",
+            "--extern",
+            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libcore.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\api\\src\\lib.rs"
+          ],
+          "duration_ms": 89,
+          "exit_code": 0,
+          "rmeta_sha256": "d76da360b845fca35ea2936a4a20a3b986da1da08945e187698e78c2a47cb438",
+          "stderr_head": [],
+          "unit": "api"
+        },
+        {
+          "args": [
+            "--crate-name",
+            "consumer",
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "-o",
+            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\consumer\\libconsumer.rmeta",
+            "--extern",
+            "api=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libapi.rmeta",
+            "-L",
+            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\consumer\\src\\lib.rs"
+          ],
+          "duration_ms": 90,
+          "exit_code": 0,
+          "rmeta_sha256": "6a77dc2315f4470bd644237e3b1f8ad130d217e986ffedcc265e8695d2358c44",
+          "stderr_head": [],
+          "unit": "consumer"
+        }
+      ]
+    },
+    "unit_api_after": {
+      "cache_key": "a5ef81f60a2a30d8deb3c9a60edd30d57881bfddbc5788f4bfee418edce7e7cc",
+      "content_id": "84243481c5a9f40fe428a85ab123db0a43b9bc5fbb321f36f279e2c5615693f3",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "d76da360b845fca35ea2936a4a20a3b986da1da08945e187698e78c2a47cb438",
+      "status": "targeted_ok",
+      "unit": "api"
+    },
+    "unit_application_after": {
+      "cache_key": "",
+      "content_id": "7672877d90bce378e60ef4038b08d9e0d0ddecd304512382c3d376e9358b20e8",
+      "diagnostics": [],
+      "fallback_reason": "binary_target",
+      "hit": false,
+      "interface_id": null,
+      "status": "fallback_package",
+      "unit": "application"
+    },
+    "unit_consumer_after": {
+      "cache_key": "8f91c41a584d109a98f2b3bbfd8b5a69a6b05389a04af14d7207f4bcb708532c",
+      "content_id": "7d4b125745b61732ce88a1dd5ce04df1ad0ca5346137c76e63b7e4d0bd7d1f43",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "6a77dc2315f4470bd644237e3b1f8ad130d217e986ffedcc265e8695d2358c44",
+      "status": "targeted_ok",
+      "unit": "consumer"
+    },
+    "unit_core_after": {
+      "cache_key": "7cc41f3f41ea0d74af0dccaaf20fd9c4bd1a9312dc69b0165974e132a8304fd3",
+      "content_id": "41806d1f9b95f1b49111bd3994f389bab9d64cc7619f9af362296af317711751",
+      "diagnostics": [],
+      "fallback_reason": null,
+      "hit": false,
+      "interface_id": "e31657b3de69407d40c21b181ff9dff6a86a71143874dc6982b750e8f92986c4",
+      "status": "targeted_ok",
+      "unit": "core"
+    }
+  },
+  "determinism": {
+    "conservative_rule_if_nondeterministic": "dependents are revalidated instead of HIT when interface ids differ",
+    "identical_compilations_same_sha256": true,
+    "units": [
+      {
+        "first_interface_id": "ec81d474b4840fae37fcf7e5bfc772ed1d8a04939717016401fb3198e27a1fdf",
+        "second_interface_id": "ec81d474b4840fae37fcf7e5bfc772ed1d8a04939717016401fb3198e27a1fdf",
+        "unit": "core"
+      },
+      {
+        "first_interface_id": "a3655e31d922decfe20cf56c63c594508d2f74af34e91c2db972a0cc328a489b",
+        "second_interface_id": "a3655e31d922decfe20cf56c63c594508d2f74af34e91c2db972a0cc328a489b",
+        "unit": "api"
+      },
+      {
+        "first_interface_id": "cb7a8f6f6f3c3f4d3cc85f8093615887a4dd147afbd850948e81ebf683a90e07",
+        "second_interface_id": "cb7a8f6f6f3c3f4d3cc85f8093615887a4dd147afbd850948e81ebf683a90e07",
+        "unit": "consumer"
+      }
+    ]
+  },
+  "fixture": "fixtures/multicrate (core -> api -> consumer -> application, plus features and buildscript)",
+  "generated_iso": "2026-11-09 (local)",
+  "generated_unix": 1794182892,
+  "kind": "mvp0c-cross-crate-2026-11-09",
+  "limits": [
+    "one local toolchain (rustc 1.95.0 x86_64-pc-windows-msvc) and one target (host)",
+    "a bounded campaign on a tiny fixture, not a large real workspace",
+    "the targeted chain compiles lib targets only; binaries, features, build scripts and external dependencies deliberately fall back to Cargo",
+    "no claim of whole-program correctness: statuses are observations, never PROVED",
+    "the .rmeta determinism is measured on this toolchain only; on a non-deterministic toolchain the conservative strategy is to revalidate dependents (documented)"
+  ],
+  "machine": {
+    "load_calibration_rustc_vV_ms": [
+      67,
+      73,
+      80
+    ],
+    "logical_processors": 16,
+    "os": "Windows 11"
+  },
+  "negative_cases": [
+    {
+      "case": "corps privé sans impact d'interface",
+      "id": 1,
+      "test": "case_01_private_body_change_keeps_dependents_valid"
+    },
+    {
+      "case": "signature publique",
+      "id": 2,
+      "test": "case_02_public_signature_change_revalidates_dependents"
+    },
+    {
+      "case": "suppression de symbole",
+      "id": 3,
+      "test": "case_03_symbol_removal_is_detected_in_dependents"
+    },
+    {
+      "case": "type partagé",
+      "id": 4,
+      "test": "case_04_shared_type_change_is_detected"
+    },
+    {
+      "case": "implémentation de trait",
+      "id": 5,
+      "test": "case_05_trait_impl_change_revalidates_without_breaking"
+    },
+    {
+      "case": "feature",
+      "id": 6,
+      "test": "case_06_feature_package_falls_back_to_cargo"
+    },
+    {
+      "case": "build script",
+      "id": 7,
+      "test": "case_07_build_script_falls_back_to_cargo"
+    },
+    {
+      "case": "dépendance externe",
+      "id": 8,
+      "test": "case_08_external_dependency_falls_back_to_cargo"
+    },
+    {
+      "case": "contrat",
+      "id": 9,
+      "test": "case_09_contract_change_is_treated_conservatively"
+    },
+    {
+      "case": "configuration cible",
+      "id": 10,
+      "test": "case_10_foreign_target_forces_full_fallback"
+    },
+    {
+      "case": "dépendance transitive",
+      "id": 11,
+      "test": "case_11_transitive_dependency_is_invalidated"
+    },
+    {
+      "case": "erreur uniquement dans un dépendant",
+      "id": 12,
+      "test": "case_12_dependent_only_error_is_detected_without_source_change"
+    },
+    {
+      "case": "modification pendant la vérification (STALE)",
+      "id": 13,
+      "test": "case_13_modification_during_verification_is_stale"
+    },
+    {
+      "case": "réutilisation d'artefact périmé (refus)",
+      "id": 14,
+      "test": "case_14_stale_artifact_is_never_reused"
+    },
+    {
+      "case": "changement de version de compilateur",
+      "id": 15,
+      "test": "case_15_toolchain_change_invalidates_the_cache"
+    },
+    {
+      "case": "conflit entre deux propositions (MANUAL_REQUIRED)",
+      "id": 16,
+      "test": "case_16_conflicting_proposals_require_manual_decision"
+    }
+  ],
+  "schema_version": 1,
+  "toolchain": {
+    "host": "x86_64-pc-windows-msvc",
+    "release": "1.95.0",
+    "rustc_vV": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  }
+}
