@@ -113,6 +113,10 @@ fn the_cache_can_be_disabled_for_measurement() {
 /// pipeline never rewrites a loaded artifact.
 #[cfg(windows)]
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "MSVC-specific claim: ELF cdylib output is reproducible, so this non-reproducibility assertion only applies to Windows"
+)]
 fn msvc_output_is_not_byte_reproducible_which_is_why_the_cache_exists() {
     let dir = work("cache-nondeterminism");
     let adapter = RustAdapter::new("rustc", dir.join("work")).with_artifact_cache(false);
