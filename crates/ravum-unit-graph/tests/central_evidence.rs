@@ -1,9 +1,15 @@
 //! Central L1 evidence: real traces for the cross-crate signature change.
 //!
-//! Running `cargo test -p ravum-unit-graph --test central_evidence` regenerates
-//! `evidence/mvp0c-cross-crate-2026-11-09.json` from real `rustc`/`cargo`
-//! invocations. Nothing is mocked: the fixture is copied to a temporary
-//! workspace, edited, and compiled by the local rustc 1.95.0.
+//! Running `cargo test -p ravum-unit-graph --test central_evidence` always builds
+//! the evidence from real `rustc`/`cargo` invocations (nothing is mocked: the
+//! fixture is copied to a temporary workspace, edited, and compiled by the local
+//! rustc 1.95.0).
+//!
+//! Writing the evidence file into the repository is opt-in so that a normal test
+//! run never dirties the working tree (timings and interface ids depend on the
+//! run): set `RAVUM_WRITE_EVIDENCE=1` to regenerate
+//! `evidence/mvp0c-cross-crate-2026-11-09.json`; otherwise the same JSON is
+//! written under `target/ravum-evidence/`.
 
 use ravum_unit_graph::{run_chain, ChainOptions, ContextSpec, RunReport, UnitGraph, UnitStatus};
 use serde_json::{json, Value};
@@ -376,14 +382,22 @@ fn central_case_and_evidence() {
         {"id": 16, "case": "conflit entre deux propositions (MANUAL_REQUIRED)", "test": "case_16_conflicting_proposals_require_manual_decision"}
     ]);
 
-    let _ = std::fs::remove_dir_all(&baseline_workspace);
-    let _ = std::fs::remove_dir_all(&breaking_workspace);
-    let _ = std::fs::remove_dir_all(&compatible_workspace);
-
-    let evidence_dir = repo_root().join("evidence");
+    let text = serde_json::to_string_pretty(&evidence).expect("serialize evidence");
+    let write_repository = std::env::var("RAVUM_WRITE_EVIDENCE").as_deref() == Ok("1");
+    let evidence_dir = if write_repository {
+        repo_root().join("evidence")
+    } else {
+        repo_root().join("target").join("ravum-evidence")
+    };
     std::fs::create_dir_all(&evidence_dir).expect("evidence dir");
     let path = evidence_dir.join("mvp0c-cross-crate-2026-11-09.json");
-    let text = serde_json::to_string_pretty(&evidence).expect("serialize evidence");
     std::fs::write(&path, format!("{text}\n")).expect("write evidence");
-    println!("evidence written: {}", path.display());
+    if write_repository {
+        println!("evidence written (repository): {}", path.display());
+    } else {
+        println!(
+            "evidence written (ignored dir; set RAVUM_WRITE_EVIDENCE=1 to write the repository copy): {}",
+            path.display()
+        );
+    }
 }
