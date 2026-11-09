@@ -40,6 +40,7 @@
 //! the same function.
 
 mod coordinator;
+pub mod cycle;
 pub mod evaluation;
 mod git_writer;
 pub mod oracle;
@@ -52,6 +53,7 @@ pub mod semantics;
 pub mod verifier;
 
 pub use coordinator::{Coordinator, IntegrationSummary};
+pub use cycle::{commit_cycle, CycleOutcome, CycleRequest};
 pub use evaluation::{
     level_for_decision, parse_journal_line, read_journal_records, CoordinatorJournalRecord,
     EvaluationLevel, EvaluationProtocol, EvaluationRecord, JournalReadError,
@@ -66,8 +68,9 @@ pub use oracle::{
     OracleVerdict, SemanticOracle, TextualSemanticsOracle,
 };
 pub use overlay::{
-    validate_relative_path, BaseSnapshot, ChangeCoordinator, IntegrationOutcome, Overlay,
-    OverlayError, StorageReport, OVERLAY_SCHEMA_VERSION,
+    validate_relative_path, BaseSnapshot, ChangeCoordinator, IntegrationOutcome, MaterializeLimits,
+    Overlay, OverlayError, StorageReport, MAX_COMPONENT_BYTES, MAX_RELATIVE_PATH_BYTES,
+    OVERLAY_SCHEMA_VERSION,
 };
 pub use patch::{apply, parse, touched_ranges, FilePatch, Hunk, PatchError};
 pub use publication_journal::{

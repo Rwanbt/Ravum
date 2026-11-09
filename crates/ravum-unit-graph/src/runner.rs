@@ -169,10 +169,13 @@ pub fn run_chain(graph: &UnitGraph, options: &ChainOptions) -> Result<RunReport,
         let files = load_unit_files(graph, unit)?;
         let content = content_id(&files);
         let ctx = context_id(&options.context, unit);
-        let mut fallback = graph.fallback_reason(
+        // The sources are already read for the content identity: pass them to the
+        // conservative scan instead of reading every `.rs` file a second time.
+        let mut fallback = graph.fallback_reason_with_sources(
             unit,
             &options.context.host_target,
             options.context.target.as_deref(),
+            Some(&files),
         );
         let mut externs: Vec<ExternArtifact> = Vec::new();
         if fallback.is_none() && unit.kind == UnitKind::Lib {

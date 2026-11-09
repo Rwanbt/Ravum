@@ -489,6 +489,28 @@ impl GitWriter {
         Err(GitError::EmptyRepository)
     }
 
+    /// SHA-256 (convention `ravum-snapshot`) of the blob of `path` in `HEAD`, or
+    /// `None` when the path is absent from the committed tree.
+    ///
+    /// Used by the cycle transaction to prove that the base snapshot really is the
+    /// Git state for every changed path before publishing a diff computed against
+    /// it. One Git invocation pair per path: cycles change few paths.
+    pub fn head_file_sha256(&self, path: &str) -> Result<Option<String>, GitError> {
+        let path =
+            path_policy::validate_relative_path(path).map_err(|reason| GitError::UnsafePath {
+                path: path.to_owned(),
+                reason,
+            })?;
+        let head = self.head()?;
+        match self.tree_blob(&head, &path)? {
+            None => Ok(None),
+            Some(blob) => {
+                let bytes = self.git_bytes(&["cat-file", "blob", &blob], None, NO_ENV)?;
+                Ok(Some(sha256_hex(&bytes)))
+            }
+        }
+    }
+
     /// Build the candidate commit without moving any reference.
     ///
     /// On failure nothing canonical changed: no reference moved, the real index and

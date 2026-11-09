@@ -118,6 +118,14 @@ pub struct Unit {
     pub features_resolved: bool,
     /// Crate types declared by the selected target (`lib`, `cdylib`, …).
     pub crate_types: Vec<String>,
+    /// The unit itself produces a proc-macro target.
+    #[serde(default)]
+    pub proc_macro: bool,
+    /// Number of compilable targets declared by the package (`lib`, `bin`,
+    /// `proc-macro`). Examples, tests and benches are excluded: `cargo check -p`
+    /// does not build them by default, so they are not a missing targeted unit.
+    #[serde(default)]
+    pub target_count: usize,
     pub build_script: bool,
     pub dependencies: Vec<Dependency>,
     pub dependents: Vec<String>,
@@ -132,20 +140,40 @@ pub struct Unit {
 pub enum FallbackReason {
     /// The unit is not a library target (binaries are checked by Cargo).
     BinaryTarget,
-    /// A build script runs before compilation: its output is not modelled.
+    /// A build script runs before compilation: its output (including `OUT_DIR`
+    /// values consumed by `include!`/`env!`) is not modelled.
     BuildScript,
     /// The package declares features: the activated cfg set is not enumerable.
     FeaturesDeclared,
+    /// An optional dependency is declared: its resolved edge set is not filtered,
+    /// so the targeted chain would try to compile an edge Cargo may disable.
+    OptionalDependency,
     /// At least one dependency comes from a registry/git source.
     ExternalDependency,
     /// A dependency is a proc-macro.
     ProcMacroDependency,
     /// The unit itself is a proc-macro.
     ProcMacroTarget,
-    /// The sources use `include!`: file set not statically enumerable here.
+    /// The selected target declares a crate type other than `lib`/`rlib`
+    /// (`cdylib`, `staticlib`, ...): the runner only builds metadata for a lib.
+    NonLibCrateType,
+    /// The package has several targets (lib + bin, several bins, ...): a single
+    /// targeted `rustc` invocation would not be the package Cargo builds.
+    MultipleTargets,
+    /// A Cargo configuration file (`.cargo/config.toml`, user config, ...) may
+    /// inject `rustflags`/`--cfg` values the targeted invocation does not read.
+    BuildConfig,
+    /// The sources use `include!`/`include_str!`/`include_bytes!`: file set not
+    /// statically enumerable here.
     IncludeMacro,
+    /// A source file carries `#[path]`: the module graph can leave the enumerated
+    /// source set.
+    PathAttribute,
     /// The sources use `env!`/`option_env!`: build environment not modelled.
     EnvMacro,
+    /// A source file of the unit could not be read: its macros/attributes cannot
+    /// be ruled out conservatively.
+    SourceUnreadable,
     /// The requested target differs from the host target.
     TargetMismatch,
     /// A direct dependency could not be compiled as a targeted unit.
@@ -158,11 +186,17 @@ impl FallbackReason {
             FallbackReason::BinaryTarget => "binary_target",
             FallbackReason::BuildScript => "build_script",
             FallbackReason::FeaturesDeclared => "features_declared",
+            FallbackReason::OptionalDependency => "optional_dependency",
             FallbackReason::ExternalDependency => "external_dependency",
             FallbackReason::ProcMacroDependency => "proc_macro_dependency",
             FallbackReason::ProcMacroTarget => "proc_macro_target",
+            FallbackReason::NonLibCrateType => "non_lib_crate_type",
+            FallbackReason::MultipleTargets => "multiple_targets",
+            FallbackReason::BuildConfig => "build_config",
             FallbackReason::IncludeMacro => "include_macro",
+            FallbackReason::PathAttribute => "path_attribute",
             FallbackReason::EnvMacro => "env_macro",
+            FallbackReason::SourceUnreadable => "source_unreadable",
             FallbackReason::TargetMismatch => "target_mismatch",
             FallbackReason::DependencyNotTargeted => "dependency_not_targeted",
         }
@@ -281,6 +315,10 @@ pub struct UnitGraph {
     root: PathBuf,
     units: BTreeMap<String, Unit>,
     order: Vec<String>,
+    /// A Cargo configuration file exists on the discovery path: it may inject
+    /// `rustflags`/`--cfg` values a targeted `rustc` invocation would not read.
+    /// Computed once, not per unit.
+    build_config_present: bool,
 }
 
 impl UnitGraph {
@@ -547,6 +585,35 @@ impl UnitGraph {
                         .collect()
                 })
                 .unwrap_or_default();
+            // A proc-macro target cannot be verified by a metadata-only lib build;
+            // several targets mean one `rustc` invocation would not be the package
+            // Cargo builds. Both are package-level facts, recorded before the
+            // per-unit selection hides them.
+            let proc_macro = targets.iter().any(|target| {
+                target["kind"]
+                    .as_array()
+                    .map(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("proc-macro")))
+                    .unwrap_or(false)
+            });
+            // Only lib/bin/proc-macro targets are compiled by `cargo check -p`
+            // without `--all-targets`: integration tests, examples and benches are
+            // not missing targeted units and must not force a fallback by themselves.
+            let target_count = targets
+                .iter()
+                .filter(|target| {
+                    target["kind"]
+                        .as_array()
+                        .map(|kinds| {
+                            kinds.iter().any(|kind| {
+                                matches!(
+                                    kind.as_str(),
+                                    Some("lib") | Some("bin") | Some("proc-macro")
+                                )
+                            })
+                        })
+                        .unwrap_or(false)
+                })
+                .count();
             let (activated_features, features_resolved) =
                 match resolved_features.as_ref().and_then(|map| map.get(id)) {
                     Some(features) => (features.clone(), true),
@@ -580,6 +647,8 @@ impl UnitGraph {
                     activated_features,
                     features_resolved,
                     crate_types,
+                    proc_macro,
+                    target_count,
                     build_script,
                     dependencies,
                     dependents: Vec::new(),
@@ -673,10 +742,12 @@ impl UnitGraph {
         }
 
         let order = topological_order(&units)?;
+        let build_config_present = cargo_config_present(root);
         Ok(Self {
             root: root.to_path_buf(),
             units,
             order,
+            build_config_present,
         })
     }
 
@@ -724,22 +795,61 @@ impl UnitGraph {
         host_target: &str,
         requested_target: Option<&str>,
     ) -> Option<FallbackReason> {
+        let sources = read_unit_sources(unit);
+        self.fallback_reason_with_sources(unit, host_target, requested_target, sources.as_deref())
+    }
+
+    /// Same decision as [`UnitGraph::fallback_reason`], reusing sources the caller
+    /// has already read (`run_chain` hashes them for the content identity) so a
+    /// campaign does not read every `.rs` file twice per unit.
+    ///
+    /// `sources == None` means a source file could not be read: the conservative
+    /// answer is a Cargo fallback, never "no macro found".
+    pub fn fallback_reason_with_sources(
+        &self,
+        unit: &Unit,
+        host_target: &str,
+        requested_target: Option<&str>,
+        sources: Option<&[(String, Vec<u8>)]>,
+    ) -> Option<FallbackReason> {
         if let Some(target) = requested_target {
             if target != host_target {
                 return Some(FallbackReason::TargetMismatch);
             }
         }
-        if unit.kind != UnitKind::Lib {
-            return Some(FallbackReason::BinaryTarget);
-        }
         if unit.build_script {
             return Some(FallbackReason::BuildScript);
         }
+        // `Other` is a target kind the graph does not model (proc-macro, example,
+        // custom build, ...): never assume it is a lib.
+        if unit.proc_macro || unit.kind == UnitKind::Other {
+            return Some(FallbackReason::ProcMacroTarget);
+        }
+        if unit.kind != UnitKind::Lib {
+            return Some(FallbackReason::BinaryTarget);
+        }
+        // A Cargo configuration file may add `--cfg`/`-C` flags; the targeted
+        // rustc command does not read Cargo config, so the unit would not be the
+        // unit Cargo builds.
+        if self.build_config_present {
+            return Some(FallbackReason::BuildConfig);
+        }
+        // Several targets: one targeted rustc invocation would only build the
+        // selected lib and silently ignore the bin/example targets Cargo checks.
+        if unit.target_count > 1 {
+            return Some(FallbackReason::MultipleTargets);
+        }
+        // The runner always compiles with `--crate-type lib`; a `cdylib`,
+        // `staticlib` or any other declared type is a different unit.
+        if unit
+            .crate_types
+            .iter()
+            .any(|crate_type| !matches!(crate_type.as_str(), "lib" | "rlib"))
+        {
+            return Some(FallbackReason::NonLibCrateType);
+        }
         if !unit.features_resolved {
             return Some(FallbackReason::FeaturesDeclared);
-        }
-        if let Some(reason) = proc_macro_reason(unit) {
-            return Some(reason);
         }
         if unit
             .dependencies
@@ -757,7 +867,7 @@ impl UnitGraph {
             .iter()
             .any(|dependency| dependency.optional)
         {
-            return Some(FallbackReason::FeaturesDeclared);
+            return Some(FallbackReason::OptionalDependency);
         }
         // A feature requested on a dependency no longer forces a fallback once
         // the activation set is resolved: the dependency's own unit carries its
@@ -770,38 +880,82 @@ impl UnitGraph {
         {
             return Some(FallbackReason::ProcMacroDependency);
         }
-        if source_uses_macro(unit, "include!") {
-            return Some(FallbackReason::IncludeMacro);
-        }
-        if source_uses_macro(unit, "env!") || source_uses_macro(unit, "option_env!") {
-            return Some(FallbackReason::EnvMacro);
-        }
-        None
+        let Some(sources) = sources else {
+            return Some(FallbackReason::SourceUnreadable);
+        };
+        scan_sources(sources)
     }
 }
 
-fn proc_macro_reason(unit: &Unit) -> Option<FallbackReason> {
-    // The unit itself is not a proc-macro: metadata only gives lib/bin/other here,
-    // proc-macro units are detected as `Other`/lib targets with a proc-macro kind.
-    // Conservatively treat any unit whose only targets are proc-macro as fallback.
-    if unit.kind == UnitKind::Other {
-        return Some(FallbackReason::ProcMacroTarget);
+/// Reads every source file of a unit. `None` is a first-class conservative
+/// result: an unreadable file could contain a macro that changes the file set.
+fn read_unit_sources(unit: &Unit) -> Option<Vec<(String, Vec<u8>)>> {
+    let mut sources = Vec::with_capacity(unit.source_files.len());
+    for path in &unit.source_files {
+        let bytes = std::fs::read(path).ok()?;
+        sources.push((path.to_string_lossy().replace('\\', "/"), bytes));
+    }
+    Some(sources)
+}
+
+/// Scans the already-read sources for constructs whose file set/environment is
+/// not statically enumerable. Returns the first conservative reason found.
+fn scan_sources(sources: &[(String, Vec<u8>)]) -> Option<FallbackReason> {
+    let mut include = false;
+    let mut env = false;
+    for (path, bytes) in sources {
+        if !path.ends_with(".rs") {
+            continue;
+        }
+        let text = String::from_utf8_lossy(bytes);
+        if text.contains("#[path") || text.contains("#[ path") {
+            return Some(FallbackReason::PathAttribute);
+        }
+        if text.contains("include!")
+            || text.contains("include_str!")
+            || text.contains("include_bytes!")
+        {
+            include = true;
+        }
+        if text.contains("env!") || text.contains("option_env!") {
+            env = true;
+        }
+    }
+    if include {
+        return Some(FallbackReason::IncludeMacro);
+    }
+    if env {
+        return Some(FallbackReason::EnvMacro);
     }
     None
 }
 
-fn source_uses_macro(unit: &Unit, needle: &str) -> bool {
-    for path in &unit.source_files {
-        if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
-            continue;
+/// True when a Cargo configuration file that can inject compiler flags exists on
+/// the discovery path: workspace ancestors, `$CARGO_HOME`, or `~/.cargo`.
+///
+/// The check is deliberately coarse (existence, not content): parsing Cargo's
+/// layered config would re-implement a private Cargo format, and a false positive
+/// only costs a Cargo fallback (which *does* read the config) instead of a wrong
+/// targeted compile.
+fn cargo_config_present(root: &Path) -> bool {
+    let mut current = Some(root);
+    while let Some(directory) = current {
+        let cargo = directory.join(".cargo");
+        if cargo.join("config.toml").is_file() || cargo.join("config").is_file() {
+            return true;
         }
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if content.contains(needle) {
-                return true;
-            }
-        }
+        current = directory.parent();
     }
-    false
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(home) = std::env::var_os("CARGO_HOME") {
+        candidates.push(PathBuf::from(home));
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        candidates.push(PathBuf::from(home).join(".cargo"));
+    }
+    candidates.into_iter().any(|directory| {
+        directory.join("config.toml").is_file() || directory.join("config").is_file()
+    })
 }
 
 /// Enumerates the files of one package, stopping at every nested manifest or
