@@ -1,6 +1,6 @@
 # Contribuer à Ravum
 
-> **État pré-MVP.** La documentation et les revues sont ouvertes. Le futur code n'a pas encore de licence arrêtée : avant tout apport externe de code, demander la politique de licence au responsable.
+> **Licence du projet : `MIT OR Apache-2.0`**, au choix du réutilisateur. Toute contribution destinée à être intégrée doit pouvoir être publiée sous les deux licences (voir [LICENSE-MIT](LICENSE-MIT) et [LICENSE-APACHE](LICENSE-APACHE)). Les contributeurs conservent leurs droits sur leurs apports ; ils doivent disposer des autorisations nécessaires et signaler tout composant ou contenu tiers avec sa licence. Toute attribution ou mention de droits antérieure reste applicable.
 
 ## Branches et flux
 
