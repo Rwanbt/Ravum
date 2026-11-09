@@ -1,0 +1,12 @@
+[package]
+name = "grouping-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Déclaration de workspace vide VOLONTAIRE : la fixture de mesure ne doit jamais
+# devenir membre du workspace Rust de Ravum. Elle se vérifie seule avec
+# `cargo check --manifest-path fixtures/grouping/Cargo.toml`.
+[workspace]
+
+[dependencies]

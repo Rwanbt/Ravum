@@ -6,7 +6,9 @@
 //! * `--suite scale` — cold vs persistent-incremental at three unit sizes;
 //! * `--suite invariants` — negative/boundary checks (stale, cancel, corrupt,
 //!   restart, budgets, JSON contract, user-file safety);
-//! * `--suite validate` — applies every edit chain without compiling anything.
+//! * `--suite validate` — applies every edit chain without compiling anything;
+//! * `--suite grouping` — MVP-0c L2: N sequential analysis cycles vs one grouped
+//!   snapshot (windows 0/25/50/100 ms) + incompatible-batch rejection/recovery.
 //!
 //! All modes use the same public `rustc` CLI arguments and the same fixture
 //! content. Nothing here is a mock: every measurement spawns a real compiler.
@@ -15,6 +17,7 @@ mod campaign;
 mod compaction;
 mod edits;
 mod gc;
+mod grouping;
 mod harness;
 mod invariants;
 mod multi_soak;
@@ -33,6 +36,8 @@ struct Args {
     out_invariants: PathBuf,
     out_gc: PathBuf,
     gc_edits: usize,
+    out_grouping: PathBuf,
+    grouping_reps: usize,
     out_soak: PathBuf,
     out_compaction: PathBuf,
     compaction_edits: usize,
@@ -61,9 +66,9 @@ fn main() {
         Err(message) => {
             eprintln!("ravum-daemon-bench: {message}");
             eprintln!(
-                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate] \
+                "usage: ravum-daemon-bench [--suite all|campaign|scale|invariants|gc|validate|grouping] \
                  [--samples N] [--scale-reps N] [--work-dir PATH] [--out PATH] \
-                 [--out-scale PATH] [--out-invariants PATH] [--no-clean]"
+                 [--out-scale PATH] [--out-invariants PATH] [--out-grouping PATH] [--grouping-reps N] [--no-clean]"
             );
             std::process::exit(2);
         }
@@ -145,6 +150,16 @@ fn main() {
             Ok(valid) => invalid |= !valid,
             Err(error) => {
                 eprintln!("soak suite failed: {error}");
+                std::process::exit(1);
+            }
+        },
+        _ => {}
+    }
+    match args.suite.as_str() {
+        "grouping" | "all" => match grouping_run(&repo_root, &args) {
+            Ok(valid) => invalid |= !valid,
+            Err(error) => {
+                eprintln!("grouping suite failed: {error}");
                 std::process::exit(1);
             }
         },
@@ -405,6 +420,75 @@ fn soak_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     Ok(value["valid"].as_bool().unwrap_or(false))
 }
 
+fn grouping_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
+    println!(
+        "grouping: 6 modes (sequential, grouped windows 0/25/50/100 ms, incompatible) x {} recorded reps",
+        args.grouping_reps
+    );
+    let value = grouping::run(&grouping::GroupingOptions {
+        repo_root: repo_root.to_path_buf(),
+        work_root: args.work_dir.join("grouping-suite"),
+        reps: args.grouping_reps,
+    })?;
+    harness::write_evidence(&args.out_grouping, &value)?;
+    let modes = &value["summary"]["modes"];
+    for (spec, mode) in modes.as_object().into_iter().flatten() {
+        let total = &mode["total_ms"];
+        let rustc = &mode["rustc_runs"];
+        println!(
+            "  {:<14} total p50={:>6}ms (min {:>6} / max {:>6})  analyses={}  rustc={}  valid={}",
+            spec,
+            total["p50"].as_u64().unwrap_or(0),
+            total["min"].as_u64().unwrap_or(0),
+            total["max"].as_u64().unwrap_or(0),
+            mode["analyses"]["p50"].as_u64().unwrap_or(0),
+            rustc["p50"].as_u64().unwrap_or(0),
+            mode["valid"].as_bool().unwrap_or(false),
+        );
+    }
+    for comparison in value["summary"]["comparison"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        println!(
+            "  gain grouped-{:>3}ms: séquentiel {}ms -> groupé {}ms, gain apparié p50={}ms ({}%), analyses économisées={}",
+            comparison["window_ms"].as_u64().unwrap_or(0),
+            comparison["sequential_total_ms"]["p50"].as_u64().unwrap_or(0),
+            comparison["grouped_total_ms"]["p50"].as_u64().unwrap_or(0),
+            comparison["gain_ms_paired"]["p50"].as_u64().unwrap_or(0),
+            comparison["gain_percent_paired"]["p50"].as_u64().unwrap_or(0),
+            comparison["analyses_saved_per_cycle"].as_u64().unwrap_or(0),
+        );
+    }
+    let incompatible = &value["summary"]["incompatible"];
+    println!(
+        "  incompatible: rejets={}/{} identifiés={}/{} reprise p50={}ms (lot refusé p50={}ms) rustc/rep={}",
+        incompatible["batch_rejected_count"].as_u64().unwrap_or(0),
+        incompatible["observations"].as_u64().unwrap_or(0),
+        incompatible["incompatible_identified_count"].as_u64().unwrap_or(0),
+        incompatible["observations"].as_u64().unwrap_or(0),
+        incompatible["recovery_total_ms"]["p50"].as_u64().unwrap_or(0),
+        incompatible["batch_latency_ms"]["p50"].as_u64().unwrap_or(0),
+        incompatible["rustc_runs_per_rep"]["p50"].as_u64().unwrap_or(0),
+    );
+    let break_even = &value["summary"]["break_even"];
+    println!(
+        "  break-even: fenêtre max mesurée à gain positif={}ms, estimation dérivée={}ms ({}), durée campagne={}s",
+        break_even["max_measured_window_with_positive_median_gain_ms"]
+            .as_u64()
+            .unwrap_or(0),
+        break_even["estimated_break_even_window_ms"]
+            .as_u64()
+            .unwrap_or(0),
+        break_even["status"].as_str().unwrap_or("?"),
+        value["campaign"]["duration_ms"].as_u64().unwrap_or(0) / 1000,
+    );
+    println!("  valid={}", value["valid"].as_bool().unwrap_or(false));
+    println!("written: {}", args.out_grouping.display());
+    Ok(value["valid"].as_bool().unwrap_or(false))
+}
+
 fn invariants_run(repo_root: &Path, args: &Args) -> Result<bool, String> {
     println!("invariants: negative/boundary checks");
     let value = invariants::run(&invariants::InvariantOptions {
@@ -512,6 +596,10 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             .join("evidence")
             .join("mvp0b-daemon-gc-2026-11-08.json"),
         gc_edits: 40,
+        out_grouping: repo_root
+            .join("evidence")
+            .join("mvp0c-grouping-2026-11-09.json"),
+        grouping_reps: 5,
         out_soak: repo_root
             .join("evidence")
             .join("mvp0b-daemon-gc-auto-2026-11-08.json"),
@@ -569,6 +657,12 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
                 args.gc_edits = take("--gc-edits")?
                     .parse()
                     .map_err(|_| "--gc-edits must be an integer".to_owned())?
+            }
+            "--out-grouping" => args.out_grouping = PathBuf::from(take("--out-grouping")?),
+            "--grouping-reps" => {
+                args.grouping_reps = take("--grouping-reps")?
+                    .parse()
+                    .map_err(|_| "--grouping-reps must be an integer".to_owned())?
             }
             "--out-soak" => args.out_soak = PathBuf::from(take("--out-soak")?),
             "--out-compaction" => args.out_compaction = PathBuf::from(take("--out-compaction")?),
@@ -666,6 +760,7 @@ fn parse_args(repo_root: &Path) -> Result<Args, String> {
             | "soak"
             | "compaction"
             | "multi-soak"
+            | "grouping"
             | "validate"
     ) {
         return Err(format!("unknown suite {:?}", args.suite));
