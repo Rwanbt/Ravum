@@ -110,3 +110,19 @@
   mais n'étaient pas mesurées.
 - **Preuves** : `target/conformance-after-t2.json`,
   `python tools/triage_conformance.py target/conformance-after-t2.json`.
+
+## D9 — Custody de la clé de signature de release
+
+- **Constat** : le mécanisme de signature est implémenté et qualifié
+  ([`docs/qualification/SIGNATURES.md`](docs/qualification/SIGNATURES.md)) :
+  `scripts/attest-release.ps1` signe avec `ssh-keygen -Y sign` (Ed25519,
+  namespace `ravum-release`) et **rejette** un artefact altéré d''un octet. Ce qui
+  manque n''est pas le code, c''est l''**ancre de confiance**.
+- **Question posée** : où vit la clé privée (secret CI, HSM, machine hors ligne),
+  qui peut l''utiliser, et où est publié le fichier `allowed_signers` correspondant ?
+- **Pourquoi ce n''est pas une décision d''agent** : une clé générée par l''agent
+  qui signe, stockée à côté de l''artefact signé, n''atteste rien. Elle donnerait
+  un `PASS` de forme et zéro garantie réelle — exactement ce que le mandat
+  interdit.
+- **Conséquence d''une non-décision** : T11 reste `PARTIAL` ; aucune release ne
+  peut être présentée comme signée, ni la provenance comme vérifiable.

@@ -81,7 +81,7 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
 | T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, **Miri rejoué en CI sur ce SHA (159 tests, 0 échec)** | **Audit externe absent** | Audit externe |
-| T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** | **Pas de signature/attestation** | Clé et custody humaines |
+| T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate
@@ -208,9 +208,13 @@ différents** produisent le même `sha256` (`75786AEF…33EEB`) avec
 différents ; l'écart se limitait à 20 octets, tous des horodatages dans l'en-tête
 PE écrits par `link.exe`.
 
-**Toujours absent** : la **signature** des artefacts et l'attestation de
-provenance signée. Aucune clé de projet n'existe, et la custody d'une clé de
-release ne peut pas être décidée par un agent.
+**Signature : mécanisme qualifié, ancre absente** —
+[`docs/qualification/SIGNATURES.md`](../qualification/SIGNATURES.md).
+`scripts/attest-release.ps1` signe et vérifie des artefacts avec `ssh-keygen -Y
+sign/verify` (Ed25519, namespace `ravum-release`) : un artefact intact est
+accepté, un artefact modifié d'un octet est rejeté avec le code de sortie 1.
+**Aucune clé de projet n'existe** : générer une clé laissée dans le dépôt
+produirait une signature décorative. La custody est **D9**.
 
 ### T12 — Dogfood, audit final, RC — `BLOCKED`
 
@@ -230,6 +234,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D6 | Périmètre des fonctionnalités universelles | **OUVERTE** |
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
 | **D8** | **Arbitrage des codes de diagnostic émis hors spécification (13 codes)** | **NOUVELLE — bloque T2** |
+| **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **NOUVELLE — bloque la signature de release (T11)** |
 
 ## 5. Règles de mise à jour
 
