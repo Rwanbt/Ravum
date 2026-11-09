@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "campaign": "S8 MVP-0c — agrégat campagne réelle",
+  "generated_at": "2026-11-09T02:25:31.248Z",
+  "summary": {
+    "A": {
+      "campaigns": 3,
+      "total_ms": {
+        "n": 3,
+        "median": 111110,
+        "min": 100664,
+        "max": 208694,
+        "samples": [
+          100664,
+          111110,
+          208694
+        ]
+      },
+      "all_tests_green": true,
+      "all_protected_ok": true,
+      "zero_lost": true,
+      "tokens": [
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 14,
+            "wallMs": 73488,
+            "inputTokens": 138228,
+            "outputTokens": 7144,
+            "totalTokens": 1826524,
+            "cacheReadTokens": 1681152,
+            "processedTokens": 1826524
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 7,
+            "wallMs": 42154,
+            "inputTokens": 127191,
+            "outputTokens": 3957,
+            "totalTokens": 872012,
+            "cacheReadTokens": 740864,
+            "processedTokens": 872012
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 76655,
+            "inputTokens": 129576,
+            "outputTokens": 5252,
+            "totalTokens": 1129240,
+            "cacheReadTokens": 994412,
+            "processedTokens": 1129240
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 17,
+            "wallMs": 107237,
+            "inputTokens": 45172,
+            "outputTokens": 11117,
+            "totalTokens": 2358881,
+            "cacheReadTokens": 2302592,
+            "processedTokens": 2358881
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 39226,
+            "inputTokens": 19979,
+            "outputTokens": 3224,
+            "totalTokens": 990115,
+            "cacheReadTokens": 966912,
+            "processedTokens": 990115
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 47666,
+            "inputTokens": 22213,
+            "outputTokens": 4923,
+            "totalTokens": 1126400,
+            "cacheReadTokens": 1099264,
+            "processedTokens": 1126400
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 36422,
+            "inputTokens": 18895,
+            "outputTokens": 3419,
+            "totalTokens": 993066,
+            "cacheReadTokens": 970752,
+            "processedTokens": 993066
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 7,
+            "wallMs": 31327,
+            "inputTokens": 18799,
+            "outputTokens": 2534,
+            "totalTokens": 863061,
+            "cacheReadTokens": 841728,
+            "processedTokens": 863061
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 7,
+            "wallMs": 36352,
+            "inputTokens": 20154,
+            "outputTokens": 3670,
+            "totalTokens": 869520,
+            "cacheReadTokens": 845696,
+            "processedTokens": 869520
+          }
+        }
+      ]
+    },
+    "B": {
+      "campaigns": 3,
+      "total_ms": {
+        "n": 3,
+        "median": 237674,
+        "min": 126224,
+        "max": 286275,
+        "samples": [
+          126224,
+          237674,
+          286275
+        ]
+      },
+      "all_tests_green": true,
+      "all_protected_ok": true,
+      "zero_lost": true,
+      "tokens": [
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 73131,
+            "inputTokens": 143331,
+            "outputTokens": 4167,
+            "totalTokens": 1128808,
+            "cacheReadTokens": 981310,
+            "processedTokens": 1128808
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 30848,
+            "inputTokens": 18593,
+            "outputTokens": 2184,
+            "totalTokens": 983977,
+            "cacheReadTokens": 963200,
+            "processedTokens": 983977
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 14,
+            "wallMs": 76463,
+            "inputTokens": 24867,
+            "outputTokens": 7118,
+            "totalTokens": 1776369,
+            "cacheReadTokens": 1744384,
+            "processedTokens": 1776369
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 12,
+            "wallMs": 55583,
+            "inputTokens": 23520,
+            "outputTokens": 5188,
+            "totalTokens": 1509156,
+            "cacheReadTokens": 1480448,
+            "processedTokens": 1509156
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 44863,
+            "inputTokens": 20567,
+            "outputTokens": 3643,
+            "totalTokens": 1115282,
+            "cacheReadTokens": 1091072,
+            "processedTokens": 1115282
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 7,
+            "wallMs": 36894,
+            "inputTokens": 20293,
+            "outputTokens": 3648,
+            "totalTokens": 869509,
+            "cacheReadTokens": 845568,
+            "processedTokens": 869509
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 16,
+            "wallMs": 100325,
+            "inputTokens": 46791,
+            "outputTokens": 9487,
+            "totalTokens": 2189654,
+            "cacheReadTokens": 2133376,
+            "processedTokens": 2189654
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 39816,
+            "inputTokens": 19323,
+            "outputTokens": 2686,
+            "totalTokens": 989177,
+            "cacheReadTokens": 967168,
+            "processedTokens": 989177
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 85965,
+            "inputTokens": 123202,
+            "outputTokens": 4257,
+            "totalTokens": 1118819,
+            "cacheReadTokens": 991360,
+            "processedTokens": 1118819
+          }
+        }
+      ]
+    },
+    "C": {
+      "campaigns": 3,
+      "total_ms": {
+        "n": 3,
+        "median": 528481,
+        "min": 269594,
+        "max": 611003,
+        "samples": [
+          269594,
+          528481,
+          611003
+        ]
+      },
+      "all_tests_green": true,
+      "all_protected_ok": true,
+      "zero_lost": true,
+      "tokens": [
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 158058,
+            "inputTokens": 128400,
+            "outputTokens": 4012,
+            "totalTokens": 1128252,
+            "cacheReadTokens": 995840,
+            "processedTokens": 1128252
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 7,
+            "wallMs": 68936,
+            "inputTokens": 122663,
+            "outputTokens": 2051,
+            "totalTokens": 859306,
+            "cacheReadTokens": 734592,
+            "processedTokens": 859306
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 37216,
+            "inputTokens": 19384,
+            "outputTokens": 3201,
+            "totalTokens": 989113,
+            "cacheReadTokens": 966528,
+            "processedTokens": 989113
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 115012,
+            "inputTokens": 128390,
+            "outputTokens": 5090,
+            "totalTokens": 1150440,
+            "cacheReadTokens": 1016960,
+            "processedTokens": 1150440
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 79010,
+            "inputTokens": 123063,
+            "outputTokens": 2847,
+            "totalTokens": 987094,
+            "cacheReadTokens": 861184,
+            "processedTokens": 987094
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 37746,
+            "inputTokens": 20002,
+            "outputTokens": 3651,
+            "totalTokens": 991333,
+            "cacheReadTokens": 967680,
+            "processedTokens": 991333
+          }
+        },
+        {
+          "agent": "agent-1",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 9,
+            "wallMs": 35863,
+            "inputTokens": 19297,
+            "outputTokens": 3015,
+            "totalTokens": 1122600,
+            "cacheReadTokens": 1100288,
+            "processedTokens": 1122600
+          }
+        },
+        {
+          "agent": "agent-2",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 8,
+            "wallMs": 69624,
+            "inputTokens": 122466,
+            "outputTokens": 2695,
+            "totalTokens": 986345,
+            "cacheReadTokens": 861184,
+            "processedTokens": 986345
+          }
+        },
+        {
+          "agent": "agent-3",
+          "tokens": {
+            "sessions": 1,
+            "assistantMessages": 11,
+            "wallMs": 61133,
+            "inputTokens": 24331,
+            "outputTokens": 7132,
+            "totalTokens": 1391719,
+            "cacheReadTokens": 1360256,
+            "processedTokens": 1391719
+          }
+        }
+      ]
+    }
+  },
+  "campaigns": [
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A1",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C1",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C2",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B2",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A2",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B3",
+    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C3"
+  ]
+}
