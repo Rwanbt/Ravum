@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "lot": "MVP-0c L5.1 — intégration CLI : unit-check et oracle inter-crates dans collab-cycle",
+  "task_id": "task-32",
+  "generated_at": "2026-11-09T02:49:44+01:00",
+  "branch": "feat/mvp0c-hardening",
+  "head": "486d4c8",
+  "worktree_state": "non commité (le Lead est seul écrivain Git ; aucune commande git mutante exécutée)",
+  "scope": {
+    "written_by_this_lot": [
+      "crates/ravum-cli/Cargo.toml",
+      "crates/ravum-cli/src/main.rs",
+      "crates/ravum-cli/src/unit_check.rs (nouveau)",
+      "crates/ravum-cli/src/collab_cycle.rs",
+      "crates/ravum-cli/tests/unit_check.rs (nouveau)",
+      "crates/ravum-cli/tests/collab_oracle_cli.rs (nouveau)",
+      "docs/mvp/MVP-0c-cli.md",
+      "evidence/mvp0c-cli-2026-11-09.json"
+    ],
+    "root_manifest_modified_by_this_lot": false,
+    "note": "Les autres modifications visibles dans git status (Cargo.toml racine, .github, ravum-daemon, tools, docs qualification, crates/ravum-batch) appartiennent à d'autres workers, pas à ce lot.",
+    "dependency_strategy": "deux dépendances path internes dans crates/ravum-cli/Cargo.toml (ravum-unit-graph, ravum-collab-oracle), aucune modification de [workspace.dependencies]",
+    "cycle": "aucun (ravum-cli -> ravum-collab-oracle -> ravum-unit-graph / ravum-workspace-coordinator)"
+  },
+  "toolchain": {
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "cargo": "1.95.0 (2f3dce0bd 2026-03-21)",
+    "os": "Windows",
+    "cargo_build_jobs": 2,
+    "test_threads": 1,
+    "machine_note": "machine partagée avec d'autres workers ; timings variables sous charge"
+  },
+  "commands": [
+    {
+      "cmd": "cargo test -p ravum-cli -- --test-threads=1",
+      "exit_code": 0,
+      "passed": 47,
+      "failed": 0,
+      "ignored": 0,
+      "warnings": 0,
+      "existing_tests_preserved": 39,
+      "new_tests": 8,
+      "detail": {
+        "src/main.rs (unit)": {"count": 18, "seconds": 0.01},
+        "tests/collab_daemon_bridge.rs": {"count": 4, "seconds": 1.28},
+        "tests/collab_flow.rs": {"count": 3, "seconds": 0.38},
+        "tests/m1_patch_loop.rs": {"count": 10, "seconds": 8.8},
+        "tests/m2_proof_gate.rs": {"count": 4, "seconds": 3.32},
+        "tests/unit_check.rs (nouveau)": {"count": 5, "seconds": 6.21},
+        "tests/collab_oracle_cli.rs (nouveau)": {"count": 3, "seconds": 1.02}
+      },
+      "note": "La tâche annonçait 33 tests existants ; mesure réelle du dépôt à ce commit : 39 existants + 8 nouveaux = 47. Aucun test existant modifié ni supprimé."
+    },
+    {
+      "cmd": "cargo build -p ravum-cli --bin ravum",
+      "exit_code": 0,
+      "warnings": 0
+    },
+    {
+      "cmd": "rustfmt --edition 2021 --check --config skip_children=true <5 fichiers touchés>",
+      "exit_code": 0,
+      "files": [
+        "crates/ravum-cli/src/main.rs",
+        "crates/ravum-cli/src/collab_cycle.rs",
+        "crates/ravum-cli/src/unit_check.rs",
+        "crates/ravum-cli/tests/unit_check.rs",
+        "crates/ravum-cli/tests/collab_oracle_cli.rs"
+      ],
+      "note": "skip_children=true pour ne pas reformater les modules non touchés ; aucun warning de compilation"
+    }
+  ],
+  "unit_check": {
+    "success_on_fixtures_multicrate": {
+      "cmd": "ravum unit-check fixtures/multicrate --state target/ravum-tests/doc-unit-check --json",
+      "exit_code": 0,
+      "report": {
+        "valid": true,
+        "errors": 0,
+        "stale": 0,
+        "exit_code": 0,
+        "workspace_unchanged": true,
+        "units": 6,
+        "affected_units": 6,
+        "rustc_invocations": 3,
+        "cargo_fallback_invocations": 3,
+        "statuses": {
+          "core": "targeted_ok",
+          "api": "targeted_ok",
+          "consumer": "targeted_ok",
+          "application": "fallback_package (binary_target)",
+          "buildscript": "fallback_package (build_script)",
+          "features": "fallback_package (features_declared)"
+        }
+      },
+      "no_user_file_modified": "empreinte du workspace identique avant/après ; aucun Cargo.lock ni target/ créé dans la fixture ; vérifié par test dédié"
+    },
+    "changed_scope": {
+      "cmd": "ravum unit-check fixtures/multicrate --changed core/src/lib.rs --json",
+      "exit_code": 0,
+      "changed_units": ["core"],
+      "affected_units": ["core", "api", "consumer", "application"],
+      "excluded": ["features", "buildscript"],
+      "asserted_by": "tests/unit_check.rs::unit_check_restricts_the_scope_with_changed_paths"
+    },
+    "broken_interface": {
+      "cmd": "ravum unit-check <copie fixture avec core::scale f64->f32> --json",
+      "exit_code": 1,
+      "report": {
+        "exit_code": 1,
+        "errors": 3,
+        "stale": 0,
+        "valid": false,
+        "workspace_unchanged": true,
+        "rustc_invocations": 1,
+        "cargo_fallback_invocations": 4,
+        "statuses": {
+          "core": "targeted_ok",
+          "api": "error",
+          "consumer": "error",
+          "application": "error",
+          "buildscript": "fallback_package",
+          "features": "fallback_package"
+        },
+        "api_first_diagnostic": "error[E0308]: mismatched types"
+      },
+      "asserted_by": "tests/unit_check.rs::unit_check_broken_interface_exits_one_with_real_diagnostics"
+    },
+    "invalid_arguments": {
+      "exit_code": 2,
+      "cases": [
+        "aucun argument",
+        "option inconnue --bogus",
+        "workspace inexistant",
+        "--changed not/a/unit/lib.rs",
+        "argument positionnel supplémentaire"
+      ],
+      "asserted_by": "tests/unit_check.rs::unit_check_invalid_arguments_exit_two"
+    },
+    "out_file": {
+      "cmd": "ravum unit-check fixtures/multicrate --changed core/src/lib.rs --json --out <report.json>",
+      "exit_code": 0,
+      "note": "le fichier écrit est le rapport JSON imprimé ; relu et vérifié par test"
+    }
+  },
+  "collab_cycle_v2_oracle": {
+    "fixture": "workspace cargo réel créé dans target/ : root package + core + api (api appelle core::scale)",
+    "breaking_proposal": "core::scale passe de f64 à f32 de façon cohérente (core compile), api inchangé reste incompatible",
+    "cmd": "ravum collab-cycle <ws> --proposals <dir> --daemon-work <dir> --journal <path> --oracle-state <dir> --protocol v2 --oracle unit-graph --json",
+    "exit_code": 1,
+    "report": {
+      "protocol": "V2_SEMANTIC_STATUSES",
+      "oracle_kind": "unit-graph",
+      "decision": "REBASE_REVALIDATE",
+      "evaluation_level": "TEXTUALLY_APPLICABLE",
+      "oracle_blocking": true,
+      "oracle_name": "unit-graph-l1",
+      "findings": ["INTERFACE_BREAK/blocking", "INTERFACE_BREAK/blocking"],
+      "accepted_changes": 0,
+      "violations": 1,
+      "reason_excerpt": "interface break: dependent unit(s) api fail to compile while their own sources are unchanged; changed unit(s): core, root_app. First compiler diagnostic: error[E0308]: mismatched types",
+      "workspace_unchanged": true
+    },
+    "without_oracle_same_proposal": {
+      "protocol": "V2_SEMANTIC_STATUSES",
+      "oracle_kind": "none",
+      "decision": "REBASE_REVALIDATE",
+      "note": "l'oracle textuel par défaut refuse aussi ; AUTO_SAFE jamais émis",
+      "asserted_by": "tests/collab_oracle_cli.rs::v2_without_the_oracle_keeps_the_textual_refusal"
+    },
+    "without_any_flag": {
+      "behavior": "inchangé (V1_COLLAB_COMPAT, aucune injection) ; couvert par les 39 tests existants, dont collab_daemon_bridge et collab_flow"
+    },
+    "invalid_arguments": {
+      "exit_code": 2,
+      "cases": [
+        "--oracle unit-graph sans --protocol v2",
+        "--protocol v9",
+        "--oracle unknown-oracle --protocol v2",
+        "--oracle-state <dir> sans --oracle"
+      ],
+      "asserted_by": "tests/collab_oracle_cli.rs::collab_cycle_oracle_arguments_are_fail_closed"
+    },
+    "known_limitation_observed": "Le root package contient les sources des membres imbriqués dans son content_id (comportement ravum-unit-graph) : le message cite 'changed unit(s): core, root_app'. L'unité affectée api reste correctement attribuée. Correction à faire côté ravum-unit-graph (hors périmètre)."
+  },
+  "new_tests": [
+    "tests/unit_check.rs::unit_check_succeeds_on_multicrate_without_touching_the_workspace",
+    "tests/unit_check.rs::unit_check_restricts_the_scope_with_changed_paths",
+    "tests/unit_check.rs::unit_check_broken_interface_exits_one_with_real_diagnostics",
+    "tests/unit_check.rs::unit_check_invalid_arguments_exit_two",
+    "tests/unit_check.rs::unit_check_out_writes_the_reported_payload",
+    "tests/collab_oracle_cli.rs::v2_with_unit_graph_oracle_is_never_auto_safe_on_an_interface_break",
+    "tests/collab_oracle_cli.rs::v2_without_the_oracle_keeps_the_textual_refusal",
+    "tests/collab_oracle_cli.rs::collab_cycle_oracle_arguments_are_fail_closed"
+  ],
+  "limits": [
+    "unit-check copie le workspace dans --state : coût IO proportionnel (fichiers binaires compris), --state non purgé automatiquement ; liens symboliques ignorés.",
+    "Toolchain locale unique, pas de cross-compilation, pas de réseau (--offline).",
+    "Fallbacks Cargo plus lents et moins précis (interface non observable) ; signalés dans le rapport.",
+    "--changed filtre la portée du rapport mais la campagne compile tout le graphe : une erreur préexistante hors portée donne exit 1.",
+    "Limitation ravum-unit-graph : root package imbriqué agrège les sources des membres dans son content_id (surestimation possible des unités changées).",
+    "collab-cycle v2 refuse par défaut (MANUAL/REBASE) tout patch sans vérification déclarée : règle v2, pas une régression.",
+    "Aucun PROVED, aucune preuve générale ; aucun branchement CI/daemon par défaut (exemple fourni).",
+    "Les tests rustc sont sérialisés (--test-threads=1) et les durées varient avec la charge machine."
+  ],
+  "files": {
+    "modified": [
+      "crates/ravum-cli/Cargo.toml",
+      "crates/ravum-cli/src/main.rs",
+      "crates/ravum-cli/src/collab_cycle.rs"
+    ],
+    "added": [
+      "crates/ravum-cli/src/unit_check.rs",
+      "crates/ravum-cli/tests/unit_check.rs",
+      "crates/ravum-cli/tests/collab_oracle_cli.rs",
+      "docs/mvp/MVP-0c-cli.md",
+      "evidence/mvp0c-cli-2026-11-09.json"
+    ],
+    "out_of_scope_modified_by_others": [
+      "Cargo.toml (membre ravum-batch, autre worker)",
+      "Cargo.lock (généré par plusieurs lots)",
+      ".github/workflows/mvp-impact.yml",
+      "crates/ravum-daemon/**",
+      "tools/impact/**",
+      "scripts/impact.ps1",
+      "docs/mvp/MVP-0c-cross-crate-daemon.md",
+      "docs/mvp/MVP-0c-qualification.md"
+    ]
+  },
+  "next_steps": [
+    "Câbler unit-check dans la CI par impact (exemple §6) une fois la PR intégrée.",
+    "Corriger côté ravum-unit-graph la portée des source_files du root package.",
+    "Ajouter une purge/borne de taille pour --state et un budget de temps par campagne.",
+    "Envisager un mode collab-cycle qui accepte une vérification déclarée en plus de l'oracle (pour obtenir AUTO_SAFE/TESTED sur patch compatible).",
+    "Publier des mesures de coût sur un vrai workspace (pas seulement la fixture)."
+  ]
+}
