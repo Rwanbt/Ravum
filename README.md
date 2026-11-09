@@ -215,6 +215,6 @@ Les propositions IA sont les bienvenues, mais **aucun agent n'accepte un ADR ou 
 
 ## Licence, contributions et état des outils
 
-La **licence du futur code** doit être choisie avant une contribution externe de code ; **aucune licence n'est actuellement déclarée**, donc n'assumez pas que le contenu soit librement réutilisable. Les analyses de licences font partie de M0. Les outils tiers étudiés ne sont pas vendus comme composants déjà intégrés.
+**Licence : `MIT OR Apache-2.0` (au choix du réutilisateur).** Consultez [LICENSE-MIT](LICENSE-MIT) et [LICENSE-APACHE](LICENSE-APACHE). Cette double licence concerne les contributions originales au projet dont les auteurs détiennent les droits ; les composants, textes ou ressources tiers restent soumis à leurs propres licences et avis. Les programmes créés avec Ravum n'héritent pas automatiquement de cette licence du seul fait de l'utilisation du langage ou du compilateur. Les outils tiers étudiés ne sont pas vendus comme composants déjà intégrés.
 
 Le projet est ouvert à la discussion sur les [issues](https://github.com/Rwanbt/Ravum/issues). Consultez la roadmap avant de commencer un ticket.
