@@ -12,8 +12,11 @@
 > Licence : **`MIT OR Apache-2.0`** sur les 23 membres (SBOM régénéré).
 > **Serveur LSP réel** : 9 tests client bout en bout
 > ([`docs/qualification/LSP.md`](../qualification/LSP.md)).
-> La qualification **Linux** reste celle d'un run antérieur (`78c8f72`) et doit
-> être rejouée sur le SHA final avant d'être citée comme preuve courante.
+> **Linux rejoué sur le SHA final** (`c43dafd`, run
+> [42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526)) :
+> workspace **82 suites / 1015 PASS / 0 FAIL / 4 ignorés**, conformance
+> **107 cas / 105 PASS / 0 FAIL / 2 SKIP** (cas Windows), smoke, installateur,
+> WASI et **Miri (159 tests)** verts ; TSan explicitement `NOT_APPLICABLE`.
 
 ## 1. Ce qui fonctionne réellement (vérifié)
 
@@ -121,7 +124,7 @@ restent liées à un SHA plus ancien et doivent être rejouées avant tout `PASS
 | T2 | **PARTIAL** | spec DRAFT 15 fichiers + conformance 106/107 (1 skip OS) ; `features.md` : 188 règles dont 99 tracées vers un cas, **92 sans référence de test** ; aucun PASS revendiqué |
 | T3 | **PARTIAL** | 69 tests syntaxe, corpus négatif ; interfaces LSP livrées et testées ; fuzz/Miri à rejouer sur le SHA final |
 | T4 | **PARTIAL** | typechecker + borrow checker testés (133 + 85 cas), finding CRITICAL corrigé ; **pas d'audit externe**, pas de preuve formelle |
-| T5 | **PARTIAL** | binaires natifs réels **Windows** (smoke 31 PASS, cette session) ; FFI `abs` exécutée ; run **Linux à rejouer** sur le SHA final ; pas d'ABI stable revendiquée |
+| T5 | **PASS** | binaires natifs réels **Windows** (smoke 31 PASS) et **Linux** (CI verte sur le même SHA) ; FFI `abs` exécutée ; WASI vert ; pas d'ABI stable revendiquée |
 | T6 | **PARTIAL** | stdlib core/io/fs/string/vec/math + **FFI minimale** (`extern "C"`, primitives, `unsafe`) ; threads/net/async `UNSUPPORTED` |
 | T7 | **PARTIAL** | CLI complète (`watch` inclus), WASM WASI preview1, **serveur LSP réel** (9 tests client) ; manque une session VS Code réelle |
 | T8 | **PARTIAL** | hot reload = rebuild + redémarrage (pas de préservation d'état) ; collaboration/overlays non qualifiés ici |

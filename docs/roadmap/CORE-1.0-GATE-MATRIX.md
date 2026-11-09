@@ -16,7 +16,8 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de la §1** | `8be7913d69dee77ba37d04b219919e894481f21e` (commit de session ; les mesures ont été exécutées sur cet arbre) |
+| **SHA des preuves locales (§1)** | `8be7913d69dee77ba37d04b219919e894481f21e` |
+| **SHA des preuves CI (§1 bis)** | `c43dafd` — 4 workflows verts sur ce même commit |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
@@ -43,6 +44,34 @@ Le seul SKIP de conformance est `security/dependency-absolute-unix`, marqué
 `skip_on: windows` : il est inapplicable sur l'hôte Windows et doit être exécuté
 par le job Linux, pas coché depuis Windows.
 
+## 1 bis. Mesures CI sur le même SHA (`c43dafd`)
+
+Les quatre workflows sont verts sur ce commit : *MVP product checks*,
+*MVP impact-selected checks*, *Documentation integrity*, *Linux qualification*.
+Détail du run Linux
+([42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526)) :
+
+| Job (Linux, `ubuntu-latest`) | Résultat |
+|---|---|
+| Workspace tests (stable 1.95.0) | **82 suites, 1015 PASS / 0 FAIL / 4 ignorés** |
+| Conformance corpus (Linux) | **total=107 pass=105 fail=0 skip=2 not_run=0** |
+| Example smoke suite (Linux) | success (binaires natifs Linux réellement construits et exécutés) |
+| Installer contract (temporary prefix, `--version`) | success |
+| `wasm32-wasip1` (build + run via Node WASI) | success — `hello, ravum` observé |
+| Fuzz smoke (tests `fuzz_*` ignorés, soft guard) | success |
+| Miri (nightly, syntax + sema) | **65 + 93 + 1 PASS / 0 FAIL** |
+| ThreadSanitizer | **SKIP explicite — `NOT_APPLICABLE`** (pas de threads/async en Core 1.0) |
+
+**Lecture honnête des SKIP de conformance** : Windows saute
+`dependency-absolute-unix` (1 SKIP) et Linux saute les deux cas spécifiques
+Windows (2 SKIP). **Chaque cas du corpus est donc exécuté sur au moins une
+plateforme**, mais un cas donné ne l'est pas sur les deux. Ce n'est ni un `PASS`
+universel, ni une règle non couverte : c'est une couverture par plateforme.
+
+**Ce que la CI ne prouve pas** : la correction sémantique de programmes
+arbitraires, les performances, le temps réel, une ABI stable, macOS, ARM, ni la
+reproductibilité bit-à-bit.
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque | Blocage |
@@ -50,14 +79,14 @@ par le job Linux, pas coché depuis Windows.
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) dans les 1018 tests | — | — |
 | T1 | `PARTIAL` | Voie A et voie B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; aucune mesure de parité A/B/C ; choix final non documenté/ratifié | Décision humaine de ratification (ADR) |
 | T2 | `PARTIAL` | 15 documents de spécification + 107 cas de conformance traçables | `features.md` incomplet ; couverture traçable règle→test non exhaustive ; contradictions résiduelles | — |
-| T3 | `PARTIAL` | Frontend réel, 1018 tests verts, corpus négatif lexer/parser, **interfaces LSP désormais implémentées et testées** | Fuzzing non rejoué sur ce SHA ; limites de profondeur/mémoire non re-mesurées | — |
+| T3 | `PARTIAL` | Frontend réel, 1018 tests verts, corpus négatif, **interfaces LSP livrées et testées**, **Miri rejoué (159 tests)** sur ce SHA | Campagne **fuzz complète** non rejouée (seul un *fuzz smoke* a tourné) ; limites profondeur/mémoire non re-mesurées | — |
 | T4 | `BLOCKED` | Typechecker + borrow checker + 85 cas d'audit adversarial interne ; finding CRITICAL `&"a"` couvert | **Audit externe humain absent** (exigé par le contrat) | Audit externe |
-| T5 | `PARTIAL` | Binaires natifs réels Windows (smoke 31 PASS) ; ABI non revendiquée stable | Run Linux non rejoué sur ce SHA ; sanitizers non exécutés | — |
+| T5 | `PASS` | Binaires natifs réels **Windows** (smoke 31 PASS) et **Linux** (CI verte : workspace + conformance + smoke) sur le **même SHA** ; WASM exécuté ; ABI stable non revendiquée | Sanitizers non exécutés (documenté) | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale `extern "C"`/`unsafe` | Threads, réseau, async, temps réel dur explicitement `UNSUPPORTED` | — |
 | T7 | `PARTIAL` | CLI complète ; **LSP réel** (diagnostics, hover, definition, references, rename, completion, symboles, formatage) testé par client réel | **Aucune session VS Code réelle** ; pas de registre de paquets distant | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays et snapshots du socle disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée pour le langage | — |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées (dont FFI et WASM) | HTTP + SQLite, DSP hôte réel, E2E navigateur absents | — |
-| T10 | `PARTIAL` | Fuzz + Miri + 2 audits internes (antérieurs) ; 1018 tests verts | **TSan `NOT_APPLICABLE`** ; fuzz/Miri non rejoués sur ce SHA ; audit externe absent | Audit externe |
+| T10 | `PARTIAL` | 1018 tests, conformance, smoke, **Miri rejoué sur ce SHA (159 PASS)** ; TSan explicitement `NOT_APPLICABLE` ; 2 audits internes antérieurs | Campagne **fuzz complète** non rejouée sur ce SHA ; **audit externe absent** | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM déterministe, provenance, checksums, **licence réconciliée** | **Pas de signature/attestation**, **pas de build bit-à-bit** | Clé de signature |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -121,10 +150,13 @@ par le job Linux, pas coché depuis Windows.
 - **Prouvé** : lexer/parser réels, récupération, garde-fous, formateur
   idempotent, corpus négatif exécuté, **interfaces LSP effectives** (le LSP
   consomme les mêmes diagnostics).
-- **Absent de cette session** : fuzzing rejoué (chiffres antérieurs : 249 054
-  entrées, 0 invariant violé), re-mesure des limites de profondeur/mémoire.
-- **Pour passer `PASS`** : rejouer fuzz + Miri sur le SHA final et joindre les
-  sorties brutes.
+- **Rejoué sur ce SHA** : **Miri** (65 tests syntax + 93 sema + 1 fuzz court,
+  0 échec) via le job Linux.
+- **Absent** : la **campagne fuzz complète** (chiffres antérieurs : 249 054
+  entrées, 0 invariant violé) n'a pas été rejouée ; seul un *fuzz smoke* a
+  tourné. Les limites de profondeur/mémoire n'ont pas été re-mesurées.
+- **Pour passer `PASS`** : rejouer la campagne fuzz complète sur le SHA final et
+  joindre les sorties brutes.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 
@@ -138,14 +170,17 @@ par le job Linux, pas coché depuis Windows.
 - **Dossier prêt pour l'auditeur** : `docs/audit/`, `docs/reports/`,
   `conformance/cases/ownership/`, `crates/ravum-lang-sema/tests/own_audit.rs`.
 
-### T5 — Codegen, ABI, exécution native — `PARTIAL`
+### T5 — Codegen, ABI, exécution native — `PASS`
 
-- **Prouvé (cette session, Windows)** : 31 PASS sur `check/build/run` réels,
+- **Prouvé (Windows, cette session)** : 31 PASS sur `check/build/run` réels,
   binaires natifs exécutés, FFI `abs` exécutée.
-- **Manquant** : run Linux sur ce SHA ; sanitizers ; revendication ABI
-  explicitement refusée (aucune ABI stable annoncée).
-- **Pour passer `PASS`** : CI Linux verte sur le SHA final + sanitizers
-  applicables documentés.
+- **Prouvé (Linux, CI sur le même SHA)** : workspace, conformance, smoke
+  (binaires natifs Linux construits et exécutés), installateur et WASI verts.
+- **Portée** : le `PASS` couvre **Windows x86-64 et Linux x86-64** sur un
+  périmètre explicite (le corpus et les exemples), pas une garantie universelle.
+- **Explicitement non revendiqué** : ABI stable, macOS, ARM, sanitizers.
+- **Preuve** : `docs/reports/LANGUAGE-CORE-STATUS.md` +
+  run [42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526).
 
 ### T6 — Runtime, stdlib, FFI — `PARTIAL`
 
@@ -190,19 +225,23 @@ par le job Linux, pas coché depuis Windows.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
-- **Prouvé** : 1018 tests, conformance 107, smoke 31, audits internes
-  antérieurs (borrow checker 85 cas, backend 21 cas).
-- **Absent de cette session** : rejeu fuzz, rejeu Miri, TSan (`NOT_APPLICABLE`
-  documenté : pas de threads dans Core 1.0), audit externe.
+- **Prouvé** : 1018 tests (Windows) / 1015 (Linux), conformance 107, smoke 31,
+  **Miri rejoué sur ce SHA (159 tests PASS)**, audits internes antérieurs
+  (borrow checker 85 cas, backend 21 cas).
+- **Absent** : la **campagne fuzz complète** n'a pas été rejouée sur ce SHA
+  (seul un *fuzz smoke* a tourné) ; **audit externe** absent.
+- **TSan** : `NOT_APPLICABLE` **parce que** Core 1.0 n'expose ni threads ni
+  async — la justification est écrite et le job est explicitement SKIP, pas
+  supprimé.
 - **Interdit** : marquer `NOT_APPLICABLE` un outil simplement difficile à
-  exécuter. TSan est `NOT_APPLICABLE` **parce que** Core 1.0 n'expose ni threads
-  ni async ; la justification est écrite, pas supposée.
+  exécuter.
 
 ### T11 — Performance, distribution, supply chain — `PARTIAL`
 
-- **Prouvé** : installateurs Windows/Linux (antérieur), SBOM SPDX-2.3
-  déterministe (64 paquets, 170 relations), checksums, manifeste de provenance,
-  **licence `MIT OR Apache-2.0` réconciliée sur les 23 membres**.
+- **Prouvé** : SBOM SPDX-2.3 déterministe (64 paquets, 170 relations),
+  checksums, manifeste de provenance, **licence `MIT OR Apache-2.0` réconciliée
+  sur les 23 membres**, **installateur vert sur Linux (CI, ce SHA)** et antérieur
+  sur Windows.
 - **Absent** : signature/attestation (aucune clé disponible), reproductibilité
   bit-à-bit démontrée, comparaison inter-machines.
 - **Interdit** : inventer une signature ou une provenance.
