@@ -1,0 +1,596 @@
+{
+  "schema_version": 1,
+  "campaign": "S8 MVP-0c — campagne réelle",
+  "mode": "live-collect",
+  "generated_at": "2026-11-09T02:16:54.808Z",
+  "scenario": "A",
+  "rep": 3,
+  "campaign_dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3",
+  "protocol": {
+    "note": "contenu exact de référence attendu uniquement si les agents scriptés sont utilisés ; en live, critère = cargo test vert + reçus cohérents + changements non perdus + fichiers protégés intacts"
+  },
+  "plan": {
+    "schema_version": 1,
+    "mode": "live",
+    "phase": "prepared",
+    "scenario": "A",
+    "rep": 3,
+    "created_at": "2026-11-09T02:15:11.904Z",
+    "started_at_epoch_ms": 1794190511904,
+    "repo_root": "D:\\App\\Ravum",
+    "campaign_dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3",
+    "fixture_dir": "D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\fixture",
+    "fixture_files": [
+      ".gitignore",
+      "Cargo.toml",
+      "src/dates.rs",
+      "src/lib.rs",
+      "src/stats.rs",
+      "src/text.rs",
+      "tests/behavior.rs"
+    ],
+    "editable_files": [
+      "src/stats.rs",
+      "src/text.rs",
+      "src/dates.rs"
+    ],
+    "protected_files": [
+      "Cargo.toml",
+      ".gitignore",
+      "src/lib.rs",
+      "tests/behavior.rs"
+    ],
+    "markers": [
+      {
+        "agent": "agent-1",
+        "marker": "S8MVP0C-AGENT-1"
+      },
+      {
+        "agent": "agent-2",
+        "marker": "S8MVP0C-AGENT-2"
+      },
+      {
+        "agent": "agent-3",
+        "marker": "S8MVP0C-AGENT-3"
+      }
+    ],
+    "agents": [
+      {
+        "id": "agent-1",
+        "tasks": [
+          "t1",
+          "t2"
+        ]
+      },
+      {
+        "id": "agent-2",
+        "tasks": [
+          "t3"
+        ]
+      },
+      {
+        "id": "agent-3",
+        "tasks": [
+          "t4"
+        ]
+      }
+    ],
+    "agent_dirs": {
+      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\agents\\agent-1",
+      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\agents\\agent-2",
+      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\agents\\agent-3"
+    },
+    "base_paths": {
+      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-1.base.json",
+      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-2.base.json",
+      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-3.base.json"
+    },
+    "receipt_paths": {
+      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-1.json",
+      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-2.json",
+      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\receipts\\agent-3.json"
+    },
+    "prompt_paths": {
+      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\prompts\\agent-1.md",
+      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\prompts\\agent-2.md",
+      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3\\prompts\\agent-3.md"
+    },
+    "base_test": {
+      "green": false,
+      "passed": 5,
+      "failed": 7,
+      "test_targets": 2,
+      "failed_names": [
+        "mean_of_negative_values",
+        "mean_of_simple_values",
+        "median_of_even_list",
+        "median_of_odd_list",
+        "parse_iso_date_accepts_valid_date",
+        "slugify_basic_title",
+        "slugify_collapses_separators_and_trims"
+      ],
+      "exit_code": 101,
+      "ms": 2952.906,
+      "timed_out": false,
+      "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 12 tests\n.. 2/12\nmean_of_negative_values --- FAILED\n. 4/12\nmedian_of_even_list --- FAILED\nparse_iso_date_accepts_valid_date --- FAILED\n. 7/12\nmean_of_simple_values --- FAILED\nslugify_basic_title --- FAILED\n. 10/12\nslugify_collapses_separators_and_trims --- FAILED\nmedian_of_odd_list --- FAILED\n\nfailures:\n\n---- mean_of_negative_values stdout ----\n\nthread 'mean_of_negative_values' (29564) panicked at tests\\behavior.rs:17:5:\nassertion `left == right` failed\n  left: Some(0)\n right: Some(-3)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n---- median_of_even_list stdout ----\n\nthread 'median_of_even_list' (24272) panicked at tests\\behavior.rs:51:5:\nassertion `left == right` failed\n  left: Some(0)\n right: Some(2)\n\n---- parse_iso_date_accepts_valid_date stdout ----\n\nthread 'parse_iso_date_accepts_valid_date' (31296) panicked at tests\\behavior.rs:63:5:\nassertion `left == right` failed\n  left: None\n right: Some((2026, 11, 9))\n\n---- mean_of_simple_values stdout ----\n\nthread 'mean_of_simple_values' (16968) panicked at tests\\behavior.rs:12:5:\nassertion `left == right` failed\n  left: Some(0)\n right: Some(2)\n\n---- slugify_basic_title stdout ----\n\nthread 'slugify_basic_title' (31380) panicked at tests\\behavior.rs:29:5:\nassertion `left == right` failed\n  left: \"Hello, World!\"\n right: \"hello-world\"\n\n---- slugify_collapses_separators_and_trims stdout ----\n\nthread 'slugify_collapses_separators_and_trims' (15520) panicked at tests\\behavior.rs:34:5:\nassertion `left == right` failed\n  left: \"  Rust--2024  \"\n right: \"rust-2024\"\n\n---- median_of_odd_list stdout ----\n\nthread 'median_of_odd_list' (18232) panicked at tests\\behavior.rs:46:5:\nassertion `left == right` failed\n  left: Some(0)\n right: Some(3)\n\n\nfailures:\n    mean_of_negative_values\n    mean_of_simple_values\n    median_of_even_list\n    median_of_odd_list\n    parse_iso_date_accepts_valid_date\n    slugify_basic_title\n    slugify_collapses_separators_and_trims\n\ntest result: FAILED. 5 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr_tail": "error: test failed, to rerun pass `--test behavior`\n"
+    },
+    "cargo_env": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "instructions": "Spawner 3 subagents (description contenant le marqueur), leur donner le prompt exact, attendre les réponses DONE, puis lancer --phase collect."
+  },
+  "timings": {
+    "total_ms_from_start": 100664,
+    "test_ms": 3201.443,
+    "integration_ms": 1.042
+  },
+  "agents": [
+    {
+      "agent": "agent-1",
+      "marker": "S8MVP0C-AGENT-1",
+      "tasks": [
+        "t1",
+        "t2"
+      ],
+      "receipt_status": "done",
+      "changed": [
+        {
+          "path": "src/stats.rs",
+          "base_sha256": "e966ed062d48c11216870965f7ad321856d109bcab619b2c1c5231c8cfcc686d",
+          "final_sha256": "1602452c671ac5fa453201f392e25e33dcd1e711bd89779d79f5af6575926685",
+          "changed_vs_base": true,
+          "present": true
+        },
+        {
+          "path": "src/text.rs",
+          "base_sha256": "0786f5608462c179e8f84f5cdef87f0e707f9ee341392f881f5c37b56487d183",
+          "final_sha256": "b4f2869f4797155cbabb6747131f9b718de3d0abccca4276452a4042dbb76c1f",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "edit_ms": null,
+      "wait_ms": 38197,
+      "conflicts": null,
+      "attempts": null
+    },
+    {
+      "agent": "agent-2",
+      "marker": "S8MVP0C-AGENT-2",
+      "tasks": [
+        "t3"
+      ],
+      "receipt_status": "done",
+      "changed": [
+        {
+          "path": "src/stats.rs",
+          "base_sha256": "e966ed062d48c11216870965f7ad321856d109bcab619b2c1c5231c8cfcc686d",
+          "final_sha256": "eee36bbc0a66ca548ee41794671fa18dd69d09822c7e9696a1152c019cfe4c7c",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "edit_ms": null,
+      "wait_ms": 34780,
+      "conflicts": null,
+      "attempts": null
+    },
+    {
+      "agent": "agent-3",
+      "marker": "S8MVP0C-AGENT-3",
+      "tasks": [
+        "t4"
+      ],
+      "receipt_status": "done",
+      "changed": [
+        {
+          "path": "src/dates.rs",
+          "base_sha256": "6cd6d6eb6546dfd7f72b2b9fcb1a8395593537955d8d2cb75cb4351b36f17508",
+          "final_sha256": "c736cdbdf198957322804a49c695d775ea3bd3a9d6da0090e5641f448b8bc454",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "edit_ms": null,
+      "wait_ms": 39549,
+      "conflicts": null,
+      "attempts": null
+    }
+  ],
+  "receipts": {
+    "agent-1": {
+      "schema_version": 1,
+      "kind": "s8-mvp0c-agent-receipt",
+      "agent": "agent-1",
+      "task_ids": [
+        "t1",
+        "t2"
+      ],
+      "changed": [
+        {
+          "path": "src/stats.rs",
+          "base_sha256": "e966ed062d48c11216870965f7ad321856d109bcab619b2c1c5231c8cfcc686d",
+          "final_sha256": "1602452c671ac5fa453201f392e25e33dcd1e711bd89779d79f5af6575926685",
+          "changed_vs_base": true,
+          "present": true
+        },
+        {
+          "path": "src/text.rs",
+          "base_sha256": "0786f5608462c179e8f84f5cdef87f0e707f9ee341392f881f5c37b56487d183",
+          "final_sha256": "b4f2869f4797155cbabb6747131f9b718de3d0abccca4276452a4042dbb76c1f",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "status": "done",
+      "created_at": "2026-11-09T02:15:50.101Z",
+      "written_by": "write-receipt.mjs"
+    },
+    "agent-2": {
+      "schema_version": 1,
+      "kind": "s8-mvp0c-agent-receipt",
+      "agent": "agent-2",
+      "task_ids": [
+        "t3"
+      ],
+      "changed": [
+        {
+          "path": "src/stats.rs",
+          "base_sha256": "e966ed062d48c11216870965f7ad321856d109bcab619b2c1c5231c8cfcc686d",
+          "final_sha256": "eee36bbc0a66ca548ee41794671fa18dd69d09822c7e9696a1152c019cfe4c7c",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "status": "done",
+      "created_at": "2026-11-09T02:15:46.684Z",
+      "written_by": "write-receipt.mjs"
+    },
+    "agent-3": {
+      "schema_version": 1,
+      "kind": "s8-mvp0c-agent-receipt",
+      "agent": "agent-3",
+      "task_ids": [
+        "t4"
+      ],
+      "changed": [
+        {
+          "path": "src/dates.rs",
+          "base_sha256": "6cd6d6eb6546dfd7f72b2b9fcb1a8395593537955d8d2cb75cb4351b36f17508",
+          "final_sha256": "c736cdbdf198957322804a49c695d775ea3bd3a9d6da0090e5641f448b8bc454",
+          "changed_vs_base": true,
+          "present": true
+        }
+      ],
+      "status": "done",
+      "created_at": "2026-11-09T02:15:51.453Z",
+      "written_by": "write-receipt.mjs"
+    }
+  },
+  "integration": {
+    "conflicts": [],
+    "merge_ms": 0.745,
+    "merges": 4,
+    "ms": 1.042
+  },
+  "tests": {
+    "green": true,
+    "passed": 12,
+    "failed": 0,
+    "test_targets": 3,
+    "failed_names": [],
+    "exit_code": 0,
+    "ms": 3201.335,
+    "timed_out": false,
+    "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 12 tests\n............\ntest result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+    "stderr_tail": ""
+  },
+  "tokens": {
+    "measured": true,
+    "source": "tools/agent-usage/usage.mjs (+ descripteurs de session DSH pour l’attribution)",
+    "command": "node tools/agent-usage/usage.mjs --json --workspace D:\\App\\Ravum",
+    "dsh_home": "C:\\Users\\barat\\.dsh",
+    "workspace_slug": "--D-App-Ravum--",
+    "usage_generated_at": "2026-11-09T02:16:54.743Z",
+    "window": {
+      "start_ms": 1794190511904,
+      "end_ms": 1794190612568,
+      "tolerance_ms": 120000
+    },
+    "markers": [
+      {
+        "agent": "agent-1",
+        "marker": "S8MVP0C-AGENT-1"
+      },
+      {
+        "agent": "agent-2",
+        "marker": "S8MVP0C-AGENT-2"
+      },
+      {
+        "agent": "agent-3",
+        "marker": "S8MVP0C-AGENT-3"
+      }
+    ],
+    "agents": {
+      "agent-1": {
+        "marker": "S8MVP0C-AGENT-1",
+        "sessions": [
+          {
+            "session": "f14078bb-7918-46aa-bde7-be51e088da79",
+            "delegationDepth": 1,
+            "origin": "subagent",
+            "parentSession": "session-fd6a9a50-0b31-4959-a9d1-b5fd7c8bf8d9",
+            "createdAt": 1794190521352,
+            "label": "S8MVP0C-AGENT-1 A3",
+            "assistantMessages": 8,
+            "wallMs": 36422,
+            "inputTokens": 18895,
+            "outputTokens": 3419,
+            "totalTokens": 993066,
+            "cacheReadTokens": 970752,
+            "processedTokens": 993066,
+            "models": [
+              {
+                "model": "deepseek-v4.1-flash",
+                "messages": 8,
+                "inputTokens": 18895,
+                "outputTokens": 3419,
+                "cacheReadTokens": 970752
+              }
+            ],
+            "matched_via": "subagent/descriptor.label"
+          }
+        ],
+        "totals": {
+          "sessions": 1,
+          "assistantMessages": 8,
+          "wallMs": 36422,
+          "inputTokens": 18895,
+          "outputTokens": 3419,
+          "totalTokens": 993066,
+          "cacheReadTokens": 970752,
+          "processedTokens": 993066
+        }
+      },
+      "agent-2": {
+        "marker": "S8MVP0C-AGENT-2",
+        "sessions": [
+          {
+            "session": "2ea3be04-f581-47f1-8136-ee720e1f7996",
+            "delegationDepth": 1,
+            "origin": "subagent",
+            "parentSession": "session-fd6a9a50-0b31-4959-a9d1-b5fd7c8bf8d9",
+            "createdAt": 1794190521354,
+            "label": "S8MVP0C-AGENT-2 A3",
+            "assistantMessages": 7,
+            "wallMs": 31327,
+            "inputTokens": 18799,
+            "outputTokens": 2534,
+            "totalTokens": 863061,
+            "cacheReadTokens": 841728,
+            "processedTokens": 863061,
+            "models": [
+              {
+                "model": "deepseek-v4.1-flash",
+                "messages": 7,
+                "inputTokens": 18799,
+                "outputTokens": 2534,
+                "cacheReadTokens": 841728
+              }
+            ],
+            "matched_via": "subagent/descriptor.label"
+          }
+        ],
+        "totals": {
+          "sessions": 1,
+          "assistantMessages": 7,
+          "wallMs": 31327,
+          "inputTokens": 18799,
+          "outputTokens": 2534,
+          "totalTokens": 863061,
+          "cacheReadTokens": 841728,
+          "processedTokens": 863061
+        }
+      },
+      "agent-3": {
+        "marker": "S8MVP0C-AGENT-3",
+        "sessions": [
+          {
+            "session": "cda8de2b-4077-4fe3-9519-eb656599af25",
+            "delegationDepth": 1,
+            "origin": "subagent",
+            "parentSession": "session-fd6a9a50-0b31-4959-a9d1-b5fd7c8bf8d9",
+            "createdAt": 1794190521355,
+            "label": "S8MVP0C-AGENT-3 A3",
+            "assistantMessages": 7,
+            "wallMs": 36352,
+            "inputTokens": 20154,
+            "outputTokens": 3670,
+            "totalTokens": 869520,
+            "cacheReadTokens": 845696,
+            "processedTokens": 869520,
+            "models": [
+              {
+                "model": "deepseek-v4.1-flash",
+                "messages": 7,
+                "inputTokens": 20154,
+                "outputTokens": 3670,
+                "cacheReadTokens": 845696
+              }
+            ],
+            "matched_via": "subagent/descriptor.label"
+          }
+        ],
+        "totals": {
+          "sessions": 1,
+          "assistantMessages": 7,
+          "wallMs": 36352,
+          "inputTokens": 20154,
+          "outputTokens": 3670,
+          "totalTokens": 869520,
+          "cacheReadTokens": 845696,
+          "processedTokens": 869520
+        }
+      }
+    },
+    "agents_matched": 3,
+    "all_agents_matched": true,
+    "unmatched_sessions": [],
+    "unmatched_count": 0,
+    "limitations": [
+      "tokens = compteurs enregistrés par le harnais DSH par message assistant ; aucune estimation",
+      "cacheReadTokens est déclaré par l’outil comme sous-ensemble d’inputTokens ; processedTokens = input+output+cacheRead (formule de usage.mjs)",
+      "wallMs d’une session couvre le premier au dernier événement, temps d’inactivité inclus",
+      "aucun coût monétaire n’est exposé par le harnais",
+      "une session non attribuée n’est jamais répartie au hasard : elle est listée à part",
+      "le marqueur doit être présent dans la description de spawn (ou le premier message utilisateur)"
+    ]
+  },
+  "verification": {
+    "reference_content_comparison": {
+      "note": "informatif en live : les agents réels écrivent leur propre code, différent de la référence scriptée",
+      "ok": false,
+      "mismatches": [
+        {
+          "path": "src/dates.rs",
+          "expected_sha256": "e65cd1cf55f1a1cb69cc353c956f5b2a55c7e4a4c17286022bf0e1d15185a5a3",
+          "actual_sha256": "c736cdbdf198957322804a49c695d775ea3bd3a9d6da0090e5641f448b8bc454"
+        },
+        {
+          "path": "src/stats.rs",
+          "expected_sha256": "7809495fa2746ad00f22d81a91f50b59b987330f57d26cf4c599295463524d10",
+          "actual_sha256": "7f15d72694070e3f89641fd86ab59aca9c07f29d304e23427469fa04b4160fe3"
+        },
+        {
+          "path": "src/text.rs",
+          "expected_sha256": "2be4099236a25bda2ce945d4c958b415c31c1724589f75896964cdec1542aee0",
+          "actual_sha256": "b4f2869f4797155cbabb6747131f9b718de3d0abccca4276452a4042dbb76c1f"
+        }
+      ]
+    },
+    "scripted_markers": {
+      "note": "informatif en live : marqueurs de l’implémentation scriptée uniquement",
+      "markers": {
+        "t1": {
+          "present": false,
+          "missing": [
+            "Some(values.iter().sum::<i64>() / values.len() as i64)"
+          ]
+        },
+        "t2": {
+          "present": false,
+          "missing": [
+            "let mut pending_sep = false;",
+            "out.push(ch.to_ascii_lowercase());"
+          ]
+        },
+        "t3": {
+          "present": false,
+          "missing": [
+            "Some((sorted[middle - 1] + sorted[middle]) / 2)"
+          ]
+        },
+        "t4": {
+          "present": false,
+          "missing": [
+            "Some((year, month, day))"
+          ]
+        }
+      }
+    },
+    "protected_ok": true,
+    "single_writer_sha_ok": true,
+    "lost_writes": [],
+    "multi_writer_paths": [
+      {
+        "path": "src/stats.rs",
+        "writers": [
+          "agent-1",
+          "agent-2"
+        ]
+      }
+    ],
+    "agent_change_checks": [
+      {
+        "agent": "agent-1",
+        "checks": [
+          {
+            "path": "src/stats.rs",
+            "writers": [
+              "agent-1",
+              "agent-2"
+            ],
+            "present": true,
+            "changed_vs_base": true,
+            "single_writer": false,
+            "recorded_final_sha256": "1602452c671ac5fa453201f392e25e33dcd1e711bd89779d79f5af6575926685",
+            "actual_sha256": "7f15d72694070e3f89641fd86ab59aca9c07f29d304e23427469fa04b4160fe3",
+            "sha_match": null
+          },
+          {
+            "path": "src/text.rs",
+            "writers": [
+              "agent-1"
+            ],
+            "present": true,
+            "changed_vs_base": true,
+            "single_writer": true,
+            "recorded_final_sha256": "b4f2869f4797155cbabb6747131f9b718de3d0abccca4276452a4042dbb76c1f",
+            "actual_sha256": "b4f2869f4797155cbabb6747131f9b718de3d0abccca4276452a4042dbb76c1f",
+            "sha_match": true
+          }
+        ],
+        "all_present": true
+      },
+      {
+        "agent": "agent-2",
+        "checks": [
+          {
+            "path": "src/stats.rs",
+            "writers": [
+              "agent-1",
+              "agent-2"
+            ],
+            "present": true,
+            "changed_vs_base": true,
+            "single_writer": false,
+            "recorded_final_sha256": "eee36bbc0a66ca548ee41794671fa18dd69d09822c7e9696a1152c019cfe4c7c",
+            "actual_sha256": "7f15d72694070e3f89641fd86ab59aca9c07f29d304e23427469fa04b4160fe3",
+            "sha_match": null
+          }
+        ],
+        "all_present": true
+      },
+      {
+        "agent": "agent-3",
+        "checks": [
+          {
+            "path": "src/dates.rs",
+            "writers": [
+              "agent-3"
+            ],
+            "present": true,
+            "changed_vs_base": true,
+            "single_writer": true,
+            "recorded_final_sha256": "c736cdbdf198957322804a49c695d775ea3bd3a9d6da0090e5641f448b8bc454",
+            "actual_sha256": "c736cdbdf198957322804a49c695d775ea3bd3a9d6da0090e5641f448b8bc454",
+            "sha_match": true
+          }
+        ],
+        "all_present": true
+      }
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "problems": []
+  },
+  "limitations": [
+    "les tokens proviennent uniquement des sessions DSH attribuées par marqueur ; aucune estimation",
+    "si --usage auto et qu’une session de sous-agent n’est pas attribuée, la campagne est marquée incomplète",
+    "le temps total est mesuré du démarrage de la préparation à la fin de la collecte (inclut la supervision humaine)",
+    "CPU/RAM ne sont pas échantillonnés en mode live (les subagents sont pilotés par le Lead)"
+  ]
+}

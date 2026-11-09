@@ -447,7 +447,79 @@ chaque campagne sont attribués à une session** (tokens non nuls et non
 respecté**. Un chiffre de tokens sans session attribuée doit être traité comme
 `UNKNOWN`, jamais comme une mesure.
 
-## 9. Fichiers et commandes
+## 9. Campagne réelle avec agents IA (exécutée le 2026-11-09)
+
+Camapanée **réelle** exécutée avec 27 subagents DSH (3 par campagne × 9 campagnes),
+même modèle/fournisseur pour tous (`deepseek-v4.1-flash`), même fixture, mêmes tâches,
+même protocole que la section 5, ordre pré-enregistré `A1 B1 C1 · C2 B2 A2 · A3 B3 C3`.
+Le Lead a spawné chaque agent avec le prompt généré (marqueur `S8MVP0C-AGENT-<n>`
+dans la description), attendu `DONE`, puis collecté et agrégé. **Aucun token n'est
+estimé** : tous proviennent des sessions DSH attribuées par marqueur (3/3 agents
+attribués, 0 session non attribuée sur les 9 campagnes).
+
+### 9.1 Résultats (n = 3 par stratégie ; ms, temps total préparation → collecte)
+
+| Stratégie | Campagnes | Médiane | Min–max | Échantillons |
+|---|---|---:|---:|---|
+| **A — copies privées + intégration** | 3 | **111 110** | 100 664–208 694 | 111 110 / 208 694 / 100 664 |
+| **B — répertoire partagé + garde** | 3 | **237 674** | 126 224–286 275 | 237 674 / 286 275 / 126 224 |
+| **C — séquentiel** | 3 | **528 481** | 269 594–611 003 | 611 003 / 528 481 / 269 594 |
+
+- **Tests** : 12/12 verts dans **9/9** campagnes ; **0 changement perdu**, fichiers
+  protégés intacts dans **9/9** ; reçus complets, éditions acceptées présentes.
+- **Tokens traités par campagne** (somme des 3 agents, `processedTokens`) :
+  A 3 827 776 / 4 475 396 / 2 725 647 ; B 3 889 154 / 3 493 947 / 4 297 650 ;
+  C 2 976 671 / 3 128 867 / 3 500 664. **Médianes : A ≈ 3,83 M, B ≈ 3,89 M, C ≈ 3,13 M**.
+- **Messages assistant par campagne** (proxy d'itérations) : A 30/34/22 ; B 31/28/33 ;
+  C 24/25/28.
+- **Durée d'agent la plus longue par campagne** : A 76,7/107,2/36,4 s ; B 76,5/55,6/100,3 s ;
+  C 158,1/115,0/69,6 s.
+
+### 9.2 Lecture et verdict
+
+- Classement par médiane : **A < B < C**. Le **répertoire partagé (B) n'est toujours
+  pas plus rapide** que les copies privées (A) : +114 % de temps médian, et A gagne
+  sur 3 répétitions sur 3.
+- C (séquentiel) est le plus lent (×4,8 vs A) : par construction, les trois tours
+  d'agents sont sérialisés, et l'attente d'orchestration du Lead s'y ajoute ; ce
+  n'est pas un défaut du harnais mais la définition de la stratégie.
+- Les **tokens sont du même ordre** entre stratégies (médianes 3,1–3,9 M traités par
+  campagne) : la différence de temps ne vient pas d'un surcoût de tokens massif mais
+  de la sérialisation/attente.
+- **Aucune supériorité du workspace partagé n'est revendiquée** : avec ce protocole,
+  sur cette fixture et ce modèle, les copies privées + intégration gagnent.
+- Comparaison avec le pilote scripté (§7) et MVP-0b : les valeurs absolues ne sont
+  pas comparables (agents LLM : latence de tours 30–160 s, supervision du Lead
+  incluse). Seul le **classement relatif** et les invariants (0 perte, tests verts)
+  sont comparés ; le classement A < C < B du pilote n'est pas reproduit ici
+  (C est dernier en réel), ce qui confirme que la stratégie C ne doit pas être
+  jugée sur un modèle scripté sans latence.
+
+### 9.3 Limites
+
+- n = 3 par stratégie, une seule fixture (3 modules, 4 tâches), un seul modèle et
+  fournisseur ; machine partagée ; variabilité forte (A : 100,7–208,7 s).
+- `total_ms` inclut la préparation, les tours LLM et la supervision d'orchestration
+  du Lead ; le temps de supervision n'est pas ventilé séparément (pas de `done.json`
+  par agent fourni). Les tokens DSH incluent les lectures de cache
+  (`processedTokens = input + output + cacheRead`) ; aucun coût monétaire n'est
+  exposé, donc aucun prix n'est inventé.
+- A = copies privées + fusion en mémoire (pas de worktrees Git, contrainte « aucune
+  commande git mutante ») ; B = écritures directes + garde de version (pas le
+  coordinateur transactionnel complet) ; C = séquentiel strict.
+- Un agent (C1/B1) a exécuté ponctuellement `rustc --emit=metadata` pour se vérifier,
+  malgré la consigne « pas de cargo » : écart de protocole mineur, signalé, qui ne
+  change pas la comparaison (aucun `cargo test`).
+
+### 9.4 Preuves
+
+- Campagnes : `evidence/mvp0c-s8-live-{A1,B1,C1,A2,B2,C2,A3,B3,C3}-2026-11-09.json`.
+- Agrégat : `evidence/mvp0c-s8-live-summary-2026-11-09.json`.
+- Chaque preuve contient : identité des agents/sessions, compteurs de tokens bruts,
+  décisions/reçus, intégration, `cargo test`, vérifications de perte/protection,
+  problèmes et limites.
+
+## 10. Fichiers et commandes
 
 - `benchmarks/s8-mvp0c/fixture/**` — fixture Rust réelle (tests rouges → verts).
 - `benchmarks/s8-mvp0c/lib/tasks.mjs` — corpus pré-enregistré.
