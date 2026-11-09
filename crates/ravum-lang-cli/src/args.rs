@@ -120,12 +120,11 @@ fn default_path() -> PathBuf {
     PathBuf::from(".")
 }
 
-fn parse_path_argument(
-    arg: &str,
-    path: &mut Option<PathBuf>,
-) -> Result<(), String> {
+fn parse_path_argument(arg: &str, path: &mut Option<PathBuf>) -> Result<(), String> {
     if path.is_some() {
-        return Err(format!("unexpected argument `{arg}` (only one PATH is accepted)"));
+        return Err(format!(
+            "unexpected argument `{arg}` (only one PATH is accepted)"
+        ));
     }
     *path = Some(PathBuf::from(arg));
     Ok(())
@@ -184,9 +183,8 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
 }
 
 fn parse_profile(value: &str) -> Result<Profile, String> {
-    Profile::parse(value).ok_or_else(|| {
-        format!("invalid profile `{value}`; expected `core`, `pure` or `rt`")
-    })
+    Profile::parse(value)
+        .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure` or `rt`"))
 }
 
 fn parse_build(rest: &[String]) -> Result<Command, String> {

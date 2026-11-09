@@ -17,8 +17,13 @@ pub fn run(path: &Path, json_output: bool, profile: Profile, locked: bool) -> i3
         let meta = json::ReportMeta {
             command: "check",
             success,
-            exit_code: if success { util::EXIT_OK } else { util::EXIT_FAIL },
-            target_kind: if frontend.pkg.crate_kind == Some(ravum_lang_sema::loader::CrateKind::File)
+            exit_code: if success {
+                util::EXIT_OK
+            } else {
+                util::EXIT_FAIL
+            },
+            target_kind: if frontend.pkg.crate_kind
+                == Some(ravum_lang_sema::loader::CrateKind::File)
             {
                 "file"
             } else {

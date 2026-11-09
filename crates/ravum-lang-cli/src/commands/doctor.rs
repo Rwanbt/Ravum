@@ -42,7 +42,9 @@ pub fn run(json_output: bool) -> i32 {
         .map(|meta| meta.is_dir() && !meta.file_type().is_symlink())
         .unwrap_or(false);
     let cache_bytes = if cache_present {
-        util::dir_stats(&cache).map(|stats| stats.bytes).unwrap_or(0)
+        util::dir_stats(&cache)
+            .map(|stats| stats.bytes)
+            .unwrap_or(0)
     } else {
         0
     };
@@ -53,10 +55,8 @@ pub fn run(json_output: bool) -> i32 {
     let (checker, checked) = probe_checker();
     let codegen = probe_codegen(checked);
 
-    let all_ready =
-        parser == Stage::Ready && checker == Stage::Ready && codegen == Stage::Ready;
-    let any_error =
-        parser == Stage::Error || checker == Stage::Error || codegen == Stage::Error;
+    let all_ready = parser == Stage::Ready && checker == Stage::Ready && codegen == Stage::Ready;
+    let any_error = parser == Stage::Error || checker == Stage::Error || codegen == Stage::Error;
     let verdict = if !rustc_present {
         "blocked"
     } else if any_error {
@@ -129,11 +129,7 @@ pub fn run(json_output: bool) -> i32 {
             ravum_lang_syntax::LANGUAGE_EDITION,
             ravum_lang_sema::loader::MANIFEST_EDITION
         );
-        println!(
-            "os: {} / {}",
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        );
+        println!("os: {} / {}", std::env::consts::OS, std::env::consts::ARCH);
         println!("cwd: {}", util::pretty_path(&cwd));
         println!("package root: {}", util::pretty_path(&package_root));
         println!(
@@ -220,7 +216,11 @@ fn probe_checker() -> (Stage, Option<CheckedProgram>) {
     // A real checker may legitimately reject the empty probe program (for
     // example `E-RES-MAIN-MISSING`); only its explicit stub marker means the
     // stage is not implemented.
-    let stage = if pending { Stage::Pending } else { Stage::Ready };
+    let stage = if pending {
+        Stage::Pending
+    } else {
+        Stage::Ready
+    };
     (stage, result.checked)
 }
 

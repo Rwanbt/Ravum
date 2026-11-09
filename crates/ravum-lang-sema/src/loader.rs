@@ -319,11 +319,7 @@ fn load_single_file(path: &Path) -> LoadedPackage {
             synthetic: &mut synthetic,
         };
         load_crate_root(&mut ctx, &canonical).map(|module| Program {
-            file: ctx
-                .file_ids
-                .get(&canonical)
-                .copied()
-                .unwrap_or(0),
+            file: ctx.file_ids.get(&canonical).copied().unwrap_or(0),
             root: module,
         })
     };
@@ -389,8 +385,12 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
             _ => {}
         }
     }
-    let manifest_text = match read_text_limited(&manifest_path, MAX_FILE_SIZE, "E-MOD-MANIFEST", &mut diags)
-    {
+    let manifest_text = match read_text_limited(
+        &manifest_path,
+        MAX_FILE_SIZE,
+        "E-MOD-MANIFEST",
+        &mut diags,
+    ) {
         Some(t) => t,
         None => {
             if !diags.has_errors() {
@@ -455,7 +455,8 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
                 digest: p.digest.clone(),
             })
             .collect();
-        out.dependencies.sort_by(|a, b| a.name.cmp(&b.name).then(a.version.cmp(&b.version)));
+        out.dependencies
+            .sort_by(|a, b| a.name.cmp(&b.name).then(a.version.cmp(&b.version)));
         out.dependencies_digest = aggregate_dependencies_digest(&out.dependencies);
     }
 
@@ -534,7 +535,11 @@ fn parse_toml(text: &str, file: FileId) -> (ParsedToml, DiagnosticBag) {
         let lead = body.len() - body.trim_start().len();
         let start = line_start.saturating_add(lead as u32);
         let end = start.saturating_add(trimmed.len() as u32);
-        let line_span = Span::new(file, start.min(bytes.len() as u32), end.min(bytes.len() as u32));
+        let line_span = Span::new(
+            file,
+            start.min(bytes.len() as u32),
+            end.min(bytes.len() as u32),
+        );
 
         if trimmed.starts_with('[') {
             if !trimmed.ends_with(']') || trimmed.len() < 2 {
@@ -678,10 +683,8 @@ fn parse_toml_value(
         let mut entries = Vec::new();
         if !inner.trim().is_empty() {
             for (idx, part) in split_top_level_commas(inner).into_iter().enumerate() {
-                let part_start = base
-                    + 1
-                    + inner.find(part).unwrap_or(0) as u32
-                    + if idx == 0 { 0 } else { 0 };
+                let part_start =
+                    base + 1 + inner.find(part).unwrap_or(0) as u32 + if idx == 0 { 0 } else { 0 };
                 let trimmed = part.trim();
                 if trimmed.is_empty() {
                     continue;
@@ -706,12 +709,13 @@ fn parse_toml_value(
                 }
                 // `base` is only used for diagnostics; derive the value offset
                 // from the original slice.
-                let value_offset = base
-                    + 1
-                    + inner.find(part).unwrap_or(0) as u32
-                    + (part.len() - v.len()) as u32;
+                let value_offset =
+                    base + 1 + inner.find(part).unwrap_or(0) as u32 + (part.len() - v.len()) as u32;
                 let (value, _) = parse_basic_string(v, file, value_offset, diags)?;
-                if entries.iter().any(|(existing, _): &(String, TomlValue)| existing == k) {
+                if entries
+                    .iter()
+                    .any(|(existing, _): &(String, TomlValue)| existing == k)
+                {
                     diags.push(Diagnostic::error(
                         "E-MOD-MANIFEST",
                         Span::new(file, part_start, part_start + part.len() as u32),
@@ -1048,11 +1052,7 @@ pub fn is_reserved_windows_component(component: &str) -> bool {
         // Empty component or trailing dot/space.
         return true;
     }
-    let base = trimmed
-        .split('.')
-        .next()
-        .unwrap_or("")
-        .to_ascii_uppercase();
+    let base = trimmed.split('.').next().unwrap_or("").to_ascii_uppercase();
     if matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
         return true;
     }
@@ -1156,9 +1156,12 @@ fn collect_dependencies(
         }
 
         let target_manifest_path = dep_dir.join(MANIFEST_NAME);
-        let Some(text) =
-            read_text_limited(&target_manifest_path, MAX_FILE_SIZE, "E-MOD-MANIFEST", diags)
-        else {
+        let Some(text) = read_text_limited(
+            &target_manifest_path,
+            MAX_FILE_SIZE,
+            "E-MOD-MANIFEST",
+            diags,
+        ) else {
             graph.failed = true;
             continue;
         };
@@ -1234,7 +1237,10 @@ fn collect_dependencies(
                 diags.push(Diagnostic::error(
                     "E-MOD-DEPENDENCY",
                     dep.span,
-                    format!("dependency `{}`: `src/lib.rv` is not a regular file", target.name),
+                    format!(
+                        "dependency `{}`: `src/lib.rv` is not a regular file",
+                        target.name
+                    ),
                 ));
                 graph.failed = true;
                 continue;
@@ -1273,15 +1279,7 @@ fn collect_dependencies(
         graph.by_dir.insert(dep_dir.clone(), index);
         graph.by_name.insert(target.name.clone(), index);
         stack.push((target.name.clone(), dep_dir.clone()));
-        collect_dependencies(
-            &dep_dir,
-            &target,
-            depth + 1,
-            stack,
-            graph,
-            sources,
-            diags,
-        );
+        collect_dependencies(&dep_dir, &target, depth + 1, stack, graph, sources, diags);
         stack.pop();
     }
 }
@@ -1329,9 +1327,7 @@ fn resolve_dependency_dir(
     }
     let depth = path
         .components()
-        .filter(|component| {
-            matches!(component, Component::Normal(_) | Component::ParentDir)
-        })
+        .filter(|component| matches!(component, Component::Normal(_) | Component::ParentDir))
         .count();
     if depth > MAX_DEPENDENCY_PATH_DEPTH {
         diags.push(Diagnostic::error(
@@ -1729,9 +1725,7 @@ fn collect_rv_files(
             if !collect_rv_files(&path, &child_rel, out, diags) {
                 return false;
             }
-        } else if meta.is_file()
-            && path.extension().and_then(|e| e.to_str()) == Some("rv")
-        {
+        } else if meta.is_file() && path.extension().and_then(|e| e.to_str()) == Some("rv") {
             out.push(child_rel);
         }
     }
@@ -1796,15 +1790,12 @@ fn update_lockfile(
             ));
             return LockfileState::Invalid;
         }
-        Ok(meta) if meta.is_file() => match read_text_limited(
-            &path,
-            MAX_LOCKFILE_SIZE,
-            "E-MOD-LOCK",
-            diags,
-        ) {
-            Some(text) => Some(text),
-            None => return LockfileState::Invalid,
-        },
+        Ok(meta) if meta.is_file() => {
+            match read_text_limited(&path, MAX_LOCKFILE_SIZE, "E-MOD-LOCK", diags) {
+                Some(text) => Some(text),
+                None => return LockfileState::Invalid,
+            }
+        }
         Ok(_) => {
             diags.push(Diagnostic::error(
                 "E-MOD-LOCK",
@@ -2176,9 +2167,7 @@ fn expand_module(
                 kept.push(item);
             }
             ItemKind::ModDecl(decl) => {
-                if let Some(mut loaded) =
-                    resolve_module_file(ctx, &decl, file_dir, inline_prefix)
-                {
+                if let Some(mut loaded) = resolve_module_file(ctx, &decl, file_dir, inline_prefix) {
                     loaded.name = Some(decl.name.clone());
                     item.kind = ItemKind::Mod(loaded);
                     kept.push(item);
@@ -2322,7 +2311,10 @@ fn resolve_module_file(
                 ctx.diags,
                 "E-MOD-MISSING",
                 decl.name.span,
-                format!("cannot resolve module `{name}` (`{}`): {e}", candidate.display()),
+                format!(
+                    "cannot resolve module `{name}` (`{}`): {e}",
+                    candidate.display()
+                ),
             );
             return None;
         }
@@ -2474,7 +2466,10 @@ fn read_text_limited(
                 diags,
                 "E-MOD-PATH",
                 Span::dummy(),
-                format!("`{}` is a symbolic link; refusing to read it", path.display()),
+                format!(
+                    "`{}` is a symbolic link; refusing to read it",
+                    path.display()
+                ),
             );
             return None;
         }
@@ -2589,11 +2584,7 @@ fn path_is_under(path: &Path, base: &Path) -> bool {
 /// any symbolic-link component. This is required in addition to canonical
 /// escape checks: a symlink inside `src/` pointing to another `src/` directory
 /// would otherwise be silently accepted.
-fn check_lexical_no_symlinks(
-    base: &Path,
-    target: &Path,
-    diags: &mut DiagnosticBag,
-) -> bool {
+fn check_lexical_no_symlinks(base: &Path, target: &Path, diags: &mut DiagnosticBag) -> bool {
     let Ok(relative) = target.strip_prefix(base) else {
         return true;
     };
@@ -2631,11 +2622,7 @@ fn check_lexical_no_symlinks(
 
 /// Walk from `base` to `target` (both canonical) and return an error if any
 /// component in between is a symbolic link. Returns the target on success.
-fn check_path_no_symlinks(
-    base: &Path,
-    target: &Path,
-    diags: &mut DiagnosticBag,
-) -> Option<()> {
+fn check_path_no_symlinks(base: &Path, target: &Path, diags: &mut DiagnosticBag) -> Option<()> {
     let Ok(relative) = target.strip_prefix(base) else {
         return Some(());
     };
@@ -2731,24 +2718,22 @@ struct Sha256 {
 }
 
 const SHA256_K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-    0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-    0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-    0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-    0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-    0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-    0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
 impl Sha256 {
     fn new() -> Self {
         Self {
             state: [
-                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
-                0x1f83d9ab, 0x5be0cd19,
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+                0x5be0cd19,
             ],
             buffer: [0u8; 64],
             buffered: 0,
@@ -2969,10 +2954,7 @@ mod tests {
 
     #[test]
     fn manifest_accepts_path_dependency() {
-        let src = manifest(
-            "app",
-            "\n[dependencies]\nutil = { path = \"../util\" }\n",
-        );
+        let src = manifest("app", "\n[dependencies]\nutil = { path = \"../util\" }\n");
         let (manifest, diags) = parse_manifest(&src, 0);
         assert!(!diags.has_errors(), "{:?}", codes(&diags));
         let manifest = manifest.expect("manifest");
@@ -2983,7 +2965,10 @@ mod tests {
 
     #[test]
     fn manifest_rejects_unknown_keys_and_sections() {
-        let src = manifest("app", "\n[dependencies]\nutil = { path = \"../util\", version = \"1\" }\n");
+        let src = manifest(
+            "app",
+            "\n[dependencies]\nutil = { path = \"../util\", version = \"1\" }\n",
+        );
         let (_, diags) = parse_manifest(&src, 0);
         assert!(codes(&diags).contains(&"E-MOD-DEPENDENCY".to_string()));
 
@@ -3042,13 +3027,17 @@ mod tests {
 
     #[test]
     fn reserved_windows_components_are_detected() {
-        for name in ["CON", "con", "Con.rv", "PRN", "AUX", "NUL", "COM1", "LPT9", "aux.txt"] {
+        for name in [
+            "CON", "con", "Con.rv", "PRN", "AUX", "NUL", "COM1", "LPT9", "aux.txt",
+        ] {
             assert!(
                 is_reserved_windows_component(name),
                 "`{name}` must be reserved"
             );
         }
-        for name in ["com0", "com10", "lpt0", "console", "foo.rv", "main", "aux_", "_con"] {
+        for name in [
+            "com0", "com10", "lpt0", "console", "foo.rv", "main", "aux_", "_con",
+        ] {
             assert!(
                 !is_reserved_windows_component(name),
                 "`{name}` must not be reserved"
@@ -3140,10 +3129,7 @@ mod tests {
         let temp = TempDir::new("locked");
         temp.file("ravum.toml", &manifest("app", ""));
         temp.file("src/main.rv", "fn main() { }\n");
-        let loaded = load_package_with_options(
-            &temp.path,
-            &LoadOptions { locked: true },
-        );
+        let loaded = load_package_with_options(&temp.path, &LoadOptions { locked: true });
         assert_eq!(loaded.lockfile_state, LockfileState::Missing);
         assert!(codes(&loaded.diags).contains(&"E-MOD-MISSING".to_string()));
     }
@@ -3228,7 +3214,10 @@ mod tests {
         temp.file("outside/src/lib.rv", "pub fn o() -> i32 { return 1; }\n");
         temp.file(
             "nested/app/ravum.toml",
-            &manifest("app", "\n[dependencies]\noutside = { path = \"../../outside\" }\n"),
+            &manifest(
+                "app",
+                "\n[dependencies]\noutside = { path = \"../../outside\" }\n",
+            ),
         );
         temp.file("nested/app/src/main.rv", "fn main() { }\n");
         let loaded = load_package(&temp.path().join("nested/app"));
@@ -3244,7 +3233,10 @@ mod tests {
         let temp = TempDir::new("dep-escape-missing");
         temp.file(
             "nested/app/ravum.toml",
-            &manifest("app", "\n[dependencies]\nutil = { path = \"../../outside\" }\n"),
+            &manifest(
+                "app",
+                "\n[dependencies]\nutil = { path = \"../../outside\" }\n",
+            ),
         );
         temp.file("nested/app/src/main.rv", "fn main() { }\n");
         // `../../outside` does not exist; the path policy must win over the
@@ -3373,11 +3365,8 @@ mod tests {
         fs::create_dir_all(temp.path.join("real")).unwrap();
         temp.file("real/ravum.toml", &manifest("util", ""));
         temp.file("real/src/lib.rv", "pub fn u() -> i32 { return 1; }\n");
-        std::os::unix::fs::symlink(
-            temp.path.join("real"),
-            temp.path.join("link"),
-        )
-        .expect("create symlink");
+        std::os::unix::fs::symlink(temp.path.join("real"), temp.path.join("link"))
+            .expect("create symlink");
         temp.file(
             "app/ravum.toml",
             &manifest("app", "\n[dependencies]\nutil = { path = \"../link\" }\n"),
@@ -3454,7 +3443,10 @@ mod tests {
             codes(&loaded.diags)
         );
         let program = loaded.program.expect("parsed program");
-        assert!(!has_mod_decl(&program.root), "ModDecl leaked to the checker");
+        assert!(
+            !has_mod_decl(&program.root),
+            "ModDecl leaked to the checker"
+        );
         let util = module_named(&program.root, "util").expect("util module");
         assert!(matches!(
             util.items.first().map(|item| &item.kind),
@@ -3533,10 +3525,7 @@ mod tests {
             "app/ravum.toml",
             &manifest("app", "\n[dependencies]\nutil = { path = \"../util\" }\n"),
         );
-        temp.file(
-            "app/src/main.rv",
-            "use util::helper;\nfn main() { }\n",
-        );
+        temp.file("app/src/main.rv", "use util::helper;\nfn main() { }\n");
         let loaded = load_package(&temp.path.join("app"));
         assert!(
             !loaded.diags.has_errors(),
@@ -3545,7 +3534,10 @@ mod tests {
         );
         let program = loaded.program.expect("parsed program");
         let util = module_named(&program.root, "util").expect("dependency module");
-        assert!(util.items.iter().any(|item| matches!(&item.kind, ItemKind::Fn(_))));
+        assert!(util
+            .items
+            .iter()
+            .any(|item| matches!(&item.kind, ItemKind::Fn(_))));
         assert_eq!(loaded.dependencies.len(), 1);
         assert!(loaded.dependencies_digest.starts_with("sha256:"));
     }

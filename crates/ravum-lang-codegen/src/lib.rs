@@ -50,9 +50,6 @@ impl std::fmt::Display for CodegenError {
 impl std::error::Error for CodegenError {}
 
 /// Generate a complete Rust source file (prelude included).
-pub fn generate(
-    checked: &CheckedProgram,
-    options: &GenOptions,
-) -> Result<String, CodegenError> {
+pub fn generate(checked: &CheckedProgram, options: &GenOptions) -> Result<String, CodegenError> {
     Generator::new(checked, options).generate()
 }

@@ -52,7 +52,10 @@ pub enum Type {
         args: Vec<Type>,
     },
     /// Generic parameter, index in the enclosing declaration.
-    Param { name: String, index: usize },
+    Param {
+        name: String,
+        index: usize,
+    },
     /// Type of a recovered error; never code-generated.
     Error,
 }

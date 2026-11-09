@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 
 use crate::util;
 
-const MANIFEST: &str = "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n";
+const MANIFEST: &str =
+    "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n";
 
 // Kept byte-identical to the formatter's canonical output so that
 // `ravum-lang fmt --check` is clean right after `init`.
@@ -71,10 +72,7 @@ fn create(dir: &Path, lib: bool, force: bool) -> Result<(), String> {
         write_generated(gitignore, ".ravum/\n", &mut created)?;
     }
 
-    println!(
-        "created package `{name}` in {}",
-        dir.display()
-    );
+    println!("created package `{name}` in {}", dir.display());
     for path in &created {
         println!("  {}", path.display());
     }
@@ -82,7 +80,11 @@ fn create(dir: &Path, lib: bool, force: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn write_generated(path: PathBuf, contents: &str, created: &mut Vec<PathBuf>) -> Result<(), String> {
+fn write_generated(
+    path: PathBuf,
+    contents: &str,
+    created: &mut Vec<PathBuf>,
+) -> Result<(), String> {
     util::write_atomic(&path, contents)?;
     created.push(path);
     Ok(())

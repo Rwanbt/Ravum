@@ -17,10 +17,10 @@
 
 use crate::builtins;
 use crate::facts::{Effect, EffectSet, Facts, MethodTarget, Profile};
+use ravum_lang_syntax::ast::NodeId;
 use ravum_lang_syntax::ast::{
     Block, Expr, ExprKind, FnItem, ItemKind, MatchArm, Program, StmtKind,
 };
-use ravum_lang_syntax::ast::NodeId;
 use ravum_lang_syntax::diag::DiagnosticBag;
 use ravum_lang_syntax::span::Span;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -141,13 +141,8 @@ pub fn infer_and_check(
             .collect(),
     };
     for (entry, entry_name) in entries {
-        if let Some((chain, effect, source)) =
-            find_violation(entry, &forbidden, &direct, facts)
-        {
-            let span = fns
-                .get(&entry)
-                .map(|f| f.span)
-                .unwrap_or(Span::dummy());
+        if let Some((chain, effect, source)) = find_violation(entry, &forbidden, &direct, facts) {
+            let span = fns.get(&entry).map(|f| f.span).unwrap_or(Span::dummy());
             let chain_text: Vec<String> = chain
                 .iter()
                 .map(|id| {
@@ -224,9 +219,7 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
         ExprKind::Call { callee, args } => {
             match facts.calls.get(&expr.id) {
                 Some(crate::facts::CallTarget::UserFn { item }) => out.edges.push(*item),
-                Some(crate::facts::CallTarget::BuiltinFn { path }) => {
-                    add_builtin_path(path, out)
-                }
+                Some(crate::facts::CallTarget::BuiltinFn { path }) => add_builtin_path(path, out),
                 Some(crate::facts::CallTarget::VariantCtor { .. })
                 | Some(crate::facts::CallTarget::Error)
                 | None => {}
@@ -236,9 +229,7 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
                 walk_expr(arg, facts, out);
             }
         }
-        ExprKind::MethodCall {
-            receiver, args, ..
-        } => {
+        ExprKind::MethodCall { receiver, args, .. } => {
             match facts.methods.get(&expr.id) {
                 Some(MethodTarget::User { item }) => out.edges.push(*item),
                 Some(MethodTarget::Builtin { path, .. }) => add_method_path(path, out),
@@ -345,8 +336,7 @@ fn add_builtin_path(path: &str, out: &mut FnEffects) {
     if let Some(effects) = effects {
         for effect in effects {
             out.direct.insert(*effect);
-            out.sources
-                .push((*effect, format!("call to `{path}`")));
+            out.sources.push((*effect, format!("call to `{path}`")));
         }
     }
 }
@@ -355,8 +345,7 @@ fn add_method_path(path: &str, out: &mut FnEffects) {
     if let Some(effects) = builtins::builtin_method_effects(path) {
         for effect in effects {
             out.direct.insert(*effect);
-            out.sources
-                .push((*effect, format!("call to `{path}`")));
+            out.sources.push((*effect, format!("call to `{path}`")));
         }
     }
 }

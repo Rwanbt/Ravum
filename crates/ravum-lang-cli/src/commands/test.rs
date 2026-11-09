@@ -155,14 +155,7 @@ pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
         } else {
             util::EXIT_FAIL
         };
-        json::print(&report(
-            &frontend,
-            path,
-            success,
-            exit,
-            Vec::new(),
-            summary,
-        ));
+        json::print(&report(&frontend, path, success, exit, Vec::new(), summary));
     } else {
         print!("{stdout}");
         eprint!("{stderr}");

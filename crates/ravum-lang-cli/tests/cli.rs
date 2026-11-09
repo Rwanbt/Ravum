@@ -114,7 +114,10 @@ fn assert_json_envelope(value: &Value, command: &str) {
     assert!(value["success"].is_boolean(), "success must be a boolean");
     assert!(value["target"]["kind"].is_string(), "target.kind");
     assert!(value["target"]["path"].is_string(), "target.path");
-    assert!(value["diagnostics"].is_array(), "diagnostics must be an array");
+    assert!(
+        value["diagnostics"].is_array(),
+        "diagnostics must be an array"
+    );
     assert!(value["summary"].is_object(), "summary must be an object");
     for diagnostic in value["diagnostics"].as_array().unwrap() {
         for key in [
@@ -166,7 +169,9 @@ fn version_and_help_are_stable() {
     let output = run(&["--help"]);
     assert!(output.status.success());
     let text = stdout(&output);
-    for command in ["init", "check", "build", "run", "test", "fmt", "lint", "doc", "cache", "doctor"] {
+    for command in [
+        "init", "check", "build", "run", "test", "fmt", "lint", "doc", "cache", "doctor",
+    ] {
         assert!(text.contains(command), "help must mention `{command}`");
     }
     assert!(text.contains("UNSUPPORTED"));
@@ -230,7 +235,10 @@ fn init_creates_a_package_and_refuses_to_overwrite() {
     fs::write(package.join("keep.txt"), "keep").unwrap();
     let output = run(&["init", package.to_str().unwrap(), "--force"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(package.join("keep.txt").is_file(), "--force must not delete files");
+    assert!(
+        package.join("keep.txt").is_file(),
+        "--force must not delete files"
+    );
 }
 
 #[test]
@@ -327,7 +335,10 @@ fn single_file_mode_check_build_run() {
     assert_eq!(value["success"], true);
     assert_eq!(value["summary"]["crate"], "file");
     assert_eq!(value["target"]["kind"], "file");
-    assert!(!temp.exists("ravum.lock"), "single-file mode has no lockfile");
+    assert!(
+        !temp.exists("ravum.lock"),
+        "single-file mode has no lockfile"
+    );
 
     let output = run(&["build", file.to_str().unwrap()]);
     assert!(
@@ -460,7 +471,10 @@ fn lockfile_is_deterministic_and_tracks_dependency_content() {
     let second = run(&["check", app.to_str().unwrap(), "--json"]);
     assert_json_envelope(&json(&second), "check");
     let lock_two = fs::read(app.join("ravum.lock")).unwrap();
-    assert_eq!(lock_one, lock_two, "lockfile must be byte-identical across runs");
+    assert_eq!(
+        lock_one, lock_two,
+        "lockfile must be byte-identical across runs"
+    );
 
     // Changing a dependency source must change the digest and the lockfile.
     temp.write("util/src/lib.rv", "pub fn helper() -> i32 { return 2; }\n");
@@ -540,7 +554,10 @@ fn nonexistent_dependency_is_rejected() {
     let app = temp.path().join("app");
     temp.write(
         "app/ravum.toml",
-        &manifest("app", "\n[dependencies]\nutil = { path = \"../missing\" }\n"),
+        &manifest(
+            "app",
+            "\n[dependencies]\nutil = { path = \"../missing\" }\n",
+        ),
     );
     temp.write("app/src/main.rv", "fn main() { }\n");
     let output = run(&["check", app.to_str().unwrap(), "--json"]);
@@ -677,13 +694,7 @@ fn build_and_run_hello() {
     };
     assert!(binary.is_file(), "missing {}", binary.display());
 
-    let output = run(&[
-        "run",
-        package.to_str().unwrap(),
-        "--",
-        "alpha",
-        "beta",
-    ]);
+    let output = run(&["run", package.to_str().unwrap(), "--", "alpha", "beta"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert!(stdout(&output).contains("hello, ravum"));
 }
@@ -799,7 +810,9 @@ fn fmt_missing_path_fails() {
 fn doc_generates_markdown_for_public_items() {
     let temp = TempDir::new("doc");
     let package = temp.path().join("lib");
-    assert!(run(&["init", package.to_str().unwrap(), "--lib"]).status.success());
+    assert!(run(&["init", package.to_str().unwrap(), "--lib"])
+        .status
+        .success());
     let out = temp.path().join("docs");
     let output = run(&[
         "doc",

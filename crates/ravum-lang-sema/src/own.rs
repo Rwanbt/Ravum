@@ -66,8 +66,8 @@
 use crate::facts::{CallTarget, CheckedProgram, Facts, MethodTarget, Resolution};
 use crate::types::Type;
 use ravum_lang_syntax::ast::{
-    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, ParamKind, Pat, PatKind,
-    Receiver, Stmt, StmtKind, UnOp,
+    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, ParamKind, Pat,
+    PatKind, Receiver, Stmt, StmtKind, UnOp,
 };
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::span::Span;
@@ -573,7 +573,8 @@ impl<'a> OwnChecker<'a> {
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
-                    if base_ty.is_reference() && !self.expr_type(expr).is_error_or_copy(self.facts) {
+                    if base_ty.is_reference() && !self.expr_type(expr).is_error_or_copy(self.facts)
+                    {
                         // Moving a field/index out of a borrowed temporary.
                         self.report_move_borrowed(expr.span);
                     }
@@ -1577,10 +1578,9 @@ impl<'a> OwnChecker<'a> {
                 },
                 Step::Field(name) => field_type(&ty, name, self.facts),
                 Step::Tuple(index) => match ty {
-                    Type::Tuple(items) => items
-                        .get(*index as usize)
-                        .cloned()
-                        .unwrap_or(Type::Error),
+                    Type::Tuple(items) => {
+                        items.get(*index as usize).cloned().unwrap_or(Type::Error)
+                    }
                     _ => Type::Error,
                 },
                 Step::Index(_) => match ty {
@@ -1663,20 +1663,11 @@ impl<'a> OwnChecker<'a> {
             E_UNINIT,
             span,
             format!("utilisation de `{name}` avant son initialisation"),
-            vec![(
-                "déclarée ici, sans valeur initiale".to_string(),
-                decl,
-            )],
+            vec![("déclarée ici, sans valeur initiale".to_string(), decl)],
         );
     }
 
-    fn report_use_after_move(
-        &mut self,
-        place: &Place,
-        span: Span,
-        st: &SlotState,
-        is_move: bool,
-    ) {
+    fn report_use_after_move(&mut self, place: &Place, span: Span, st: &SlotState, is_move: bool) {
         let name = self.display_place(place);
         if is_move && st.moved && !st.used_since {
             let first = st.move_span;

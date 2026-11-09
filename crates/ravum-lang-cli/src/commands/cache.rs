@@ -54,14 +54,20 @@ fn status(root: &Path) -> i32 {
             return util::EXIT_FAIL;
         }
         Ok(meta) if !meta.is_dir() => {
-            util::err(format!("`{}` is not a directory", util::pretty_path(&cache)));
+            util::err(format!(
+                "`{}` is not a directory",
+                util::pretty_path(&cache)
+            ));
             return util::EXIT_FAIL;
         }
         Ok(_) => {
             let stats = match util::dir_stats(&cache) {
                 Ok(stats) => stats,
                 Err(error) => {
-                    util::err(format!("cannot measure `{}`: {error}", util::pretty_path(&cache)));
+                    util::err(format!(
+                        "cannot measure `{}`: {error}",
+                        util::pretty_path(&cache)
+                    ));
                     return util::EXIT_FAIL;
                 }
             };
@@ -90,7 +96,10 @@ fn status(root: &Path) -> i32 {
             println!("state: absent");
         }
         Err(error) => {
-            util::err(format!("cannot inspect `{}`: {error}", util::pretty_path(&cache)));
+            util::err(format!(
+                "cannot inspect `{}`: {error}",
+                util::pretty_path(&cache)
+            ));
             return util::EXIT_FAIL;
         }
     }
@@ -107,7 +116,10 @@ fn clean(root: &Path) -> i32 {
             return util::EXIT_OK;
         }
         Err(error) => {
-            util::err(format!("cannot inspect `{}`: {error}", util::pretty_path(&cache)));
+            util::err(format!(
+                "cannot inspect `{}`: {error}",
+                util::pretty_path(&cache)
+            ));
             return util::EXIT_FAIL;
         }
     };
@@ -130,20 +142,25 @@ fn clean(root: &Path) -> i32 {
     let canonical_root = match fs::canonicalize(root) {
         Ok(path) => path,
         Err(error) => {
-            util::err(format!("cannot resolve `{}`: {error}", util::pretty_path(root)));
+            util::err(format!(
+                "cannot resolve `{}`: {error}",
+                util::pretty_path(root)
+            ));
             return util::EXIT_FAIL;
         }
     };
     let canonical_cache = match fs::canonicalize(&cache) {
         Ok(path) => path,
         Err(error) => {
-            util::err(format!("cannot resolve `{}`: {error}", util::pretty_path(&cache)));
+            util::err(format!(
+                "cannot resolve `{}`: {error}",
+                util::pretty_path(&cache)
+            ));
             return util::EXIT_FAIL;
         }
     };
     if canonical_cache.parent() != Some(canonical_root.as_path())
-        || canonical_cache.file_name().and_then(|name| name.to_str())
-            != Some(util::CACHE_DIR)
+        || canonical_cache.file_name().and_then(|name| name.to_str()) != Some(util::CACHE_DIR)
     {
         util::err(format!(
             "`{}` is not the expected `<package>/.ravum` directory; refusing to delete it",
@@ -152,9 +169,14 @@ fn clean(root: &Path) -> i32 {
         return util::EXIT_FAIL;
     }
 
-    let size = util::dir_stats(&cache).map(|stats| stats.bytes).unwrap_or(0);
+    let size = util::dir_stats(&cache)
+        .map(|stats| stats.bytes)
+        .unwrap_or(0);
     if let Err(error) = fs::remove_dir_all(&cache) {
-        util::err(format!("cannot remove `{}`: {error}", util::pretty_path(&cache)));
+        util::err(format!(
+            "cannot remove `{}`: {error}",
+            util::pretty_path(&cache)
+        ));
         return util::EXIT_FAIL;
     }
     println!(

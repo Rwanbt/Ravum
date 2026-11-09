@@ -47,8 +47,7 @@ pub fn read_text(path: &Path) -> Result<String, String> {
         ));
     }
     let bytes = fs::read(path).map_err(|e| format!("cannot read `{}`: {e}", path.display()))?;
-    String::from_utf8(bytes)
-        .map_err(|_| format!("`{}` is not valid UTF-8", path.display()))
+    String::from_utf8(bytes).map_err(|_| format!("`{}` is not valid UTF-8", path.display()))
 }
 
 /// Atomic write: write a temporary sibling then rename it over the target.
@@ -58,8 +57,7 @@ pub fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
 
 pub fn write_bytes_atomic(path: &Path, contents: &[u8]) -> Result<(), String> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)
-        .map_err(|e| format!("cannot create `{}`: {e}", parent.display()))?;
+    fs::create_dir_all(parent).map_err(|e| format!("cannot create `{}`: {e}", parent.display()))?;
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -199,8 +197,8 @@ pub fn dir_stats(dir: &Path) -> std::io::Result<DirStats> {
 /// Top-level cache entries with their sizes, sorted by name.
 pub fn cache_entries(cache: &Path) -> Result<Vec<(String, u64, bool)>, String> {
     let mut out = Vec::new();
-    let entries = fs::read_dir(cache)
-        .map_err(|e| format!("cannot list `{}`: {e}", cache.display()))?;
+    let entries =
+        fs::read_dir(cache).map_err(|e| format!("cannot list `{}`: {e}", cache.display()))?;
     for entry in entries.filter_map(Result::ok) {
         let meta = fs::symlink_metadata(entry.path())
             .map_err(|e| format!("cannot inspect `{}`: {e}", entry.path().display()))?;
@@ -210,7 +208,11 @@ pub fn cache_entries(cache: &Path) -> Result<Vec<(String, u64, bool)>, String> {
         } else {
             meta.len()
         };
-        out.push((entry.file_name().to_string_lossy().to_string(), size, is_dir));
+        out.push((
+            entry.file_name().to_string_lossy().to_string(),
+            size,
+            is_dir,
+        ));
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(out)

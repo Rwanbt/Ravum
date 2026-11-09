@@ -32,7 +32,12 @@ fn parse_ok(path: &Path) -> Program {
     let errors: Vec<String> = parsed
         .diags
         .iter()
-        .map(|d| format!("{}: {} [{}..{}]", d.code, d.message, d.span.start, d.span.end))
+        .map(|d| {
+            format!(
+                "{}: {} [{}..{}]",
+                d.code, d.message, d.span.start, d.span.end
+            )
+        })
         .collect();
     assert!(
         !parsed.diags.has_errors(),
@@ -70,7 +75,11 @@ fn every_example_parses_without_diagnostics() {
     let root = examples_root();
     let mut files = Vec::new();
     all_rv_files(&root, &mut files);
-    assert!(!files.is_empty(), "no .rv example found under {}", root.display());
+    assert!(
+        !files.is_empty(),
+        "no .rv example found under {}",
+        root.display()
+    );
     let mut failures = Vec::new();
     for file in files {
         let src = std::fs::read_to_string(&file).expect("read source");
@@ -96,7 +105,11 @@ fn every_example_parses_without_diagnostics() {
             file.display()
         );
     }
-    assert!(failures.is_empty(), "parse failures:\n{}", failures.join("\n\n"));
+    assert!(
+        failures.is_empty(),
+        "parse failures:\n{}",
+        failures.join("\n\n")
+    );
 }
 
 #[test]
@@ -114,15 +127,16 @@ fn hello_has_one_main() {
     assert_eq!(fns.len(), 1, "hello must have exactly one fn");
     assert_eq!(fns[0].name.name, "main");
     assert!(fns[0].params.is_empty());
-    assert!(matches!(fns[0].ret.kind, ravum_lang_syntax::ast::TypeKind::Unit));
+    assert!(matches!(
+        fns[0].ret.kind,
+        ravum_lang_syntax::ast::TypeKind::Unit
+    ));
 }
 
 #[test]
 fn truncated_input_never_panics() {
-    let full = std::fs::read_to_string(
-        examples_root().join("fib").join("src").join("main.rv"),
-    )
-    .expect("read fib");
+    let full = std::fs::read_to_string(examples_root().join("fib").join("src").join("main.rv"))
+        .expect("read fib");
     for cut in (0..full.len()).step_by(7) {
         let mut end = cut;
         while end < full.len() && !full.is_char_boundary(end) {

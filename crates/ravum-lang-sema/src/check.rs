@@ -9,9 +9,7 @@
 //! Une édition inconnue est refusée (`E-UNSUPPORTED-EDITION`) avant toute
 //! analyse.
 
-use crate::facts::{
-    file_infos, CheckOptions, CheckResult, CheckedProgram, Facts,
-};
+use crate::facts::{file_infos, CheckOptions, CheckResult, CheckedProgram, Facts};
 use crate::resolve::World;
 use crate::{effects, own, resolve, typeck};
 use ravum_lang_syntax::ast::Program;
@@ -46,13 +44,8 @@ pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> 
         return CheckResult::failed(diags);
     }
 
-    let typed = typeck::typecheck_with_world(
-        &program,
-        &mut facts,
-        &world,
-        Some(sources),
-        &mut diags,
-    );
+    let typed =
+        typeck::typecheck_with_world(&program, &mut facts, &world, Some(sources), &mut diags);
     if !typed || diags.has_errors() {
         diags.sort();
         return CheckResult::failed(diags);
@@ -270,11 +263,7 @@ fn main() { }
 
     #[test]
     fn invalid_main_signatures_are_reported() {
-        let (result, _) = run(
-            "src/main.rv",
-            r#"fn main(x: i32) { }"#,
-            Profile::Core,
-        );
+        let (result, _) = run("src/main.rv", r#"fn main(x: i32) { }"#, Profile::Core);
         error(&result, "E-TYP-MAIN");
 
         let (result, _) = run(
@@ -502,7 +491,9 @@ mod fact_coverage_tests {
     use ravum_lang_syntax::source::SourceMap;
     use std::collections::BTreeSet;
 
-    fn collect_ids(program: &Program) -> (BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>) {
+    fn collect_ids(
+        program: &Program,
+    ) -> (BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>) {
         let mut exprs = BTreeSet::new();
         let mut paths = BTreeSet::new();
         let mut pats = BTreeSet::new();
@@ -751,7 +742,11 @@ mod fact_coverage_tests {
         let mut sources = SourceMap::new();
         let file = sources.add(path, src);
         let parsed = parser::parse_file(file, src);
-        assert!(parsed.diags.is_empty(), "parse errors: {:?}", parsed.diags.as_slice());
+        assert!(
+            parsed.diags.is_empty(),
+            "parse errors: {:?}",
+            parsed.diags.as_slice()
+        );
         let options = CheckOptions::default();
         let result = check(&parsed.program, &sources, &options);
         let checked = match result.checked {
@@ -795,7 +790,10 @@ mod fact_coverage_tests {
             missing_paths.is_empty(),
             "missing resolutions for {missing_paths:?}"
         );
-        assert!(missing_pats.is_empty(), "missing pat_types for {missing_pats:?}");
+        assert!(
+            missing_pats.is_empty(),
+            "missing pat_types for {missing_pats:?}"
+        );
         assert!(
             missing_types.is_empty(),
             "missing type_nodes for {missing_types:?}"
@@ -903,11 +901,15 @@ fn f(o: Option<i32>) -> i32 { match o { Option::Some(x) => x, Option::None => 0 
 fn main() { let o: Option<i32> = None; let n = f(o); }
 "#,
         );
-        assert!(result.checked.is_some(), "expected success: {:?}", result
-            .diags
-            .iter()
-            .map(|d| (d.code.clone(), d.message.clone()))
-            .collect::<Vec<_>>());
+        assert!(
+            result.checked.is_some(),
+            "expected success: {:?}",
+            result
+                .diags
+                .iter()
+                .map(|d| (d.code.clone(), d.message.clone()))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -924,11 +926,15 @@ fn main() {
 }
 "#,
         );
-        assert!(result.checked.is_some(), "expected success: {:?}", result
-            .diags
-            .iter()
-            .map(|d| (d.code.clone(), d.message.clone()))
-            .collect::<Vec<_>>());
+        assert!(
+            result.checked.is_some(),
+            "expected success: {:?}",
+            result
+                .diags
+                .iter()
+                .map(|d| (d.code.clone(), d.message.clone()))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -946,11 +952,15 @@ test fn t() {
 }
 "#,
         );
-        assert!(result.checked.is_some(), "expected success: {:?}", result
-            .diags
-            .iter()
-            .map(|d| (d.code.clone(), d.message.clone()))
-            .collect::<Vec<_>>());
+        assert!(
+            result.checked.is_some(),
+            "expected success: {:?}",
+            result
+                .diags
+                .iter()
+                .map(|d| (d.code.clone(), d.message.clone()))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

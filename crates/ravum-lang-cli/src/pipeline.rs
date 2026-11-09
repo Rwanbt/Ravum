@@ -163,10 +163,16 @@ pub fn function_effects(checked: &CheckedProgram) -> Vec<FnEffects> {
         .map(|signature| FnEffects {
             name: signature.name.clone(),
             path: signature.rust_path.clone(),
-            effects: signature.effects.names().into_iter().map(str::to_string).collect(),
-            declared: signature.declared_effects.as_ref().map(|set| {
-                set.names().into_iter().map(str::to_string).collect()
-            }),
+            effects: signature
+                .effects
+                .names()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            declared: signature
+                .declared_effects
+                .as_ref()
+                .map(|set| set.names().into_iter().map(str::to_string).collect()),
             is_test: signature.is_test,
         })
         .collect();
@@ -336,19 +342,18 @@ pub fn compile_program(
     frontend: &Frontend,
     options: &BuildOptions,
 ) -> Result<Artifacts, BuildError> {
-    let checked = frontend
-        .checked
-        .as_ref()
-        .ok_or(BuildError::NoProgram)?;
+    let checked = frontend.checked.as_ref().ok_or(BuildError::NoProgram)?;
     let root = frontend.root();
     let cache = util::ensure_cache_dir(&root).map_err(BuildError::Cache)?;
     let crate_name = util::rust_crate_name(frontend.pkg.package_name.as_deref());
 
     let generated = match &options.emit_rust {
         Some(path) => path.clone(),
-        None => cache
-            .join("gen")
-            .join(if options.test_mode { "tests.rs" } else { "main.rs" }),
+        None => cache.join("gen").join(if options.test_mode {
+            "tests.rs"
+        } else {
+            "main.rs"
+        }),
     };
 
     let gen_options = GenOptions {
@@ -356,12 +361,11 @@ pub fn compile_program(
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
     };
-    let rust = generate(checked, &gen_options)
-        .map_err(|error| BuildError::Codegen(error.message))?;
+    let rust =
+        generate(checked, &gen_options).map_err(|error| BuildError::Codegen(error.message))?;
     util::write_bytes_atomic(&generated, rust.as_bytes()).map_err(BuildError::Write)?;
 
-    let is_library = !options.test_mode
-        && frontend.pkg.crate_kind == Some(CrateKind::Lib);
+    let is_library = !options.test_mode && frontend.pkg.crate_kind == Some(CrateKind::Lib);
     let output_path = if options.test_mode {
         cache
             .join("bin")
@@ -369,13 +373,14 @@ pub fn compile_program(
     } else if is_library {
         cache.join("lib").join(format!("{crate_name}.rlib"))
     } else {
-        cache.join("bin").join(util::executable_name(
-            frontend.pkg.package_name.as_deref(),
-        ))
+        cache
+            .join("bin")
+            .join(util::executable_name(frontend.pkg.package_name.as_deref()))
     };
     if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| BuildError::Write(format!("cannot create `{}`: {error}", parent.display())))?;
+        std::fs::create_dir_all(parent).map_err(|error| {
+            BuildError::Write(format!("cannot create `{}`: {error}", parent.display()))
+        })?;
     }
 
     let rustc = rustc_command();
@@ -441,9 +446,7 @@ fn exe_suffix() -> &'static str {
 
 pub fn ir_dump(frontend: &Frontend) -> String {
     let mut out = String::new();
-    out.push_str(
-        "// ravum-lang facts dump — unstable, NOT a stable IR (Core 1.0 draft)\n",
-    );
+    out.push_str("// ravum-lang facts dump — unstable, NOT a stable IR (Core 1.0 draft)\n");
     out.push_str(&format!(
         "package: {}\n",
         frontend.pkg.package_name.as_deref().unwrap_or("<none>")

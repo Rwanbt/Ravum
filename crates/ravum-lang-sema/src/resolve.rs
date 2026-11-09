@@ -27,7 +27,7 @@
 
 use crate::builtins;
 use crate::facts::{
-    EnumInfo, Effect, EffectSet, Facts, FieldInfo, FnSig, ParamSig, StructInfo, VariantInfo,
+    Effect, EffectSet, EnumInfo, Facts, FieldInfo, FnSig, ParamSig, StructInfo, VariantInfo,
     VariantKind,
 };
 use crate::types::Type;
@@ -240,7 +240,14 @@ impl<'a> World<'a> {
             match &item.kind {
                 ItemKind::Fn(f) => {
                     self.fns.insert(item.id, f);
-                    self.register(id, Ns::Value, &f.name.name, Sym::Fn(item.id), item.vis, item.span);
+                    self.register(
+                        id,
+                        Ns::Value,
+                        &f.name.name,
+                        Sym::Fn(item.id),
+                        item.vis,
+                        item.span,
+                    );
                     if f.is_test {
                         self.test_fns.push(item.id);
                     }
@@ -323,29 +330,15 @@ impl<'a> World<'a> {
         }
     }
 
-    fn register(
-        &mut self,
-        module: ModuleId,
-        ns: Ns,
-        name: &str,
-        sym: Sym,
-        vis: Vis,
-        span: Span,
-    ) {
+    fn register(&mut self, module: ModuleId, ns: Ns, name: &str, sym: Sym, vis: Vis, span: Span) {
         if let Some(previous) = self.table(module, ns).get(name) {
             let first = previous.span;
             self.duplicates
                 .push((module, ns, name.to_string(), span, first));
             return;
         }
-        self.table_mut(module, ns).insert(
-            name.to_string(),
-            ItemSym {
-                sym,
-                vis,
-                span,
-            },
-        );
+        self.table_mut(module, ns)
+            .insert(name.to_string(), ItemSym { sym, vis, span });
         let reserved = match ns {
             Ns::Type => builtins::is_prelude_type_name(name),
             Ns::Value => builtins::is_prelude_value_name(name),
@@ -581,8 +574,7 @@ pub(crate) fn resolve_value_path(
         if !segments[0].args.is_empty() {
             return Err(PathError {
                 code: "E-UNSUPPORTED-TURBOFISH",
-                message: "explicit generic arguments are not supported in expressions"
-                    .to_string(),
+                message: "explicit generic arguments are not supported in expressions".to_string(),
             });
         }
         if generics.iter().any(|(n, _)| n == name) {
@@ -887,7 +879,8 @@ fn resolve_associated(world: &World, ty: Type, name: &str) -> Result<ValuePath, 
         Type::Nominal { def, .. } => {
             if world.nominal_kind(*def) == Some(NominalKind::Enum) {
                 if let Some(enum_ast) = world.enums.get(def) {
-                    if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name) {
+                    if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name)
+                    {
                         return Ok(ValuePath::Variant {
                             enum_item: *def,
                             variant: index,
@@ -2004,7 +1997,10 @@ fn array_length(
 ) -> Option<usize> {
     expr_types.insert(len.id, Type::Usize);
     match &len.kind {
-        ast::ExprKind::Int { value, suffix: None } => {
+        ast::ExprKind::Int {
+            value,
+            suffix: None,
+        } => {
             if *value == 0 {
                 diags.error(
                     "E-TYP-ARRAY-LEN",
@@ -2136,7 +2132,13 @@ fn resolve_type_path(
                 return Type::Error;
             }
             let args = resolve_type_args(
-                world, type_nodes, expr_types, diags, module, generics, self_ty,
+                world,
+                type_nodes,
+                expr_types,
+                diags,
+                module,
+                generics,
+                self_ty,
                 &segment.args,
             );
             return nominal_type(world, sym.sym, &args, segment.name.span, diags)
@@ -2144,7 +2146,13 @@ fn resolve_type_path(
         }
         if is_builtin_type_name(name) {
             let args = resolve_type_args(
-                world, type_nodes, expr_types, diags, module, generics, self_ty,
+                world,
+                type_nodes,
+                expr_types,
+                diags,
+                module,
+                generics,
+                self_ty,
                 &segment.args,
             );
             return prelude_nominal(name, &args, segment.name.span, diags).unwrap_or(Type::Error);
@@ -2310,7 +2318,13 @@ fn resolve_type_path(
                         return Type::Error;
                     }
                     let args = resolve_type_args(
-                        world, type_nodes, expr_types, diags, module, generics, self_ty,
+                        world,
+                        type_nodes,
+                        expr_types,
+                        diags,
+                        module,
+                        generics,
+                        self_ty,
                         &segment.args,
                     );
                     return nominal_type(world, sym.sym, &args, segment.name.span, diags)
@@ -2459,8 +2473,15 @@ fn compute_copy_and_recursive_types(world: &World, facts: &mut Facts, diags: &mu
     let mut flags: BTreeMap<NodeId, bool> = BTreeMap::new();
     for def in defs {
         let mut stack = Vec::new();
-        let is_copy =
-            nominal_is_copy(def, world, facts, &mut state, &mut stack, &mut reported, diags);
+        let is_copy = nominal_is_copy(
+            def,
+            world,
+            facts,
+            &mut state,
+            &mut stack,
+            &mut reported,
+            diags,
+        );
         flags.insert(def, is_copy);
     }
     for (def, is_copy) in flags {
@@ -2574,9 +2595,7 @@ fn type_is_copy(
         | Type::Never
         | Type::Ref { .. } => true,
         Type::Str | Type::String | Type::Vec(_) | Type::Slice(_) => false,
-        Type::Array { elem, .. } => {
-            type_is_copy(elem, world, facts, state, stack, reported, diags)
-        }
+        Type::Array { elem, .. } => type_is_copy(elem, world, facts, state, stack, reported, diags),
         Type::Tuple(items) => items
             .iter()
             .all(|item| type_is_copy(item, world, facts, state, stack, reported, diags)),

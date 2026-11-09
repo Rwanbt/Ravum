@@ -6,12 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::pipeline::{self, BuildOptions};
 use crate::util;
 
-pub fn run(
-    path: &Path,
-    release: bool,
-    emit_rust: Option<PathBuf>,
-    emit_ir: bool,
-) -> i32 {
+pub fn run(path: &Path, release: bool, emit_rust: Option<PathBuf>, emit_ir: bool) -> i32 {
     let frontend = pipeline::analyze(path, Profile::Core, false);
     if !frontend.success() {
         eprint!("{}", pipeline::render_diags(&frontend));

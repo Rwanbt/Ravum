@@ -165,13 +165,19 @@ impl DiagnosticBag {
                 let _ = writeln!(out, "{line:>3} | {text}");
                 let width = d.span.len().max(1) as usize;
                 let pad = " ".repeat(col.saturating_sub(1) as usize);
-                let caret = "^".repeat(width.min(text.len().saturating_sub(col as usize - 1).max(1)));
+                let caret =
+                    "^".repeat(width.min(text.len().saturating_sub(col as usize - 1).max(1)));
                 let _ = writeln!(out, "   | {pad}{caret}");
             }
             for note in &d.notes {
                 match note.span {
                     Some(span) => {
-                        let _ = writeln!(out, "   = note: {} ({})", note.message, sources.location(span));
+                        let _ = writeln!(
+                            out,
+                            "   = note: {} ({})",
+                            note.message,
+                            sources.location(span)
+                        );
                     }
                     None => {
                         let _ = writeln!(out, "   = note: {}", note.message);

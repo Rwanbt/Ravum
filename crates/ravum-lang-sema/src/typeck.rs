@@ -17,7 +17,7 @@
 
 use crate::builtins::{self, MethodSelfKind};
 use crate::facts::{
-    CallTarget, ConstInfo, ConstValue, CheckedProgram, Facts, MethodTarget, Resolution,
+    CallTarget, CheckedProgram, ConstInfo, ConstValue, Facts, MethodTarget, Resolution,
 };
 use crate::resolve::{self, ModuleId, NominalKind, PathError, ValuePath, World};
 use crate::types::Type;
@@ -139,9 +139,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         note: impl Into<String>,
         note_span: Option<Span>,
     ) {
-        self.diags.push(
-            Diagnostic::error(code, span, message).with_note(note, note_span),
-        );
+        self.diags
+            .push(Diagnostic::error(code, span, message).with_note(note, note_span));
     }
 
     fn warning(&mut self, code: &'static str, span: Span, message: impl Into<String>) {
@@ -200,7 +199,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     fn compatible(a: &Type, b: &Type) -> bool {
-        a == b || matches!(a, Type::Never) || matches!(b, Type::Never)
+        a == b
+            || matches!(a, Type::Never)
+            || matches!(b, Type::Never)
             || matches!(a, Type::Error)
             || matches!(b, Type::Error)
     }
@@ -283,9 +284,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.var_occurs(target, inner)
             }
             Type::Tuple(items) => items.iter().any(|t| self.var_occurs(target, t)),
-            Type::Result(ok, err) => {
-                self.var_occurs(target, ok) || self.var_occurs(target, err)
-            }
+            Type::Result(ok, err) => self.var_occurs(target, ok) || self.var_occurs(target, err),
             Type::Nominal { args, .. } => args.iter().any(|t| self.var_occurs(target, t)),
             _ => false,
         }
@@ -322,7 +321,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 elem: Box::new(self.instantiate_with(elem, span, mapping)),
                 len: *len,
             },
-            Type::Slice(inner) => Type::Slice(Box::new(self.instantiate_with(inner, span, mapping))),
+            Type::Slice(inner) => {
+                Type::Slice(Box::new(self.instantiate_with(inner, span, mapping)))
+            }
             Type::Tuple(items) => Type::Tuple(
                 items
                     .iter()
@@ -376,9 +377,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     true
                 }
             },
-            (Type::Ref { mutable: pm, inner: pi }, Type::Ref { mutable: am, inner: ai }) => {
-                pm == am && self.unify_pattern(pi, ai, subst)
-            }
+            (
+                Type::Ref {
+                    mutable: pm,
+                    inner: pi,
+                },
+                Type::Ref {
+                    mutable: am,
+                    inner: ai,
+                },
+            ) => pm == am && self.unify_pattern(pi, ai, subst),
             (Type::Array { elem: pe, len: pl }, Type::Array { elem: ae, len: al }) => {
                 pl == al && self.unify_pattern(pe, ae, subst)
             }
@@ -396,8 +404,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.unify_pattern(po, ao, subst) && self.unify_pattern(pe, ae, subst)
             }
             (
-                Type::Nominal { def: pd, args: pa, .. },
-                Type::Nominal { def: ad, args: aa, .. },
+                Type::Nominal {
+                    def: pd, args: pa, ..
+                },
+                Type::Nominal {
+                    def: ad, args: aa, ..
+                },
             ) => {
                 pd == ad
                     && pa.len() == aa.len()
@@ -432,11 +444,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
         for index in unresolved {
-            let span = self
-                .var_spans
-                .get(index)
-                .copied()
-                .unwrap_or(Span::dummy());
+            let span = self.var_spans.get(index).copied().unwrap_or(Span::dummy());
             self.error(
                 "E-TYP-AMBIGUOUS",
                 span,
@@ -660,7 +668,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let body_ty = self.check_block(&f.body, Some(&sig.ret));
         let body_ty = self.resolve_vars(&body_ty);
         let ret = self.resolve_vars(&sig.ret);
-        if !Self::compatible(&body_ty, &ret) && !self.unify(&body_ty, &ret, f.body.span, "function body") {
+        if !Self::compatible(&body_ty, &ret)
+            && !self.unify(&body_ty, &ret, f.body.span, "function body")
+        {
             self.error(
                 "E-TYP-MISMATCH",
                 f.body.span,
@@ -702,10 +712,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         match &stmt.kind {
             StmtKind::Let(lets) => {
                 let declared = lets.ty.as_ref().map(|t| self.resolve_type(t));
-                let init_ty = lets.init.as_ref().map(|e| self.check_expr(e, declared.as_ref()));
+                let init_ty = lets
+                    .init
+                    .as_ref()
+                    .map(|e| self.check_expr(e, declared.as_ref()));
                 let final_ty = match (&declared, &init_ty) {
                     (Some(d), Some(i)) => {
-                        self.unify(i, d, lets.init.as_ref().map(|e| e.span).unwrap_or(stmt.span), "let");
+                        self.unify(
+                            i,
+                            d,
+                            lets.init.as_ref().map(|e| e.span).unwrap_or(stmt.span),
+                            "let",
+                        );
                         d.clone()
                     }
                     (Some(d), None) => d.clone(),
@@ -793,11 +811,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ExprKind::Unary { op, expr: operand } => self.check_unary(expr, *op, operand, expected),
             ExprKind::Binary { op, lhs, rhs } => self.check_binary(expr, *op, lhs, rhs, expected),
             ExprKind::Assign { target, value } => self.check_assign(target, value),
-            ExprKind::AssignOp {
-                op,
-                target,
-                value,
-            } => self.check_assign_op(expr, *op, target, value),
+            ExprKind::AssignOp { op, target, value } => {
+                self.check_assign_op(expr, *op, target, value)
+            }
             ExprKind::Cast { expr: value, ty } => self.check_cast(value, ty),
             ExprKind::If {
                 cond,
@@ -815,7 +831,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             ExprKind::Array(items) => self.check_array(items),
             ExprKind::ArrayRepeat { value, len } => self.check_array_repeat(expr, value, len),
-            ExprKind::StructLit { path, fields } => self.check_struct_lit(expr, path, fields, expected),
+            ExprKind::StructLit { path, fields } => {
+                self.check_struct_lit(expr, path, fields, expected)
+            }
             ExprKind::Range {
                 start,
                 end,
@@ -1066,13 +1084,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
-            ValuePath::BuiltinConst(path) => {
-                self.builtin_unit_variant_type(expr, path, expected)
-            }
-            ValuePath::Variant {
-                enum_item,
-                variant,
-            } => {
+            ValuePath::BuiltinConst(path) => self.builtin_unit_variant_type(expr, path, expected),
+            ValuePath::Variant { enum_item, variant } => {
                 let info = match self.facts.enums.get(enum_item) {
                     Some(info) => info.clone(),
                     None => return Type::Error,
@@ -1092,7 +1105,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     );
                     return Type::Error;
                 }
-                let args = self.builtin_enum_args(expected, *enum_item, info.generics.len(), expr.span);
+                let args =
+                    self.builtin_enum_args(expected, *enum_item, info.generics.len(), expr.span);
                 Type::Nominal {
                     def: *enum_item,
                     name: info.name.clone(),
@@ -1278,10 +1292,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     Type::Error
                 }
             }
-            ValuePath::Variant {
-                enum_item,
-                variant,
-            } => self.check_variant_call(*enum_item, *variant, args, expected, expr.span),
+            ValuePath::Variant { enum_item, variant } => {
+                self.check_variant_call(*enum_item, *variant, args, expected, expr.span)
+            }
             ValuePath::BuiltinCtor { path, .. } => {
                 self.check_builtin_ctor_call(path, args, expected, expr.span)
             }
@@ -1329,10 +1342,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             match &target {
                 ValuePath::Item(id) => CallTarget::UserFn { item: *id },
                 ValuePath::AssocFn(id) => CallTarget::UserFn { item: *id },
-                ValuePath::Variant {
-                    enum_item,
-                    variant,
-                } => CallTarget::VariantCtor {
+                ValuePath::Variant { enum_item, variant } => CallTarget::VariantCtor {
                     enum_item: *enum_item,
                     variant: *variant,
                 },
@@ -1489,21 +1499,35 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             return expected.clone();
         }
         match (expected, &found) {
-            (Type::Ref { mutable: false, inner: exp_inner }, found_ty) => {
-                match (&**exp_inner, found_ty) {
-                    (Type::Str, Type::String) => expected.clone(),
-                    (Type::Str, Type::Ref { mutable: false, inner }) if **inner == Type::String => {
-                        expected.clone()
-                    }
-                    (Type::Str, Type::Str) => expected.clone(),
-                    (Type::Slice(elem), Type::Ref { mutable: false, inner }) => match &**inner {
-                        Type::Array { elem: felem, .. } if elem == felem => expected.clone(),
-                        Type::Slice(felem) if elem == felem => expected.clone(),
-                        _ => found,
+            (
+                Type::Ref {
+                    mutable: false,
+                    inner: exp_inner,
+                },
+                found_ty,
+            ) => match (&**exp_inner, found_ty) {
+                (Type::Str, Type::String) => expected.clone(),
+                (
+                    Type::Str,
+                    Type::Ref {
+                        mutable: false,
+                        inner,
                     },
+                ) if **inner == Type::String => expected.clone(),
+                (Type::Str, Type::Str) => expected.clone(),
+                (
+                    Type::Slice(elem),
+                    Type::Ref {
+                        mutable: false,
+                        inner,
+                    },
+                ) => match &**inner {
+                    Type::Array { elem: felem, .. } if elem == felem => expected.clone(),
+                    Type::Slice(felem) if elem == felem => expected.clone(),
                     _ => found,
-                }
-            }
+                },
+                _ => found,
+            },
             _ => found,
         }
     }
@@ -1672,7 +1696,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             None => return Type::Error,
         };
         let mut subst: BTreeMap<usize, Type> = BTreeMap::new();
-        if let Some(Type::Nominal { def, args: exp_args, .. }) = expected {
+        if let Some(Type::Nominal {
+            def,
+            args: exp_args,
+            ..
+        }) = expected
+        {
             if *def == enum_item && exp_args.len() == info.generics.len() {
                 for (i, arg) in exp_args.iter().enumerate() {
                     subst.insert(i, arg.clone());
@@ -1722,7 +1751,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     self.error(
                         "E-TYP-ARITY",
                         span,
-                        format!("variant `{}::{}` takes no arguments", info.name, variant_info.name),
+                        format!(
+                            "variant `{}::{}` takes no arguments",
+                            info.name, variant_info.name
+                        ),
                     );
                     for arg in args {
                         self.check_expr(arg, None);
@@ -1809,9 +1841,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     );
                 }
                 let (ok_expected, err_expected) = match expected {
-                    Some(Type::Result(ok, err)) => {
-                        (Some((**ok).clone()), Some((**err).clone()))
-                    }
+                    Some(Type::Result(ok, err)) => (Some((**ok).clone()), Some((**err).clone())),
                     _ => (None, None),
                 };
                 let value = match args.first() {
@@ -1881,10 +1911,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     Some(entry) => {
                         let target = self.check_user_method_call(&entry, &base, args, name_span);
                         let ty = target.1;
-                        self.facts.methods.insert(
-                            expr.id,
-                            MethodTarget::User { item: entry.item },
-                        );
+                        self.facts
+                            .methods
+                            .insert(expr.id, MethodTarget::User { item: entry.item });
                         ty
                     }
                     None => {
@@ -1987,9 +2016,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.error(
                     "E-RES-UNKNOWN",
                     *name_span,
-                    format!(
-                        "no method `{name}` can be resolved on generic parameter `{param}`"
-                    ),
+                    format!("no method `{name}` can be resolved on generic parameter `{param}`"),
                 );
                 for arg in args {
                     self.check_expr(arg, None);
@@ -2086,11 +2113,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let base_ty = self.check_expr(base, None);
         let ty = deref_type(&base_ty);
         match ty {
-            Type::Nominal {
-                def,
-                ref args,
-                ..
-            } => {
+            Type::Nominal { def, ref args, .. } => {
                 let Some(field) = self
                     .facts
                     .structs
@@ -2128,7 +2151,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
     }
 
-    fn check_field_visibility(&mut self, def: &NodeId, field: &crate::facts::FieldInfo, span: Span) {
+    fn check_field_visibility(
+        &mut self,
+        def: &NodeId,
+        field: &crate::facts::FieldInfo,
+        span: Span,
+    ) {
         if field.public {
             return;
         }
@@ -2270,7 +2298,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
             UnOp::Not => {
-                let inner_ty = self.check_expr(operand, expected.filter(|t| **t == Type::Bool || t.is_int()));
+                let inner_ty = self.check_expr(
+                    operand,
+                    expected.filter(|t| **t == Type::Bool || t.is_int()),
+                );
                 match &inner_ty {
                     Type::Bool => Type::Bool,
                     t if t.is_int() => t.clone(),
@@ -2411,7 +2442,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             B::Eq | B::Ne => {
                 if (is_text_like(&l_ty) && is_text_like(&r_ty))
                     || (l_ty == r_ty
-                        && (l_ty.is_int() || l_ty.is_float() || l_ty == Type::Bool || l_ty == Type::Char))
+                        && (l_ty.is_int()
+                            || l_ty.is_float()
+                            || l_ty == Type::Bool
+                            || l_ty == Type::Char))
                 {
                     Type::Bool
                 } else {
@@ -2427,8 +2461,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
             B::Lt | B::Le | B::Gt | B::Ge => {
-                let ok = l_ty == r_ty
-                    && (l_ty.is_int() || l_ty.is_float() || l_ty == Type::Char);
+                let ok = l_ty == r_ty && (l_ty.is_int() || l_ty.is_float() || l_ty == Type::Char);
                 if ok {
                     Type::Bool
                 } else {
@@ -2691,12 +2724,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             match &iter_ty {
                 Type::Vec(elem) => (**elem).clone(),
                 Type::Ref { inner, .. } => match &**inner {
-                    Type::Vec(elem) | Type::Slice(elem) => {
-                        Type::Ref {
-                            mutable: false,
-                            inner: elem.clone(),
-                        }
-                    }
+                    Type::Vec(elem) | Type::Slice(elem) => Type::Ref {
+                        mutable: false,
+                        inner: elem.clone(),
+                    },
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -2831,9 +2862,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         self.error(
                             "E-TYP-MISMATCH",
                             arm.body.span,
-                            format!(
-                                "match arms have different types: `{acc}` and `{body_ty}`"
-                            ),
+                            format!("match arms have different types: `{acc}` and `{body_ty}`"),
                         );
                         acc
                     } else if matches!(acc, Type::Never) {
@@ -2873,8 +2902,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             self.error(
                 "E-TYP-TRY",
                 expr.span,
-                "`?` is only valid inside a function returning `Result` or `Option`"
-                    .to_string(),
+                "`?` is only valid inside a function returning `Result` or `Option`".to_string(),
             );
             return Type::Error;
         }
@@ -2946,14 +2974,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     self.error(
                         "E-TYP-RETURN",
                         value.span,
-                        "`return` with a value is invalid in a function returning `()`"
-                            .to_string(),
+                        "`return` with a value is invalid in a function returning `()`".to_string(),
                     );
                 } else {
                     let found = self.check_expr(value, Some(&ret));
                     let found = self.resolve_vars(&found);
                     let ret = self.resolve_vars(&ret);
-                    if !Self::compatible(&found, &ret) && !self.unify(&found, &ret, value.span, "return") {
+                    if !Self::compatible(&found, &ret)
+                        && !self.unify(&found, &ret, value.span, "return")
+                    {
                         self.error(
                             "E-TYP-RETURN",
                             value.span,
@@ -3093,10 +3122,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .resolutions
                     .insert(path.id, Resolution::Item { item: *def });
             }
-            ValuePath::Variant {
-                enum_item,
-                variant,
-            } => {
+            ValuePath::Variant { enum_item, variant } => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::Variant {
@@ -3114,9 +3140,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
             }
             _ => {
-                self.facts
-                    .resolutions
-                    .insert(path.id, Resolution::Error);
+                self.facts.resolutions.insert(path.id, Resolution::Error);
             }
         }
         match target {
@@ -3137,7 +3161,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     None => return Type::Error,
                 };
                 let mut subst: BTreeMap<usize, Type> = BTreeMap::new();
-                if let Some(Type::Nominal { def: exp_def, args: exp_args, .. }) = expected {
+                if let Some(Type::Nominal {
+                    def: exp_def,
+                    args: exp_args,
+                    ..
+                }) = expected
+                {
                     if *exp_def == def && exp_args.len() == info.generics.len() {
                         for (i, arg) in exp_args.iter().enumerate() {
                             subst.insert(i, arg.clone());
@@ -3171,10 +3200,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     args: final_args,
                 }
             }
-            ValuePath::Variant {
-                enum_item,
-                variant,
-            } => {
+            ValuePath::Variant { enum_item, variant } => {
                 let info = match self.facts.enums.get(&enum_item) {
                     Some(info) => info.clone(),
                     None => return Type::Error,
@@ -3198,7 +3224,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     return Type::Error;
                 }
                 let mut subst: BTreeMap<usize, Type> = BTreeMap::new();
-                if let Some(Type::Nominal { def: exp_def, args: exp_args, .. }) = expected {
+                if let Some(Type::Nominal {
+                    def: exp_def,
+                    args: exp_args,
+                    ..
+                }) = expected
+                {
                     if *exp_def == enum_item && exp_args.len() == info.generics.len() {
                         for (i, arg) in exp_args.iter().enumerate() {
                             subst.insert(i, arg.clone());
@@ -3454,18 +3485,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             self.self_ty.as_ref(),
             path,
         ) {
-            Ok(ValuePath::Variant {
-                enum_item,
-                variant,
-            }) => {
+            Ok(ValuePath::Variant { enum_item, variant }) => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));
-                self.facts.resolutions.insert(
-                    path.id,
-                    Resolution::Variant {
-                        enum_item,
-                        variant,
-                    },
-                );
+                self.facts
+                    .resolutions
+                    .insert(path.id, Resolution::Variant { enum_item, variant });
                 self.pattern_enum_ty(pat.span, enum_item, expected)
             }
             Ok(ValuePath::BuiltinConst(ctor_path)) => {
@@ -3568,18 +3592,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         };
         match target {
-            ValuePath::Variant {
-                enum_item,
-                variant,
-            } => {
+            ValuePath::Variant { enum_item, variant } => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));
-                self.facts.resolutions.insert(
-                    path.id,
-                    Resolution::Variant {
-                        enum_item,
-                        variant,
-                    },
-                );
+                self.facts
+                    .resolutions
+                    .insert(path.id, Resolution::Variant { enum_item, variant });
                 let info = match self.facts.enums.get(&enum_item) {
                     Some(info) => info.clone(),
                     None => return Type::Error,
@@ -3619,7 +3636,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 }
             }
-            ValuePath::BuiltinCtor { path: ctor_path, .. } => {
+            ValuePath::BuiltinCtor {
+                path: ctor_path, ..
+            } => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::BuiltinFn {
@@ -3691,7 +3710,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let mut seen: BTreeSet<&str> = BTreeSet::new();
                 for field in field_pats {
                     seen.insert(field.name.name.as_str());
-                    match variant_info.fields.iter().find(|f| f.name == field.name.name) {
+                    match variant_info
+                        .fields
+                        .iter()
+                        .find(|f| f.name == field.name.name)
+                    {
                         Some(decl) => {
                             let ty = substitute(&decl.ty, subst);
                             self.check_pattern(&field.pat, &ty);
@@ -3891,8 +3914,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.error(
                     "E-RES-CONST-NOT-CONST",
                     expr.span,
-                    "floating-point constants are not representable in Core 1.0 facts"
-                        .to_string(),
+                    "floating-point constants are not representable in Core 1.0 facts".to_string(),
                 );
                 (ty, None)
             }
@@ -3961,9 +3983,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     self.error(
                         "E-TYP-CAST",
                         operand.span,
-                        format!(
-                            "cast from `{source_ty}` to `{target}` is not allowed in Core 1.0"
-                        ),
+                        format!("cast from `{source_ty}` to `{target}` is not allowed in Core 1.0"),
                     );
                     return (Type::Error, None);
                 }
@@ -4036,11 +4056,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     match result {
                         Some(v) if int_i128_fits(v, ty) => (ty.clone(), Some(ConstValue::Int(v))),
                         Some(_) => {
-                            self.error(
-                                "E-TYP-CONST",
-                                expr.span,
-                                "constant overflow".to_string(),
-                            );
+                            self.error("E-TYP-CONST", expr.span, "constant overflow".to_string());
                             (ty.clone(), None)
                         }
                         None => {
@@ -4227,7 +4243,8 @@ fn is_text_like(ty: &Type) -> bool {
 }
 
 fn cast_allowed(source: &Type, target: &Type) -> bool {
-    let source_scalar = source.is_int() || source.is_float() || matches!(source, Type::Bool | Type::Char);
+    let source_scalar =
+        source.is_int() || source.is_float() || matches!(source, Type::Bool | Type::Char);
     if source == target && source_scalar {
         return true;
     }
@@ -4389,11 +4406,7 @@ fn resolve_vars_keep(vars: &[Option<Type>], ty: &Type) -> Type {
 
 /// Résout les variables d'inférence pour de bon : une variable libre devient
 /// `Error` et son index est enregistré.
-fn resolve_vars_final(
-    vars: &[Option<Type>],
-    ty: &Type,
-    unresolved: &mut BTreeSet<usize>,
-) -> Type {
+fn resolve_vars_final(vars: &[Option<Type>], ty: &Type, unresolved: &mut BTreeSet<usize>) -> Type {
     resolve_vars_impl(vars, ty, Some(unresolved), 0)
 }
 
@@ -4427,23 +4440,37 @@ fn resolve_vars_impl(
             elem: Box::new(resolve_vars_impl(vars, elem, unresolved, depth + 1)),
             len: *len,
         },
-        Type::Slice(inner) => {
-            Type::Slice(Box::new(resolve_vars_impl(vars, inner, unresolved, depth + 1)))
-        }
+        Type::Slice(inner) => Type::Slice(Box::new(resolve_vars_impl(
+            vars,
+            inner,
+            unresolved,
+            depth + 1,
+        ))),
         Type::Tuple(items) => Type::Tuple(
             items
                 .iter()
                 .map(|t| resolve_vars_impl(vars, t, unresolved.as_deref_mut(), depth + 1))
                 .collect(),
         ),
-        Type::Vec(inner) => {
-            Type::Vec(Box::new(resolve_vars_impl(vars, inner, unresolved, depth + 1)))
-        }
-        Type::Option(inner) => {
-            Type::Option(Box::new(resolve_vars_impl(vars, inner, unresolved, depth + 1)))
-        }
+        Type::Vec(inner) => Type::Vec(Box::new(resolve_vars_impl(
+            vars,
+            inner,
+            unresolved,
+            depth + 1,
+        ))),
+        Type::Option(inner) => Type::Option(Box::new(resolve_vars_impl(
+            vars,
+            inner,
+            unresolved,
+            depth + 1,
+        ))),
         Type::Result(ok, err) => Type::Result(
-            Box::new(resolve_vars_impl(vars, ok, unresolved.as_deref_mut(), depth + 1)),
+            Box::new(resolve_vars_impl(
+                vars,
+                ok,
+                unresolved.as_deref_mut(),
+                depth + 1,
+            )),
             Box::new(resolve_vars_impl(vars, err, unresolved, depth + 1)),
         ),
         Type::Nominal { def, name, args } => Type::Nominal {
@@ -4653,7 +4680,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 _ => {}
             },
-            Coverage::Enum { def, variants, seen } => match &pat.kind {
+            Coverage::Enum {
+                def,
+                variants,
+                seen,
+            } => match &pat.kind {
                 PatKind::Wild | PatKind::Binding { .. } => {
                     for index in 0..variants.len() {
                         seen.insert(index);

@@ -5,8 +5,7 @@
 
 use ravum_lang_sema::loader::{load_package, CrateKind, LoadedPackage};
 use ravum_lang_syntax::ast::{
-    FieldDef, FnItem, ItemKind, Module, ParamKind, Receiver, Type, TypeKind,
-    VariantDefFields,
+    FieldDef, FnItem, ItemKind, Module, ParamKind, Receiver, Type, TypeKind, VariantDefFields,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,7 +27,10 @@ pub fn run(path: &Path, out: Option<&Path>) -> i32 {
     let out_dir = match out {
         Some(dir) => {
             if let Err(message) = fs::create_dir_all(dir) {
-                util::err(format!("cannot create `{}`: {message}", util::pretty_path(dir)));
+                util::err(format!(
+                    "cannot create `{}`: {message}",
+                    util::pretty_path(dir)
+                ));
                 return util::EXIT_FAIL;
             }
             dir.to_path_buf()
@@ -37,7 +39,10 @@ pub fn run(path: &Path, out: Option<&Path>) -> i32 {
             Ok(cache) => {
                 let dir = cache.join("doc");
                 if let Err(message) = fs::create_dir_all(&dir) {
-                    util::err(format!("cannot create `{}`: {message}", util::pretty_path(&dir)));
+                    util::err(format!(
+                        "cannot create `{}`: {message}",
+                        util::pretty_path(&dir)
+                    ));
                     return util::EXIT_FAIL;
                 }
                 dir
@@ -161,8 +166,7 @@ fn render_module(md: &mut String, module: &Module, path: &str, level: usize) {
             } else {
                 md.push_str(&format!(
                     "- `pub struct {} {{ {} }}`\n",
-                    definition.name.name,
-                    fields
+                    definition.name.name, fields
                 ));
             }
         }
@@ -179,11 +183,7 @@ fn render_module(md: &mut String, module: &Module, path: &str, level: usize) {
                     VariantDefFields::Tuple(types) => format!(
                         "{}({})",
                         variant.name.name,
-                        types
-                            .iter()
-                            .map(render_type)
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        types.iter().map(render_type).collect::<Vec<_>>().join(", ")
                     ),
                     VariantDefFields::Struct(fields) => {
                         format!(

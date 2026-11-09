@@ -46,8 +46,8 @@ pub fn is_error_type(ty: &Type) -> bool {
 
 /// Noms de types réservés par le prélude (collision = `E-RES-CONFLICT`).
 pub const PRELUDE_TYPES: &[&str] = &[
-    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize", "usize",
-    "f32", "f64", "bool", "char", "String", "Vec", "Option", "Result", "Error",
+    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize", "usize", "f32",
+    "f64", "bool", "char", "String", "Vec", "Option", "Result", "Error",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -63,15 +63,7 @@ pub const PRELUDE_VALUES: &[&str] = &[
 ];
 
 /// Modules accessibles sans `use` (chemins canoniques).
-pub const PRELUDE_MODULES: &[&str] = &[
-    "io",
-    "fs",
-    "string",
-    "math",
-    "env",
-    "process",
-    "std",
-];
+pub const PRELUDE_MODULES: &[&str] = &["io", "fs", "string", "math", "env", "process", "std"];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
 pub fn builtin_root_module(name: &str) -> Option<&'static str> {
@@ -530,36 +522,169 @@ const CHAR_KINDS: &[MethodSelfKind] = &[MethodSelfKind::Char];
 pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     // --- String ---
     method!(STRING_KINDS, "len", "String::len", [], "usize", PURE),
-    method!(STRING_KINDS, "is_empty", "String::is_empty", [], "bool", PURE),
+    method!(
+        STRING_KINDS,
+        "is_empty",
+        "String::is_empty",
+        [],
+        "bool",
+        PURE
+    ),
     method!(STRING_KINDS, "as_str", "String::as_str", [], "&str", PURE),
-    method!(STRING_KINDS, "push_str", "String::push_str", ["&str"], "()", ALLOC),
+    method!(
+        STRING_KINDS,
+        "push_str",
+        "String::push_str",
+        ["&str"],
+        "()",
+        ALLOC
+    ),
     method!(STRING_KINDS, "push", "String::push", ["char"], "()", ALLOC),
     method!(STRING_KINDS, "clone", "String::clone", [], "String", ALLOC),
     // `trim`, `to_uppercase`, `to_lowercase` renvoient des valeurs possédées.
     method!(STRING_KINDS, "trim", "String::trim", [], "String", ALLOC),
-    method!(STRING_KINDS, "to_uppercase", "String::to_uppercase", [], "String", ALLOC),
-    method!(STRING_KINDS, "to_lowercase", "String::to_lowercase", [], "String", ALLOC),
-    method!(STRING_KINDS, "contains", "String::contains", ["&str"], "bool", PURE),
-    method!(STRING_KINDS, "replace", "String::replace", ["&str", "&str"], "String", ALLOC),
-    method!(STRING_KINDS, "lines", "String::lines", [], "Vec<String>", ALLOC),
-    method!(STRING_KINDS, "starts_with", "String::starts_with", ["&str"], "bool", PURE),
-    method!(STRING_KINDS, "ends_with", "String::ends_with", ["&str"], "bool", PURE),
-    method!(STRING_KINDS, "parse_i64", "String::parse_i64", [], "Result<i64, Error>", ALLOC),
-    method!(STRING_KINDS, "parse_f64", "String::parse_f64", [], "Result<f64, Error>", ALLOC),
+    method!(
+        STRING_KINDS,
+        "to_uppercase",
+        "String::to_uppercase",
+        [],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "to_lowercase",
+        "String::to_lowercase",
+        [],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "contains",
+        "String::contains",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STRING_KINDS,
+        "replace",
+        "String::replace",
+        ["&str", "&str"],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "lines",
+        "String::lines",
+        [],
+        "Vec<String>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "starts_with",
+        "String::starts_with",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STRING_KINDS,
+        "ends_with",
+        "String::ends_with",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STRING_KINDS,
+        "parse_i64",
+        "String::parse_i64",
+        [],
+        "Result<i64, Error>",
+        ALLOC
+    ),
+    method!(
+        STRING_KINDS,
+        "parse_f64",
+        "String::parse_f64",
+        [],
+        "Result<f64, Error>",
+        ALLOC
+    ),
     // --- &str (lecture seule, valeurs possédées pour les transformations) ---
     method!(STR_KINDS, "len", "str::len", [], "usize", PURE),
     method!(STR_KINDS, "is_empty", "str::is_empty", [], "bool", PURE),
     method!(STR_KINDS, "as_str", "str::as_str", [], "&str", PURE),
     method!(STR_KINDS, "trim", "str::trim", [], "String", ALLOC),
-    method!(STR_KINDS, "to_uppercase", "str::to_uppercase", [], "String", ALLOC),
-    method!(STR_KINDS, "to_lowercase", "str::to_lowercase", [], "String", ALLOC),
-    method!(STR_KINDS, "contains", "str::contains", ["&str"], "bool", PURE),
-    method!(STR_KINDS, "replace", "str::replace", ["&str", "&str"], "String", ALLOC),
+    method!(
+        STR_KINDS,
+        "to_uppercase",
+        "str::to_uppercase",
+        [],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "to_lowercase",
+        "str::to_lowercase",
+        [],
+        "String",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "contains",
+        "str::contains",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STR_KINDS,
+        "replace",
+        "str::replace",
+        ["&str", "&str"],
+        "String",
+        ALLOC
+    ),
     method!(STR_KINDS, "lines", "str::lines", [], "Vec<String>", ALLOC),
-    method!(STR_KINDS, "starts_with", "str::starts_with", ["&str"], "bool", PURE),
-    method!(STR_KINDS, "ends_with", "str::ends_with", ["&str"], "bool", PURE),
-    method!(STR_KINDS, "parse_i64", "str::parse_i64", [], "Result<i64, Error>", ALLOC),
-    method!(STR_KINDS, "parse_f64", "str::parse_f64", [], "Result<f64, Error>", ALLOC),
+    method!(
+        STR_KINDS,
+        "starts_with",
+        "str::starts_with",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STR_KINDS,
+        "ends_with",
+        "str::ends_with",
+        ["&str"],
+        "bool",
+        PURE
+    ),
+    method!(
+        STR_KINDS,
+        "parse_i64",
+        "str::parse_i64",
+        [],
+        "Result<i64, Error>",
+        ALLOC
+    ),
+    method!(
+        STR_KINDS,
+        "parse_f64",
+        "str::parse_f64",
+        [],
+        "Result<f64, Error>",
+        ALLOC
+    ),
     // --- &[T] ---
     method!(SLICE_KINDS, "len", "slice::len", [], "usize", PURE),
     method!(SLICE_KINDS, "is_empty", "slice::is_empty", [], "bool", PURE),
@@ -575,19 +700,54 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     method!(OPTION_KINDS, "is_some", "Option::is_some", [], "bool", PURE),
     method!(OPTION_KINDS, "is_none", "Option::is_none", [], "bool", PURE),
     method!(OPTION_KINDS, "unwrap", "Option::unwrap", [], "T", PANIC),
-    method!(OPTION_KINDS, "unwrap_or", "Option::unwrap_or", ["T"], "T", PURE),
-    method!(OPTION_KINDS, "ok_or", "Option::ok_or", ["Error"], "Result<T, Error>", PURE),
+    method!(
+        OPTION_KINDS,
+        "unwrap_or",
+        "Option::unwrap_or",
+        ["T"],
+        "T",
+        PURE
+    ),
+    method!(
+        OPTION_KINDS,
+        "ok_or",
+        "Option::ok_or",
+        ["Error"],
+        "Result<T, Error>",
+        PURE
+    ),
     // --- Result<T, E> ---
     method!(RESULT_KINDS, "is_ok", "Result::is_ok", [], "bool", PURE),
     method!(RESULT_KINDS, "is_err", "Result::is_err", [], "bool", PURE),
     method!(RESULT_KINDS, "unwrap", "Result::unwrap", [], "T", PANIC),
-    method!(RESULT_KINDS, "unwrap_or", "Result::unwrap_or", ["T"], "T", PURE),
+    method!(
+        RESULT_KINDS,
+        "unwrap_or",
+        "Result::unwrap_or",
+        ["T"],
+        "T",
+        PURE
+    ),
     method!(RESULT_KINDS, "ok", "Result::ok", [], "Option<T>", PURE),
     method!(RESULT_KINDS, "err", "Result::err", [], "Option<E>", PURE),
     // --- primitifs ---
-    method!(INT_KINDS, "to_string", "int::to_string", [], "String", ALLOC),
+    method!(
+        INT_KINDS,
+        "to_string",
+        "int::to_string",
+        [],
+        "String",
+        ALLOC
+    ),
     method!(SIGNED_KINDS, "abs", "int::abs", [], "Self", PURE),
-    method!(FLOAT_KINDS, "to_string", "float::to_string", [], "String", ALLOC),
+    method!(
+        FLOAT_KINDS,
+        "to_string",
+        "float::to_string",
+        [],
+        "String",
+        ALLOC
+    ),
     method!(F64_KINDS, "abs", "f64::abs", [], "f64", PURE),
     method!(F64_KINDS, "sqrt", "f64::sqrt", [], "f64", PURE),
     method!(F64_KINDS, "floor", "f64::floor", [], "f64", PURE),
@@ -596,15 +756,29 @@ pub static BUILTIN_METHODS: &[BuiltinMethodSig] = &[
     method!(F64_KINDS, "powf", "f64::powf", ["f64"], "f64", PURE),
     method!(F64_KINDS, "min", "f64::min", ["f64"], "f64", PURE),
     method!(F64_KINDS, "max", "f64::max", ["f64"], "f64", PURE),
-    method!(BOOL_KINDS, "to_string", "bool::to_string", [], "String", ALLOC),
-    method!(CHAR_KINDS, "to_string", "char::to_string", [], "String", ALLOC),
+    method!(
+        BOOL_KINDS,
+        "to_string",
+        "bool::to_string",
+        [],
+        "String",
+        ALLOC
+    ),
+    method!(
+        CHAR_KINDS,
+        "to_string",
+        "char::to_string",
+        [],
+        "String",
+        ALLOC
+    ),
 ];
 
 /// Lookup d'une méthode builtin par famille de receveur et nom.
 pub fn builtin_method(kind: MethodSelfKind, name: &str) -> Option<&'static BuiltinMethodSig> {
-    BUILTIN_METHODS.iter().find(|m| {
-        m.name == name && m.kinds.iter().any(|k| kind_accepts(*k, kind))
-    })
+    BUILTIN_METHODS
+        .iter()
+        .find(|m| m.name == name && m.kinds.iter().any(|k| kind_accepts(*k, kind)))
 }
 
 fn kind_accepts(entry: MethodSelfKind, receiver: MethodSelfKind) -> bool {
@@ -678,11 +852,7 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
         }
         return Some(Type::Tuple(items));
     }
-    for (prefix, wrap) in [
-        ("Vec<", 0usize),
-        ("Option<", 1usize),
-        ("Result<", 2usize),
-    ] {
+    for (prefix, wrap) in [("Vec<", 0usize), ("Option<", 1usize), ("Result<", 2usize)] {
         if let Some(inner) = t.strip_prefix(prefix).and_then(|s| s.strip_suffix('>')) {
             let parts = split_top_level(inner, ',')?;
             let types: Option<Vec<Type>> = parts.iter().map(|p| type_from_str(p, env)).collect();
@@ -804,13 +974,21 @@ mod tests {
     #[test]
     fn every_builtin_fn_parses() {
         for sig in BUILTIN_FNS {
-            assert!(fn_ret_type(sig) != Type::Error, "retour illisible: {}", sig.path);
+            assert!(
+                fn_ret_type(sig) != Type::Error,
+                "retour illisible: {}",
+                sig.path
+            );
             for ty in fn_param_types(sig) {
                 assert!(!ty.is_error(), "paramètre illisible: {}", sig.path);
             }
         }
         for sig in BUILTIN_ASSOC_FNS {
-            assert!(!assoc_ret_type(sig).is_error(), "retour illisible: {}", sig.path);
+            assert!(
+                !assoc_ret_type(sig).is_error(),
+                "retour illisible: {}",
+                sig.path
+            );
             for ty in assoc_param_types(sig) {
                 assert!(!ty.is_error(), "paramètre illisible: {}", sig.path);
             }

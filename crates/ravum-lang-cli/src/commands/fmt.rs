@@ -64,7 +64,11 @@ pub fn run(path: &Path, check: bool) -> i32 {
         eprint!("{}", diags.render(&sources));
     }
     let error_count = diags.error_count() + failures;
-    let mode = if check { "would reformat" } else { "reformatted" };
+    let mode = if check {
+        "would reformat"
+    } else {
+        "reformatted"
+    };
     for file in &changed {
         println!("{mode} {}", util::pretty_path(file));
     }
@@ -104,7 +108,11 @@ fn collect_files(path: &Path) -> Result<Vec<PathBuf>, String> {
     let canonical = fs::canonicalize(path)
         .map_err(|error| format!("cannot resolve `{}`: {error}", util::pretty_path(path)))?;
     if canonical.is_file() {
-        if canonical.extension().and_then(|extension| extension.to_str()) != Some("rv") {
+        if canonical
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("rv")
+        {
             return Err(format!("`{}` is not a `.rv` file", util::pretty_path(path)));
         }
         return Ok(vec![canonical]);

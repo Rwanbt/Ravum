@@ -35,7 +35,9 @@ impl SourceMap {
     }
 
     pub fn path(&self, id: FileId) -> &str {
-        self.file(id).map(|f| f.path.as_str()).unwrap_or("<unknown>")
+        self.file(id)
+            .map(|f| f.path.as_str())
+            .unwrap_or("<unknown>")
     }
 
     /// Human-readable `file:line:col` for a span (1-based).

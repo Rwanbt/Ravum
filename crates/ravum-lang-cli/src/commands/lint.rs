@@ -50,9 +50,7 @@ fn count_denied(frontend: &Frontend, deny: &[String]) -> usize {
     if deny.is_empty() {
         return 0;
     }
-    let deny_all = deny
-        .iter()
-        .any(|code| code == "all" || code == "warnings");
+    let deny_all = deny.iter().any(|code| code == "all" || code == "warnings");
     frontend
         .diags
         .iter()

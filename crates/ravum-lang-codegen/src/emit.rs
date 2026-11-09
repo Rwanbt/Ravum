@@ -38,7 +38,8 @@ use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
     Block, EnumItem, Expr, ExprKind, FloatTy, FnItem, GenericParam, Ident, ImplItem, IntTy, Item,
     ItemKind, LitPat, MatchArm, Module, NodeId, ParamKind, Pat, PatKind, Path, PathRoot, Receiver,
-    Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp, VariantDefFields, VariantPatFields,
+    Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp, VariantDefFields,
+    VariantPatFields,
 };
 use ravum_lang_syntax::span::Span;
 use std::collections::{BTreeMap, BTreeSet};
@@ -196,7 +197,13 @@ impl Index {
     fn build(checked: &CheckedProgram) -> Index {
         let mut index = Index::default();
         let mut raws: Vec<RawItem> = Vec::new();
-        index.walk_module(checked, &checked.program.root, "", "crate::rvm_root", &mut raws);
+        index.walk_module(
+            checked,
+            &checked.program.root,
+            "",
+            "crate::rvm_root",
+            &mut raws,
+        );
 
         // The user `main`: an explicit fact wins, else the first `main` declared
         // in the root module, else the first `main` in declaration order.
@@ -204,7 +211,10 @@ impl Index {
             .facts
             .main_fn
             .or_else(|| first_user_main(&raws))
-            .filter(|id| raws.iter().any(|raw| raw.id == *id && raw.kind == RawKind::Fn));
+            .filter(|id| {
+                raws.iter()
+                    .any(|raw| raw.id == *id && raw.kind == RawKind::Fn)
+            });
         index.user_main = candidate;
 
         // Rust names (the user `main` is renamed so the emitted `fn main` is ours).
@@ -674,9 +684,7 @@ fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "string::from" | "String::from" | "str::from" => FreeBuiltin::StringFrom,
         "Error::new" | "error::new" => FreeBuiltin::ErrorNew,
         "Vec::new" | "vec::new" => FreeBuiltin::RustPath("Vec::new"),
-        "Vec::with_capacity" | "vec::with_capacity" => {
-            FreeBuiltin::RustPath("Vec::with_capacity")
-        }
+        "Vec::with_capacity" | "vec::with_capacity" => FreeBuiltin::RustPath("Vec::with_capacity"),
         "String::new" | "string::new" => FreeBuiltin::RustPath("String::new"),
         "string::parse_i64" | "parse_i64" | "str::parse_i64" => FreeBuiltin::ParseI64,
         "string::parse_f64" | "parse_f64" | "str::parse_f64" => FreeBuiltin::ParseF64,
@@ -806,7 +814,9 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "starts_with",
         "ends_with",
     ];
-    const VEC: &[&str] = &["len", "is_empty", "push", "pop", "clear", "clone", "as_slice"];
+    const VEC: &[&str] = &[
+        "len", "is_empty", "push", "pop", "clear", "clone", "as_slice",
+    ];
     const SLICE: &[&str] = &["len", "is_empty"];
     const OPTION: &[&str] = &["is_some", "is_none", "unwrap", "unwrap_or", "ok_or"];
     const RESULT: &[&str] = &["is_ok", "is_err", "unwrap", "unwrap_or", "ok", "err"];
@@ -997,11 +1007,12 @@ impl<'a> Emitter<'a> {
     // -- items -------------------------------------------------------------
 
     fn emit_module(&self, buf: &mut Buf, module: &Module) -> Result<(), CodegenError> {
-        let entry = self
-            .index
-            .modules
-            .get(&module.id)
-            .ok_or_else(|| err(format!("module node {} is missing from the index", module.id)))?;
+        let entry = self.index.modules.get(&module.id).ok_or_else(|| {
+            err(format!(
+                "module node {} is missing from the index",
+                module.id
+            ))
+        })?;
         self.marker(buf, module.span);
         buf.line(&format!("pub mod {} {{", entry.rust_name));
         buf.indent += 1;
@@ -1038,11 +1049,12 @@ impl<'a> Emitter<'a> {
 
     fn emit_fn(&self, buf: &mut Buf, item: &Item, fun: &FnItem) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
-        let entry = self
-            .index
-            .fns
-            .get(&item.id)
-            .ok_or_else(|| err(format!("function node {} is missing from the index", item.id)))?;
+        let entry = self.index.fns.get(&item.id).ok_or_else(|| {
+            err(format!(
+                "function node {} is missing from the index",
+                item.id
+            ))
+        })?;
 
         let mut signature = String::new();
         // `main` and test functions are called from the generated crate-root
@@ -1064,7 +1076,11 @@ impl<'a> Emitter<'a> {
                     Receiver::ByValue => "self".to_string(),
                 }),
                 ParamKind::Binding { name, ty } => {
-                    params.push(format!("{}: {}", mangle_ident(&name.name), self.type_node(ty)?));
+                    params.push(format!(
+                        "{}: {}",
+                        mangle_ident(&name.name),
+                        self.type_node(ty)?
+                    ));
                 }
             }
         }
@@ -1092,10 +1108,7 @@ impl<'a> Emitter<'a> {
         buf.line(&self.derive_attribute(item.id));
         let visibility = if item.vis.is_public() { "pub " } else { "" };
         let generics = self.generics(&structure.generics);
-        let head = format!(
-            "{visibility}struct {}{generics}",
-            entry.rust_name
-        );
+        let head = format!("{visibility}struct {}{generics}", entry.rust_name);
         if structure.fields.is_empty() {
             buf.line(&format!("{head} {{}}"));
             return Ok(());
@@ -1339,11 +1352,9 @@ impl<'a> Emitter<'a> {
     fn expr(&self, expr: &Expr, indent: usize) -> Result<String, CodegenError> {
         match &expr.kind {
             ExprKind::Unit => Ok("()".to_string()),
-            ExprKind::Int { value, suffix } => Ok(self.int_literal_text(
-                *value,
-                *suffix,
-                self.facts().expr_types.get(&expr.id),
-            )),
+            ExprKind::Int { value, suffix } => {
+                Ok(self.int_literal_text(*value, *suffix, self.facts().expr_types.get(&expr.id)))
+            }
             ExprKind::Float { text, suffix } => {
                 Ok(self.float_literal(*suffix, text, self.facts().expr_types.get(&expr.id)))
             }
@@ -1553,12 +1564,7 @@ impl<'a> Emitter<'a> {
 
     // -- literals ----------------------------------------------------------
 
-    fn int_literal_text(
-        &self,
-        value: u128,
-        suffix: Option<IntTy>,
-        ty: Option<&Type>,
-    ) -> String {
+    fn int_literal_text(&self, value: u128, suffix: Option<IntTy>, ty: Option<&Type>) -> String {
         let name = match suffix {
             Some(suffix) => Some(suffix.name().to_string()),
             None => ty.and_then(int_type_name).map(str::to_string),
@@ -1718,7 +1724,11 @@ impl<'a> Emitter<'a> {
     /// with the module tree emitted from the AST; the AST tree wins on conflict
     /// because only it is guaranteed to match the emitted modules.
     fn item_path(&self, id: NodeId) -> Result<String, CodegenError> {
-        let computed = self.index.items.get(&id).map(|entry| entry.rust_path.clone());
+        let computed = self
+            .index
+            .items
+            .get(&id)
+            .map(|entry| entry.rust_path.clone());
         if let Some(raw) = self.facts().item_paths.get(&id) {
             let rewritten = self.rewrite_fact_path(raw);
             return match computed {
@@ -2014,11 +2024,9 @@ impl<'a> Emitter<'a> {
 
     fn literal_pattern(&self, pat: &Pat, literal: &LitPat) -> Result<String, CodegenError> {
         Ok(match literal {
-            LitPat::Int { value, suffix } => self.int_literal_text(
-                *value,
-                *suffix,
-                self.facts().pat_types.get(&pat.id),
-            ),
+            LitPat::Int { value, suffix } => {
+                self.int_literal_text(*value, *suffix, self.facts().pat_types.get(&pat.id))
+            }
             LitPat::Bool(value) => {
                 if *value {
                     "true".to_string()
@@ -2258,12 +2266,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn nth_arg(
-        &self,
-        args: &[Expr],
-        index: usize,
-        indent: usize,
-    ) -> Result<String, CodegenError> {
+    fn nth_arg(&self, args: &[Expr], index: usize, indent: usize) -> Result<String, CodegenError> {
         match args.get(index) {
             Some(argument) => self.expr(argument, indent),
             None => Err(err(format!(
@@ -2387,7 +2390,9 @@ impl<'a> Emitter<'a> {
         Ok(match value {
             ConstValue::Int(number) => {
                 let name = int_type_name(ty).ok_or_else(|| {
-                    err(format!("constant with an integer value has non-integer type `{ty}`"))
+                    err(format!(
+                        "constant with an integer value has non-integer type `{ty}`"
+                    ))
                 })?;
                 if *number < 0 {
                     format!("-{}{}", number.unsigned_abs(), name)
@@ -2409,11 +2414,9 @@ impl<'a> Emitter<'a> {
 
     fn literal_const_expr(&self, expr: &Expr) -> Result<String, CodegenError> {
         match &expr.kind {
-            ExprKind::Int { value, suffix } => Ok(self.int_literal_text(
-                *value,
-                *suffix,
-                self.facts().expr_types.get(&expr.id),
-            )),
+            ExprKind::Int { value, suffix } => {
+                Ok(self.int_literal_text(*value, *suffix, self.facts().expr_types.get(&expr.id)))
+            }
             ExprKind::Bool(value) => Ok(if *value { "true" } else { "false" }.to_string()),
             ExprKind::Char(value) => Ok(char_literal(*value)),
             ExprKind::Str(value) => Ok(string_literal(value)),
@@ -2618,7 +2621,13 @@ mod tests {
             }
         }
 
-        fn method(&mut self, receiver: Expr, name: &str, args: Vec<Expr>, target: MethodTarget) -> Expr {
+        fn method(
+            &mut self,
+            receiver: Expr,
+            name: &str,
+            args: Vec<Expr>,
+            target: MethodTarget,
+        ) -> Expr {
             let method = self.ident(name);
             let id = self.id();
             self.facts.methods.insert(id, target);
@@ -2941,7 +2950,12 @@ mod tests {
         let point_stmt = b.let_stmt("p", Some(point_annotation), point_literal);
 
         let receiver_p = b.var("p", Some(point_ty.clone()));
-        let sum_call = b.method(receiver_p, "sum", Vec::new(), MethodTarget::User { item: sum_id });
+        let sum_call = b.method(
+            receiver_p,
+            "sum",
+            Vec::new(),
+            MethodTarget::User { item: sum_id },
+        );
         let sum_annotation = b.named_type("i32", Some(STy::I32));
         let sum_stmt = b.let_stmt("s", Some(sum_annotation), sum_call);
 
@@ -3004,7 +3018,12 @@ mod tests {
 
         let body = b.block(
             vec![
-                print_stmt, point_stmt, sum_stmt, to_string_stmt, print_t_stmt, q_stmt,
+                print_stmt,
+                point_stmt,
+                sum_stmt,
+                to_string_stmt,
+                print_t_stmt,
+                q_stmt,
             ],
             Some(ok_call),
         );
@@ -3066,7 +3085,11 @@ mod tests {
         // test fn passes() { assert_eq(helper(), 7); }
         let passes_id = b.id();
         let helper_callee = b.callee("helper");
-        let helper_call = b.call(helper_callee, Vec::new(), CallTarget::UserFn { item: helper_id });
+        let helper_call = b.call(
+            helper_callee,
+            Vec::new(),
+            CallTarget::UserFn { item: helper_id },
+        );
         let seven_arg = b.int(7, Some(STy::I32));
         let assert_eq_callee = b.callee("assert_eq");
         let assert_eq_call = b.call(
@@ -3415,7 +3438,10 @@ mod tests {
     // -- rustc-backed tests -------------------------------------------------
 
     fn rustc_available() -> bool {
-        match std::process::Command::new("rustc").arg("--version").output() {
+        match std::process::Command::new("rustc")
+            .arg("--version")
+            .output()
+        {
             Ok(output) => output.status.success(),
             Err(_) => false,
         }
@@ -3456,9 +3482,11 @@ mod tests {
         let dir = TempDir::new(label);
         let source = dir.path.join("program.rs");
         std::fs::write(&source, code).expect("cannot write the generated program");
-        let binary = dir
-            .path
-            .join(if cfg!(windows) { "program.exe" } else { "program" });
+        let binary = dir.path.join(if cfg!(windows) {
+            "program.exe"
+        } else {
+            "program"
+        });
         let output = std::process::Command::new("rustc")
             .arg("--edition")
             .arg("2021")
@@ -3554,7 +3582,10 @@ mod tests {
         assert!(stdout.contains("test passes ... ok"), "stdout: {stdout}");
         assert!(stdout.contains("test fails ... FAILED"), "stdout: {stdout}");
         assert!(stdout.contains("1 passed; 1 failed"), "stdout: {stdout}");
-        assert!(stdout.contains("assertion failed at main.rv:1"), "stdout: {stdout}");
+        assert!(
+            stdout.contains("assertion failed at main.rv:1"),
+            "stdout: {stdout}"
+        );
         assert_eq!(code, 1, "stderr: {stderr}");
     }
 
@@ -3723,17 +3754,20 @@ mod tests {
         Path {
             id,
             root: PathRoot::Plain,
-            segments: vec![PathSegment {
-                name: ident,
-                args,
-            }],
+            segments: vec![PathSegment { name: ident, args }],
             span: span(),
         }
     }
 
     fn binding_pat(b: &mut Builder, name: &str, mutable: bool) -> Pat {
         let ident = b.ident(name);
-        b.pat(PatKind::Binding { mutable, name: ident }, None)
+        b.pat(
+            PatKind::Binding {
+                mutable,
+                name: ident,
+            },
+            None,
+        )
     }
 
     fn variant_pattern(
@@ -4181,10 +4215,7 @@ mod tests {
         let total_id = b.id();
         let element_ty = b.named_type("i32", Some(STy::I32));
         let vec_path = generic_path(&mut b, "Vec", vec![element_ty]);
-        let vec_ty = b.ty(
-            TypeKind::Path(vec_path),
-            Some(STy::Vec(Box::new(STy::I32))),
-        );
+        let vec_ty = b.ty(TypeKind::Path(vec_path), Some(STy::Vec(Box::new(STy::I32))));
         let values_param = make_param(&mut b, "values", vec_ty);
         let sum_pat = binding_pat(&mut b, "sum", true);
         let sum_ty = b.named_type("i32", Some(STy::I32));
@@ -4416,10 +4447,13 @@ mod tests {
             }),
         );
         let text_param = make_param(&mut b, "text", text_ty);
-        let text_value = b.var("text", Some(STy::Ref {
-            mutable: false,
-            inner: Box::new(STy::Str),
-        }));
+        let text_value = b.var(
+            "text",
+            Some(STy::Ref {
+                mutable: false,
+                inner: Box::new(STy::Str),
+            }),
+        );
         let parsed_ty = STy::Result(
             Box::new(STy::I64),
             Box::new(STy::Nominal {
@@ -4436,10 +4470,7 @@ mod tests {
             "String::parse_i64",
             parsed_ty.clone(),
         );
-        let tried = b.expr(
-            ExprKind::Try(Box::new(parse_call)),
-            Some(STy::I64),
-        );
+        let tried = b.expr(ExprKind::Try(Box::new(parse_call)), Some(STy::I64));
         let number_annotation = b.named_type("i64", Some(STy::I64));
         let number_let = Stmt {
             id: b.id(),
@@ -4462,10 +4493,7 @@ mod tests {
         );
         let parse_body = b.block(vec![number_let], Some(ok_number));
         let parse_result_path = b.path(&["Result"]);
-        let parse_ret = b.ty(
-            TypeKind::Path(parse_result_path),
-            Some(parsed_ty),
-        );
+        let parse_ret = b.ty(TypeKind::Path(parse_result_path), Some(parsed_ty));
         let parse_item = make_fn(
             &mut b,
             parse_number_id,
@@ -4552,9 +4580,13 @@ mod tests {
         // let rect: Shape = Shape::Rect { w: 2.0, h: 3.0 };
         let rect_literal = {
             let path = b.path(&["Shape", "Rect"]);
-            b.facts
-                .resolutions
-                .insert(path.id, Resolution::Variant { enum_item: shape_id, variant: 1 });
+            b.facts.resolutions.insert(
+                path.id,
+                Resolution::Variant {
+                    enum_item: shape_id,
+                    variant: 1,
+                },
+            );
             let w_name = b.ident("w");
             let h_name = b.ident("h");
             let w_value = b.expr(
@@ -4597,9 +4629,13 @@ mod tests {
         // let empty: Shape = Shape::Empty;
         let empty_value = {
             let path = b.path(&["Shape", "Empty"]);
-            b.facts
-                .resolutions
-                .insert(path.id, Resolution::Variant { enum_item: shape_id, variant: 2 });
+            b.facts.resolutions.insert(
+                path.id,
+                Resolution::Variant {
+                    enum_item: shape_id,
+                    variant: 2,
+                },
+            );
             b.expr(ExprKind::Path(path), Some(shape_ty.clone()))
         };
         let empty_annotation = b.named_type("Shape", Some(shape_ty.clone()));
@@ -4713,10 +4749,13 @@ mod tests {
             b.int(2, Some(STy::I32)),
             b.int(3, Some(STy::I32)),
         ];
-        let array_literal = b.expr(ExprKind::Array(array_items), Some(STy::Array {
-            elem: Box::new(STy::I32),
-            len: 3,
-        }));
+        let array_literal = b.expr(
+            ExprKind::Array(array_items),
+            Some(STy::Array {
+                elem: Box::new(STy::I32),
+                len: 3,
+            }),
+        );
         let numbers_let = Stmt {
             id: b.id(),
             kind: StmtKind::Let(LetStmt {
@@ -4728,10 +4767,13 @@ mod tests {
         };
         statements.push(numbers_let);
         let indexed = {
-            let base = b.var("numbers", Some(STy::Array {
-                elem: Box::new(STy::I32),
-                len: 3,
-            }));
+            let base = b.var(
+                "numbers",
+                Some(STy::Array {
+                    elem: Box::new(STy::I32),
+                    len: 3,
+                }),
+            );
             let index = b.int(1, Some(STy::Usize));
             b.expr(
                 ExprKind::Index {
@@ -4823,13 +4865,14 @@ mod tests {
         // let nothing: Option<i32> = None; print nothing.is_none()
         let nothing_value = {
             let path = b.path(&["None"]);
-            b.facts
-                .resolutions
-                .insert(path.id, Resolution::Variant { enum_item: 930_001, variant: 1 });
-            b.expr(
-                ExprKind::Path(path),
-                Some(STy::Option(Box::new(STy::I32))),
-            )
+            b.facts.resolutions.insert(
+                path.id,
+                Resolution::Variant {
+                    enum_item: 930_001,
+                    variant: 1,
+                },
+            );
+            b.expr(ExprKind::Path(path), Some(STy::Option(Box::new(STy::I32))))
         };
         let nothing_element = b.named_type("i32", Some(STy::I32));
         let nothing_path = generic_path(&mut b, "Option", vec![nothing_element]);
@@ -4849,7 +4892,14 @@ mod tests {
         statements.push(nothing_let);
         let is_none = {
             let receiver = b.var("nothing", Some(STy::Option(Box::new(STy::I32))));
-            method_builtin(&mut b, receiver, "is_none", Vec::new(), "Option::is_none", STy::Bool)
+            method_builtin(
+                &mut b,
+                receiver,
+                "is_none",
+                Vec::new(),
+                "Option::is_none",
+                STy::Bool,
+            )
         };
         statements.push(print_value(&mut b, is_none, "bool"));
 
@@ -5057,7 +5107,8 @@ mod tests {
 
         let binary = compile(&code, "program-e");
         let (stdout, stderr, status) = run(&binary);
-        let expected = "12\n6\n0\n7\n6\n6\n3\nHI\n0\n10\n-1\n2\n4\n3\ntrue\ntrue\n42\nsay \"hi\"\n10\n";
+        let expected =
+            "12\n6\n0\n7\n6\n6\n3\nHI\n0\n10\n-1\n2\n4\n3\ntrue\ntrue\n42\nsay \"hi\"\n10\n";
         assert_eq!(stdout, expected, "stderr: {stderr}\n--- code ---\n{code}");
         assert_eq!(status, 0, "stderr: {stderr}");
     }
@@ -5074,7 +5125,10 @@ mod tests {
             options: &options,
             index,
         };
-        assert_eq!(emitter.rewrite_fact_path("crate::area"), "crate::rvm_root::area");
+        assert_eq!(
+            emitter.rewrite_fact_path("crate::area"),
+            "crate::rvm_root::area"
+        );
         assert_eq!(
             emitter.rewrite_fact_path("crate::Shape::Circle"),
             "crate::rvm_root::Shape::Circle"
@@ -5095,7 +5149,8 @@ mod tests {
     }
 
     #[test]
-    fn short_circuit_operators_are_preserved() {        let mut b = Builder::new();
+    fn short_circuit_operators_are_preserved() {
+        let mut b = Builder::new();
         let logic_id = b.id();
         let a_ty = b.named_type("bool", Some(STy::Bool));
         let b_ty = b.named_type("bool", Some(STy::Bool));
@@ -5356,5 +5411,3 @@ mod tests {
         assert_eq!(status, 0, "stderr: {stderr}");
     }
 }
-
-
