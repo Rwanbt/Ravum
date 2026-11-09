@@ -16,6 +16,7 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
+| **SHA des preuves de la §1** | `8be7913d69dee77ba37d04b219919e894481f21e` (commit de session ; les mesures ont été exécutées sur cet arbre) |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
