@@ -246,7 +246,10 @@ impl UnitGraph {
     /// Discovers the workspace at `root` with `cargo metadata --no-deps`.
     pub fn discover(root: &Path) -> Result<Self, GraphError> {
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let canonical_root = std::fs::canonicalize(root).map_err(|error| {
+        // The root is normalized like every unit path: `load_unit_files` strips it
+        // from each source path to build the content identity, and a verbatim
+        // prefix on one side only would silently turn every identity absolute.
+        let canonical_root = normalize_path(&std::fs::canonicalize(root).map_err(|error| {
             GraphError::new(
                 DiscoverError::ManifestInvalid,
                 format!(
@@ -254,7 +257,7 @@ impl UnitGraph {
                     root.display()
                 ),
             )
-        })?;
+        })?);
         // A resolved `cargo metadata` is preferred: it carries the activated
         // feature set, without which a unit that declares features cannot be
         // verified incrementally (`Unit::features_resolved`). Resolution is
