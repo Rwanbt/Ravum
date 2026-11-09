@@ -79,4 +79,5 @@ pub use report::{
 pub use snapshot::{
     externs_digest, sync_unit_dir, validate_externs, AnalysisRequest, ExternInput,
     MaterializedSnapshot, SnapshotExtern, SnapshotIdentity, SnapshotStore, SourceFile, SyncStats,
+    WireAnalyzeRequest, WireExtern,
 };

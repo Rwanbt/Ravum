@@ -257,8 +257,10 @@ struct ExternInputWire {
     name: String,
     crate_name: String,
     interface_id: String,
-    len: u64,
-    rmeta_hex: String,
+    #[serde(default)]
+    len: Option<u64>,
+    #[serde(default, alias = "rmeta_hex")]
+    bytes_hex: String,
 }
 
 impl Serialize for ExternInput {
@@ -266,12 +268,19 @@ impl Serialize for ExternInput {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        ExternInputWire {
-            name: self.name.clone(),
-            crate_name: self.crate_name.clone(),
-            interface_id: self.interface_id.clone(),
-            len: self.bytes.len() as u64,
-            rmeta_hex: hex_encode(&self.bytes),
+        // Exact wire schema: {name, crate_name, interface_id, bytes_hex}.
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            name: &'a str,
+            crate_name: &'a str,
+            interface_id: &'a str,
+            bytes_hex: String,
+        }
+        Wire {
+            name: &self.name,
+            crate_name: &self.crate_name,
+            interface_id: &self.interface_id,
+            bytes_hex: hex_encode(&self.bytes),
         }
         .serialize(serializer)
     }
@@ -283,14 +292,16 @@ impl<'de> Deserialize<'de> for ExternInput {
     ) -> std::result::Result<Self, D::Error> {
         use serde::de::Error as DeError;
         let wire = ExternInputWire::deserialize(deserializer)?;
-        let bytes = hex_decode(&wire.rmeta_hex).map_err(DeError::custom)?;
-        if bytes.len() as u64 != wire.len {
-            return Err(DeError::custom(format!(
-                "extern {:?}: len {} does not match {} decoded bytes",
-                wire.name,
-                wire.len,
-                bytes.len()
-            )));
+        let bytes = hex_decode(&wire.bytes_hex).map_err(DeError::custom)?;
+        if let Some(len) = wire.len {
+            if bytes.len() as u64 != len {
+                return Err(DeError::custom(format!(
+                    "extern {:?}: len {} does not match {} decoded bytes",
+                    wire.name,
+                    len,
+                    bytes.len()
+                )));
+            }
         }
         let input = ExternInput {
             name: wire.name,
@@ -549,6 +560,61 @@ impl SnapshotStore {
     }
 }
 
+/// One extern as it appears on the JSON-lines wire:
+/// `{ "name", "crate_name", "interface_id", "bytes_hex" }`.
+///
+/// This is a *protocol* type, deliberately separate from [`AnalysisRequest`] so
+/// the Rust API keeps its exact legacy shape (no struct literal breakage) while
+/// clients can version the wire schema independently.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WireExtern {
+    pub name: String,
+    pub crate_name: String,
+    pub interface_id: String,
+    pub bytes_hex: String,
+}
+
+impl WireExtern {
+    /// Validates and converts one wire extern into the internal [`ExternInput`].
+    /// Fail-closed: hex validity, SHA-256 match, name and size bounds.
+    pub fn into_extern_input(self) -> Result<ExternInput> {
+        let bytes = hex_decode(&self.bytes_hex)?;
+        let input = ExternInput::new(self.name, self.crate_name, bytes)?;
+        if input.interface_id != self.interface_id {
+            return Err(DaemonError::invalid(format!(
+                "extern {:?}: interface_id does not match the SHA-256 of bytes_hex",
+                input.name
+            )));
+        }
+        Ok(input)
+    }
+}
+
+/// Complete wire request: the legacy [`AnalysisRequest`] (flattened, exactly the
+/// same JSON fields as before) plus an optional `externs` array.
+///
+/// `#[serde(default)]` makes every existing client request valid unchanged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WireAnalyzeRequest {
+    #[serde(flatten)]
+    pub request: AnalysisRequest,
+    #[serde(default)]
+    pub externs: Vec<WireExtern>,
+}
+
+impl WireAnalyzeRequest {
+    /// Splits and validates the wire request into the Rust request and externs.
+    pub fn into_parts(self) -> Result<(AnalysisRequest, Vec<ExternInput>)> {
+        let externs = self
+            .externs
+            .into_iter()
+            .map(WireExtern::into_extern_input)
+            .collect::<Result<Vec<_>>>()?;
+        validate_externs(&externs)?;
+        Ok((self.request, externs))
+    }
+}
 fn validate_extern_one(extern_input: &ExternInput) -> Result<()> {
     validate_extern_name(&extern_input.name)?;
     validate_extern_name(&extern_input.crate_name)?;
