@@ -73,7 +73,11 @@ pub struct DiagnosticSet {
 }
 
 impl DiagnosticSet {
-    pub fn new(source_snapshot_id: SnapshotId, tool: impl Into<String>, tool_version: impl Into<String>) -> Self {
+    pub fn new(
+        source_snapshot_id: SnapshotId,
+        tool: impl Into<String>,
+        tool_version: impl Into<String>,
+    ) -> Self {
         Self {
             schema_version: DIAGNOSTICS_SCHEMA_VERSION,
             source_snapshot_id,
@@ -84,7 +88,10 @@ impl DiagnosticSet {
     }
 
     pub fn error_count(&self) -> usize {
-        self.diagnostics.iter().filter(|d| d.level.is_error()).count()
+        self.diagnostics
+            .iter()
+            .filter(|d| d.level.is_error())
+            .count()
     }
 
     pub fn warning_count(&self) -> usize {

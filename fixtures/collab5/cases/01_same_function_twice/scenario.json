@@ -1,0 +1,14 @@
+{
+  "id": "01_same_function_twice",
+  "description": "Deux propositions modifient la meme fonction du meme fichier.",
+  "lane": "scripted_verifier",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "alpha-a", "target": "src/lib.rs", "symbols": ["alpha"], "patch": "a.patch"},
+    {"agent_id": "agent-b", "task_id": "alpha-b", "target": "src/lib.rs", "symbols": ["alpha"], "patch": "b.patch"}
+  ],
+  "expected_decisions": ["AUTO_SAFE", "CONFLICT"],
+  "expected_levels": ["SEMANTICALLY_CHECKED", "REJECTED"],
+  "verifier": {"mode": "pass_all"},
+  "expect_reason_contains": [[], ["alpha"]]
+}

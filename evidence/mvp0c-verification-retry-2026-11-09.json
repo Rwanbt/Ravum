@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "suite_name": "verification-retry",
+  "generated_unix": 1794185408,
+  "git": {
+    "head": "05350c76ba77d48c6142f77daa7c06ee11da4e1f",
+    "branch": "feat/mvp0c-hardening",
+    "dirty_files": 10,
+    "note": "arbre de travail partagé MVP-0c: fichiers dirty d'autres workers attendus, hors identité de ce correctif"
+  },
+  "machine": {
+    "node": "v26.13.0",
+    "os": "win32",
+    "release": "10.0.26100",
+    "arch": "x64",
+    "logical_parallelism": 16,
+    "total_memory_bytes": 16868962304,
+    "free_memory_bytes": 2819588096,
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "rustc_calibration_ms": [
+      141,
+      80,
+      104
+    ]
+  },
+  "protocol": {
+    "incident_reference": "docs/mvp/MVP-0c-build-performance.md section 9 + evidence/mvp0c-verification-transient-2026-11-09.json",
+    "classification_rules": [
+      "exit 0 + no error diagnostic => Passed (AUTO_SAFE if other preconditions hold)",
+      "non-zero + at least one E-code => Failed => REJECT (unchanged)",
+      "non-zero without any E-code => one bounded retry with fresh state (attempt 2)",
+      "retry success => Passed (SEMANTICALLY_CHECKED, retry noted in check summary)",
+      "retry failure with E-code => Failed => REJECT",
+      "persistent no-code failure (2 attempts) => Unavailable => MANUAL_REQUIRED, never REJECT",
+      "spawn error / test-execution timeout => Unavailable (unchanged)",
+      "no successful verification => no integration (fail-closed)"
+    ],
+    "bounded_retry": "1 retry (2 attempts total), fresh state directory <snapshot>-retry1",
+    "evidence_fields": "exit_code + stderr excerpt <= 2048 bytes, kept in MergeCheck.summary and VerificationOutcome reason (both journaled); MergeCheck schema itself not extended (out of scope)",
+    "rustc_seam": "RAVUM_RUSTC applies only when caller did not resolve a specific compiler (default string rustc); explicit --rustc/RUSTC wins; behaviour unchanged when unset",
+    "no_code_definition": "a rustc failure whose parsed diagnostics carry no diagnostic code (E#### absent), including loader/sysroot metadata errors",
+    "fake_rustc_protocol": "small Rust program compiled at test setup; delegates -vV to the real rustc; modes transient-once / ecode / permanent-transient; counts compile calls and logs argv; injected via RAVUM_RUSTC into the real ravum-collab binary",
+    "no_git_commands": "aucune commande git mutante exécutée; seules des lectures git rev-parse/status ont servi à cette preuve"
+  },
+  "code_changes": [
+    {
+      "file": "crates/ravum-workspace-coordinator/src/bin/common/mod.rs",
+      "change": "classification transitoire, retry borné 1 avec état neuf, exit_code + extrait stderr <=2KiB, seam RAVUM_RUSTC",
+      "functions": [
+        "RustcMergeVerifier::new",
+        "scratch",
+        "materialize",
+        "metadata_attempt",
+        "compile_metadata",
+        "verify",
+        "bounded_stderr_excerpt",
+        "definitive_compile_reason",
+        "transient_unavailable_reason"
+      ]
+    },
+    {
+      "file": "crates/ravum-workspace-coordinator/tests/transient_verification.rs",
+      "change": "nouveau fichier, 3 tests déterministes via faux rustc (aucun test existant modifié)"
+    },
+    {
+      "file": "crates/ravum-workspace-coordinator/src/coordinator.rs",
+      "change": "non modifié: mapping Failed->REJECT et Unavailable->MANUAL_REQUIRED déjà correct"
+    },
+    {
+      "file": "crates/ravum-workspace-coordinator/src/verifier.rs",
+      "change": "non modifié: la classification vit dans le vérificateur rustc injecté"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario": "1-transient-once-retry-success",
+      "fake_mode": "transient-once",
+      "exit_code": 0,
+      "duration_ms": 508,
+      "decisions": [
+        "AUTO_SAFE",
+        "AUTO_SAFE"
+      ],
+      "levels": [
+        "SEMANTICALLY_CHECKED",
+        "SEMANTICALLY_CHECKED"
+      ],
+      "accepted_changes": 2,
+      "accepted_verification_statuses": [
+        "passed",
+        "passed"
+      ],
+      "fake_compile_calls": 3,
+      "fake_log_lines": [
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\de04c97bd1ba\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\de04c97bd1ba\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\de04c97bd1ba-retry1\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\de04c97bd1ba-retry1\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\290205c2e1db\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\transient-once\\verify-work\\snapshots\\290205c2e1db\\src\\lib.rs"
+      ],
+      "journal_lines": 2,
+      "journal_reasons": [
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+        "semantic verification: passed (metadata_check=passed, evidence a17f60125a609f89bb58eaa6efbf62073c9db303bafa1a2249e689f27eea6597)",
+        "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only; succeeded on bounded retry 1 of 2 after a transient no-code failure: first exit code 101, first stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata\",\"code\":null,\"level\":\"error\",\"spans\":[]} {\"$message_type\":\"diagnostic\",\"message\":\"cannot resolve a prelude import\",\"code\":null,\"level\":\"error\",\"spans\":[]}) [passed] evidence ee6bcf417ad83883daa3001d25cd13639703e83ae54fa97882e73ae72a617f83",
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+        "semantic verification: passed (metadata_check=passed, evidence c0ec9fb6715189cc429810e3b665999e608b75e2899e5c01bcdeb8e962a29884)",
+        "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence 6860933a3da3b665efe681d58242698aeba8c01cca93d20c76953ceb8c8f36c3"
+      ]
+    },
+    {
+      "scenario": "2-ecode-reject-preserved",
+      "fake_mode": "ecode",
+      "exit_code": 0,
+      "duration_ms": 304,
+      "decisions": [
+        "REJECT",
+        "REJECT"
+      ],
+      "levels": [
+        "REJECTED",
+        "REJECTED"
+      ],
+      "accepted_changes": 0,
+      "accepted_verification_statuses": [],
+      "fake_compile_calls": 2,
+      "fake_log_lines": [
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\ecode\\verify-work\\snapshots\\de04c97bd1ba\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\ecode\\verify-work\\snapshots\\de04c97bd1ba\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\ecode\\verify-work\\snapshots\\0510efc108bd\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\ecode\\verify-work\\snapshots\\0510efc108bd\\src\\lib.rs"
+      ],
+      "journal_lines": 2,
+      "journal_reasons": [
+        "semantic verification failed: merged snapshot de04c97bd1ba does not compile with rustc 1.95.0 (exit code 101; stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"this function takes 2 arguments but 1 argument was supplied\",\"code\":{\"code\":\"E0061\"},\"level\":\"error\",\"spans\":[]})",
+        "failed check metadata_check on snapshot de04c97bd1ba (evidence 8b5743c85075bda3008c28500be53bf406041f670f356c5ad49c12d8abc064f3)",
+        "diagnostic: E0061 [error] this function takes 2 arguments but 1 argument was supplied",
+        "semantic verification failed: merged snapshot 0510efc108bd does not compile with rustc 1.95.0 (exit code 101; stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"this function takes 2 arguments but 1 argument was supplied\",\"code\":{\"code\":\"E0061\"},\"level\":\"error\",\"spans\":[]})",
+        "failed check metadata_check on snapshot 0510efc108bd (evidence 58f2c50c80a561ea98154e3a8eaa0e96a49889f7c5942863014e23a981cfc8f5)",
+        "diagnostic: E0061 [error] this function takes 2 arguments but 1 argument was supplied"
+      ]
+    },
+    {
+      "scenario": "3-permanent-transient-manual-required",
+      "fake_mode": "permanent-transient",
+      "exit_code": 0,
+      "duration_ms": 282,
+      "decisions": [
+        "MANUAL_REQUIRED",
+        "MANUAL_REQUIRED"
+      ],
+      "levels": [
+        "TEXTUALLY_APPLICABLE",
+        "TEXTUALLY_APPLICABLE"
+      ],
+      "accepted_changes": 0,
+      "accepted_verification_statuses": [],
+      "fake_compile_calls": 4,
+      "fake_log_lines": [
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\de04c97bd1ba\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\de04c97bd1ba\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\de04c97bd1ba-retry1\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\de04c97bd1ba-retry1\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\0510efc108bd\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\0510efc108bd\\src\\lib.rs",
+        "--edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\0510efc108bd-retry1\\.ravum-metadata <repo>\\crates\\ravum-workspace-coordinator\\../..\\target\\ravum-tests\\transient-verification\\permanent-transient\\verify-work\\snapshots\\0510efc108bd-retry1\\src\\lib.rs"
+      ],
+      "journal_lines": 2,
+      "journal_reasons": [
+        "semantic verification required but unavailable: rustc 1.95.0 produced no compiler error code while verifying merged snapshot de04c97bd1ba after 2 attempt(s) with fresh state: transient/infrastructure failure, not a compilation verdict (attempt 1: exit code 101, stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata\",\"code\":null,\"level\":\"error\",\"spans\":[]} {\"$message_type\":\"diagnostic\",\"message\":\"cannot resolve a prelude import\",\"code\":null,\"level\":\"error\",\"spans\":[]} | attempt 2: exit code 101, stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata\",\"code\":null,\"level\":\"error\",\"spans\":[]} {\"$message_type\":\"diagnostic\",\"message\":\"cannot resolve a prelude import\",\"code\":null,\"level\":\"error\",\"spans\":[]}); no integration without a successful verification",
+        "verifier \"rustc-cli\" could not run the required check; a textually clean merge is not accepted without proof (fail-closed)",
+        "semantic verification required but unavailable: rustc 1.95.0 produced no compiler error code while verifying merged snapshot 0510efc108bd after 2 attempt(s) with fresh state: transient/infrastructure failure, not a compilation verdict (attempt 1: exit code 101, stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata\",\"code\":null,\"level\":\"error\",\"spans\":[]} {\"$message_type\":\"diagnostic\",\"message\":\"cannot resolve a prelude import\",\"code\":null,\"level\":\"error\",\"spans\":[]} | attempt 2: exit code 101, stderr excerpt: {\"$message_type\":\"diagnostic\",\"message\":\"only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata\",\"code\":null,\"level\":\"error\",\"spans\":[]} {\"$message_type\":\"diagnostic\",\"message\":\"cannot resolve a prelude import\",\"code\":null,\"level\":\"error\",\"spans\":[]}); no integration without a successful verification",
+        "verifier \"rustc-cli\" could not run the required check; a textually clean merge is not accepted without proof (fail-closed)"
+      ]
+    }
+  ],
+  "suite": {
+    "command": "cargo test -p ravum-workspace-coordinator -- --test-threads=1",
+    "suites": [
+      {
+        "target": "unittests src\\lib.rs",
+        "status": "ok",
+        "passed": 76,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.09
+      },
+      {
+        "target": "unittests src\\bin\\collab2-lab.rs",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.0
+      },
+      {
+        "target": "unittests src\\bin\\ravum-collab.rs",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.0
+      },
+      {
+        "target": "tests\\collab1_non_regression.rs",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 3.53
+      },
+      {
+        "target": "tests\\collab2_two_functions.rs",
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 8.66
+      },
+      {
+        "target": "tests\\collab3_semantic.rs",
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 14.66
+      },
+      {
+        "target": "tests\\collab5_semantic_statuses.rs",
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.05
+      },
+      {
+        "target": "tests\\git_publication.rs",
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 33.45
+      },
+      {
+        "target": "tests\\git_publication_crash.rs",
+        "status": "ok",
+        "passed": 15,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 47.82
+      },
+      {
+        "target": "tests\\git_writer.rs",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 3.61
+      },
+      {
+        "target": "tests\\journal_durability.rs",
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.03
+      },
+      {
+        "target": "tests\\merge_strategies.rs",
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 6.62
+      },
+      {
+        "target": "tests\\transient_verification.rs",
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 2.56
+      },
+      {
+        "target": "tests\\transient_verification.rs (doc-tests)",
+        "status": "ok",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "duration_s": 0.0
+      }
+    ],
+    "total_passed": 137,
+    "total_failed": 0,
+    "warnings_in_log": 0,
+    "interpretation": "119 tests existants du périmètre committé + 3 nouveaux = 122 verts; + 15 tests du fichier untracked git_publication_crash.rs (autre worker) exécutés aussi => total observé",
+    "existing_tests_expected": 119,
+    "new_tests": 3
+  },
+  "checks": {
+    "build_ok": true,
+    "rustfmt_clean": true,
+    "no_warnings_in_suite_log": true,
+    "no_existing_test_modified": true,
+    "fail_closed_preserved": true,
+    "transient_retry_verified": true,
+    "ecode_still_rejected": true,
+    "persistent_no_code_manual_required": true
+  },
+  "limits": [
+    "le faux rustc reproduit le motif, pas la cause OS réelle (pression I/O/mémoire)",
+    "retry unique borné, pas de backoff ni de file d'attente",
+    "un échec de compilation sans E-code serait reclassé MANUAL_REQUIRED (arbitrage fail-closed assumé)",
+    "MergeCheck non étendu (schéma hors périmètre): exit code/extrait dans le résumé du check et la raison journalisée",
+    "aucun timeout de compilation metadata ajouté (limite connue)",
+    "tests lancent de vrais processus: --test-threads=1 requis sur machine partagée",
+    "aucun PROVED, aucune preuve de correction générale"
+  ],
+  "valid": true
+}

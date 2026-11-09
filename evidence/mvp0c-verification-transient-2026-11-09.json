@@ -1,0 +1,4795 @@
+{
+  "schema_version": 1,
+  "suite": "verification-transient",
+  "generated_unix": 1794184424,
+  "duration_ms": 59404,
+  "protocol": {
+    "goal": "classifier l’échec transitoire de la vérification sémantique sous charge (L4.5) sans affaiblir le fail-closed",
+    "incident": {
+      "available": true,
+      "path": "evidence\\mvp0c-grouping-multiagent-2026-11-09.json",
+      "evidenceValid": false,
+      "evidenceDurationMs": 29249,
+      "evidenceGit": {
+        "head": "58220f5b351668b3d6b2b2ae7772534bb9628a5a",
+        "branch": "feat/mvp0c-hardening",
+        "dirtyFiles": 17,
+        "note": "arbre de travail partagé avec les autres workers MVP-0c: un nombre de fichiers dirty non nul est attendu et n'entre pas dans l'identité de la campagne"
+      },
+      "evidenceLoad": {
+        "start": {
+          "freeMemoryBytes": 1514045440,
+          "totalMemoryBytes": 16868962304
+        },
+        "end": {
+          "freeMemoryBytes": 2144976896,
+          "totalMemoryBytes": 16868962304
+        },
+        "calibrationStartMs": [
+          441,
+          318,
+          328
+        ],
+        "calibrationEndMs": [
+          197,
+          204,
+          134
+        ],
+        "note": "machine de référence partagée avec d'autres workers; charge non contrôlée, mono-exécution; mémoire libre et calibration rustc -vV enregistrées avant/après chaque répétition"
+      },
+      "failureCount": 1,
+      "failures": [
+        {
+          "rep": 4,
+          "scenario": "d-undeclared-dependency",
+          "wallMs": 3131,
+          "spawnExit": 0,
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "agentId": "agent-d1",
+              "taskId": "helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ],
+              "integratedPaths": [
+                "src/lib.rs"
+              ],
+              "resultingSnapshotId": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4"
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "agentId": "agent-d2",
+              "taskId": "compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            },
+            {
+              "decision": "REJECT",
+              "proposalId": "agent-d3/other",
+              "agentId": "agent-d3",
+              "taskId": "other",
+              "reasons": [
+                "semantic verification failed: merged snapshot c77b8f105753 does not compile with rustc 1.95.0",
+                "failed check metadata_check on snapshot c77b8f105753 (evidence c9d6448833c403358701f9e2be2a7ef76046a0c0ef400140dcfb9a7b57d7a7bb)",
+                "diagnostic: no-code [error] only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata",
+                "diagnostic: no-code [error] cannot resolve a prelude import"
+              ],
+              "integratedPaths": [],
+              "resultingSnapshotId": null
+            }
+          ],
+          "checks": {
+            "decisionsExpected": false,
+            "chainOk": true,
+            "finalDigestMatches": true,
+            "noLostChanges": true,
+            "expectedFinalDigest": "d50475c6dfbf69cd4e90b539e1966bed2e8dda115bd2fe50f202aad9b1f36ae4",
+            "acceptedCount": 1,
+            "autoSafeCount": 1
+          },
+          "loadBefore": {
+            "freeMemoryBytes": 1166331904,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          },
+          "loadAfter": {
+            "freeMemoryBytes": 1314840576,
+            "totalMemoryBytes": 16868962304,
+            "processCount": null
+          }
+        }
+      ]
+    },
+    "scenario": {
+      "id": "d-undeclared-dependency",
+      "fixture": "benchmarks/grouping-multiagent/fixtures/scenario-d",
+      "expectedDecisions": [
+        "AUTO_SAFE",
+        "MANUAL_REQUIRED",
+        "AUTO_SAFE"
+      ],
+      "candidateContentSha256": "bf5798b9d6c7bceeb85704cba2226c184f74daff101648f50bf427f3113c4bf3",
+      "candidateEdits": [
+        {
+          "find": "    x + 1",
+          "replace": "    x + 5"
+        },
+        {
+          "find": "    x - 1",
+          "replace": "    x - 2"
+        }
+      ]
+    },
+    "conditions": [
+      {
+        "id": "rest",
+        "label": "repos relatif (aucune charge injectée)"
+      },
+      {
+        "id": "cpu",
+        "label": "charge CPU bornée (2 processus Node en boucle)"
+      },
+      {
+        "id": "memio",
+        "label": "charge mémoire/I/O bornée (192 Mo + I/O 64 Mo en boucle)"
+      }
+    ],
+    "runsPerConditionRequested": 20,
+    "directRustcProbesPerCondition": 12,
+    "runCommand": "ravum-collab integrate --workspace <copie fixture> --proposals <dir> --journal <tmp> --json --verify --work <tmp> (binaire déjà compilé, aucun rebuild)",
+    "directProbeCommand": "rustc --edition 2021 --crate-name ravum_merge_check --crate-type lib --emit=metadata --error-format=json --out-dir <tmp> <candidate>/src/lib.rs (RUSTFLAGS/RUSTC_WRAPPER/RUSTC_WORKSPACE_WRAPPER retirés, comme le vérificateur)",
+    "noCodeChanges": "crates/** non modifié ; investigation en lecture seule côté code",
+    "loadBounds": "charge CPU = 2 processus Node 120 s max ; charge mémoire/IO = 1 processus Node (192 Mo + 4×16 Mo I/O en boucle) 120 s max ; les deux sont tués explicitement à la fin de chaque condition",
+    "excluded": "aucune activation, aucun build cdylib, aucune modification du workspace réel"
+  },
+  "machine": {
+    "os": "win32",
+    "release": "10.0.26100",
+    "arch": "x64",
+    "logicalParallelism": 16,
+    "totalMemoryBytes": 16868962304,
+    "node": "v26.13.0"
+  },
+  "toolchain": {
+    "path": "target\\debug\\ravum-collab.exe",
+    "rustcVv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+    "rustcCalibrationStartMs": [
+      120,
+      119,
+      130
+    ],
+    "sysroot": "C:\\Users\\<user>\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc",
+    "stdMetadataFiles": [
+      {
+        "name": "libstd-0cebe7c42cd80226.rlib",
+        "bytes": 5648528
+      },
+      {
+        "name": "libstd-0cebe7c42cd80226.rmeta",
+        "bytes": 9633944
+      }
+    ]
+  },
+  "load": {
+    "start": {
+      "capturedUnix": 1794184365,
+      "freeMemoryBytes": 2631999488,
+      "totalMemoryBytes": 16868962304,
+      "calibrationMs": [
+        120,
+        119,
+        130
+      ]
+    },
+    "end": {
+      "capturedUnix": 1794184424,
+      "freeMemoryBytes": 2706776064,
+      "totalMemoryBytes": 16868962304,
+      "calibrationMs": [
+        91,
+        119,
+        98
+      ]
+    }
+  },
+  "referenceDirectProbes": [
+    {
+      "wallMs": 214,
+      "exitCode": 0,
+      "spawnError": null,
+      "success": true,
+      "errors": [],
+      "stderrFirstLines": [
+        ""
+      ]
+    },
+    {
+      "wallMs": 178,
+      "exitCode": 0,
+      "spawnError": null,
+      "success": true,
+      "errors": [],
+      "stderrFirstLines": [
+        ""
+      ]
+    },
+    {
+      "wallMs": 235,
+      "exitCode": 0,
+      "spawnError": null,
+      "success": true,
+      "errors": [],
+      "stderrFirstLines": [
+        ""
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "rest",
+      "label": "repos relatif (aucune charge injectée)",
+      "injectedLoad": null,
+      "runs": 20,
+      "mismatches": 0,
+      "mismatchRate": 0,
+      "wallMs": {
+        "count": 20,
+        "min": 474,
+        "max": 828,
+        "mean": 550.65,
+        "p50": 530,
+        "p95": 618
+      },
+      "observations": [
+        {
+          "wallMs": 553,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184366,
+            "freeMemoryBytes": 2616270848,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              121
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184367,
+            "freeMemoryBytes": 2668331008,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              135
+            ]
+          },
+          "index": 1
+        },
+        {
+          "wallMs": 485,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184367,
+            "freeMemoryBytes": 2713726976,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              124
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184368,
+            "freeMemoryBytes": 2869284864,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              139
+            ]
+          },
+          "index": 2
+        },
+        {
+          "wallMs": 482,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184368,
+            "freeMemoryBytes": 2978652160,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              95
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184369,
+            "freeMemoryBytes": 2930364416,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              122
+            ]
+          },
+          "index": 3
+        },
+        {
+          "wallMs": 582,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184369,
+            "freeMemoryBytes": 2918154240,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              113
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184370,
+            "freeMemoryBytes": 2927996928,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              113
+            ]
+          },
+          "index": 4
+        },
+        {
+          "wallMs": 474,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184370,
+            "freeMemoryBytes": 2940792832,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              108
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184371,
+            "freeMemoryBytes": 2940702720,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              101
+            ]
+          },
+          "index": 5
+        },
+        {
+          "wallMs": 477,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184371,
+            "freeMemoryBytes": 2949632000,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              102
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184372,
+            "freeMemoryBytes": 2954858496,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              103
+            ]
+          },
+          "index": 6
+        },
+        {
+          "wallMs": 618,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184372,
+            "freeMemoryBytes": 2908237824,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              120
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184373,
+            "freeMemoryBytes": 2868068352,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              127
+            ]
+          },
+          "index": 7
+        },
+        {
+          "wallMs": 511,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184373,
+            "freeMemoryBytes": 2862034944,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              122
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184374,
+            "freeMemoryBytes": 2902835200,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              131
+            ]
+          },
+          "index": 8
+        },
+        {
+          "wallMs": 542,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184374,
+            "freeMemoryBytes": 2902761472,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              147
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184375,
+            "freeMemoryBytes": 2838650880,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              125
+            ]
+          },
+          "index": 9
+        },
+        {
+          "wallMs": 530,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184375,
+            "freeMemoryBytes": 2855247872,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              114
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184376,
+            "freeMemoryBytes": 2791165952,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              127
+            ]
+          },
+          "index": 10
+        },
+        {
+          "wallMs": 575,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184376,
+            "freeMemoryBytes": 2758025216,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              124
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184377,
+            "freeMemoryBytes": 2717138944,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              124
+            ]
+          },
+          "index": 11
+        },
+        {
+          "wallMs": 493,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184377,
+            "freeMemoryBytes": 2666115072,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              133
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184378,
+            "freeMemoryBytes": 2665017344,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              123
+            ]
+          },
+          "index": 12
+        },
+        {
+          "wallMs": 528,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184378,
+            "freeMemoryBytes": 2658402304,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              131
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184379,
+            "freeMemoryBytes": 2637750272,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              117
+            ]
+          },
+          "index": 13
+        },
+        {
+          "wallMs": 501,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184379,
+            "freeMemoryBytes": 2645393408,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              125
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184380,
+            "freeMemoryBytes": 2615709696,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              153
+            ]
+          },
+          "index": 14
+        },
+        {
+          "wallMs": 543,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184380,
+            "freeMemoryBytes": 2608586752,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              158
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184381,
+            "freeMemoryBytes": 2572075008,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              130
+            ]
+          },
+          "index": 15
+        },
+        {
+          "wallMs": 828,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184381,
+            "freeMemoryBytes": 2576707584,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              197
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184382,
+            "freeMemoryBytes": 2143293440,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              222
+            ]
+          },
+          "index": 16
+        },
+        {
+          "wallMs": 590,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184382,
+            "freeMemoryBytes": 2121842688,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              136
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184383,
+            "freeMemoryBytes": 2053394432,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              142
+            ]
+          },
+          "index": 17
+        },
+        {
+          "wallMs": 606,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184383,
+            "freeMemoryBytes": 2044416000,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              142
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184384,
+            "freeMemoryBytes": 2054791168,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              188
+            ]
+          },
+          "index": 18
+        },
+        {
+          "wallMs": 595,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184384,
+            "freeMemoryBytes": 2071846912,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              129
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184385,
+            "freeMemoryBytes": 2448396288,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              129
+            ]
+          },
+          "index": 19
+        },
+        {
+          "wallMs": 500,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184385,
+            "freeMemoryBytes": 2515681280,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              119
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184386,
+            "freeMemoryBytes": 2739433472,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              107
+            ]
+          },
+          "index": 20
+        }
+      ],
+      "directRustcProbes": 12,
+      "directRustcProbeFailures": 0,
+      "probes": [
+        {
+          "wallMs": 174,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 1
+        },
+        {
+          "wallMs": 159,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 2
+        },
+        {
+          "wallMs": 244,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 3
+        },
+        {
+          "wallMs": 199,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 4
+        },
+        {
+          "wallMs": 186,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 5
+        },
+        {
+          "wallMs": 199,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 6
+        },
+        {
+          "wallMs": 184,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 7
+        },
+        {
+          "wallMs": 224,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 8
+        },
+        {
+          "wallMs": 192,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 9
+        },
+        {
+          "wallMs": 192,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 10
+        },
+        {
+          "wallMs": 196,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 11
+        },
+        {
+          "wallMs": 186,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 12
+        }
+      ],
+      "loadBefore": {
+        "capturedUnix": 1794184366,
+        "freeMemoryBytes": 2642415616,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          142,
+          180
+        ]
+      },
+      "loadAfter": {
+        "capturedUnix": 1794184386,
+        "freeMemoryBytes": 2732392448,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          114,
+          95
+        ]
+      }
+    },
+    {
+      "id": "cpu",
+      "label": "charge CPU bornée (2 processus Node en boucle)",
+      "injectedLoad": {
+        "kind": "cpu",
+        "description": "2 processus Node en boucle CPU (120 s max, arrêtés explicitement)"
+      },
+      "runs": 20,
+      "mismatches": 0,
+      "mismatchRate": 0,
+      "wallMs": {
+        "count": 20,
+        "min": 438,
+        "max": 663,
+        "mean": 527.35,
+        "p50": 499,
+        "p95": 641
+      },
+      "observations": [
+        {
+          "wallMs": 477,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184386,
+            "freeMemoryBytes": 2713362432,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              113
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184387,
+            "freeMemoryBytes": 2706010112,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              105
+            ]
+          },
+          "index": 1
+        },
+        {
+          "wallMs": 481,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184387,
+            "freeMemoryBytes": 2700804096,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              116
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184388,
+            "freeMemoryBytes": 2640445440,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              147
+            ]
+          },
+          "index": 2
+        },
+        {
+          "wallMs": 499,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184388,
+            "freeMemoryBytes": 2710003712,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              148
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184389,
+            "freeMemoryBytes": 2697887744,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              120
+            ]
+          },
+          "index": 3
+        },
+        {
+          "wallMs": 641,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184389,
+            "freeMemoryBytes": 2670424064,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              147
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184390,
+            "freeMemoryBytes": 2712436736,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              133
+            ]
+          },
+          "index": 4
+        },
+        {
+          "wallMs": 450,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184391,
+            "freeMemoryBytes": 2700443648,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              103
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184391,
+            "freeMemoryBytes": 2693140480,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              114
+            ]
+          },
+          "index": 5
+        },
+        {
+          "wallMs": 466,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184391,
+            "freeMemoryBytes": 2727526400,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              107
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184392,
+            "freeMemoryBytes": 2718302208,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              107
+            ]
+          },
+          "index": 6
+        },
+        {
+          "wallMs": 530,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184392,
+            "freeMemoryBytes": 2719690752,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              107
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184393,
+            "freeMemoryBytes": 2601066496,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              130
+            ]
+          },
+          "index": 7
+        },
+        {
+          "wallMs": 533,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184393,
+            "freeMemoryBytes": 2569555968,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              132
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184394,
+            "freeMemoryBytes": 2506420224,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              126
+            ]
+          },
+          "index": 8
+        },
+        {
+          "wallMs": 563,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184394,
+            "freeMemoryBytes": 2453565440,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              168
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184395,
+            "freeMemoryBytes": 2505535488,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              124
+            ]
+          },
+          "index": 9
+        },
+        {
+          "wallMs": 562,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184395,
+            "freeMemoryBytes": 2505453568,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              129
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184396,
+            "freeMemoryBytes": 2510114816,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              157
+            ]
+          },
+          "index": 10
+        },
+        {
+          "wallMs": 556,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184397,
+            "freeMemoryBytes": 2509107200,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              167
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184397,
+            "freeMemoryBytes": 2554978304,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              126
+            ]
+          },
+          "index": 11
+        },
+        {
+          "wallMs": 478,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184398,
+            "freeMemoryBytes": 2570305536,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              160
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184398,
+            "freeMemoryBytes": 2530689024,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              120
+            ]
+          },
+          "index": 12
+        },
+        {
+          "wallMs": 438,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184399,
+            "freeMemoryBytes": 2542907392,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              156
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184399,
+            "freeMemoryBytes": 2520276992,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              122
+            ]
+          },
+          "index": 13
+        },
+        {
+          "wallMs": 491,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184400,
+            "freeMemoryBytes": 2529710080,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              120
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184400,
+            "freeMemoryBytes": 2533675008,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              114
+            ]
+          },
+          "index": 14
+        },
+        {
+          "wallMs": 632,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184400,
+            "freeMemoryBytes": 2511822848,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              130
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184401,
+            "freeMemoryBytes": 2543894528,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              143
+            ]
+          },
+          "index": 15
+        },
+        {
+          "wallMs": 626,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184401,
+            "freeMemoryBytes": 2509094912,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              241
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184402,
+            "freeMemoryBytes": 2472722432,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              171
+            ]
+          },
+          "index": 16
+        },
+        {
+          "wallMs": 663,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184402,
+            "freeMemoryBytes": 2491101184,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              198
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184403,
+            "freeMemoryBytes": 2510184448,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              247
+            ]
+          },
+          "index": 17
+        },
+        {
+          "wallMs": 527,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184404,
+            "freeMemoryBytes": 2453061632,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              189
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184404,
+            "freeMemoryBytes": 2435825664,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              110
+            ]
+          },
+          "index": 18
+        },
+        {
+          "wallMs": 465,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184404,
+            "freeMemoryBytes": 2425024512,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              121
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184405,
+            "freeMemoryBytes": 2445365248,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              155
+            ]
+          },
+          "index": 19
+        },
+        {
+          "wallMs": 469,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184405,
+            "freeMemoryBytes": 2412449792,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              137
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184406,
+            "freeMemoryBytes": 2500755456,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              137
+            ]
+          },
+          "index": 20
+        }
+      ],
+      "directRustcProbes": 12,
+      "directRustcProbeFailures": 0,
+      "probes": [
+        {
+          "wallMs": 175,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 1
+        },
+        {
+          "wallMs": 177,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 2
+        },
+        {
+          "wallMs": 186,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 3
+        },
+        {
+          "wallMs": 175,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 4
+        },
+        {
+          "wallMs": 195,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 5
+        },
+        {
+          "wallMs": 168,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 6
+        },
+        {
+          "wallMs": 191,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 7
+        },
+        {
+          "wallMs": 182,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 8
+        },
+        {
+          "wallMs": 192,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 9
+        },
+        {
+          "wallMs": 219,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 10
+        },
+        {
+          "wallMs": 182,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 11
+        },
+        {
+          "wallMs": 181,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 12
+        }
+      ],
+      "loadBefore": {
+        "capturedUnix": 1794184386,
+        "freeMemoryBytes": 2735484928,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          146,
+          113
+        ]
+      },
+      "loadAfter": {
+        "capturedUnix": 1794184406,
+        "freeMemoryBytes": 2512285696,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          139,
+          98
+        ]
+      }
+    },
+    {
+      "id": "memio",
+      "label": "charge mémoire/I/O bornée (192 Mo + I/O 64 Mo en boucle)",
+      "injectedLoad": {
+        "kind": "memio",
+        "description": "1 processus Node: 192 Mo alloués/touchés + écritures/lectures fsync de 4×16 Mo en boucle (120 s max, arrêté explicitement)"
+      },
+      "runs": 20,
+      "mismatches": 0,
+      "mismatchRate": 0,
+      "wallMs": {
+        "count": 20,
+        "min": 373,
+        "max": 550,
+        "mean": 453.2,
+        "p50": 433,
+        "p95": 538
+      },
+      "observations": [
+        {
+          "wallMs": 497,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184407,
+            "freeMemoryBytes": 2272571392,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              111
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184407,
+            "freeMemoryBytes": 2181967872,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              159
+            ]
+          },
+          "index": 1
+        },
+        {
+          "wallMs": 550,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184408,
+            "freeMemoryBytes": 2200084480,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              115
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184408,
+            "freeMemoryBytes": 2115166208,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              111
+            ]
+          },
+          "index": 2
+        },
+        {
+          "wallMs": 492,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184409,
+            "freeMemoryBytes": 2120716288,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              150
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184409,
+            "freeMemoryBytes": 2173050880,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              118
+            ]
+          },
+          "index": 3
+        },
+        {
+          "wallMs": 538,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184410,
+            "freeMemoryBytes": 2108620800,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              110
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184410,
+            "freeMemoryBytes": 2218225664,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              125
+            ]
+          },
+          "index": 4
+        },
+        {
+          "wallMs": 494,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184411,
+            "freeMemoryBytes": 2228264960,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              111
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184411,
+            "freeMemoryBytes": 2250825728,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              117
+            ]
+          },
+          "index": 5
+        },
+        {
+          "wallMs": 517,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184412,
+            "freeMemoryBytes": 2306580480,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              119
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184412,
+            "freeMemoryBytes": 2297888768,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              112
+            ]
+          },
+          "index": 6
+        },
+        {
+          "wallMs": 442,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184413,
+            "freeMemoryBytes": 2254815232,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              115
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184413,
+            "freeMemoryBytes": 2309029888,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              120
+            ]
+          },
+          "index": 7
+        },
+        {
+          "wallMs": 433,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184414,
+            "freeMemoryBytes": 2234576896,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              106
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184414,
+            "freeMemoryBytes": 2266025984,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              115
+            ]
+          },
+          "index": 8
+        },
+        {
+          "wallMs": 492,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184415,
+            "freeMemoryBytes": 2266640384,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              114
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184415,
+            "freeMemoryBytes": 2251063296,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              101
+            ]
+          },
+          "index": 9
+        },
+        {
+          "wallMs": 452,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184415,
+            "freeMemoryBytes": 2288992256,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              111
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184416,
+            "freeMemoryBytes": 2249412608,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              106
+            ]
+          },
+          "index": 10
+        },
+        {
+          "wallMs": 409,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184416,
+            "freeMemoryBytes": 2251825152,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              127
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184417,
+            "freeMemoryBytes": 2243801088,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              111
+            ]
+          },
+          "index": 11
+        },
+        {
+          "wallMs": 429,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184417,
+            "freeMemoryBytes": 2271498240,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              115
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184418,
+            "freeMemoryBytes": 2399633408,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              105
+            ]
+          },
+          "index": 12
+        },
+        {
+          "wallMs": 395,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184418,
+            "freeMemoryBytes": 2410516480,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              95
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184419,
+            "freeMemoryBytes": 2396962816,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              126
+            ]
+          },
+          "index": 13
+        },
+        {
+          "wallMs": 432,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184419,
+            "freeMemoryBytes": 2410819584,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              141
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184419,
+            "freeMemoryBytes": 2379096064,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              99
+            ]
+          },
+          "index": 14
+        },
+        {
+          "wallMs": 433,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184420,
+            "freeMemoryBytes": 2417946624,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              103
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184420,
+            "freeMemoryBytes": 2392944640,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              113
+            ]
+          },
+          "index": 15
+        },
+        {
+          "wallMs": 405,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184420,
+            "freeMemoryBytes": 2420781056,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              114
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184421,
+            "freeMemoryBytes": 2405027840,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              100
+            ]
+          },
+          "index": 16
+        },
+        {
+          "wallMs": 373,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184421,
+            "freeMemoryBytes": 2349121536,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              135
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184422,
+            "freeMemoryBytes": 2350751744,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              96
+            ]
+          },
+          "index": 17
+        },
+        {
+          "wallMs": 418,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184422,
+            "freeMemoryBytes": 2386550784,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              102
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184422,
+            "freeMemoryBytes": 2370306048,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              107
+            ]
+          },
+          "index": 18
+        },
+        {
+          "wallMs": 380,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184422,
+            "freeMemoryBytes": 2402668544,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              108
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184423,
+            "freeMemoryBytes": 2411589632,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              98
+            ]
+          },
+          "index": 19
+        },
+        {
+          "wallMs": 483,
+          "exitCode": 0,
+          "spawnError": null,
+          "stderr": "",
+          "parseError": null,
+          "baseSnapshotId": "7617cc2a4927ce88b3940a6ab7a0e5a5ae9215ac9cd7efd4477425e2c267bc01",
+          "expected": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "actual": [
+            "AUTO_SAFE",
+            "MANUAL_REQUIRED",
+            "AUTO_SAFE"
+          ],
+          "decisions": [
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d1/helper",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 26ee0a85147b820ff295b937b4bc9fb7b6d8ad3f3bf47004b7bcc72537705337)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence ad8b1f0f72eb6450f1afc022efe88c75fbc538aecf4f1e44718212c13cbf5d00"
+              ]
+            },
+            {
+              "decision": "MANUAL_REQUIRED",
+              "proposalId": "agent-d2/compose-undeclared",
+              "reasons": [
+                "undeclared semantic dependency: a changed line references symbol \"helper\", whose definition was modified by agent-d1/helper (agent agent-d1); declare the dependency on \"src/lib.rs\" or request arbitration",
+                "semantic policy evidence: 4a237444cdcea619ef8c0e9e697d9e89a81e3248ee94a554677d465b610f6ca3"
+              ]
+            },
+            {
+              "decision": "AUTO_SAFE",
+              "proposalId": "agent-d3/other",
+              "reasons": [
+                "preconditions satisfied, patch applies exactly, no overlap with integrated work",
+                "semantic verification: passed (metadata_check=passed, evidence 433071b70165d2292ae7954819a1adaa64f2a9674e505f728b5c136950921fb9)",
+                "metadata_check: rustc 1.95.0: candidate snapshot compiles (metadata only) [passed] evidence a5ae5dab00b39796d36b47ea822b1614c21a46466c47c66405a1b98ef8129d70"
+              ]
+            }
+          ],
+          "mismatch": false,
+          "journalLines": 3,
+          "snapshotAfter": "c77b8f105753b2a893820ef9be112193d9371675f3794e7bcf6b9bd51e9bebd3",
+          "loadBefore": {
+            "capturedUnix": 1794184423,
+            "freeMemoryBytes": 2336219136,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              155
+            ]
+          },
+          "loadAfter": {
+            "capturedUnix": 1794184424,
+            "freeMemoryBytes": 2399522816,
+            "totalMemoryBytes": 16868962304,
+            "calibrationMs": [
+              103
+            ]
+          },
+          "index": 20
+        }
+      ],
+      "directRustcProbes": 12,
+      "directRustcProbeFailures": 0,
+      "probes": [
+        {
+          "wallMs": 193,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 1
+        },
+        {
+          "wallMs": 191,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 2
+        },
+        {
+          "wallMs": 198,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 3
+        },
+        {
+          "wallMs": 176,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 4
+        },
+        {
+          "wallMs": 174,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 5
+        },
+        {
+          "wallMs": 172,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 6
+        },
+        {
+          "wallMs": 231,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 7
+        },
+        {
+          "wallMs": 185,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 8
+        },
+        {
+          "wallMs": 166,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 9
+        },
+        {
+          "wallMs": 172,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 10
+        },
+        {
+          "wallMs": 179,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 11
+        },
+        {
+          "wallMs": 218,
+          "exitCode": 0,
+          "spawnError": null,
+          "success": true,
+          "errors": [],
+          "stderrFirstLines": [
+            ""
+          ],
+          "index": 12
+        }
+      ],
+      "loadBefore": {
+        "capturedUnix": 1794184406,
+        "freeMemoryBytes": 2542882816,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          108,
+          112
+        ]
+      },
+      "loadAfter": {
+        "capturedUnix": 1794184424,
+        "freeMemoryBytes": 2345406464,
+        "totalMemoryBytes": 16868962304,
+        "calibrationMs": [
+          92,
+          93
+        ]
+      }
+    }
+  ],
+  "analysis": {
+    "failures": 0,
+    "failureDetails": [],
+    "directProbeFailures": 0,
+    "referenceProbeFailures": 0,
+    "failureRateByCondition": [
+      {
+        "condition": "rest",
+        "runs": 20,
+        "mismatches": 0,
+        "mismatchRate": 0,
+        "directRustcProbes": 12,
+        "directRustcProbeFailures": 0
+      },
+      {
+        "condition": "cpu",
+        "runs": 20,
+        "mismatches": 0,
+        "mismatchRate": 0,
+        "directRustcProbes": 12,
+        "directRustcProbeFailures": 0
+      },
+      {
+        "condition": "memio",
+        "runs": 20,
+        "mismatches": 0,
+        "mismatchRate": 0,
+        "directRustcProbes": 12,
+        "directRustcProbeFailures": 0
+      }
+    ],
+    "rootCause": {
+      "status": "UNDETERMINED",
+      "establishedFacts": [
+        "les deux diagnostics de l’incident (« only metadata stub found for `rlib` dependency `std` … », « cannot resolve a prelude import ») ont été émis par rustc lui-même (JSON --error-format=json) et ne portent aucun E-code ; ils ne désignent aucune ligne du contenu candidat",
+        "le même contenu candidat compile réellement (probes directes de référence) ; le sysroot contient un libstd .rmeta complet, pas un stub",
+        "le vérificateur ne conserve ni code de sortie rustc ni stderr brut : seul le diagnostic parsé est archivé, ce qui empêche de distinguer un incident d’I/O/OS d’un échec de compilation",
+        "dans le code actuel, une erreur de spawn rustc devient VerificationOutcome::Unavailable (MANUAL_REQUIRED) mais un processus rustc qui sort non-zéro devient Failed => REJECT, sans retry ni classification transitoire"
+      ],
+      "classificationGap": "Tout échec non-zéro de rustc — y compris une erreur de chargement de métadonnées du sysroot sans rapport avec les sources — est converti en échec de compilation définitif (Failed → REJECT) par RustcMergeVerifier::metadata_check (crates/ravum-workspace-coordinator/src/bin/common/mod.rs) ; seul le timeout d’exécution des tests est traité en Unavailable.",
+      "hypothesis": "incident transitoire de lecture/chargement des métadonnées du sysroot (I/O/OS sous pression) transformé à tort en échec de compilation définitif ; déclencheur exact non capturé (UNDETERMINED) car le vérificateur ne conserve pas le code de sortie ni le stderr brut de rustc et le run n’a pas été reproduit en conditions contrôlées."
+    }
+  },
+  "recommendations": {
+    "classificationGapRecommendations": [
+      {
+        "title": "Conserver le code de sortie et le stderr brut (borné) dans MergeCheck",
+        "where": "crates/ravum-workspace-coordinator/src/bin/common/mod.rs — struct Probe / metadata_check",
+        "change": "ajouter exit_code et un extrait stderr (≤ 2 Ko) au check ; sans cela tout incident futur reste UNDETERMINED et non auditable",
+        "risk": "faible (champ d’évidence supplémentaire, pas de changement de décision)"
+      },
+      {
+        "title": "Classifier un échec rustc sans diagnostic source comme Unavailable (ou retry borné puis Unavailable)",
+        "where": "crates/ravum-workspace-coordinator/src/bin/common/mod.rs — compile_metadata / RustcMergeVerifier::verify",
+        "change": "si rustc sort non-zéro avec des diagnostics SANS code E (et a fortiori avec les motifs « only metadata stub found », « cannot resolve a prelude import », ou sans aucun diagnostic parsé) : un retry borné (1 tentative) puis VerificationOutcome::Unavailable → MANUAL_REQUIRED, jamais REJECT. Un vrai échec de compilation garde son E-code et reste Failed → REJECT.",
+        "risk": "moyen : un vrai échec sans E-code serait reclassé MANUAL_REQUIRED au lieu de REJECT ; le retry unique puis Unavailable conserve le fail-closed (rien n’est intégré) et la distinction des E-codes est testable."
+      },
+      {
+        "title": "Test qui prouve la classification (à écrire, non écrit ici)",
+        "where": "crates/ravum-workspace-coordinator/tests/ (nouveau fichier) ou tests du binaire collab",
+        "change": "wrapper rustc factice via RAVUM_RUSTC : (1) 1er appel émet le JSON « only metadata stub found for `rlib` dependency `std` » + sort 101, 2e appel réussit => après correctif, décision attendue MANUAL_REQUIRED (UNKNOWN) ou AUTO_SAFE après retry, jamais REJECT ; (2) un wrapper émettant un vrai E0061 => REJECT conservé ; (3) wrapper qui échoue toujours avec le motif transitoire => MANUAL_REQUIRED, pas REJECT. Test actuel de référence : `crates/ravum-workspace-coordinator/src/coordinator.rs` tests semantic_mode_*",
+        "risk": "faible (test d’intégration, aucun test existant supprimé)"
+      }
+    ],
+    "l22Impact": [
+      "les mesures L2.2 en régime calme (valid=true, décisions attendues, digests conformes) restent valides : la campagne de phase 1 (coûts 191/184/1596 ms) et la campagne L2.2 calme ne sont pas invalidées par cet incident",
+      "sous charge, le harnais L2.2 peut compter un faux « lot conflictuel » (REJECT transitoire) ; toute mesure de fréquence de conflits doit donc être prise en régime contrôlé ou filtrer les incidents transitoires (code retour/UNDETERMINED) avant d’alimenter le modèle",
+      "le seuil de bascule p* du modèle n’est pas modifié par cet incident : c’est la variable p mesurée qui est biaisée si la charge n’est pas maîtrisée ; consigner la charge et exclure/retester les runs non déterministes"
+    ],
+    "nextSteps": [
+      "appliquer le correctif de classification + test proposé dans un lot dédié (Worker B ou Lead)",
+      "regénérer la preuve principale L2.2 en charge faible si possible (fait dans la même session si la machine le permet)"
+    ]
+  },
+  "valid": true
+}

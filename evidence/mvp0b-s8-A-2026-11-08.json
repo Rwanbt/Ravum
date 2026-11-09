@@ -332,7 +332,7 @@
       "stderr_tail": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s\n",
       "offline": true
     },
-    "exe": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-coordinator-cache\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+    "exe": "<temp>\\ravum-s8-coordinator-cache\\7026f21554c1\\target\\debug\\ravum-collab.exe",
     "exe_display": "<coord-cache>\\7026f21554c1\\target\\debug\\ravum-collab.exe",
     "sha256": "2b845149cdac6896f6e72a9b68cc98e2543c04553bf014851a13e452fe1fd0d6",
     "size_bytes": 1721856
@@ -1961,7 +1961,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 107.769,
           "code": 0,
           "signal": null,
@@ -1981,7 +1981,7 @@
         {
           "label": "git-worktree",
           "command": "git worktree list --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 146.499,
           "code": 0,
           "signal": null,
@@ -1991,7 +1991,7 @@
         {
           "label": "git-branch",
           "command": "git branch --list",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 110.29,
           "code": 0,
           "signal": null,
@@ -2001,7 +2001,7 @@
         {
           "label": "git-rev-parse",
           "command": "git rev-parse HEAD",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 94.504,
           "code": 0,
           "signal": null,
@@ -2011,7 +2011,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 121.991,
           "code": 0,
           "signal": null,
@@ -2021,7 +2021,7 @@
         {
           "label": "git-log",
           "command": "git log --graph --oneline --all -n 40",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 130.847,
           "code": 0,
           "signal": null,
@@ -2051,7 +2051,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A1\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A1\\repo",
           "ms": 85.7,
           "code": 0,
           "signal": null,
@@ -3069,7 +3069,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 95.616,
           "code": 0,
           "signal": null,
@@ -3089,7 +3089,7 @@
         {
           "label": "git-worktree",
           "command": "git worktree list --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 103.592,
           "code": 0,
           "signal": null,
@@ -3099,7 +3099,7 @@
         {
           "label": "git-branch",
           "command": "git branch --list",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 95.991,
           "code": 0,
           "signal": null,
@@ -3109,7 +3109,7 @@
         {
           "label": "git-rev-parse",
           "command": "git rev-parse HEAD",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 106.958,
           "code": 0,
           "signal": null,
@@ -3119,7 +3119,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 122.692,
           "code": 0,
           "signal": null,
@@ -3129,7 +3129,7 @@
         {
           "label": "git-log",
           "command": "git log --graph --oneline --all -n 40",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 118.31,
           "code": 0,
           "signal": null,
@@ -3159,7 +3159,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A2\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A2\\repo",
           "ms": 107.551,
           "code": 0,
           "signal": null,
@@ -4347,7 +4347,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 145.012,
           "code": 0,
           "signal": null,
@@ -4367,7 +4367,7 @@
         {
           "label": "git-worktree",
           "command": "git worktree list --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 168.989,
           "code": 0,
           "signal": null,
@@ -4377,7 +4377,7 @@
         {
           "label": "git-branch",
           "command": "git branch --list",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 129.414,
           "code": 0,
           "signal": null,
@@ -4387,7 +4387,7 @@
         {
           "label": "git-rev-parse",
           "command": "git rev-parse HEAD",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 120.232,
           "code": 0,
           "signal": null,
@@ -4397,7 +4397,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 122.879,
           "code": 0,
           "signal": null,
@@ -4407,7 +4407,7 @@
         {
           "label": "git-log",
           "command": "git log --graph --oneline --all -n 40",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 228.956,
           "code": 0,
           "signal": null,
@@ -4437,7 +4437,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A3\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A3\\repo",
           "ms": 131.168,
           "code": 0,
           "signal": null,
@@ -5624,7 +5624,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 145.585,
           "code": 0,
           "signal": null,
@@ -5644,7 +5644,7 @@
         {
           "label": "git-worktree",
           "command": "git worktree list --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 134.589,
           "code": 0,
           "signal": null,
@@ -5654,7 +5654,7 @@
         {
           "label": "git-branch",
           "command": "git branch --list",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 145.378,
           "code": 0,
           "signal": null,
@@ -5664,7 +5664,7 @@
         {
           "label": "git-rev-parse",
           "command": "git rev-parse HEAD",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 121.23,
           "code": 0,
           "signal": null,
@@ -5674,7 +5674,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 171.625,
           "code": 0,
           "signal": null,
@@ -5684,7 +5684,7 @@
         {
           "label": "git-log",
           "command": "git log --graph --oneline --all -n 40",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 208.056,
           "code": 0,
           "signal": null,
@@ -5714,7 +5714,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A4\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A4\\repo",
           "ms": 102.69,
           "code": 0,
           "signal": null,
@@ -6903,7 +6903,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 149.674,
           "code": 0,
           "signal": null,
@@ -6923,7 +6923,7 @@
         {
           "label": "git-worktree",
           "command": "git worktree list --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 128.781,
           "code": 0,
           "signal": null,
@@ -6933,7 +6933,7 @@
         {
           "label": "git-branch",
           "command": "git branch --list",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 116.249,
           "code": 0,
           "signal": null,
@@ -6943,7 +6943,7 @@
         {
           "label": "git-rev-parse",
           "command": "git rev-parse HEAD",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 84.071,
           "code": 0,
           "signal": null,
@@ -6953,7 +6953,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 117.279,
           "code": 0,
           "signal": null,
@@ -6963,7 +6963,7 @@
         {
           "label": "git-log",
           "command": "git log --graph --oneline --all -n 40",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 102.462,
           "code": 0,
           "signal": null,
@@ -6993,7 +6993,7 @@
         {
           "label": "git-status",
           "command": "git status --porcelain",
-          "cwd": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-s8-20261108T134437\\A5\\repo",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\A5\\repo",
           "ms": 92.792,
           "code": 0,
           "signal": null,

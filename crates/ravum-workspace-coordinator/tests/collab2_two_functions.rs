@@ -22,7 +22,10 @@ fn demo_crate_repo(name: &str) -> std::path::PathBuf {
 }
 
 fn name_collision_repo(name: &str) -> std::path::PathBuf {
-    init_repo(name, &[("src/lib.rs", fixture("name_collision/src/lib.rs"))])
+    init_repo(
+        name,
+        &[("src/lib.rs", fixture("name_collision/src/lib.rs"))],
+    )
 }
 
 fn patch(name: &str) -> String {
@@ -38,11 +41,25 @@ fn two_independent_functions_are_auto_safe_only_after_a_real_compile_and_test_ru
         &[
             (
                 "01-a.json",
-                proposal_json(&base, "agent-a", "alpha", "src/lib.rs", &["alpha"], &patch("demo-crate/a.patch")),
+                proposal_json(
+                    &base,
+                    "agent-a",
+                    "alpha",
+                    "src/lib.rs",
+                    &["alpha"],
+                    &patch("demo-crate/a.patch"),
+                ),
             ),
             (
                 "02-b.json",
-                proposal_json(&base, "agent-b", "beta", "src/lib.rs", &["beta"], &patch("demo-crate/b.patch")),
+                proposal_json(
+                    &base,
+                    "agent-b",
+                    "beta",
+                    "src/lib.rs",
+                    &["beta"],
+                    &patch("demo-crate/b.patch"),
+                ),
             ),
         ],
     );
@@ -50,11 +67,22 @@ fn two_independent_functions_are_auto_safe_only_after_a_real_compile_and_test_ru
     let run = run_integrate(
         &repo,
         &proposals,
-        &["--verify-tests", "--commit", "--author", "agent-x", "--email", "agent-x@ravum.invalid"],
+        &[
+            "--verify-tests",
+            "--commit",
+            "--author",
+            "agent-x",
+            "--email",
+            "agent-x@ravum.invalid",
+        ],
         &scratch,
     );
 
-    assert_eq!(run.code, 0, "stderr: {}\nstdout: {}", run.stderr, run.stdout);
+    assert_eq!(
+        run.code, 0,
+        "stderr: {}\nstdout: {}",
+        run.stderr, run.stdout
+    );
     assert_eq!(run.decision_kinds(), vec!["AUTO_SAFE", "AUTO_SAFE"]);
     assert_eq!(run.summary("auto_safe"), 2);
     assert_eq!(run.report["verification"]["mode"], "semantic");
@@ -99,10 +127,19 @@ fn two_independent_functions_are_auto_safe_only_after_a_real_compile_and_test_ru
             .find(|check| check["kind"] == "test_run")
             .expect("test_run check");
         assert!(
-            test_run["summary"].as_str().unwrap().contains("test result: ok"),
+            test_run["summary"]
+                .as_str()
+                .unwrap()
+                .contains("test result: ok"),
             "the merged test harness must really have run: {test_run}"
         );
-        assert_eq!(record["verification"]["evidence_id"].as_str().unwrap().len(), 64);
+        assert_eq!(
+            record["verification"]["evidence_id"]
+                .as_str()
+                .unwrap()
+                .len(),
+            64
+        );
         assert_eq!(record["evidence_ids"].as_array().unwrap().len(), 4);
     }
 
@@ -133,12 +170,16 @@ fn two_independent_functions_are_auto_safe_only_after_a_real_compile_and_test_ru
             reasons.contains("semantic verification: passed"),
             "journaled reasons: {reasons}"
         );
-        assert!(reasons.contains("metadata_check: "), "journaled reasons: {reasons}");
+        assert!(
+            reasons.contains("metadata_check: "),
+            "journaled reasons: {reasons}"
+        );
     }
 }
 
 #[test]
-fn a_merged_snapshot_that_does_not_compile_rejects_the_faulty_proposal_and_publishes_only_the_rest() {
+fn a_merged_snapshot_that_does_not_compile_rejects_the_faulty_proposal_and_publishes_only_the_rest()
+{
     let repo = name_collision_repo("collab2-compile-failure");
     let base = run_base(&repo);
     let proposals = write_proposals(
@@ -146,18 +187,36 @@ fn a_merged_snapshot_that_does_not_compile_rejects_the_faulty_proposal_and_publi
         &[
             (
                 "01-a.json",
-                proposal_json(&base, "agent-a", "rename-a", "src/lib.rs", &["slot_a"], &patch("name_collision/a.patch")),
+                proposal_json(
+                    &base,
+                    "agent-a",
+                    "rename-a",
+                    "src/lib.rs",
+                    &["slot_a"],
+                    &patch("name_collision/a.patch"),
+                ),
             ),
             (
                 "02-b.json",
-                proposal_json(&base, "agent-b", "rename-b", "src/lib.rs", &["slot_b"], &patch("name_collision/b.patch")),
+                proposal_json(
+                    &base,
+                    "agent-b",
+                    "rename-b",
+                    "src/lib.rs",
+                    &["slot_b"],
+                    &patch("name_collision/b.patch"),
+                ),
             ),
         ],
     );
     let scratch = repo.with_extension("scratch");
     let run = run_integrate(&repo, &proposals, &["--verify", "--commit"], &scratch);
 
-    assert_eq!(run.code, 0, "stderr: {}\nstdout: {}", run.stderr, run.stdout);
+    assert_eq!(
+        run.code, 0,
+        "stderr: {}\nstdout: {}",
+        run.stderr, run.stdout
+    );
     assert_eq!(run.decision_kinds(), vec!["AUTO_SAFE", "REJECT"]);
     assert_eq!(run.summary("auto_safe"), 1);
     assert_eq!(run.summary("reject"), 1);
@@ -210,7 +269,14 @@ fn a_merge_needing_semantic_verification_that_is_not_opted_in_is_never_silently_
         &repo,
         &[(
             "01-a.json",
-            proposal_json(&base, "agent-a", "alpha", "src/lib.rs", &["alpha"], &patch("demo-crate/a.patch")),
+            proposal_json(
+                &base,
+                "agent-a",
+                "alpha",
+                "src/lib.rs",
+                &["alpha"],
+                &patch("demo-crate/a.patch"),
+            ),
         )],
     );
     let scratch = repo.with_extension("scratch");
@@ -222,4 +288,3 @@ fn a_merge_needing_semantic_verification_that_is_not_opted_in_is_never_silently_
     assert_eq!(record["verification_required"], false);
     assert_eq!(record["verification"]["status"], "skipped");
 }
-

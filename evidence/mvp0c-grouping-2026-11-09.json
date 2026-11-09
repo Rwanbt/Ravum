@@ -1,0 +1,5019 @@
+{
+  "campaign": {
+    "calibration_end_ms": [
+      78,
+      55,
+      55
+    ],
+    "calibration_start_ms": [
+      89,
+      78,
+      79
+    ],
+    "duration_ms": 29001,
+    "load_end": {
+      "captured_unix": 1794182626,
+      "cpu_busy_percent": 11.489361702127665,
+      "daemon_working_set_bytes": 8245248,
+      "memory_available_bytes": 1961590784,
+      "memory_total_bytes": 16868962304,
+      "process_count": 323
+    },
+    "load_start": {
+      "captured_unix": 1794182597,
+      "cpu_busy_percent": 45.199999999999996,
+      "daemon_working_set_bytes": 6156288,
+      "memory_available_bytes": 1655558144,
+      "memory_total_bytes": 16868962304,
+      "process_count": 326
+    },
+    "started_unix": 1794182626,
+    "warmup": [
+      {
+        "correct": true,
+        "mode": "sequential",
+        "success": true,
+        "total_ms": 1279
+      },
+      {
+        "correct": true,
+        "mode": "grouped-0",
+        "success": true,
+        "total_ms": 207
+      },
+      {
+        "correct": true,
+        "mode": "grouped-25",
+        "success": true,
+        "total_ms": 230
+      },
+      {
+        "correct": true,
+        "mode": "grouped-50",
+        "success": true,
+        "total_ms": 263
+      },
+      {
+        "correct": true,
+        "mode": "grouped-100",
+        "success": true,
+        "total_ms": 310
+      },
+      {
+        "correct": true,
+        "mode": "incompatible",
+        "success": true,
+        "total_ms": 1453
+      }
+    ]
+  },
+  "fixture": {
+    "base_digest": "58bdc14b37fd3aed",
+    "compatible_digest": "74a801600f1c31c9",
+    "compatible_edits": [
+      "edit-01-add-plus-one",
+      "edit-02-mul-plus-two",
+      "edit-03-is-even-bitwise",
+      "edit-04-factorial-range",
+      "edit-05-checksum-mix",
+      "edit-06-lerp-formula"
+    ],
+    "crate_name": "grouping_unit",
+    "expected_incompatible_code": "E0061",
+    "file_count": 1,
+    "incompatible_edit": "edit-07-scale-signature",
+    "line_count": 479,
+    "path": "fixtures/grouping",
+    "source": "fixtures/grouping/src/lib.rs"
+  },
+  "generated_unix": 1794182626,
+  "git": {
+    "branch": "feat/mvp0c-hardening",
+    "dirty_files": 27,
+    "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+    "head": "11b5e9edc73f3f49d1057e8715fadb1c912af292"
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows",
+    "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+  },
+  "protocol": {
+    "alternation": "l'ordre des 6 modes tourne d'un cran à chaque répétition (dérive de charge répartie)",
+    "build_definition": "l'analyse daemon est `rustc --emit=metadata`: « build » = compilation de métadonnées, aucun codegen ni lien (le daemon ne les couvre pas)",
+    "excluded": "aucun codegen, lien, activation: le daemon est un moteur d'analyse",
+    "fresh_state": "chaque mode/répétition utilise un répertoire d'état daemon neuf : aucun verdict ne peut être servi par le cache d'une autre variante; rustc_runs == analyses est vérifié",
+    "incompatible_scenario": "lot complet + édition incompatible => analyse refusée; reprise individuelle (N+1 analyses) pour isoler l'édition fautive; re-lot des compatibles => accepté",
+    "load": "charge CPU/mémoire du système échantillonnée avant/après chaque répétition + calibration rustc -vV au début et à la fin",
+    "modes": [
+      "sequential",
+      "grouped-0",
+      "grouped-25",
+      "grouped-50",
+      "grouped-100",
+      "incompatible"
+    ],
+    "phases": {
+      "analyze": "appel daemon end-to-end (validation + identité + snapshot + cache + rustc si miss)",
+      "compose": "application des éditions aux octets (string replace vérifié unique)",
+      "unaccounted": "surcoût de mesure (Instant, allocation, boucle) = total - phases",
+      "verify": "postconditions de contenu + comparaison d'identité",
+      "wait": "sleep de collecte simulé"
+    },
+    "question": "N éditions compatibles : N cycles complets ou 1 snapshot groupé après une fenêtre de collecte bornée ?",
+    "repetitions_minimum": 5,
+    "repetitions_recorded": 5,
+    "verification_definition": "postcondition de contenu (marqueurs des éditions présents dans les octets soumis) + identité de contenu recalculée == snapshot_id rapporté + statut fresh; ce n'est pas une preuve sémantique",
+    "wait_definition": "fenêtre de collecte simulée par sleep avant composition+analyse; elle est comptée dans le temps total",
+    "warmup": "1 répétition non enregistrée de tous les modes avant les mesures (effets de cache OS initiaux)",
+    "windows_ms": [
+      0,
+      25,
+      50,
+      100
+    ]
+  },
+  "repetitions": [
+    {
+      "load_after": {
+        "captured_unix": 1794182606,
+        "cpu_busy_percent": 11.965811965811968,
+        "daemon_working_set_bytes": 7581696,
+        "memory_available_bytes": 1745928192,
+        "memory_total_bytes": 16868962304,
+        "process_count": 323
+      },
+      "load_before": {
+        "captured_unix": 1794182602,
+        "cpu_busy_percent": 11.702127659574469,
+        "daemon_working_set_bytes": 7540736,
+        "memory_available_bytes": 1704550400,
+        "memory_total_bytes": 16868962304,
+        "process_count": 323
+      },
+      "modes": [
+        {
+          "mode_spec": "sequential",
+          "observation": {
+            "analyses": 6,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 6
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 47,
+              "process_user_ms": 47
+            },
+            "cycles": [
+              {
+                "analyze_ms": 202,
+                "cache_kind": "miss",
+                "edit": "edit-01-add-plus-one",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 190,
+                "cache_kind": "miss",
+                "edit": "edit-02-mul-plus-two",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 189,
+                "cache_kind": "miss",
+                "edit": "edit-03-is-even-bitwise",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 213,
+                "cache_kind": "miss",
+                "edit": "edit-04-factorial-range",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 180,
+                "cache_kind": "miss",
+                "edit": "edit-05-checksum-mix",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 177,
+                "cache_kind": "miss",
+                "edit": "edit-06-lerp-formula",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 6,
+              "snapshots_created": 6,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 6,
+                "cancelled": 0,
+                "fresh": 6,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 6,
+                "rustc_ms_total": 1119,
+                "rustc_runs": 6,
+                "snapshots_created": 6,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 6
+              },
+              "unit_files_written": 6
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 2513933,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "sequential",
+            "phases_ms": {
+              "analyze": 1151,
+              "compose": 0,
+              "unaccounted": 8,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7569408,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7655424,
+              "start": 7581696
+            },
+            "rustc_runs": 6,
+            "success": true,
+            "total_ms": 1159,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 6,
+              "identity_failures": 0,
+              "marker_checks": 21,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-0",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 233,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 228,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 233,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7450624,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7602176,
+              "start": 7532544
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 234,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-25",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 187,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 25
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 182,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 187,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 25
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7585792,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7630848,
+              "start": 7553024
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 214,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 25
+          }
+        },
+        {
+          "mode_spec": "grouped-50",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 16
+            },
+            "cycles": [
+              {
+                "analyze_ms": 212,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 50
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 207,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 212,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 50
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7536640,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7581696,
+              "start": 7315456
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 264,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 50
+          }
+        },
+        {
+          "mode_spec": "grouped-100",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 15
+            },
+            "cycles": [
+              {
+                "analyze_ms": 185,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 100
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 180,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 185,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 100
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7581696,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7659520,
+              "start": 7491584
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 287,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 100
+          }
+        },
+        {
+          "mode_spec": "incompatible",
+          "observation": {
+            "analyses": 9,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 9
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 125,
+              "process_user_ms": 78
+            },
+            "cycles": [
+              {
+                "analyze_ms": 164,
+                "codes": [
+                  "E0061"
+                ],
+                "error_count": 2,
+                "latency_ms": 165,
+                "phase": "batch-with-incompatible",
+                "rejected": true
+              },
+              {
+                "analyze_ms": 150,
+                "cache_kind": "miss",
+                "error_count": 0,
+                "phase": "recovery-grouped-compatible",
+                "status": "fresh",
+                "success": true
+              }
+            ],
+            "daemon": {
+              "requests": 9,
+              "snapshots_created": 9,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 9,
+                "cancelled": 0,
+                "fresh": 9,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 9,
+                "rustc_ms_total": 1539,
+                "rustc_runs": 9,
+                "snapshots_created": 9,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 9
+              },
+              "unit_files_written": 9
+            },
+            "diagnostic_codes": [
+              "E0061",
+              "E0061"
+            ],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 5330062,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 4,
+            "errors": [],
+            "mode": "incompatible",
+            "phases_ms": {
+              "analyze": 1585,
+              "compose": 0,
+              "unaccounted": 12,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [
+                "E0061"
+              ],
+              "batch_error_count": 2,
+              "batch_latency_ms": 165,
+              "batch_rejected": true,
+              "error_latency_ms": 164,
+              "incompatible_identified": true,
+              "recovery_total_ms": 1596,
+              "retry_ms": 151,
+              "retry_success": true,
+              "steps": [
+                {
+                  "analyze_ms": 200,
+                  "codes": [],
+                  "edit": "edit-01-add-plus-one",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 174,
+                  "codes": [],
+                  "edit": "edit-02-mul-plus-two",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 181,
+                  "codes": [],
+                  "edit": "edit-03-is-even-bitwise",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 198,
+                  "codes": [],
+                  "edit": "edit-04-factorial-range",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 183,
+                  "codes": [],
+                  "edit": "edit-05-checksum-mix",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 175,
+                  "codes": [],
+                  "edit": "edit-06-lerp-formula",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 160,
+                  "codes": [
+                    "E0061"
+                  ],
+                  "edit": "edit-07-scale-signature",
+                  "error_count": 2,
+                  "identified": true,
+                  "status": "fresh",
+                  "success": false
+                }
+              ]
+            },
+            "repetition": 1,
+            "rss_bytes": {
+              "end": 7536640,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7852032,
+              "start": 7532544
+            },
+            "rustc_runs": 9,
+            "success": true,
+            "total_ms": 1597,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 9,
+              "identity_failures": 0,
+              "marker_checks": 12,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        }
+      ],
+      "order": [
+        "sequential",
+        "grouped-0",
+        "grouped-25",
+        "grouped-50",
+        "grouped-100",
+        "incompatible"
+      ],
+      "repetition": 1
+    },
+    {
+      "load_after": {
+        "captured_unix": 1794182610,
+        "cpu_busy_percent": 27.27272727272727,
+        "daemon_working_set_bytes": 7811072,
+        "memory_available_bytes": 1764012032,
+        "memory_total_bytes": 16868962304,
+        "process_count": 321
+      },
+      "load_before": {
+        "captured_unix": 1794182606,
+        "cpu_busy_percent": 26.785714285714292,
+        "daemon_working_set_bytes": 7630848,
+        "memory_available_bytes": 1739952128,
+        "memory_total_bytes": 16868962304,
+        "process_count": 323
+      },
+      "modes": [
+        {
+          "mode_spec": "grouped-0",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 171,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 167,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 171,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7753728,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7860224,
+              "start": 7704576
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 172,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-25",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 31,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 173,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 25
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 169,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 173,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 25
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7749632,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7852032,
+              "start": 7700480
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 199,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 25
+          }
+        },
+        {
+          "mode_spec": "grouped-50",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 15,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 170,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 50
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 166,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 170,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 50
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7757824,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7794688,
+              "start": 7757824
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 221,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 50
+          }
+        },
+        {
+          "mode_spec": "grouped-100",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 16
+            },
+            "cycles": [
+              {
+                "analyze_ms": 206,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 100
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 199,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 206,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 100
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7766016,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7872512,
+              "start": 7757824
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 308,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 100
+          }
+        },
+        {
+          "mode_spec": "incompatible",
+          "observation": {
+            "analyses": 9,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 9
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 141,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 183,
+                "codes": [
+                  "E0061"
+                ],
+                "error_count": 2,
+                "latency_ms": 184,
+                "phase": "batch-with-incompatible",
+                "rejected": true
+              },
+              {
+                "analyze_ms": 157,
+                "cache_kind": "miss",
+                "error_count": 0,
+                "phase": "recovery-grouped-compatible",
+                "status": "fresh",
+                "success": true
+              }
+            ],
+            "daemon": {
+              "requests": 9,
+              "snapshots_created": 9,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 9,
+                "cancelled": 0,
+                "fresh": 9,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 9,
+                "rustc_ms_total": 1517,
+                "rustc_runs": 9,
+                "snapshots_created": 9,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 9
+              },
+              "unit_files_written": 9
+            },
+            "diagnostic_codes": [
+              "E0061",
+              "E0061"
+            ],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 5330062,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 4,
+            "errors": [],
+            "mode": "incompatible",
+            "phases_ms": {
+              "analyze": 1565,
+              "compose": 0,
+              "unaccounted": 11,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [
+                "E0061"
+              ],
+              "batch_error_count": 2,
+              "batch_latency_ms": 184,
+              "batch_rejected": true,
+              "error_latency_ms": 183,
+              "incompatible_identified": true,
+              "recovery_total_ms": 1576,
+              "retry_ms": 158,
+              "retry_success": true,
+              "steps": [
+                {
+                  "analyze_ms": 226,
+                  "codes": [],
+                  "edit": "edit-01-add-plus-one",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 214,
+                  "codes": [],
+                  "edit": "edit-02-mul-plus-two",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 190,
+                  "codes": [],
+                  "edit": "edit-03-is-even-bitwise",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 144,
+                  "codes": [],
+                  "edit": "edit-04-factorial-range",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 149,
+                  "codes": [],
+                  "edit": "edit-05-checksum-mix",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 160,
+                  "codes": [],
+                  "edit": "edit-06-lerp-formula",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 142,
+                  "codes": [
+                    "E0061"
+                  ],
+                  "edit": "edit-07-scale-signature",
+                  "error_count": 2,
+                  "identified": true,
+                  "status": "fresh",
+                  "success": false
+                }
+              ]
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7819264,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7991296,
+              "start": 7766016
+            },
+            "rustc_runs": 9,
+            "success": true,
+            "total_ms": 1576,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 9,
+              "identity_failures": 0,
+              "marker_checks": 12,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "sequential",
+          "observation": {
+            "analyses": 6,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 6
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 125,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 235,
+                "cache_kind": "miss",
+                "edit": "edit-01-add-plus-one",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 214,
+                "cache_kind": "miss",
+                "edit": "edit-02-mul-plus-two",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 190,
+                "cache_kind": "miss",
+                "edit": "edit-03-is-even-bitwise",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 172,
+                "cache_kind": "miss",
+                "edit": "edit-04-factorial-range",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 164,
+                "cache_kind": "miss",
+                "edit": "edit-05-checksum-mix",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 178,
+                "cache_kind": "miss",
+                "edit": "edit-06-lerp-formula",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 6,
+              "snapshots_created": 6,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 6,
+                "cancelled": 0,
+                "fresh": 6,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 6,
+                "rustc_ms_total": 1106,
+                "rustc_runs": 6,
+                "snapshots_created": 6,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 6
+              },
+              "unit_files_written": 6
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 2513933,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "sequential",
+            "phases_ms": {
+              "analyze": 1153,
+              "compose": 0,
+              "unaccounted": 9,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 2,
+            "rss_bytes": {
+              "end": 7897088,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8003584,
+              "start": 7806976
+            },
+            "rustc_runs": 6,
+            "success": true,
+            "total_ms": 1162,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 6,
+              "identity_failures": 0,
+              "marker_checks": 21,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        }
+      ],
+      "order": [
+        "grouped-0",
+        "grouped-25",
+        "grouped-50",
+        "grouped-100",
+        "incompatible",
+        "sequential"
+      ],
+      "repetition": 2
+    },
+    {
+      "load_after": {
+        "captured_unix": 1794182614,
+        "cpu_busy_percent": 44.08602150537635,
+        "daemon_working_set_bytes": 8011776,
+        "memory_available_bytes": 1900285952,
+        "memory_total_bytes": 16868962304,
+        "process_count": 325
+      },
+      "load_before": {
+        "captured_unix": 1794182610,
+        "cpu_busy_percent": 28.723404255319153,
+        "daemon_working_set_bytes": 7856128,
+        "memory_available_bytes": 1865269248,
+        "memory_total_bytes": 16868962304,
+        "process_count": 321
+      },
+      "modes": [
+        {
+          "mode_spec": "grouped-25",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 207,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 25
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 202,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 207,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 25
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 7946240,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8007680,
+              "start": 7843840
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 233,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 25
+          }
+        },
+        {
+          "mode_spec": "grouped-50",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 170,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 50
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 166,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 170,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 50
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 7819264,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7901184,
+              "start": 7778304
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 221,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 50
+          }
+        },
+        {
+          "mode_spec": "grouped-100",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 183,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 100
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 178,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 183,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 100
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 7892992,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 7942144,
+              "start": 7860224
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 285,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 100
+          }
+        },
+        {
+          "mode_spec": "incompatible",
+          "observation": {
+            "analyses": 9,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 9
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 78,
+              "process_user_ms": 47
+            },
+            "cycles": [
+              {
+                "analyze_ms": 173,
+                "codes": [
+                  "E0061"
+                ],
+                "error_count": 2,
+                "latency_ms": 174,
+                "phase": "batch-with-incompatible",
+                "rejected": true
+              },
+              {
+                "analyze_ms": 143,
+                "cache_kind": "miss",
+                "error_count": 0,
+                "phase": "recovery-grouped-compatible",
+                "status": "fresh",
+                "success": true
+              }
+            ],
+            "daemon": {
+              "requests": 9,
+              "snapshots_created": 9,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 9,
+                "cancelled": 0,
+                "fresh": 9,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 9,
+                "rustc_ms_total": 1451,
+                "rustc_runs": 9,
+                "snapshots_created": 9,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 9
+              },
+              "unit_files_written": 9
+            },
+            "diagnostic_codes": [
+              "E0061",
+              "E0061"
+            ],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 5330062,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 4,
+            "errors": [],
+            "mode": "incompatible",
+            "phases_ms": {
+              "analyze": 1499,
+              "compose": 0,
+              "unaccounted": 12,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [
+                "E0061"
+              ],
+              "batch_error_count": 2,
+              "batch_latency_ms": 174,
+              "batch_rejected": true,
+              "error_latency_ms": 173,
+              "incompatible_identified": true,
+              "recovery_total_ms": 1511,
+              "retry_ms": 144,
+              "retry_success": true,
+              "steps": [
+                {
+                  "analyze_ms": 211,
+                  "codes": [],
+                  "edit": "edit-01-add-plus-one",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 175,
+                  "codes": [],
+                  "edit": "edit-02-mul-plus-two",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 188,
+                  "codes": [],
+                  "edit": "edit-03-is-even-bitwise",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 163,
+                  "codes": [],
+                  "edit": "edit-04-factorial-range",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 149,
+                  "codes": [],
+                  "edit": "edit-05-checksum-mix",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 163,
+                  "codes": [],
+                  "edit": "edit-06-lerp-formula",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 134,
+                  "codes": [
+                    "E0061"
+                  ],
+                  "edit": "edit-07-scale-signature",
+                  "error_count": 2,
+                  "identified": true,
+                  "status": "fresh",
+                  "success": false
+                }
+              ]
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 7860224,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8159232,
+              "start": 7901184
+            },
+            "rustc_runs": 9,
+            "success": true,
+            "total_ms": 1511,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 9,
+              "identity_failures": 0,
+              "marker_checks": 12,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "sequential",
+          "observation": {
+            "analyses": 6,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 6
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 93,
+              "process_user_ms": 15
+            },
+            "cycles": [
+              {
+                "analyze_ms": 205,
+                "cache_kind": "miss",
+                "edit": "edit-01-add-plus-one",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 177,
+                "cache_kind": "miss",
+                "edit": "edit-02-mul-plus-two",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 182,
+                "cache_kind": "miss",
+                "edit": "edit-03-is-even-bitwise",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 168,
+                "cache_kind": "miss",
+                "edit": "edit-04-factorial-range",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 174,
+                "cache_kind": "miss",
+                "edit": "edit-05-checksum-mix",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 202,
+                "cache_kind": "miss",
+                "edit": "edit-06-lerp-formula",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 6,
+              "snapshots_created": 6,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 6,
+                "cancelled": 0,
+                "fresh": 6,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 6,
+                "rustc_ms_total": 1077,
+                "rustc_runs": 6,
+                "snapshots_created": 6,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 6
+              },
+              "unit_files_written": 6
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 2513933,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "sequential",
+            "phases_ms": {
+              "analyze": 1108,
+              "compose": 0,
+              "unaccounted": 8,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 8007680,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8114176,
+              "start": 7868416
+            },
+            "rustc_runs": 6,
+            "success": true,
+            "total_ms": 1116,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 6,
+              "identity_failures": 0,
+              "marker_checks": 21,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-0",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 203,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 198,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 203,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 3,
+            "rss_bytes": {
+              "end": 8011776,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8077312,
+              "start": 8011776
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 204,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        }
+      ],
+      "order": [
+        "grouped-25",
+        "grouped-50",
+        "grouped-100",
+        "incompatible",
+        "sequential",
+        "grouped-0"
+      ],
+      "repetition": 3
+    },
+    {
+      "load_after": {
+        "captured_unix": 1794182620,
+        "cpu_busy_percent": 49.01960784313726,
+        "daemon_working_set_bytes": 8101888,
+        "memory_available_bytes": 1107120128,
+        "memory_total_bytes": 16868962304,
+        "process_count": 349
+      },
+      "load_before": {
+        "captured_unix": 1794182615,
+        "cpu_busy_percent": 35.51401869158879,
+        "daemon_working_set_bytes": 8036352,
+        "memory_available_bytes": 1880645632,
+        "memory_total_bytes": 16868962304,
+        "process_count": 327
+      },
+      "modes": [
+        {
+          "mode_spec": "grouped-50",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 31,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 269,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 50
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 262,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 269,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 50
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8118272,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8159232,
+              "start": 8081408
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 320,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 50
+          }
+        },
+        {
+          "mode_spec": "grouped-100",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 15,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 226,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 100
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 221,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 226,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 100
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8138752,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8175616,
+              "start": 8138752
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 328,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 100
+          }
+        },
+        {
+          "mode_spec": "incompatible",
+          "observation": {
+            "analyses": 9,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 9
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 187,
+              "process_user_ms": 16
+            },
+            "cycles": [
+              {
+                "analyze_ms": 213,
+                "codes": [
+                  "E0061"
+                ],
+                "error_count": 2,
+                "latency_ms": 214,
+                "phase": "batch-with-incompatible",
+                "rejected": true
+              },
+              {
+                "analyze_ms": 213,
+                "cache_kind": "miss",
+                "error_count": 0,
+                "phase": "recovery-grouped-compatible",
+                "status": "fresh",
+                "success": true
+              }
+            ],
+            "daemon": {
+              "requests": 9,
+              "snapshots_created": 9,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 9,
+                "cancelled": 0,
+                "fresh": 9,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 9,
+                "rustc_ms_total": 2024,
+                "rustc_runs": 9,
+                "snapshots_created": 9,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 9
+              },
+              "unit_files_written": 9
+            },
+            "diagnostic_codes": [
+              "E0061",
+              "E0061"
+            ],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 5330062,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 4,
+            "errors": [],
+            "mode": "incompatible",
+            "phases_ms": {
+              "analyze": 2096,
+              "compose": 0,
+              "unaccounted": 16,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [
+                "E0061"
+              ],
+              "batch_error_count": 2,
+              "batch_latency_ms": 214,
+              "batch_rejected": true,
+              "error_latency_ms": 213,
+              "incompatible_identified": true,
+              "recovery_total_ms": 2111,
+              "retry_ms": 215,
+              "retry_success": true,
+              "steps": [
+                {
+                  "analyze_ms": 216,
+                  "codes": [],
+                  "edit": "edit-01-add-plus-one",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 241,
+                  "codes": [],
+                  "edit": "edit-02-mul-plus-two",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 249,
+                  "codes": [],
+                  "edit": "edit-03-is-even-bitwise",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 207,
+                  "codes": [],
+                  "edit": "edit-04-factorial-range",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 233,
+                  "codes": [],
+                  "edit": "edit-05-checksum-mix",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 293,
+                  "codes": [],
+                  "edit": "edit-06-lerp-formula",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 231,
+                  "codes": [
+                    "E0061"
+                  ],
+                  "edit": "edit-07-scale-signature",
+                  "error_count": 2,
+                  "identified": true,
+                  "status": "fresh",
+                  "success": false
+                }
+              ]
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8007680,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8343552,
+              "start": 8142848
+            },
+            "rustc_runs": 9,
+            "success": true,
+            "total_ms": 2112,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 9,
+              "identity_failures": 0,
+              "marker_checks": 12,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "sequential",
+          "observation": {
+            "analyses": 6,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 6
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 141,
+              "process_user_ms": 31
+            },
+            "cycles": [
+              {
+                "analyze_ms": 412,
+                "cache_kind": "miss",
+                "edit": "edit-01-add-plus-one",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 464,
+                "cache_kind": "miss",
+                "edit": "edit-02-mul-plus-two",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 211,
+                "cache_kind": "miss",
+                "edit": "edit-03-is-even-bitwise",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 197,
+                "cache_kind": "miss",
+                "edit": "edit-04-factorial-range",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 212,
+                "cache_kind": "miss",
+                "edit": "edit-05-checksum-mix",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 241,
+                "cache_kind": "miss",
+                "edit": "edit-06-lerp-formula",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 6,
+              "snapshots_created": 6,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 6,
+                "cancelled": 0,
+                "fresh": 6,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 6,
+                "rustc_ms_total": 1692,
+                "rustc_runs": 6,
+                "snapshots_created": 6,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 6
+              },
+              "unit_files_written": 6
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 2513933,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "sequential",
+            "phases_ms": {
+              "analyze": 1737,
+              "compose": 0,
+              "unaccounted": 8,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8105984,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8155136,
+              "start": 7966720
+            },
+            "rustc_runs": 6,
+            "success": true,
+            "total_ms": 1745,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 6,
+              "identity_failures": 0,
+              "marker_checks": 21,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-0",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 47,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 209,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 203,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 209,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8081408,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8126464,
+              "start": 8036352
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 210,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-25",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 31,
+              "process_user_ms": 16
+            },
+            "cycles": [
+              {
+                "analyze_ms": 204,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 25
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 198,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 204,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 25
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 4,
+            "rss_bytes": {
+              "end": 8089600,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8192000,
+              "start": 8081408
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 231,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 25
+          }
+        }
+      ],
+      "order": [
+        "grouped-50",
+        "grouped-100",
+        "incompatible",
+        "sequential",
+        "grouped-0",
+        "grouped-25"
+      ],
+      "repetition": 4
+    },
+    {
+      "load_after": {
+        "captured_unix": 1794182625,
+        "cpu_busy_percent": 8.333333333333337,
+        "daemon_working_set_bytes": 8179712,
+        "memory_available_bytes": 1960919040,
+        "memory_total_bytes": 16868962304,
+        "process_count": 323
+      },
+      "load_before": {
+        "captured_unix": 1794182620,
+        "cpu_busy_percent": 41.41414141414141,
+        "daemon_working_set_bytes": 8167424,
+        "memory_available_bytes": 1106157568,
+        "memory_total_bytes": 16868962304,
+        "process_count": 349
+      },
+      "modes": [
+        {
+          "mode_spec": "grouped-100",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 31,
+              "process_user_ms": 16
+            },
+            "cycles": [
+              {
+                "analyze_ms": 237,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 100
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 231,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 237,
+              "compose": 0,
+              "unaccounted": 2,
+              "verify": 0,
+              "wait": 100
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8159232,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8265728,
+              "start": 8056832
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 339,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 100
+          }
+        },
+        {
+          "mode_spec": "incompatible",
+          "observation": {
+            "analyses": 9,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 9
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 187,
+              "process_user_ms": 62
+            },
+            "cycles": [
+              {
+                "analyze_ms": 257,
+                "codes": [
+                  "E0061"
+                ],
+                "error_count": 2,
+                "latency_ms": 259,
+                "phase": "batch-with-incompatible",
+                "rejected": true
+              },
+              {
+                "analyze_ms": 202,
+                "cache_kind": "miss",
+                "error_count": 0,
+                "phase": "recovery-grouped-compatible",
+                "status": "fresh",
+                "success": true
+              }
+            ],
+            "daemon": {
+              "requests": 9,
+              "snapshots_created": 9,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 9,
+                "cancelled": 0,
+                "fresh": 9,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 9,
+                "rustc_ms_total": 2272,
+                "rustc_runs": 9,
+                "snapshots_created": 9,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 9
+              },
+              "unit_files_written": 9
+            },
+            "diagnostic_codes": [
+              "E0061",
+              "E0061"
+            ],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 5330062,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 4,
+            "errors": [],
+            "mode": "incompatible",
+            "phases_ms": {
+              "analyze": 2348,
+              "compose": 0,
+              "unaccounted": 19,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [
+                "E0061"
+              ],
+              "batch_error_count": 2,
+              "batch_latency_ms": 259,
+              "batch_rejected": true,
+              "error_latency_ms": 257,
+              "incompatible_identified": true,
+              "recovery_total_ms": 2366,
+              "retry_ms": 204,
+              "retry_success": true,
+              "steps": [
+                {
+                  "analyze_ms": 270,
+                  "codes": [],
+                  "edit": "edit-01-add-plus-one",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 216,
+                  "codes": [],
+                  "edit": "edit-02-mul-plus-two",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 279,
+                  "codes": [],
+                  "edit": "edit-03-is-even-bitwise",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 325,
+                  "codes": [],
+                  "edit": "edit-04-factorial-range",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 296,
+                  "codes": [],
+                  "edit": "edit-05-checksum-mix",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 262,
+                  "codes": [],
+                  "edit": "edit-06-lerp-formula",
+                  "error_count": 0,
+                  "status": "fresh",
+                  "success": true
+                },
+                {
+                  "analyze_ms": 241,
+                  "codes": [
+                    "E0061"
+                  ],
+                  "edit": "edit-07-scale-signature",
+                  "error_count": 2,
+                  "identified": true,
+                  "status": "fresh",
+                  "success": false
+                }
+              ]
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8163328,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8417280,
+              "start": 8175616
+            },
+            "rustc_runs": 9,
+            "success": true,
+            "total_ms": 2367,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 9,
+              "identity_failures": 0,
+              "marker_checks": 12,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "sequential",
+          "observation": {
+            "analyses": 6,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss",
+                "miss"
+              ],
+              "misses": 6
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 78,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 203,
+                "cache_kind": "miss",
+                "edit": "edit-01-add-plus-one",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 149,
+                "cache_kind": "miss",
+                "edit": "edit-02-mul-plus-two",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 147,
+                "cache_kind": "miss",
+                "edit": "edit-03-is-even-bitwise",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 149,
+                "cache_kind": "miss",
+                "edit": "edit-04-factorial-range",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 161,
+                "cache_kind": "miss",
+                "edit": "edit-05-checksum-mix",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              },
+              {
+                "analyze_ms": 174,
+                "cache_kind": "miss",
+                "edit": "edit-06-lerp-formula",
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 6,
+              "snapshots_created": 6,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 6,
+                "cancelled": 0,
+                "fresh": 6,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 6,
+                "rustc_ms_total": 953,
+                "rustc_runs": 6,
+                "snapshots_created": 6,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 6
+              },
+              "unit_files_written": 6
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 2513933,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "sequential",
+            "phases_ms": {
+              "analyze": 983,
+              "compose": 0,
+              "unaccounted": 8,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8192000,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8286208,
+              "start": 8134656
+            },
+            "rustc_runs": 6,
+            "success": true,
+            "total_ms": 991,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 6,
+              "identity_failures": 0,
+              "marker_checks": 21,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-0",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 0,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 170,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 0
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 166,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 170,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 0
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8110080,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8155136,
+              "start": 7999488
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 171,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 0
+          }
+        },
+        {
+          "mode_spec": "grouped-25",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 15,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 167,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 25
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 163,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 167,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 25
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8175616,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8273920,
+              "start": 8138752
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 193,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 25
+          }
+        },
+        {
+          "mode_spec": "grouped-50",
+          "observation": {
+            "analyses": 1,
+            "cache": {
+              "hits_disk": 0,
+              "hits_memory": 0,
+              "kinds_per_analysis": [
+                "miss"
+              ],
+              "misses": 1
+            },
+            "content_digest": "74a801600f1c31c9",
+            "correct": true,
+            "cpu": {
+              "note": "CPU du processus harnais (daemon in-process); le CPU des processus rustc enfants n'est pas attribué ici, leur temps est timings.analysis_ms",
+              "process_kernel_ms": 16,
+              "process_user_ms": 0
+            },
+            "cycles": [
+              {
+                "analyze_ms": 189,
+                "cache_kind": "miss",
+                "edit_count": 6,
+                "error_count": 0,
+                "status": "fresh",
+                "success": true,
+                "verify_ms": 0,
+                "window_ms": 50
+              }
+            ],
+            "daemon": {
+              "requests": 1,
+              "snapshots_created": 1,
+              "stats": {
+                "auto_gc": {
+                  "busy": false,
+                  "checks": 0,
+                  "enabled": false,
+                  "failures": 0,
+                  "journal_entries": 0,
+                  "last": null,
+                  "pending": false,
+                  "requests_since_check": 0,
+                  "runs": 0
+                },
+                "cache_corrupt": 0,
+                "cache_hits_disk": 0,
+                "cache_hits_memory": 0,
+                "cache_misses": 1,
+                "cancelled": 0,
+                "fresh": 1,
+                "gc_deleted_entries": 0,
+                "gc_freed_bytes": 0,
+                "gc_runs": 0,
+                "peak_active_jobs": 1,
+                "requests": 1,
+                "rustc_ms_total": 184,
+                "rustc_runs": 1,
+                "snapshots_created": 1,
+                "snapshots_verified": 0,
+                "superseded": 0,
+                "timed_out": 0,
+                "unit_files_written": 1
+              },
+              "unit_files_written": 1
+            },
+            "diagnostic_codes": [],
+            "disk_bytes": {
+              "after_daemon_open": 0,
+              "after_mode": 1242962,
+              "note": "état du daemon (snapshots + cache disque + incrémental) mesuré par ravum_daemon::gc::measure_total_bytes"
+            },
+            "error_count": 0,
+            "errors": [],
+            "mode": "grouped",
+            "phases_ms": {
+              "analyze": 189,
+              "compose": 0,
+              "unaccounted": 1,
+              "verify": 0,
+              "wait": 50
+            },
+            "recovery": {
+              "batch_codes": [],
+              "batch_error_count": 0,
+              "batch_latency_ms": 0,
+              "batch_rejected": false,
+              "error_latency_ms": 0,
+              "incompatible_identified": false,
+              "recovery_total_ms": 0,
+              "retry_ms": 0,
+              "retry_success": false,
+              "steps": []
+            },
+            "repetition": 5,
+            "rss_bytes": {
+              "end": 8163328,
+              "note": "working set du processus harnais échantillonné toutes les 2 ms; le pic peut inclure de la mémoire résiduelle des modes précédents car le processus est réutilisé",
+              "peak_sampled": 8241152,
+              "start": 7933952
+            },
+            "rustc_runs": 1,
+            "success": true,
+            "total_ms": 240,
+            "verification": {
+              "definition": "content postcondition (all applied markers present in the submitted bytes) + recomputed content identity equals the report snapshot_id + report is fresh",
+              "identity_checks": 1,
+              "identity_failures": 0,
+              "marker_checks": 6,
+              "marker_failures": 0
+            },
+            "window_ms": 50
+          }
+        }
+      ],
+      "order": [
+        "grouped-100",
+        "incompatible",
+        "sequential",
+        "grouped-0",
+        "grouped-25",
+        "grouped-50"
+      ],
+      "repetition": 5
+    }
+  ],
+  "schema_version": 1,
+  "suite": "grouping",
+  "summary": {
+    "break_even": {
+      "estimated_break_even_window_ms": 955,
+      "formula": "fenêtre d'équilibre estimée = (N-1) × coût médian d'une analyse séquentielle (temps d'analyse total du mode séquentiel / N); estimation dérivée des mesures 0..=100 ms, non mesurée au-delà de 100 ms, suppose une attente purement latente",
+      "max_measured_window_with_positive_median_gain_ms": 100,
+      "measured_windows_ms": [
+        0,
+        25,
+        50,
+        100
+      ],
+      "per_cycle_analysis_ms": {
+        "count": 5,
+        "max": 289,
+        "mean": 203.8,
+        "min": 163,
+        "p50": 191,
+        "p95": 289
+      },
+      "per_cycle_analysis_p50_ms": 191,
+      "status": "ESTIMATE (dérivée, pas une mesure directe de fenêtre > 100 ms)"
+    },
+    "comparison": [
+      {
+        "analyses_saved_per_cycle": 5,
+        "gain_ms_medians": 955,
+        "gain_ms_paired": {
+          "count": 5,
+          "max": 1535,
+          "mean": 1036.4,
+          "min": 820,
+          "p50": 925,
+          "p95": 1535
+        },
+        "gain_percent_paired": {
+          "count": 5,
+          "max": 88,
+          "mean": 83.6,
+          "min": 80,
+          "p50": 83,
+          "p95": 88
+        },
+        "grouped_total_ms": {
+          "count": 5,
+          "max": 234,
+          "mean": 198.2,
+          "min": 171,
+          "p50": 204,
+          "p95": 234
+        },
+        "rustc_runs_saved_per_cycle": 5,
+        "sequential_total_ms": {
+          "count": 5,
+          "max": 1745,
+          "mean": 1234.6,
+          "min": 991,
+          "p50": 1159,
+          "p95": 1745
+        },
+        "window_ms": 0
+      },
+      {
+        "analyses_saved_per_cycle": 5,
+        "gain_ms_medians": 945,
+        "gain_ms_paired": {
+          "count": 5,
+          "max": 1514,
+          "mean": 1020.6,
+          "min": 798,
+          "p50": 945,
+          "p95": 1514
+        },
+        "gain_percent_paired": {
+          "count": 5,
+          "max": 87,
+          "mean": 82.4,
+          "min": 79,
+          "p50": 82,
+          "p95": 87
+        },
+        "grouped_total_ms": {
+          "count": 5,
+          "max": 233,
+          "mean": 214.0,
+          "min": 193,
+          "p50": 214,
+          "p95": 233
+        },
+        "rustc_runs_saved_per_cycle": 5,
+        "sequential_total_ms": {
+          "count": 5,
+          "max": 1745,
+          "mean": 1234.6,
+          "min": 991,
+          "p50": 1159,
+          "p95": 1745
+        },
+        "window_ms": 25
+      },
+      {
+        "analyses_saved_per_cycle": 5,
+        "gain_ms_medians": 919,
+        "gain_ms_paired": {
+          "count": 5,
+          "max": 1425,
+          "mean": 981.4,
+          "min": 751,
+          "p50": 895,
+          "p95": 1425
+        },
+        "gain_percent_paired": {
+          "count": 5,
+          "max": 82,
+          "mean": 79.2,
+          "min": 76,
+          "p50": 80,
+          "p95": 82
+        },
+        "grouped_total_ms": {
+          "count": 5,
+          "max": 320,
+          "mean": 253.2,
+          "min": 221,
+          "p50": 240,
+          "p95": 320
+        },
+        "rustc_runs_saved_per_cycle": 5,
+        "sequential_total_ms": {
+          "count": 5,
+          "max": 1745,
+          "mean": 1234.6,
+          "min": 991,
+          "p50": 1159,
+          "p95": 1745
+        },
+        "window_ms": 50
+      },
+      {
+        "analyses_saved_per_cycle": 5,
+        "gain_ms_medians": 851,
+        "gain_ms_paired": {
+          "count": 5,
+          "max": 1417,
+          "mean": 925.2,
+          "min": 652,
+          "p50": 854,
+          "p95": 1417
+        },
+        "gain_percent_paired": {
+          "count": 5,
+          "max": 81,
+          "mean": 73.8,
+          "min": 66,
+          "p50": 74,
+          "p95": 81
+        },
+        "grouped_total_ms": {
+          "count": 5,
+          "max": 339,
+          "mean": 309.4,
+          "min": 285,
+          "p50": 308,
+          "p95": 339
+        },
+        "rustc_runs_saved_per_cycle": 5,
+        "sequential_total_ms": {
+          "count": 5,
+          "max": 1745,
+          "mean": 1234.6,
+          "min": 991,
+          "p50": 1159,
+          "p95": 1745
+        },
+        "window_ms": 100
+      }
+    ],
+    "correctness": {
+      "all_modes_valid": true,
+      "content_digests_match_across_strategies": true,
+      "identity_checks": 95,
+      "identity_failures": 0,
+      "incompatible_handled": true,
+      "marker_checks": 285,
+      "marker_failures": 0,
+      "reference_digest": "74a801600f1c31c9",
+      "rustc_counts_as_expected": true,
+      "success_rate": {
+        "modes_total": 6,
+        "modes_valid": 6
+      }
+    },
+    "errors": [],
+    "incompatible": {
+      "batch_latency_ms": {
+        "count": 5,
+        "max": 259,
+        "mean": 199.2,
+        "min": 165,
+        "p50": 184,
+        "p95": 259
+      },
+      "batch_rejected_count": 5,
+      "incompatible_identified_count": 5,
+      "no_incorrect_acceptance": true,
+      "observations": 5,
+      "recovery_total_ms": {
+        "count": 5,
+        "max": 2366,
+        "mean": 1832.0,
+        "min": 1511,
+        "p50": 1596,
+        "p95": 2366
+      },
+      "retry_ms": {
+        "count": 5,
+        "max": 215,
+        "mean": 174.4,
+        "min": 144,
+        "p50": 158,
+        "p95": 215
+      },
+      "retry_success_count": 5,
+      "rustc_runs_per_rep": {
+        "count": 5,
+        "max": 9,
+        "mean": 9.0,
+        "min": 9,
+        "p50": 9,
+        "p95": 9
+      }
+    },
+    "modes": {
+      "grouped-0": {
+        "analyses": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 233,
+            "mean": 197.2,
+            "min": 170,
+            "p50": 203,
+            "p95": 233
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 234,
+          "mean": 198.2,
+          "min": 171,
+          "p50": 204,
+          "p95": 234
+        },
+        "valid": true
+      },
+      "grouped-100": {
+        "analyses": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 237,
+            "mean": 207.4,
+            "min": 183,
+            "p50": 206,
+            "p95": 237
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 100,
+            "mean": 100.0,
+            "min": 100,
+            "p50": 100,
+            "p95": 100
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 339,
+          "mean": 309.4,
+          "min": 285,
+          "p50": 308,
+          "p95": 339
+        },
+        "valid": true
+      },
+      "grouped-25": {
+        "analyses": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 207,
+            "mean": 187.6,
+            "min": 167,
+            "p50": 187,
+            "p95": 207
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 25,
+            "mean": 25.0,
+            "min": 25,
+            "p50": 25,
+            "p95": 25
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 233,
+          "mean": 214.0,
+          "min": 193,
+          "p50": 214,
+          "p95": 233
+        },
+        "valid": true
+      },
+      "grouped-50": {
+        "analyses": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 269,
+            "mean": 202.0,
+            "min": 170,
+            "p50": 189,
+            "p95": 269
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 50,
+            "mean": 50.0,
+            "min": 50,
+            "p50": 50,
+            "p95": 50
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 1,
+          "mean": 1.0,
+          "min": 1,
+          "p50": 1,
+          "p95": 1
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 320,
+          "mean": 253.2,
+          "min": 221,
+          "p50": 240,
+          "p95": 320
+        },
+        "valid": true
+      },
+      "incompatible": {
+        "analyses": {
+          "count": 5,
+          "max": 9,
+          "mean": 9.0,
+          "min": 9,
+          "p50": 9,
+          "p95": 9
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 2348,
+            "mean": 1818.6,
+            "min": 1499,
+            "p50": 1585,
+            "p95": 2348
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 9,
+          "mean": 9.0,
+          "min": 9,
+          "p50": 9,
+          "p95": 9
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 2367,
+          "mean": 1832.6,
+          "min": 1511,
+          "p50": 1597,
+          "p95": 2367
+        },
+        "valid": true
+      },
+      "sequential": {
+        "analyses": {
+          "count": 5,
+          "max": 6,
+          "mean": 6.0,
+          "min": 6,
+          "p50": 6,
+          "p95": 6
+        },
+        "correct_count": 5,
+        "observations": 5,
+        "phases_ms": {
+          "analyze": {
+            "count": 5,
+            "max": 1737,
+            "mean": 1226.4,
+            "min": 983,
+            "p50": 1151,
+            "p95": 1737
+          },
+          "compose": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "verify": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          },
+          "wait": {
+            "count": 5,
+            "max": 0,
+            "mean": 0.0,
+            "min": 0,
+            "p50": 0,
+            "p95": 0
+          }
+        },
+        "rustc_runs": {
+          "count": 5,
+          "max": 6,
+          "mean": 6.0,
+          "min": 6,
+          "p50": 6,
+          "p95": 6
+        },
+        "success_count": 5,
+        "total_ms": {
+          "count": 5,
+          "max": 1745,
+          "mean": 1234.6,
+          "min": 991,
+          "p50": 1159,
+          "p95": 1745
+        },
+        "valid": true
+      }
+    },
+    "savings": {
+      "analyses_per_grouped_cycle": 1,
+      "analyses_per_sequential_cycle": 6,
+      "compatible_edits": 6,
+      "formula": "éditions groupées N => N analyses séquentielles remplacées par 1 analyse; économie = N-1 invocations rustc par lot",
+      "rustc_runs_saved_per_grouped_cycle": 5
+    }
+  },
+  "toolchain": {
+    "repo_root": "<repo>",
+    "rustc_path": "rustc",
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  },
+  "valid": true
+}

@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-auto-gc-flake-2026-11-09",
+  "generated_unix": 1794189888,
+  "rustc_vV": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "commands": {
+    "flaky_test": "cargo test -q -p ravum-daemon --offline --test auto_gc_integration -- --test-threads=1 --exact auto_gc_journal_and_stats_are_bounded_and_coherent",
+    "full_file": "cargo test -q -p ravum-daemon --offline --test auto_gc_integration -- --test-threads=1",
+    "load": "two bounded PowerShell CPU loops (Start-Job, max 300 s, stopped after the 5 runs)"
+  },
+  "root_cause": "automatic GC runs in a background maintenance thread; the test asserted runs >= 1 immediately after wait_auto_gc_idle, which does not guarantee the asynchronous trigger was scheduled/processed under load",
+  "fix": "bounded poll helper (50 ms interval, 10 s timeout) waiting for auto_gc.runs >= 1; on timeout panic with runs/failures/checks/busy/pending/requests_since_check/journal path+lines/work_dir diagnostics; all existing assertions kept unchanged",
+  "runs": [
+    {
+      "mode": "under_load",
+      "iteration": 1,
+      "exit_code": 0,
+      "duration_ms": 6746,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 5.29s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 2,
+      "exit_code": 0,
+      "duration_ms": 5956,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 5.32s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 3,
+      "exit_code": 0,
+      "duration_ms": 5480,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.82s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 4,
+      "exit_code": 0,
+      "duration_ms": 5079,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.51s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 5,
+      "exit_code": 0,
+      "duration_ms": 5256,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.55s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 1,
+      "exit_code": 0,
+      "duration_ms": 3563,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.16s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 2,
+      "exit_code": 0,
+      "duration_ms": 3600,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.26s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 3,
+      "exit_code": 0,
+      "duration_ms": 3810,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.41s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 4,
+      "exit_code": 0,
+      "duration_ms": 4100,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.68s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 5,
+      "exit_code": 0,
+      "duration_ms": 4157,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.78s | "
+    }
+  ],
+  "load_runs": [
+    {
+      "mode": "under_load",
+      "iteration": 1,
+      "exit_code": 0,
+      "duration_ms": 6746,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 5.29s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 2,
+      "exit_code": 0,
+      "duration_ms": 5956,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 5.32s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 3,
+      "exit_code": 0,
+      "duration_ms": 5480,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.82s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 4,
+      "exit_code": 0,
+      "duration_ms": 5079,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.51s | "
+    },
+    {
+      "mode": "under_load",
+      "iteration": 5,
+      "exit_code": 0,
+      "duration_ms": 5256,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 4.55s | "
+    }
+  ],
+  "idle_runs": [
+    {
+      "mode": "idle",
+      "iteration": 1,
+      "exit_code": 0,
+      "duration_ms": 3563,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.16s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 2,
+      "exit_code": 0,
+      "duration_ms": 3600,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.26s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 3,
+      "exit_code": 0,
+      "duration_ms": 3810,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.41s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 4,
+      "exit_code": 0,
+      "duration_ms": 4100,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.68s | "
+    },
+    {
+      "mode": "idle",
+      "iteration": 5,
+      "exit_code": 0,
+      "duration_ms": 4157,
+      "tail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.78s | "
+    }
+  ],
+  "full_file": {
+    "exit_code": 0,
+    "duration_ms": 16762,
+    "passed": 7,
+    "failed": 0,
+    "test_result_tail": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.37s"
+  },
+  "stable_under_load": true,
+  "stable_idle": true,
+  "valid": true,
+  "limits": [
+    "the test remains temporal but bounded (10 s timeout, 50 ms poll); it is not a real-time guarantee",
+    "load is simulated with two CPU-bound PowerShell loops on a shared machine, not a controlled scheduler",
+    "product code untouched: only the test file was changed; no other flaky test addressed",
+    "no PROVED: bounded observations under one toolchain/OS"
+  ],
+  "post_format_full_file": {
+    "exit_code": 0,
+    "duration_ms": 11900,
+    "test_result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.61s",
+    "note": "full file re-run after rustfmt; no semantic change"
+  }
+}

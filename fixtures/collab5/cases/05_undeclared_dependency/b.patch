@@ -1,0 +1,6 @@
++++ b/src/lib.rs
+@@ -7,3 +7,3 @@
+ fn compose(x: u32) -> u32 {
+-    helper(x) * 2
++    helper(x) * 3
+ }

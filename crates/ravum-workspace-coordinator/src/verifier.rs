@@ -94,7 +94,7 @@ pub fn extra_checks(required: &[MergeCheckKind], checks: &[MergeCheck]) -> Vec<M
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::records::{MergeDiagnostic, MergeCheck};
+    use crate::records::{MergeCheck, MergeDiagnostic};
     use ravum_protocol::SnapshotId;
 
     fn check(kind: MergeCheckKind, status: MergeCheckStatus) -> MergeCheck {
@@ -114,12 +114,21 @@ mod tests {
     fn a_failed_required_check_is_reported_missing() {
         let required = vec![MergeCheckKind::MetadataCheck];
         assert_eq!(
-            missing_required_checks(&required, &[check(MergeCheckKind::MetadataCheck, MergeCheckStatus::Failed)]),
+            missing_required_checks(
+                &required,
+                &[check(
+                    MergeCheckKind::MetadataCheck,
+                    MergeCheckStatus::Failed
+                )]
+            ),
             required
         );
         assert!(missing_required_checks(
             &required,
-            &[check(MergeCheckKind::MetadataCheck, MergeCheckStatus::Passed)]
+            &[check(
+                MergeCheckKind::MetadataCheck,
+                MergeCheckStatus::Passed
+            )]
         )
         .is_empty());
     }
@@ -144,4 +153,3 @@ mod tests {
         assert_eq!(extra_checks(&required, &checks).len(), 1);
     }
 }
-

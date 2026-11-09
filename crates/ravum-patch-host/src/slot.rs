@@ -175,7 +175,10 @@ mod tests {
 
     impl Drop for ThreadTracked {
         fn drop(&mut self) {
-            self.drops.lock().expect("drops lock").push(thread::current().id());
+            self.drops
+                .lock()
+                .expect("drops lock")
+                .push(thread::current().id());
         }
     }
 
@@ -216,7 +219,11 @@ mod tests {
         // 200 values retired by the writer, all freed once no reader held them.
         assert_eq!(drops.load(Ordering::SeqCst), 200);
         drop(slot);
-        assert_eq!(drops.load(Ordering::SeqCst), 201, "the last value must be freed");
+        assert_eq!(
+            drops.load(Ordering::SeqCst),
+            201,
+            "the last value must be freed"
+        );
     }
 
     #[test]

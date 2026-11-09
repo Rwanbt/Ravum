@@ -6,8 +6,8 @@
 //! the M3 audio profile where unloading on the callback thread is forbidden.
 
 use libloading::Library;
-use std::sync::mpsc::{self, Sender};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
 use std::thread;
 
@@ -44,7 +44,9 @@ fn sender() -> &'static Sender<Library> {
 
 /// Modules loaded in this process (in-flight + active + awaiting reclamation).
 pub fn live_modules() -> u64 {
-    METRICS.loaded.load(Ordering::SeqCst)
+    METRICS
+        .loaded
+        .load(Ordering::SeqCst)
         .saturating_sub(METRICS.unloaded.load(Ordering::SeqCst))
 }
 
@@ -94,8 +96,7 @@ impl DeferredLibrary {
         // SAFETY: loading an arbitrary native library is inherently unsafe; the
         // caller only ever points this at artifacts produced by our own build
         // pipeline. The handle is never used after Drop.
-        let lib = unsafe { Library::new(path) }
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let lib = unsafe { Library::new(path) }.map_err(|e| format!("{}: {e}", path.display()))?;
         METRICS.loaded.fetch_add(1, Ordering::SeqCst);
         Ok(Self {
             lib: Some(lib),

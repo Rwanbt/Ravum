@@ -4,7 +4,7 @@
 //!   ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>]
 //!                          [--publication-journal <path>]
 //!                          [--commit] [--author NAME] [--email MAIL] [--json]
-//!                          [--verify] [--verify-tests]
+//!                          [--verify] [--verify-tests] [--protocol v1|v2]
 //!                          [--rustc <path>] [--work <dir>]
 //!   ravum-collab base --workspace <dir>
 //!
@@ -26,6 +26,12 @@
 //! * `--verify-tests` implies `--verify` and additionally compiles and executes
 //!   the merged snapshot's test harness (it executes code, hence the explicit
 //!   flag).
+//! * `--protocol v2` switches to the MVP-0c strict protocol: a textually
+//!   applicable patch is never `AUTO_SAFE` without a declared verification; the
+//!   decision journal and the accepted-change records carry versioned
+//!   `EvaluationRecord`s, and a default textual `SemanticOracle` reports the
+//!   contract findings it can see. `--protocol v1` (default) is the historical
+//!   COLLAB-1 compatibility profile and is marked as such in every record.
 
 mod common;
 
@@ -33,7 +39,8 @@ use common::RustcMergeVerifier;
 use ravum_protocol::{ChangeProposal, DecisionKind, ProposalDecision};
 use ravum_snapshot::SourceSnapshot;
 use ravum_workspace_coordinator::{
-    Coordinator, GitWriter, IntegrationSummary, MergeCheckStatus, PathUpdate, PublishRequest,
+    Coordinator, EvaluationProtocol, GitWriter, IntegrationSummary, MergeCheckStatus, PathUpdate,
+    PublishRequest, COORDINATOR_SCHEMA_VERSION,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -45,7 +52,7 @@ fn main() {
         Some("base") => base(&args[1..]),
         _ => {
             eprintln!(
-                "usage:\n  ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>] [--commit] [--json] [--fail-on-conflict]\n                        [--verify] [--verify-tests] [--rustc <path>] [--work <dir>]\n  ravum-collab base --workspace <dir>"
+                "usage:\n  ravum-collab integrate --workspace <dir> --proposals <dir> [--journal <path>] [--commit] [--json] [--fail-on-conflict]\n                        [--verify] [--verify-tests] [--protocol v1|v2] [--rustc <path>] [--work <dir>]\n  ravum-collab base --workspace <dir>"
             );
             2
         }
@@ -74,7 +81,10 @@ fn base(args: &[String]) -> i32 {
                 "snapshot_id": snapshot.id(),
                 "files": files,
             });
-            println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).unwrap_or_default()
+            );
             0
         }
         Err(e) => {
@@ -102,6 +112,14 @@ fn integrate(args: &[String]) -> i32 {
     // Opt-in only: COLLAB-1 callers and the historical demo keep their exact
     // decisions unless semantic verification is explicitly requested.
     let semantic = verify_tests || args.iter().any(|a| a == "--verify");
+    let protocol = match flag(args, "--protocol").as_deref() {
+        None | Some("v1") => EvaluationProtocol::V1CollabCompat,
+        Some("v2") => EvaluationProtocol::V2SemanticStatuses,
+        Some(other) => {
+            eprintln!("unknown --protocol {other:?} (expected v1 or v2)");
+            return 2;
+        }
+    };
 
     let base = read_workspace(&workspace);
     let base = match base {
@@ -111,7 +129,7 @@ fn integrate(args: &[String]) -> i32 {
             return 2;
         }
     };
-    let mut coordinator = Coordinator::new(base);
+    let mut coordinator = Coordinator::new(base).with_evaluation_protocol(protocol);
     if semantic {
         let rustc = flag(args, "--rustc")
             .or_else(|| std::env::var("RUSTC").ok())
@@ -144,16 +162,23 @@ fn integrate(args: &[String]) -> i32 {
         let decision = coordinator.submit(&proposal);
         if let Some(err) = coordinator.journal_error() {
             eprintln!("journal write failed: {err}");
-            eprintln!("aborting: a decision that cannot be recorded must not be acted upon further");
+            eprintln!(
+                "aborting: a decision that cannot be recorded must not be acted upon further"
+            );
             return 2;
         }
         summary.record(&decision);
+        let level = coordinator
+            .evaluation_for(&decision.proposal_id)
+            .map(|evaluation| evaluation.level.as_str())
+            .unwrap_or("UNKNOWN");
         if !json {
             println!(
-                "#{} {:<17} {:<24} {}",
+                "#{} {:<17} {:<24} {:<24} {}",
                 index + 1,
                 decision.decision.as_str(),
                 decision.proposal_id,
+                level,
                 decision.reasons.first().cloned().unwrap_or_default()
             );
             for reason in decision.reasons.iter().skip(1) {
@@ -168,7 +193,16 @@ fn integrate(args: &[String]) -> i32 {
             "\nAUTO_SAFE={} CONFLICT={} REJECT={} MANUAL_REQUIRED={} REBASE_REVALIDATE={}",
             summary.auto_safe, summary.conflicts, summary.rejected, summary.manual, summary.rebase
         );
-        println!("snapshot {} -> {}", initial.short(), coordinator.current_id().short());
+        println!(
+            "snapshot {} -> {}",
+            initial.short(),
+            coordinator.current_id().short()
+        );
+        println!(
+            "evaluation protocol: {} (coordinator schema v{})",
+            coordinator.protocol().as_str(),
+            COORDINATOR_SCHEMA_VERSION
+        );
         match coordinator.verifier_name() {
             Some(name) => println!(
                 "verification: semantic (verifier {name}); {} accepted change record(s)",
@@ -179,11 +213,17 @@ fn integrate(args: &[String]) -> i32 {
             ),
         }
         for change in coordinator.accepted_changes() {
+            let level = change
+                .evaluation
+                .as_ref()
+                .map(|evaluation| evaluation.level.as_str())
+                .unwrap_or("UNKNOWN");
             println!(
-                "  record {} -> {} [{}] {}",
+                "  record {} -> {} [{} / {}] {}",
                 change.snapshot_before.short(),
                 change.snapshot_after.short(),
                 change.verification.status.as_str(),
+                level,
                 change.evidence_ids.join(",")
             );
         }
@@ -212,6 +252,8 @@ fn integrate(args: &[String]) -> i32 {
     if json {
         let payload = serde_json::json!({
             "schema_version": 2,
+            "coordinator_schema_version": COORDINATOR_SCHEMA_VERSION,
+            "protocol": coordinator.protocol().as_str(),
             "snapshot_before": initial,
             "snapshot_after": coordinator.current_id(),
             "verification": {
@@ -220,6 +262,7 @@ fn integrate(args: &[String]) -> i32 {
                 "verifier": coordinator.verifier_name(),
                 "test_execution": verify_tests,
             },
+            "oracle": coordinator.oracle_name(),
             "summary": {
                 "auto_safe": summary.auto_safe,
                 "conflict": summary.conflicts,
@@ -228,13 +271,19 @@ fn integrate(args: &[String]) -> i32 {
                 "rebase_revalidate": summary.rebase,
             },
             "decisions": decisions,
+            "evaluations": coordinator.evaluations(),
             "accepted_changes": coordinator.accepted_changes(),
             "publication": publication,
         });
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).unwrap_or_default()
+        );
     }
 
-    if fail_on_conflict && (summary.conflicts + summary.rejected + summary.manual + summary.rebase > 0) {
+    if fail_on_conflict
+        && (summary.conflicts + summary.rejected + summary.manual + summary.rebase > 0)
+    {
         return 1;
     }
     0
@@ -265,7 +314,11 @@ fn short(sha: &str) -> String {
     sha[..12.min(sha.len())].to_owned()
 }
 
-fn commit(workspace: &Path, coordinator: &Coordinator, args: &[String]) -> Result<CommitInfo, String> {
+fn commit(
+    workspace: &Path,
+    coordinator: &Coordinator,
+    args: &[String],
+) -> Result<CommitInfo, String> {
     // Fail closed: in semantic mode nothing is published without a recorded,
     // passed verification bound to the exact accepted snapshot.
     for change in coordinator.accepted_changes() {
@@ -424,6 +477,3 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .and_then(|i| args.get(i + 1))
         .cloned()
 }
-
-
-

@@ -178,9 +178,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-batch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ravum-cli"
 version = "0.1.0"
 dependencies = [
+ "ravum-batch",
+ "ravum-collab-oracle",
  "ravum-coordinator",
  "ravum-daemon",
  "ravum-dsp-harness",
@@ -189,9 +199,21 @@ dependencies = [
  "ravum-protocol",
  "ravum-rust-adapter",
  "ravum-snapshot",
+ "ravum-unit-graph",
  "ravum-workspace-coordinator",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ravum-collab-oracle"
+version = "0.1.0"
+dependencies = [
+ "ravum-protocol",
+ "ravum-snapshot",
+ "ravum-unit-graph",
+ "ravum-workspace-coordinator",
+ "serde",
 ]
 
 [[package]]
@@ -210,6 +232,7 @@ dependencies = [
 name = "ravum-daemon"
 version = "0.1.0"
 dependencies = [
+ "ravum-batch",
  "serde",
  "serde_json",
  "sha2",
@@ -231,6 +254,8 @@ version = "0.1.0"
 dependencies = [
  "ravum-patch-host",
  "ravum-protocol",
+ "ravum-rust-adapter",
+ "ravum-snapshot",
  "serde_json",
 ]
 
@@ -312,6 +337,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ravum-unit-graph"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

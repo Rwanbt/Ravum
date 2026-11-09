@@ -36,7 +36,10 @@ impl VerificationStatus {
 
     /// Only these may gate an activation in the M1 profile.
     pub fn allows_activation(self) -> bool {
-        matches!(self, VerificationStatus::Proved | VerificationStatus::Tested)
+        matches!(
+            self,
+            VerificationStatus::Proved | VerificationStatus::Tested
+        )
     }
 }
 
@@ -118,7 +121,15 @@ mod tests {
     #[test]
     fn evidence_is_bound_to_its_context() {
         let r = record();
-        assert!(r.applies_to(&SnapshotId::new("s"), &BuildContextId::new("b"), &ArtifactId::new("a")));
-        assert!(!r.applies_to(&SnapshotId::new("s2"), &BuildContextId::new("b"), &ArtifactId::new("a")));
+        assert!(r.applies_to(
+            &SnapshotId::new("s"),
+            &BuildContextId::new("b"),
+            &ArtifactId::new("a")
+        ));
+        assert!(!r.applies_to(
+            &SnapshotId::new("s2"),
+            &BuildContextId::new("b"),
+            &ArtifactId::new("a")
+        ));
     }
 }

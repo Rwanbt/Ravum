@@ -1,0 +1,14 @@
+{
+  "id": "05_undeclared_dependency",
+  "description": "B modifie compose qui appelle helper change par A, sans declarer la dependance.",
+  "lane": "scripted_verifier",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "helper", "target": "src/lib.rs", "symbols": ["helper"], "patch": "a.patch"},
+    {"agent_id": "agent-b", "task_id": "compose", "target": "src/lib.rs", "symbols": ["compose"], "patch": "b.patch"}
+  ],
+  "expected_decisions": ["AUTO_SAFE", "MANUAL_REQUIRED"],
+  "expected_levels": ["SEMANTICALLY_CHECKED", "MANUAL_REQUIRED"],
+  "verifier": {"mode": "pass_all"},
+  "expect_reason_contains": [[], ["undeclared semantic dependency"]]
+}

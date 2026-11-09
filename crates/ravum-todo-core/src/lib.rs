@@ -62,7 +62,9 @@ impl ValidationError {
     pub fn message(&self) -> String {
         match self {
             ValidationError::TitleEmpty => "the title must not be empty".to_owned(),
-            ValidationError::TitleTooLong { max } => format!("the title must be at most {max} characters"),
+            ValidationError::TitleTooLong { max } => {
+                format!("the title must be at most {max} characters")
+            }
             ValidationError::DueDateInvalid { value } => {
                 format!("{value:?} is not a valid YYYY-MM-DD date")
             }
@@ -216,7 +218,13 @@ mod tests {
 
     #[test]
     fn malformed_dates_are_rejected() {
-        for bad in ["2026-1-1", "20261109", "2026/11/09", "2026-00-10", "2026-12-32"] {
+        for bad in [
+            "2026-1-1",
+            "20261109",
+            "2026/11/09",
+            "2026-00-10",
+            "2026-12-32",
+        ] {
             let task = NewTask {
                 title: "x".to_owned(),
                 due_date: Some(bad.to_owned()),
@@ -244,7 +252,9 @@ mod tests {
     fn the_contract_exposes_the_writable_fields() {
         let contract = contract();
         assert_eq!(contract["contract_version"], CONTRACT_VERSION);
-        let fields = contract["resources"]["task"]["fields"].as_array().expect("fields");
+        let fields = contract["resources"]["task"]["fields"]
+            .as_array()
+            .expect("fields");
         assert!(fields.iter().any(|f| f["name"] == "due_date"));
         assert!(fields.iter().any(|f| f["name"] == "title"));
     }

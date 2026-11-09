@@ -35,14 +35,16 @@
 //!   historique d'activation native: aucun artefact n'est construit ni chargé ici.
 
 use crate::commands::{flag, flag_u64, has, positional, work_dir};
+use ravum_collab_oracle::UnitGraphOracle;
 use ravum_daemon::{AnalysisRequest, BuildContext, Daemon, DaemonConfig};
 use ravum_protocol::{ChangeProposal, DecisionKind, COLLAB_SCHEMA_VERSION};
 use ravum_snapshot::SourceSnapshot;
-use ravum_workspace_coordinator::Coordinator;
+use ravum_workspace_coordinator::{Coordinator, EvaluationProtocol};
 use serde::Serialize;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const REPORT_SCHEMA_VERSION: u32 = 1;
 const MAX_PASSES: u64 = 8;
@@ -171,9 +173,9 @@ impl UnitGraph {
         let mut units: BTreeMap<String, Unit> = BTreeMap::new();
         for manifest_path in &manifest_paths {
             let dir = parent_dir(manifest_path);
-            let content = snapshot
-                .content_of(manifest_path)
-                .ok_or_else(|| CycleError::graph(format!("Cargo.toml absent du snapshot: {manifest_path}")))?;
+            let content = snapshot.content_of(manifest_path).ok_or_else(|| {
+                CycleError::graph(format!("Cargo.toml absent du snapshot: {manifest_path}"))
+            })?;
             let parsed = parse_manifest(manifest_path, content)?;
             manifests.insert(dir.clone());
             let crate_name = sanitize_crate_name(&parsed.package_name);
@@ -243,7 +245,9 @@ impl UnitGraph {
             if is_manifest_path(path) {
                 let dir = parent_dir(path);
                 let unit = units.get_mut(&dir).ok_or_else(|| {
-                    CycleError::graph(format!("Cargo.toml non découvert (incohérence interne): {path}"))
+                    CycleError::graph(format!(
+                        "Cargo.toml non découvert (incohérence interne): {path}"
+                    ))
                 })?;
                 unit.files.push(path.to_owned());
                 continue;
@@ -316,7 +320,10 @@ impl UnitGraph {
         let mut stack: Vec<String> = direct.iter().cloned().collect();
         while let Some(dir) = stack.pop() {
             let unit = self.units.get(&dir).ok_or_else(|| {
-                CycleError::graph(format!("unité inconnue dans le graphe: {:?}", display_dir(&dir)))
+                CycleError::graph(format!(
+                    "unité inconnue dans le graphe: {:?}",
+                    display_dir(&dir)
+                ))
             })?;
             for dependent in unit.dependents.clone() {
                 if affected.insert(dependent.clone()) {
@@ -506,9 +513,7 @@ fn parse_manifest(path: &str, content: &str) -> CycleResult<ParsedManifest> {
                 let resolved = unquote(path, line_index, value)?;
                 table_dependencies.insert(dependency_name, Some(resolved));
             } else if key == "version" {
-                table_dependencies
-                    .entry(dependency_name)
-                    .or_insert(None);
+                table_dependencies.entry(dependency_name).or_insert(None);
             }
         }
     }
@@ -538,7 +543,10 @@ fn parse_manifest(path: &str, content: &str) -> CycleResult<ParsedManifest> {
 
 fn unquote(path: &str, line_index: usize, value: &str) -> CycleResult<String> {
     let trimmed = value.trim();
-    let Some(inner) = trimmed.strip_prefix('"').and_then(|rest| rest.strip_suffix('"')) else {
+    let Some(inner) = trimmed
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    else {
         return Err(CycleError::graph(format!(
             "{path}:{}: valeur TOML non supportée (chaîne attendue): {value:?}",
             line_index + 1
@@ -616,7 +624,12 @@ fn topological_order(units: &BTreeMap<String, Unit>) -> CycleResult<Vec<String>>
     ) -> Result<(), String> {
         match state.get(dir).copied().unwrap_or(0) {
             2 => return Ok(()),
-            1 => return Err(format!("cycle de dépendances path autour de {:?}", display_dir(dir))),
+            1 => {
+                return Err(format!(
+                    "cycle de dépendances path autour de {:?}",
+                    display_dir(dir)
+                ))
+            }
             _ => {}
         }
         state.insert(dir.to_owned(), 1);
@@ -714,7 +727,11 @@ fn replacement_patch(
     }
     let index = matches[0];
     let first = index.saturating_sub(1);
-    let last = if index + 1 < lines.len() { index + 1 } else { index };
+    let last = if index + 1 < lines.len() {
+        index + 1
+    } else {
+        index
+    };
     let mut hunk = Vec::new();
     let mut old_len = 0usize;
     let mut new_len = 0usize;
@@ -876,7 +893,8 @@ fn run(args: &[String]) -> CycleResult<u8> {
     let Some(workspace_argument) = positional(args, 0) else {
         return Err(CycleError::usage(
             "usage: ravum collab-cycle <workspace> [--proposals <dir>] [--daemon-work <dir>] \
-             [--journal <path>] [--out <path>] [--passes N] [--json]",
+             [--journal <path>] [--out <path>] [--passes N] [--json] \
+             [--protocol v1|v2] [--oracle unit-graph --oracle-state <dir>]",
         ));
     };
     let workspace = PathBuf::from(&workspace_argument);
@@ -897,9 +915,50 @@ fn run(args: &[String]) -> CycleResult<u8> {
     let json_output = has(args, "--json");
     let passes = flag_u64(args, "--passes", 1).clamp(1, MAX_PASSES) as u32;
 
+    // MVP-0c L5.1: opt-in versioned protocol and injected L1 oracle. Defaults
+    // (no flags) are unchanged: v1 textual compatibility, no oracle.
+    let protocol = match flag(args, "--protocol").as_deref() {
+        None | Some("v1") => EvaluationProtocol::V1CollabCompat,
+        Some("v2") => EvaluationProtocol::V2SemanticStatuses,
+        Some(other) => {
+            return Err(CycleError::usage(format!(
+                "--protocol attendu: v1 ou v2, reçu {other:?}"
+            )));
+        }
+    };
+    let oracle_kind = flag(args, "--oracle");
+    let oracle_state = flag(args, "--oracle-state").map(PathBuf::from);
+    let oracle_enabled = match oracle_kind.as_deref() {
+        None | Some("none") => {
+            if oracle_state.is_some() {
+                return Err(CycleError::usage(
+                    "--oracle-state exige --oracle unit-graph",
+                ));
+            }
+            false
+        }
+        Some("unit-graph") => {
+            if !protocol.is_v2() {
+                return Err(CycleError::usage(
+                    "--oracle unit-graph exige --protocol v2 (l'oracle n'est pas consulté en mode v1)",
+                ));
+            }
+            true
+        }
+        Some(other) => {
+            return Err(CycleError::usage(format!(
+                "--oracle attendu: unit-graph ou none, reçu {other:?}"
+            )));
+        }
+    };
+    let oracle_state = oracle_state.unwrap_or_else(|| work_dir().join("collab-oracle"));
+
     // 1. Workspace -> SourceSnapshot (single content engine: ravum-snapshot).
     let base_snapshot = SourceSnapshot::from_directory(&workspace, |path| {
-        let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
         name == "Cargo.toml" || path.extension().map(|ext| ext == "rs").unwrap_or(false)
     })
     .map_err(|error| {
@@ -954,7 +1013,12 @@ fn run(args: &[String]) -> CycleResult<u8> {
     for pass in 1..=passes {
         let pass_started = std::time::Instant::now();
         let journal_path = journal_path_for(&journal_base, pass);
-        let mut coordinator = Coordinator::new(base_snapshot.clone());
+        let mut coordinator =
+            Coordinator::new(base_snapshot.clone()).with_evaluation_protocol(protocol);
+        if oracle_enabled {
+            coordinator = coordinator
+                .with_semantic_oracle(Arc::new(UnitGraphOracle::new(oracle_state.clone())));
+        }
         coordinator = coordinator.with_journal(&journal_path).map_err(|error| {
             CycleError::usage(format!(
                 "journal de décisions inutilisable {}: {error}",
@@ -968,6 +1032,7 @@ fn run(args: &[String]) -> CycleResult<u8> {
         for proposal in &proposals {
             let decision = coordinator.submit(proposal);
             pass_decisions += 1;
+            let evaluation = coordinator.evaluations().last().cloned();
             decisions.push(json!({
                 "pass": pass,
                 "proposal_id": decision.proposal_id,
@@ -976,6 +1041,12 @@ fn run(args: &[String]) -> CycleResult<u8> {
                 "base_snapshot_id": decision.base_snapshot_id,
                 "resulting_snapshot_id": decision.resulting_snapshot_id,
                 "journal_seq": coordinator.journal().last().map(|entry| entry.seq),
+                "evaluation_level": evaluation.as_ref().map(|record| record.level.as_str()),
+                "oracle_blocking": evaluation
+                    .as_ref()
+                    .and_then(|record| record.oracle.as_ref())
+                    .map(|report| report.has_blocking()),
+                "evaluation": evaluation,
             }));
             if decision.decision != DecisionKind::AutoSafe {
                 violations.push(Violation::new(
@@ -1037,11 +1108,7 @@ fn run(args: &[String]) -> CycleResult<u8> {
                 } else {
                     "dependent"
                 };
-                expected_scope.insert((
-                    pass,
-                    accepted.proposal_id.clone(),
-                    unit.dir.clone(),
-                ));
+                expected_scope.insert((pass, accepted.proposal_id.clone(), unit.dir.clone()));
                 revision += 1;
                 let label = sanitize_label(&format!(
                     "collab4-p{pass}-{}-{}",
@@ -1051,7 +1118,10 @@ fn run(args: &[String]) -> CycleResult<u8> {
                 let identity = request.identity(&toolchain).map_err(|error| {
                     CycleError::new(
                         EXIT_USAGE_OR_GRAPH,
-                        format!("requête daemon invalide pour {:?}: {error}", unit.package_name),
+                        format!(
+                            "requête daemon invalide pour {:?}: {error}",
+                            unit.package_name
+                        ),
                     )
                 })?;
                 let report = match daemon.analyze(&request) {
@@ -1250,7 +1320,10 @@ fn run(args: &[String]) -> CycleResult<u8> {
             ));
         }
         let durable_lines = count_lines(&journal_path).map_err(|error| {
-            CycleError::usage(format!("journal illisible {}: {error}", journal_path.display()))
+            CycleError::usage(format!(
+                "journal illisible {}: {error}",
+                journal_path.display()
+            ))
         })?;
         if durable_lines != entries.len() as u64 {
             violations.push(Violation::new(
@@ -1265,9 +1338,14 @@ fn run(args: &[String]) -> CycleResult<u8> {
         journal_paths.push(journal_path.display().to_string());
 
         let stats_after = daemon.stats();
-        let pass_analyses: Vec<&AnalysisRecord> =
-            analyses.iter().filter(|analysis| analysis.pass == pass).collect();
-        let hits = pass_analyses.iter().filter(|analysis| analysis.cache_hit).count() as u64;
+        let pass_analyses: Vec<&AnalysisRecord> = analyses
+            .iter()
+            .filter(|analysis| analysis.pass == pass)
+            .collect();
+        let hits = pass_analyses
+            .iter()
+            .filter(|analysis| analysis.cache_hit)
+            .count() as u64;
         passes_report.push(json!({
             "pass": pass,
             "decisions": pass_decisions,
@@ -1331,11 +1409,20 @@ fn run(args: &[String]) -> CycleResult<u8> {
         .collect();
 
     let mut exit_code = EXIT_OK;
-    if violations.iter().any(|violation| violation.kind == "identity" || violation.kind == "journal") {
+    if violations
+        .iter()
+        .any(|violation| violation.kind == "identity" || violation.kind == "journal")
+    {
         exit_code = EXIT_IDENTITY_VIOLATION;
-    } else if violations.iter().any(|violation| violation.kind == "analysis_failed") {
+    } else if violations
+        .iter()
+        .any(|violation| violation.kind == "analysis_failed")
+    {
         exit_code = EXIT_ANALYSIS_FAILED;
-    } else if violations.iter().any(|violation| violation.kind == "unexpected_decision") {
+    } else if violations
+        .iter()
+        .any(|violation| violation.kind == "unexpected_decision")
+    {
         exit_code = EXIT_UNEXPECTED_DECISION;
     }
 
@@ -1346,6 +1433,12 @@ fn run(args: &[String]) -> CycleResult<u8> {
         "duration_ms": started.elapsed().as_millis() as u64,
         "workspace": workspace.display().to_string(),
         "mode": mode,
+        "protocol": protocol.as_str(),
+        "oracle": {
+            "kind": if oracle_enabled { "unit-graph" } else { "none" },
+            "state_dir": if oracle_enabled { Some(oracle_state.display().to_string()) } else { None },
+            "note": "l'oracle L1 n'est consulté qu'en protocole v2 et seulement s'il est demandé; son indisponibilité est fail-closed (MANUAL_REQUIRED)",
+        },
         "passes_requested": passes,
         "environment": {
             "os": std::env::consts::OS,
@@ -1398,7 +1491,10 @@ fn run(args: &[String]) -> CycleResult<u8> {
             CycleError::usage(format!("sérialisation du rapport impossible: {error}"))
         })?;
         std::fs::write(path, format!("{text}\n")).map_err(|error| {
-            CycleError::usage(format!("écriture du rapport {} impossible: {error}", path.display()))
+            CycleError::usage(format!(
+                "écriture du rapport {} impossible: {error}",
+                path.display()
+            ))
         })?;
     }
 
@@ -1491,8 +1587,20 @@ fn build_request(
 
 fn print_human_summary(report: &serde_json::Value, analyses: &[AnalysisRecord], exit_code: u8) {
     let workspace = report["workspace"].as_str().unwrap_or("?");
-    println!("collab-cycle workspace={workspace} mode={}", report["mode"].as_str().unwrap_or("?"));
-    let units = report["unit_graph"]["units"].as_array().cloned().unwrap_or_default();
+    println!(
+        "collab-cycle workspace={workspace} mode={}",
+        report["mode"].as_str().unwrap_or("?")
+    );
+    println!(
+        "protocol={} oracle={} oracle_state={}",
+        report["protocol"].as_str().unwrap_or("?"),
+        report["oracle"]["kind"].as_str().unwrap_or("none"),
+        report["oracle"]["state_dir"].as_str().unwrap_or("-")
+    );
+    let units = report["unit_graph"]["units"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let names: Vec<String> = units
         .iter()
         .map(|unit| {
@@ -1517,8 +1625,14 @@ fn print_human_summary(report: &serde_json::Value, analyses: &[AnalysisRecord], 
     println!("units: {}", names.join(", "));
     println!(
         "workspace snapshot {} ({} fichiers)",
-        short_id(report["workspace_snapshot"]["base_snapshot_id"].as_str().unwrap_or("?")),
-        report["workspace_snapshot"]["file_count"].as_u64().unwrap_or(0)
+        short_id(
+            report["workspace_snapshot"]["base_snapshot_id"]
+                .as_str()
+                .unwrap_or("?")
+        ),
+        report["workspace_snapshot"]["file_count"]
+            .as_u64()
+            .unwrap_or(0)
     );
 
     for pass in report["passes"].as_array().cloned().unwrap_or_default() {
@@ -1563,7 +1677,10 @@ fn print_human_summary(report: &serde_json::Value, analyses: &[AnalysisRecord], 
         );
     }
 
-    let skipped = report["skipped_units"].as_array().cloned().unwrap_or_default();
+    let skipped = report["skipped_units"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     if skipped.is_empty() {
         println!("unités sautées: aucune");
     } else {
@@ -1614,7 +1731,10 @@ mod tests {
     fn fixture_snapshot() -> SourceSnapshot {
         let workspace = fixture_workspace();
         SourceSnapshot::from_directory(&workspace, |path| {
-            let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
             name == "Cargo.toml" || path.extension().map(|ext| ext == "rs").unwrap_or(false)
         })
         .expect("fixture workspace")
@@ -1696,7 +1816,10 @@ mod tests {
         );
 
         let error = UnitGraph::discover(&snapshot(&[
-            ("a/Cargo.toml", "[package]\nname = \"a\"\n[dependencies\nbroken\n"),
+            (
+                "a/Cargo.toml",
+                "[package]\nname = \"a\"\n[dependencies\nbroken\n",
+            ),
             ("a/src/lib.rs", "pub fn a() {}\n"),
         ]))
         .expect_err("a malformed section header must be refused");
@@ -1735,13 +1858,23 @@ mod tests {
     #[test]
     fn dependency_cycle_fails_closed() {
         let error = UnitGraph::discover(&snapshot(&[
-            ("a/Cargo.toml", "[package]\nname = \"a\"\n[workspace]\n\n[dependencies]\nb = { path = \"../b\" }\n"),
+            (
+                "a/Cargo.toml",
+                "[package]\nname = \"a\"\n[workspace]\n\n[dependencies]\nb = { path = \"../b\" }\n",
+            ),
             ("a/src/lib.rs", "pub fn a() {}\n"),
-            ("b/Cargo.toml", "[package]\nname = \"b\"\n[workspace]\n\n[dependencies]\na = { path = \"../a\" }\n"),
+            (
+                "b/Cargo.toml",
+                "[package]\nname = \"b\"\n[workspace]\n\n[dependencies]\na = { path = \"../a\" }\n",
+            ),
             ("b/src/lib.rs", "pub fn b() {}\n"),
         ]))
         .expect_err("a path-dependency cycle must be refused");
-        assert!(error.message.contains("cycle"), "message: {}", error.message);
+        assert!(
+            error.message.contains("cycle"),
+            "message: {}",
+            error.message
+        );
     }
 
     #[test]
@@ -1823,7 +1956,9 @@ mod tests {
         actual.remove(&(1, "agent-a/t".to_owned(), "crate_b".to_owned()));
         let violations = scope_violations(&expected, &actual);
         assert!(
-            violations.iter().any(|message| message.contains("non analysée")),
+            violations
+                .iter()
+                .any(|message| message.contains("non analysée")),
             "{violations:?}"
         );
     }

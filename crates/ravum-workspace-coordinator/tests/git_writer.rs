@@ -67,7 +67,10 @@ fn commits_only_the_integrated_paths_with_attribution() {
         "agent B's modification must remain uncommitted, status: {status}"
     );
     let committed_b = git(&repo, &["show", "HEAD:b.rs"]);
-    assert!(committed_b.contains("fn b() {}"), "b.rs content must be unchanged in the commit");
+    assert!(
+        committed_b.contains("fn b() {}"),
+        "b.rs content must be unchanged in the commit"
+    );
 }
 
 #[test]
@@ -77,5 +80,8 @@ fn committing_again_without_new_changes_is_refused() {
     let err = writer
         .commit_paths(&["a.rs".to_owned()], "chore: no change", &[])
         .expect_err("nothing to commit");
-    assert!(matches!(err, GitError::NothingToCommit), "unexpected: {err:?}");
+    assert!(
+        matches!(err, GitError::NothingToCommit),
+        "unexpected: {err:?}"
+    );
 }

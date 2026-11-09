@@ -21,13 +21,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust (stable, MSVC)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Show toolchain
         run: |
           rustc -vV
           cargo --version
           git --version
+
+      - name: Check formatting (rustfmt, pinned toolchain)
+        run: cargo fmt --all -- --check
 
       - name: Cache cargo registry and target
         uses: actions/cache@v4
@@ -135,7 +138,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust (stable, MSVC)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Show toolchain
         run: |

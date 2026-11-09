@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-impact-dev-dep",
+  "date": "2026-11-09",
+  "branch": "feat/mvp0c-hardening",
+  "head": "c86d1f0",
+  "root_cause": {
+    "summary": "Le commit c86d1f0 a ajouté à ravum-dsp-harness les dev-dependencies ravum-rust-adapter et ravum-snapshot (légitimes : le test de stress compile de vraies fixtures). Le graphe d'impact les voit, mais deux cas du selftest codaient l'ancien graphe et excluaient explicitement ravum-dsp-harness.",
+    "ci_failing_run": {
+      "run_id": 42543351783,
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42543351783",
+      "event": "push",
+      "head_sha": "c86d1f0",
+      "conclusion": "failure",
+      "job": "impact",
+      "failed_step": "Verify the impact mapping itself (Node selftest, no cargo)",
+      "selftest_result": "SELFTEST FAIL — 52 cas, 524 assertions, 2 échec(s)",
+      "selftest_failures": [
+        "dépendant transitif et précision: ravum-snapshot: ravum-dsp-harness ne dépend pas de ravum-snapshot et ne devrait pas être testé",
+        "dev-dependency: un saut, pas de propagation arbitraire (rust-adapter): dsp-harness ne dépend pas de rust-adapter et ne doit pas être testé"
+      ],
+      "cascade_error": "::error::aucune décision d'impact: échec explicite (pas de vert silencieux)",
+      "cascade_explanation": "Le step de calcul était sauté après l'échec du selftest, mais les étapes conditionnelles « always() » lisaient des outputs vides : d'où une seconde erreur trompeuse. Corrigé par une garde explicite (cf. workflow_robustness)."
+    }
+  },
+  "graph_facts": {
+    "workspace_packages": 16,
+    "dsp_harness_dev_dependencies": [
+      "ravum-rust-adapter",
+      "ravum-snapshot"
+    ],
+    "dev_dependents_of_snapshot": [
+      "ravum-dsp-harness",
+      "ravum-patch-host",
+      "ravum-proof"
+    ],
+    "dev_dependents_of_rust_adapter": [
+      "ravum-dsp-harness",
+      "ravum-patch-host",
+      "ravum-proof"
+    ],
+    "note": "Règle dev-dependency inchangée : une dev-dependency DIRECTE rend le dépendant à tester ; la propagation s'arrête à un saut (démonstration : ravum-demo-host, dépendant normal du dev-hop ravum-patch-host, reste exclu)."
+  },
+  "dev_dependency_rule_evidence": {
+    "snapshot_change": {
+      "decision": "selective",
+      "full": false,
+      "uncertain": false,
+      "docs_required": false,
+      "packages": [
+        "ravum-patch-host",
+        "ravum-proof",
+        "ravum-snapshot",
+        "ravum-rust-adapter",
+        "ravum-coordinator",
+        "ravum-dsp-harness",
+        "ravum-workspace-coordinator",
+        "ravum-cli",
+        "ravum-collab-oracle"
+      ],
+      "commands": [
+        "cargo test -p ravum-patch-host -- --test-threads=1",
+        "cargo test -p ravum-proof -- --test-threads=1",
+        "cargo test -p ravum-snapshot -- --test-threads=1",
+        "cargo test -p ravum-rust-adapter -- --test-threads=1",
+        "cargo test -p ravum-coordinator -- --test-threads=1",
+        "cargo test -p ravum-dsp-harness -- --test-threads=1",
+        "cargo test -p ravum-workspace-coordinator -- --test-threads=1",
+        "cargo test -p ravum-cli -- --test-threads=1",
+        "cargo test -p ravum-collab-oracle -- --test-threads=1"
+      ],
+      "reasons": [
+        "direct — paquet(s) directement modifié(s): ravum-snapshot",
+        "dev-hop — test du dev-dépendant ravum-patch-host requis car ravum-rust-adapter change (dev-dependency, un seul saut)",
+        "dev-hop — test du dev-dépendant ravum-proof requis car ravum-rust-adapter change (dev-dependency, un seul saut)",
+        "transitive — test du dépendant ravum-rust-adapter requis car ravum-snapshot change (dépendance)"
+      ],
+      "unknown_paths": [],
+      "dsp_harness_included": true,
+      "dsp_harness_provenance": {
+        "type": "dev-dependent",
+        "via": "ravum-rust-adapter",
+        "kind": "dev",
+        "label": "dépendant de test (dev-dependency) de ravum-rust-adapter"
+      },
+      "demo_host_excluded": true,
+      "demo_host_provenance": null
+    },
+    "rust_adapter_change": {
+      "decision": "selective",
+      "full": false,
+      "uncertain": false,
+      "docs_required": false,
+      "packages": [
+        "ravum-patch-host",
+        "ravum-proof",
+        "ravum-rust-adapter",
+        "ravum-coordinator",
+        "ravum-dsp-harness",
+        "ravum-workspace-coordinator",
+        "ravum-cli",
+        "ravum-collab-oracle"
+      ],
+      "commands": [
+        "cargo test -p ravum-patch-host -- --test-threads=1",
+        "cargo test -p ravum-proof -- --test-threads=1",
+        "cargo test -p ravum-rust-adapter -- --test-threads=1",
+        "cargo test -p ravum-coordinator -- --test-threads=1",
+        "cargo test -p ravum-dsp-harness -- --test-threads=1",
+        "cargo test -p ravum-workspace-coordinator -- --test-threads=1",
+        "cargo test -p ravum-cli -- --test-threads=1",
+        "cargo test -p ravum-collab-oracle -- --test-threads=1"
+      ],
+      "reasons": [
+        "direct — paquet(s) directement modifié(s): ravum-rust-adapter",
+        "dev-hop — test du dev-dépendant ravum-patch-host requis car ravum-rust-adapter change (dev-dependency, un seul saut)",
+        "dev-hop — test du dev-dépendant ravum-proof requis car ravum-rust-adapter change (dev-dependency, un seul saut)",
+        "transitive — test du dépendant ravum-coordinator requis car ravum-rust-adapter change (dépendance)"
+      ],
+      "unknown_paths": [],
+      "dsp_harness_included": true,
+      "dsp_harness_provenance": {
+        "type": "dev-dependent",
+        "via": "ravum-rust-adapter",
+        "kind": "dev",
+        "label": "dépendant de test (dev-dependency) de ravum-rust-adapter"
+      },
+      "demo_host_excluded": true,
+      "demo_host_provenance": null
+    }
+  },
+  "benchmarks_decisions": {
+    "fixture_manifest": {
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "docs_required": false,
+      "packages": [],
+      "commands": [
+        "cargo test --workspace -- --test-threads=1"
+      ],
+      "reasons": [
+        "full:manifest — benchmarks/s8-mvp0c/fixture/Cargo.toml :: FULL: manifeste de construction modifié (Cargo.toml) — le graphe de dépendances peut changer sans que ce graphe le reflète"
+      ],
+      "unknown_paths": []
+    },
+    "script_mjs": {
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "docs_required": false,
+      "packages": [],
+      "commands": [
+        "cargo test --workspace -- --test-threads=1"
+      ],
+      "reasons": [
+        "full:unknown-path — benchmarks/s8/run-s8.mjs :: FULL: chemin hors du graphe d’impact connu: benchmarks/s8/run-s8.mjs — aucun composant ne peut être prouvé",
+        "unknown-path — benchmarks/s8/run-s8.mjs"
+      ],
+      "unknown_paths": [
+        "benchmarks/s8/run-s8.mjs"
+      ]
+    },
+    "mixed_docs_plus_benchmarks": {
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "docs_required": true,
+      "packages": [],
+      "commands": [
+        "cargo test --workspace -- --test-threads=1",
+        "python tools/validate_repo_docs.py"
+      ],
+      "reasons": [
+        "full:manifest — benchmarks/s8-mvp0c/fixture/Cargo.toml :: FULL: manifeste de construction modifié (Cargo.toml) — le graphe de dépendances peut changer sans que ce graphe le reflète",
+        "docs — documentation modifiée: vérification d’intégrité des documents requise"
+      ],
+      "unknown_paths": []
+    },
+    "assertions": [
+      "fixture Cargo.toml => FULL conservateur (manifeste), JSON valide, exit 0",
+      "script .mjs => FULL conservateur (chemin inconnu listé), jamais une décision vide",
+      "mixte docs+benchmarks => FULL + check docs (deux commandes)"
+    ]
+  },
+  "real_diff_decisions": {
+    "origin_dev_to_head": {
+      "command": "node tools/impact/impact.mjs --base origin/dev --head HEAD --json",
+      "exit_code": 0,
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "changed": 595,
+      "commands": [
+        "cargo test --workspace -- --test-threads=1",
+        "python tools/validate_repo_docs.py"
+      ],
+      "valid_json": true
+    },
+    "dsp_commit_c86d1f0": {
+      "command": "node tools/impact/impact.mjs --base 'c86d1f0^' --head c86d1f0 --json",
+      "exit_code": 0,
+      "decision": "full-conservative",
+      "full": true,
+      "uncertain": false,
+      "changed": 4,
+      "commands": [
+        "cargo test --workspace -- --test-threads=1",
+        "python tools/validate_repo_docs.py"
+      ],
+      "reasons": [
+        "full:manifest — crates/ravum-dsp-harness/Cargo.toml :: FULL: manifeste de construction modifié (Cargo.toml) — le graphe de dépendances peut changer sans que ce graphe le reflète",
+        "docs — documentation modifiée: vérification d’intégrité des documents requise"
+      ]
+    }
+  },
+  "selftest": {
+    "before_fix": {
+      "cases": 52,
+      "assertions": 524,
+      "failures": 2,
+      "result": "SELFTEST FAIL"
+    },
+    "after_fix": {
+      "cases": 56,
+      "assertions": 583,
+      "failures": 0,
+      "result": "SELFTEST PASS"
+    },
+    "cases_added": [
+      "règle dev-dependency: directe => testée, jamais propagée au-delà d’un saut",
+      "benchmarks/** => FULL conservateur, jamais de décision vide",
+      "diff mixte docs + benchmarks => FULL + check docs (décision non vide)",
+      "CLI --files: benchmark fixture => FULL conservateur, JSON valide (exit 0)"
+    ],
+    "cases_updated": [
+      "dépendant transitif et dev-dépendant direct: ravum-snapshot (dev-dep directe incluse, provenance vérifiée, demo-host non propagé)",
+      "dev-dependency directe: dépendant testé, pas de propagation transitive (rust-adapter)"
+    ],
+    "rule_unchanged": true
+  },
+  "workflow_robustness": {
+    "change": "id: mapping_selftest sur la garde + condition « steps.mapping_selftest.outcome == 'success' » sur les 3 étapes conditionnelles (docs, FULL, sélectif).",
+    "effect": "Si le selftest échoue, le job échoue une seule fois explicitement ; plus de cascade trompeuse « aucune décision d’impact ». Aucun test n’est sauté : si le mapping n’est pas prouvé, aucune étape de test n’est prétendue exécutée.",
+    "yaml_valid": true,
+    "steps": 13,
+    "gated_conditions": 3
+  },
+  "local_workflow_simulation": {
+    "gate_step_exit": 0,
+    "gate_log_tail": [
+      "SELFTEST PASS — 56 cas, 583 assertions, 0 échec."
+    ],
+    "compute_step_exit": 0,
+    "compute_log": [
+      "Base du diff: origin/dev",
+      "Décision: full=true uncertain=false docs=true (exit outil=0)"
+    ],
+    "github_outputs": {
+      "full": "true",
+      "uncertain": "false",
+      "docs": "true",
+      "tool_exit": "0",
+      "base": "origin/dev"
+    },
+    "note": "Simulation locale des corps de steps extraits du YAML ; la CI GitHub réelle redeviendra verte après commit par le Lead (le run rouge 42543351783 portait l'ancien selftest)."
+  },
+  "files_modified": [
+    "tools/impact/selftest.mjs (modifié)",
+    ".github/workflows/mvp-impact.yml (robustesse: garde selftest identifiée + conditions)",
+    "docs/mvp/MVP-0c-qualification.md (section correctif ajoutée)",
+    "evidence/mvp0c-impact-dev-dep-2026-11-09.json (créé)"
+  ],
+  "not_modified": [
+    "tools/impact/impact.mjs",
+    "scripts/impact.ps1",
+    "crates/**",
+    "apps/**",
+    "Cargo.toml",
+    "benchmarks/**"
+  ],
+  "limits": [
+    "Aucune commande git mutante, aucun commit : la CI GitHub ne peut redevenir verte qu'après le commit du Lead ; le run rouge 42543351783 portait l'ancien selftest.",
+    "Aucun test cargo local exécuté (workspace partagé, durée bornée) : la simulation couvre la garde et le calcul d'impact, pas l'exécution des suites.",
+    "Le cas benchmarks vérifie des chemins réels du dépôt mais ne compile ni ne lance les benchmarks.",
+    "La promotion du FULL conservateur reste inchangée ; aucune règle n'a été affaiblie.",
+    "La provenance dev-hop peut désigner n'importe quel paquet affecté dont dsp-harness est une dev-dependency (ici snapshot ou rust-adapter) : l'assertion vérifie la règle, pas un ordre de parcours."
+  ]
+}

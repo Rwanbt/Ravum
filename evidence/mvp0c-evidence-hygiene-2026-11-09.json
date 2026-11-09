@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-evidence-hygiene-2026-11-09",
+  "generated_unix": 1794191128,
+  "rustc_vV": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "problem": "two test files wrote evidence/*.json unconditionally, dirtying the git tree on every cargo test --workspace",
+  "fix": "write evidence/ only when RAVUM_WRITE_EVIDENCE=1; otherwise write target/ravum-evidence/<same-name>.json (same convention as central_evidence)",
+  "files_patched": [
+    "crates/ravum-daemon/tests/wire_externs.rs",
+    "crates/ravum-unit-graph/tests/rootapp_attribution.rs"
+  ],
+  "evidence_files_guarded": [
+    "evidence/mvp0c-daemon-wire-externs-2026-11-09.json",
+    "evidence/mvp0c-unit-graph-rootapp-2026-11-09.json"
+  ],
+  "commands": {
+    "default_wire": "cargo test -p ravum-daemon --offline --test wire_externs -- --test-threads=1",
+    "default_rootapp": "cargo test -p ravum-unit-graph --offline --test rootapp_attribution -- --test-threads=1",
+    "regenerate_wire": "$env:RAVUM_WRITE_EVIDENCE='1'; cargo test -p ravum-daemon --offline --test wire_externs -- --test-threads=1",
+    "regenerate_rootapp": "$env:RAVUM_WRITE_EVIDENCE='1'; cargo test -p ravum-unit-graph --offline --test rootapp_attribution -- --test-threads=1"
+  },
+  "measurements": {
+    "wire_normal_exit": 0,
+    "wire_normal_ms": 3698,
+    "rootapp_normal_exit": 0,
+    "rootapp_normal_ms": 2372,
+    "evidence_status_before": "",
+    "evidence_status_after_normal": "",
+    "target_copies_created": {
+      "wire": true,
+      "rootapp": true
+    },
+    "wire_optin_exit": 0,
+    "wire_optin_ms": 1851,
+    "rootapp_optin_exit": 0,
+    "rootapp_optin_ms": 1321,
+    "evidence_status_after_optin": " M evidence/mvp0c-daemon-wire-externs-2026-11-09.json\n M evidence/mvp0c-unit-graph-rootapp-2026-11-09.json",
+    "evidence_status_after_restore": ""
+  },
+  "tree_clean_after_default_run": true,
+  "target_copies_created": {
+    "wire": true,
+    "rootapp": true
+  },
+  "opt_in_writes_repository_evidence": true,
+  "repository_evidence_restored_after_proof": true,
+  "assertions_kept": "both tests keep all assertions and pass 2/2 each in default and opt-in modes",
+  "git_checkout_used": "git checkout -- evidence/mvp0c-daemon-wire-externs-2026-11-09.json evidence/mvp0c-unit-graph-rootapp-2026-11-09.json (allowed by the task)",
+  "valid": true,
+  "limits": [
+    "proof is about output location/tree cleanliness; evidence content is unchanged by this task",
+    "targeted tests were used for the before/after proof, not a full cargo test --workspace (other workers WIP may be red independently)",
+    "environment variable opt-in applies only to these two test binaries and central_evidence; bench binaries still write their configured output paths",
+    "no PROVED: bounded observations on one toolchain/OS"
+  ]
+}

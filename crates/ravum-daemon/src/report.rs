@@ -58,6 +58,9 @@ pub struct SnapshotReport {
     pub written_files: usize,
     pub removed_files: usize,
     pub verified_files: usize,
+    /// Number of content-addressed extern artifacts stored in the snapshot.
+    #[serde(default)]
+    pub externs: usize,
     /// Immutable snapshot directory (daemon-private, never a user path).
     pub dir: String,
 }
@@ -82,6 +85,14 @@ pub struct AnalysisReport {
     pub diagnostics: Vec<Diagnostic>,
     pub timings: Timings,
     pub snapshot: Option<SnapshotReport>,
+    /// Content-addressed direct externs actually used by this analysis (empty on
+    /// the legacy no-extern path).
+    #[serde(default)]
+    pub externs: Vec<ExternUsageReport>,
+    /// SHA-256 of the `.rmeta` interface produced (or reused from the cache) by
+    /// this analysis; a dependent analysis can feed it back via `ExternInput`.
+    #[serde(default)]
+    pub artifact_sha256: Option<String>,
     pub daemon_version: String,
     /// Human-readable reason for a non-fresh status; `None` when fresh.
     pub message: Option<String>,
@@ -171,5 +182,103 @@ impl DaemonStats {
         let lookups = self.cache_hits_memory + self.cache_hits_disk + self.cache_misses;
         (lookups > 0)
             .then(|| (self.cache_hits_memory + self.cache_hits_disk) as f64 / lookups as f64)
+    }
+}
+/// One direct extern interface artifact used by a cross-crate analysis
+/// (snapshot schema 2). The interface id is the SHA-256 of the `.rmeta` bytes; a
+/// report whose two ids disagree is refused, never treated as a verified extern.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternUsageReport {
+    /// Name under which the dependent imported the crate (`--extern NAME=...`).
+    pub name: String,
+    /// Crate name of the dependency target.
+    pub crate_name: String,
+    /// Interface identity (SHA-256 of the `.rmeta` bytes) used at analysis time.
+    pub interface_id: String,
+    /// SHA-256 of the artifact bytes actually stored in the snapshot.
+    pub rmeta_sha256: String,
+}
+
+impl ExternUsageReport {
+    /// Both identities must agree and look like SHA-256; otherwise the report is
+    /// inconsistent and must not be consumed.
+    pub fn validates(&self) -> bool {
+        self.interface_id == self.rmeta_sha256
+            && is_sha256(&self.interface_id)
+            && !self.name.is_empty()
+            && !self.crate_name.is_empty()
+    }
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .chars()
+            .all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase())
+}
+
+/// Ordered digest of the externs of one analysis, for report equality and audit
+/// evidence (never used alone as a cache key).
+pub fn externs_report_digest(externs: &[ExternUsageReport]) -> String {
+    let mut ordered: Vec<&ExternUsageReport> = externs.iter().collect();
+    ordered.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut canonical = String::new();
+    for extern_usage in ordered {
+        canonical.push_str(&extern_usage.name);
+        canonical.push('=');
+        canonical.push_str(&extern_usage.interface_id);
+        canonical.push('\n');
+    }
+    crate::hash::sha256_hex(canonical.as_bytes())
+}
+
+#[cfg(test)]
+mod extern_report_tests {
+    use super::{externs_report_digest, ExternUsageReport};
+
+    fn usage(name: &str, interface_id: &str) -> ExternUsageReport {
+        ExternUsageReport {
+            name: name.to_owned(),
+            crate_name: name.to_owned(),
+            interface_id: interface_id.to_owned(),
+            rmeta_sha256: interface_id.to_owned(),
+        }
+    }
+
+    #[test]
+    fn extern_usage_roundtrips_and_validates() {
+        let valid = usage("core", &"a".repeat(64));
+        assert!(valid.validates());
+        let text = serde_json::to_string(&valid).unwrap();
+        let parsed: ExternUsageReport = serde_json::from_str(&text).unwrap();
+        assert_eq!(parsed, valid);
+        // Unknown fields are rejected: a typo must not silently fall back.
+        let with_unknown = format!("{{\"name\":\"core\",\"crate_name\":\"core\",\"interface_id\":\"{}\",\"rmeta_sha256\":\"{}\",\"extra\":1}}", "a".repeat(64), "a".repeat(64));
+        assert!(serde_json::from_str::<ExternUsageReport>(&with_unknown).is_err());
+        let mut inconsistent = valid.clone();
+        inconsistent.rmeta_sha256 = "b".repeat(64);
+        assert!(!inconsistent.validates());
+        let mut uppercase = valid;
+        uppercase.interface_id = uppercase.interface_id.to_uppercase();
+        uppercase.rmeta_sha256 = uppercase.interface_id.clone();
+        assert!(!uppercase.validates());
+    }
+
+    #[test]
+    fn extern_digest_is_order_independent_but_interface_sensitive() {
+        let a = usage("api", &"1".repeat(64));
+        let b = usage("core", &"2".repeat(64));
+        assert_eq!(
+            externs_report_digest(&[a.clone(), b.clone()]),
+            externs_report_digest(&[b.clone(), a.clone()])
+        );
+        let mut changed = b;
+        changed.interface_id = "3".repeat(64);
+        changed.rmeta_sha256 = changed.interface_id.clone();
+        assert_ne!(
+            externs_report_digest(&[a.clone(), changed]),
+            externs_report_digest(&[a, usage("core", &"2".repeat(64))])
+        );
     }
 }

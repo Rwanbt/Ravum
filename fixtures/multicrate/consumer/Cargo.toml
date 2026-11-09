@@ -1,0 +1,10 @@
+[package]
+name = "consumer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+api = { path = "../api" }
+
+[lib]
+path = "src/lib.rs"

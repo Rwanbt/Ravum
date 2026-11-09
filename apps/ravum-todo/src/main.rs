@@ -21,7 +21,11 @@ fn main() {
         .unwrap_or_else(|| PathBuf::from("target/ravum/todo.db"));
     let port = flag(&args, "--port")
         .and_then(|p| p.parse().ok())
-        .or_else(|| std::env::var("RAVUM_TODO_PORT").ok().and_then(|p| p.parse().ok()))
+        .or_else(|| {
+            std::env::var("RAVUM_TODO_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+        })
         .unwrap_or(8080);
     let token = flag(&args, "--token")
         .or_else(|| std::env::var("RAVUM_TODO_TOKEN").ok())

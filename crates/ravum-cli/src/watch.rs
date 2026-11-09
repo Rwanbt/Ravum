@@ -37,7 +37,12 @@ pub fn watch(args: &[String]) -> u8 {
     };
     let session = Arc::new(WorkspaceSession::new(initial.id().clone()));
     let stop = Arc::new(AtomicBool::new(false));
-    spawn_file_watcher(file.clone(), Arc::clone(&session), Arc::clone(&stop), interval);
+    spawn_file_watcher(
+        file.clone(),
+        Arc::clone(&session),
+        Arc::clone(&stop),
+        interval,
+    );
 
     let first = if concurrent {
         pipeline.prepare_candidate_concurrent(&initial, &|| session.current())
@@ -240,7 +245,14 @@ fn publish(host: &mut HostProc, report: &mut LoopReport, session: &WorkspaceSess
     }
 }
 
-fn record(report: &LoopReport, pid: u32, activations: u64, refusals: u64, stale: u64, json_out: bool) {
+fn record(
+    report: &LoopReport,
+    pid: u32,
+    activations: u64,
+    refusals: u64,
+    stale: u64,
+    json_out: bool,
+) {
     // Staleness is only meaningful through the session verdict; keep the report honest.
     let delivery_note = if matches!(report.outcome, LoopOutcome::RefusedAsStale { .. }) {
         "stale"
@@ -295,7 +307,11 @@ fn record(report: &LoopReport, pid: u32, activations: u64, refusals: u64, stale:
                 println!("{}", render_diagnostics(&check.diagnostics));
             }
         }
-        if let Some(reason) = report.activation.as_ref().and_then(|a| a.reject_reason.clone()) {
+        if let Some(reason) = report
+            .activation
+            .as_ref()
+            .and_then(|a| a.reject_reason.clone())
+        {
             println!("  refused by host: {reason:?}");
         }
     }
@@ -306,14 +322,21 @@ fn write_state(entry: &serde_json::Value) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::write(path, serde_json::to_string_pretty(entry).unwrap_or_default());
+    let _ = std::fs::write(
+        path,
+        serde_json::to_string_pretty(entry).unwrap_or_default(),
+    );
 }
 
 fn append_jsonl(path: &Path, entry: &serde_json::Value) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         use std::io::Write;
         let _ = writeln!(file, "{entry}");
     }

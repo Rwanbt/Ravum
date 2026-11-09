@@ -154,6 +154,8 @@ $decisionLabel = switch ([string]$decision.decision) {
 $uncertainLabel = if ($decision.uncertain -eq $true) { 'OUI (échec explicite exigé)' } else { 'non' }
 Write-Host ('Décision d''impact : ' + $decisionLabel)
 Write-Host ('Mapping incertain  : ' + $uncertainLabel)
+$browserLabel = if ($decision.browser_e2e_required -eq $true) { 'OUI — ' + $decision.browser_e2e_reason } else { 'non' }
+Write-Host ('E2E navigateur    : ' + $browserLabel)
 if ($decision.base) { Write-Host ('Base               : ' + $decision.base) }
 if ($decision.head) { Write-Host ('Tête               : ' + $decision.head) }
 Write-Host ('Fichiers modifiés  : ' + @($decision.changed).Count)

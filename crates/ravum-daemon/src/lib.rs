@@ -72,8 +72,12 @@ pub use gc::{
     run_gc, BudgetStatus, CategorySizes, GcBudgets, GcCompaction, GcDeleted, GcKept, GcMode,
     GcPolicy, GcProtection, GcReport, RecentAnalysis, RetentionState,
 };
-pub use report::{AnalysisReport, AutoGcLast, DaemonStats, ReportStatus, SnapshotReport, Timings};
+pub use report::{
+    AnalysisReport, AutoGcLast, DaemonStats, ExternUsageReport, ReportStatus, SnapshotReport,
+    Timings,
+};
 pub use snapshot::{
-    sync_unit_dir, AnalysisRequest, MaterializedSnapshot, SnapshotIdentity, SnapshotStore,
-    SourceFile, SyncStats,
+    externs_digest, sync_unit_dir, validate_externs, AnalysisRequest, ExternInput,
+    MaterializedSnapshot, SnapshotExtern, SnapshotIdentity, SnapshotStore, SourceFile, SyncStats,
+    WireAnalyzeRequest, WireExtern,
 };

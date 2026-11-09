@@ -1,0 +1,17 @@
+[package]
+name = "ravum-collab-oracle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Real SemanticOracle adapter backed by the L1 unit graph (MVP-0c L3.4)"
+
+[dependencies]
+ravum-snapshot = { workspace = true }
+ravum-unit-graph = { path = "../ravum-unit-graph" }
+ravum-workspace-coordinator = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+ravum-protocol = { workspace = true }
+

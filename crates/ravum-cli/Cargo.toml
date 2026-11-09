@@ -20,9 +20,16 @@ ravum-daemon = { workspace = true }
 # integration tests. Workspace path dependency already built for the dev tests;
 # no new external dependency.
 ravum-workspace-coordinator = { workspace = true }
+# MVP-0c L5.1: real inter-crate unit campaign + injected L1 oracle. Direct path
+# dependencies keep the root workspace manifest untouched.
+ravum-unit-graph = { path = "../ravum-unit-graph" }
+ravum-collab-oracle = { path = "../ravum-collab-oracle" }
+# MVP-0c L2.4 → produit : collecteur de propositions pour `ravum batch-check`.
+ravum-batch = { path = "../ravum-batch" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [[bin]]
 name = "ravum"
 path = "src/main.rs"
+

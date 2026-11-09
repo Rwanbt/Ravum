@@ -25,6 +25,12 @@
 | MVP-0b / L3.4 — collaboration ↔ daemon | **Implémenté et mesuré** : unités affectées + dépendants path-deps seulement, unité indépendante jamais analysée, identités vérifiées fichier par fichier, rejeu 0 `rustc` (cache mémoire/disque) — [MVP-0b-collab-4.md](../mvp/MVP-0b-collab-4.md) |
 | MVP-0b / L4-A — E2E navigateur | Harnais CDP sans dépendance npm, scénarios réels sur l'UI — [MVP-0b-browser-e2e.md](../mvp/MVP-0b-browser-e2e.md) |
 | MVP-0b / L4-E — CI sélective | Graphe d'impact conservateur et fail-closed ; suite complète conservée — [MVP-0b-ci.md](../mvp/MVP-0b-ci.md) |
+| MVP-0c / L0 — audit et plan | **Fait** : suite 347/0 reproduite, audit structuré des PR #78/#80 (0 secret, 0 binaire, 0 fichier supprimé), plan des six lots — [MVP-0c-plan.md](../mvp/MVP-0c-plan.md) |
+| MVP-0c / L1 — incrémentalité inter-crates | **Implémenté et testé** : crate `ravum-unit-graph` (`cargo metadata`, identités séparées, chaîne `--extern`, fallback Cargo, 21 tests dont cas central et fix root-package), daemon schéma 2 avec externs contenu-adressés **et protocole JSON-lines** (115 tests) ; rupture d'API de `core` détectée sur `api` **sans changement de ses sources** — [MVP-0c-cross-crate.md](../mvp/MVP-0c-cross-crate.md), [daemon](../mvp/MVP-0c-cross-crate-daemon.md) |
+| MVP-0c / L2 — modifications réelles | **Gate franchi et collecteur câblé au CLI** : analyse 6 éditions → 1 (1 159 → 204–240 ms, −74 à −83 %), seuils `p*` 27–68 % ; **de bout en bout avec vrai `cargo test`** : 8 960 → 2 765 ms (**−69,1 %**), 12/12 tests + digest identiques ; `ravum batch-check` (collecteur + vrai `cargo test`, repli N+1, 4 tests) ; un lot invalide coûte ≈ le séquentiel ; intégration daemon non faite (non requise) — [MVP-0c-build-performance.md](../mvp/MVP-0c-build-performance.md), [CLI](../mvp/MVP-0c-cli.md) |
+| MVP-0c / L3 — collaboration | **Partiel avancé** : protocole v2 versionné (plus d'`AUTO_SAFE` textuel), 10/10 cas, adaptateur `ravum-collab-oracle` sur le graphe L1, publication Git robuste (15 tests de crash réels, aucun défaut de sûreté), **campagne S8 réelle exécutée** (27 subagents DSH, 9 campagnes, tokens mesurés : A 111 s < B 238 s < C 528 s, B **pas** plus rapide, 0 perte) — [MVP-0c-collaboration.md](../mvp/MVP-0c-collaboration.md), [oracle](../mvp/MVP-0c-collab-oracle.md), [publication](../mvp/MVP-0c-publication-robustness.md), [S8](../mvp/MVP-0c-s8.md) |
+| MVP-0c / L4 — qualification | **Partiel** : **495 tests / 0 échec / 78 suites**, CI par impact (59 cas / 655 assertions, E2E navigateur déclenchés par impact et **vérifiés sur CI réelle** : runs + dispatch, +26–29 s), 10/10 E2E local+CI, 9 tests de stress DSP, reclassification des échecs transitoires, flake auto-GC corrigé, preuves de test opt-in et anonymisées, gate `fmt` ; CI produit+impact verte sur `8fc1345` ; CI par impact sur une vraie PR vers `dev` bloquée (`dev` sans crate) ; aucun prouveur externe (Kani bloqué, WSL indisponible) — [rapport](../mvp/MVP-0c-REPORT.md), [qualification](../mvp/MVP-0c-qualification.md) |
+| MVP-0c / L5 — intégration | **Avancé** : CLI `ravum unit-check` + `collab-cycle --protocol v2 --oracle unit-graph` (47 tests), **audit final `READY_FOR_HUMAN_REVIEW`** (0 bloquant, 0 secret, 0 conflit simulé), **gate `fmt` rustfmt 1.95 + toolchain épinglée**, **preuves anonymisées** (63 JSON, 0 chemin utilisateur), simulation de fusion rejouée (0 conflit, arbres documentés), rapport consolidé, sessions Obsidian, PR #82 draft ; aucune fusion, aucun ADR accepté — [checklist](../mvp/MVP-0c-integration-checklist.md) |
 | Vérification bornée (M2) | `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
 | DSP de bloc (M3) | Démonstrateur : ABI de bloc, état possédé par l'hôte, swap sans verrou, crossfade optionnel ; **pas d'hôte audio réel** |
 | Verticale full-stack (M4) | Application témoin : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E API + **E2E navigateur** ; pas de TLS |
@@ -53,6 +59,15 @@
   « petit patch p95 < 500 ms » non re-mesurée de bout en bout.
 - Aucune preuve que le workspace partagé est plus productif que les worktrees avec de
   vrais agents LLM (S8 utilise des éditeurs scriptés ; tokens non mesurés).
+- Le groupement de patches (L2) n'est **pas implémenté** ; sa rentabilité mesurée est
+  conditionnelle (seuil `p*` = 27–68 % selon N) et le régime de conflits réel en
+  production n'est pas mesuré.
+- La campagne S8 avec de vrais agents et statistiques d'usage reste à exécuter ; la
+  procédure est prête mais aucun token réel n'a encore été mesuré.
+- Le CLI ne branche pas encore l'analyse inter-crates ni l'oracle sémantique, et la CI
+  par impact n'a pas été exercée sur une vraie PR vers `dev` (`dev` sans crate).
+- `cargo fmt --check` n'est pas un gate : ~305 fichiers ne sont pas au format
+  rustfmt 1.95 (dérive de version), sans impact fonctionnel démontré.
 - Aucun prouveur externe, aucune propriété générale, aucun certificat indépendant.
 - Aucune mesure de productivité humaine/agent jusqu'au livraison vérifié (P0-I).
 
@@ -68,3 +83,11 @@
   [licence](../mvp/MVP-0b-licence-analysis.md), [S8](../mvp/MVP-0b-s8.md),
   [E2E navigateur](../mvp/MVP-0b-browser-e2e.md), [CI impact](../mvp/MVP-0b-ci.md),
   [COLLAB-2/3](../mvp/MVP-0b-collab-2-3.md).
+- Rapports MVP-0c : [rapport consolidé](../mvp/MVP-0c-REPORT.md),
+  [plan](../mvp/MVP-0c-plan.md), [audit PR](../mvp/MVP-0c-pr-audit.md),
+  [cross-crate](../mvp/MVP-0c-cross-crate.md), [daemon externs](../mvp/MVP-0c-cross-crate-daemon.md),
+  [performance](../mvp/MVP-0c-build-performance.md), [collaboration](../mvp/MVP-0c-collaboration.md),
+  [oracle L1](../mvp/MVP-0c-collab-oracle.md), [publication](../mvp/MVP-0c-publication-robustness.md),
+  [vérification](../mvp/MVP-0c-verification.md), [S8](../mvp/MVP-0c-s8.md),
+  [E2E](../mvp/MVP-0c-e2e.md), [stress DSP](../mvp/MVP-0c-dsp-stress.md),
+  [qualification](../mvp/MVP-0c-qualification.md).

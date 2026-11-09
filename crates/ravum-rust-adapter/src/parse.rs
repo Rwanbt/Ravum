@@ -136,7 +136,10 @@ fn to_span(span: &Value) -> DiagnosticSpan {
             .unwrap_or("<unknown>")
             .to_owned(),
         line_start: span.get("line_start").and_then(Value::as_u64).unwrap_or(0) as u32,
-        column_start: span.get("column_start").and_then(Value::as_u64).unwrap_or(0) as u32,
+        column_start: span
+            .get("column_start")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as u32,
         line_end: span.get("line_end").and_then(Value::as_u64).unwrap_or(0) as u32,
         column_end: span.get("column_end").and_then(Value::as_u64).unwrap_or(0) as u32,
     }
@@ -160,7 +163,13 @@ mod tests {
 
     #[test]
     fn failed_process_without_diagnostic_still_reports_an_error() {
-        let set = parse_rustc_json("garbage from the tool", &SnapshotId::new("s"), "rustc", "1", false);
+        let set = parse_rustc_json(
+            "garbage from the tool",
+            &SnapshotId::new("s"),
+            "rustc",
+            "1",
+            false,
+        );
         assert!(set.has_errors());
         assert_eq!(set.diagnostics[0].code.as_deref(), Some("no-diagnostic"));
         assert!(

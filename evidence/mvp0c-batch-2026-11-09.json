@@ -1,0 +1,570 @@
+{
+  "checks": {
+    "all_analyzer_calls_accounted": true,
+    "compatible_wave_saves_25_analyses": true,
+    "compatible_wave_uses_one_analysis_each": true,
+    "mixed_analyses_used_matches_fallback_model": true,
+    "mixed_has_about_half_fallbacks": true,
+    "mixed_no_loss": true,
+    "mixed_wait_p50_is_window": true,
+    "no_proposal_lost": true,
+    "textual_conflict_is_never_merged": true,
+    "textual_scenario_no_loss": true
+  },
+  "duration_ms": 1,
+  "generated_unix": 1794188953,
+  "machine": {
+    "arch": "x86_64",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows"
+  },
+  "model_comparison_mixed": {
+    "collected_cost_model_ms": 7548,
+    "conflict_rate_observed": 0.5,
+    "expected_batch_cost_ms": 943.5,
+    "gain_model_ms": 92,
+    "gain_per_batch_ms": 11.5,
+    "gain_percent": 1.2041884816753927,
+    "model_sweep_p50_window50": [
+      {
+        "break_even_conflict_rate": 0.23629893238434163,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": -370.5,
+        "n": 3,
+        "profitable_at_p50": false,
+        "sequential_cost_ms": 573.0
+      },
+      {
+        "break_even_conflict_rate": 0.37224199288256227,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": -179.5,
+        "n": 4,
+        "profitable_at_p50": false,
+        "sequential_cost_ms": 764.0
+      },
+      {
+        "break_even_conflict_rate": 0.5081850533807829,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": 11.5,
+        "n": 5,
+        "profitable_at_p50": true,
+        "sequential_cost_ms": 955.0
+      },
+      {
+        "break_even_conflict_rate": 0.6441281138790036,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": 202.5,
+        "n": 6,
+        "profitable_at_p50": true,
+        "sequential_cost_ms": 1146.0
+      },
+      {
+        "break_even_conflict_rate": 0.7800711743772242,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": 393.5,
+        "n": 7,
+        "profitable_at_p50": true,
+        "sequential_cost_ms": 1337.0
+      },
+      {
+        "break_even_conflict_rate": 0.9160142348754449,
+        "expected_grouped_cost_ms_at_p50": 943.5,
+        "gain_ms": 584.5,
+        "n": 8,
+        "profitable_at_p50": true,
+        "sequential_cost_ms": 1528.0
+      }
+    ],
+    "note": "coût collecté = fenêtre mesurée + 191 ms par lot accepté + 1596 ms par lot en repli (reprise mesurée à N=6, conservatrice pour N=5) ; le balayage N=3..8 applique le modèle L2.2 à p=50 % et w=50 ms",
+    "sequential_batch_cost_ms": 955.0,
+    "sequential_cost_model_ms": 7640
+  },
+  "protocol": {
+    "analyzer": "déterministe: rejette un lot si l'un de ses ids est marqué; rejette l'item marqué en analyse individuelle",
+    "calibrated_costs": {
+      "cycle_ms": 191,
+      "recovery_ms": 1596
+    },
+    "calibrated_costs_source": "docs/mvp/MVP-0c-build-performance.md (phase 1) + evidence/mvp0c-grouping-2026-11-09.json",
+    "config": {
+      "max_batch": 6,
+      "max_pending": 256,
+      "window_ms": 50
+    },
+    "goal": "mesurer le collecteur de lots borné sur des arrivées simulées et le comparer au modèle L2.2 calibré",
+    "model_label": "MODÈLE CALIBRÉ: le collecteur réduit le nombre d'analyses; la conversion en ms n'est pas une mesure bout en bout",
+    "no_cargo_in_loops": true,
+    "no_rustc": true,
+    "timestamps": "injectés (ms); aucun sleep"
+  },
+  "scenarios": [
+    {
+      "analyses_saved_net": 25,
+      "analyses_used": 5,
+      "analyzer_calls_observed": 5,
+      "base_mismatches": 0,
+      "batches": 5,
+      "batches_accepted_all": 5,
+      "batches_detail": [
+        {
+          "analyses_used": 1,
+          "batch_id": 1,
+          "outcome": "accepted_all",
+          "proposals": [
+            "a-w0-i0",
+            "a-w0-i1",
+            "a-w0-i2",
+            "a-w0-i3",
+            "a-w0-i4",
+            "a-w0-i5"
+          ],
+          "reason": "full",
+          "wait_ms": 5
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 2,
+          "outcome": "accepted_all",
+          "proposals": [
+            "a-w1-i0",
+            "a-w1-i1",
+            "a-w1-i2",
+            "a-w1-i3",
+            "a-w1-i4",
+            "a-w1-i5"
+          ],
+          "reason": "full",
+          "wait_ms": 5
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 3,
+          "outcome": "accepted_all",
+          "proposals": [
+            "a-w2-i0",
+            "a-w2-i1",
+            "a-w2-i2",
+            "a-w2-i3",
+            "a-w2-i4",
+            "a-w2-i5"
+          ],
+          "reason": "full",
+          "wait_ms": 5
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 4,
+          "outcome": "accepted_all",
+          "proposals": [
+            "a-w3-i0",
+            "a-w3-i1",
+            "a-w3-i2",
+            "a-w3-i3",
+            "a-w3-i4",
+            "a-w3-i5"
+          ],
+          "reason": "full",
+          "wait_ms": 5
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 5,
+          "outcome": "accepted_all",
+          "proposals": [
+            "a-w4-i0",
+            "a-w4-i1",
+            "a-w4-i2",
+            "a-w4-i3",
+            "a-w4-i4",
+            "a-w4-i5"
+          ],
+          "reason": "full",
+          "wait_ms": 5
+        }
+      ],
+      "batches_fell_back": 0,
+      "config": {
+        "max_batch": 6,
+        "window_ms": 50
+      },
+      "description": "5 vagues de 6 propositions disjointes (max_batch=6) : un lot plein par vague, une analyse",
+      "fallback_rate": 0.0,
+      "items_reported": 30,
+      "name": "compatible-5x6",
+      "no_loss": true,
+      "path_conflicts": 0,
+      "preflight_isolations": 0,
+      "proposals": 30,
+      "proposals_received": 30,
+      "sequential_analyses_baseline": 30,
+      "symbol_conflicts": 0,
+      "wait_ms": {
+        "max": 5,
+        "min": 5,
+        "p50": 5,
+        "p95": 5,
+        "samples": [
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "analyses_saved_net": 12,
+      "analyses_used": 28,
+      "analyzer_calls_observed": 28,
+      "base_mismatches": 0,
+      "batches": 8,
+      "batches_accepted_all": 4,
+      "batches_detail": [
+        {
+          "analyses_used": 1,
+          "batch_id": 1,
+          "outcome": "accepted_all",
+          "proposals": [
+            "b-w0-i0",
+            "b-w0-i1",
+            "b-w0-i2",
+            "b-w0-i3",
+            "b-w0-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 6,
+          "batch_id": 2,
+          "outcome": {
+            "fell_back": {
+              "rejected_ids": [
+                "b-w1-unexpected-reject"
+              ]
+            }
+          },
+          "proposals": [
+            "b-w1-i0",
+            "b-w1-i1",
+            "b-w1-unexpected-reject",
+            "b-w1-i3",
+            "b-w1-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 3,
+          "outcome": "accepted_all",
+          "proposals": [
+            "b-w2-i0",
+            "b-w2-i1",
+            "b-w2-i2",
+            "b-w2-i3",
+            "b-w2-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 6,
+          "batch_id": 4,
+          "outcome": {
+            "fell_back": {
+              "rejected_ids": [
+                "b-w3-unexpected-reject"
+              ]
+            }
+          },
+          "proposals": [
+            "b-w3-i0",
+            "b-w3-i1",
+            "b-w3-unexpected-reject",
+            "b-w3-i3",
+            "b-w3-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 5,
+          "outcome": "accepted_all",
+          "proposals": [
+            "b-w4-i0",
+            "b-w4-i1",
+            "b-w4-i2",
+            "b-w4-i3",
+            "b-w4-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 6,
+          "batch_id": 6,
+          "outcome": {
+            "fell_back": {
+              "rejected_ids": [
+                "b-w5-unexpected-reject"
+              ]
+            }
+          },
+          "proposals": [
+            "b-w5-i0",
+            "b-w5-i1",
+            "b-w5-unexpected-reject",
+            "b-w5-i3",
+            "b-w5-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 7,
+          "outcome": "accepted_all",
+          "proposals": [
+            "b-w6-i0",
+            "b-w6-i1",
+            "b-w6-i2",
+            "b-w6-i3",
+            "b-w6-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 6,
+          "batch_id": 8,
+          "outcome": {
+            "fell_back": {
+              "rejected_ids": [
+                "b-w7-unexpected-reject"
+              ]
+            }
+          },
+          "proposals": [
+            "b-w7-i0",
+            "b-w7-i1",
+            "b-w7-unexpected-reject",
+            "b-w7-i3",
+            "b-w7-i4"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        }
+      ],
+      "batches_fell_back": 4,
+      "config": {
+        "max_batch": 6,
+        "window_ms": 50
+      },
+      "description": "8 vagues de 5 propositions ; 4 vagues sur 8 contiennent un rejet sémantique imprévu (non détectable par le pré-vol) => p≈50 % de lots en repli",
+      "fallback_rate": 0.5,
+      "items_reported": 40,
+      "name": "mixed-p-50",
+      "no_loss": true,
+      "path_conflicts": 0,
+      "preflight_isolations": 0,
+      "proposals": 40,
+      "proposals_received": 40,
+      "sequential_analyses_baseline": 40,
+      "symbol_conflicts": 0,
+      "wait_ms": {
+        "max": 50,
+        "min": 50,
+        "p50": 50,
+        "p95": 50,
+        "samples": [
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "analyses_saved_net": 6,
+      "analyses_used": 12,
+      "analyzer_calls_observed": 12,
+      "base_mismatches": 0,
+      "batches": 12,
+      "batches_accepted_all": 12,
+      "batches_detail": [
+        {
+          "analyses_used": 1,
+          "batch_id": 1,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w0-shared-a",
+            "c-w0-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 2,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w0-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 3,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w1-shared-a",
+            "c-w1-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 4,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w1-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 5,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w2-shared-a",
+            "c-w2-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 6,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w2-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 7,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w3-shared-a",
+            "c-w3-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 8,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w3-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 9,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w4-shared-a",
+            "c-w4-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 10,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w4-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 11,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w5-shared-a",
+            "c-w5-independent"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        },
+        {
+          "analyses_used": 1,
+          "batch_id": 12,
+          "outcome": "accepted_all",
+          "proposals": [
+            "c-w5-shared-b"
+          ],
+          "reason": "window_expired",
+          "wait_ms": 50
+        }
+      ],
+      "batches_fell_back": 0,
+      "config": {
+        "max_batch": 6,
+        "window_ms": 50
+      },
+      "description": "6 vagues : un symbole partagé par deux propositions est isolé par le pré-vol (jamais fusionné); la troisième reste groupable",
+      "fallback_rate": 0.0,
+      "items_reported": 18,
+      "name": "textual-conflicts",
+      "no_loss": true,
+      "path_conflicts": 6,
+      "preflight_isolations": 6,
+      "proposals": 18,
+      "proposals_received": 18,
+      "sequential_analyses_baseline": 18,
+      "symbol_conflicts": 6,
+      "wait_ms": {
+        "max": 50,
+        "min": 50,
+        "p50": 50,
+        "p95": 50,
+        "samples": [
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50
+        ]
+      }
+    }
+  ],
+  "schema_version": 1,
+  "suite": "batch",
+  "valid": true
+}

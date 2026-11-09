@@ -157,6 +157,39 @@ fn dir_size(path: &Path) -> u64 {
     total
 }
 
+/// Bounded wait for the asynchronous auto-GC maintenance thread. The trigger is
+/// not synchronous with `analyze`, so the test must poll `runs` instead of
+/// asserting immediately (a timeout is a real failure with full diagnostics).
+fn wait_for_auto_gc_run(daemon: &Daemon) -> ravum_daemon::AutoGcStats {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut stats = daemon.stats();
+    while stats.auto_gc.runs == 0 && std::time::Instant::now() < deadline {
+        let _ = daemon.wait_auto_gc_idle(500);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        stats = daemon.stats();
+    }
+    if stats.auto_gc.runs == 0 {
+        let journal_path = daemon.auto_gc_journal_path();
+        let journal_count = journal_path
+            .as_deref()
+            .map(|path| journal_lines(path).len())
+            .unwrap_or(0);
+        panic!(
+            "automatic GC never ran within 10 s: runs={} failures={} checks={} busy={} pending={} \
+             requests_since_check={} journal_path={journal_path:?} journal_lines={journal_count} \
+             work_dir={}",
+            stats.auto_gc.runs,
+            stats.auto_gc.failures,
+            stats.auto_gc.checks,
+            stats.auto_gc.busy,
+            stats.auto_gc.pending,
+            stats.auto_gc.requests_since_check,
+            daemon.work_dir().display()
+        );
+    }
+    stats.auto_gc
+}
+
 fn journal_lines(path: &Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .map(|text| {
@@ -474,7 +507,13 @@ fn auto_gc_journal_and_stats_are_bounded_and_coherent() {
             .expect("analysis");
         assert!(report.success);
     }
-    assert!(daemon.wait_auto_gc_idle(15_000));
+    // The auto-GC trigger is asynchronous: poll with a bounded timeout (50 ms,
+    // 10 s) so load cannot turn a real collection into a spurious failure.
+    let _ = wait_for_auto_gc_run(&daemon);
+    assert!(
+        daemon.wait_auto_gc_idle(15_000),
+        "auto-GC must settle after the collection"
+    );
     let stats = daemon.stats();
     let entries = journal_lines(&work.join("gc-auto.log"));
     assert_eq!(entries.len() as u64, stats.auto_gc.journal_entries);

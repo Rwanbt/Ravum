@@ -22,15 +22,13 @@ const PATCH_B: &str = "+++ b/two_functions.rs\n@@ -29,5 +29,5 @@\n /// Point d'e
 const PATCH_C: &str = "+++ b/two_functions.rs\n@@ -24,4 +24,4 @@\n /// Calcule un decalage simple.\n fn helper(x: f64) -> f64 {\n-    x + 1.0\n+    x + 99.0\n }\n";
 
 fn base_coordinator() -> Coordinator {
-    Coordinator::new(SourceSnapshot::new([(PATH.to_string(), SOURCE.to_string())]))
+    Coordinator::new(SourceSnapshot::new([(
+        PATH.to_string(),
+        SOURCE.to_string(),
+    )]))
 }
 
-fn proposal(
-    base: &Coordinator,
-    agent: &str,
-    symbols: &[&str],
-    patch: &str,
-) -> ChangeProposal {
+fn proposal(base: &Coordinator, agent: &str, symbols: &[&str], patch: &str) -> ChangeProposal {
     let hash = base.base().file_hash(PATH).unwrap().to_string();
     ChangeProposal {
         schema_version: COLLAB_SCHEMA_VERSION,
@@ -62,24 +60,47 @@ fn two_agents_integrate_into_one_file_and_the_result_hot_activates() {
 
     let a = proposal(&coordinator, "agent-a", &["helper"], PATCH_A);
     let decision_a = coordinator.submit(&a);
-    assert_eq!(decision_a.decision, DecisionKind::AutoSafe, "{:?}", decision_a.reasons);
+    assert_eq!(
+        decision_a.decision,
+        DecisionKind::AutoSafe,
+        "{:?}",
+        decision_a.reasons
+    );
 
     let b = proposal(&coordinator, "agent-b", &["ravum_compute"], PATCH_B);
     let decision_b = coordinator.submit(&b);
-    assert_eq!(decision_b.decision, DecisionKind::AutoSafe, "{:?}", decision_b.reasons);
+    assert_eq!(
+        decision_b.decision,
+        DecisionKind::AutoSafe,
+        "{:?}",
+        decision_b.reasons
+    );
 
     let merged = coordinator.current().content_of(PATH).unwrap().to_owned();
-    assert!(merged.contains("x + 10.0"), "agent A intent must be preserved");
-    assert!(merged.contains("helper(x) * 3.0"), "agent B intent must be present");
+    assert!(
+        merged.contains("x + 10.0"),
+        "agent A intent must be preserved"
+    );
+    assert!(
+        merged.contains("helper(x) * 3.0"),
+        "agent B intent must be present"
+    );
 
     // COLLAB-4 (partial): the merged snapshot is compiled and activated for real.
     let pipeline = Pipeline::new("rustc", work("collab-merged"));
     let snapshot = SourceSnapshot::new([(PATH.to_string(), merged)]);
     let built = pipeline.build(&snapshot).expect("adapter");
-    assert!(built.success, "merged source must compile: {:?}", built.build.diagnostics);
+    assert!(
+        built.success,
+        "merged source must compile: {:?}",
+        built.build.diagnostics
+    );
 
-    let host = PatchHost::bootstrap(ExpectedAbi::default(), Path::new(&built.build.artifact_path))
-        .expect("bootstrap merged artifact");
+    let host = PatchHost::bootstrap(
+        ExpectedAbi::default(),
+        Path::new(&built.build.artifact_path),
+    )
+    .expect("bootstrap merged artifact");
     // (2 + 10) * 3 = 36 with both agents' changes; 6 or 26 if one was lost.
     assert_eq!(host.call(2.0), 36.0);
 }

@@ -1,0 +1,12 @@
+[package]
+name = "s8mvp0c-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Déclaration de workspace vide VOLONTAIRE : cette fixture ne doit jamais être
+# membre du workspace Rust de Ravum. Les campagnes S8 MVP-0c compilent des
+# copies éphémères de ce crate dans le dossier temporaire du harnais.
+[workspace]
+
+[dependencies]
