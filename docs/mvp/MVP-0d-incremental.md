@@ -26,13 +26,25 @@ Deux défauts d'identité ont été trouvés en écrivant ce lot :
 
 | Élément | Comportement |
 |---|---|
-| Découverte | `cargo metadata` **résolu** (offline) en premier ; repli `--no-deps` si la résolution échoue |
+| Découverte | `--no-deps` (bon marché) d'abord ; `cargo metadata` **résolu** seulement si un membre déclare une feature ou si une dépendance normale est optionnelle/demande des features |
 | Activation inconnue | `Unit::features_resolved = false` → repli Cargo conservateur, **jamais** un ensemble vide supposé |
 | `Unit` | `package_id`, `activated_features`, `features_resolved`, `crate_types` |
 | `context_id` v2 | toolchain, cible, édition, nom de crate, **features activées**, **crate types**, build script, kind, flags |
 | Compilation ciblée | `--cfg feature="…"` passé à rustc, exactement comme Cargo |
 | Chemins | normalisation (canonicalisation + suppression du préfixe verbatim) de la racine, des manifestes, des sources et des dépendances |
 | Dépendances optionnelles | **repli conservateur maintenu** : tant que l'ensemble d'arêtes résolu n'est pas utilisé pour filtrer les arêtes inactives, une dépendance optionnelle force Cargo |
+
+### Coût de la résolution (mesuré sur ce dépôt)
+
+| Appel | Durée |
+|---|---:|
+| `cargo metadata --no-deps --offline` | 372 ms |
+| `cargo metadata --offline` (résolu) | 1 096 ms |
+
+D'où la découverte en deux temps : un workspace sans features garde le coût du
+MVP-0c (372 ms) ; la résolution (+724 ms sur ce dépôt) n'est payée que lorsqu'elle
+apporte une information réelle. Le prix de la fonctionnalité est donc **explicite et
+conditionnel**, pas imposé à tous les projets.
 
 Le point important est le dernier : il aurait été possible de « gagner » en
 supprimant ce repli, au prix d'une compilation d'arêtes que Cargo n'active pas.

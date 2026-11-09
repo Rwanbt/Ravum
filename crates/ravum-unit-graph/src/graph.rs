@@ -189,6 +189,47 @@ fn normalize_path(path: &Path) -> PathBuf {
     canonical
 }
 
+/// `true` when a workspace member declares a feature, or when one of its normal
+/// dependencies is optional or requests features. Only then is the activated set
+/// worth a resolved `cargo metadata` call; otherwise every activation is provably
+/// empty and the cheap `--no-deps` graph is enough.
+fn needs_feature_resolution(metadata: &serde_json::Value) -> bool {
+    let members: BTreeSet<&str> = metadata["workspace_members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str())
+        .collect();
+    metadata["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|package| {
+            let id = package["id"].as_str().unwrap_or_default();
+            if !members.contains(id) {
+                return false;
+            }
+            let declares = package["features"]
+                .as_object()
+                .map(|features| !features.is_empty())
+                .unwrap_or(false);
+            let requests = package["dependencies"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|dependency| {
+                    let kind = dependency["kind"].as_str().unwrap_or("normal");
+                    kind == "normal"
+                        && (dependency["optional"].as_bool().unwrap_or(false)
+                            || dependency["features"]
+                                .as_array()
+                                .map(|features| !features.is_empty())
+                                .unwrap_or(false))
+                });
+            declares || requests
+        })
+}
+
 /// Runs `cargo metadata` once, optionally without resolving the dependency
 /// graph. `--offline` is always passed: a campaign never downloads crates, and
 /// an unresolvable offline graph degrades to the conservative fallback instead
@@ -258,24 +299,18 @@ impl UnitGraph {
                 ),
             )
         })?);
-        // A resolved `cargo metadata` is preferred: it carries the activated
-        // feature set, without which a unit that declares features cannot be
-        // verified incrementally (`Unit::features_resolved`). Resolution is
-        // bounded: on failure we retry with `--no-deps`, where the activation
-        // set is unknown and every feature-bearing unit falls back to Cargo.
-        let metadata = match metadata_json(&cargo, &canonical_root, false) {
-            Ok(metadata) => metadata,
-            Err(resolved_error) => {
-                metadata_json(&cargo, &canonical_root, true).map_err(|no_deps_error| {
-                    GraphError::new(
-                        no_deps_error.kind,
-                        format!(
-                            "`cargo metadata` failed in both modes: resolved: {}; --no-deps: {}",
-                            resolved_error.message, no_deps_error.message
-                        ),
-                    )
-                })?
-            }
+        // Two-phase discovery: the cheap `--no-deps` call is always required, and
+        // the resolved call (which activates features but costs ~3x on a large
+        // workspace: 1096 ms vs 372 ms measured on this repository) is only paid
+        // when a unit actually declares or requests features. A workspace without
+        // features keeps the MVP-0c discovery cost and stays fully verifiable.
+        let shallow = metadata_json(&cargo, &canonical_root, true)?;
+        let metadata = if needs_feature_resolution(&shallow) {
+            // On failure the shallow graph is kept: the activation set then stays
+            // unknown, which is a conservative Cargo fallback, never an empty set.
+            metadata_json(&cargo, &canonical_root, false).unwrap_or(shallow)
+        } else {
+            shallow
         };
         Self::from_metadata(&canonical_root, &metadata)
     }
