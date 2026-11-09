@@ -77,6 +77,19 @@ jobs:
           git --version
           python --version
 
+      # The mapping is a gate: prove it before trusting it. This runs in ~2 s and
+      # needs no cargo (independent of a workspace mid-edit by another worker).
+      # It includes the INVENTORY case: a workspace crate/app without a test
+      # mapping fails here instead of being silently ignored.
+      - name: Verify the impact mapping itself (Node selftest, no cargo)
+        shell: pwsh
+        run: |
+          node tools/impact/selftest.mjs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::selftest du graphe d'impact en échec: le mapping n'est pas fiable, aucun vert silencieux possible."
+            exit 1
+          }
+
       - name: Cache cargo registry and target
         uses: actions/cache@v4
         with:

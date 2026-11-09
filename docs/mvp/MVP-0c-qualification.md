@@ -1,0 +1,324 @@
+# MVP-0c — Qualification L4 : CI par impact renforcée et conservation des tests
+
+> **Statut** : outil et selftest renforcés, sélection prouvée sur diffs réels, workflow exercé
+> en `workflow_dispatch` (2 runs réels). **Aucun commit n'a été fait par ce worker** : le Lead
+> est seul écrivain Git ; les modifications de cette mission sont non commitées dans le worktree.
+>
+> **Non-qualification** : ce document prouve le **mécanisme de sélection de tests** et son
+> fail-closed. Il ne qualifie ni un compilateur, ni une preuve, ni une ABI, ni le temps réel,
+> ni une release. Aucun test n'a été supprimé, exclu, ignoré ou affaibli.
+
+- **Branche** : `feat/mvp0c-hardening`.
+- **HEAD au début de la mission** : `95069fd` ; **HEAD à la fin** : `11b5e9e` (commits du Lead
+  pendant la mission) ; **tête distante utilisée par les dispatches** : `54177dd`.
+- **Base MVP-0b** : `origin/feat/mvp0b-hardening` = `ea7200c`.
+- **Environnement** : Windows `10.0.26100.0`, Node `v26.13.0` ; machine partagée avec
+  d'autres workers (compilations concurrentes) ; **aucun test cargo local lancé** par cette
+  mission (périmètre temps ~10 min, workspace en cours de modification par Worker B).
+
+---
+
+## 1. Objectif et périmètre
+
+Renforcer la CI par impact de `tools/impact/impact.mjs` + `.github/workflows/mvp-impact.yml`
+sans affaiblir les règles conservatrices, et **prouver** que la sélection ne saute aucun test
+pertinent, y compris pour les cibles L1 en cours d'ajout (`crates/ravum-unit-graph`,
+`fixtures/multicrate`).
+
+Périmètre d'écriture effectif (conforme à la tâche) :
+
+| Fichier | État |
+|---|---|
+| `tools/impact/selftest.mjs` | **modifié** (nouveaux cas + inventaire) |
+| `.github/workflows/mvp-impact.yml` | **modifié** (garde selftest en CI) |
+| `docs/mvp/MVP-0c-qualification.md` | **créé** (ce document) |
+| `evidence/mvp0c-impact-2026-11-09.json` | **créé** (preuves JSON) |
+| `tools/impact/impact.mjs` | **non modifié** (aucune règle de mapping changée) |
+| `scripts/impact.ps1` | **non modifié** |
+| `.github/workflows/mvp.yml`, `crates/**`, `apps/**`, `Cargo.toml` | **non touchés** |
+
+---
+
+## 2. Audit du mapping
+
+### 2.1 Graphe lu à l'exécution
+
+L'outil lit le `Cargo.toml` racine (`[workspace].members`, `[workspace.dependencies]`) puis
+chaque manifeste de membre. Au worktree courant (Worker B inclus) :
+
+- **15 paquets** = 13 crates + 2 apps, dont `ravum-unit-graph` (**non commité** à `11b5e9e`) ;
+- au **HEAD commité**, 14 paquets (les 54 suites du plan §7).
+
+### 2.2 Règles conservatrices (inchangées)
+
+| Chemin | Issue | Justification |
+|---|---|---|
+| `Cargo.toml`/`Cargo.lock` (tout) | FULL | le graphe de construction peut changer |
+| `.github/**` | FULL | la sélection elle-même est en jeu |
+| `crates/ravum-protocol/**` | FULL | contrat/ABI partagé |
+| `crates/ravum-patch-host/**` | FULL | hôte natif, effets process-global |
+| `fixtures/**` (dont `fixtures/multicrate/**`) | FULL | données partagées, manifests imbriqués |
+| `scripts/**` | FULL | orchestration sans mapping statique |
+| `tools/impact/**` | FULL | l'outil ne certifie pas sa propre PR |
+| `tools/**` autres | FULL | sémantique non modélisée |
+| `.github/workflows/**` | FULL | idem CI |
+| `docs/**` + `*.md` racine | sélectif | 1 commande : `python tools/validate_repo_docs.py` |
+| `evidence/**` | sélectif | aucun test automatisé ne le consomme |
+| `crates/<membre>/**`, `apps/<membre>/**` | sélectif | `cargo test -p <paquet>` + fermeture des dépendants |
+| suppression / renommage / copie | union | source + destination (R/C) ou chemin supprimé (D) |
+| chemin inconnu | FULL + `unknown_paths` | fail-closed |
+| diff vide, statut `U/X/B`, manifeste illisible, base introuvable | FULL + **INCERTAIN** | échec explicite après suite de secours |
+
+Aucune de ces règles n'a été modifiée ou affaiblie dans cette mission.
+
+---
+
+## 3. Renforcement du selftest (`tools/impact/selftest.mjs`)
+
+### 3.1 Avant / après
+
+| | Cas | Assertions | Résultat |
+|---|---|---|---|
+| Avant (MVP-0b, HEAD `95069fd`) | **48** | **388** | `SELFTEST PASS` |
+| Après (cette mission) | **52** | **491** | **`SELFTEST PASS — 52 cas, 491 assertions, 0 échec`** |
+
+### 3.2 Cas ajoutés / renforcés
+
+1. **Nouveau crate `ravum-unit-graph`** (L1) : un changement dans
+   `crates/ravum-unit-graph/src/graph.rs` est **sélectif** (pas FULL), exige
+   `cargo test -p ravum-unit-graph -- --test-threads=1` et inclut **tous ses dépendants**
+   calculés par la fermeture de référence indépendante. Si le crate est absent (non encore
+   commité), le cas le dit explicitement et le test d'inventaire générique prend le relais —
+   aucune invention de présence.
+2. **Suppression dans `ravum-unit-graph`** : fermeture conservée (le paquet reste compilé/testé).
+3. **Fixture multi-crates `fixtures/multicrate`** : `core/src/lib.rs`, `application/src/main.rs`,
+   `api/Cargo.toml`, `multicrate/Cargo.toml` => **FULL conservateur** (`fixtures` ou `manifest`),
+   **non incertain**, avec commande suite complète ; vérifie aussi que le fixture **n'est pas**
+   un member du workspace (sinon `cargo test --workspace` le compilerait).
+4. **INVENTAIRE — aucun crate silencieux** (nouveau, exigé par le mandat) :
+   - tout répertoire `crates/*` ou `apps/*` portant un `Cargo.toml` **doit** être membre de
+     `[workspace].members` (sinon il ne serait testé par aucune sélection) ;
+   - chaque paquet du workspace doit produire **soit sa suite sélective**, **soit un FULL
+     conservateur explicite** — « aucun mapping de test » = échec ;
+   - les seuls FULL par paquet autorisés sont `ravum-protocol` et `ravum-patch-host`
+     (tout autre FULL implicite = échec, pour auditer un futur oubli) ;
+   - toute commande de test doit viser un paquet du workspace.
+5. **docs-only renforcé** : en plus de « 0 test Rust + check docs », le cas exige
+   **exactement une commande** (`python tools/validate_repo_docs.py`).
+
+Le cas d'inventaire rend le selftest **auto-bloquant pour tout futur crate** : si un crate est
+ajouté aux `members` sans mapping de tests, le selftest échoue (et la CI échoue via la garde
+ajoutée au workflow, cf. §5).
+
+### 3.3 Garde ajoutée au workflow
+
+`mvp-impact.yml` exécute désormais, **avant** le calcul d'impact :
+
+```yaml
+- name: Verify the impact mapping itself (Node selftest, no cargo)
+  run: node tools/impact/selftest.mjs   # échec explicite si le mapping régresse (inventaire inclus)
+```
+
+Cette garde ne dépend pas de cargo (le workspace peut être en cours de modification par un
+autre worker) et rend le renforcement effectif en CI.
+
+---
+
+## 4. Inventaire des suites de tests et des scénarios E2E
+
+### 4.1 54 suites au HEAD commité (cargo metadata, lecture seule)
+
+Source : `cargo metadata --no-deps --format-version 1 --offline` (sans compilation) —
+**42 cibles de test + 12 harnais doc-test = 54 suites**, conformément au plan MVP-0c §7.
+Le worktree contient 3 suites supplémentaires (`ravum-unit-graph`, Worker B non commité) :
+**57 suites locales**.
+
+| Paquet | Suites (HEAD) | Paquet | Suites (HEAD) |
+|---|---|---|---|
+| ravum-cli | 5 | ravum-protocol | 2 |
+| ravum-coordinator | 2 | ravum-rust-adapter | 3 |
+| ravum-daemon | 8 | ravum-snapshot | 2 |
+| ravum-demo-host | 1 | ravum-store | 2 |
+| ravum-dsp-harness | 4 | ravum-todo | 4 |
+| ravum-patch-host | 5 | ravum-todo-core | 2 |
+| ravum-proof | 3 | ravum-workspace-coordinator | 11 |
+| **Total HEAD** | **54** | ravum-unit-graph (WIP) | +3 |
+| **Total worktree** | **57** | | |
+
+Couverture par la sélection : `cargo test -p <paquet>` couvre **toutes** les suites du paquet
+(cibles lib/bin/`tests/*.rs` et doc-tests) ; une décision FULL couvre les 54 (57 au worktree).
+Le mapping ne peut pas exclure une suite d'un paquet sélectionné.
+
+### 4.2 10 scénarios E2E navigateur
+
+Source : `apps/ravum-todo/e2e/browser_e2e.mjs` (`SCENARIOS`), ids 1–10 :
+
+| id | Scénario |
+|---|---|
+| 1 | chargement de l'interface (titre, formulaire, version de contrat) |
+| 2 | création d'une tâche et affichage dans le DOM |
+| 3 | modification du titre et mise à jour du DOM |
+| 4 | suppression et disparition du DOM |
+| 5 | erreur de validation (titre vide) affichée dans le DOM |
+| 6 | erreur d'autorisation (401) affichée sans casser l'UI |
+| 7 | incompatibilité de contrat (v2 côté serveur) → message UI explicite |
+| 8 | persistance : redémarrage du serveur sur la même base et rechargement |
+| 9 | migration v1 → v2 : UI fonctionnelle et données v1 visibles |
+| 10 | erreur réseau (serveur arrêté) visible, aucune exception non capturée |
+
+**Couverture** : ces 10 scénarios sont exécutés par le job `mvp` de `.github/workflows/mvp.yml`
+(step `Browser E2E … -RequireBrowser`), **pas** par `mvp-impact.yml`. Aucun diff de cette
+mission ne touche `apps/**` ; c'est une limite connue du chemin sélectif pour une future PR UI
+(§7, limite 4), pas un test sauté silencieusement.
+
+---
+
+## 5. Table de sélection sur des diffs réels (lecture seule)
+
+Commandes exécutées (git lecture seule + outil Node) :
+
+```powershell
+node tools/impact/impact.mjs --base ea7200c --head 19ce0ab --json   # A
+node tools/impact/impact.mjs --base 19ce0ab --head 9c02f2f --json   # B
+node tools/impact/impact.mjs --base 9c02f2f --head 95069fd --json   # C
+node tools/impact/impact.mjs --base ea7200c --head 95069fd --json   # D (agrégat branche)
+node tools/impact/impact.mjs --files 'crates/ravum-unit-graph/src/graph.rs' --json        # E
+node tools/impact/impact.mjs --files 'fixtures/multicrate/core/src/lib.rs' --json         # F
+node tools/impact/impact.mjs --base refs/heads/base-qui-nexiste-pas --json                 # G
+```
+
+| # | Diff | Fichiers modifiés | Décision | Commandes exigées | Suites couvertes |
+|---|---|---|---|---|---|
+| A | `ea7200c..19ce0ab` | `A docs/mvp/MVP-0c-plan.md` | **SÉLECTIVE** | `python tools/validate_repo_docs.py` | 0/57 Rust (aucun code Rust touché) — 1/1 check docs |
+| B | `19ce0ab..9c02f2f` | `M scripts/run-tests.ps1` | **FULL conservateur** | `cargo test --workspace -- --test-threads=1` | **57/57** (54 au HEAD) |
+| C | `9c02f2f..95069fd` | `M docs/mvp/MVP-0c-plan.md` | **SÉLECTIVE** | `python tools/validate_repo_docs.py` | 0/57 Rust — 1/1 check docs |
+| D | `ea7200c..95069fd` (agrégat) | docs + scripts | **FULL conservateur** + docs | suite complète **+** check docs | **57/57** + docs |
+| E | worktree : `crates/ravum-unit-graph/src/graph.rs` | 1 fichier du nouveau crate | **SÉLECTIVE** | `cargo test -p ravum-unit-graph -- --test-threads=1` | **3/57** (les 3 suites du crate) |
+| F | worktree : `fixtures/multicrate/core/src/lib.rs` | fixture multi-crates | **FULL conservateur** | suite complète | **57/57** |
+| G | base `refs/heads/base-qui-nexiste-pas` | — (base introuvable) | **FULL + INCERTAIN** (exit 2) | suite complète de secours | **57/57** puis échec explicite |
+
+**Analyse de non-masquage** :
+
+- A/C : aucun fichier Rust modifié ⇒ aucune suite Rust n'est pertinente ; le check docs est
+  conservé (pas d'économie silencieuse). Un full serait du gaspillage, pas une preuve.
+- B/D/F : la règle conservatrice correspondante déclenche FULL ; **aucune** des 54 suites du
+  HEAD n'est omise (57 au worktree).
+- E : la sélection couvre les 3 suites du nouveau crate (lib unit, `tests/negative_cases.rs`,
+  doc-test) ; s'il acquiert des dépendants, la fermeture les ajoute (vérifié par le selftest et
+  la référence indépendante). Aucun dépendant à ce HEAD.
+- G : fail-closed — le mapping ne peut pas être prouvé, donc suite complète **puis** échec
+  explicite (pas de vert silencieux).
+- Aucune règle n'a été affaiblie (le mapping est inchangé, cf. §1) et aucun test n'a été
+  supprimé ou masqué.
+
+---
+
+## 6. Exercice du workflow sans PR (`workflow_dispatch`)
+
+Workflow déclenché sur la branche (`gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening`)
+contre la tête distante `54177dd` (le workflow dispatch exécute la version de la branche) :
+
+| Run | Base fournie | Décision observée dans le log | Conclusion | Durée | URL |
+|---|---|---|---|---|---|
+| **42537476826** | `9c02f2f` | `full=true uncertain=false docs=true` (exit outil 0) — FULL légitime (`tools/agent-usage` non mappé + docs) | **success** | 146 s | https://github.com/Rwanbt/Ravum/actions/runs/42537476826 |
+| **42537714614** | `refs/heads/base-qui-nexiste-pas` | `full=true uncertain=true` (exit outil 2) — FULL de secours puis garde d'incertitude | **failure** (attendu) | 128 s | https://github.com/Rwanbt/Ravum/actions/runs/42537714614 |
+
+Extraits de logs réels :
+
+```
+# run 42537476826 (succès)
+Base du diff: 9c02f2f
+Décision: full=true uncertain=false docs=true (exit outil=0)
+Documentation-only check PASS: 42 proposed ADRs and required files present.
+OK: suite complète exécutée et verte (FULL légitime).
+
+# run 42537714614 (échec attendu)
+Base du diff: refs/heads/base-qui-nexiste-pas
+Décision: full=true uncertain=true (exit outil=2)
+::error::Mapping d'impact INCERTAIN ou erreur interne (exit outil 2). La suite complète de
+secours a été exécutée, mais ce job échoue explicitement...
+```
+
+Vérification locale équivalente du fail-closed (garde de l'outil) :
+
+```powershell
+node tools/impact/impact.mjs --base refs/heads/base-qui-nexiste-pas --json
+# exit 2 ; decision=full-uncertain ; commande: cargo test --workspace -- --test-threads=1
+```
+
+**Blocage PR** : la création d'une PR vers `dev` reste impossible sans simuler (cf. plan
+MVP-0c §7 : `dev` ne contient pas encore les crates). Aucune PR n'a été créée, aucun merge,
+aucune commande Git mutante.
+
+---
+
+## 7. Limites honnêtes
+
+1. **Aucune PR vers `dev`** : le chemin `pull_request` n'est pas exercé ; seuls les chemins
+   `push` (runs antérieurs) et `workflow_dispatch` le sont. Blocage documenté par le plan §7.
+2. **Runs dispatch sur `54177dd`** : le worktree local a ensuite avancé (`11b5e9e`) et les
+   modifications de cette mission (`selftest.mjs`, garde du workflow) ne sont **pas** dans ces
+   runs — le Lead doit les committer pour qu'elles s'appliquent. La garde selftest ajoutée n'a
+   donc pas encore été exécutée par GitHub Actions.
+3. **Aucun test cargo local** : workspace en cours de modification par Worker B et limite de
+   temps ~10 min ; l'inventaire des suites vient de `cargo metadata` (lecture seule) et les
+   scénarios E2E de la lecture du source, pas d'une exécution. Les suites sont comptées, pas
+   qualifiées dans ce lot.
+4. **E2E navigateur hors impact** : les 10 scénarios sont exécutés par `mvp.yml` uniquement.
+   Aucun diff de cette mission ne touche `apps/**`, mais une future PR UI ne serait pas couverte
+   par `mvp-impact.yml` sur ce point (limite inchangée depuis MVP-0b).
+5. **54 vs 57 suites** : 54 au HEAD commité (plan §7) ; 57 dans le worktree à cause du crate
+   `ravum-unit-graph` non commité de Worker B.
+6. **Diff agrégat D** : il résout en FULL (scripts) ; il prouve la conservation intégrale, pas
+   la sélectivité sur ce contenu.
+7. **Le selftest ne lit pas le contenu des tests** : il prouve que chaque crate/app a un mapping
+   et que les règles conservatrices s'appliquent ; il ne peut pas prouver qu'un test
+   nouvellement ajouté est pertinent, ni détecter la suppression/désactivation d'un test
+   existant (le workflow, lui, ne neutralise rien).
+8. **Machine partagée** : la sélection Node n'a pas de dépendance cargo, mais les runs CI
+   réels ont duré 128–146 s sur des runners GitHub, pas sur la machine de référence.
+
+---
+
+## 8. Reproductibilité
+
+```powershell
+# 1. Selftest renforcé (indépendant de cargo, ~2 s)
+node tools/impact/selftest.mjs
+
+# 2. Inventaire des suites (lecture seule, sans compilation)
+cargo metadata --no-deps --format-version 1 --offline
+
+# 3. Table de sélection (diffs réels)
+node tools/impact/impact.mjs --base ea7200c --head 19ce0ab  --json
+node tools/impact/impact.mjs --base 19ce0ab --head 9c02f2f  --json
+node tools/impact/impact.mjs --base 9c02f2f --head 95069fd  --json
+node tools/impact/impact.mjs --base ea7200c --head 95069fd  --json
+node tools/impact/impact.mjs --files 'crates/ravum-unit-graph/src/graph.rs' --json
+node tools/impact/impact.mjs --files 'fixtures/multicrate/core/src/lib.rs' --json
+
+# 4. Fail-closed base introuvable (exit 2 attendu)
+node tools/impact/impact.mjs --base refs/heads/base-qui-nexiste-pas --json
+
+# 5. Exercice CI sans PR
+gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening -f base=9c02f2f
+gh run list --workflow mvp-impact.yml --limit 3
+```
+
+---
+
+## 9. Conclusion
+
+- Selftest : **48 cas / 388 assertions → 52 cas / 491 assertions**, `PASS`, avec **cas
+  d'inventaire** qui échoue si un crate/app du workspace n'a pas de mapping de test.
+- Nouveaux cas : `ravum-unit-graph` (suite + dépendants, suppression), `fixtures/multicrate`
+  ⇒ FULL conservateur, docs-only ⇒ une seule commande.
+- Table de sélection prouvée sur **3 commits réels + agrégat branche + 2 cibles L1 + cas
+  fail-closed** : rien de pertinent n'est sauté, les règles conservatrices sont intactes,
+  aucun test supprimé/masqué.
+- Workflow exercé en `workflow_dispatch` : run **42537476826 success** (FULL légitime + docs)
+  et run **42537714614 failure attendu** (base introuvable ⇒ incertain ⇒ échec explicite).
+- Limites listées §7 ; la première exécution `pull_request` et la garde selftest en CI
+  restent à valider après commit par le Lead.
+
+**Preuves JSON** : [`evidence/mvp0c-impact-2026-11-09.json`](../../evidence/mvp0c-impact-2026-11-09.json).

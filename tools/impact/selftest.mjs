@@ -6,23 +6,28 @@
  * implémentation de référence INDÉPENDANTE de la fermeture des dépendants
  * (simple point fixe sur les arêtes inverses) pour comparer les ensembles.
  *
- * Cas obligatoires (mandat L4-E) :
+ * Cas obligatoires (mandat L4-E, renforcés MVP-0c L4) :
  *   - impact direct ;
  *   - dépendant transitif, avec preuve qu'une classification naïve
  *     (« seulement le crate modifié ») aurait sauté le test du dépendant ;
- *   - docs-only : aucun test Rust, mais le check docs reste exigé ;
+ *   - docs-only : aucun test Rust, mais le check docs reste exigé (une commande) ;
  *   - protocole => FULL ;
  *   - chemin inconnu => FULL ;
  *   - renommage => UNION source + destination ;
- *   - suppression => composant du chemin supprimé ;
- *   - manifeste/CI => FULL ; statut non résolu / diff vide => FULL + INCERTAIN.
+ *   - suppression => composant du chemin supprimé (et ses dépendants) ;
+ *   - manifeste/CI => FULL ; statut non résolu / diff vide => FULL + INCERTAIN ;
+ *   - nouveau crate `ravum-unit-graph` : suite propre + dépendants (si présent) ;
+ *   - fixture multi-crates `fixtures/multicrate` => FULL conservateur ;
+ *   - INVENTAIRE : chaque crate/app du workspace doit avoir un mapping de test,
+ *     et aucun répertoire `crates/*` ou `apps/*` avec manifeste ne peut rester
+ *     hors des `members` (sinon il ne serait testé nulle part).
  *
  * Zéro dépendance npm. Node >= 20 (testé Node 26).
  * Code de sortie : 0 = tout passe, 1 = au moins un échec.
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -205,6 +210,25 @@ path = "src/main.rs"
 // 1. Corpus d'impact (niveau bibliothèque)
 // ---------------------------------------------------------------------------
 
+/** Répertoires `crates/*` ou `apps/*` qui portent un manifeste sur disque. */
+function workspaceMemberDirsOnDisk() {
+  const dirs = [];
+  for (const scope of ['crates', 'apps']) {
+    const base = path.join(REPO_ROOT, scope);
+    let entries;
+    try {
+      entries = readdirSync(base, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (existsSync(path.join(base, entry.name, 'Cargo.toml'))) dirs.push(`${scope}/${entry.name}`);
+    }
+  }
+  return dirs.sort();
+}
+
 function testImpactCorpus(workspace) {
   const packageNames = sorted(workspace.packages.keys());
 
@@ -308,7 +332,52 @@ function testImpactCorpus(workspace) {
     check(!result.packages.includes('ravum-dsp-harness'), 'dsp-harness ne dépend pas de rust-adapter et ne doit pas être testé');
   });
 
-  runCase('docs-only: aucun test Rust, check docs conservé', () => {
+  runCase('nouveau crate ravum-unit-graph: suite propre + dépendants (MVP-0c L1)', () => {
+    const unitGraph = workspace.packages.get('ravum-unit-graph');
+    if (!unitGraph) {
+      // Le crate est développé par un autre worker : ne pas inventer sa présence.
+      // Le test d'inventaire générique ci-dessous échouera dès qu'il sera member
+      // sans mapping, et couvre donc tout futur crate même absent aujourd'hui.
+      check(true, 'ravum-unit-graph absent du workspace local : cas d’inventaire générique actif');
+      return;
+    }
+    const result = analyze(workspace, [M(`${unitGraph.dir}/src/graph.rs`)]);
+    const expected = referenceClosure(workspace, ['ravum-unit-graph']);
+    check(result.full === false, 'ravum-unit-graph (non critique) ne doit pas déclencher FULL');
+    check(result.uncertain === false, 'le mapping ravum-unit-graph ne doit pas être incertain');
+    check(result.decision === 'selective', `décision selective attendue, obtenue ${result.decision}`);
+    assertSetEqual(result.packages, expected, 'fermeture ravum-unit-graph');
+    check(result.packages.includes('ravum-unit-graph'), 'ravum-unit-graph doit exiger sa propre suite');
+    const ownCommand = result.commands.find((command) => command.kind === 'cargo' && command.package === 'ravum-unit-graph');
+    check(Boolean(ownCommand), 'commande cargo test -p ravum-unit-graph absente');
+    check(ownCommand.argv.includes('--test-threads=1'), 'commande ravum-unit-graph non sérialisée');
+    for (const dependent of [...expected].filter((name) => name !== 'ravum-unit-graph')) {
+      check(
+        result.commands.some((command) => command.kind === 'cargo' && command.package === dependent),
+        `suite du dépendant ${dependent} sautée`,
+      );
+    }
+    // La suite d'intégration du crate, si présente sur disque, reste couverte par
+    // `cargo test -p ravum-unit-graph` (pas d'exclusion possible via le mapping).
+    if (existsSync(path.join(REPO_ROOT, unitGraph.dir, 'tests'))) {
+      check(true, 'le crate ravum-unit-graph expose des tests d’intégration, couverts par cargo test -p');
+    }
+  });
+
+  runCase('suppression dans ravum-unit-graph: fermeture conservée', () => {
+    const unitGraph = workspace.packages.get('ravum-unit-graph');
+    if (!unitGraph) {
+      check(true, 'ravum-unit-graph absent : cas d’inventaire générique actif');
+      return;
+    }
+    const result = analyze(workspace, [{ status: 'D', path: `${unitGraph.dir}/src/graph.rs` }]);
+    const expected = referenceClosure(workspace, ['ravum-unit-graph']);
+    assertSetEqual(result.packages, expected, 'fermeture après suppression unit-graph');
+    check(result.packages.includes('ravum-unit-graph'), 'le paquet supprimé doit rester compilé/testé');
+    check(result.full === false, 'une suppression de source ne doit pas déclencher FULL à tort');
+  });
+
+  runCase('docs-only: aucun test Rust, check docs conservé (une seule commande)', () => {
     const result = analyze(workspace, [M('docs/architecture/STATUS.md'), M('README.md')]);
     check(result.full === false, 'docs-only ne doit pas déclencher FULL');
     check(result.packages.length === 0, 'docs-only ne doit exiger aucun paquet Rust');
@@ -316,6 +385,8 @@ function testImpactCorpus(workspace) {
     check(cargoCommands(result).length === 0, 'aucune commande cargo ne doit être émise pour docs-only');
     const docs = result.commands.filter((command) => command.kind === 'docs');
     check(docs.length === 1 && docs[0].argv[0] === 'python', 'la commande docs (python) est manquante');
+    check(result.commands.length === 1, `docs-only doit produire exactement 1 commande, obtenu ${result.commands.length}`);
+    check(result.decision === 'selective', `décision sélective attendue, obtenue ${result.decision}`);
   });
 
   runCase('protocole => FULL (contrat/ABI partagé), issue légitime sans incertitude', () => {
@@ -355,6 +426,36 @@ function testImpactCorpus(workspace) {
     const result = analyze(workspace, [M('fixtures/proof/positive.rs')]);
     check(result.full === true, 'fixtures/ doit déclencher FULL');
     check(result.reasons.some((reason) => reason.includes('shared-fixtures')), 'raison shared-fixtures absente');
+  });
+
+  runCase('fixture multi-crates fixtures/multicrate => FULL conservateur', () => {
+    // La fixture contient des manifestes imbriqués et des sources consommées par
+    // les tests de `ravum-unit-graph` : elle n'est pas un member du workspace,
+    // donc aucune sélection sélective ne peut la couvrir -> FULL conservateur.
+    const fixturePaths = [
+      'fixtures/multicrate/core/src/lib.rs',
+      'fixtures/multicrate/application/src/main.rs',
+      'fixtures/multicrate/api/Cargo.toml',
+      'fixtures/multicrate/Cargo.toml',
+    ];
+    for (const filePath of fixturePaths) {
+      const result = analyze(workspace, [M(filePath)]);
+      check(result.full === true, `${filePath} doit déclencher FULL`);
+      check(result.decision === 'full-conservative', `décision FULL conservatrice attendue pour ${filePath}, obtenue ${result.decision}`);
+      check(result.uncertain === false, `${filePath}: un FULL conservateur ne doit pas être incertain`);
+      check(
+        result.reasons.some((reason) => reason.includes('fixtures') || reason.includes('manifest')),
+        `${filePath}: raison conservatrice (fixtures/manifeste) absente`,
+      );
+      check(
+        commandArgs(result).some((argv) => argv.join(' ') === FULL_TEST_ARGV.join(' ')),
+        `${filePath}: commande de suite complète absente`,
+      );
+    }
+    check(
+      !workspace.byDirLower.has('fixtures/multicrate'.toLowerCase()),
+      'fixtures/multicrate ne doit pas être un member du workspace (sinon cargo test --workspace le compilerait)',
+    );
   });
 
   runCase('scripts d’orchestration => FULL', () => {
@@ -525,6 +626,59 @@ function testImpactCorpus(workspace) {
     check(app.packages.includes('ravum-todo') && app.full === null, 'mapping app incorrect');
     const unknown = classifyPath('benchmarks/whatever.txt', workspace);
     check(unknown.full !== null && unknown.unknown === true, 'chemin inconnu non fail-closed');
+  });
+
+  runCase('INVENTAIRE: chaque crate/app du workspace a un mapping de test (aucun crate silencieux)', () => {
+    // 1. Tout manifeste sous crates/ ou apps/ doit être déclaré member : un crate
+    //    non déclaré ne serait compilé/testé par AUCUNE sélection du workspace.
+    const memberDirs = workspaceMemberDirsOnDisk();
+    check(memberDirs.length >= 14, `répertoires crate/app avec manifeste attendus >= 14, trouvés ${memberDirs.length}`);
+    for (const dir of memberDirs) {
+      check(
+        workspace.byDirLower.has(dir.toLowerCase()),
+        `crate/app sur disque hors [workspace].members (donc non testé): ${dir}`,
+      );
+    }
+    // 2. Chaque paquet du workspace doit produire soit sa propre suite sélective,
+    //    soit un FULL conservateur explicite (« aucun mapping » = échec).
+    const notMapped = [];
+    const withoutCommand = [];
+    for (const packageName of sorted(workspace.packages.keys())) {
+      const pkg = workspace.packages.get(packageName);
+      const filePath = `${pkg.dir}/src/lib.rs`;
+      const classified = classifyPath(filePath, workspace);
+      const result = analyze(workspace, [M(filePath)]);
+      const mapped = classified.packages.includes(packageName) || classified.full !== null;
+      if (!mapped) notMapped.push(packageName);
+      const selectiveCommand = result.commands.some(
+        (command) => command.kind === 'cargo' && command.package === packageName,
+      );
+      if (!(result.full === true || selectiveCommand)) withoutCommand.push(packageName);
+      check(
+        result.full === true || result.decision === 'selective',
+        `décision inattendue pour ${packageName}: ${result.decision}`,
+      );
+      for (const command of result.commands.filter((entry) => entry.kind === 'cargo' && entry.package)) {
+        check(workspace.packages.has(command.package), `commande vers un paquet inconnu: ${command.package}`);
+      }
+    }
+    check(notMapped.length === 0, `paquets sans aucun mapping de test: ${notMapped.join(', ')}`);
+    check(withoutCommand.length === 0, `paquets sans commande de test ni FULL: ${withoutCommand.join(', ')}`);
+    // 3. Les paquets critiques (FULL par règle) comptent comme mappés : moins de
+    //    paquets sélectifs que de membres est normal, mais la différence doit
+    //    être EXACTEMENT les crates critiques, jamais un oubli silencieux.
+    const criticalPackages = [];
+    for (const packageName of sorted(workspace.packages.keys())) {
+      const pkg = workspace.packages.get(packageName);
+      const result = analyze(workspace, [M(`${pkg.dir}/src/lib.rs`)]);
+      if (result.full === true) criticalPackages.push(packageName);
+    }
+    for (const packageName of criticalPackages) {
+      check(
+        ['ravum-protocol', 'ravum-patch-host'].includes(packageName),
+        `paquet inattendu en FULL conservateur (règle à auditer): ${packageName}`,
+      );
+    }
   });
 }
 
