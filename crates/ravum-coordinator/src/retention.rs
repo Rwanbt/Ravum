@@ -134,7 +134,10 @@ mod tests {
     }
 
     fn touch(dir: &Path, stamp: u64) -> PathBuf {
-        let path = dir.join(format!("patch-deadbeef-cafebabe-{stamp}.dll"));
+        let path = dir.join(format!(
+            "patch-deadbeef-cafebabe-{stamp}.{}",
+            std::env::consts::DLL_EXTENSION
+        ));
         fs::write(&path, b"x").unwrap();
         path
     }
