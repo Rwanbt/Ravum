@@ -1,3 +1,6 @@
+<!-- Ravum repository banner -->
+![Ravum — Universal language for continuous development](https://raw.githubusercontent.com/Rwanbt/Ravum/main/assets/ravum-banner.jpg)
+
 # Ravum
 
 > **Projet de recherche et d'ingénierie — état : cadrage architectural / pré-MVP (8 novembre 2026).**  
