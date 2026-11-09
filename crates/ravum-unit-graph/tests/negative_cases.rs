@@ -5,8 +5,8 @@
 //! central signature-change case is `central_case_signature_change`.
 
 use ravum_unit_graph::{
-    run_chain, ChainOptions, ContextSpec, Proposal, ProposalDecision, ProposalSet, RunReport,
-    UnitGraph, UnitStatus,
+    run_chain, ChainOptions, ContextSpec, FallbackReason, Proposal, ProposalDecision, ProposalSet,
+    RunReport, UnitGraph, UnitStatus,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -296,23 +296,88 @@ fn case_05_trait_impl_change_revalidates_without_breaking() {
 }
 
 // ---------------------------------------------------------------------------
-// Case 6: feature package (not enumerable) -> Cargo fallback
+// Case 6: feature package -> targeted when the activation set is resolved,
+//         conservative Cargo fallback when it is not.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn case_06_feature_package_falls_back_to_cargo() {
+fn case_06_feature_package_is_targeted_when_the_activation_set_is_resolved() {
     let workspace = temp_workspace("case06");
-    let report = run(&workspace, &state_dir(&workspace, "s"));
+    let state = state_dir(&workspace, "s");
+    let report = run(&workspace, &state);
     let features = report.unit("features").expect("features unit");
-    assert_eq!(features.status, UnitStatus::FallbackPackage);
-    assert_eq!(
-        features.fallback_reason.as_deref(),
-        Some("features_declared")
+    assert_eq!(features.status, UnitStatus::TargetedOk);
+    assert_eq!(features.fallback_reason, None);
+    assert!(
+        report
+            .rustc_traces
+            .iter()
+            .any(|trace| trace.unit == "features"),
+        "a resolved feature set must be compiled by the targeted chain"
     );
-    assert!(report
-        .cargo_traces
-        .iter()
-        .any(|trace| trace.unit == "features"));
+
+    // Enabling the feature changes no source byte, only the activated cfg set.
+    let manifest = read(&workspace, "features/Cargo.toml");
+    write(
+        &workspace,
+        "features/Cargo.toml",
+        &manifest.replace("default = []", "default = [\"extra\"]"),
+    );
+    let enabled = run(&workspace, &state);
+    let enabled_features = enabled.unit("features").expect("features unit");
+    assert_eq!(enabled_features.status, UnitStatus::TargetedOk);
+    assert!(
+        !enabled_features.hit,
+        "a feature change must not be served from the cache"
+    );
+    // `Cargo.toml` belongs to the content identity, so editing it also changes
+    // `content_id`; that is expected and explains nothing about the compile. The
+    // decisive evidence is the interface: rustc never reads `Cargo.toml`, so an
+    // identical source with a different `.rmeta` can only come from the
+    // `--cfg feature="…"` set actually reaching the compiler.
+    assert_ne!(
+        enabled_features.context_id, features.context_id,
+        "the activated feature set belongs to the context identity"
+    );
+    assert_ne!(
+        enabled_features.interface_id, features.interface_id,
+        "the `--cfg feature` set must reach rustc, not only the cache key"
+    );
+    cleanup(&workspace);
+}
+
+#[test]
+fn case_06b_feature_package_falls_back_when_the_activation_set_is_unknown() {
+    let workspace = temp_workspace("case06b");
+    // `--no-deps` metadata carries no `resolve` section, so the activation set
+    // is unknown (never empty) and the unit must fall back conservatively.
+    let output =
+        std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+            .args([
+                "metadata",
+                "--no-deps",
+                "--format-version",
+                "1",
+                "--offline",
+                "--manifest-path",
+            ])
+            .arg(workspace.join("Cargo.toml"))
+            .output()
+            .expect("cargo metadata");
+    assert!(output.status.success(), "cargo metadata failed");
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("metadata json");
+    assert!(
+        metadata["resolve"].is_null(),
+        "--no-deps metadata must carry a null resolve section, not an activation set"
+    );
+    let graph = UnitGraph::from_metadata(&workspace, &metadata).expect("graph");
+    let unit = graph.unit("features").expect("features unit");
+    assert!(!unit.features_resolved);
+    assert_eq!(
+        graph.fallback_reason(unit, &context().host_target, None),
+        Some(FallbackReason::FeaturesDeclared)
+    );
     cleanup(&workspace);
 }
 
@@ -562,8 +627,8 @@ fn case_15_toolchain_change_invalidates_the_cache() {
     let second = run(&workspace, &state);
     assert_eq!(
         second.cache_hits,
-        baseline.cache_hits + 3,
-        "three targeted units are HIT on an unchanged run: {second:?}"
+        baseline.cache_hits + 4,
+        "four targeted units are HIT on an unchanged run: {second:?}"
     );
     let mut other = context();
     other.toolchain_id = format!("0{}", &other.toolchain_id[1..]);
@@ -638,7 +703,10 @@ fn hit_is_only_granted_when_everything_matches() {
     assert!(!first.rustc_traces.is_empty());
     let second = run(&workspace, &state);
     assert!(second.valid);
-    assert_eq!(second.cache_hits, 3, "core, api and consumer are HIT");
+    assert_eq!(
+        second.cache_hits, 4,
+        "core, api, consumer and the feature unit are HIT"
+    );
     assert!(second.unit("core").unwrap().hit);
     assert!(second.unit("api").unwrap().hit);
     assert!(second.unit("consumer").unwrap().hit);

@@ -100,12 +100,24 @@ pub struct Dependency {
 pub struct Unit {
     pub name: String,
     pub crate_name: String,
+    /// `cargo metadata` package id (stable inside one resolution only).
+    pub package_id: String,
     pub manifest_path: PathBuf,
     pub root_dir: PathBuf,
     pub edition: String,
     pub kind: UnitKind,
     pub src_path: PathBuf,
     pub declared_features: Vec<String>,
+    /// Features Cargo actually activates for this package, sorted. Empty is a
+    /// real empty set, not "unknown": see [`Unit::features_resolved`].
+    pub activated_features: Vec<String>,
+    /// `true` when the activation set is known (resolved metadata, or provably
+    /// empty). `false` forces a conservative Cargo fallback: a targeted rustc
+    /// build without the right `--cfg feature="…"` would not be the unit Cargo
+    /// builds.
+    pub features_resolved: bool,
+    /// Crate types declared by the selected target (`lib`, `cdylib`, …).
+    pub crate_types: Vec<String>,
     pub build_script: bool,
     pub dependencies: Vec<Dependency>,
     pub dependents: Vec<String>,
@@ -157,6 +169,70 @@ impl FallbackReason {
     }
 }
 
+/// Canonicalizes a path and strips the Windows verbatim prefix.
+///
+/// `cargo metadata` echoes `src_path`/`manifest_path` sometimes with a
+/// `\\?\` verbatim prefix and sometimes without, depending on how the
+/// manifest path was passed. rustc records the source path it is given, so an
+/// unstable prefix silently makes two identical builds produce different
+/// `.rmeta` bytes and different interface identities. Normalizing once, here,
+/// keeps the content identity and the interface identity stable.
+fn normalize_path(path: &Path) -> PathBuf {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = canonical.to_string_lossy().to_string();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest.to_string());
+    }
+    canonical
+}
+
+/// Runs `cargo metadata` once, optionally without resolving the dependency
+/// graph. `--offline` is always passed: a campaign never downloads crates, and
+/// an unresolvable offline graph degrades to the conservative fallback instead
+/// of silently using a different network graph.
+fn metadata_json(
+    cargo: &std::ffi::OsStr,
+    root: &Path,
+    no_deps: bool,
+) -> Result<serde_json::Value, GraphError> {
+    let mut command = Command::new(cargo);
+    command.arg("metadata").arg("--format-version").arg("1");
+    if no_deps {
+        command.arg("--no-deps");
+    }
+    command
+        .arg("--offline")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"));
+    let output = command.output().map_err(|error| {
+        GraphError::new(
+            DiscoverError::CargoMissing,
+            format!("cannot spawn `cargo metadata`: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(GraphError::new(
+            DiscoverError::CargoFailed,
+            format!(
+                "`cargo metadata{}` failed with {}: {}",
+                if no_deps { " --no-deps" } else { "" },
+                output.status,
+                stderr.trim()
+            ),
+        ));
+    }
+    serde_json::from_slice(&output.stdout).map_err(|error| {
+        GraphError::new(
+            DiscoverError::ManifestInvalid,
+            format!("cargo metadata returned invalid JSON: {error}"),
+        )
+    })
+}
+
 /// The workspace unit graph. Members are ordered topologically (dependencies
 /// first) and deterministically (name order for ties).
 #[derive(Debug, Clone)]
@@ -179,39 +255,25 @@ impl UnitGraph {
                 ),
             )
         })?;
-        let output = Command::new(&cargo)
-            .arg("metadata")
-            .arg("--no-deps")
-            .arg("--format-version")
-            .arg("1")
-            .arg("--offline")
-            .arg("--manifest-path")
-            .arg(canonical_root.join("Cargo.toml"))
-            .output()
-            .map_err(|error| {
-                GraphError::new(
-                    DiscoverError::CargoMissing,
-                    format!("cannot spawn `cargo metadata`: {error}"),
-                )
-            })?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(GraphError::new(
-                DiscoverError::CargoFailed,
-                format!(
-                    "`cargo metadata --no-deps` failed with {}: {}",
-                    output.status,
-                    stderr.trim()
-                ),
-            ));
-        }
-        let metadata: serde_json::Value =
-            serde_json::from_slice(&output.stdout).map_err(|error| {
-                GraphError::new(
-                    DiscoverError::ManifestInvalid,
-                    format!("cargo metadata returned invalid JSON: {error}"),
-                )
-            })?;
+        // A resolved `cargo metadata` is preferred: it carries the activated
+        // feature set, without which a unit that declares features cannot be
+        // verified incrementally (`Unit::features_resolved`). Resolution is
+        // bounded: on failure we retry with `--no-deps`, where the activation
+        // set is unknown and every feature-bearing unit falls back to Cargo.
+        let metadata = match metadata_json(&cargo, &canonical_root, false) {
+            Ok(metadata) => metadata,
+            Err(resolved_error) => {
+                metadata_json(&cargo, &canonical_root, true).map_err(|no_deps_error| {
+                    GraphError::new(
+                        no_deps_error.kind,
+                        format!(
+                            "`cargo metadata` failed in both modes: resolved: {}; --no-deps: {}",
+                            resolved_error.message, no_deps_error.message
+                        ),
+                    )
+                })?
+            }
+        };
         Self::from_metadata(&canonical_root, &metadata)
     }
 
@@ -241,6 +303,27 @@ impl UnitGraph {
                 packages_by_id.insert(id, package);
             }
         }
+
+        // `resolve` exists only in a resolved metadata run. Its absence means the
+        // activation set is unknown, never that it is empty.
+        let resolved_features: Option<BTreeMap<String, Vec<String>>> =
+            metadata["resolve"].as_object().map(|resolve| {
+                let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+                for node in resolve["nodes"].as_array().into_iter().flatten() {
+                    if let (Some(id), Some(features)) =
+                        (node["id"].as_str(), node["features"].as_array())
+                    {
+                        let mut names: Vec<String> = features
+                            .iter()
+                            .filter_map(|value| value.as_str().map(str::to_owned))
+                            .collect();
+                        names.sort();
+                        names.dedup();
+                        map.insert(id.to_owned(), names);
+                    }
+                }
+                map
+            });
 
         // Package name -> package id, and proc-macro package ids.
         let mut name_to_id: BTreeMap<String, String> = BTreeMap::new();
@@ -286,13 +369,14 @@ impl UnitGraph {
                 .get(id.as_str())
                 .copied()
                 .expect("checked above");
-            let manifest_path =
-                PathBuf::from(package["manifest_path"].as_str().ok_or_else(|| {
+            let manifest_path = normalize_path(Path::new(
+                package["manifest_path"].as_str().ok_or_else(|| {
                     GraphError::new(
                         DiscoverError::ManifestInvalid,
                         format!("package {name} has no manifest_path"),
                     )
-                })?);
+                })?,
+            ));
             let root_dir = manifest_path
                 .parent()
                 .map(Path::to_path_buf)
@@ -325,12 +409,13 @@ impl UnitGraph {
                     (UnitKind::Other, target.clone())
                 }
             };
-            let src_path = PathBuf::from(target["src_path"].as_str().ok_or_else(|| {
-                GraphError::new(
-                    DiscoverError::ManifestInvalid,
-                    format!("package {name} has a target without src_path"),
-                )
-            })?);
+            let src_path =
+                normalize_path(Path::new(target["src_path"].as_str().ok_or_else(|| {
+                    GraphError::new(
+                        DiscoverError::ManifestInvalid,
+                        format!("package {name} has a target without src_path"),
+                    )
+                })?));
             let crate_name = target["name"]
                 .as_str()
                 .map(|name| name.replace('-', "_"))
@@ -387,7 +472,9 @@ impl UnitGraph {
                     .as_str()
                     .map(str::to_owned)
                     .unwrap_or_else(|| package_name.replace('-', "_"));
-                let path = dependency["path"].as_str().map(PathBuf::from);
+                let path = dependency["path"]
+                    .as_str()
+                    .map(|value| normalize_path(Path::new(value)));
                 let dep_id = name_to_id.get(&package_name);
                 let proc_macro = dep_id
                     .map(|id| proc_macro_ids.contains(id))
@@ -413,6 +500,30 @@ impl UnitGraph {
                 });
             }
             dependencies.sort_by(|a, b| a.extern_name.cmp(&b.extern_name));
+            let crate_types: Vec<String> = target["crate_types"]
+                .as_array()
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let (activated_features, features_resolved) =
+                match resolved_features.as_ref().and_then(|map| map.get(id)) {
+                    Some(features) => (features.clone(), true),
+                    None => {
+                        // No resolved entry: only a provably empty activation set is
+                        // trusted. Any declared feature, feature requested on a
+                        // dependency or optional dependency makes it unknown, and an
+                        // unknown set must fall back to Cargo.
+                        let needs_resolution = !declared_features.is_empty()
+                            || dependencies.iter().any(|dependency| {
+                                dependency.optional || !dependency.features.is_empty()
+                            });
+                        (Vec::new(), !needs_resolution)
+                    }
+                };
             // Filled after every unit root is known: attribution must stop at
             // nested manifests/members (nearest-manifest rule, no double count).
             let source_files = Vec::new();
@@ -421,12 +532,16 @@ impl UnitGraph {
                 Unit {
                     name: name.clone(),
                     crate_name,
+                    package_id: id.clone(),
                     manifest_path,
                     root_dir,
                     edition,
                     kind,
                     src_path,
                     declared_features,
+                    activated_features,
+                    features_resolved,
+                    crate_types,
                     build_script,
                     dependencies,
                     dependents: Vec::new(),
@@ -582,7 +697,7 @@ impl UnitGraph {
         if unit.build_script {
             return Some(FallbackReason::BuildScript);
         }
-        if !unit.declared_features.is_empty() {
+        if !unit.features_resolved {
             return Some(FallbackReason::FeaturesDeclared);
         }
         if let Some(reason) = proc_macro_reason(unit) {
@@ -595,6 +710,10 @@ impl UnitGraph {
         {
             return Some(FallbackReason::ExternalDependency);
         }
+        // Optional dependencies are still declared on the unit even when Cargo
+        // leaves them disabled, and the targeted chain would try to compile them.
+        // Until the resolved edge set is used to filter them, they force a
+        // conservative fallback even when the feature set itself is known.
         if unit
             .dependencies
             .iter()
@@ -602,13 +721,10 @@ impl UnitGraph {
         {
             return Some(FallbackReason::FeaturesDeclared);
         }
-        if unit
-            .dependencies
-            .iter()
-            .any(|dependency| !dependency.features.is_empty())
-        {
-            return Some(FallbackReason::FeaturesDeclared);
-        }
+        // A feature requested on a dependency no longer forces a fallback once
+        // the activation set is resolved: the dependency's own unit carries its
+        // activated features (`Unit::activated_features`) and its interface is
+        // hashed into `externs_digest`, so a change re-verifies the dependent.
         if unit
             .dependencies
             .iter()

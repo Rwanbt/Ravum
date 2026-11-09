@@ -1,5 +1,6 @@
-//! Optional-feature unit: its cfg surface is not enumerable from metadata, so the
-//! graph must fall back to Cargo for this package.
+//! Optional-feature unit: its activation set comes from the resolved
+//! `cargo metadata`, so a resolved run compiles it with the exact `--cfg
+//! feature="…"` set and only an unknown activation falls back to Cargo.
 
 #[cfg(feature = "extra")]
 pub fn extra_value() -> u32 {

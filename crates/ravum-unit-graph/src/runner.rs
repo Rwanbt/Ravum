@@ -284,6 +284,15 @@ pub fn run_chain(graph: &UnitGraph, options: &ChainOptions) -> Result<RunReport,
             "-o".to_owned(),
             out_file.display().to_string(),
         ];
+        // Activated Cargo features must be visible to rustc exactly as Cargo
+        // passes them. Without these `--cfg` flags the targeted build would not
+        // be the unit Cargo builds: a `#[cfg(feature = "…")]` API could silently
+        // disappear and the verified interface would be wrong. Units whose
+        // activation set is unknown never reach this point.
+        for feature in &unit.activated_features {
+            args.push("--cfg".to_owned());
+            args.push(format!("feature=\"{feature}\""));
+        }
         for extern_artifact in &externs {
             let artifact_path = match artifacts.load_verified(&extern_artifact.interface_id) {
                 Some(bytes) => {
