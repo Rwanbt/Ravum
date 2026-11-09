@@ -27,8 +27,8 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **82 suites, 1019 passés / 0 échec / 2 ignorés** (exit 0) |
-| LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **10 PASS / 0 FAIL** |
+| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **82 suites, 1020 passés / 0 échec / 2 ignorés** (exit 0) |
+| LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
 | Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 250 PASS / 18 FAIL / 1 SKIP / 0 NOT_RUN** |
@@ -78,7 +78,7 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
 | T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
-| T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée | Implémentation |
+| T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
 | T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, **Miri rejoué en CI sur ce SHA (159 tests, 0 échec)** | **Audit externe absent** | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
@@ -180,6 +180,14 @@ Preuve : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md).
 
 `watch` recompile et redémarre. **La préservation d'état n'existe pas** : un
 redémarrage automatique ne satisfait pas une exigence de préservation d'état.
+Le contrat d'invalidation demandé par
+[`docs/specs/03-compilation-continue-hot-swap.md`](../specs/03-compilation-continue-hot-swap.md)
+est en revanche mesuré : `warm_incremental_edits_match_a_cold_analysis` applique
+36 éditions incrémentales à un buffer et vérifie qu'après chaque lot l'arbre de
+symboles servi est **identique** à celui d'un serveur neuf analysant le même
+texte, avec une assertion de non-vacuité (au moins un lot doit changer l'arbre).
+Une régression d'invalidation devient donc un échec de test, pas une erreur
+silencieuse dans l'éditeur.
 
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 

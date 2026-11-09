@@ -650,3 +650,128 @@ fn unknown_request_returns_method_not_found() {
     assert_eq!(response["error"]["code"], -32601);
     client.shutdown_and_exit();
 }
+
+// ---------------------------------------------------------------------------
+// Cold vs warm invalidation oracle
+// ---------------------------------------------------------------------------
+
+/// Nearest char boundary at or before `offset`.
+fn boundary_at(text: &str, offset: usize) -> usize {
+    (0..=offset.min(text.len()))
+        .rev()
+        .find(|index| text.is_char_boundary(*index))
+        .unwrap_or(0)
+}
+
+/// LSP position of a byte offset (`text` is the whole buffer, `offset` in bytes).
+fn position_at(text: &str, offset: usize) -> Value {
+    let before = &text[..offset];
+    let line = before.matches('\n').count();
+    let line_start = before.rfind('\n').map(|index| index + 1).unwrap_or(0);
+    let character: usize = text[line_start..offset].encode_utf16().count();
+    json!({ "line": line, "character": character })
+}
+
+fn symbols(client: &mut LspClient, uri: &str) -> Value {
+    client.request(
+        "textDocument/documentSymbol",
+        json!({ "textDocument": { "uri": uri } }),
+    )["result"]
+        .clone()
+}
+
+#[test]
+fn warm_incremental_edits_match_a_cold_analysis() {
+    // Oracle cold vs warm (`docs/specs/03-compilation-continue-hot-swap.md`).
+    //
+    // A long sequence of incremental edits is applied to one buffer. After every
+    // batch, the symbol tree served for that buffer must be **identical** to the
+    // tree a brand-new server produces for the same text. A stale overlay, a
+    // missed invalidation or an incremental-edit bug then shows up as a
+    // divergence instead of a silently wrong editor.
+    let package = TempPackage::new("warm", SOURCE);
+    let mut warm = LspClient::start();
+    warm.initialize(package.dir());
+    warm.open(&package.main_uri(), SOURCE);
+    let _ = warm.wait_notification("textDocument/publishDiagnostics");
+
+    let mut text = SOURCE.to_string();
+    let mut version = 1_u64;
+    let mut state: u64 = 0x5DEE_CE66_D1CE_1234;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let inserts = ["(", ")", "\"", ";", " ", "x", "1", "->", "{", "}", "fn "];
+    let first_symbols = symbols(&mut warm, &package.main_uri());
+    let mut changed = 0;
+
+    for batch in 0..12 {
+        for _ in 0..3 {
+            if text.len() < 16 {
+                break;
+            }
+            let roll = next();
+            let offset = boundary_at(&text, (roll as usize) % text.len());
+            if roll & (1 << 40) == 0 {
+                let snippet = inserts[(roll >> 8) as usize % inserts.len()];
+                let at = position_at(&text, offset);
+                warm.notify(
+                    "textDocument/didChange",
+                    json!({
+                        "textDocument": { "uri": package.main_uri(), "version": version },
+                        "contentChanges": [{
+                            "range": { "start": at, "end": at },
+                            "text": snippet,
+                        }],
+                    }),
+                );
+                text.insert_str(offset, snippet);
+            } else {
+                let length = (((roll >> 16) as usize) % 3 + 1).min(text.len() - offset);
+                let end = boundary_at(&text, offset + length);
+                if end == offset {
+                    continue;
+                }
+                warm.notify(
+                    "textDocument/didChange",
+                    json!({
+                        "textDocument": { "uri": package.main_uri(), "version": version },
+                        "contentChanges": [{
+                            "range": {
+                                "start": position_at(&text, offset),
+                                "end": position_at(&text, end),
+                            },
+                            "text": "",
+                        }],
+                    }),
+                );
+                text.replace_range(offset..end, "");
+            }
+            version += 1;
+        }
+
+        let warm_symbols = symbols(&mut warm, &package.main_uri());
+        if warm_symbols != first_symbols {
+            changed += 1;
+        }
+
+        // Cold oracle: a fresh package holding exactly the edited text, analysed by
+        // a fresh server. Nothing is shared with the warm instance.
+        let cold_package = TempPackage::new("cold", &text);
+        let mut cold = LspClient::start();
+        cold.initialize(cold_package.dir());
+        cold.open(&cold_package.main_uri(), &text);
+        let cold_symbols = symbols(&mut cold, &cold_package.main_uri());
+        cold.shutdown_and_exit();
+
+        assert_eq!(
+            warm_symbols, cold_symbols,
+            "batch {batch}: the incrementally edited buffer diverges from a cold analysis\n\
+             --- text ---\n{text}\n--- warm ---\n{warm_symbols}\n--- cold ---\n{cold_symbols}"
+        );
+    }
+    warm.shutdown_and_exit();
+}

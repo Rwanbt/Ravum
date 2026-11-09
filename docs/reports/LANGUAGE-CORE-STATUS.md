@@ -6,7 +6,7 @@
 > Aucun `PROVED`, aucune maturité « production ».
 > Dernière mesure : 2026-11-09 (passe T2 de traçabilité + session VS Code),
 > Windows 11 x86-64, rustc 1.95.0, branche `feat/lang-core-1.0-rc` @ `1b7b4f1`.
-> Tests workspace : **1019 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des
+> Tests workspace : **1020 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des
 > exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
 > Conformance : **269 cas, 250 PASS / 18 FAIL / 1 SKIP** — les 18 échecs restants
 > sont des divergences spec ↔ implémentation, documentées et non assouplies

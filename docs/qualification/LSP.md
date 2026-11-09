@@ -22,6 +22,7 @@ des octets de protocole n'est écrit sur `stdout` ; les erreurs vont sur `stderr
 | `textDocument/references` | Implémenté | idem |
 | `textDocument/rename` | Implémenté (depuis un usage **et** depuis la déclaration) | `rename_rewrites_declaration_and_uses` |
 | `textDocument/prepareRename` | Implémenté (requis par VS Code) | `navigation_from_the_declaration_name_works` |
+| Oracle **cold vs warm** | Les éditions incrémentales convergent vers l'analyse froide du même texte | `warm_incremental_edits_match_a_cold_analysis` |
 | `textDocument/completion` | Implémenté | `symbols_completion_and_formatting_answer` |
 | `textDocument/documentSymbol` | Implémenté | idem |
 | `workspace/symbol` | Implémenté | requête couverte par le dispatch ; pas d'assertion dédiée |
