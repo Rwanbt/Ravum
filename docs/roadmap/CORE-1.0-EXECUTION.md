@@ -14,12 +14,12 @@
 | T2 | [#90](https://github.com/Rwanbt/Ravum/issues/90) | Spécification candidate Core 1.0 + conformance | **PARTIAL** — spec DRAFT 15 fichiers, conformance 106/107, `features.md` incomplet |
 | T3 | [#91](https://github.com/Rwanbt/Ravum/issues/91) | Frontend : lexer, parser, diagnostics, formatter | **PARTIAL** — 69 tests + fuzz 249 k + Miri PASS ; LSP absent |
 | T4 | [#92](https://github.com/Rwanbt/Ravum/issues/92) | Typage, ownership, borrows, effets | **PARTIAL** — 133 + 85 tests, finding CRITICAL corrigé ; pas d'audit externe |
-| T5 | [#93](https://github.com/Rwanbt/Ravum/issues/93) | Backend natif, ABI, exécution | **PARTIAL** — Windows réel, Linux sur runner CI ; parité debug/release non mesurée |
+| T5 | [#93](https://github.com/Rwanbt/Ravum/issues/93) | Backend natif, ABI, exécution | **PASS** — binaires natifs Windows + Linux (CI), FFI `abs` sur les deux ; pas d'ABI stable revendiquée |
 | T6 | [#94](https://github.com/Rwanbt/Ravum/issues/94) | Runtime, stdlib Core 1.0, FFI | **PARTIAL** — stdlib + FFI primitive `extern "C"`/`unsafe` ; threads/net/async `UNSUPPORTED` |
 | T7 | [#95](https://github.com/Rwanbt/Ravum/issues/95) | CLI, packages, LSP, outils | **PARTIAL** — CLI complète + `watch` + WASM WASI ; LSP `UNSUPPORTED` |
 | T8 | [#96](https://github.com/Rwanbt/Ravum/issues/96) | Compilation continue, hot reload, collaboration | **PARTIAL** — `watch` = rebuild+restart (pas d'état préservé) ; collaboration non qualifiée |
 | T9 | [#97](https://github.com/Rwanbt/Ravum/issues/97) | Applications réelles `.rv` | **PARTIAL** — 9 verticales exécutées (dont FFI et WASM) ; HTTP/SQLite/GPU absents |
-| T10 | [#98](https://github.com/Rwanbt/Ravum/issues/98) | Conformance, fuzz, sanitizers, audits | **PARTIAL** — fuzz + Miri + 2 audits internes ; **TSan `NOT_RUN`**, audit externe absent |
+| T10 | [#98](https://github.com/Rwanbt/Ravum/issues/98) | Conformance, fuzz, sanitizers, audits | **PARTIAL** — fuzz + Miri + 2 audits internes (Windows et Linux) ; **TSan `NOT_RUN`/`NOT_APPLICABLE`**, audit externe absent |
 | T11 | [#99](https://github.com/Rwanbt/Ravum/issues/99) | Performance, supply chain, distribution | **PARTIAL** — installateur + SBOM + provenance ; pas de signature ni build bit-à-bit |
 | T12 | [#100](https://github.com/Rwanbt/Ravum/issues/100) | RC, dogfood, Go/No-Go | **PARTIAL** — RC interne non publiée ; Go/No-Go humain absent |
 

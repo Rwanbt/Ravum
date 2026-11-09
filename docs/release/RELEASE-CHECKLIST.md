@@ -53,7 +53,7 @@
 | [x] | `install.sh` : syntaxe valide (`bash -n`) | exit 0 |
 | [x] | `install.sh` : installation/désinstallation dans un préfixe temporaire (Git Bash) | exit 0, manifeste parsé, binaire exécuté |
 | [x] | `install.sh` : chemin Windows (`C:/…`) converti via `cygpath`, pas d'écriture hors préfixe | testé ; aucune pollution du dépôt |
-| [ ] | Installation testée sur **Linux natif** | `NOT_RUN` |
+| [x] | Installation testée sur **Linux natif** | CI `install` run [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985) : préfixe temporaire, manifeste, `--version` |
 | [ ] | Installation testée sur **macOS natif** | `NOT_RUN` |
 | [ ] | Préfixe par défaut testé (hors temporaire), sans effet de bord | `NOT_RUN` |
 

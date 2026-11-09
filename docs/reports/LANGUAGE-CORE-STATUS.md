@@ -6,9 +6,11 @@
 > Dernière mesure : 2026-11-09, Windows 11 x86-64, rustc 1.95.0. Tests
 > workspace : **987 passés / 0 échec / 8 ignorés / 80 suites**. Smoke des
 > exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
-> Conformance : **107 cas, 106 PASS / 0 FAIL / 1 SKIP**. Qualification Linux :
-> runner GitHub `ubuntu-latest` (machine indépendante) ; statut consigné dans
-> [`docs/qualification/LINUX-QUALIFICATION.md`](../qualification/LINUX-QUALIFICATION.md).
+> Conformance : **107 cas, 106 PASS / 0 FAIL / 1 SKIP**. **Linux qualifié** sur
+> runner GitHub `ubuntu-latest` (run
+> [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985), SHA
+> `78c8f72`) : workspace, conformance, smoke, install, Miri, fuzz et WASM verts ;
+> TSan explicitement `NOT_APPLICABLE`.
 
 ## 1. Ce qui fonctionne réellement (vérifié)
 
@@ -100,12 +102,12 @@ exécuté par le job Linux.
 | T2 | **PARTIAL** | spec DRAFT 15 fichiers + conformance 106/107 (1 skip OS) ; `features.md` encore majoritairement `NOT_COVERED`, aucun PASS revendiqué |
 | T3 | **PARTIAL** | 69 tests syntaxe, fuzz 249 k entrées, Miri syntax PASS ; LSP absent (outil, pas frontend) |
 | T4 | **PARTIAL** | typechecker + borrow checker testés (133 + 85 cas), finding CRITICAL corrigé ; **pas d'audit externe**, pas de preuve formelle |
-| T5 | **PARTIAL** | binaires natifs Windows réels ; qualification Linux sur runner GitHub (résultat dans le doc dédié) ; parité debug/release non mesurée |
+| T5 | **PASS** | binaires natifs réels sur **Windows et Linux** (CI) ; FFI `abs` exécutée sur les deux ; pas d'ABI stable revendiquée |
 | T6 | **PARTIAL** | stdlib core/io/fs/string/vec/math + **FFI minimale** (`extern "C"`, primitives, `unsafe`) ; threads/net/async `UNSUPPORTED` |
 | T7 | **PARTIAL** | CLI complète (`watch` inclus), WASM WASI preview1 ; **LSP `UNSUPPORTED` explicite** ; binaire nommé `ravum-lang` |
 | T8 | **PARTIAL** | hot reload = rebuild + redémarrage (pas de préservation d'état) ; collaboration/overlays non qualifiés ici |
 | T9 | **PARTIAL** | 9 verticales `.rv` exécutées (dont FFI et WASM) ; HTTP/SQLite/GPU `NOT_RUN`/`UNSUPPORTED` |
-| T10 | **PARTIAL** | fuzz + Miri + audits internes exécutés ; **TSan `NOT_RUN`**, audit externe absent |
+| T10 | **PARTIAL** | fuzz + Miri + audits internes exécutés sur Windows **et** Linux ; **TSan `NOT_RUN`/`NOT_APPLICABLE`**, audit externe absent |
 | T11 | **PARTIAL** | installateur, SBOM, provenance, checksums ; **pas de signature**, **pas de build bit-à-bit**, licence `PENDING_HUMAN` |
 | T12 | **PARTIAL** | PR/rapports/décisions prêts ; dogfood indépendant et Go/No-Go humain absents |
 

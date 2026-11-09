@@ -1,11 +1,12 @@
 # Qualification Linux — méthode et statut
 
-> **Statut global : `PREPARED` / `NOT_YET_RUN`.**
-> Ce document décrit une qualification **préparée** pour un runner GitHub Actions
-> `ubuntu-latest`. Aucun run CI n'a encore été exécuté depuis cette session : le
-> Lead pousse la branche puis déclenche le workflow. Tant que le run n'existe pas,
-> aucun job n'est `PASS` et aucun résultat Linux n'est `PROVED`. Les seules
-> preuves locales disponibles sont listées au §6.
+> **Statut global : `PASS` sur le run [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985).**
+> Les 8 jobs du workflow ont un résultat explicite sur `ubuntu-latest` :
+> `workspace-tests`, `conformance`, `smoke`, `install`, `miri`, `fuzz`, `wasm`
+> sont **PASS** ; `tsan` est **SKIP explicite `NOT_APPLICABLE`** (pas de
+> threads/async dans Core 1.0). WSL local reste hors service et n'est **pas**
+> une preuve ; la qualification repose sur une machine indépendante. Voir §10
+> pour les chiffres, le SHA et les correctifs de portabilité.
 
 ## 1. Objet
 
@@ -208,3 +209,54 @@ qu'à `bash -n` et au smoke portable, pas à la qualification.
    valeur bornée et documentée, ou déplacer le budget long dans un job nocturne.
 5. Mettre à jour ce document avec les résultats bruts, les durées et les
    artefacts (`conformance-report-linux`).
+
+## 10. Résultats observés (runs réels)
+
+Run final vert : [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985),
+SHA `78c8f72`, `ubuntu-latest`, rustc stable 1.95.0, Node 22, nightly 1.97.0
+pour Miri/fuzz.
+
+| Job | Résultat observé | Preuve |
+|---|---|---|
+| `workspace-tests` | **PASS** | `cargo test --workspace --all-targets -- --test-threads=2`, 8 min environ ; tous les crates/targets compilent et passent sur Linux |
+| `conformance` | **PASS** | 107 cas : **105 PASS / 0 FAIL / 2 SKIP** (`security/dependency-absolute-windows`, `security/reserved-windows-name`, spécifiques à Windows) ; artefact `conformance-report-linux` |
+| `smoke` | **PASS** | `RESUME: 31 PASS / 0 FAIL / 0 NOT_RUN` (les 31 cas, dont `ffi-abs`) |
+| `install` | **PASS** | build release `--locked`, manifeste + SHA-256, binaire `ravum-lang 0.1.0 (edition core-1.0-draft.1)` |
+| `fuzz` | **PASS** | `fuzz_lex_parse` long (`--ignored`), budget 200 000 itérations |
+| `miri` | **PASS** | libs `syntax` (65) + `sema` (87) + fuzz court (3 itérations), exclusions bornées et documentées |
+| `wasm` | **PASS** | `build` + `run --target wasm32-wasip1 examples/hello` → `hello, ravum` via Node 22 |
+| `tsan` | **SKIP explicite** | `NOT_APPLICABLE` : pas de threads/async dans Core 1.0, FFI synchrone mono-thread |
+
+### 10.1 Défauts de portabilité Linux trouvés et corrigés
+
+Aucun n'était un défaut du langage ; tous étaient des hypothèses Windows dans
+des tests/utilitaires existants. Aucun test n'a été supprimé ou affaibli :
+
+| Commit | Défaut | Correctif |
+|---|---|---|
+| `92fcc71` | `conformance/util` acceptait `C:\...` comme chemin relatif sous Linux | politique portable : rejet de `\\` et `:` sur tout hôte |
+| `d43fffc` | test de rétention du coordinateur cherchait `.dll` en dur | utilise `std::env::consts::DLL_EXTENSION` |
+| `8751b43` | `daemon::safe_join` acceptait `C:/abs.rs` sous Linux | rejet des formes absolues Windows et des backslashes |
+| `3eb6bb5` | test de supersession dépendant d'un `sleep(40 ms)` (course sur runner rapide) | synchronisation par canal sur l'entrée dans `analyze` |
+| `7f50c7e` | stress DSP dépassait 60 s sous contention CI | budget `RAVUM_STRESS_MAX_SECONDS` explicite (défaut local 60 s, CI 1200 s), assertions de correction inchangées |
+| `6df3b9b` | `patch-host` tentait de `dlopen` le binaire de test Linux (PIE) | `#[cfg_attr(not(windows), ignore = ...)]` explicite, chemin d'unload couvert sur Windows et par les fixtures cdylib |
+| `55cae5a` | cache d'artefact : identifiants ELF reproductibles et borne de temps trop stricte | détection de fraude conservée (`cached_build == false`), borne de temps transformée en sanity bound |
+| `008f01a` | test « MSVC non reproductible » échouait sur ELF (reproductible) | revendication limitée à Windows via `#[cfg_attr(not(windows), ignore)]` |
+
+### 10.2 WSL local
+
+`wsl -l -v`, `wsl --shutdown` et toute commande de distribution se bloquent
+> 2 minutes ; `Restart-Service WslService` est refusé (pas d'admin). WSL n'a donc
+fourni **aucune** preuve. La qualification Linux repose uniquement sur le runner
+GitHub, qui est une machine indépendante — un choix de preuve plus fort, mais
+qui ne couvre que l'image `ubuntu-latest` du moment.
+
+### 10.3 Incidents de run
+
+Un run intermédiaire ([42673560942](https://github.com/Rwanbt/Ravum/actions/runs/42673560942))
+n'a créé que 5 jobs sur 8 (les jobs `install`, `miri`, `fuzz` n'ont pas été
+planifiés) tout en rapportant un échec global sans job en échec. Le workflow
+était identique dans le commit (vérifié via l'API GitHub). Un commit de relance
+a produit le run vert final avec les 8 jobs. Ce run intermédiaire n'est **pas**
+compté comme une preuve ; l'incident est probablement côté planificateur GitHub,
+mais n'est pas expliqué avec certitude.

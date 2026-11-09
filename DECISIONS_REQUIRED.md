@@ -42,14 +42,20 @@
 
 ## D5 — Cibles Tier 1 et qualification Linux
 
-- **Recommandation** : Windows x86-64 = testé localement ; Linux x86-64 = qualifié
-  par un runner GitHub Actions `ubuntu-latest` sur le SHA de la PR (machine
-  indépendante). Le WSL local de la machine de développement est hors service
-  (service non réactif, pas d'admin) : il n'est **pas** une preuve.
-- **Preuves** : `.github/workflows/linux-qual.yml`, artefact
-  `evidence/linux/` après exécution réelle du workflow.
-- **Sans décision** : annoncer Linux Tier 1 seulement si le run CI est vert sur
-  le SHA final ; sinon `PARTIAL/NOT_RUN`.
+- **Recommandation** : Windows x86-64 = testé localement ; Linux x86-64 =
+  **qualifié** par un runner GitHub Actions `ubuntu-latest` sur le SHA de la PR
+  (machine indépendante), run
+  [42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985) :
+  workspace, conformance, smoke, install, Miri, fuzz et WASM verts ; TSan
+  `NOT_APPLICABLE` documenté. Le WSL local de la machine de développement est
+  hors service (service non réactif, pas d'admin) : il n'est **pas** une preuve.
+- **Preuves** : `.github/workflows/linux-qual.yml`,
+  [`docs/qualification/LINUX-QUALIFICATION.md`](docs/qualification/LINUX-QUALIFICATION.md),
+  artefact `conformance-report-linux`.
+- **Limite** : une seule image (`ubuntu-latest`) et un seul run ; pas de
+  reproductibilité multi-images ni de qualification ARM/macOS.
+- **Sans décision** : annoncer Linux Tier 1 seulement pour l'image testée, pas
+  comme support universel.
 
 ## D6 — Périmètre des fonctionnalités universelles (T8-T11)
 
