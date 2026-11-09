@@ -242,7 +242,16 @@ jobs:
           MIRIFLAGS: -Zmiri-disable-isolation
         run: |
           cargo +nightly miri --version
-          cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib
+          # Exclusions are the same as the locally measured 5.5-minute run:
+          # two <2 s timing assertions, the 300k-token hostile input (hours under
+          # Miri), and the example-tree formatter walk (read_dir). They are
+          # covered natively by the workspace job.
+          cargo +nightly miri test -p ravum-lang-syntax --lib -- \
+            --skip hostile_100k_tokens \
+            --skip hostile_deep_nesting \
+            --skip too_large_token_stream \
+            --skip examples_are_idempotent_and_meaning_preserving
+          cargo +nightly miri test -p ravum-lang-sema --lib -- --skip loader::
 
       - name: Run Miri on the short sema fuzz test
         env:
