@@ -101,7 +101,14 @@ impl ProofBroker {
         let started = std::time::Instant::now();
         let outcome = self.verifier.check(artifact, obligation);
         let elapsed_ms = started.elapsed().as_millis() as u64;
-        let mut record = record_of(obligation, ctx, &outcome, self.verifier.name(), &self.verifier.version(), elapsed_ms);
+        let mut record = record_of(
+            obligation,
+            ctx,
+            &outcome,
+            self.verifier.name(),
+            &self.verifier.version(),
+            elapsed_ms,
+        );
         record.verification_key = key.clone();
         self.ledger.append(record.clone())?;
         self.stats.recorded += 1;
@@ -137,15 +144,19 @@ fn record_of(
 
     let (status, passed, counterexample) = match outcome {
         VerifierOutcome::Proved => (VerificationStatus::Proved, true, None),
-        VerifierOutcome::Failed { counterexample } => {
-            (VerificationStatus::Tested, false, Some(counterexample.clone()))
-        }
+        VerifierOutcome::Failed { counterexample } => (
+            VerificationStatus::Tested,
+            false,
+            Some(counterexample.clone()),
+        ),
         VerifierOutcome::Unsupported { detail } => {
             assumptions.push(format!("backend unsupported: {detail}"));
             (VerificationStatus::Unknown, false, None)
         }
         VerifierOutcome::Timeout { after_ms } => {
-            assumptions.push(format!("timeout after {after_ms} ms: the domain is not covered"));
+            assumptions.push(format!(
+                "timeout after {after_ms} ms: the domain is not covered"
+            ));
             (VerificationStatus::Timeout, false, None)
         }
         VerifierOutcome::Unknown { detail } => {
@@ -222,8 +233,8 @@ mod tests {
     fn broker_with(outcome: VerifierOutcome, runs: Arc<AtomicU64>) -> ProofBroker {
         static LEDGER_SEQ: AtomicU64 = AtomicU64::new(0);
         let seq = LEDGER_SEQ.fetch_add(1, Ordering::SeqCst);
-        let path = std::env::temp_dir()
-            .join(format!("ravum-broker-{}-{seq}.jsonl", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("ravum-broker-{}-{seq}.jsonl", std::process::id()));
         let _ = std::fs::remove_file(&path);
         ProofBroker::new(
             Box::new(CountingVerifier { outcome, runs }),
@@ -237,9 +248,13 @@ mod tests {
         let mut broker = broker_with(VerifierOutcome::Proved, Arc::clone(&runs));
         let obligation = Obligation::new("o", Claim::Finite, vec![1.0]);
 
-        let first = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let first = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert!(!first.from_cache);
-        let second = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let second = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert!(second.from_cache);
         assert_eq!(runs.load(Ordering::SeqCst), 1);
         assert_eq!(broker.stats().cache_hits, 1);
@@ -255,10 +270,14 @@ mod tests {
             Arc::clone(&runs),
         );
         let obligation = Obligation::new("o", Claim::NonNegative, vec![1.0]);
-        let first = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let first = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert_eq!(first.record.counterexample.as_deref(), Some("f(1) = -1"));
         assert!(!first.record.authorizes_activation());
-        let second = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let second = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert!(second.from_cache);
         assert!(!second.record.authorizes_activation());
         assert_eq!(runs.load(Ordering::SeqCst), 1);
@@ -269,10 +288,14 @@ mod tests {
         let runs = Arc::new(AtomicU64::new(0));
         let mut broker = broker_with(VerifierOutcome::Proved, Arc::clone(&runs));
         let obligation = Obligation::new("o", Claim::Finite, vec![1.0]);
-        broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         let mut other = ctx();
         other.artifact_id = ArtifactId::new("other");
-        broker.prove(Path::new("a.dll"), &obligation, &other).unwrap();
+        broker
+            .prove(Path::new("a.dll"), &obligation, &other)
+            .unwrap();
         assert_eq!(runs.load(Ordering::SeqCst), 2);
     }
 
@@ -286,7 +309,9 @@ mod tests {
             runs,
         );
         let obligation = Obligation::new("o", Claim::Finite, vec![1.0]);
-        let result = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let result = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert_eq!(result.record.status, VerificationStatus::Unknown);
         assert!(!result.record.authorizes_activation());
     }
@@ -294,12 +319,11 @@ mod tests {
     #[test]
     fn timeout_never_authorizes_activation() {
         let runs = Arc::new(AtomicU64::new(0));
-        let mut broker = broker_with(
-            VerifierOutcome::Timeout { after_ms: 5 },
-            runs,
-        );
+        let mut broker = broker_with(VerifierOutcome::Timeout { after_ms: 5 }, runs);
         let obligation = Obligation::new("o", Claim::Finite, vec![1.0]);
-        let result = broker.prove(Path::new("a.dll"), &obligation, &ctx()).unwrap();
+        let result = broker
+            .prove(Path::new("a.dll"), &obligation, &ctx())
+            .unwrap();
         assert_eq!(result.record.status, VerificationStatus::Timeout);
         assert!(!result.record.authorizes_activation());
     }

@@ -17,7 +17,9 @@ pub mod evidence;
 pub mod ids;
 pub mod patch;
 
-pub use collab::{ChangeProposal, DecisionKind, JournalEntry, ProposalDecision, COLLAB_SCHEMA_VERSION};
+pub use collab::{
+    ChangeProposal, DecisionKind, JournalEntry, ProposalDecision, COLLAB_SCHEMA_VERSION,
+};
 pub use diagnostics::{
     Diagnostic, DiagnosticSet, DiagnosticSpan, Severity, DIAGNOSTICS_SCHEMA_VERSION,
 };

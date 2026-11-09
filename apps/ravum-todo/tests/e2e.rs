@@ -52,7 +52,8 @@ impl TestServer {
     fn request(&self, method: &str, path: &str, token: Option<&str>, body: Option<&str>) -> Reply {
         let addr = self.running.addr;
         let mut stream = TcpStream::connect(addr).expect("connect");
-        let mut request = format!("{method} {path} HTTP/1.1\r\nHost: ravum.test\r\nConnection: close\r\n");
+        let mut request =
+            format!("{method} {path} HTTP/1.1\r\nHost: ravum.test\r\nConnection: close\r\n");
         if let Some(token) = token {
             request.push_str(&format!("Authorization: Bearer {token}\r\n"));
         }
@@ -103,7 +104,10 @@ fn full_crud_round_trip() {
     assert_eq!(created.status, 201, "{}", created.body);
     let task = &json(&created)["task"];
     let id = task["id"].as_i64().expect("id");
-    assert_eq!(task["title"], "acheter du cafe", "the server trims the title");
+    assert_eq!(
+        task["title"], "acheter du cafe",
+        "the server trims the title"
+    );
     assert_eq!(task["done"], false);
     assert_eq!(task["due_date"], "2026-11-09");
     assert!(task["created_at"].as_str().unwrap_or("").ends_with('Z'));
@@ -137,10 +141,18 @@ fn full_crud_round_trip() {
 fn validation_is_enforced_on_the_server() {
     let server = TestServer::start("validation");
 
-    let empty = server.request("POST", "/api/tasks", Some(TOKEN), Some(r#"{"title":"   "}"#));
+    let empty = server.request(
+        "POST",
+        "/api/tasks",
+        Some(TOKEN),
+        Some(r#"{"title":"   "}"#),
+    );
     assert_eq!(empty.status, 400);
     assert_eq!(json(&empty)["error"]["code"], "validation_failed");
-    assert_eq!(json(&empty)["error"]["details"][0]["violation"]["code"], "title_empty");
+    assert_eq!(
+        json(&empty)["error"]["details"][0]["violation"]["code"],
+        "title_empty"
+    );
 
     let long_title = format!(r#"{{"title":"{}"}}"#, "a".repeat(200));
     let too_long = server.request("POST", "/api/tasks", Some(TOKEN), Some(&long_title));
@@ -205,12 +217,18 @@ fn the_contract_is_served_and_versioned() {
     let schema = server.request("GET", "/api/schema", None, None);
     assert_eq!(schema.status, 200);
     let contract = json(&schema);
-    assert_eq!(contract["contract_version"], ravum_todo_core::CONTRACT_VERSION);
+    assert_eq!(
+        contract["contract_version"],
+        ravum_todo_core::CONTRACT_VERSION
+    );
     let fields = contract["resources"]["task"]["fields"].as_array().unwrap();
     assert!(fields.iter().any(|f| f["name"] == "due_date"));
     assert!(fields.iter().any(|f| f["name"] == "title"));
     assert!(
-        contract["compatibility"].as_str().unwrap_or("").contains("exact"),
+        contract["compatibility"]
+            .as_str()
+            .unwrap_or("")
+            .contains("exact"),
         "the contract must state that compatibility is exact"
     );
 }
@@ -227,7 +245,12 @@ fn a_client_with_another_contract_version_is_not_compatible() {
 #[test]
 fn data_survives_a_restart() {
     let server = TestServer::start("restart");
-    let created = server.request("POST", "/api/tasks", Some(TOKEN), Some(r#"{"title":"persistant"}"#));
+    let created = server.request(
+        "POST",
+        "/api/tasks",
+        Some(TOKEN),
+        Some(r#"{"title":"persistant"}"#),
+    );
     assert_eq!(created.status, 201);
     let TestServer { running, dir } = server;
     running.shutdown();
@@ -300,7 +323,10 @@ fn e2e_migration_from_a_legacy_database() {
     let tasks = json(&listed)["tasks"].as_array().unwrap().clone();
     assert_eq!(tasks.len(), 1, "the existing row must be preserved");
     assert_eq!(tasks[0]["title"], "tache v1");
-    assert!(tasks[0]["due_date"].is_null(), "the new column defaults to NULL");
+    assert!(
+        tasks[0]["due_date"].is_null(),
+        "the new column defaults to NULL"
+    );
 
     // The migrated database accepts writes to the new column.
     let id = tasks[0]["id"].as_i64().unwrap();

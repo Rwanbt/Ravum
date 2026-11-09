@@ -39,8 +39,8 @@ fn report() -> &'static Value {
         );
         let text = std::fs::read_to_string(&report_path)
             .unwrap_or_else(|e| panic!("cannot read lab report: {e}\nstdout: {stdout}"));
-        let parsed: Value = serde_json::from_str(&text)
-            .unwrap_or_else(|e| panic!("lab report is not JSON: {e}"));
+        let parsed: Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("lab report is not JSON: {e}"));
         // The human table must name every scenario; it is the artifact quoted in
         // docs/mvp/MVP-0b-collab-2-3.md.
         for result in parsed["results"].as_array().expect("results") {
@@ -103,7 +103,11 @@ fn the_corpus_covers_the_mandate_and_every_accepted_merge_is_compiled() {
     }
 
     let strategies = report["strategies"].as_array().expect("strategies");
-    assert_eq!(strategies.len(), 5, "4 compared strategies + the verified pipeline");
+    assert_eq!(
+        strategies.len(),
+        5,
+        "4 compared strategies + the verified pipeline"
+    );
 
     let mut accepted_total = 0usize;
     for result in results() {
@@ -139,7 +143,8 @@ fn the_corpus_covers_the_mandate_and_every_accepted_merge_is_compiled() {
     assert!(accepted_total > 0);
     for strategy in strategies.iter().filter_map(Value::as_str) {
         assert_eq!(
-            summary(strategy)["compiled_all_accepted"], true,
+            summary(strategy)["compiled_all_accepted"],
+            true,
             "strategy {strategy} accepted a merge it never compiled"
         );
         assert_eq!(summary(strategy)["accepted_without_compile"], 0);
@@ -150,23 +155,41 @@ fn the_corpus_covers_the_mandate_and_every_accepted_merge_is_compiled() {
 fn the_measures_separate_the_four_strategies_and_justify_the_retained_one() {
     // (1) Pure textual merges cannot see a semantic conflict that compiles:
     //     same function, disjoint lines. The symbol-aware strategies refuse.
-    assert_eq!(classification("s09_same_function_disjoint_lines", "naive_textual"), "unsafe_accept_semantic");
-    assert_eq!(classification("s09_same_function_disjoint_lines", "strict_hunks"), "unsafe_accept_semantic");
+    assert_eq!(
+        classification("s09_same_function_disjoint_lines", "naive_textual"),
+        "unsafe_accept_semantic"
+    );
+    assert_eq!(
+        classification("s09_same_function_disjoint_lines", "strict_hunks"),
+        "unsafe_accept_semantic"
+    );
     assert_eq!(
         classification("s09_same_function_disjoint_lines", "symbols_ranges_deps"),
         "correct_refusal"
     );
     assert_eq!(
-        classification("s09_same_function_disjoint_lines", "symbols_ranges_deps_verified"),
+        classification(
+            "s09_same_function_disjoint_lines",
+            "symbols_ranges_deps_verified"
+        ),
         "correct_refusal"
     );
 
     // (2) A line shift after a head insertion falsely conflicts when the merge
     //     layer refuses offsets (the retained strategy), and is handled by the
     //     naive offset compensation and by syntactic anchoring.
-    assert_eq!(classification("s04_line_shift_insert_head", "naive_textual"), "correct_accept");
-    assert_eq!(classification("s04_line_shift_insert_head", "strict_hunks"), "false_conflict");
-    assert_eq!(classification("s04_line_shift_insert_head", "syntactic_anchors"), "correct_accept");
+    assert_eq!(
+        classification("s04_line_shift_insert_head", "naive_textual"),
+        "correct_accept"
+    );
+    assert_eq!(
+        classification("s04_line_shift_insert_head", "strict_hunks"),
+        "false_conflict"
+    );
+    assert_eq!(
+        classification("s04_line_shift_insert_head", "syntactic_anchors"),
+        "correct_accept"
+    );
     assert_eq!(
         classification("s04_line_shift_insert_head", "symbols_ranges_deps"),
         "false_conflict"
@@ -174,14 +197,28 @@ fn the_measures_separate_the_four_strategies_and_justify_the_retained_one() {
 
     // (3) A moved symbol defeats both line offsets and strict context: only the
     //     symbol anchor relocates the edit correctly.
-    assert_eq!(classification("s06_symbol_moved", "naive_textual"), "false_conflict");
-    assert_eq!(classification("s06_symbol_moved", "strict_hunks"), "false_conflict");
-    assert_eq!(classification("s06_symbol_moved", "syntactic_anchors"), "correct_accept");
+    assert_eq!(
+        classification("s06_symbol_moved", "naive_textual"),
+        "false_conflict"
+    );
+    assert_eq!(
+        classification("s06_symbol_moved", "strict_hunks"),
+        "false_conflict"
+    );
+    assert_eq!(
+        classification("s06_symbol_moved", "syntactic_anchors"),
+        "correct_accept"
+    );
 
     // (4) Two independent-looking renames collide at compile time: only the
     //     compile gate turns this into a refusal. The comparison records the
     //     compile evidence instead of silently accepting.
-    for strategy in ["naive_textual", "strict_hunks", "syntactic_anchors", "symbols_ranges_deps"] {
+    for strategy in [
+        "naive_textual",
+        "strict_hunks",
+        "syntactic_anchors",
+        "symbols_ranges_deps",
+    ] {
         assert_eq!(
             classification("s07_name_conflict", strategy),
             "compile_failure_detected",
@@ -212,9 +249,7 @@ fn the_measures_separate_the_four_strategies_and_justify_the_retained_one() {
         .as_array()
         .expect("diagnostic_codes");
     assert!(
-        codes
-            .iter()
-            .any(|code| code == "E0404" || code == "E0405"),
+        codes.iter().any(|code| code == "E0404" || code == "E0405"),
         "expected a missing/ambivalent trait error (E0404/E0405), got {codes:?}"
     );
 
@@ -247,8 +282,7 @@ fn the_measures_separate_the_four_strategies_and_justify_the_retained_one() {
     // pays with incorrect semantic/compile accepts. A score never replaces the
     // compile check, which is why the retained strategy does not adopt it.
     assert!(
-        summary("naive_textual")["unsafe_accepts"].as_u64().unwrap()
-            >= 1,
+        summary("naive_textual")["unsafe_accepts"].as_u64().unwrap() >= 1,
         "naive textual merging should show at least one unsafe accept"
     );
     assert!(
@@ -257,12 +291,11 @@ fn the_measures_separate_the_four_strategies_and_justify_the_retained_one() {
             .unwrap()
             >= 2
     );
+    assert!(summary("strict_hunks")["false_conflicts"].as_u64().unwrap() >= 2);
     assert!(
-        summary("strict_hunks")["false_conflicts"].as_u64().unwrap() >= 2
-    );
-    assert!(
-        summary("syntactic_anchors")["false_conflicts"].as_u64().unwrap()
+        summary("syntactic_anchors")["false_conflicts"]
+            .as_u64()
+            .unwrap()
             <= summary("strict_hunks")["false_conflicts"].as_u64().unwrap()
     );
 }
-

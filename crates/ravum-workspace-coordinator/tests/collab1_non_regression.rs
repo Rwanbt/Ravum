@@ -18,16 +18,14 @@ const PATCH_A: &str = "+++ b/two_functions.rs\n@@ -24,4 +24,4 @@\n /// Calcule u
 const PATCH_B: &str = "+++ b/two_functions.rs\n@@ -29,5 +29,5 @@\n /// Point d'entree patchable.\n #[no_mangle]\n pub extern \"C\" fn ravum_compute(x: f64) -> f64 {\n-    helper(x) * 2.0\n+    helper(x) * 3.0\n }\n";
 
 fn collab_fixture_repo(name: &str) -> std::path::PathBuf {
-    let two_functions = std::fs::read_to_string(workspace_root().join("fixtures/collab/two_functions.rs"))
-        .expect("read COLLAB-1 two_functions fixture");
+    let two_functions =
+        std::fs::read_to_string(workspace_root().join("fixtures/collab/two_functions.rs"))
+            .expect("read COLLAB-1 two_functions fixture");
     let notes = std::fs::read_to_string(workspace_root().join("fixtures/collab/notes.rs"))
         .expect("read COLLAB-1 notes fixture");
     init_repo(
         name,
-        &[
-            ("two_functions.rs", two_functions),
-            ("notes.rs", notes),
-        ],
+        &[("two_functions.rs", two_functions), ("notes.rs", notes)],
     )
 }
 
@@ -40,7 +38,14 @@ fn without_opt_in_the_collab1_non_crate_workspace_keeps_auto_safe_decisions() {
         &[
             (
                 "01-a.json",
-                proposal_json(&base, "agent-a", "tune-helper", "two_functions.rs", &["helper"], PATCH_A),
+                proposal_json(
+                    &base,
+                    "agent-a",
+                    "tune-helper",
+                    "two_functions.rs",
+                    &["helper"],
+                    PATCH_A,
+                ),
             ),
             (
                 "02-b.json",
@@ -58,7 +63,11 @@ fn without_opt_in_the_collab1_non_crate_workspace_keeps_auto_safe_decisions() {
     let scratch = repo.with_extension("scratch");
     let run = run_integrate(&repo, &proposals, &["--commit"], &scratch);
 
-    assert_eq!(run.code, 0, "stderr: {}\nstdout: {}", run.stderr, run.stdout);
+    assert_eq!(
+        run.code, 0,
+        "stderr: {}\nstdout: {}",
+        run.stderr, run.stdout
+    );
     assert_eq!(
         run.decision_kinds(),
         vec!["AUTO_SAFE", "AUTO_SAFE"],
@@ -68,7 +77,10 @@ fn without_opt_in_the_collab1_non_crate_workspace_keeps_auto_safe_decisions() {
     assert_eq!(run.summary("auto_safe"), 2);
     assert_eq!(run.report["verification"]["mode"], "textual_only");
     assert_eq!(run.report["verification"]["requested"], false);
-    assert_eq!(run.report["verification"]["verifier"], serde_json::Value::Null);
+    assert_eq!(
+        run.report["verification"]["verifier"],
+        serde_json::Value::Null
+    );
 
     // A textual-mode acceptance is recorded, but never as a fake "passed" proof.
     let accepted = run.accepted();
@@ -76,7 +88,10 @@ fn without_opt_in_the_collab1_non_crate_workspace_keeps_auto_safe_decisions() {
     for record in accepted {
         assert_eq!(record["verification_required"], false);
         assert_eq!(record["verification"]["status"], "skipped");
-        assert!(record["verification"]["checks"].as_array().unwrap().is_empty());
+        assert!(record["verification"]["checks"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     // The single Git writer still publishes both changes.
@@ -95,7 +110,14 @@ fn requesting_semantic_verification_on_a_non_crate_workspace_fails_closed() {
         &repo,
         &[(
             "01-a.json",
-            proposal_json(&base, "agent-a", "tune-helper", "two_functions.rs", &["helper"], PATCH_A),
+            proposal_json(
+                &base,
+                "agent-a",
+                "tune-helper",
+                "two_functions.rs",
+                &["helper"],
+                PATCH_A,
+            ),
         )],
     );
     let scratch = repo.with_extension("scratch");

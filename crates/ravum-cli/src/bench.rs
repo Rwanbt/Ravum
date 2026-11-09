@@ -1,6 +1,7 @@
 //! `ravum bench` — measure every stage of the loop separately, honestly labelled.
 
-use crate::commands::{flag, flag_u64, load_snapshot, pipeline, positional, work_dir};use crate::metrics::{env_info, stats, working_set_bytes};
+use crate::commands::{flag, flag_u64, load_snapshot, pipeline, positional, work_dir};
+use crate::metrics::{env_info, stats, working_set_bytes};
 use ravum_coordinator::{LoopOutcome, LoopReport, Pipeline};
 use ravum_patch_host::{ExpectedAbi, PatchHost};
 use ravum_snapshot::SourceSnapshot;
@@ -90,7 +91,10 @@ pub fn bench(args: &[String]) -> u8 {
     if let Some(parent) = Path::new(&out_path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    match std::fs::write(&out_path, serde_json::to_string_pretty(&payload).unwrap_or_default()) {
+    match std::fs::write(
+        &out_path,
+        serde_json::to_string_pretty(&payload).unwrap_or_default(),
+    ) {
         Ok(()) => eprintln!("written: {out_path}"),
         Err(e) => {
             eprintln!("cannot write {out_path}: {e}");
@@ -98,9 +102,7 @@ pub fn bench(args: &[String]) -> u8 {
         }
     }
 
-    println!(
-        "iterations={iterations} activated={activated} refused={refused} rustc={rustc}"
-    );
+    println!("iterations={iterations} activated={activated} refused={refused} rustc={rustc}");
     for stage in ["check", "build", "verify", "load", "activate", "total"] {
         let s = &payload["stats"][format!("{stage}_ms")];
         println!(
@@ -109,7 +111,11 @@ pub fn bench(args: &[String]) -> u8 {
         );
     }
     if let (Some(before), Some(after)) = (memory_before, memory_after) {
-        println!("  memory    before={}KiB after={}KiB", before / 1024, after / 1024);
+        println!(
+            "  memory    before={}KiB after={}KiB",
+            before / 1024,
+            after / 1024
+        );
     }
     if !calibration.is_empty() {
         let mut sorted = calibration.clone();
@@ -139,7 +145,8 @@ fn rustc_spawn_calibration(_pipeline: &Pipeline, samples: usize) -> Vec<u64> {
     out
 }
 
-fn bootstrap(pipeline: &Pipeline, source: &SourceSnapshot) -> Option<PatchHost> {    let warm = pipeline.prepare_candidate(source, &|| source.id().clone());
+fn bootstrap(pipeline: &Pipeline, source: &SourceSnapshot) -> Option<PatchHost> {
+    let warm = pipeline.prepare_candidate(source, &|| source.id().clone());
     if !matches!(warm.outcome, LoopOutcome::CandidateReady) {
         eprintln!("bootstrap refused: {:?}", warm.outcome);
         return None;

@@ -189,7 +189,11 @@ fn run(corpus: &Path, work: &Path, rustc: &str, json_path: Option<&Path>) -> i32
 
     let mut results = Vec::new();
     let mut summaries: BTreeMap<String, Summary> = BTreeMap::new();
-    for strategy in STRATEGY_IDS.iter().copied().chain(std::iter::once(VERIFIED_ID)) {
+    for strategy in STRATEGY_IDS
+        .iter()
+        .copied()
+        .chain(std::iter::once(VERIFIED_ID))
+    {
         summaries.insert(strategy.to_owned(), Summary::default());
     }
 
@@ -276,7 +280,10 @@ fn run(corpus: &Path, work: &Path, rustc: &str, json_path: Option<&Path>) -> i32
                 &scenario.merged_contains,
                 &attempt,
             );
-            summaries.get_mut(VERIFIED_ID).expect("summary").record(&outcome);
+            summaries
+                .get_mut(VERIFIED_ID)
+                .expect("summary")
+                .record(&outcome);
             outcomes.insert(VERIFIED_ID.to_owned(), outcome);
         }
 
@@ -405,7 +412,11 @@ fn measure(
         accepted: attempt.accepted,
         refused: !attempt.accepted,
         reason: attempt.reason.clone(),
-        merged_compiles: if attempt.accepted { Some(verdict.ok) } else { None },
+        merged_compiles: if attempt.accepted {
+            Some(verdict.ok)
+        } else {
+            None
+        },
         diagnostic_codes: verdict.diagnostic_codes,
         merged_snapshot,
         contains_expected,
@@ -509,7 +520,9 @@ fn naive_textual(base: &str, a_patch: &str, b_patch: &str, path: &str) -> Attemp
     let ranges_a = touched_ranges(&a_files);
     let ranges_b = touched_ranges(&b_files);
     if let Some((overlap_path, line)) = range_overlap(&ranges_a, &ranges_b) {
-        return Attempt::refuse(format!("modified line ranges overlap at {overlap_path}:{line}"));
+        return Attempt::refuse(format!(
+            "modified line ranges overlap at {overlap_path}:{line}"
+        ));
     }
     let after_a = match patch::apply(a_file, base) {
         Ok(content) => content,
@@ -543,7 +556,10 @@ fn apply_shifted(
         let delta = delta_before(applied_before, hunk.old_start);
         let start = hunk.old_start as isize - 1 + delta;
         if start < 0 {
-            return Err(format!("shifted hunk start is negative for line {}", hunk.old_start));
+            return Err(format!(
+                "shifted hunk start is negative for line {}",
+                hunk.old_start
+            ));
         }
         let start = start as usize;
         let mut index = start;
@@ -661,7 +677,10 @@ fn syntactic_anchors(base: &str, a_patch: &str, b_patch: &str, path: &str) -> At
     }
 }
 
-fn touched_symbols(spans: &[semantics::SymbolSpan], ranges: &[(String, usize, usize)]) -> BTreeSet<String> {
+fn touched_symbols(
+    spans: &[semantics::SymbolSpan],
+    ranges: &[(String, usize, usize)],
+) -> BTreeSet<String> {
     let mut symbols = BTreeSet::new();
     for (_, start, end) in ranges {
         for line in *start..=*end {
@@ -729,7 +748,12 @@ fn apply_anchored(file: &FilePatch, base: &str, target: &str) -> Result<String, 
             let target_span = target_spans
                 .iter()
                 .find(|span| span.name == base_span.name)
-                .ok_or_else(|| format!("anchor symbol {:?} disappeared from the merged content", base_span.name))?;
+                .ok_or_else(|| {
+                    format!(
+                        "anchor symbol {:?} disappeared from the merged content",
+                        base_span.name
+                    )
+                })?;
             let delta = target_span.start_line as isize - base_span.start_line as isize;
             let start = anchor_line as isize - 1 + delta;
             if start < 0 {
@@ -823,7 +847,11 @@ fn symbols_ranges_deps(
     for symbol in &facts_a.modified_symbols {
         modified.insert(
             symbol.clone(),
-            (path.to_owned(), "agent-a/t".to_owned(), "agent-a".to_owned()),
+            (
+                path.to_owned(),
+                "agent-a/t".to_owned(),
+                "agent-a".to_owned(),
+            ),
         );
     }
     if let Some(dependency) = semantics::undeclared_dependency(&facts_b, &modified) {
@@ -853,7 +881,9 @@ fn proposal(
         base_snapshot_id: base_id.clone(),
         target_paths: vec![path.to_owned()],
         target_symbols: symbols.to_vec(),
-        expected_hashes: [(path.to_owned(), base_hash.to_owned())].into_iter().collect(),
+        expected_hashes: [(path.to_owned(), base_hash.to_owned())]
+            .into_iter()
+            .collect(),
         declared_dependencies: Vec::new(),
         impacted_contracts: Vec::new(),
         unified_patch: unified_patch.to_owned(),
@@ -931,8 +961,8 @@ fn load_scenarios(corpus: &Path) -> Result<Vec<Scenario>, String> {
             continue;
         }
         let text = std::fs::read_to_string(&manifest).map_err(|error| error.to_string())?;
-        let scenario: Scenario =
-            serde_json::from_str(&text).map_err(|error| format!("{}: {error}", manifest.display()))?;
+        let scenario: Scenario = serde_json::from_str(&text)
+            .map_err(|error| format!("{}: {error}", manifest.display()))?;
         scenarios.push(scenario);
     }
     scenarios.sort_by(|left, right| left.id.cmp(&right.id));
@@ -994,7 +1024,16 @@ fn print_report(report: &Report) {
     }
     println!(
         "\n{:<26} {:>8} {:>8} {:>15} {:>16} {:>18} {:>18} {:>14} {:>14} {:>12}",
-        "strategy", "accepted", "refused", "false_conflict", "bad_merge", "unsafe_semantic", "compile_caught", "correct_accept", "correct_refuse", "all_compiled"
+        "strategy",
+        "accepted",
+        "refused",
+        "false_conflict",
+        "bad_merge",
+        "unsafe_semantic",
+        "compile_caught",
+        "correct_accept",
+        "correct_refuse",
+        "all_compiled"
     );
     for (id, summary) in &report.summary {
         println!(
@@ -1028,5 +1067,3 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .and_then(|index| args.get(index + 1))
         .cloned()
 }
-
-

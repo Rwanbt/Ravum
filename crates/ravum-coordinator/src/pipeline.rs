@@ -43,7 +43,10 @@ pub enum LoopOutcome {
     /// A declared obligation was not satisfied (failed, unknown, timeout, unsupported).
     RefusedByProof { obligation: String, status: String },
     /// The snapshot changed while the pipeline was running.
-    RefusedAsStale { built_from: SnapshotId, current: SnapshotId },
+    RefusedAsStale {
+        built_from: SnapshotId,
+        current: SnapshotId,
+    },
     /// The host refused the candidate (ABI, manifest, verification, ...).
     RefusedByHost { reason: RejectReason },
     /// Toolchain/IO problem; never silently treated as success.
@@ -272,8 +275,10 @@ impl Pipeline {
                 match broker.prove(Path::new(&build.build.artifact_path), obligation, &ctx) {
                     Ok(result) => {
                         if failing.is_none() && !result.record.authorizes_activation() {
-                            failing =
-                                Some((obligation.id.clone(), result.record.status.as_str().to_owned()));
+                            failing = Some((
+                                obligation.id.clone(),
+                                result.record.status.as_str().to_owned(),
+                            ));
                         }
                         report.proofs.push(result.record);
                     }
@@ -372,12 +377,12 @@ impl Pipeline {
             let check = scope.spawn(|| self.analyze(snapshot));
             let build = scope.spawn(|| self.build(snapshot));
             (
-                check.join().unwrap_or_else(|_| {
-                    Err(AdapterError("check thread panicked".to_owned()))
-                }),
-                build.join().unwrap_or_else(|_| {
-                    Err(AdapterError("build thread panicked".to_owned()))
-                }),
+                check
+                    .join()
+                    .unwrap_or_else(|_| Err(AdapterError("check thread panicked".to_owned()))),
+                build
+                    .join()
+                    .unwrap_or_else(|_| Err(AdapterError("build thread panicked".to_owned()))),
             )
         });
 
@@ -512,7 +517,10 @@ pub fn merge_activation(report: &mut LoopReport, activation: ActivationReport) {
 /// This is `TESTED`, never `PROVED`. It does not check functional correctness,
 /// thread safety, memory safety or performance.
 pub fn smoke_verify(build: &BuildOutput) -> Result<EvidenceRecord, RejectReason> {
-    let prepared = prepare(&PathBuf::from(&build.artifact_path), &ExpectedAbi::default())?;
+    let prepared = prepare(
+        &PathBuf::from(&build.artifact_path),
+        &ExpectedAbi::default(),
+    )?;
     if prepared.module.artifact_id != build.artifact_id {
         return Err(RejectReason::ArtifactMismatch {
             expected: build.artifact_id.clone(),
@@ -607,11 +615,25 @@ mod tests {
         let current = || clean.id().clone();
 
         let sequential = pipeline.prepare_candidate(&clean, &current);
-        assert_eq!(sequential.outcome, LoopOutcome::CandidateReady, "{sequential:?}");
+        assert_eq!(
+            sequential.outcome,
+            LoopOutcome::CandidateReady,
+            "{sequential:?}"
+        );
         let concurrent = pipeline.prepare_candidate_concurrent(&clean, &current);
-        assert_eq!(concurrent.outcome, LoopOutcome::CandidateReady, "{concurrent:?}");
-        assert!(concurrent.check.is_some(), "the concurrent path keeps the diagnostics");
-        assert!(concurrent.evidence.is_some(), "the concurrent path keeps the evidence");
+        assert_eq!(
+            concurrent.outcome,
+            LoopOutcome::CandidateReady,
+            "{concurrent:?}"
+        );
+        assert!(
+            concurrent.check.is_some(),
+            "the concurrent path keeps the diagnostics"
+        );
+        assert!(
+            concurrent.evidence.is_some(),
+            "the concurrent path keeps the evidence"
+        );
         assert!(
             concurrent.timings.check_ms > 0,
             "the analysis stage must be measured: {:?}",
@@ -641,7 +663,13 @@ mod tests {
         let stale_current = || other.id().clone();
         let sequential_stale = pipeline.prepare_candidate(&clean, &stale_current);
         let concurrent_stale = pipeline.prepare_candidate_concurrent(&clean, &stale_current);
-        assert!(matches!(sequential_stale.outcome, LoopOutcome::RefusedAsStale { .. }));
-        assert!(matches!(concurrent_stale.outcome, LoopOutcome::RefusedAsStale { .. }));
+        assert!(matches!(
+            sequential_stale.outcome,
+            LoopOutcome::RefusedAsStale { .. }
+        ));
+        assert!(matches!(
+            concurrent_stale.outcome,
+            LoopOutcome::RefusedAsStale { .. }
+        ));
     }
 }

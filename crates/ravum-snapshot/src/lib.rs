@@ -19,7 +19,11 @@ pub struct FileEntry {
 impl FileEntry {
     fn new(path: String, content: String) -> Self {
         let hash = sha256_hex(content.as_bytes());
-        Self { path, content, hash }
+        Self {
+            path,
+            content,
+            hash,
+        }
     }
 
     pub fn path(&self) -> &str {
@@ -74,10 +78,7 @@ impl SourceSnapshot {
 
     /// Snapshot of every file under `root` for which `include` returns true.
     /// Paths are stored relative to `root` with forward slashes.
-    pub fn from_directory(
-        root: &Path,
-        include: impl Fn(&Path) -> bool,
-    ) -> io::Result<Self> {
+    pub fn from_directory(root: &Path, include: impl Fn(&Path) -> bool) -> io::Result<Self> {
         let mut files = Vec::new();
         collect(root, root, &include, &mut files)?;
         Ok(Self::new(files))
@@ -109,10 +110,7 @@ impl SourceSnapshot {
 
     /// Produce a *new* snapshot where the given paths are replaced/added.
     /// The receiver is untouched: overlays never mutate shared state.
-    pub fn with_overlay(
-        &self,
-        overlays: impl IntoIterator<Item = (String, String)>,
-    ) -> Self {
+    pub fn with_overlay(&self, overlays: impl IntoIterator<Item = (String, String)>) -> Self {
         let mut files: BTreeMap<String, FileEntry> = self.files.clone();
         for (path, content) in overlays {
             let path = canonical_path(&path);
@@ -203,11 +201,7 @@ mod tests {
     use super::*;
 
     fn snap(files: &[(&str, &str)]) -> SourceSnapshot {
-        SourceSnapshot::new(
-            files
-                .iter()
-                .map(|(p, c)| (p.to_string(), c.to_string())),
-        )
+        SourceSnapshot::new(files.iter().map(|(p, c)| (p.to_string(), c.to_string())))
     }
 
     #[test]

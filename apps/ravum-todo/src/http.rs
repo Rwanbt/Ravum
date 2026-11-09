@@ -236,9 +236,8 @@ mod tests {
 
     #[test]
     fn parses_a_request_with_a_body() {
-        let request = parse(
-            "POST /api/tasks HTTP/1.1\r\nHost: x\r\nContent-Length: 7\r\n\r\n{\"a\":1}",
-        );
+        let request =
+            parse("POST /api/tasks HTTP/1.1\r\nHost: x\r\nContent-Length: 7\r\n\r\n{\"a\":1}");
         assert_eq!(request.method, "POST");
         assert_eq!(request.route(), "/api/tasks");
         assert_eq!(request.body, b"{\"a\":1}");
@@ -262,7 +261,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let mut client = TcpStream::connect(addr).unwrap();
-        client.write_all(b"GET / HTTP/1.1\r\nbroken-header\r\n\r\n").unwrap();
+        client
+            .write_all(b"GET / HTTP/1.1\r\nbroken-header\r\n\r\n")
+            .unwrap();
         let (server_side, _) = listener.accept().unwrap();
         assert!(matches!(
             read_request(&server_side),

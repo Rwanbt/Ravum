@@ -2,7 +2,7 @@
 
 use crate::reclaimer::{live_modules, unloaded_modules, DeferredLibrary};
 use ravum_protocol::{
-    sha256_hex, ActiveVersionId, ActivationReport, ActivationStatus, ArtifactId, BuildOutput,
+    sha256_hex, ActivationReport, ActivationStatus, ActiveVersionId, ArtifactId, BuildOutput,
     EvidenceRecord, HostStatus, PatchManifest, RejectReason, SnapshotId, StageTimings,
     VerificationStatus, ABI_VERSION_EXPORT, COMPUTE_EXPORT, COMPUTE_SIGNATURE, MANIFEST_EXPORT,
     PATCH_ABI_VERSION, PATCH_SCHEMA_VERSION,
@@ -146,11 +146,12 @@ pub(crate) fn validate_loaded(
             detail: "ravum_manifest_v1 returned a null pointer".to_owned(),
         });
     }
-    let text = unsafe { CStr::from_ptr(raw) }
-        .to_str()
-        .map_err(|e| RejectReason::ManifestInvalid {
-            detail: format!("manifest is not UTF-8: {e}"),
-        })?;
+    let text =
+        unsafe { CStr::from_ptr(raw) }
+            .to_str()
+            .map_err(|e| RejectReason::ManifestInvalid {
+                detail: format!("manifest is not UTF-8: {e}"),
+            })?;
     let manifest: PatchManifest =
         serde_json::from_str(text).map_err(|e| RejectReason::ManifestInvalid {
             detail: format!("manifest is not valid JSON: {e}"),
@@ -232,12 +233,11 @@ pub fn prepare(path: &Path, expected: &ExpectedAbi) -> Result<PreparedPatch, Rej
     let validated = validate_loaded(lib, path, expected)?;
 
     // Only now resolve the callable symbol.
-    let compute: ComputeFn =
-        unsafe { validated.lib.symbol(b"ravum_compute\0") }.map_err(|_| {
-            RejectReason::MissingExport {
-                symbol: COMPUTE_EXPORT.to_owned(),
-            }
-        })?;
+    let compute: ComputeFn = unsafe { validated.lib.symbol(b"ravum_compute\0") }.map_err(|_| {
+        RejectReason::MissingExport {
+            symbol: COMPUTE_EXPORT.to_owned(),
+        }
+    })?;
 
     Ok(PreparedPatch {
         module: Arc::new(LoadedModule {

@@ -19,5 +19,7 @@ pub mod verifier;
 
 pub use broker::{ProofBroker, ProofResult, ProofStats};
 pub use ledger::{EvidenceLedger, LedgerError, LedgerLine, Lookup};
-pub use obligation::{verification_key, Claim, Obligation, ProofContext, OBLIGATION_SCHEMA_VERSION};
+pub use obligation::{
+    verification_key, Claim, Obligation, ProofContext, OBLIGATION_SCHEMA_VERSION,
+};
 pub use verifier::{ExhaustiveVerifier, KaniVerifier, Verifier, VerifierOutcome};

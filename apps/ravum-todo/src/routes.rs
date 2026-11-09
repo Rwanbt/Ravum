@@ -2,7 +2,9 @@
 
 use crate::http::{read_request, write_response, ParseError, Request, Response};
 use ravum_store::{Db, StoreError, SCHEMA_VERSION};
-use ravum_todo_core::{contract, validate_new, validate_patch, NewTask, TaskPatch, ValidationError, CONTRACT_VERSION};
+use ravum_todo_core::{
+    contract, validate_new, validate_patch, NewTask, TaskPatch, ValidationError, CONTRACT_VERSION,
+};
 use serde_json::json;
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -171,24 +173,30 @@ fn route(request: &Request, shared: &Shared) -> Response {
         ("GET", "/") | ("GET", "/index.html") => {
             Response::text(200, "text/html; charset=utf-8", INDEX_HTML)
         }
-        ("GET", "/app.js") => {
-            Response::text(200, "application/javascript; charset=utf-8", APP_JS)
-        }
+        ("GET", "/app.js") => Response::text(200, "application/javascript; charset=utf-8", APP_JS),
         (method, p) if p.starts_with("/api/tasks/") && method == "PATCH" => {
             with_id(p, |id| patch_task(request, shared, id))
         }
         (method, p) if p.starts_with("/api/tasks/") && method == "DELETE" => {
             with_id(p, |id| delete_task(request, shared, id))
         }
-        ("GET", _) | ("POST", _) | ("PATCH", _) | ("DELETE", _) => {
-            error(404, "not_found", "no such route", vec![json!({"path": path})])
-        }
+        ("GET", _) | ("POST", _) | ("PATCH", _) | ("DELETE", _) => error(
+            404,
+            "not_found",
+            "no such route",
+            vec![json!({"path": path})],
+        ),
         _ => error(405, "method_not_allowed", "method not allowed", vec![]),
     }
 }
 
 fn with_id(path: &str, handler: impl FnOnce(i64) -> Response) -> Response {
-    match path.trim_end_matches('/').rsplit('/').next().and_then(|s| s.parse::<i64>().ok()) {
+    match path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .and_then(|s| s.parse::<i64>().ok())
+    {
         Some(id) => handler(id),
         None => error(400, "invalid_id", "the task id must be an integer", vec![]),
     }
@@ -212,7 +220,12 @@ fn list_tasks(shared: &Shared) -> Response {
 
 fn create_task(request: &Request, shared: &Shared) -> Response {
     if !authorized(request, shared) {
-        return error(401, "unauthorized", "a valid bearer token is required", vec![]);
+        return error(
+            401,
+            "unauthorized",
+            "a valid bearer token is required",
+            vec![],
+        );
     }
     let new: NewTask = match serde_json::from_slice(&request.body) {
         Ok(value) => value,
@@ -237,7 +250,12 @@ fn create_task(request: &Request, shared: &Shared) -> Response {
 
 fn patch_task(request: &Request, shared: &Shared, id: i64) -> Response {
     if !authorized(request, shared) {
-        return error(401, "unauthorized", "a valid bearer token is required", vec![]);
+        return error(
+            401,
+            "unauthorized",
+            "a valid bearer token is required",
+            vec![],
+        );
     }
     let patch: TaskPatch = match serde_json::from_slice(&request.body) {
         Ok(value) => value,
@@ -256,19 +274,34 @@ fn patch_task(request: &Request, shared: &Shared, id: i64) -> Response {
     let db = shared.db.lock().unwrap_or_else(|e| e.into_inner());
     match db.patch_task(id, &patch) {
         Ok(Some(task)) => Response::json(200, &json!({ "task": task })),
-        Ok(None) => error(404, "not_found", "no task with this id", vec![json!({"id": id})]),
+        Ok(None) => error(
+            404,
+            "not_found",
+            "no task with this id",
+            vec![json!({"id": id})],
+        ),
         Err(e) => store_failure(e),
     }
 }
 
 fn delete_task(request: &Request, shared: &Shared, id: i64) -> Response {
     if !authorized(request, shared) {
-        return error(401, "unauthorized", "a valid bearer token is required", vec![]);
+        return error(
+            401,
+            "unauthorized",
+            "a valid bearer token is required",
+            vec![],
+        );
     }
     let db = shared.db.lock().unwrap_or_else(|e| e.into_inner());
     match db.delete_task(id) {
         Ok(true) => Response::empty(204),
-        Ok(false) => error(404, "not_found", "no task with this id", vec![json!({"id": id})]),
+        Ok(false) => error(
+            404,
+            "not_found",
+            "no task with this id",
+            vec![json!({"id": id})],
+        ),
         Err(e) => store_failure(e),
     }
 }
@@ -278,7 +311,12 @@ fn validation_failure(errors: Vec<ValidationError>) -> Response {
         .iter()
         .map(|e| json!({ "violation": e, "message": e.message() }))
         .collect();
-    error(400, "validation_failed", "the request is not valid", details)
+    error(
+        400,
+        "validation_failed",
+        "the request is not valid",
+        details,
+    )
 }
 
 fn store_failure(error_value: StoreError) -> Response {
