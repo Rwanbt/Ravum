@@ -2217,6 +2217,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let recv_ty = self.check_expr(receiver, None);
         let recv_ty = self.resolve_vars(&recv_ty);
         let base = deref_type(&recv_ty);
+        // `Vec<T>::clone` exists only for `Copy` elements (STD-10.4, F-STD-024).
+        // For a mobile element the method does not exist at all, so the
+        // diagnostic is a resolution failure, not a type mismatch.
+        if name == "clone" {
+            if let Type::Vec(inner) = &base {
+                if !crate::own::is_copy_type(inner, self.facts) {
+                    self.error(
+                        "E-RES-UNKNOWN",
+                        *name_span,
+                        format!(
+                            "`clone` on `Vec<{inner}>` requires a `Copy` element type; \
+                             `{inner}` is mobile"
+                        ),
+                    );
+                }
+            }
+        }
         match &base {
             Type::Nominal { def, .. } => {
                 let entry = self.world.method(*def, name, false).cloned();
@@ -2454,11 +2471,30 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 Type::Error
             }
             _ => {
-                self.error(
-                    "E-TYP-FIELD",
-                    span,
-                    format!("no field `{name}` on type `{ty}`"),
-                );
+                // A method name used without a call is not a field and not a
+                // value: `s.parse_i64` is a resolution failure (STD-9.10,
+                // F-STD-021), which is a different diagnostic from "unknown
+                // field" and points the user at the fix.
+                let is_method = method_self_kind(&ty)
+                    .and_then(|kind| builtins::builtin_method(kind, name))
+                    .is_some()
+                    || matches!(
+                        &ty,
+                        Type::Nominal { def, .. } if self.world.method(*def, name, false).is_some()
+                    );
+                if is_method {
+                    self.error(
+                        "E-RES-UNKNOWN",
+                        span,
+                        format!("`{name}` is a method of `{ty}`, not a value; call it with `(…)`"),
+                    );
+                } else {
+                    self.error(
+                        "E-TYP-FIELD",
+                        span,
+                        format!("no field `{name}` on type `{ty}`"),
+                    );
+                }
                 Type::Error
             }
         }

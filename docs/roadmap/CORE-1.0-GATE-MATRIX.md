@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **10 PASS / 0 FAIL** |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
-| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 248 PASS / 20 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 250 PASS / 18 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0x9ca81d63781e9d75`, 23,2 s |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 003 it/s, 20,0 s |
@@ -62,7 +62,7 @@ Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 Les **30 mêmes cas** échouaient alors sur Linux et sur Windows : les divergences
 spec ↔ implémentation ne sont pas spécifiques à une plateforme. Sept d'entre eux
 ont depuis été corrigés dans le compilateur (mesure locale postérieure :
-**248 PASS / 20 FAIL**) ; la CI de conformance reste rouge **volontairement**
+**250 PASS / 18 FAIL**) ; la CI de conformance reste rouge **volontairement**
 tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
@@ -72,7 +72,7 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `FAIL` | 15 documents de spec ; 269 cas ; **187/188 règles tracées** ; **10 défauts corrigés** dans le compilateur | **20 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
+| T2 | `FAIL` | 15 documents de spec ; 269 cas ; **187/188 règles tracées** ; **12 défauts corrigés** dans le compilateur | **18 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
 | T3 | `PARTIAL` | Lexer/parser/AST réels, 1019 tests, **fuzz complet rejoué**, **Miri rejoué (159 tests)** ; **3 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs) | Cascade de 4 erreurs sur le token `lifetime` au lieu d'un `E-UNSUPPORTED-TOKEN` unique | Correction de diagnostic |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
@@ -109,10 +109,10 @@ Passe de traçabilité complète dans
 - **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
   **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
   portant le code exigé).
-- **20 cas échouent** après les dix correctifs de la seconde passe (§8 de
+- **18 cas échouent** après les douze correctifs de la seconde passe (§8 de
   `T2-FINDINGS.md`), chacun documenté : 13 codes sont **émis par le
   compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
-  `E-UNSUPPORTED-TURBOFISH`, …), 5 sont des divergences de nom sur des codes
+  `E-UNSUPPORTED-TURBOFISH`, …), 4 sont des divergences de nom sur des codes
   pourtant documentés, 2 sont des défauts de comportement.
 - **1 règle non couvrable** : `F-META-006` n'a ni forme acceptée ni refus
   exécutable (MACH-1.4 fixe l'interpréteur à `NOT_IMPLEMENTED`).

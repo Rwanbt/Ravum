@@ -2103,7 +2103,7 @@ fn field_type(ty: &Type, name: &str, facts: &Facts) -> Type {
 
 /// Copy classification (OWN-2.1/2.2). Nominal types use the `is_copy` flag
 /// computed by the checker; missing facts are treated as mobile (conservative).
-fn is_copy_type(ty: &Type, facts: &Facts) -> bool {
+pub(crate) fn is_copy_type(ty: &Type, facts: &Facts) -> bool {
     match ty {
         Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::I128 => true,
         Type::U8 | Type::U16 | Type::U32 | Type::U64 | Type::U128 => true,
