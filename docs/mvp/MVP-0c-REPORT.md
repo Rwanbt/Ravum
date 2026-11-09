@@ -289,7 +289,7 @@ S8 a été rendu indépendant de WMI. Aucune valeur n'est inventée quand la mes
 
 ## 17. Preuves et sessions Obsidian
 
-Preuves versionnées : `evidence/mvp0c-{pr-audit,cross-crate,cross-crate-daemon,grouping,grouping-multiagent,verification-transient,impact,impact-dev-dep,collab,collab-oracle,publication,e2e,verification-retry,dsp-stress,dsp-stress-ci,s8-pilot}-2026-11-09.json`.
+Preuves versionnées : `evidence/mvp0c-{cross-crate,cross-crate-daemon,grouping,grouping-multiagent,verification-transient,impact,impact-dev-dep,collab,collab-oracle,publication,e2e,verification-retry,dsp-stress,dsp-stress-ci,s8-pilot}-2026-11-09.json`, plus `evidence/mvp0c-pr-audit.json`, `evidence/mvp0c-batch-2026-11-09.json`, `evidence/mvp0c-batch-e2e-2026-11-09.json`, `evidence/mvp0c-impact-e2e-2026-11-09.json`, `evidence/mvp0c-integration-audit-2026-11-09.json` et `evidence/mvp0c-s8-live-{A1,B1,C1,A2,B2,C2,A3,B3,C3}-2026-11-09.json`.
 
 Sessions vault :
 [L0 audit](https://github.com/Rwanbt/obsidian-dev-brain/blob/master/projects/ravum/operations/sessions/2026-11-09-mvp0c-l0-audit-and-integration.md),
@@ -367,3 +367,72 @@ monétaire exposé, aucun chiffre inventé. Détail et limites :
   vraie PR vers `dev`, formatage global + gate fmt, Kani (Linux/WSL2), ASIO/CLAP,
   implémentation du groupement conditionnel en production (le collecteur existe mais
   n'est pas encore branché au daemon/CLI).
+
+## 20. Mise à jour du 9 novembre — gate L2 franchi, audit final et E2E CI vérifiés
+
+### 20.1 Gate L2 de bout en bout (avec vrai `cargo test`)
+
+`fixtures/grouping` porte désormais **12 tests** (5 unitaires + 7 d'intégration
+sous éditions cumulées). Protocole : 5 modes, 5 répétitions en ordre alterné,
+`CARGO_TARGET_DIR` neuf par mode/répétition, `CARGO_BUILD_JOBS=2`, aucun réseau.
+Modes : séquentiel (6 `cargo test` cumulatifs), groupé (1 lot), collecteur réel
+`ravum-batch` (fenêtres 0 et 50 ms), incompatible + repli.
+
+| Mode | cold p50 | warm p50 | total p50 | `cargo test` | tests |
+|---|---:|---:|---:|---:|---|
+| Séquentiel | 2 512 ms | 1 290 ms | **8 960 ms** | 6 | 12/12 |
+| Groupé | 2 520 ms | 271 ms | **2 765 ms** | 2 | 12/12 |
+| Collecteur w=0 | 2 492 ms | 276 ms | **2 777 ms** | 2 | 12/12 |
+| Collecteur w=50 | 2 582 ms | 270 ms | **2 893 ms** | 2 | 12/12 |
+| Incompatible + repli | 534 ms | 1 303 ms | **9 861 ms** | 8 | 6 acceptés / 1 rejeté |
+
+- **Gain : 6 195 ms (−69,1 %)** jusqu'à tests verts ; **12/12 tests et digest
+  SHA-256 du contenu final identiques** entre séquentiel, groupé et collecteur
+  (`cddae95b87c1…`). Le gain vient de l'élimination des 5 recompilations chaudes
+  (cold équivalent), pas du build initial.
+- **Ré-exécution indépendante du Lead** (5 reps) : séquentiel **8 563 ms** vs groupé
+  **2 659 ms**, gain **5 904 ms (−68,9 %)** ; collecteur w=0 2 861 ms, w=50
+  2 627 ms, incompatible 9 317 ms, `valid=true` — chiffres cohérents avec la preuve
+  du worker (variance de quelques % sur machine partagée).
+- **Point d'équilibre réel** : 6 195 ms d'attente tolérable avant neutralité ; les
+  fenêtres mesurées (0/50 ms) sont ~100× en dessous. Fenêtre 50 ms : +116 ms p50
+  (~2 % du gain).
+- **Limite structurelle documentée** : si l'adaptateur déclare des chemins de
+  fichier communs, le pré-vol file-granulaire isole chaque proposition et le gain
+  tombe à zéro ; l'adaptateur L2.4 déclare des symboles distincts et s'appuie sur le
+  `cargo test` de l'analyseur. Un lot invalide coûte ≈ le séquentiel (repli sans
+  gain, cohérent avec `p*`). Le collecteur n'est pas encore branché au produit.
+
+### 20.2 Audit final d'intégration
+
+[`MVP-0c-integration-checklist.md`](MVP-0c-integration-checklist.md) : verdict
+**`READY_FOR_HUMAN_REVIEW`**, aucun bloquant technique. 202 fichiers (+71 322/−273),
+0 suppression/renommage/binaire, 0 secret sur 71 305 lignes, 76 liens relatifs
+valides, 33/33 preuves JSON valides, aucun test supprimé/désactivé, **0 conflit**
+simulé entre les 3 PR, séquence #78 → #80 → #82 documentée avec arbres attendus.
+Constats non bloquants : chemins personnels dans 14 preuves, protection `dev` sans
+required status check, écart de comptage 491/492 **expliqué** (la CI exécute la
+suite workspace de 491 tests **plus** un test filtré par une démo `migration v1→v2`,
+`9 filtered out`), nom de preuve d'audit initial corrigé dans §17.
+
+### 20.3 Règle E2E vérifiée sur la CI réelle
+
+Runs `42550250227` (`51a1bae`) et `42551014585` (`24d92b1`) : étapes **Setup Node,
+Browser E2E, Upload** toutes `success`, artefact `browser-e2e-evidence` (155 290 o),
+rapport **10/10**, 44 vérifications. **`workflow_dispatch` réel** : run
+[42551717472](https://github.com/Rwanbt/Ravum/actions/runs/42551717472),
+`base=origin/dev`, succès, décision `browser=true`, E2E 21 s, artefact 10/10.
+Décisions locales 4/4 conformes ; **coût observé +26 à 29 s** (bas de la fourchette
+25–65 s), run dominé par la suite FULL (216–233 s). Les runs observés sont FULL
+(diff vs `origin/dev`) : FULL + E2E prouvés, chemin sélectif UI non observé.
+
+### 20.4 Blocages et dette confirmés
+
+- **Kani / prouveur externe** : toujours bloqué — `wsl -l -v` ne répond pas (>120 s)
+  sur cette machine, aucun prouveur externe exécuté ; documenté, aucun faux vert.
+- **Formatage** : ~240 fichiers non conformes à rustfmt 1.95, aucun gate `fmt` ;
+  recommandation d'un commit de formatage dédié + gate avec toolchain épinglée
+  (décision humaine), pas d'exécution pour ne pas gonfler la revue.
+- **CI par impact sur `dev`** : toujours bloquée tant que `dev` ne contient pas les
+  crates (décision humaine sur #78).
+- Le collecteur `ravum-batch` reste non câblé au daemon/CLI ; aucun `PROVED`.
