@@ -10,3 +10,9 @@ description = "DSP session harness: allocation counting, block timing, discontin
 ravum-protocol = { workspace = true }
 ravum-patch-host = { workspace = true }
 serde_json = { workspace = true }
+
+# The MVP-0c DSP stress campaign compiles the real fixtures and loads the real
+# artifacts, exactly like the patch-host M3 tests: no simulated module.
+[dev-dependencies]
+ravum-rust-adapter = { workspace = true }
+ravum-snapshot = { workspace = true }
