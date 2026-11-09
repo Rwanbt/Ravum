@@ -8,5 +8,5 @@
   "expect_codes": [
     "E-MOD-PATH-ESCAPE"
   ],
-  "notes": "Dependency paths are validated (MOD-5.6). Lead ruling: E-MOD-PATH-ESCAPE covers absolute paths, `..` escapes and depth violations. diagnostics.md 3.3 currently lists only E-MOD-PATH; the registry must add PATH-ESCAPE."
+  "notes": "Dependency paths are validated (MOD-5.6). Lead ruling (Q-DIAG-1): E-MOD-PATH-ESCAPE covers absolute paths, `..` escapes and depth violations, while E-MOD-PATH covers shape and symlink violations. `spec/language/diagnostics.md` §3.3 documents both codes separately and Q-DIAG-1 records PATH-ESCAPE as canonical, so the earlier 'registry must add PATH-ESCAPE' note is stale and has been corrected. The case stays `skip_on: windows` because the trigger is a POSIX absolute path."
 }

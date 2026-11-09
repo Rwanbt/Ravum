@@ -106,10 +106,14 @@ par le job Linux, pas coché depuis Windows.
   `features.md` trace `F-EFF-009`, `F-FFI-001`, `F-FFI-002` vers
   `cases/run/ffi-abs`, `cases/types/ffi-outside-unsafe`, `cases/types/ffi-bad-type`.
   La divergence signalée dans le mandat ne se reproduit donc pas sur ce SHA.
-- **Incohérence documentaire connue** : `diagnostics.md` §3.3 liste
-  `E-MOD-PATH` alors que l'implémentation émet `E-MOD-PATH-ESCAPE` (noté par le
-  cas de conformance `security/dependency-absolute-unix`). **À corriger, pas à
-  masquer** : c'est un écart spec↔implémentation, pas un test à supprimer.
+- **Incohérence spec↔implémentation vérifiée puis corrigée** : le cas
+  `security/dependency-absolute-unix` portait une note affirmant que
+  `diagnostics.md` §3.3 ne listait que `E-MOD-PATH`. Vérification faite, la
+  spécification documente **les deux** codes (`E-MOD-PATH` : forme du chemin,
+  lien symbolique ; `E-MOD-PATH-ESCAPE` : chemin absolu, `..`, profondeur), et
+  `Q-DIAG-1` enregistre `E-MOD-PATH-ESCAPE` comme canonique. La note du cas
+  était donc périmée et a été **corrigée** ; ce n'est pas un test modifié pour
+  obtenir un vert, seulement une annotation alignée sur la spec et le code.
 - **Décision humaine** : ratification des choix normatifs.
 
 ### T3 — Frontend — `PARTIAL`
