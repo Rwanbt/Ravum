@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "kind": "dsp-stress-ci-regression-fix",
+  "date": "2026-11-09",
+  "derived": true,
+  "note": "Diagnostic et mesures locales du correctif du crash CI ; fichiers bruts de reference dans les logs cites. Ce n-est pas une mesure CI directe (pas d-acces aux logs du runner), le symptome CI est celui du run 42543351768.",
+  "ci_symptom": {
+    "run_id": 42543351768,
+    "commit": "c86d1f0",
+    "runner": "GitHub Actions, Windows Server 2025, 4 vCPU, 7 Go",
+    "exit_code": "0xC0000409",
+    "exit_code_name": "STATUS_STACK_BUFFER_OVERRUN",
+    "observed_after_seconds": 46,
+    "last_visible_test": "concurrent_publications_render_whole_versions_only"
+  },
+  "root_cause": {
+    "classification": "test defect (not UB, not harness, not stack overflow)",
+    "mechanism": "std::process::abort() from a wall-clock 45 s watchdog (Windows abort -> __fastfail -> 0xC0000409)",
+    "chain": [
+      "both publisher threads ran the same candidate sequence in lockstep",
+      "the winner published, the loser got AlreadyActive, both retried the same candidate, repeat",
+      "loser exhausted 64 retries -> assert!(activated) panic at line 1100",
+      "publisher join panicked at line 1140, scope unwound, render thread still looped on publishers_done=false",
+      "wall watchdog fired after 45 s and aborted the process"
+    ],
+    "why_ci_only": "local scheduling jitter broke the lockstep after a few attempts; the slower 4 vCPU runner kept both threads synchronized enough that the loser never won a race",
+    "harness_not_involved": "ArcSlot/BlockHost/reclaimer unchanged; patch-host M3 tests and the other 8 stress scenarios never failed"
+  },
+  "fix": {
+    "deterministic_phases": "publisher 0 starts with gain_v2, publisher 1 with gain_v1; after a rejection the next attempt targets the other artifact, which cannot be active then",
+    "no_thread_panic": "publisher_loop returns Result; the main thread panics once, after the render loop is stopped",
+    "stop_on_drop": "guard sets publishers_done=true on unwind so the scope join cannot hang",
+    "progress_watchdog": "abort only if the (blocks + activations) progress counter does not move for 30 s; wall-clock 45 s timeout removed",
+    "cooperative_render": "yield_now() per rendered block so a 4 vCPU runner still schedules the publishers",
+    "ci_work_budget": "10 000 swaps kept; concurrent invariant kept at 4 000 successful activations and whole-version blocks; 10k loop uses generated ~9 KiB no_std modules because the mandatory artifact hash dominated (31.2 s -> 3.0 s)"
+  },
+  "measured_after": {
+    "reference_machine": "16 Go, 10 coeurs, Windows 11 26100, rustc 1.95.0, debug",
+    "four_cpu_simulated": {
+      "command": "ProcessorAffinity=0xF on the test process, dsp_stress.exe <test> --nocapture --test-threads=1",
+      "races_alone_ms": 12299,
+      "ten_thousand_swaps_alone_ms": 9505,
+      "ten_thousand_prepare_us": 7587748,
+      "ten_thousand_apply_us": 577701
+    },
+    "full_suite_under_load": {
+      "command": "CARGO_BUILD_JOBS=2 cargo test -p ravum-dsp-harness --test dsp_stress -- --nocapture --test-threads=1 (2 busy-loop PowerShell)",
+      "result": "9 passed / 0 failed",
+      "suite_ms": 38100,
+      "concurrent_ms": 19653,
+      "ten_thousand_ms": 4405,
+      "watchdog_fired": false
+    },
+    "full_suite_clean_after": {
+      "result": "9 passed / 0 failed",
+      "suite_ms": 32240,
+      "concurrent_ms": 15963,
+      "ten_thousand_ms": 5853,
+      "watchdog_fired": false
+    },
+    "evidence_campaign": {
+      "file": "evidence/mvp0c-dsp-stress-2026-11-09.json",
+      "suite_ms": 22131,
+      "cases": 8,
+      "concurrent_ms": 13246,
+      "ten_thousand_ms": 4515,
+      "ten_thousand_prepare_us": 3555949,
+      "ten_thousand_apply_us": 99765
+    }
+  },
+  "invariants_kept": [
+    "10 000 swaps in the continuous-render scenario",
+    "2 concurrent publishers and 4 000 successful activations in the version-race scenario",
+    "no mixed-version block observed (15 093 167 blocks during the races)",
+    "0 allocation / 0 deallocation on the render thread for the measured blocks",
+    "whole-version block rule and retired-module guard rule unchanged"
+  ],
+  "limits": [
+    "local measurements only: no direct access to the CI runner logs; the CI symptom is the one reported in run 42543351768",
+    "the machine is shared with other agents; durations are indicative margins, not throughput claims",
+    "a genuine deadlock still aborts the process after 30 s without progress (hard bound, not a graceful recovery)",
+    "in-memory block host only: no audio device, no real-time priority, no XRUN, no hard real-time claim"
+  ],
+  "raw_measurements": [
+    "target/ci-fix2-run1-load.log",
+    "target/ci-fix2-run2-clean.log",
+    "target/10k-mini.log",
+    "target/ci-sim-races-new.log",
+    "target/evidence-run3.log"
+  ]
+}

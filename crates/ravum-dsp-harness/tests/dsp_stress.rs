@@ -84,6 +84,91 @@ fn build(dir: &Path, fixture: &str) -> Built {
     }
 }
 
+/// Build a test-generated Rust source (written under 	arget/), through the same
+/// RustAdapter/rustc path as the repository fixtures. No repository file is added.
+fn build_source(dir: &Path, name: &str, source: &str) -> Built {
+    std::fs::create_dir_all(dir).expect("source dir");
+    let source_path = dir.join(format!("{name}.rs"));
+    std::fs::write(&source_path, source).expect("write generated source");
+    let snapshot = SourceSnapshot::from_file(&source_path).expect("generated source");
+    let adapter = RustAdapter::new("rustc", dir.join("work"));
+    let outcome = adapter
+        .build_cdylib(&snapshot, &dir.join("artifacts"))
+        .expect("rustc adapter");
+    assert!(
+        outcome.success,
+        "{name} must compile: {:?}",
+        outcome.build.diagnostics
+    );
+    let evidence = block_evidence(&outcome.build).expect("block evidence");
+    Built {
+        build: outcome.build,
+        evidence,
+    }
+}
+
+/// A minimal `no_std` gain module: same checked ABI and same lifecycle as the fixtures,
+/// but ~9 KiB instead of ~102 KiB. The 10 000-swap loop's dominant cost is the mandatory
+/// artifact hash inside prepare_block (31 s of the 32 s measured with the fixtures on
+/// the reference machine, debug sha2); using a smaller real module keeps 10 000 real
+/// publications inside the CI budget without changing the publication/validation path.
+fn mini_source(patch_id: &str, gain: f32) -> String {
+    format!(
+        r#"#![no_std]
+use core::panic::PanicInfo;
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {{
+    loop {{}}
+}}
+
+const MANIFEST: &[u8] = b"{{\"schema_version\":1,\"patch_id\":\"{patch_id}\",\"export\":\"ravum_process_block\",\"signature\":\"block:f32->f32+state:v1\",\"author\":\"test\"}}\0";
+
+#[no_mangle]
+pub extern "C" fn ravum_abi_version() -> u32 {{
+    2
+}}
+
+#[no_mangle]
+pub extern "C" fn ravum_manifest_v1() -> *const core::ffi::c_char {{
+    MANIFEST.as_ptr() as *const core::ffi::c_char
+}}
+
+#[no_mangle]
+pub extern "C" fn ravum_process_block(
+    input: *const f32,
+    output: *mut f32,
+    frames: u32,
+    _state: *mut core::ffi::c_void,
+) {{
+    let n = frames as usize;
+    for i in 0..n {{
+        unsafe {{
+            *output.add(i) = *input.add(i) * {gain}f32;
+        }}
+    }}
+}}
+"#
+    )
+}
+
+struct MiniFixtures {
+    v1: Built,
+    v2: Built,
+}
+
+static MINI_FIXTURES: OnceLock<MiniFixtures> = OnceLock::new();
+
+fn mini_fixtures() -> &'static MiniFixtures {
+    MINI_FIXTURES.get_or_init(|| {
+        let dir = work(&format!("dsp-stress-mini-{}", std::process::id()));
+        MiniFixtures {
+            v1: build_source(&dir, "mini_v1", &mini_source("dsp-mini-v1", 0.5)),
+            v2: build_source(&dir, "mini_v2", &mini_source("dsp-mini-v2", 2.0)),
+        }
+    })
+}
+
 struct Fixtures {
     gain_v1: Built,
     gain_v2: Built,
@@ -241,37 +326,57 @@ mod process_memory {
     }
 }
 
-/// Watches a scenario that could deadlock and aborts the test process (hard bound).
-///
-/// A plain `join()` has no timeout; rather than hang the whole test run, the watchdog
-/// turns a real deadlock into a fast, visible failure. The abort path is a deliberate
-/// last resort, documented in the stress report.
-struct Watchdog {
+/// Progress watchdog: aborts the test process **only when no observable progress happened
+/// for the configured stall**. A slow machine keeps making progress (blocks rendered,
+/// modules activated) and is never killed; a genuine deadlock stops the counter and is
+/// turned into a fast, visible failure. This replaces a former wall-clock watchdog that
+/// killed a slow-but-progressing run on the 4 vCPU CI runner.
+struct ProgressWatchdog {
     done: Arc<AtomicBool>,
 }
 
-impl Watchdog {
-    fn start(seconds: u64, what: &'static str) -> Self {
+impl ProgressWatchdog {
+    fn start(what: &'static str, stall: Duration, progress: Arc<AtomicU64>) -> Self {
         let done = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&done);
         std::thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(seconds);
-            while Instant::now() < deadline {
-                if flag.load(Ordering::SeqCst) {
-                    return;
+            let mut last_value = progress.load(Ordering::SeqCst);
+            let mut last_change = Instant::now();
+            while !flag.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(100));
+                let value = progress.load(Ordering::SeqCst);
+                if value != last_value {
+                    last_value = value;
+                    last_change = Instant::now();
+                } else if last_change.elapsed() >= stall {
+                    eprintln!(
+                        "[dsp-stress] WATCHDOG: {what} made no progress for {}s (counter={value}): aborting",
+                        stall.as_secs()
+                    );
+                    std::process::abort();
                 }
-                std::thread::sleep(Duration::from_millis(25));
             }
-            eprintln!("[dsp-stress] WATCHDOG: {what} did not finish in {seconds}s: aborting");
-            std::process::abort();
         });
         Self { done }
     }
 }
 
-impl Drop for Watchdog {
+impl Drop for ProgressWatchdog {
     fn drop(&mut self) {
         self.done.store(true, Ordering::SeqCst);
+    }
+}
+
+fn progress_counter() -> Arc<AtomicU64> {
+    Arc::new(AtomicU64::new(0))
+}
+
+/// Ensures the render loop stops even if a publisher thread panics (no infinite join).
+struct StopOnDrop<'a>(&'a AtomicBool);
+
+impl Drop for StopOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
     }
 }
 
@@ -340,9 +445,13 @@ impl Scale {
 fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
     let started = Instant::now();
     let test = "ten_thousand_swaps_keep_the_callback_finite_alloc_free_and_one_version";
+    // Test-generated minimal real modules (~9 KiB) for the 10 000-swap loop: the mandatory
+    // artifact hash inside prepare_block dominates the cost with the 102 KiB fixtures
+    // (measured 31 s / 32 s in debug). The publication/validation path is unchanged.
+    let mini = mini_fixtures();
     let host =
-        BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&fx.gain_v1)).expect("bootstrap");
-    let warm = warm_images(fx);
+        BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&mini.v1)).expect("bootstrap");
+    let warm = vec![prepare(&mini.v1), prepare(&mini.v2)];
     let baseline = clean_baseline();
     let mut state = DspState::default();
     let mut input = sine(128, 0);
@@ -354,13 +463,22 @@ fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
 
     // Warm-up touches TLS and the module's lazy path before measuring.
     host.process_rt(&input, &mut output, &mut state);
+    let mut prepare_us: u128 = 0;
+    let mut apply_us: u128 = 0;
     for index in 0..scale.swaps {
-        let candidate = if index % 2 == 0 {
-            &fx.gain_v2
-        } else {
-            &fx.gain_v1
-        };
-        apply(&host, candidate);
+        let candidate = if index % 2 == 0 { &mini.v2 } else { &mini.v1 };
+        let prepare_started = Instant::now();
+        let prepared = prepare(candidate);
+        prepare_us += prepare_started.elapsed().as_micros();
+        let apply_started = Instant::now();
+        let report = host.apply(
+            prepared,
+            &candidate.build,
+            Some(&candidate.evidence),
+            &candidate.build.source_snapshot_id,
+        );
+        apply_us += apply_started.elapsed().as_micros();
+        assert_eq!(report.status, ActivationStatus::Activated);
         let (allocations, deallocations) = process_measured(&host, &input, &mut output, &mut state);
         alloc_violations += (allocations > 0) as u64;
         free_violations += (deallocations > 0) as u64;
@@ -397,12 +515,19 @@ fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
         "the reclaimer did not drain before the guard check"
     );
     let live_before_guard = live_modules();
-    let watchdog = Watchdog::start(20, "publication while a reader guard is alive");
+    let progress = progress_counter();
+    progress.fetch_add(1, Ordering::SeqCst);
+    let watchdog = ProgressWatchdog::start(
+        "publication while a reader guard is alive",
+        Duration::from_secs(30),
+        Arc::clone(&progress),
+    );
     std::thread::scope(|scope| {
         let program = host.enter_rt();
         let retired_patch = program.current.manifest.patch_id.clone();
         let publisher = scope.spawn(|| {
             apply(&host, &fx.gain_v2);
+            progress.fetch_add(1, Ordering::SeqCst);
         });
         let mut retired_out = vec![0f32; 64];
         program
@@ -486,6 +611,10 @@ fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
         baseline_delta * 4.0
     );
 
+    eprintln!(
+        "[dsp-stress] 10k split: prepare={prepare_us} us, apply={apply_us} us ({} swaps)",
+        scale.swaps
+    );
     Scenario::record(
         test,
         test,
@@ -495,10 +624,13 @@ fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
             "activations": host.status().activations,
             "active_version": host.active_version().0,
             "block_frames": 128,
+            "module": "test-generated minimal no_std rustc modules (~9 KiB) for the swap loop; ABI, validation and reclamation path unchanged",
             "non_finite_blocks": non_finite,
             "allocation_violations": alloc_violations,
             "deallocation_violations": free_violations,
             "max_abs_output": max_abs,
+            "prepare_us_total": prepare_us as u64,
+            "apply_us_total": apply_us as u64,
             "live_modules_baseline": baseline,
             "live_modules_after_drain": clean_baseline(),
             "crossfade": {
@@ -624,7 +756,13 @@ fn two_hosts_in_parallel_keep_independent_state() {
 // Scenario 3 — repeated stop/start of a render worker, host reused afterwards.
 // ---------------------------------------------------------------------------------------
 
-fn render_until_stop(host: &BlockHost, stop: &AtomicBool, blocks: &AtomicU64, bad: &AtomicU64) {
+fn render_until_stop(
+    host: &BlockHost,
+    stop: &AtomicBool,
+    blocks: &AtomicU64,
+    bad: &AtomicU64,
+    progress: &AtomicU64,
+) {
     let mut state = DspState::default();
     let mut input = vec![0.5f32; 64];
     let mut output = vec![0f32; 64];
@@ -634,6 +772,7 @@ fn render_until_stop(host: &BlockHost, stop: &AtomicBool, blocks: &AtomicU64, ba
             bad.fetch_add(1, Ordering::SeqCst);
         }
         blocks.fetch_add(1, Ordering::SeqCst);
+        progress.fetch_add(1, Ordering::SeqCst);
         input.rotate_left(1);
     }
     reset_thread_counters();
@@ -648,6 +787,12 @@ fn scenario_stop_start_cycles(fx: &Fixtures, scale: Scale) -> Scenario {
         BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&fx.gain_v1)).expect("bootstrap");
     let warm = warm_images(fx);
     let baseline = clean_baseline();
+    let progress = progress_counter();
+    let watchdog = ProgressWatchdog::start(
+        "stop/start cycles",
+        Duration::from_secs(30),
+        Arc::clone(&progress),
+    );
     let mut total_blocks = 0u64;
     let mut render_allocations = 0u64;
     let mut render_deallocations = 0u64;
@@ -657,7 +802,7 @@ fn scenario_stop_start_cycles(fx: &Fixtures, scale: Scale) -> Scenario {
         let blocks = AtomicU64::new(0);
         let bad = AtomicU64::new(0);
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| render_until_stop(&host, &stop, &blocks, &bad));
+            let worker = scope.spawn(|| render_until_stop(&host, &stop, &blocks, &bad, &progress));
             // Let the worker render, then stop it while it is mid-loop.
             while blocks.load(Ordering::SeqCst) < 8 {
                 std::thread::yield_now();
@@ -704,6 +849,7 @@ fn scenario_stop_start_cycles(fx: &Fixtures, scale: Scale) -> Scenario {
         "module count drifted after cycles"
     );
     assert_eq!(pending_reclamations(), 0);
+    drop(watchdog);
 
     Scenario::record(
         test,
@@ -841,6 +987,12 @@ fn scenario_drop_during_closure(fx: &Fixtures, scale: Scale) -> Scenario {
     let test = "dropping_the_host_after_stop_never_destroys_on_the_render_thread";
     let baseline = clean_baseline();
     let unloaded_before = unloaded_modules();
+    let progress = progress_counter();
+    let watchdog = ProgressWatchdog::start(
+        "drop during closure",
+        Duration::from_secs(30),
+        Arc::clone(&progress),
+    );
     let (blocks, allocations, deallocations) = {
         let host = BlockHost::bootstrap_with_crossfade(
             ExpectedAbi::dsp(),
@@ -864,6 +1016,7 @@ fn scenario_drop_during_closure(fx: &Fixtures, scale: Scale) -> Scenario {
                         panic!("non-finite sample on the render thread");
                     }
                     blocks.fetch_add(1, Ordering::SeqCst);
+                    progress.fetch_add(1, Ordering::SeqCst);
                 }
                 (allocations_on_this_thread(), deallocations_on_this_thread())
             });
@@ -893,6 +1046,7 @@ fn scenario_drop_during_closure(fx: &Fixtures, scale: Scale) -> Scenario {
         "the deferred unloader never ran"
     );
     assert_eq!(pending_reclamations(), 0);
+    drop(watchdog);
 
     Scenario::record(
         test,
@@ -926,7 +1080,12 @@ fn dropping_the_host_after_stop_never_destroys_on_the_render_thread() {
 fn scenario_stop_during_swap(fx: &Fixtures, scale: Scale) -> Scenario {
     let started = Instant::now();
     let test = "stop_during_swaps_terminates_without_deadlock";
-    let watchdog = Watchdog::start(45, "stop during swap");
+    let progress = progress_counter();
+    let watchdog = ProgressWatchdog::start(
+        "stop during swap",
+        Duration::from_secs(30),
+        Arc::clone(&progress),
+    );
     let host =
         BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&fx.gain_v1)).expect("bootstrap");
     let _warm = warm_images(fx);
@@ -934,8 +1093,9 @@ fn scenario_stop_during_swap(fx: &Fixtures, scale: Scale) -> Scenario {
     let blocks = AtomicU64::new(0);
     let bad = AtomicU64::new(0);
     let activations = std::thread::scope(|scope| {
+        let _stop = StopOnDrop(&stop);
         let worker = scope.spawn(|| {
-            render_until_stop(&host, &stop, &blocks, &bad);
+            render_until_stop(&host, &stop, &blocks, &bad, &progress);
         });
         let mut activations = 0u64;
         for index in 0..scale.iterations {
@@ -946,6 +1106,7 @@ fn scenario_stop_during_swap(fx: &Fixtures, scale: Scale) -> Scenario {
             };
             apply(&host, candidate);
             activations += 1;
+            progress.fetch_add(1, Ordering::SeqCst);
             if index % 7 == 0 {
                 std::thread::yield_now();
             }
@@ -973,7 +1134,7 @@ fn scenario_stop_during_swap(fx: &Fixtures, scale: Scale) -> Scenario {
             "worker_blocks": blocks.load(Ordering::SeqCst),
             "non_finite_blocks": bad.load(Ordering::SeqCst),
             "deadlock": false,
-            "hard_bound": "45 s watchdog that aborts the test process if the worker never stops",
+            "hard_bound": "progress watchdog: aborts only if no block and no activation happen for 30 s",
         }),
     )
 }
@@ -1074,44 +1235,63 @@ fn saturation_dozens_of_modules_are_reclaimed_and_memory_stays_bounded() {
 // Scenario 8 — races between DSP state and published versions.
 // ---------------------------------------------------------------------------------------
 
-fn publisher_loop(host: &BlockHost, fx: &Fixtures, activations: usize) -> u64 {
+/// One publisher thread. Each publisher has a **fixed phase offset** (0 starts with
+/// `gain_v2`, 1 starts with `gain_v1`) and alternates. A rejection means the other
+/// publisher won that artifact; the next attempt targets the other artifact and is
+/// therefore guaranteed to succeed. This removes the former retry loop, which could
+/// livelock forever when both threads ran the same candidate sequence in lockstep (the
+/// CI failure: the loser exhausted its retries and panicked, then the render thread kept
+/// the scope alive until the watchdog aborted the process).
+fn publisher_loop(
+    host: &BlockHost,
+    fx: &Fixtures,
+    activations: usize,
+    phase: u64,
+    progress: &AtomicU64,
+) -> Result<u64, String> {
     let mut local = 0u64;
-    for index in 0..activations {
-        let (first, second) = if index % 2 == 0 {
-            (&fx.gain_v2, &fx.gain_v1)
-        } else {
-            (&fx.gain_v1, &fx.gain_v2)
-        };
-        // Two publisher threads race on the same host: when the other thread publishes
-        // exactly our candidate first, the host rejects with AlreadyActive. That is the
-        // documented behaviour; retry (the active artifact can only be one of the two
-        // candidates) instead of turning a legitimate race into a panic or a mixed block.
-        let mut activated = false;
-        'retry: for _attempt in 0..64 {
-            for candidate in [first, second] {
-                if try_apply(host, candidate).status == ActivationStatus::Activated {
-                    local += 1;
-                    activated = true;
-                    break 'retry;
-                }
-            }
-            std::hint::spin_loop();
+    let mut attempts = 0u64;
+    while local < activations as u64 {
+        attempts += 1;
+        if attempts > (activations as u64).saturating_mul(4).max(64) {
+            return Err(format!(
+                "publisher (phase {phase}) gave up after {attempts} attempts for {activations} activations"
+            ));
         }
-        assert!(activated, "both candidates kept being rejected in the race");
+        let candidate = if (attempts + phase) % 2 == 0 {
+            &fx.gain_v2
+        } else {
+            &fx.gain_v1
+        };
+        match try_apply(host, candidate).status {
+            ActivationStatus::Activated => {
+                local += 1;
+                progress.fetch_add(1, Ordering::SeqCst);
+            }
+            // Documented race: the other publisher activated exactly this artifact first.
+            // The next attempt selects the other artifact, which cannot be active then.
+            ActivationStatus::Rejected => continue,
+        }
     }
-    local
+    Ok(local)
 }
+
 fn scenario_version_races(fx: &Fixtures, scale: Scale) -> Scenario {
     let started = Instant::now();
     let test = "concurrent_publications_render_whole_versions_only";
-    let watchdog = Watchdog::start(45, "publication/render races");
+    let progress = progress_counter();
+    let watchdog = ProgressWatchdog::start(
+        "publication/render races",
+        Duration::from_secs(30),
+        Arc::clone(&progress),
+    );
     let host =
         BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&fx.gain_v1)).expect("bootstrap");
     let _warm = warm_images(fx);
     let publishers_done = AtomicBool::new(false);
     let blocks = AtomicU64::new(0);
     let bad_blocks = AtomicU64::new(0);
-    let (activations, render_blocks) = std::thread::scope(|scope| {
+    let (activations, render_blocks, failure) = std::thread::scope(|scope| {
         let render = scope.spawn(|| {
             let mut state = DspState::default();
             let input = vec![1.0f32; 128];
@@ -1127,27 +1307,46 @@ fn scenario_version_races(fx: &Fixtures, scale: Scale) -> Scenario {
                     bad_blocks.fetch_add(1, Ordering::SeqCst);
                 }
                 blocks.fetch_add(1, Ordering::SeqCst);
+                progress.fetch_add(1, Ordering::SeqCst);
+                // On a 4 vCPU CI runner the render loop must not monopolise a core: the
+                // publishers do the expensive work (module registration). Yielding keeps
+                // the race progressing in both directions without reducing coverage.
+                std::thread::yield_now();
             }
         });
+        // Stop the render loop even if a publisher panics: no scope deadlock.
+        let _stop = StopOnDrop(&publishers_done);
         let mut activations = 0u64;
+        let mut failure: Option<String> = None;
         for _round in 0..2 {
             let work = scale.race_activations / 2;
-            // Two publisher threads racing on the same host.
+            // Two publisher threads racing on the same host, with distinct phases so a
+            // successful publication never turns into an unbounded retry loop.
             let (a, b) = std::thread::scope(|inner| {
-                let a = inner.spawn(|| publisher_loop(&host, fx, work));
-                let b = inner.spawn(|| publisher_loop(&host, fx, work));
+                let a = inner.spawn(|| publisher_loop(&host, fx, work, 0, &progress));
+                let b = inner.spawn(|| publisher_loop(&host, fx, work, 1, &progress));
                 (
                     a.join().expect("publisher A"),
                     b.join().expect("publisher B"),
                 )
             });
-            activations += a + b;
+            match (a, b) {
+                (Ok(a), Ok(b)) => activations += a + b,
+                (first, second) => {
+                    failure = Some(format!("publisher failure: {first:?}"));
+                    let _ = second;
+                    break;
+                }
+            }
         }
         publishers_done.store(true, Ordering::SeqCst);
         render.join().expect("render thread");
-        (activations, blocks.load(Ordering::SeqCst))
+        (activations, blocks.load(Ordering::SeqCst), failure)
     });
     drop(watchdog);
+    if let Some(failure) = failure {
+        panic!("{failure}");
+    }
     assert_eq!(
         bad_blocks.load(Ordering::SeqCst),
         0,
@@ -1169,7 +1368,7 @@ fn scenario_version_races(fx: &Fixtures, scale: Scale) -> Scenario {
             "render_blocks_during_races": render_blocks,
             "mixed_blocks": bad_blocks.load(Ordering::SeqCst),
             "rule": "each block is processed under one non-owning guard: every sample must come from the same published gain (0.5 or 2.0)",
-            "hard_bound": "45 s watchdog that aborts the test process if the race never ends",
+            "hard_bound": "progress watchdog: aborts only if no block and no activation happen for 30 s",
         }),
     )
 }

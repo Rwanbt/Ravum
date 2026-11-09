@@ -3,11 +3,12 @@
   "cases": [
     {
       "case": "ten_thousand_swaps_keep_the_callback_finite_alloc_free_and_one_version",
-      "duration_ms": 19556,
+      "duration_ms": 4515,
       "facts": {
         "activations": 10001,
         "active_version": 10002,
         "allocation_violations": 0,
+        "apply_us_total": 99765,
         "block_frames": 128,
         "crossfade": {
           "faded_worst_delta": 0.05760908126831055,
@@ -19,7 +20,9 @@
         "live_modules_after_drain": 1,
         "live_modules_baseline": 3,
         "max_abs_output": 1.0,
+        "module": "test-generated minimal no_std rustc modules (~9 KiB) for the swap loop; ABI, validation and reclamation path unchanged",
         "non_finite_blocks": 0,
+        "prepare_us_total": 3555949,
         "retired_module_guard_check": "module stayed mapped while the non-owning guard was alive",
         "swaps": 10000
       },
@@ -28,7 +31,7 @@
     },
     {
       "case": "two_hosts_in_parallel_keep_independent_state",
-      "duration_ms": 1075,
+      "duration_ms": 1452,
       "facts": {
         "host_a": {
           "activations": 500,
@@ -55,7 +58,7 @@
     },
     {
       "case": "stop_start_cycles_reuse_the_host_without_leaking_modules",
-      "duration_ms": 239,
+      "duration_ms": 295,
       "facts": {
         "activations": 50,
         "control_blocks": 50,
@@ -64,14 +67,14 @@
         "live_modules_baseline": 3,
         "render_allocations": 0,
         "render_deallocations": 0,
-        "worker_blocks": 419232
+        "worker_blocks": 345691
       },
       "status": "pass",
       "test": "stop_start_cycles_reuse_the_host_without_leaking_modules"
     },
     {
       "case": "variable_block_sizes_are_defined_across_a_version_change",
-      "duration_ms": 9,
+      "duration_ms": 15,
       "facts": {
         "allocation_violations": 0,
         "crossfade_large_blocks": [
@@ -113,7 +116,7 @@
     },
     {
       "case": "dropping_the_host_after_stop_never_destroys_on_the_render_thread",
-      "duration_ms": 8,
+      "duration_ms": 12,
       "facts": {
         "live_modules_after_drop": 0,
         "live_modules_baseline": 0,
@@ -121,29 +124,29 @@
         "pending_reclamations_after": 0,
         "render_allocations": 0,
         "render_deallocations": 0,
-        "unloaded_after": 11085,
-        "unloaded_before": 11083,
-        "worker_blocks": 1016
+        "unloaded_after": 11087,
+        "unloaded_before": 11085,
+        "worker_blocks": 889
       },
       "status": "pass",
       "test": "dropping_the_host_after_stop_never_destroys_on_the_render_thread"
     },
     {
       "case": "stop_during_swaps_terminates_without_deadlock",
-      "duration_ms": 1097,
+      "duration_ms": 1618,
       "facts": {
         "deadlock": false,
-        "hard_bound": "45 s watchdog that aborts the test process if the worker never stops",
+        "hard_bound": "progress watchdog: aborts only if no block and no activation happen for 30 s",
         "non_finite_blocks": 0,
         "swaps": 500,
-        "worker_blocks": 1862279
+        "worker_blocks": 1886003
       },
       "status": "pass",
       "test": "stop_during_swaps_terminates_without_deadlock"
     },
     {
       "case": "saturation_dozens_of_modules_are_reclaimed_and_memory_stays_bounded",
-      "duration_ms": 579,
+      "duration_ms": 974,
       "facts": {
         "cycles": 3,
         "live_after_each_cycle": [
@@ -155,23 +158,23 @@
         "modules_per_cycle": 20,
         "peak_live_modules": 20,
         "pending_reclamations_after": 0,
-        "rss_after_bytes": 7254016,
-        "rss_before_bytes": 6656000,
+        "rss_after_bytes": 7413760,
+        "rss_before_bytes": 6840320,
         "rss_bound_mib": 256,
-        "rss_delta_mib": 0.5703125
+        "rss_delta_mib": 0.546875
       },
       "status": "pass",
       "test": "saturation_dozens_of_modules_are_reclaimed_and_memory_stays_bounded"
     },
     {
       "case": "concurrent_publications_render_whole_versions_only",
-      "duration_ms": 9508,
+      "duration_ms": 13246,
       "facts": {
         "activations": 4000,
-        "hard_bound": "45 s watchdog that aborts the test process if the race never ends",
+        "hard_bound": "progress watchdog: aborts only if no block and no activation happen for 30 s",
         "mixed_blocks": 0,
         "publishers": 2,
-        "render_blocks_during_races": 22576725,
+        "render_blocks_during_races": 14766540,
         "rule": "each block is processed under one non-owning guard: every sample must come from the same published gain (0.5 or 2.0)"
       },
       "status": "pass",
@@ -191,11 +194,11 @@
   "logic_cpus": 16,
   "platform": "windows",
   "profile": "test (debug)",
-  "rss_end_bytes": 7430144,
-  "rss_start_bytes": 6545408,
+  "rss_end_bytes": 7565312,
+  "rss_start_bytes": 6516736,
   "scenario_bound_s": 60,
   "schema_version": 1,
   "suite_budget_ms": 300000,
-  "suite_duration_ms": 32075,
+  "suite_duration_ms": 22131,
   "tool": "cargo test -p ravum-dsp-harness --test dsp_stress"
 }
