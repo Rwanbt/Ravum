@@ -214,10 +214,10 @@
     "log_tail": [
       "Source: ms-playwright chromium_headless_shell-1248 (headless shell)",
       "Résultat: 10/10 scénarios réussis, 0 échec(s), durée 10.1 s",
-      "Rapport JSON: D:\\App\\Ravum\\target\\ravum\\browser-e2e\\report.json",
+      "Rapport JSON: <repo>\\target\\ravum\\browser-e2e\\report.json",
       "SUCCÈS: le JavaScript de l’interface a été exercé dans un vrai navigateur.",
       "SUCCÈS: le JavaScript de l'interface a été validé dans un vrai navigateur.",
-      "Rapport JSON : D:\\App\\Ravum\\target\\ravum\\browser-e2e\\report.json"
+      "Rapport JSON : <repo>\\target\\ravum\\browser-e2e\\report.json"
     ],
     "note": "La machine locale fournit un navigateur (Playwright) ; le script compile dabord ravum-todo (cache chaud), puis exécute les 10 scénarios réels CDP."
   },

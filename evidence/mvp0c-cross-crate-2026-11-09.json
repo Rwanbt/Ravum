@@ -73,10 +73,10 @@
             "-p",
             "application",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
           ],
           "duration_ms": 639,
           "exit_code": 0,
@@ -88,10 +88,10 @@
             "-p",
             "buildscript",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
           ],
           "duration_ms": 711,
           "exit_code": 0,
@@ -103,10 +103,10 @@
             "-p",
             "features",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\cargo-target"
           ],
           "duration_ms": 225,
           "exit_code": 0,
@@ -124,10 +124,10 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\core\\libcore.rmeta",
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\core\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\core\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\core\\src\\lib.rs"
           ],
           "duration_ms": 143,
           "exit_code": 0,
@@ -145,12 +145,12 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\api\\libapi.rmeta",
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\api\\libapi.rmeta",
             "--extern",
-            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libcore.rmeta",
+            "core=<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\api\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\api\\src\\lib.rs"
           ],
           "duration_ms": 134,
           "exit_code": 0,
@@ -168,12 +168,12 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\consumer\\libconsumer.rmeta",
+            "<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\out\\consumer\\libconsumer.rmeta",
             "--extern",
-            "api=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libapi.rmeta",
+            "api=<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps\\libapi.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-baseline-23880-1794182897199069000\\consumer\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-baseline-23880-1794182897199069000\\consumer\\src\\lib.rs"
           ],
           "duration_ms": 119,
           "exit_code": 0,
@@ -404,10 +404,10 @@
             "-p",
             "consumer",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
           ],
           "duration_ms": 283,
           "exit_code": 101,
@@ -419,10 +419,10 @@
             "-p",
             "application",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
           ],
           "duration_ms": 146,
           "exit_code": 101,
@@ -434,10 +434,10 @@
             "-p",
             "buildscript",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
           ],
           "duration_ms": 97,
           "exit_code": 0,
@@ -449,10 +449,10 @@
             "-p",
             "features",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\cargo-target"
           ],
           "duration_ms": 77,
           "exit_code": 0,
@@ -470,10 +470,10 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\core\\libcore.rmeta",
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\core\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\core\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\core\\src\\lib.rs"
           ],
           "duration_ms": 98,
           "exit_code": 0,
@@ -491,19 +491,19 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\api\\libapi.rmeta",
+            "<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\out\\api\\libapi.rmeta",
             "--extern",
-            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps\\libcore.rmeta",
+            "core=<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs"
           ],
           "duration_ms": 85,
           "exit_code": 1,
           "rmeta_sha256": null,
           "stderr_head": [
             "error[E0061]: this function takes 2 arguments but 1 argument was supplied",
-            "  --> \\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs:7:5",
+            "  --> \\\\?\\<temp>\\ravum-mvp0c-breaking-23880-1794182899433290400\\api\\src\\lib.rs:7:5",
             "   |",
             " 7 |     core::scale(x)",
             "   |     ^^^^^^^^^^^--- argument #2 of type `f64` is missing",
@@ -647,10 +647,10 @@
             "-p",
             "application",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
           ],
           "duration_ms": 495,
           "exit_code": 0,
@@ -662,10 +662,10 @@
             "-p",
             "buildscript",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
           ],
           "duration_ms": 95,
           "exit_code": 0,
@@ -677,10 +677,10 @@
             "-p",
             "features",
             "--manifest-path",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\Cargo.toml",
             "--offline",
             "--target-dir",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\cargo-target"
           ],
           "duration_ms": 79,
           "exit_code": 0,
@@ -698,10 +698,10 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\core\\libcore.rmeta",
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\core\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\core\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\core\\src\\lib.rs"
           ],
           "duration_ms": 102,
           "exit_code": 0,
@@ -719,12 +719,12 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\api\\libapi.rmeta",
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\api\\libapi.rmeta",
             "--extern",
-            "core=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libcore.rmeta",
+            "core=<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libcore.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\api\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\api\\src\\lib.rs"
           ],
           "duration_ms": 89,
           "exit_code": 0,
@@ -742,12 +742,12 @@
             "lib",
             "--emit=metadata",
             "-o",
-            "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\consumer\\libconsumer.rmeta",
+            "<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\out\\consumer\\libconsumer.rmeta",
             "--extern",
-            "api=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libapi.rmeta",
+            "api=<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps\\libapi.rmeta",
             "-L",
-            "dependency=C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
-            "\\\\?\\C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-compatible-23880-1794182902478971600\\consumer\\src\\lib.rs"
+            "dependency=<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\state\\deps",
+            "\\\\?\\<temp>\\ravum-mvp0c-compatible-23880-1794182902478971600\\consumer\\src\\lib.rs"
           ],
           "duration_ms": 90,
           "exit_code": 0,

@@ -4,7 +4,7 @@
     "buffers": 4,
     "crossfade_frames": 256,
     "frames": 512,
-    "module": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+    "module": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
     "period_us": 10666,
     "rate": 48000,
     "requested_device": {
@@ -12,8 +12,8 @@
     },
     "seconds": 3,
     "swap_builds": [
-      "D:\\App\\Ravum\\target\\ravum\\audio-probe\\build-iir_v2.json",
-      "D:\\App\\Ravum\\target\\ravum\\audio-probe\\build-iir_v1.json"
+      "<repo>\\target\\ravum\\audio-probe\\build-iir_v2.json",
+      "<repo>\\target\\ravum\\audio-probe\\build-iir_v1.json"
     ],
     "swap_every_ms": 250
   },
@@ -205,7 +205,7 @@
   },
   "dsp": {
     "baseline_sample_delta": 0.028793953359127045,
-    "bootstrap_module": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+    "bootstrap_module": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
     "input_wraps": 0,
     "max_sample_delta": 0.0292640570551157,
     "non_finite_samples": 0,
@@ -344,7 +344,7 @@
   "module": {
     "bootstrap_artifact_id": "1c995521ea1b4008367567f134e696ed8463842724395e12fa750cd1f4b4b990",
     "bootstrap_patch_id": "dsp-iir-v1",
-    "bootstrap_path": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+    "bootstrap_path": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
     "bootstrap_verification": "assumed",
     "crossfade_frames": 256,
     "final_artifact_id": "746699394f340709aeca90d5b48fa63813d5cc5dad2a9e843b4e7968803278e8",
@@ -385,7 +385,7 @@
         "load_ms": 4,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 7
       },
@@ -397,7 +397,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v1",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
         "status": "activated",
         "total_ms": 4
       },
@@ -409,7 +409,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 4
       },
@@ -421,7 +421,7 @@
         "load_ms": 3,
         "patch_id": "dsp-iir-v1",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
         "status": "activated",
         "total_ms": 5
       },
@@ -433,7 +433,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 4
       },
@@ -445,7 +445,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v1",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
         "status": "activated",
         "total_ms": 4
       },
@@ -457,7 +457,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 4
       },
@@ -469,7 +469,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v1",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
         "status": "activated",
         "total_ms": 5
       },
@@ -481,7 +481,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 5
       },
@@ -493,7 +493,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v1",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
         "status": "activated",
         "total_ms": 5
       },
@@ -505,7 +505,7 @@
         "load_ms": 2,
         "patch_id": "dsp-iir-v2",
         "reject_reason": null,
-        "requested_artifact": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
+        "requested_artifact": "<repo>\\target\\ravum\\artifacts\\patch-c0d1385c8c1a-4e76db523f6d-1.dll",
         "status": "activated",
         "total_ms": 4
       }

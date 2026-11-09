@@ -892,8 +892,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A1\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A1\\receipts\\agent-1.base.json --receipt <tmp>\\A1\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A1\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A1\\receipts\\agent-1.base.json --receipt <tmp>\\A1\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 158.634,
           "code": 0,
           "timedOut": false,
@@ -901,8 +901,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A1\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A1\\receipts\\agent-2.base.json --receipt <tmp>\\A1\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A1\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A1\\receipts\\agent-2.base.json --receipt <tmp>\\A1\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 151.234,
           "code": 0,
           "timedOut": false,
@@ -910,8 +910,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A1\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A1\\receipts\\agent-3.base.json --receipt <tmp>\\A1\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A1\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A1\\receipts\\agent-3.base.json --receipt <tmp>\\A1\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 138.791,
           "code": 0,
           "timedOut": false,
@@ -1572,8 +1572,8 @@
       "commands": [
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B1\\shared --tasks t4 --strategy B --base <tmp>\\B1\\receipts\\agent-3.base.json --receipt <tmp>\\B1\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B1\\shared --tasks t4 --strategy B --base <tmp>\\B1\\receipts\\agent-3.base.json --receipt <tmp>\\B1\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 125.199,
           "code": 0,
           "timedOut": false,
@@ -1581,8 +1581,8 @@
         },
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B1\\shared --tasks t1,t2 --strategy B --base <tmp>\\B1\\receipts\\agent-1.base.json --receipt <tmp>\\B1\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B1\\shared --tasks t1,t2 --strategy B --base <tmp>\\B1\\receipts\\agent-1.base.json --receipt <tmp>\\B1\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 164.891,
           "code": 0,
           "timedOut": false,
@@ -1590,8 +1590,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B1\\shared --tasks t3 --strategy B --base <tmp>\\B1\\receipts\\agent-2.base.json --receipt <tmp>\\B1\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B1\\shared --tasks t3 --strategy B --base <tmp>\\B1\\receipts\\agent-2.base.json --receipt <tmp>\\B1\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
+          "cwd": "<repo>",
           "ms": 410.747,
           "code": 0,
           "timedOut": false,
@@ -2245,8 +2245,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C1\\shared --tasks t1,t2 --strategy C --base <tmp>\\C1\\receipts\\agent-1.base.json --receipt <tmp>\\C1\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C1\\shared --tasks t1,t2 --strategy C --base <tmp>\\C1\\receipts\\agent-1.base.json --receipt <tmp>\\C1\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 155.557,
           "code": 0,
           "timedOut": false,
@@ -2254,8 +2254,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C1\\shared --tasks t3 --strategy C --base <tmp>\\C1\\receipts\\agent-2.base.json --receipt <tmp>\\C1\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C1\\shared --tasks t3 --strategy C --base <tmp>\\C1\\receipts\\agent-2.base.json --receipt <tmp>\\C1\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 139.962,
           "code": 0,
           "timedOut": false,
@@ -2263,8 +2263,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C1\\shared --tasks t4 --strategy C --base <tmp>\\C1\\receipts\\agent-3.base.json --receipt <tmp>\\C1\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C1\\shared --tasks t4 --strategy C --base <tmp>\\C1\\receipts\\agent-3.base.json --receipt <tmp>\\C1\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 148.559,
           "code": 0,
           "timedOut": false,
@@ -2895,8 +2895,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C2\\shared --tasks t1,t2 --strategy C --base <tmp>\\C2\\receipts\\agent-1.base.json --receipt <tmp>\\C2\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C2\\shared --tasks t1,t2 --strategy C --base <tmp>\\C2\\receipts\\agent-1.base.json --receipt <tmp>\\C2\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 156.363,
           "code": 0,
           "timedOut": false,
@@ -2904,8 +2904,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C2\\shared --tasks t3 --strategy C --base <tmp>\\C2\\receipts\\agent-2.base.json --receipt <tmp>\\C2\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C2\\shared --tasks t3 --strategy C --base <tmp>\\C2\\receipts\\agent-2.base.json --receipt <tmp>\\C2\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 142.484,
           "code": 0,
           "timedOut": false,
@@ -2913,8 +2913,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C2\\shared --tasks t4 --strategy C --base <tmp>\\C2\\receipts\\agent-3.base.json --receipt <tmp>\\C2\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C2\\shared --tasks t4 --strategy C --base <tmp>\\C2\\receipts\\agent-3.base.json --receipt <tmp>\\C2\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 147.345,
           "code": 0,
           "timedOut": false,
@@ -3604,8 +3604,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B2\\shared --tasks t1,t2 --strategy B --base <tmp>\\B2\\receipts\\agent-1.base.json --receipt <tmp>\\B2\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B2\\shared --tasks t1,t2 --strategy B --base <tmp>\\B2\\receipts\\agent-1.base.json --receipt <tmp>\\B2\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 163.122,
           "code": 0,
           "timedOut": false,
@@ -3613,8 +3613,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B2\\shared --tasks t4 --strategy B --base <tmp>\\B2\\receipts\\agent-3.base.json --receipt <tmp>\\B2\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B2\\shared --tasks t4 --strategy B --base <tmp>\\B2\\receipts\\agent-3.base.json --receipt <tmp>\\B2\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 159.854,
           "code": 0,
           "timedOut": false,
@@ -3622,8 +3622,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B2\\shared --tasks t3 --strategy B --base <tmp>\\B2\\receipts\\agent-2.base.json --receipt <tmp>\\B2\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B2\\shared --tasks t3 --strategy B --base <tmp>\\B2\\receipts\\agent-2.base.json --receipt <tmp>\\B2\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
+          "cwd": "<repo>",
           "ms": 483.475,
           "code": 0,
           "timedOut": false,
@@ -4233,8 +4233,8 @@
       "commands": [
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A2\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A2\\receipts\\agent-2.base.json --receipt <tmp>\\A2\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A2\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A2\\receipts\\agent-2.base.json --receipt <tmp>\\A2\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 152.4,
           "code": 0,
           "timedOut": false,
@@ -4242,8 +4242,8 @@
         },
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A2\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A2\\receipts\\agent-1.base.json --receipt <tmp>\\A2\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A2\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A2\\receipts\\agent-1.base.json --receipt <tmp>\\A2\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 170.689,
           "code": 0,
           "timedOut": false,
@@ -4251,8 +4251,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A2\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A2\\receipts\\agent-3.base.json --receipt <tmp>\\A2\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A2\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A2\\receipts\\agent-3.base.json --receipt <tmp>\\A2\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 137.159,
           "code": 0,
           "timedOut": false,
@@ -4959,8 +4959,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A3\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A3\\receipts\\agent-1.base.json --receipt <tmp>\\A3\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\A3\\agents\\agent-1 --tasks t1,t2 --strategy A --base <tmp>\\A3\\receipts\\agent-1.base.json --receipt <tmp>\\A3\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 181.83,
           "code": 0,
           "timedOut": false,
@@ -4968,8 +4968,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A3\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A3\\receipts\\agent-2.base.json --receipt <tmp>\\A3\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\A3\\agents\\agent-2 --tasks t3 --strategy A --base <tmp>\\A3\\receipts\\agent-2.base.json --receipt <tmp>\\A3\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 190.963,
           "code": 0,
           "timedOut": false,
@@ -4977,8 +4977,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A3\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A3\\receipts\\agent-3.base.json --receipt <tmp>\\A3\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\A3\\agents\\agent-3 --tasks t4 --strategy A --base <tmp>\\A3\\receipts\\agent-3.base.json --receipt <tmp>\\A3\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 172.04,
           "code": 0,
           "timedOut": false,
@@ -5706,8 +5706,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B3\\shared --tasks t1,t2 --strategy B --base <tmp>\\B3\\receipts\\agent-1.base.json --receipt <tmp>\\B3\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\B3\\shared --tasks t1,t2 --strategy B --base <tmp>\\B3\\receipts\\agent-1.base.json --receipt <tmp>\\B3\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 161.232,
           "code": 0,
           "timedOut": false,
@@ -5715,8 +5715,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B3\\shared --tasks t4 --strategy B --base <tmp>\\B3\\receipts\\agent-3.base.json --receipt <tmp>\\B3\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\B3\\shared --tasks t4 --strategy B --base <tmp>\\B3\\receipts\\agent-3.base.json --receipt <tmp>\\B3\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 158.092,
           "code": 0,
           "timedOut": false,
@@ -5724,8 +5724,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B3\\shared --tasks t3 --strategy B --base <tmp>\\B3\\receipts\\agent-2.base.json --receipt <tmp>\\B3\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\B3\\shared --tasks t3 --strategy B --base <tmp>\\B3\\receipts\\agent-2.base.json --receipt <tmp>\\B3\\receipts\\agent-2.json --collision-task t3 --collision-delay-ms 150",
+          "cwd": "<repo>",
           "ms": 465.319,
           "code": 0,
           "timedOut": false,
@@ -6350,8 +6350,8 @@
       "commands": [
         {
           "label": "agent-agent-1",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C3\\shared --tasks t1,t2 --strategy C --base <tmp>\\C3\\receipts\\agent-1.base.json --receipt <tmp>\\C3\\receipts\\agent-1.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-1 --workspace <tmp>\\C3\\shared --tasks t1,t2 --strategy C --base <tmp>\\C3\\receipts\\agent-1.base.json --receipt <tmp>\\C3\\receipts\\agent-1.json",
+          "cwd": "<repo>",
           "ms": 119.778,
           "code": 0,
           "timedOut": false,
@@ -6359,8 +6359,8 @@
         },
         {
           "label": "agent-agent-2",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C3\\shared --tasks t3 --strategy C --base <tmp>\\C3\\receipts\\agent-2.base.json --receipt <tmp>\\C3\\receipts\\agent-2.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-2 --workspace <tmp>\\C3\\shared --tasks t3 --strategy C --base <tmp>\\C3\\receipts\\agent-2.base.json --receipt <tmp>\\C3\\receipts\\agent-2.json",
+          "cwd": "<repo>",
           "ms": 99.332,
           "code": 0,
           "timedOut": false,
@@ -6368,8 +6368,8 @@
         },
         {
           "label": "agent-agent-3",
-          "command": "C:\\Program Files\\nodejs\\node.exe D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C3\\shared --tasks t4 --strategy C --base <tmp>\\C3\\receipts\\agent-3.base.json --receipt <tmp>\\C3\\receipts\\agent-3.json",
-          "cwd": "D:\\App\\Ravum",
+          "command": "C:\\Program Files\\nodejs\\node.exe <repo>\\benchmarks\\s8-mvp0c\\lib\\agent-scripted.mjs --agent agent-3 --workspace <tmp>\\C3\\shared --tasks t4 --strategy C --base <tmp>\\C3\\receipts\\agent-3.base.json --receipt <tmp>\\C3\\receipts\\agent-3.json",
+          "cwd": "<repo>",
           "ms": 113.971,
           "code": 0,
           "timedOut": false,

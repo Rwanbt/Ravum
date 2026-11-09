@@ -19,7 +19,7 @@
                             }
                         ],
     "expected_seconds_budget":  120,
-    "work_dir":  "D:\\App\\Ravum\\target\\ravum\\soak-daemon",
+    "work_dir":  "<repo>\\target\\ravum\\soak-daemon",
     "daemon_pid":  1492,
     "daemon_exit_code":  0,
     "shutdown_ack":  true,

@@ -19,7 +19,7 @@
     "requests": 10,
     "reused": false,
     "verifier_runs": 5,
-    "work_dir": "D:\\App\\Ravum\\target\\ravum\\cycle-daemon"
+    "work_dir": "<repo>\\target\\ravum\\cycle-daemon"
   },
   "env": {
     "arch": "x86_64",

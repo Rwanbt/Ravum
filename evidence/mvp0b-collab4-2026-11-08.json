@@ -163,14 +163,14 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
         "message": null,
         "revision": 1,
         "root": "crate_a/src/lib.rs",
         "schema_version": 1,
         "snapshot": {
           "bytes": 969,
-          "dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\snapshots\\e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
           "files": 2,
           "removed_files": 0,
           "verified_files": 2,
@@ -249,14 +249,14 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
         "message": null,
         "revision": 2,
         "root": "crate_b/src/lib.rs",
         "schema_version": 1,
         "snapshot": {
           "bytes": 866,
-          "dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\snapshots\\49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
           "files": 2,
           "removed_files": 0,
           "verified_files": 2,
@@ -335,14 +335,14 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
         "message": null,
         "revision": 3,
         "root": "crate_a/src/lib.rs",
         "schema_version": 1,
         "snapshot": {
           "bytes": 970,
-          "dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\snapshots\\1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
           "files": 2,
           "removed_files": 0,
           "verified_files": 2,
@@ -421,7 +421,7 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
         "message": null,
         "revision": 4,
         "root": "crate_b/src/lib.rs",
@@ -500,7 +500,7 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
         "message": null,
         "revision": 5,
         "root": "crate_a/src/lib.rs",
@@ -579,7 +579,7 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
         "message": null,
         "revision": 6,
         "root": "crate_b/src/lib.rs",
@@ -658,7 +658,7 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
         "message": null,
         "revision": 7,
         "root": "crate_a/src/lib.rs",
@@ -737,7 +737,7 @@
         "daemon_version": "0.1.0",
         "diagnostics": [],
         "exit_code": 0,
-        "incremental_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
         "message": null,
         "revision": 8,
         "root": "crate_b/src/lib.rs",
@@ -812,7 +812,7 @@
       "timed_out": 0,
       "unit_files_written": 5
     },
-    "work_dir": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\daemon"
+    "work_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon"
   },
   "decisions": [
     {
@@ -880,8 +880,8 @@
     "replay_rule": "un second passage identique doit être servi par le cache daemon (hit) sans exécution rustc"
   },
   "journal_paths": [
-    "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
-    "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl"
+    "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
+    "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl"
   ],
   "mode": "builtin:two-agents-two-functions",
   "passes": [
@@ -894,7 +894,7 @@
       "duration_ms": 432,
       "journal_durable_lines": 2,
       "journal_entries": 2,
-      "journal_path": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
+      "journal_path": "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
       "pass": 1,
       "rustc_runs": 3
     },
@@ -907,7 +907,7 @@
       "duration_ms": 20,
       "journal_durable_lines": 2,
       "journal_entries": 2,
-      "journal_path": "D:\\App\\Ravum\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl",
+      "journal_path": "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl",
       "pass": 2,
       "rustc_runs": 0
     }
@@ -978,7 +978,7 @@
     ]
   },
   "violations": [],
-  "workspace": "D:\\App\\Ravum\\fixtures\\collab4\\workspace",
+  "workspace": "<repo>\\fixtures\\collab4\\workspace",
   "workspace_snapshot": {
     "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
     "file_count": 6,

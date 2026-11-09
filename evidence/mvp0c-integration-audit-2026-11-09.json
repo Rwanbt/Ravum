@@ -5,7 +5,7 @@
   "mode": "read-only (aucune commande git mutante, aucun build, aucun fichier deplace)",
   "repository": "Rwanbt/Ravum",
   "workspace": {
-    "path": "D:\\App\\Ravum",
+    "path": "<repo>",
     "branch": "feat/mvp0c-hardening",
     "head": "24d92b1319112425aa690c0d3dff5df372ddfbf1",
     "head_equals_origin_0c": true,

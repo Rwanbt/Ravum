@@ -6,7 +6,7 @@
     "crossfade_frames": 256,
     "frames": 512,
     "mmcss_requested": false,
-    "module": "D:\\App\\Ravum\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
+    "module": "<repo>\\target\\ravum\\artifacts\\patch-c3f9c57d0559-4e76db523f6d-0.dll",
     "period_us": 10666,
     "rate": 48000,
     "requested_device": {
@@ -14,8 +14,8 @@
     },
     "seconds": 3,
     "swap_builds": [
-      "D:\\App\\Ravum\\target\\ravum\\audio-probe\\build-iir_v2.json",
-      "D:\\App\\Ravum\\target\\ravum\\audio-probe\\build-iir_v1.json"
+      "<repo>\\target\\ravum\\audio-probe\\build-iir_v2.json",
+      "<repo>\\target\\ravum\\audio-probe\\build-iir_v1.json"
     ],
     "swap_every_ms": 250,
     "thread_priority_requested": null

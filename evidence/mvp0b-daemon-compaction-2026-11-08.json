@@ -3,15 +3,15 @@
     "disk_bytes": 191055,
     "disk_freed_bytes": 1630686,
     "session_paths": [
-      "D:\\App\\Ravum\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaoclboa-07cldnc-26dzc9vnxtjj32u9jif4fyhj2"
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaoclboa-07cldnc-26dzc9vnxtjj32u9jif4fyhj2"
     ],
     "sessions": 1
   },
   "before": {
     "disk_bytes": 1821741,
     "session_paths": [
-      "D:\\App\\Ravum\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocbkpr-0lh4ce9-3wwix0swnklpdexhs0o10445l",
-      "D:\\App\\Ravum\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocfwlr-049y54x-553ejhrhlt21ocyuvnfs8tyyi"
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocbkpr-0lh4ce9-3wwix0swnklpdexhs0o10445l",
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocfwlr-049y54x-553ejhrhlt21ocyuvnfs8tyyi"
     ],
     "sessions": 2
   },
@@ -165,7 +165,7 @@
     "release": "1.95.0"
   },
   "toolchain_evidence": {
-    "repo_root": "D:\\App\\Ravum",
+    "repo_root": "<repo>",
     "rustc_path": "rustc",
     "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
   },
