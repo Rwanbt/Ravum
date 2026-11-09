@@ -38,6 +38,19 @@ use std::time::{Duration, Instant};
 /// Hard bound for one scenario: a scenario that runs longer fails its test.
 const MAX_SCENARIO_SECONDS: u64 = 60;
 
+/// Per-scenario time budget. The default (60 s) is the local performance guard.
+/// Shared CI runners are 3-10x slower under contention, so the Linux
+/// qualification workflow raises the bound explicitly instead of hiding the
+/// stress tests. This changes the timing envelope, never the correctness
+/// assertions.
+fn scenario_budget_seconds() -> u64 {
+    std::env::var("RAVUM_STRESS_MAX_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(MAX_SCENARIO_SECONDS)
+}
+
 /// Global lock: module counters and the reclamation queue are process-wide, and the
 /// scenarios assert exact transitions, so they are serialized. A poisoned lock is still
 /// usable (the failing scenario already reported its own panic).
@@ -391,9 +404,10 @@ struct Scenario {
 impl Scenario {
     fn record(name: &'static str, test: &'static str, started: Instant, facts: Value) -> Scenario {
         let duration_ms = started.elapsed().as_millis() as u64;
+        let budget = scenario_budget_seconds();
         assert!(
-            duration_ms < MAX_SCENARIO_SECONDS * 1000,
-            "{name} took {duration_ms} ms, above the {MAX_SCENARIO_SECONDS} s bound"
+            duration_ms < budget * 1000,
+            "{name} took {duration_ms} ms, above the {budget} s bound"
         );
         eprintln!("[dsp-stress] {test}: {duration_ms} ms");
         Scenario {

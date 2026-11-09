@@ -66,6 +66,11 @@ jobs:
       # are all compiled on the qualification host. Two test threads bound the
       # RAM of the runner while still exercising parallel execution paths.
       - name: Test workspace (all targets, 2 test threads)
+        env:
+          # Shared runners are much slower than the reference workstation; the
+          # DSP stress scenarios keep their correctness assertions but get an
+          # explicit, documented timing envelope (default 60 s locally).
+          RAVUM_STRESS_MAX_SECONDS: '1200'
         run: cargo test --workspace --all-targets -- --test-threads=2
 
       - name: Scope notice
