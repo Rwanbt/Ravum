@@ -79,7 +79,7 @@ présenté comme un succès.
 | T7 | **PARTIAL** | `init/check/build/run/fmt/doctor/--version` opérationnels ; `test` en cours ; LSP `UNSUPPORTED` explicite |
 | T8 | **NOT_RUN** | hot reload `.rv` non tenté ; fondations P0 disponibles |
 | T9 | **PARTIAL** | hello/fib/calculator/stats exécutés ; dsp et tests-demo en cours ; service HTTP/WASM `NOT_RUN`/`UNSUPPORTED` |
-| T10 | **PARTIAL** | conformance 103/104, 855 tests workspace ; fuzz long, Miri/TSan, audit indépendant non exécutés |
+| T10 | **PARTIAL** | conformance 103/104, 858 tests workspace ; fuzz long, Miri/TSan, audit indépendant non exécutés |
 | T11 | **NOT_RUN** | installateur/SBOM/provenance non produits ; licence = décision humaine |
 | T12 | **PARTIAL** | dossier de décisions et rapport ; dogfood/audit externe absents |
 
@@ -105,6 +105,7 @@ target\debug\ravum-lang.exe run examples\hello
 pwsh -File scripts\lang-smoke.ps1 -SkipBuild
 cargo run -p ravum-conformance -- run --json target/conformance-report.json
 ```
+
 
 
 

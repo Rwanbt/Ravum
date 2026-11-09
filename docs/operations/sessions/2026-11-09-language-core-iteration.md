@@ -75,7 +75,7 @@ conformance, preuves honnêtes et dossier de décisions humaines.
 | Suite | Résultat |
 |---|---|
 | Baseline outillage (T0) | 511 passés / 0 échec / 80 suites sur `5408d9b` |
-| P0 concernés | 208 passés / 0 échec / 24 suites (`target/p0-tests-lead.log`) |\n| Workspace final | **855 passés / 0 échec / 93 suites** (`target/t0-final-workspace-tests.log`) |
+| P0 concernés | 208 passés / 0 échec / 24 suites (`target/p0-tests-lead.log`) |\n| Workspace final | **858 passés / 0 échec / 93 suites** (`target/final-workspace-tests-2.log`, `--test-threads=2`) |
 | `ravum-lang-syntax` | 56 tests verts (11 lexer, 25 parser, 16 formatter, 4 intégration) |
 | `ravum-lang-codegen` | 26 tests verts, dont compilations/exécutions rustc réelles |
 | `ravum-lang-sema` | ~102 tests, 4 échecs dus à la régression lexer `0..` (en correction) |
@@ -121,6 +121,7 @@ publication de release, audit externe, qualification Linux, périmètre universe
 4. Intégrer dans `dev` par PR après gates ; ne pas toucher `main`.
 5. Migrer cette note vers le vault quand la validation sera verte ou avec
    dérogation humaine explicite.
+
 
 
 
