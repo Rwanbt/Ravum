@@ -14,6 +14,7 @@ members = [
   "crates/ravum-daemon",
   "crates/ravum-cli",
   "crates/ravum-unit-graph",
+  "crates/ravum-collab-oracle",
   "apps/ravum-demo-host",
   "apps/ravum-todo",
 ]
