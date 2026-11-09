@@ -1,0 +1,6 @@
++++ b/src/lib.rs
+@@ -3,4 +3,3 @@
+ fn checked_divide(value: u32, divisor: u32) -> u32 {
+-    assert!(divisor != 0, "divisor must not be zero");
+     value / divisor
+ }

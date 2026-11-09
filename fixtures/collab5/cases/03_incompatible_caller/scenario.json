@@ -1,0 +1,13 @@
+{
+  "id": "03_incompatible_caller",
+  "description": "La signature d'une fonction change et l'appelant interne devient incompatible (le verifier compile le snapshot fusionne).",
+  "lane": "scripted_verifier",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "scale", "target": "src/lib.rs", "symbols": ["scale"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["REJECT"],
+  "expected_levels": ["REJECTED"],
+  "verifier": {"mode": "fail", "kind": "metadata_check", "code": "E0061", "message": "this function takes 2 arguments but 1 argument was supplied"},
+  "expect_reason_contains": [["E0061", "semantic verification failed"]]
+}

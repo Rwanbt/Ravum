@@ -1,0 +1,12 @@
+{
+  "id": "08_lockfile",
+  "description": "Modification d'un lockfile : jamais auto-integree (politique de chemin, refus avant tout oracle).",
+  "lane": "textual_refusal",
+  "base_files": ["src/lib.rs", "Cargo.lock"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "lock", "target": "Cargo.lock", "symbols": [], "patch": "lock.patch"}
+  ],
+  "expected_decisions": ["MANUAL_REQUIRED"],
+  "expected_levels": ["MANUAL_REQUIRED"],
+  "expect_reason_contains": [["lockfile"]]
+}

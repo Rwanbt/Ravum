@@ -16,6 +16,7 @@
 //! what was actually run, and `MergeCheckStatus::Skipped` explicitly records
 //! that no semantic verification existed (COLLAB-1 compatibility mode).
 
+use crate::evaluation::EvaluationRecord;
 use ravum_protocol::{sha256_hex, DecisionKind, SnapshotId};
 use serde::{Deserialize, Serialize};
 
@@ -331,6 +332,11 @@ pub struct AcceptedChange {
     pub verification_required: bool,
     pub verification: VerificationRecord,
     pub evidence_ids: Vec<String>,
+    /// Versioned evaluation record (protocol v2): level, oracle report, bounded
+    /// proof and reasons. Additive: records produced by a v1 coordinator simply
+    /// omit the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluation: Option<EvaluationRecord>,
     pub recorded_at_unix: u64,
 }
 

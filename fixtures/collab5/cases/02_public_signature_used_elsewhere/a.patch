@@ -1,0 +1,7 @@
++++ b/src/lib.rs
+@@ -3,3 +3,3 @@
+-pub fn area(width: u32) -> u32 {
+-    width * 2
++pub fn area(width: u32, height: u32) -> u32 {
++    width * height
+ }
