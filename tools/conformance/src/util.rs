@@ -50,6 +50,12 @@ pub fn is_safe_relative_path(path: &str) -> bool {
     if path.is_empty() {
         return false;
     }
+    // Portable policy: a case path is a forward-slash relative path. Windows
+    // drive/UNC forms (`C:\x`, `\\server\share`) and backslashes are refused on
+    // every host, so the corpus behaves identically under Linux CI and Windows.
+    if path.contains('\\') || path.contains(':') {
+        return false;
+    }
     let candidate = Path::new(path);
     if candidate.is_absolute() {
         return false;
