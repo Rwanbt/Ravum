@@ -231,6 +231,7 @@ dependencies = [
 name = "ravum-daemon"
 version = "0.1.0"
 dependencies = [
+ "ravum-batch",
  "serde",
  "serde_json",
  "sha2",

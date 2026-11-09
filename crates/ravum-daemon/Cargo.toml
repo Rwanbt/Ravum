@@ -20,3 +20,5 @@ path = "src/bin/ravum-daemon-bench/main.rs"
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# L2.4 end-to-end gate: the bench drives the real bounded batch collector.
+ravum-batch = { path = "../ravum-batch" }

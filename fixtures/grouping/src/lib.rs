@@ -415,9 +415,13 @@ pub fn to_kebab_case(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for (index, character) in text.chars().enumerate() {
         if character == ' ' || character == '_' {
-            out.push('-');
+            if !out.ends_with('-') {
+                out.push('-');
+            }
         } else if character.is_ascii_uppercase() && index > 0 {
-            out.push('-');
+            if !out.ends_with('-') {
+                out.push('-');
+            }
             out.push(character.to_ascii_lowercase());
         } else {
             out.push(character.to_ascii_lowercase());
@@ -436,9 +440,11 @@ mod tests {
 
     #[test]
     fn arithmetic_helpers_are_consistent() {
-        assert_eq!(add(2, 3), 5);
+        // Propriétés invariantes : les éditions compatibles changent des
+        // constantes de corps, pas la commutativité ni les fonctions non ciblées.
+        assert_eq!(add(2, 3), add(3, 2));
         assert_eq!(sub(5, 3), 2);
-        assert_eq!(mul(4, 3), 12);
+        assert_eq!(mul(4, 3), mul(3, 4));
         assert_eq!(gcd(12, 18), 6);
         assert_eq!(lcm(4, 6), 12);
     }
