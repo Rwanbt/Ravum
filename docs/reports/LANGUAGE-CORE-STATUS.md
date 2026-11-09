@@ -4,14 +4,19 @@
 > commande exécutée sur cette machine. Le registre canonique des gates est
 > [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 > Aucun `PROVED`, aucune maturité « production ».
-> Dernière mesure : 2026-11-09 (session LSP + réconciliation licence),
-> Windows 11 x86-64, rustc 1.95.0. Tests workspace :
-> **1018 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des exemples :
-> **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`). Conformance :
-> **107 cas, 106 PASS / 0 FAIL / 1 SKIP** (`skip_on: windows`).
-> Licence : **`MIT OR Apache-2.0`** sur les 23 membres (SBOM régénéré).
-> **Serveur LSP réel** : 9 tests client bout en bout
-> ([`docs/qualification/LSP.md`](../qualification/LSP.md)).
+> Dernière mesure : 2026-11-09 (passe T2 de traçabilité + session VS Code),
+> Windows 11 x86-64, rustc 1.95.0, branche `feat/lang-core-1.0-rc` @ `1b7b4f1`.
+> Tests workspace : **1019 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des
+> exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
+> Conformance : **268 cas, 237 PASS / 30 FAIL / 1 SKIP** — les 30 échecs sont
+> des divergences spec ↔ implémentation, documentées et non assouplies
+> ([`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md)) :
+> **T2 et T3 sont donc `FAIL`**, et non plus `PARTIAL`.
+> Licence : **`MIT OR Apache-2.0`** sur les 23 membres (SBOM reproductible à
+> époque fixée : digest `21ee4d00…526db` sur deux runs identiques).
+> **Serveur LSP réel** : 10 tests client bout en bout
+> ([`docs/qualification/LSP.md`](../qualification/LSP.md)), et **session VS Code
+> réelle 10/10** ([`docs/qualification/VSCODE.md`](../qualification/VSCODE.md)).
 > **Linux rejoué sur le SHA final** (`c43dafd`, run
 > [42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526)) :
 > workspace **82 suites / 1015 PASS / 0 FAIL / 4 ignorés**, conformance

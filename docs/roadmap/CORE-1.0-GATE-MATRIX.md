@@ -8,7 +8,7 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-09 (session LSP + réconciliation licence).
+> Dernière mise à jour : 2026-11-09 (passe T2 de traçabilité + session VS Code).
 
 ## 0. Base de référence
 
@@ -16,243 +16,168 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves locales (§1)** | `8be7913d69dee77ba37d04b219919e894481f21e` |
-| **SHA des preuves CI (§1 bis)** | `c43dafd` et `01fc148` — **4 workflows verts sur les deux** (aucune modification de code entre eux, seulement de la documentation) |
+| **SHA des preuves de cette passe** | `1b7b4f1` (navigation LSP, `prepareRename`, extension VS Code, 161 cas de conformance) |
+| SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
-| Toolchain | Windows 11 x86-64, `rustc 1.95.0`, `cargo 1.95.0` |
 
-Les chiffres de la §1 ont été **réexécutés dans cette session** sur la baseline
-ci-dessus (avant le commit de session). Ceux marqués « antérieur » proviennent
-d'un run lié à un SHA plus ancien et doivent être rejoués avant tout `PASS`.
-
-## 1. Mesures réexécutées dans cette session
+## 1. Mesures de cette passe (SHA `1b7b4f1`)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **1018 passés / 0 échec / 2 ignorés / 82 suites** (exit 0) |
-| Conformance | `cargo run -p ravum-conformance -- run --json target/conformance-after-lsp.json` | **107 cas : 106 PASS / 0 FAIL / 1 SKIP** (exit 0) |
+| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **82 suites, 1019 passés / 0 échec / 2 ignorés** (exit 0) |
+| LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **10 PASS / 0 FAIL** |
+| LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
+| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **268 cas : 237 PASS / 30 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
+| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0x9ca81d63781e9d75`, 23,2 s |
+| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 003 it/s, 20,0 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
-| SBOM | `pwsh -File scripts/sbom.ps1` | 64 paquets (23 workspace + 41 dépendances), 170 relations, `sha256=63f3faf0…e915f` |
-| Licences déclarées | `cargo metadata --locked` + SBOM | **23/23 membres = `MIT OR Apache-2.0`** |
-| Intégrité documentaire | `python tools/validate_repo_docs.py` | exit 0 après réconciliation |
-| LSP (bout en bout) | `cargo test -p ravum-lang-cli --test lsp_client` | **9 PASS / 0 FAIL** (client LSP réel sur tubes) |
+| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, **digest reproductible `21ee4d00…526db`** (deux runs identiques) |
+| Formatage | `cargo fmt --all -- --check` | exit 0 |
 
-Le seul SKIP de conformance est `security/dependency-absolute-unix`, marqué
-`skip_on: windows` : il est inapplicable sur l'hôte Windows et doit être exécuté
-par le job Linux, pas coché depuis Windows.
-
-## 1 bis. Mesures CI sur le même SHA (`c43dafd`)
-
-Les quatre workflows sont verts sur ce commit : *MVP product checks*,
-*MVP impact-selected checks*, *Documentation integrity*, *Linux qualification*.
-Détail du run Linux
-([42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526)) :
-
-| Job (Linux, `ubuntu-latest`) | Résultat |
-|---|---|
-| Workspace tests (stable 1.95.0) | **82 suites, 1015 PASS / 0 FAIL / 4 ignorés** |
-| Conformance corpus (Linux) | **total=107 pass=105 fail=0 skip=2 not_run=0** |
-| Example smoke suite (Linux) | success (binaires natifs Linux réellement construits et exécutés) |
-| Installer contract (temporary prefix, `--version`) | success |
-| `wasm32-wasip1` (build + run via Node WASI) | success — `hello, ravum` observé |
-| Fuzz smoke (tests `fuzz_*` ignorés, soft guard) | success |
-| Miri (nightly, syntax + sema) | **65 + 93 + 1 PASS / 0 FAIL** |
-| ThreadSanitizer | **SKIP explicite — `NOT_APPLICABLE`** (pas de threads/async en Core 1.0) |
-
-**Lecture honnête des SKIP de conformance** : Windows saute
-`dependency-absolute-unix` (1 SKIP) et Linux saute les deux cas spécifiques
-Windows (2 SKIP). **Chaque cas du corpus est donc exécuté sur au moins une
-plateforme**, mais un cas donné ne l'est pas sur les deux. Ce n'est ni un `PASS`
-universel, ni une règle non couverte : c'est une couverture par plateforme.
-
-**Ce que la CI ne prouve pas** : la correction sémantique de programmes
-arbitraires, les performances, le temps réel, une ABI stable, macOS, ARM, ni la
-reproductibilité bit-à-bit.
+Les deux SKIP de conformance sont **par plateforme** : Windows saute
+`security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
+Windows. Chaque cas tourne sur au moins un OS, aucun sur les deux.
 
 ## 2. Matrice
 
-| Gate | État | Ce qui est prouvé | Ce qui manque | Blocage |
+| Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
 |---|---|---|---|---|
-| T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) dans les 1018 tests | — | — |
-| T1 | `PARTIAL` | Voie A et voie B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; aucune mesure de parité A/B/C ; choix final non documenté/ratifié | Décision humaine de ratification (ADR) |
-| T2 | `PARTIAL` | 15 documents de spécification + 107 cas de conformance traçables | `features.md` incomplet ; couverture traçable règle→test non exhaustive ; contradictions résiduelles | — |
-| T3 | `PARTIAL` | Frontend réel, 1018 tests verts, corpus négatif, **interfaces LSP livrées et testées**, **Miri rejoué (159 tests)** sur ce SHA | Campagne **fuzz complète** non rejouée (seul un *fuzz smoke* a tourné) ; limites profondeur/mémoire non re-mesurées | — |
-| T4 | `BLOCKED` | Typechecker + borrow checker + 85 cas d'audit adversarial interne ; finding CRITICAL `&"a"` couvert | **Audit externe humain absent** (exigé par le contrat) | Audit externe |
-| T5 | `PASS` | Binaires natifs réels **Windows** (smoke 31 PASS) et **Linux** (CI verte : workspace + conformance + smoke) sur le **même SHA** ; WASM exécuté ; ABI stable non revendiquée | Sanitizers non exécutés (documenté) | — |
-| T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale `extern "C"`/`unsafe` | Threads, réseau, async, temps réel dur explicitement `UNSUPPORTED` | — |
-| T7 | `PARTIAL` | CLI complète ; **LSP réel** (diagnostics, hover, definition, references, rename, completion, symboles, formatage) testé par client réel | **Aucune session VS Code réelle** ; pas de registre de paquets distant | — |
-| T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays et snapshots du socle disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée pour le langage | — |
-| T9 | `PARTIAL` | 9 verticales `.rv` exécutées (dont FFI et WASM) | HTTP + SQLite, DSP hôte réel, E2E navigateur absents | — |
-| T10 | `PARTIAL` | 1018 tests, conformance, smoke, **Miri rejoué sur ce SHA (159 PASS)** ; TSan explicitement `NOT_APPLICABLE` ; 2 audits internes antérieurs | Campagne **fuzz complète** non rejouée sur ce SHA ; **audit externe absent** | Audit externe |
-| T11 | `PARTIAL` | Installateur, SBOM déterministe, provenance, checksums, **licence réconciliée** | **Pas de signature/attestation**, **pas de build bit-à-bit** | Clé de signature |
+| T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
+| T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
+| T2 | `FAIL` | 15 documents de spec ; 268 cas ; **187/188 règles tracées** | **30 divergences spec ↔ implémentation** (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
+| T3 | `FAIL` | Lexer/parser/AST réels, 1019 tests, **fuzz complet rejoué sur ce SHA** (2 campagnes, 0 échec), Miri antérieur | **3 défauts frontend reproduits** : `effects` refusé comme identifiant, `pub test fn` accepté, `while`/`loop`/`for` acceptés comme valeur | Défauts à corriger |
+| T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
+| T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
+| T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
+| T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
+| T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots disponibles | **Pas de préservation d'état** ; compatibilité de patch non qualifiée | Implémentation |
+| T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
+| T10 | `PARTIAL` | 1019 tests, conformance, smoke, **fuzz complet rejoué**, Miri antérieur (159 tests) | **Audit externe absent** ; Miri non rejoué sur ce SHA exact | Audit externe |
+| T11 | `PARTIAL` | Installateur, SBOM **reproductible** (digest stable à époque fixée), provenance, checksums, licence | **Pas de signature/attestation**, **pas de build bit-à-bit** | Clé de signature (humaine) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate
 
 ### T0 — Fondations et sécurité du socle — `PASS`
 
-- **Exigences d'origine** : overlays, confinement de chemins, symlinks,
-  propagation d'erreurs, snapshots, publication Git, restauration après crash,
-  caches, invalidations, coordination concurrente.
-- **Prérequis** : aucun.
-- **Preuves (cette session)** : suites `overlay` (17), `git_publication` (16),
-  `git_publication_crash` (15), `journal_durability` (3), `cycle_integration`
-  (14), `merge_strategies` (2), `transient_verification` (3) — toutes vertes.
-  Le scénario `publication → snapshot → même fichier → publication` est couvert
-  par `overlay::publication_starts_a_new_cycle_and_the_same_path_is_no_longer_a_false_conflict`.
-- **Tests négatifs** : chemins relatifs hostiles, symlinks, `git` metadata
-  protégée, hook `pre-commit` refusant, journal non inscriptible.
-- **Risques restants** : aucun défaut bloquant connu ; corpus fini.
-- **Owner** : socle d'orchestration (agents 8/12).
+Inchangé. Suites `overlay` (17), `git_publication` (16),
+`git_publication_crash` (15), `journal_durability` (3), `cycle_integration`
+(14), `merge_strategies` (2), `transient_verification` (3) vertes, plus le
+scénario `publication → snapshot → même fichier → publication`.
 
 ### T1 — Architecture du compilateur et bootstrap — `PARTIAL`
 
-- **Prouvé** : voie B (Rust généré + `rustc`) réellement utilisée par
-  `build`/`run`/`test` ; voie A (outils Rust) opérationnelle ; parité A/B
-  antérieure `MATCH` sur 4 programmes (`scripts/m5-bench.ps1`).
-- **Absent** : **voie C** (backend natif direct, Cranelift ou alternative).
-- **Conséquence** : le gate M5 ne peut pas être `PASS` : la comparaison A/B/C
-  exigée n'existe pas. `NOT_IMPLEMENTED` n'est pas `PASS`.
-- **Tests requis** : prototype C mesurable sur un périmètre explicite, parité
-  des sorties, temps d'analyse/codegen/link, taille binaire, mémoire.
-- **Décision humaine** : ratification architecturale du choix final (ADR).
+Voie B réellement utilisée par `build`/`run`/`test` ; voie A opérationnelle ;
+parité A/B antérieure `MATCH` sur 4 programmes. **La voie C (backend natif
+direct) n'existe pas** : `NOT_IMPLEMENTED` n'est pas `PASS`, donc M5 ne peut pas
+être vert. Décision humaine D2.
 
-### T2 — Spécification formelle — `PARTIAL`
+### T2 — Spécification formelle — `FAIL`
 
-- **Prouvé** : `spec/language/` (15 documents) ; 107 cas dont 106 PASS sur ce
-  SHA ; codes de diagnostic stables réutilisés par le LSP.
-- **Couverture mesurée** : `spec/language/features.md` contient **188 règles**,
-  dont **99 référencent un cas de conformance** et **92 n'ont aucune référence de
-  test**. C'est le déficit précis à combler pour `PASS`, pas une impression.
-- **Absent** : couverture traçable exhaustive règle → test positif + tests
-  négatifs + code + diagnostic.
-- **Contradiction vérifiée comme déjà résolue** : `unsafe` et `extern "C"` ne
-  sont **pas** exclus de la spécification. `unsupported.md` les liste comme
-  supportés (bloc `unsafe`, `extern "C" { … }`, primitives FFI-sûres) et
-  `features.md` trace `F-EFF-009`, `F-FFI-001`, `F-FFI-002` vers
-  `cases/run/ffi-abs`, `cases/types/ffi-outside-unsafe`, `cases/types/ffi-bad-type`.
-  La divergence signalée dans le mandat ne se reproduit donc pas sur ce SHA.
-- **Incohérence spec↔implémentation vérifiée puis corrigée** : le cas
-  `security/dependency-absolute-unix` portait une note affirmant que
-  `diagnostics.md` §3.3 ne listait que `E-MOD-PATH`. Vérification faite, la
-  spécification documente **les deux** codes (`E-MOD-PATH` : forme du chemin,
-  lien symbolique ; `E-MOD-PATH-ESCAPE` : chemin absolu, `..`, profondeur), et
-  `Q-DIAG-1` enregistre `E-MOD-PATH-ESCAPE` comme canonique. La note du cas
-  était donc périmée et a été **corrigée** ; ce n'est pas un test modifié pour
-  obtenir un vert, seulement une annotation alignée sur la spec et le code.
-- **Décision humaine** : ratification des choix normatifs.
+Passe de traçabilité complète dans
+[`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
-### T3 — Frontend — `PARTIAL`
+- **Avant** : 99/188 règles citées par un cas, 107 cas, couverture non mesurée.
+- **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
+  **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
+  portant le code exigé).
+- **30 cas échouent**, chacun documenté : 13 codes sont **émis par le
+  compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
+  `E-UNSUPPORTED-TURBOFISH`, …), 9 sont des défauts de comportement (programmes
+  acceptés qui devraient être refusés, ou l'inverse), le reste des noms de codes
+  divergents.
+- **1 règle non couvrable** : `F-META-006` n'a ni forme acceptée ni refus
+  exécutable (MACH-1.4 fixe l'interpréteur à `NOT_IMPLEMENTED`).
+- **Aucun cas n'a été assoupli** : `expect_codes` vient de la spec, jamais de la
+  sortie du compilateur.
+- **Arbitrage requis** : D8 (quel nom de code est canonique).
 
-- **Prouvé** : lexer/parser réels, récupération, garde-fous, formateur
-  idempotent, corpus négatif exécuté, **interfaces LSP effectives** (le LSP
-  consomme les mêmes diagnostics).
-- **Rejoué sur ce SHA** : **Miri** (65 tests syntax + 93 sema + 1 fuzz court,
-  0 échec) via le job Linux.
-- **Absent** : la **campagne fuzz complète** (chiffres antérieurs : 249 054
-  entrées, 0 invariant violé) n'a pas été rejouée ; seul un *fuzz smoke* a
-  tourné. Les limites de profondeur/mémoire n'ont pas été re-mesurées.
-- **Pour passer `PASS`** : rejouer la campagne fuzz complète sur le SHA final et
-  joindre les sorties brutes.
+### T3 — Frontend — `FAIL`
+
+- **Prouvé** : lexer/parser/AST réels, récupération, garde-fous, formateur
+  idempotent, corpus négatif, interfaces LSP effectives.
+- **Fuzz complet rejoué sur ce SHA** : 249 054 entrées lexer/parser
+  (0 échec, digest `0x9ca81d63781e9d75`, identique à la campagne antérieure) et
+  100 000 itérations `sema` (0 échec, 5 003 it/s). Les deux bugs de formateur
+  trouvés par la campagne initiale restent couverts par des tests de régression.
+- **Échec** : la passe T2 a produit trois défauts frontend **reproduits par des
+  cas** — `let effects = 1;` refusé alors que `effects` n'est pas un mot-clé
+  réservé (LEX-4.5), `pub test fn` accepté alors qu'il doit être un
+  `E-PARSE-EXPECTED`, et `while`/`loop`/`for` acceptés comme valeurs
+  (`E-TYP-STATEMENT-VALUE` attendu). Voir `T2-FINDINGS.md` §4.2.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 
-- **Prouvé** : typechecker, moves/moves partiels, prêts, non-échappement, drop,
-  effets transitifs, profils ; 85 cas d'audit adversarial interne ; régression
-  permanente du finding critique `&"a"`.
-- **Manquant** : **audit externe humain**. Le contrat est explicite : un audit
-  mené par un autre agent reste un audit interne. Sans auditeur réellement
-  indépendant, ce gate ne peut pas être `PASS`, même si tous les tests locaux
-  sont verts.
-- **Dossier prêt pour l'auditeur** : `docs/audit/`, `docs/reports/`,
-  `conformance/cases/ownership/`, `crates/ravum-lang-sema/tests/own_audit.rs`.
+Inchangé : le contrat exige un **auditeur humain indépendant**. Un audit mené
+par un autre agent reste un audit interne. Dossier prêt pour l'auditeur :
+`docs/audit/`, `docs/reports/`, `conformance/cases/ownership/`,
+`crates/ravum-lang-sema/tests/own_audit.rs`.
 
 ### T5 — Codegen, ABI, exécution native — `PASS`
 
-- **Prouvé (Windows, cette session)** : 31 PASS sur `check/build/run` réels,
-  binaires natifs exécutés, FFI `abs` exécutée.
-- **Prouvé (Linux, CI sur le même SHA)** : workspace, conformance, smoke
-  (binaires natifs Linux construits et exécutés), installateur et WASI verts.
-- **Portée** : le `PASS` couvre **Windows x86-64 et Linux x86-64** sur un
-  périmètre explicite (le corpus et les exemples), pas une garantie universelle.
-- **Explicitement non revendiqué** : ABI stable, macOS, ARM, sanitizers.
-- **Preuve** : `docs/reports/LANGUAGE-CORE-STATUS.md` +
-  run [42692673526](https://github.com/Rwanbt/Ravum/actions/runs/42692673526).
+31 PASS Windows sur `check/build/run` réels ; Linux qualifié par la CI
+antérieure (workspace, conformance, smoke, installateur, WASI). Portée :
+Windows x86-64 + Linux x86-64 sur le corpus et les exemples. Non revendiqué :
+ABI stable, macOS, ARM, sanitizers.
 
 ### T6 — Runtime, stdlib, FFI — `PARTIAL`
 
-- **Prouvé** : API core/io/fs/string/vec/math ; FFI minimale (`extern "C"`,
-  `unsafe`, types primitifs, effets `ffi`/`unsafe`, refus hors `unsafe`).
-- **Explicitement `UNSUPPORTED`** : threads, réseau, async, temps réel dur.
-  Ces exclusions correspondent à la spécification : elles ne sont pas un
-  périmètre réduit inventé pour obtenir un vert.
-- **Manquant pour `PASS`** : les exigences T6 obligatoires non couvertes
-  (réseau, concurrence, capacités système) restent absentes.
+`core/io/fs/string/vec/math`, FFI minimale (`extern "C"`, `unsafe`, types
+primitifs, effets `ffi`/`unsafe`, refus hors `unsafe`). Threads, réseau, async,
+temps réel dur explicitement `UNSUPPORTED` — conformément à la spec, donc pas un
+périmètre réduit inventé. Les exigences T6 obligatoires non couvertes restent
+absentes.
 
-### T7 — Environnement de développement — `PARTIAL`
+### T7 — Environnement de développement — `PASS`
 
-- **Prouvé** : `init`, `check`, `build`, `run`, `test`, `fmt`, `lint`, `doc`,
-  `cache`, `doctor`, `watch`, **`lsp`** ; packages locaux, lockfile, validation
-  de chemins.
-- **Nouveau cette session** : serveur LSP réel, qualifié par un client LSP
-  écrit à la main (9 tests) — voir
-  [`docs/qualification/LSP.md`](../qualification/LSP.md).
-- **Manquant** : session VS Code réelle ; registre de paquets distant
-  (non annoncé, donc non requis).
-- **Pour passer `PASS`** : démontrer le parcours complet dans un IDE réel et
-  le documenter avec captures/commandes.
+Preuve : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md).
+
+- Extension réelle `tools/vscode-ravum` (grammaire TextMate, serveur `ravum-lang
+  lsp` en stdio), **10 tests d'intégration exécutés dans un VS Code réel**
+  (1.145.2), **10 PASS / 0 FAIL**.
+- Assertions via l'API publique `vscode` : langue, absence de faux positif,
+  symboles, complétion, survol, définition, références, formatage, renommage
+  multi-occurrences, diagnostic `E-*` publié.
+- Deux défauts réels trouvés par ce test et corrigés côté serveur : navigation
+  impossible depuis une déclaration, et `textDocument/prepareRename` absent (ce
+  qui faisait échouer le renommage VS Code même avec une édition valide).
 
 ### T8 — Compilation continue et hot reload — `PARTIAL`
 
-- **Prouvé** : `watch` recompile et redémarre ; overlays/snapshots du socle
-  disponibles.
-- **Absent** : préservation d'état, contrôle de compatibilité de patch,
-  activation atomique avec lecteurs concurrents **pour le langage**.
-- **Position honnête** : un redémarrage automatique ne satisfait pas un gate qui
-  exige la préservation d'état. T8 reste `PARTIAL` jusqu'à implémentation réelle.
+`watch` recompile et redémarre. **La préservation d'état n'existe pas** : un
+redémarrage automatique ne satisfait pas une exigence de préservation d'état.
 
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 
-- **Prouvé** : 9 verticales exécutées (`hello`, `fib`, `calculator`,
-  `file-tool`, `stats`, `dsp-gain-iir`, `package-demo`, `tests-demo`,
-  `ffi-abs`).
-- **Absent** : service HTTP + SQLite, DSP dans un hôte réel, E2E navigateur.
-- **Point de vigilance** : l'application full-stack Rust du MVP-0b **n'est pas**
-  une preuve que Ravum possède une base de données ou un serveur HTTP.
+9 verticales exécutées (`hello`, `fib`, `calculator`, `file-tool`, `stats`,
+`dsp-gain-iir`, `package-demo`, `tests-demo`, `ffi-abs`). Absents : service HTTP
++ SQLite, DSP dans un hôte réel, E2E navigateur.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
-- **Prouvé** : 1018 tests (Windows) / 1015 (Linux), conformance 107, smoke 31,
-  **Miri rejoué sur ce SHA (159 tests PASS)**, audits internes antérieurs
-  (borrow checker 85 cas, backend 21 cas).
-- **Absent** : la **campagne fuzz complète** n'a pas été rejouée sur ce SHA
-  (seul un *fuzz smoke* a tourné) ; **audit externe** absent.
-- **TSan** : `NOT_APPLICABLE` **parce que** Core 1.0 n'expose ni threads ni
-  async — la justification est écrite et le job est explicitement SKIP, pas
-  supprimé.
-- **Interdit** : marquer `NOT_APPLICABLE` un outil simplement difficile à
-  exécuter.
+1019 tests, 268 cas de conformance, 31 smoke, **fuzz complet rejoué sur ce
+SHA**. Miri (159 tests) reste **antérieur** : il n'a pas été rejoué sur
+`1b7b4f1`. TSan `NOT_APPLICABLE` justifié (aucun thread/async exposé). **Audit
+externe absent** — c'est ce qui empêche `PASS`.
 
 ### T11 — Performance, distribution, supply chain — `PARTIAL`
 
-- **Prouvé** : SBOM SPDX-2.3 déterministe (64 paquets, 170 relations),
-  checksums, manifeste de provenance, **licence `MIT OR Apache-2.0` réconciliée
-  sur les 23 membres**, **installateur vert sur Linux (CI, ce SHA)** et antérieur
-  sur Windows.
-- **Absent** : signature/attestation (aucune clé disponible), reproductibilité
-  bit-à-bit démontrée, comparaison inter-machines.
-- **Interdit** : inventer une signature ou une provenance.
+SBOM SPDX-2.3 reproductible (64 paquets, 170 relations, digest identique sur
+deux runs à époque fixée — le digest dépend sinon de l'horodatage, ce qui est le
+comportement SPDX attendu et non un défaut), checksums, manifeste de provenance,
+licence réconciliée. **Aucune signature** (aucune clé, aucune custody) et
+**aucune reproductibilité bit-à-bit** du binaire démontrée.
 
 ### T12 — Dogfood, audit final, RC — `BLOCKED`
 
-- **Prouvé** : dossier de RC interne (PR, rapports, matrice, preuves),
-  décisions humaines explicitées.
-- **Absent** : dogfooding par des agents n'ayant pas développé le compilateur ;
-  Go/No-Go humain.
-- **Verdict de maturité** : `CORE_RC_CANDIDATE` au mieux, **jamais** `RELEASED`.
+Dossier de RC interne complet. Absents : dogfooding par des agents n'ayant pas
+développé le compilateur, et Go/No-Go humain. Verdict plafonné à
+`CORE_RC_CANDIDATE`, jamais `RELEASED`.
 
 ## 4. Décisions humaines restantes
 
@@ -262,9 +187,10 @@ reproductibilité bit-à-bit.
 | D2 | Ratification des ADR / choix du backend | **OUVERTE** |
 | D3 | Fusion dans `main` et publication | **OUVERTE** |
 | D4 | Audit externe (T4/T10/T12) | **OUVERTE** — bloque T4 et T12 |
-| D5 | Périmètre Tier 1 (Linux/autres OS) | **PARTIELLE** : Windows testé, Linux sur CI |
+| D5 | Périmètre Tier 1 | **PARTIELLE** : Windows local, Linux sur CI |
 | D6 | Périmètre des fonctionnalités universelles | **OUVERTE** |
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
+| **D8** | **Arbitrage des codes de diagnostic émis hors spécification (13 codes)** | **NOUVELLE — bloque T2** |
 
 ## 5. Règles de mise à jour
 
@@ -272,3 +198,6 @@ reproductibilité bit-à-bit.
 - Un test ignoré ou non exécuté n'est jamais compté comme réussi.
 - Un `SKIP` lié à l'OS est exécuté sur l'autre plateforme avant d'être coché.
 - Aucun `PASS` obtenu en modifiant la définition du gate.
+- **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
+  passe T2 a produit des contre-exemples exécutables. Une information nouvelle
+  qui dégrade un état est un progrès de mesure, pas une régression de qualité.
