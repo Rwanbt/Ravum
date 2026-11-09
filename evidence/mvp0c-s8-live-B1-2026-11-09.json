@@ -5,7 +5,7 @@
   "generated_at": "2026-11-09T01:45:38.866Z",
   "scenario": "B",
   "rep": 1,
-  "campaign_dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1",
+  "campaign_dir": "<temp>\\s8-mvp0c-live\\B1",
   "protocol": {
     "note": "contenu exact de référence attendu uniquement si les agents scriptés sont utilisés ; en live, critère = cargo test vert + reçus cohérents + changements non perdus + fichiers protégés intacts"
   },
@@ -17,9 +17,9 @@
     "rep": 1,
     "created_at": "2026-11-09T01:41:40.071Z",
     "started_at_epoch_ms": 1794188500071,
-    "repo_root": "D:\\App\\Ravum",
-    "campaign_dir": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1",
-    "fixture_dir": "D:\\App\\Ravum\\benchmarks\\s8-mvp0c\\fixture",
+    "repo_root": "<repo>",
+    "campaign_dir": "<temp>\\s8-mvp0c-live\\B1",
+    "fixture_dir": "<repo>\\benchmarks\\s8-mvp0c\\fixture",
     "fixture_files": [
       ".gitignore",
       "Cargo.toml",
@@ -76,24 +76,24 @@
       }
     ],
     "agent_dirs": {
-      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\shared",
-      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\shared",
-      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\shared"
+      "agent-1": "<temp>\\s8-mvp0c-live\\B1\\shared",
+      "agent-2": "<temp>\\s8-mvp0c-live\\B1\\shared",
+      "agent-3": "<temp>\\s8-mvp0c-live\\B1\\shared"
     },
     "base_paths": {
-      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-1.base.json",
-      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-2.base.json",
-      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-3.base.json"
+      "agent-1": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-1.base.json",
+      "agent-2": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-2.base.json",
+      "agent-3": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-3.base.json"
     },
     "receipt_paths": {
-      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-1.json",
-      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-2.json",
-      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\receipts\\agent-3.json"
+      "agent-1": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-1.json",
+      "agent-2": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-2.json",
+      "agent-3": "<temp>\\s8-mvp0c-live\\B1\\receipts\\agent-3.json"
     },
     "prompt_paths": {
-      "agent-1": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\prompts\\agent-1.md",
-      "agent-2": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\prompts\\agent-2.md",
-      "agent-3": "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1\\prompts\\agent-3.md"
+      "agent-1": "<temp>\\s8-mvp0c-live\\B1\\prompts\\agent-1.md",
+      "agent-2": "<temp>\\s8-mvp0c-live\\B1\\prompts\\agent-2.md",
+      "agent-3": "<temp>\\s8-mvp0c-live\\B1\\prompts\\agent-3.md"
     },
     "base_test": {
       "green": false,
@@ -285,8 +285,8 @@
   "tokens": {
     "measured": true,
     "source": "tools/agent-usage/usage.mjs (+ descripteurs de session DSH pour l’attribution)",
-    "command": "node tools/agent-usage/usage.mjs --json --workspace D:\\App\\Ravum",
-    "dsh_home": "C:\\Users\\barat\\.dsh",
+    "command": "node tools/agent-usage/usage.mjs --json --workspace <repo>",
+    "dsh_home": "C:\\Users\\<user>\\.dsh",
     "workspace_slug": "--D-App-Ravum--",
     "usage_generated_at": "2026-11-09T01:45:38.835Z",
     "window": {

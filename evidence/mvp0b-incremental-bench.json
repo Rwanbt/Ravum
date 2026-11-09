@@ -4770,7 +4770,7 @@
       "timed_out": 0,
       "unit_files_written": 86
     },
-    "work_dir": "D:\\App\\Ravum\\target\\ravum-daemon-bench\\campaign\\daemon",
+    "work_dir": "<repo>\\target\\ravum-daemon-bench\\campaign\\daemon",
     "work_dir_bytes": 9487662
   },
   "fixture": {
@@ -4780,7 +4780,7 @@
       "edition": "2021",
       "flags": []
     },
-    "dir": "D:\\App\\Ravum\\crates\\ravum-daemon\\fixtures\\unit",
+    "dir": "<repo>\\crates\\ravum-daemon\\fixtures\\unit",
     "files": [
       {
         "bytes": 927,
@@ -4931,7 +4931,7 @@
     "release": "1.95.0"
   },
   "toolchain_evidence": {
-    "repo_root": "D:\\App\\Ravum",
+    "repo_root": "<repo>",
     "rustc_path": "rustc",
     "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
   },

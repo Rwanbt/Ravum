@@ -163,7 +163,7 @@
     {
       "details": {
         "unchanged": true,
-        "user_file": "D:\\App\\Ravum\\target\\ravum-daemon-bench\\invariants-suite\\invariants\\user-files\\src\\lib.rs"
+        "user_file": "<repo>\\target\\ravum-daemon-bench\\invariants-suite\\invariants\\user-files\\src\\lib.rs"
       },
       "name": "user_files_untouched",
       "passed": true
@@ -297,7 +297,7 @@
     "release": "1.95.0"
   },
   "toolchain_evidence": {
-    "repo_root": "D:\\App\\Ravum",
+    "repo_root": "<repo>",
     "rustc_path": "rustc",
     "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
   }

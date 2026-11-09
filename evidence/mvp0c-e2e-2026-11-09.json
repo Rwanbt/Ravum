@@ -18,7 +18,7 @@
   },
   "localRevalidation": {
     "command": "RAVUM_TODO_BIN=target\\debug\\ravum-todo.exe RAVUM_E2E_REQUIRE_BROWSER=1 NODE_OPTIONS=--require=<temp>\\taskkill-preload.cjs node apps/ravum-todo/e2e/browser_e2e.mjs --screenshots=<temp>\\screenshots --report=<temp>\\local-report.json",
-    "cwd": "D:\\App\\Ravum",
+    "cwd": "<repo>",
     "exitCode": 0,
     "wallClockMs": 12500,
     "harnessReportedDurationMs": 7420,
@@ -26,7 +26,7 @@
       "product": "HeadlessChrome/156.0.8078.4",
       "protocolVersion": "1.3",
       "revision": "@f842f52ef39fd97b449eb27cff414bf05a98ddce",
-      "executablePath": "C:\\Users\\barat\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1248\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+      "executablePath": "C:\\Users\\<user>\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1248\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
       "discoverySource": "ms-playwright chromium_headless_shell-1248 (headless shell)",
       "launchArguments": [
         "--headless=new",
@@ -46,7 +46,7 @@
       "release": "10.0.26100",
       "arch": "x64"
     },
-    "serverMode": "RAVUM_TODO_BIN=D:\\App\\Ravum\\target\\debug\\ravum-todo.exe (binaire précompilé ; le harnais démarre un vrai serveur par scénario, vrai socket, vrai fichier SQLite)",
+    "serverMode": "RAVUM_TODO_BIN=<repo>\\target\\debug\\ravum-todo.exe (binaire précompilé ; le harnais démarre un vrai serveur par scénario, vrai socket, vrai fichier SQLite)",
     "totals": {
       "scenarios": 10,
       "pass": 10,
@@ -76,9 +76,9 @@
       "measuredStopProcess": "0,02 s"
     },
     "artifacts": {
-      "report": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\local-report.json",
-      "consoleLog": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\console.log",
-      "screenshotsDirectory": "C:\\Users\\barat\\AppData\\Local\\Temp\\ravum-mvp0c-e2e-final\\screenshots"
+      "report": "<temp>\\ravum-mvp0c-e2e-final\\local-report.json",
+      "consoleLog": "<temp>\\ravum-mvp0c-e2e-final\\console.log",
+      "screenshotsDirectory": "<temp>\\ravum-mvp0c-e2e-final\\screenshots"
     }
   },
   "coverageAgainstCurrentContract": {

@@ -413,14 +413,14 @@
     }
   },
   "campaigns": [
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A1",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B1",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C1",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C2",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B2",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A2",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\A3",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\B3",
-    "C:\\Users\\barat\\AppData\\Local\\Temp\\s8-mvp0c-live\\C3"
+    "<temp>\\s8-mvp0c-live\\A1",
+    "<temp>\\s8-mvp0c-live\\B1",
+    "<temp>\\s8-mvp0c-live\\C1",
+    "<temp>\\s8-mvp0c-live\\C2",
+    "<temp>\\s8-mvp0c-live\\B2",
+    "<temp>\\s8-mvp0c-live\\A2",
+    "<temp>\\s8-mvp0c-live\\A3",
+    "<temp>\\s8-mvp0c-live\\B3",
+    "<temp>\\s8-mvp0c-live\\C3"
   ]
 }

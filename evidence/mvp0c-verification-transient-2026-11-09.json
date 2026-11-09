@@ -167,7 +167,7 @@
       119,
       130
     ],
-    "sysroot": "C:\\Users\\barat\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc",
+    "sysroot": "C:\\Users\\<user>\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc",
     "stdMetadataFiles": [
       {
         "name": "libstd-0cebe7c42cd80226.rlib",

@@ -1,0 +1,533 @@
+{
+  "schema_version": 1,
+  "task": "MVP-0c L5.3 — anonymisation des chemins personnels dans les preuves versionnées",
+  "generated_at": "2026-11-09T03:22:04.284Z",
+  "scope": "evidence/*.json (MVP-0b et MVP-0c)",
+  "replacements": {
+    "C:\\\\Users\\\\<redacted-user>": "C:\\\\Users\\\\<user>",
+    "D:\\\\App\\\\Ravum": "<repo>",
+    "C:\\\\Users\\\\<user>\\\\AppData\\\\Local\\\\Temp": "<temp>"
+  },
+  "totals": {
+    "files_changed": 63,
+    "user_paths": 124,
+    "repo_paths": 739,
+    "temp_paths": 124
+  },
+  "files": [
+    {
+      "file": "mvp0b-audio-mmsc-load-mmcss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 19059,
+      "bytes_after": 18939
+    },
+    {
+      "file": "mvp0b-audio-mmsc-load-mmcss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 19060,
+      "bytes_after": 18940
+    },
+    {
+      "file": "mvp0b-audio-mmsc-load-nommscss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 18868,
+      "bytes_after": 18748
+    },
+    {
+      "file": "mvp0b-audio-mmsc-load-nommscss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19264,
+      "bytes_after": 19136
+    },
+    {
+      "file": "mvp0b-audio-mmsc-rest-mmcss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19253,
+      "bytes_after": 19125
+    },
+    {
+      "file": "mvp0b-audio-mmsc-rest-mmcss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19255,
+      "bytes_after": 19127
+    },
+    {
+      "file": "mvp0b-audio-mmsc-rest-nommscss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19056,
+      "bytes_after": 18928
+    },
+    {
+      "file": "mvp0b-audio-mmsc-rest-nommscss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19058,
+      "bytes_after": 18930
+    },
+    {
+      "file": "mvp0b-audio-mmsc-rest-nommscss-r3-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19064,
+      "bytes_after": 18936
+    },
+    {
+      "file": "mvp0b-audio-probe-2026-11-08-f256.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 17263,
+      "bytes_after": 17135
+    },
+    {
+      "file": "mvp0b-audio-probe-2026-11-08-nocrossfade.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 17217,
+      "bytes_after": 17089
+    },
+    {
+      "file": "mvp0b-audio-probe-2026-11-08-realtek-f256.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 17258,
+      "bytes_after": 17130
+    },
+    {
+      "file": "mvp0b-audio-probe-2026-11-08-under-load.json",
+      "user_paths": 0,
+      "repo_paths": 14,
+      "temp_paths": 0,
+      "bytes_before": 17247,
+      "bytes_after": 17135
+    },
+    {
+      "file": "mvp0b-audio-probe-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 17227,
+      "bytes_after": 17099
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-default-refused-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 3,
+      "temp_paths": 0,
+      "bytes_before": 40865,
+      "bytes_after": 40841
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-load-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 33939,
+      "bytes_after": 33811
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-load-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 33937,
+      "bytes_after": 33809
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-rest-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 33747,
+      "bytes_after": 33619
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-rest-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 33748,
+      "bytes_after": 33620
+    },
+    {
+      "file": "mvp0b-audio-wasapi-exclusive-rest-r3-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 33744,
+      "bytes_after": 33616
+    },
+    {
+      "file": "mvp0b-audio-wasapi-load-mmcss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 16112,
+      "bytes_after": 15984
+    },
+    {
+      "file": "mvp0b-audio-wasapi-load-mmcss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 16115,
+      "bytes_after": 15987
+    },
+    {
+      "file": "mvp0b-audio-wasapi-load-nommscss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 16070,
+      "bytes_after": 15942
+    },
+    {
+      "file": "mvp0b-audio-wasapi-load-nommscss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 3,
+      "temp_paths": 0,
+      "bytes_before": 4551,
+      "bytes_after": 4527
+    },
+    {
+      "file": "mvp0b-audio-wasapi-rest-mmcss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 16096,
+      "bytes_after": 15968
+    },
+    {
+      "file": "mvp0b-audio-wasapi-rest-mmcss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 16096,
+      "bytes_after": 15968
+    },
+    {
+      "file": "mvp0b-audio-wasapi-rest-nommscss-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 15897,
+      "bytes_after": 15769
+    },
+    {
+      "file": "mvp0b-audio-wasapi-rest-nommscss-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 15901,
+      "bytes_after": 15773
+    },
+    {
+      "file": "mvp0b-audio-xrun-injected-wasapi-exclusive-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 12,
+      "temp_paths": 0,
+      "bytes_before": 35598,
+      "bytes_after": 35502
+    },
+    {
+      "file": "mvp0b-audio-xrun-injected-wasapi-shared-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 12,
+      "temp_paths": 0,
+      "bytes_before": 18295,
+      "bytes_after": 18199
+    },
+    {
+      "file": "mvp0b-audio-xrun-injected-waveout-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 12,
+      "temp_paths": 0,
+      "bytes_before": 21036,
+      "bytes_after": 20940
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-exclusive-load-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 37219,
+      "bytes_after": 37091
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-exclusive-load-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 37202,
+      "bytes_after": 37074
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-exclusive-rest-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 37057,
+      "bytes_after": 36929
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-exclusive-rest-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 37036,
+      "bytes_after": 36908
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-exclusive-rest-r3-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 37028,
+      "bytes_after": 36900
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-shared-load-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 19537,
+      "bytes_after": 19417
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-shared-load-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 19523,
+      "bytes_after": 19403
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-shared-rest-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19740,
+      "bytes_after": 19612
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-shared-rest-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19726,
+      "bytes_after": 19598
+    },
+    {
+      "file": "mvp0b-audio-xrun-wasapi-shared-rest-r3-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 19727,
+      "bytes_after": 19599
+    },
+    {
+      "file": "mvp0b-audio-xrun-waveout-load-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 22675,
+      "bytes_after": 22547
+    },
+    {
+      "file": "mvp0b-audio-xrun-waveout-load-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 15,
+      "temp_paths": 0,
+      "bytes_before": 22323,
+      "bytes_after": 22203
+    },
+    {
+      "file": "mvp0b-audio-xrun-waveout-rest-r1-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 22460,
+      "bytes_after": 22332
+    },
+    {
+      "file": "mvp0b-audio-xrun-waveout-rest-r2-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 22464,
+      "bytes_after": 22336
+    },
+    {
+      "file": "mvp0b-audio-xrun-waveout-rest-r3-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 16,
+      "temp_paths": 0,
+      "bytes_before": 22466,
+      "bytes_after": 22338
+    },
+    {
+      "file": "mvp0b-collab4-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 17,
+      "temp_paths": 0,
+      "bytes_before": 35984,
+      "bytes_after": 35848
+    },
+    {
+      "file": "mvp0b-cycle-bench-concurrent.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 29467,
+      "bytes_after": 29459
+    },
+    {
+      "file": "mvp0b-cycle-bench-large-concurrent.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 19601,
+      "bytes_after": 19593
+    },
+    {
+      "file": "mvp0b-cycle-bench-large.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 19601,
+      "bytes_after": 19593
+    },
+    {
+      "file": "mvp0b-cycle-bench.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 29414,
+      "bytes_after": 29406
+    },
+    {
+      "file": "mvp0b-daemon-compaction-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 4,
+      "temp_paths": 0,
+      "bytes_before": 5863,
+      "bytes_after": 5831
+    },
+    {
+      "file": "mvp0b-daemon-gc-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 2,
+      "temp_paths": 0,
+      "bytes_before": 71543,
+      "bytes_after": 71527
+    },
+    {
+      "file": "mvp0b-daemon-gc-auto-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 16532,
+      "bytes_after": 16524
+    },
+    {
+      "file": "mvp0b-daemon-soak-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 27341,
+      "bytes_after": 27333
+    },
+    {
+      "file": "mvp0b-daemon-soak-multi-2026-11-08.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 69473,
+      "bytes_after": 69465
+    },
+    {
+      "file": "mvp0b-incremental-bench.json",
+      "user_paths": 0,
+      "repo_paths": 3,
+      "temp_paths": 0,
+      "bytes_before": 147594,
+      "bytes_after": 147570
+    },
+    {
+      "file": "mvp0b-incremental-invariants.json",
+      "user_paths": 0,
+      "repo_paths": 2,
+      "temp_paths": 0,
+      "bytes_before": 9470,
+      "bytes_after": 9454
+    },
+    {
+      "file": "mvp0b-incremental-scale.json",
+      "user_paths": 0,
+      "repo_paths": 1,
+      "temp_paths": 0,
+      "bytes_before": 9514,
+      "bytes_after": 9506
+    },
+    {
+      "file": "mvp0b-s8-A-2026-11-08.json",
+      "user_paths": 36,
+      "repo_paths": 0,
+      "temp_paths": 36,
+      "bytes_before": 204809,
+      "bytes_after": 203657
+    },
+    {
+      "file": "mvp0b-s8-B-2026-11-08.json",
+      "user_paths": 51,
+      "repo_paths": 10,
+      "temp_paths": 51,
+      "bytes_before": 255092,
+      "bytes_after": 253380
+    },
+    {
+      "file": "mvp0b-s8-C-2026-11-08.json",
+      "user_paths": 36,
+      "repo_paths": 0,
+      "temp_paths": 36,
+      "bytes_before": 172898,
+      "bytes_after": 171746
+    },
+    {
+      "file": "mvp0b-s8-summary-2026-11-08.json",
+      "user_paths": 1,
+      "repo_paths": 3,
+      "temp_paths": 1,
+      "bytes_before": 46093,
+      "bytes_after": 46037
+    }
+  ],
+  "validation": {
+    "json_parse_ok": true,
+    "semantic_change": "aucun — seuls les chemins d’environnement sont remplacés",
+    "residual_username_occurrences": 0
+  },
+  "limits": [
+    "seuls les fichiers JSON de evidence/ sont concernés",
+    "les identifiants SHA-256 de contenus tiers ne sont pas affectés",
+    "aucun résultat, chiffre ou conclusion modifié"
+  ]
+}
