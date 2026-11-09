@@ -76,7 +76,7 @@ const LIMITS = Object.freeze([
   "Les `dev-dependencies` sont propagées sur un seul saut : les tests du dépendant sont exigés, pas ceux de ses propres dépendants.",
   '`fixtures/**` déclenche la suite complète : données consommées par plusieurs crates de test et par les démos, sans mapping statique sûr.',
   "`scripts/**` déclenche la suite complète mais les scripts de démo/orchestration ne sont pas exécutés par ce workflow (couverts par `mvp.yml`).",
-  "UI statique (`apps/*/static/**`) et suites E2E navigateur éventuelles : la suite Rust du paquet est exigée, le navigateur n'est pas exécuté ici.",
+  "UI statique (`apps/*/static/**`) : la suite Rust du paquet est exigée, et les 10 scénarios E2E navigateur sont exécutés quand `browser_e2e_required` est vrai.",
   "Un diff vide est traité comme incertain (FULL) : impossible de distinguer « aucun changement » d'une base Git erronée.",
   "Le graphe ne détecte pas la suppression ou la désactivation d'un test ; ce workflow ne neutralise rien mais ne peut pas prouver l'absence de tests retirés.",
 ]);
@@ -1025,6 +1025,48 @@ export function analyze(workspace, changes) {
     });
   }
 
+  // --- E2E navigateur : requis pour toute surface applicative/UI ou décision
+  // non fiable. Conservateur : jamais de faux négatif sur un chemin UI connu ;
+  // un chemin inconnu (FULL) exige aussi le navigateur par prudence.
+  const changedPaths = changed.flatMap((change) => change.entries.map((entry) => entry.path));
+  const browserReasons = [];
+  const requireBrowser = (reason) => {
+    if (!browserReasons.includes(reason)) browserReasons.push(reason);
+  };
+  if (uncertain) {
+    requireBrowser('mapping incertain (fail-closed) : E2E navigateur exigés par prudence');
+  }
+  for (const changedPath of changedPaths) {
+    if (under(changedPath, 'apps')) requireBrowser(`application/UI modifiée: ${changedPath}`);
+    if (under(changedPath, 'crates/ravum-todo-core')) requireBrowser(`contrat applicatif modifié: ${changedPath}`);
+    if (under(changedPath, 'crates/ravum-store')) requireBrowser(`stockage applicatif modifié: ${changedPath}`);
+    if (changedPath === 'scripts/demo-m4-browser.ps1') requireBrowser('script E2E navigateur modifié');
+  }
+  if (!uncertain && unknownPaths.length > 0) {
+    requireBrowser(`chemin inconnu (${uniqueSorted(unknownPaths)[0]}) : E2E navigateur exigés par prudence`);
+  }
+  if (full) {
+    const manifestChanged = changedPaths.some((changedPath) => {
+      const base = path.posix.basename(changedPath);
+      return base === 'Cargo.toml' || base === 'Cargo.lock';
+    });
+    const uiChanged = changedPaths.some(
+      (changedPath) =>
+        under(changedPath, 'apps') ||
+        under(changedPath, 'crates/ravum-todo-core') ||
+        under(changedPath, 'crates/ravum-store'),
+    );
+    if (manifestChanged) requireBrowser('décision FULL + manifeste de construction modifié');
+    if (uiChanged) requireBrowser('décision FULL + surface applicative/UI modifiée');
+  }
+  const browserE2eRequired = browserReasons.length > 0;
+  if (browserE2eRequired) {
+    const extra = browserReasons.length > 1 ? ` (+${browserReasons.length - 1} autre(s) raison(s))` : '';
+    reasons.push(`browser-e2e — requis: ${browserReasons[0]}${extra}`);
+  } else {
+    reasons.push('browser-e2e — non requis: aucun chemin apps/todo-core/store/script E2E, pas d’incertitude, pas de FULL+manifeste/UI');
+  }
+
   return {
     schema: SCHEMA,
     /**
@@ -1043,6 +1085,9 @@ export function analyze(workspace, changes) {
     packages_scope: full ? 'workspace' : 'impacted',
     direct_packages: [...directPackages].sort(),
     naive_packages: [...directPackages].sort(),
+    browser_e2e_required: browserE2eRequired,
+    browser_e2e_reason: browserReasons[0] ?? null,
+    browser_e2e_reasons: browserReasons,
     commands,
     reasons: dedupe(reasons),
     unknown_paths: uniqueSorted(unknownPaths),
@@ -1240,6 +1285,13 @@ export function renderExplain(result, workspace) {
     }
   }
   push('');
+  if (result.browser_e2e_required) {
+    push(`E2E NAVIGATEUR: REQUIS — ${result.browser_e2e_reason}`);
+    for (const extra of (result.browser_e2e_reasons ?? []).slice(1)) push(`  autre raison: ${extra}`);
+  } else {
+    push('E2E NAVIGATEUR: non requis');
+  }
+  push('');
   push('NOTES');
   if (result.notes.length === 0) push('  (aucune)');
   for (const note of result.notes) push(`  - ${note}`);
@@ -1262,6 +1314,9 @@ function fallbackDecision(message) {
     decision: 'full-uncertain',
     full: true,
     uncertain: true,
+    browser_e2e_required: true,
+    browser_e2e_reason: 'décision de secours impossible : E2E navigateur exigés par prudence (fail-closed)',
+    browser_e2e_reasons: ['décision de secours impossible : E2E navigateur exigés par prudence (fail-closed)'],
     packages: [],
     packages_scope: 'workspace',
     direct_packages: [],

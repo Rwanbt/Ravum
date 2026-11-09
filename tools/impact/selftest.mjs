@@ -439,6 +439,56 @@ function testImpactCorpus(workspace) {
     check(result.decision === 'selective', `décision sélective attendue, obtenue ${result.decision}`);
   });
 
+  runCase('E2E navigateur: règle conservatrice browser_e2e_required', () => {
+    const trueCases = [
+      ['apps/ravum-todo/src/routes.rs', /apps/],
+      ['apps/ravum-todo/static/app.js', /apps/],
+      ['crates/ravum-todo-core/src/lib.rs', /todo-core/],
+      ['crates/ravum-store/src/lib.rs', /store/],
+      ['scripts/demo-m4-browser.ps1', /E2E|script/],
+      ['Cargo.toml', /manifeste/],
+      ['inconnu/fichier.bin', /inconnu/],
+    ];
+    for (const [filePath, reasonPattern] of trueCases) {
+      const result = analyze(workspace, [M(filePath)]);
+      check(result.browser_e2e_required === true, `${filePath} doit exiger les E2E navigateur`);
+      check(
+        typeof result.browser_e2e_reason === 'string' && reasonPattern.test(result.browser_e2e_reason),
+        `${filePath}: raison navigateur inattendue (${result.browser_e2e_reason})`,
+      );
+      check(result.browser_e2e_reasons.length >= 1, `${filePath}: liste de raisons navigateur vide`);
+      check(
+        result.reasons.some((reason) => reason.includes('browser-e2e — requis')),
+        `${filePath}: raison « browser-e2e — requis » absente`,
+      );
+    }
+    const falseCases = [
+      'docs/mvp/MVP-0c-qualification.md',
+      'README.md',
+      'crates/ravum-unit-graph/src/lib.rs',
+      'crates/ravum-proof/src/lib.rs',
+    ];
+    for (const filePath of falseCases) {
+      const result = analyze(workspace, [M(filePath)]);
+      check(result.browser_e2e_required === false, `${filePath} ne doit PAS exiger les E2E navigateur`);
+      check(result.browser_e2e_reason === null, `${filePath}: raison navigateur inattendue (${result.browser_e2e_reason})`);
+      check(
+        result.reasons.some((reason) => reason.includes('browser-e2e — non requis')),
+        `${filePath}: raison « browser-e2e — non requis » absente`,
+      );
+    }
+    const uncertainResult = analyze(workspace, [{ status: 'U', path: 'crates/ravum-snapshot/src/lib.rs' }]);
+    check(uncertainResult.uncertain === true && uncertainResult.browser_e2e_required === true, 'un mapping incertain doit exiger les E2E');
+    const emptyResult = analyze(workspace, []);
+    check(emptyResult.uncertain === true && emptyResult.browser_e2e_required === true, 'un diff vide doit exiger les E2E');
+    const manifestFull = analyze(workspace, [M('Cargo.toml')]);
+    check(manifestFull.full === true && manifestFull.browser_e2e_required === true, 'FULL + manifeste doit exiger les E2E');
+    const scriptsOnly = analyze(workspace, [M('scripts/run-tests.ps1')]);
+    check(scriptsOnly.full === true && scriptsOnly.browser_e2e_required === false, 'FULL scripts non-UI ne doit pas exiger le navigateur');
+    const unitGraphOnly = analyze(workspace, [M('crates/ravum-unit-graph/src/lib.rs')]);
+    check(unitGraphOnly.browser_e2e_required === false, 'ravum-unit-graph seul ne doit pas exiger le navigateur');
+  });
+
   runCase('protocole => FULL (contrat/ABI partagé), issue légitime sans incertitude', () => {
     const result = analyze(workspace, [M('crates/ravum-protocol/src/lib.rs')]);
     check(result.full === true, 'ravum-protocol doit déclencher FULL');
@@ -833,6 +883,22 @@ function testCli() {
     check(Array.isArray(decision.commands) && decision.commands.length >= 1, 'décision JSON vide (aucune commande)');
   });
 
+  runCase('CLI --files: application UI => browser_e2e_required true (JSON valide)', () => {
+    const run = runCli(['--files', 'apps/ravum-todo/src/routes.rs', '--json']);
+    check(run.code === 0, `code attendu 0, obtenu ${run.code}`);
+    const decision = parseCliJson(run, 'CLI app UI');
+    check(decision.browser_e2e_required === true, 'browser_e2e_required attendu true');
+    check(typeof decision.browser_e2e_reason === 'string' && decision.browser_e2e_reason.length > 0, 'raison navigateur absente');
+  });
+
+  runCase('CLI --files: docs-only => browser_e2e_required false', () => {
+    const run = runCli(['--files', 'docs/mvp/MVP-0c-qualification.md', '--json']);
+    check(run.code === 0, `code attendu 0, obtenu ${run.code}`);
+    const decision = parseCliJson(run, 'CLI docs-only navigateur');
+    check(decision.browser_e2e_required === false, 'browser_e2e_required attendu false pour docs-only');
+    check(decision.browser_e2e_reason === null, `raison navigateur inattendue: ${decision.browser_e2e_reason}`);
+  });
+
   runCase('INCERTAIN: statut U => FULL + INCERTAIN, exit 2 (seul cas d’échec mapping)', () => {
     const run = runCli(['--files', 'U:crates/ravum-snapshot/src/lib.rs', '--json']);
     check(run.code === 2, `code attendu 2, obtenu ${run.code}`);
@@ -995,6 +1061,22 @@ function testWorkflowIntegrity() {
     check(
       text.indexOf('id: mapping_selftest') < text.indexOf('Compute impact mapping'),
       'le selftest du mapping doit précéder le calcul d’impact',
+    );
+
+    // E2E navigateur déclenchés par l’impact : conditionnels, explicites,
+    // jamais un skip transformé en vert.
+    check(text.includes('browser_e2e_required'), 'le workflow doit lire browser_e2e_required');
+    check(text.includes('"browser=$browserFlag"'), 'le workflow doit publier la sortie browser');
+    check(text.includes('demo-m4-browser.ps1 -RequireBrowser'), 'le workflow doit exécuter le script E2E avec -RequireBrowser');
+    check(text.includes('actions/setup-node@v4'), 'setup-node requis pour le harnais navigateur');
+    check(text.includes('target/ravum/browser-e2e'), 'artefact browser-e2e absent du workflow');
+    check(
+      (text.match(/steps\.impact\.outputs\.browser == 'true'/g) || []).length >= 2,
+      'les étapes navigateur (setup + exécution) doivent être conditionnées à browser',
+    );
+    check(
+      /::error::E2E navigateur exigés par le mapping/.test(text),
+      'un échec navigateur doit produire une erreur explicite (pas de skip vert)',
     );
   });
 }

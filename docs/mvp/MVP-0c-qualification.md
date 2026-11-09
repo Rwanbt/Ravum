@@ -448,3 +448,115 @@ portait l'ancien selftest).
    `scripts/impact.ps1` sont inchangés.
 
 **Preuve JSON** : [`evidence/mvp0c-impact-dev-dep-2026-11-09.json`](../../evidence/mvp0c-impact-dev-dep-2026-11-09.json).
+
+---
+
+## 11. E2E navigateur déclenchés par la CI par impact (MVP-0c L4.9)
+
+### 11.1 Trou fermé
+
+`mvp-impact.yml` n'exécutait aucun navigateur : une modification d'application/UI pouvait
+passer avec des tests Rust verts sans jamais exercer le JavaScript réellement affiché.
+Le champ `browser_e2e_required` comble ce trou, sans affaiblir les règles conservatrices.
+
+### 11.2 Règle `browser_e2e_required` (conservatrice)
+
+| Déclencheur | `browser_e2e_required` | Exemple de raison |
+|---|---|---|
+| chemin sous `apps/**` (UI/app) | **true** | `application/UI modifiée: apps/ravum-todo/src/routes.rs` |
+| `crates/ravum-todo-core/**` (contrat applicatif) | **true** | `contrat applicatif modifié: …` |
+| `crates/ravum-store/**` (stockage applicatif) | **true** | `stockage applicatif modifié: …` |
+| `scripts/demo-m4-browser.ps1` (script E2E) | **true** | `script E2E navigateur modifié` |
+| mapping **incertain** (U/X/B, diff vide, base introuvable…) | **true** (fail-closed) | `mapping incertain (fail-closed) …` |
+| **FULL + manifeste** (`Cargo.toml`/`Cargo.lock`) | **true** | `décision FULL + manifeste de construction modifié` |
+| **FULL + surface UI** | **true** | `décision FULL + surface applicative/UI modifiée` |
+| **chemin inconnu** (FULL) | **true** (extension conservatrice) | `chemin inconnu (…) : E2E navigateur exigés par prudence` |
+| docs-only | **false** | `browser-e2e — non requis: …` |
+| crate sans lien applicatif (`ravum-unit-graph`, `ravum-proof`) | **false** | idem |
+| FULL dû à `scripts/**` non-UI | **false** (compromis de coût) | idem |
+
+Le champ est émis dans le JSON (`browser_e2e_required`, `browser_e2e_reason`,
+`browser_e2e_reasons`), affiché par `--explain` et par `scripts/impact.ps1`, et journalisé
+dans les `reasons` (`browser-e2e — requis/non requis`). En cas de champ absent ou de
+décision de secours, le workflow force `browser=true` (fail-closed).
+
+### 11.3 Workflow (YAML validé, 16 steps)
+
+3 étapes conditionnelles ajoutées à `mvp-impact.yml` :
+
+1. `Setup Node.js for the browser E2E (impact-selected)` (`node-version: '24'`) ;
+2. `Browser E2E - real Chromium/Edge via CDP (impact-selected)` :
+   `powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots` ;
+3. `Upload browser E2E evidence (impact-selected)` (artefact `browser-e2e-evidence`,
+   `target/ravum/browser-e2e`).
+
+Conditions : `always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'`.
+**Aucun skip transformé en vert** : `-RequireBrowser` transforme l'absence de navigateur en
+échec (exit 1), et tout code non nul fait échouer le job (`::error::E2E navigateur …`).
+Preuve locale : navigateur invalide + `RAVUM_E2E_REQUIRE_BROWSER=1` ⇒ **exit 1** explicite.
+
+### 11.4 Exécution locale réelle (coût)
+
+Le navigateur disponible localement est un **Playwright headless shell** (pas Edge CI) :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser
+# exit 0 ; 10/10 scénarios réussis, 0 échec ; 10,1 s de scénarios ; 24,1 s au total (build inclus)
+```
+
+Référence CI (preuves F, run `mvp.yml` **42546044558**, head `486d4c8`) :
+
+| Étape | Durée réelle |
+|---|---|
+| Setup Node.js | 4 s |
+| Browser E2E (10 scénarios) | 22 s |
+| Upload artefact | 1 s |
+| **Ajout par exécution impact** | **~27 s** |
+
+Le job impact peut recompiler `ravum-todo` si le cache est froid (non mesuré séparément,
+borné par le timeout global). **Compromis assumé** : `mvp.yml` et `mvp-impact.yml` se
+déclenchent tous deux sur `push feat/**` ; quand le navigateur est requis, les 10 E2E
+peuvent tourner deux fois. La CI par impact reste autosuffisante (aucune dépendance à un
+autre job pour ne pas rater une régression UI), coût ~27 s par occurrence.
+
+### 11.5 Décisions réelles (JSON)
+
+| Diff | Décision | `browser_e2e_required` | Raison |
+|---|---|---|---|
+| `apps/ravum-todo/src/routes.rs` | sélective | **true** | application/UI modifiée |
+| `docs/mvp/MVP-0c-qualification.md` | sélective | **false** | non requis |
+| `crates/ravum-unit-graph/src/lib.rs` | sélective | **false** | non requis |
+| `Cargo.toml` | FULL conservateur | **true** | FULL + manifeste |
+| `scripts/demo-m4-browser.ps1` | FULL conservateur | **true** | script E2E modifié |
+| `crates/ravum-todo-core/src/lib.rs` | sélective | **true** | contrat applicatif |
+| `crates/ravum-store/src/lib.rs` | sélective | **true** | stockage applicatif |
+| `zorglub/x.bin` | FULL conservateur | **true** | chemin inconnu (prudence) |
+| statut `U` (incertain) | FULL + incertain | **true** | fail-closed |
+
+Diff réel `origin/dev..HEAD` (`node tools/impact/impact.mjs --base origin/dev --head HEAD --json`) :
+**exit 0**, `full-conservative`, `uncertain=false`, `browser_e2e_required=true`
+(`application/UI modifiée: apps/ravum-demo-host/Cargo.toml`), `docs_required=true`,
+598 fichiers, 2 commandes.
+
+### 11.6 Selftest
+
+`SELFTEST PASS — 59 cas, 655 assertions, 0 échec` (avant : 56 cas/583 assertions ; le nombre d'assertions est dynamique car l'inventaire boucle sur les paquets du workspace, y compris les WIP d'autres workers).
+Nouveaux cas : règle navigateur (true/false/incertain/FULL+manifeste/unit-graph), CLI
+`apps` ⇒ true, CLI `docs-only` ⇒ false, et assertions de garde du workflow (setup-node,
+`-RequireBrowser`, sortie `browser`, artefact, échec explicite).
+
+### 11.7 Limites
+
+1. **Aucun `workflow_dispatch` avec le nouveau code** avant le commit du Lead (aucune
+   commande git mutante) : le ref distant `486d4c8` ne contient pas ces étapes ; un
+   dispatch maintenant reproduirait l'ancien comportement. Commande prévue après commit :
+   `gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening -f base=origin/dev`.
+2. Navigateur local = Playwright headless shell, pas Edge de `windows-latest` ; les 10
+   scénarios réussissent localement, la CI peut différer.
+3. Coût CI mesuré à cache chaud dans le job `mvp` ; coût à froid du job impact non mesuré.
+4. Duplication `mvp.yml`/`mvp-impact.yml` assumée et documentée.
+5. Le sélecteur déclenche les E2E existants ; il ne prouve pas une absence générale de
+   régression UI, et ne remplace pas la qualification produit.
+
+**Preuve JSON** : [`evidence/mvp0c-impact-e2e-2026-11-09.json`](../../evidence/mvp0c-impact-e2e-2026-11-09.json).
+
