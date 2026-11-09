@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-impact-e2e-ci",
+  "date": "2026-11-09",
+  "branch": "feat/mvp0c-hardening",
+  "head": "24d92b1",
+  "rule_commit": "5aa18af",
+  "objective": "Prouver sur GitHub que la règle browser_e2e_required exécute réellement les 10 scénarios CDP dans la CI par impact, produit lartefact, et exercer un workflow_dispatch réel base=origin/dev.",
+  "push_runs": [
+    {
+      "run_id": 42550250227,
+      "head": "51a1bae",
+      "event": "push",
+      "conclusion": "success",
+      "job_duration_s": 308,
+      "full_suite_s": 233,
+      "browser_steps": [
+        {
+          "number": 12,
+          "name": "Setup Node.js for the browser E2E (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 5
+        },
+        {
+          "number": 13,
+          "name": "Browser E2E - real Chromium/Edge via CDP (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 23
+        },
+        {
+          "number": 14,
+          "name": "Upload browser E2E evidence (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 1
+        }
+      ],
+      "decision_log": "Décision: full=true uncertain=false docs=true browser=true (exit outil=0)",
+      "skipped_as_expected": [
+        "Run exactly the required Rust tests (FULL actif)",
+        "Fail explicitly on an uncertain mapping (mapping certain)"
+      ],
+      "artifact": {
+        "name": "browser-e2e-evidence",
+        "size_bytes": 155290,
+        "expired": false,
+        "report": {
+          "scenarios": 10,
+          "pass": 10,
+          "fail": 0,
+          "documentedChecks": 44
+        }
+      },
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42550250227"
+    },
+    {
+      "run_id": 42551014585,
+      "head": "24d92b1",
+      "event": "push",
+      "conclusion": "success",
+      "job_duration_s": 283,
+      "full_suite_s": 216,
+      "browser_steps": [
+        {
+          "number": 12,
+          "name": "Setup Node.js for the browser E2E (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 5
+        },
+        {
+          "number": 13,
+          "name": "Browser E2E - real Chromium/Edge via CDP (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 21
+        },
+        {
+          "number": 14,
+          "name": "Upload browser E2E evidence (impact-selected)",
+          "conclusion": "success",
+          "duration_s": 1
+        }
+      ],
+      "decision_log": "Décision: full=true uncertain=false docs=true browser=true (exit outil=0)",
+      "skipped_as_expected": [
+        "Run exactly the required Rust tests (FULL actif)",
+        "Fail explicitly on an uncertain mapping (mapping certain)"
+      ],
+      "artifact": {
+        "name": "browser-e2e-evidence",
+        "size_bytes": 155290,
+        "expired": false,
+        "report": {
+          "scenarios": 10,
+          "pass": 10,
+          "fail": 0,
+          "documentedChecks": 44
+        }
+      },
+      "url": "https://github.com/Rwanbt/Ravum/actions/runs/42551014585"
+    }
+  ],
+  "dispatch": {
+    "command": "gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening -f base=origin/dev",
+    "run_id": 42551717472,
+    "event": "workflow_dispatch",
+    "ref": "feat/mvp0c-hardening",
+    "input_base": "origin/dev",
+    "head": "24d92b1",
+    "conclusion": "success",
+    "url": "https://github.com/Rwanbt/Ravum/actions/runs/42551717472",
+    "job_started_utc": "2026-11-09T02:34:52Z",
+    "job_completed_utc": "2026-11-09T02:39:49Z",
+    "job_duration_s": 297,
+    "steps": [
+      {
+        "number": 6,
+        "name": "Verify the impact mapping itself (Node selftest, no cargo)",
+        "conclusion": "success",
+        "duration_s": 4
+      },
+      {
+        "number": 8,
+        "name": "Compute impact mapping",
+        "conclusion": "success",
+        "duration_s": 1
+      },
+      {
+        "number": 10,
+        "name": "Run the FULL workspace suite (legitimate conservative mapping)",
+        "conclusion": "success",
+        "duration_s": 232
+      },
+      {
+        "number": 11,
+        "name": "Run exactly the required Rust tests (serialized)",
+        "conclusion": "skipped",
+        "note": "attendu : décision FULL"
+      },
+      {
+        "number": 12,
+        "name": "Setup Node.js for the browser E2E (impact-selected)",
+        "conclusion": "success",
+        "duration_s": 4
+      },
+      {
+        "number": 13,
+        "name": "Browser E2E - real Chromium/Edge via CDP (impact-selected)",
+        "conclusion": "success",
+        "duration_s": 21
+      },
+      {
+        "number": 14,
+        "name": "Upload browser E2E evidence (impact-selected)",
+        "conclusion": "success",
+        "duration_s": 1
+      },
+      {
+        "number": 15,
+        "name": "Fail explicitly on an uncertain mapping",
+        "conclusion": "skipped",
+        "note": "attendu : mapping certain"
+      }
+    ],
+    "decision_log": "Décision: full=true uncertain=false docs=true browser=true (exit outil=0)",
+    "e2e_log": "Résultat: 10/10 scénarios réussis, 0 échec(s), durée 14.8 s",
+    "artifact": {
+      "name": "browser-e2e-evidence",
+      "size_bytes": 155331,
+      "expired": false,
+      "report": {
+        "scenarios": 10,
+        "pass": 10,
+        "fail": 0,
+        "documentedChecks": 44,
+        "harnessError": null,
+        "durationMs": 14772,
+        "browser": "Chrome/156.0.8078.80 (navigateur système, Windows Server 2025 Datacenter)",
+        "node": "v24.22.2",
+        "commit": "24d92b1"
+      }
+    }
+  },
+  "local_decisions": [
+    {
+      "diff": "apps/ravum-todo/src/routes.rs",
+      "decision": "selective",
+      "full": false,
+      "browser_e2e_required": true,
+      "expected": true,
+      "ok": true,
+      "reason": "application/UI modifiée: apps/ravum-todo/src/routes.rs"
+    },
+    {
+      "diff": "docs/mvp/MVP-0c-qualification.md",
+      "decision": "selective",
+      "full": false,
+      "browser_e2e_required": false,
+      "expected": false,
+      "ok": true,
+      "reason": null
+    },
+    {
+      "diff": "crates/ravum-unit-graph/src/lib.rs",
+      "decision": "selective",
+      "full": false,
+      "browser_e2e_required": false,
+      "expected": false,
+      "ok": true,
+      "reason": null
+    },
+    {
+      "diff": "Cargo.toml",
+      "decision": "full-conservative",
+      "full": true,
+      "browser_e2e_required": true,
+      "expected": true,
+      "ok": true,
+      "reason": "décision FULL + manifeste de construction modifié"
+    }
+  ],
+  "cost": {
+    "no_e2e_baseline": {
+      "run_id": 42546044539,
+      "head": "486d4c8",
+      "job_duration_s": 211,
+      "note": "run impact avant le commit 5aa18af : aucune étape navigateur"
+    },
+    "with_e2e": [
+      {
+        "run_id": 42550250227,
+        "job_duration_s": 308,
+        "browser_added_s": 29
+      },
+      {
+        "run_id": 42551014585,
+        "job_duration_s": 283,
+        "browser_added_s": 27
+      },
+      {
+        "run_id": 42551717472,
+        "job_duration_s": 297,
+        "browser_added_s": 26
+      }
+    ],
+    "browser_added_range_s": [
+      26,
+      29
+    ],
+    "expected_range_announced_s": [
+      25,
+      65
+    ],
+    "note": "Coût ajouté = setup-node (4–5 s) + Browser E2E (21–23 s) + upload (1 s), mesuré sur les timestamps d'étapes réels. Le run complet reste dominé par la suite FULL (~3,6–3,9 min) ; ces runs sont FULL (diff vs origin/dev), pas sélectifs."
+  },
+  "no_false_green": {
+    "skipped_steps_are_expected": "le step sélectif est sauté car la décision est FULL ; le step incertain est sauté car uncertain=false. Les trois étapes navigateur sont success et l'artefact est présent.",
+    "any_browser_step_missing": false,
+    "any_false_skip": false
+  },
+  "files_modified": [
+    "docs/mvp/MVP-0c-qualification.md (section 12)",
+    "evidence/mvp0c-impact-e2e-ci-2026-11-09.json (créé)"
+  ],
+  "not_modified": [
+    "tools/impact/**",
+    ".github/workflows/**",
+    "scripts/**",
+    "apps/**",
+    "crates/**",
+    "Cargo.toml",
+    "benchmarks/**"
+  ],
+  "limits": [
+    "Un seul navigateur observé sur le runner : Chrome système 156 ; aucune diversité de navigateur.",
+    "Les 3 runs observés sont FULL (diff vs origin/dev) : le dispatch prouve le chemin FULL + E2E, pas un chemin sélectif UI avec E2E.",
+    "Duplication possible avec mvp.yml sur push feat/** (documentée) : les 10 E2E peuvent tourner deux fois.",
+    "Un chemin inconnu (FULL) exige le navigateur par prudence : cela augmente la fréquence d'exécution sur les diffs hétérogènes.",
+    "Une seule exécution workflow_dispatch observée ; ce n'est pas une preuve de stabilité dans le temps.",
+    "Le rapport du harnais porte sa propre mise en garde : TESTED/PENDING, jamais PROVED ; aucun résultat CI ne qualifie le produit.",
+    "Aucune commande git mutante, aucun commit, aucune PR : la vérification porte sur les runs GitHub existants et un dispatch."
+  ]
+}
