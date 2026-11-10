@@ -176,6 +176,40 @@ pwsh -File scripts/lang-bench.ps1 -Runs 3                  # perf
 cd tools/vscode-ravum; npm install; node test/runTest.js   # 10/10 VS Code
 ```
 
+## 15 bis. Point de reprise vérifié depuis un clone neuf
+
+Les commandes de §15 ont été **exécutées depuis un clone neuf** (`git clone
+--depth 1 --branch feat/lang-core-1.0-rc`), dans un répertoire temporaire, sans
+réutiliser le `target/` de la machine de développement.
+
+| Commande | Résultat dans le clone neuf | Attendu (ce rapport) |
+|---|---|---|
+| `cargo build -p ravum-lang-cli` | succès | succès |
+| `cargo run -p ravum-conformance -- run` | **322 cas, 321 PASS / 0 FAIL / 1 SKIP** | identique |
+| `python tools/features_coverage.py --strict` | **186/188** | identique |
+| `python tools/registry_audit.py` | **112 codes, 1 hors registre** | identique |
+| `pwsh scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL** | identique |
+| `cargo test --workspace --all-targets` | **1 échec** : `ravum-collab-oracle` → `cost_of_five_real_evaluations_on_the_multicrate_fixture` | 1020 passés |
+
+Les cinq mesures qui fondent les gates du **langage** se reproduisent à
+l'identique. La suite workspace, elle, **n'est pas verte depuis un clone neuf** :
+un test de `ravum-collab-oracle` (orchestration de collaboration, hors périmètre
+langage) échoue avec
+
+```
+Unavailable { reason: "the baseline snapshot does not compile (1 error(s));
+interface attribution is impossible (fail-closed)" }
+```
+
+alors que le fixture `fixtures/multicrate` **compile correctement** en `cargo
+check` dans ce même clone. Le défaut est donc dans la campagne de compilation
+unité par unité de l'oracle, pas dans le fixture.
+
+**Ce que cela signifie** : le point de reprise est fiable pour qualifier le
+langage ; la suite workspace complète, telle que documentée, dépend d'un état
+présent sur un poste déjà utilisé. C'est un défaut de reproductibilité du dépôt,
+mesuré et non corrigé ici — il touche une crate d'orchestration, pas le
+compilateur.
 ## 16. Ce que ce rapport ne prétend pas
 
 - Ce n'est **pas** un audit de sécurité indépendant.
