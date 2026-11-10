@@ -1930,6 +1930,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 args.get(1).map(|a| a.span).unwrap_or(Span::dummy()),
                 format!("`assert_eq` arguments have different types `{a_ty}` and `{b_ty}`"),
             );
+        } else {
+            // `assert_eq` compares with `==` (STD-8.2), so a type without `==`
+            // cannot be asserted: `Vec`, `Option`, `Result`, structs and enums
+            // have no equality in Core 1.0.
+            let comparable = (is_text_like(&a_ty) && is_text_like(&b_ty))
+                || (a_ty == b_ty
+                    && (a_ty.is_int()
+                        || a_ty.is_float()
+                        || a_ty == Type::Bool
+                        || a_ty == Type::Char));
+            if !comparable && !matches!(a_ty, Type::Error) {
+                self.error(
+                    "E-TYP-EQ",
+                    args.first().map(|a| a.span).unwrap_or(Span::dummy()),
+                    format!("`assert_eq` requires a type with `==`; `{a_ty}` has none in Core 1.0"),
+                );
+            }
         }
         Type::Unit
     }
