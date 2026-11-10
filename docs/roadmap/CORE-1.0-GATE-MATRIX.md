@@ -18,15 +18,15 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de cette passe** | **`16775b4`** (contrats T2/diagnostics, 83 suites, conformance, fuzz, reproductibilité) |
+| **SHA des preuves de cette passe** | **`63eda55`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| CI sur `16775b4` | **`NOT_RUN`** — commit local non poussé au moment de la mesure ; les résultats Linux/Miri ci-dessous restent liés à `9ca29de`/`c43dafd` |
+| CI sur `63eda55` | **`NOT_RUN`** — commit local non poussé au moment de la mesure ; les résultats Linux/Miri ci-dessous restent liés à `9ca29de`/`c43dafd` |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures de cette passe (SHA `16775b4`)
+## 1. Mesures de cette passe (SHA `63eda55`)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
@@ -34,15 +34,15 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | 13 PASS / 0 FAIL (mesure antérieure, code inchangé) |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** — mesure antérieure `1b7b4f1`, **non rejouée** dans cette passe |
-| Conformance | `cargo run -p ravum-conformance -- run --json target/p0-conformance.json` | **326 cas : 325 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
+| Conformance | `cargo run -p ravum-conformance -- run --json target/p2-conformance.json` | **340 cas : 339 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées, **188/188 satisfaites** (187 par cas + 1 exemption justifiée et vérifiée), exit 0 |
 | **Contrats de validation** | `python -m unittest discover -s tools/tests -v` | **8 tests PASS** (vecteurs de faux PASS T2 et registre) |
-| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0xcda2af33726b1343`, 32,6 s |
-| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 3 263 it/s, 30,7 s |
+| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0x338b9afe9926aa4f`, 20,2 s |
+| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 5 376 it/s, 18,6 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
-| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = 1eaa45fc…f00e` à époque fixée |
+| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = ca776dd8…aa14` à époque fixée |
 | **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 130 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
-| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 76BB56C9…90CD` (racines et `target/` différents) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 8B10B4B7…9ED2` (racines et `target/` différents) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
 | **Contrat JSON** | `python tools/json_contract.py` | **6 scénarios**, 0 violation, **1 tension documentée** (`doctor` expose des chemins absolus, interdits par DIAG-7.5) |
@@ -50,8 +50,8 @@
 | **Balayage CLI** | `pwsh -File scripts/cli-sweep.ps1` | **13 cas, 13 PASS / 0 FAIL** |
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 PASS / 0 FAIL** |
 | **Miri (Windows)** | `cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests -- --skip loader::tests` | **93 + 2 PASS**, mais **`tests/ffi` NOT_RUN** : Miri Windows refuse `GetTempPathW`. Pas un défaut du programme ; **Miri complet reste lié à la CI Linux** (`9ca29de`, 159 tests) |
-| Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `16775b4` |
-| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `16775b4` |
+| Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
+| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
@@ -78,7 +78,7 @@ ont depuis été corrigés dans le compilateur (mesure locale postérieure :
 **268 PASS / 0 FAIL / 1 SKIP**) ; la CI de conformance reste rouge **volontairement** tant que le travail de cas de T2 n'est pas terminé. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
-**Ce tableau ne couvre pas `16775b4`.** Le commit de cette passe n'a pas été
+**Ce tableau ne couvre pas `63eda55`.** Le commit de cette passe n'a pas été
 poussé au moment de la mesure : aucune affirmation CI n'est transférée
 automatiquement. Un nouveau workflow local, `.github/workflows/gate-contracts.yml`,
 exécute les contrôles de la §1 et devra être observé sur un run réel avant d'être
@@ -90,15 +90,15 @@ compté comme preuve CI.
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PASS` | 326 cas : **325 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, vérifiée par l'outil et bloquante en CI | Exemption vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, Miri Linux antérieur (159 tests) + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **5 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T2 | `PASS` | 340 cas : **339 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, vérifiée par l'outil et bloquante en CI | Exemption vérifiée, révocable |
+| T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, Miri Linux antérieur (159 tests) + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
 | T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `9ca29de` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri complet et Linux **non rejoués sur `16775b4`** | Audit externe |
+| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `9ca29de` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri complet et Linux **non rejoués sur `63eda55`** | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -124,7 +124,7 @@ Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
 - **Avant** : 99/188 règles citées par un cas, 107 cas, couverture non mesurée.
-- **Après (2026-11-10)** : **326 cas**, **188/188** règles tracées vers un cas
+- **Après (2026-11-10)** : **340 cas**, **188/188** règles tracées vers un cas
   existant ou vers une exemption vérifiée, **188/188 satisfaites** au critère
   strict (cas d'acceptation + cas de refus portant le code exigé) : **187 par
   cas + `F-META-006` exemptée**.
@@ -150,11 +150,12 @@ Passe de traçabilité complète dans
 
 - **Prouvé** : lexer/parser/AST réels, récupération, garde-fous, formateur
   idempotent, corpus négatif, interfaces LSP effectives.
-- **Fuzz complet rejoué sur `16775b4`** : 249 054 entrées lexer/parser
-  (**0 échec**, digest `0xcda2af33726b1343`, 32,6 s) et 100 000 itérations `sema`
-  (**0 échec**, 3 263 it/s, 30,7 s). Le digest est identique à la campagne
-  précédente : le retrait de `W-TYP-UNREACHABLE` ne modifie pas l'ensemble des
-  programmes acceptés, seulement un diagnostic interdit.
+- **Fuzz complet rejoué sur le SHA de cette passe** : 249 054 entrées lexer/parser
+  (**0 échec**, digest `0x338b9afe9926aa4f`, 20,2 s) et 100 000 itérations `sema`
+  (**0 échec**, 5 376 it/s, 18,6 s). Le digest a changé par rapport à la campagne
+  précédente, ce qui est attendu : `!` est désormais un type syntaxique et les
+  tuples hétérogènes sont acceptés, donc l'ensemble des programmes acceptés
+  change. L'empreinte reste donc liée au compilateur, pas une constante.
 - **Trois défauts frontend reproduits puis corrigés** : `let effects = 1;` refusé
   alors que `effects` est contextuel (LEX-4.5), `pub test fn` accepté au lieu de
   `E-PARSE-EXPECTED`, et `while`/`loop`/`for` acceptés comme valeurs
@@ -167,13 +168,38 @@ Passe de traçabilité complète dans
   par le checker (`E-TYP-FIELD`), alors que la spécification en fait une erreur
   de **parse**. Le parseur vérifie maintenant que la cible est une *place* (nom,
   champ, index, déréférence) et émet `E-PARSE-EXPECTED`.
-- **Pourquoi T3 est `PASS` (mesure du 2026-11-10)** : les 326 cas de conformance
-  passent (325 PASS, 1 SKIP par plateforme, 0 FAIL) et **aucun code émis hors
+- **Corrigé en plus — type `!` (G-5.11 / TYP-1.6)** : le parseur refusait `!`
+  dans **toute** position, ce qui rendait impossible une fonction divergente
+  `fn stop() -> !` et faisait passer le cas de refus `never-return-body` pour la
+  mauvaise raison. `!` est désormais un type syntaxique ; il est accepté comme
+  type de retour **entier** d'une fonction dont le corps diverge par `panic`,
+  `return` ou un appel divergent — `loop`/`while`/`for` restent de type `()`
+  (EXPR-5.11/6.7/G-6.19), donc un corps `loop {}` est refusé (`E-TYP-RETURN`). Il
+  est refusé en paramètre, champ, argument générique, annotation locale et
+  constante (`E-TYP-MISMATCH`), comme cible de `as` (`E-TYP-CAST`), et une
+  inférence qui produirait `Option<!>`/`Vec<!>`/`(!, T)`/`W<!>` est
+  `E-TYP-AMBIGUOUS` ; `for x in panic(…)` est `E-TYP-MISMATCH`. La phrase
+  EXPR-11.3 « non nommable », contredite par G-5.11/TYP-1.6/Q-GRAM-10, a été
+  alignée. **Douze cas** couvrent les deux directions, dont `never-return-run`
+  qui **compile et exécute** réellement une fonction `-> !`.
+  La première version de ce correctif typait `loop` sans `break` comme `!` :
+  elle a été **retirée après contre-expertise indépendante** (trois MUST
+  contredits, acceptation relâchée).
+- **Corrigé en plus — tuples hétérogènes et exhaustivité** : le checker
+  unifiait les éléments d'un tuple comme ceux d'un tableau, donc `(i32, bool)`
+  était refusé (`E-TYP-MISMATCH`). Chaque élément est maintenant vérifié contre
+  l'élément attendu correspondant. Un motif tuple irréfutable (`(a, b)`) couvre
+  désormais tout le tuple, donc `match t { (a, b) => a }` n'est plus déclaré
+  non exhaustif. Deux cas de conformance et une exécution réelle (`t.0` → `7`)
+  le verrouillent.
+- **Pourquoi T3 est `PASS` (mesure du 2026-11-10)** : les 340 cas de conformance
+  passent (331 PASS, 1 SKIP par plateforme, 0 FAIL) et **aucun code émis hors
   registre** ne subsiste. L'ancien écart résiduel — des identifiants de diagnostic
   différents sur 16 cas, dont 13 non enregistrés — est clos : les codes ont été
   alignés ou enregistrés, et le dernier code interdit (`W-TYP-UNREACHABLE`) a été
   retiré parce que EXPR-5.9/G-6.44 imposent qu'un bras inatteignable ne produise
-  **aucun** diagnostic. Aucun programme n'est accepté à tort ni refusé à tort.
+  **aucun** diagnostic. Aucun programme n'est accepté à tort ni refusé à tort
+  sur les cas mesurés.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 
@@ -301,3 +327,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+
+
+
+

@@ -138,21 +138,27 @@ Ces cas échouent sur le **comportement**, pas sur un identifiant :
 ### 4.3 Défauts observés hors périmètre des cas de cette passe
 
 Constatés pendant la rédaction des cas, non encodés (ils ne relèvent pas des
-règles traitées) :
+règles traitées). **État au 2026-11-10 : les six défauts sont corrigés et
+re-testés ; voir §14.**
 
-- **Tuples hétérogènes** : `(i32, bool)` ne fonctionne pas, seul l'homogène
-  passe (`E-TYP-MISMATCH` sur le second élément).
-- **Exhaustivité des tuples** : `match t { (a, b) => … }` est jugé
-  non-exhaustif alors que `(a, b)` couvre le tuple entier.
-- **`mut` sur paramètre** : `fn f(mut n: i32)` est refusé (`E-OWN-IMMUTABLE`)
-  alors que `grammar.md` G-6.4/G-6.9 et `types.md` §2/§3 le documentent.
+- **Tuples hétérogènes** : `(i32, bool)` ne fonctionnait pas, seul l'homogène
+  passait (`E-TYP-MISMATCH` sur le second élément). — **corrigé.**
+- **Exhaustivité des tuples** : `match t { (a, b) => … }` était jugé
+  non-exhaustif alors que `(a, b)` couvre le tuple entier. — **corrigé.**
+- **`mut` sur paramètre** : `fn f(mut n: i32)` était refusé (`E-OWN-IMMUTABLE`)
+  alors que `grammar.md` G-6.4/G-6.9 et `types.md` §2/§3 le documentent. —
+  **corrigé** (accepté, vérifié).
 - **Type `!`** : `grammar.md` G-5.11 et `types.md` TYP-1.6 le décrivent avec
-  restrictions ; le parseur le refuse dans **toute** position de type.
-- **Littéraux flottants en récepteur** : `math::sqrt(2.0)` passe `check` mais
-  échoue à `rustc` (`can't call method 'sqrt' on ambiguous numeric type
-  '{float}'`) : la génération perd l'annotation `f64`.
-- **Génériques à deux types** : `fn pair<A, B>(a: A, b: B) -> (A, B)` est refusé
-  (`E-TYP-MISMATCH`).
+  restrictions ; le parseur le refusait dans **toute** position de type. —
+  **corrigé** (voir §14).
+- **Littéraux flottants en récepteur** : `math::sqrt(2.0)` passait `check` mais
+  échouait à `rustc` (`can't call method 'sqrt' on ambiguous numeric type
+  '{float}'`). — **corrigé** : `check` et `build` réussissent sur
+  `let x: f64 = math::sqrt(2.0);`.
+- **Génériques à deux types** : `fn pair<A, B>(a: A, b: B) -> (A, B)` était
+  refusé (`E-TYP-MISMATCH`). — **corrigé** : `fn first<A, B>(a: A, b: B) -> A`
+  est accepté et instancié avec `(i32, &text)`, ce qui a aussi révélé le défaut
+  des tuples hétérogènes.
 
 ## 5. Règles non couvrables en l'état
 
@@ -433,3 +439,95 @@ inatteignable — y compris après un `_` couvrant.
 sens : code émis absent du registre §3 **et** code enregistré qu''aucune source
 n''émet. Mesure : **112 codes enregistrés, 130 émis, 0 hors registre, 0
 déclaré-jamais-émis**, exit **0**.
+
+## 14. Type `!` et tuples : deux défauts frontend mesurés puis corrigés (2026-11-10)
+
+### 14.1 `!` était refusé dans toute position de type
+
+G-5.11 et TYP-1.6 (MUST) déclarent `!` **nommable**, coercible vers tout type
+attendu, et interdit comme paramètre, champ, élément de `Vec` et retour d''une
+fonction **non divergente**. Le parseur émettait pourtant `E-TYP-RETURN` /
+`E-TYP-MISMATCH` sur tout `!`. Conséquences mesurées :
+
+- `fn stop() -> ! { loop { } }` était impossible à écrire ;
+- le cas de refus `types/never-return-body` (`fn f() -> ! { }` → `E-TYP-RETURN`)
+  passait **pour la mauvaise raison** : le type entier était rejeté avant même
+  d''examiner le corps ;
+- la colonne « pass » de F-TYP-004 n''était couverte que par la coercition de
+  `panic`, jamais par une vraie fonction divergente.
+
+Correction : `TypeKind::Never` dans l''AST, parse de `!`, résolution vers
+`Type::Never`, codegen `-> !`. Le resolver rejette `!` (et tout type qui le
+contient) en paramètre, champ de struct/enum, argument générique, annotation
+locale et constante (`E-TYP-MISMATCH`). Le checker exige un corps réellement
+divergent (`E-TYP-RETURN` sinon) et refuse `return 1;` dans une fonction `-> !`
+— la compatibilité symétrique traitait sinon `i32` comme compatible avec `!`.
+
+**`loop`/`while`/`for` restent de type `()`** : EXPR-5.11, EXPR-6.7 et G-6.19
+(MUST) l''imposent, même quand la boucle diverge (EXPR-6.2). Une fonction `-> !`
+doit donc diverger par `panic`, `return` ou un appel de fonction divergente ;
+`fn stop() -> ! { loop { } }` est **refusé** (`E-TYP-RETURN`) et ce refus est
+verrouillé par `types/never-loop-tail-fail`. Un premier correctif typait `loop`
+sans `break` comme `!` : il a été **retiré après contre-expertise indépendante**
+(il contredisait trois MUST et relâchait l''acceptation de
+`fn f() -> i32 { loop { } }`). La contradiction interne EXPR-11.3 (« `!`
+interne, non nommable ») a été alignée sur G-5.11/TYP-1.6/Q-GRAM-10, qui sont
+les règles de type spécifiques.
+
+Les autres trous révélés par la même contre-expertise sont fermés :
+`x as !` → `E-TYP-CAST` ; une inférence qui produirait `Option<!>`, `Vec<!>`,
+`[!; N]`, `(!, T)` ou `W<!>` → `E-TYP-AMBIGUOUS` (le backend Rust stable refuse
+`!` en argument générique) ; `for x in panic("x")` → `E-TYP-MISMATCH` ;
+`while`/`loop`/`for` en élément de tuple ou de tableau →
+`E-TYP-STATEMENT-VALUE`.
+
+Deux restrictions vont au-delà de la liste littérale de TYP-1.6 (qui nomme
+paramètre, champ, élément de `Vec` et retour non divergent) : les annotations
+locales/constantes de type `!` et les types composés contenant `!` sont aussi
+refusés. Motif mesuré : le backend de référence B émet du Rust stable, où une
+place de type `!` (`let x: ! = …`, `const C: ! = …`) est refusée (`E0658`).
+C''est une **limite du backend**, documentée comme telle, pas une règle de
+langage ; elle est fail-closed (le programme est refusé au `check`, jamais
+accepté puis cassé au build).
+
+Preuves (toutes exécutées) : `types/never-return-diverges` (compile-pass),
+`types/never-return-run` (**run-fail : build + exécution réelle**, panique
+`panic: stop`), `types/never-param-fail`, `types/never-field-fail`,
+`types/never-return-value-fail`, `types/never-loop-tail-fail`,
+`types/never-cast-fail`, `types/never-infer-option-fail`,
+`types/never-infer-vec-fail`, `types/never-tuple-infer-fail`,
+`types/never-for-iter-fail`, et `types/control-as-tuple-element-fail`.
+
+### 14.2 Les tuples hétérogènes étaient unifiés comme des tableaux
+
+`let t = (1, true);` produisait `E-TYP-MISMATCH: array/tuple element type bool
+does not match i32`, alors que TYP-4 définit le tuple comme un produit ordonné
+hétérogène. Le checker réutilisait `check_expr_list` (destiné aux tableaux) pour
+les tuples. Correction : chaque élément est vérifié contre l''élément attendu
+correspondant, sans unification entre frères. Effet secondaire mesuré : la
+couverture d''exhaustivité ne connaissait pas `Type::Tuple`, donc
+`match t { (a, b) => … }` exigeait un `_` ; un motif tuple irréfutable couvre
+maintenant le produit.
+
+Preuves : `types/tuple-heterogeneous` et `types/tuple-match-exhaustive`
+(compile-pass), plus une exécution réelle d''un programme `(7, true)` déstructuré
+par `match`, qui affiche `7` (codegen Rust compilé et exécuté).
+
+### 14.3 Portée
+
+Ces corrections sont des **corrections de conformité au contrat existant**, pas
+des extensions de périmètre : aucun code de diagnostic nouveau, **aucune règle
+relâchée**. Le type des boucles est inchangé (`()`) ; les changements qui
+modifient l''acceptation sont tous des **resserrements** exigés par TYP-1.6
+(`as !`, `Vec<!>`/`Option<!>` inférés, `for` sur `!`, contrôle en élément de
+tuple), plus l''acceptation des tuples hétérogènes, exigée par TYP-4 et
+auparavant refusée à tort. Le corpus passe de 326 à **340 cas, 339 PASS /
+0 FAIL / 1 SKIP**. Ces mesures ne prouvent ni l''absence d''autres écarts, ni une
+conformité générale.
+
+**Limite de la vérification de l''exemption.** `F-META-006` est vérifiée
+*structurellement* (cellule `NOT_COVERED`, référence normative, date, condition
+de réexamen, absence d''exemption obsolète) ; la vérité sémantique de la
+justification reste une **revue humaine**, pas un fait machine. Aucune
+ratification humaine n''a eu lieu sur ce point : le statut `PASS` de T2 est un
+claim interne, pas une certification.

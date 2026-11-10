@@ -7,9 +7,9 @@
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
 > (SHA `a277b86`). La **section 0** ci-dessous porte la passe P0 du **2026-11-10**
-> (SHA `16775b4`) et **prévaut pour les chiffres courants**.
+> (SHA `63eda55`) et **prévaut pour les chiffres courants**.
 
-## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `16775b4`)
+## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `63eda55`)
 
 Deux vecteurs de faux `PASS` mesurés au début de la passe :
 
@@ -28,23 +28,37 @@ obsolète ou masquant une règle non marquée `NOT_COVERED` ; émission
 un test Rust ; audit du registre bloquant dans les **deux** sens ; nouveau
 workflow `gate-contracts.yml` ; 8 tests Python de régression.
 
-Mesures locales sur `16775b4` (Windows 11 x86-64, rustc 1.95.0) :
+Puis, en vérifiant les affirmations « vertes » du frontend : deux défauts réels
+mesurés et corrigés — le type `!` était refusé dans **toute** position alors que
+G-5.11/TYP-1.6 le rendent nommable pour une fonction divergente (ce qui faisait
+passer un cas de refus pour la mauvaise raison), et les tuples hétérogènes
+`(i32, bool)` étaient unifiés comme des tableaux, avec l'exhaustivité de motif
+tuple cassée en conséquence. Une contre-expertise indépendante a ensuite rejeté
+la première implémentation de `!` (elle typait `loop` comme `!`, contredisant
+EXPR-5.11/6.7/G-6.19) et révélé trois trous : `as !` accepté, inférence
+`Vec<!>`/`Option<!>`, `for` sur `!`. La version retenue garde `loop` de type `()`,
+rejette ces trois cas (`E-TYP-CAST`, `E-TYP-AMBIGUOUS`, `E-TYP-MISMATCH`) et
+aligne EXPR-11.3. Quatorze cas de conformance neufs couvrent les deux
+directions, dont `never-return-run` qui **compile et exécute** une fonction
+`-> !`, et une exécution réelle d'un tuple déstructuré par `match` (`t.0` → `7`).
+Détail : `docs/qualification/T2-FINDINGS.md` §14.
 
+Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
 | `cargo test --workspace --all-targets` | **83 suites, 1022 passés / 0 échec / 2 ignorés** |
-| Conformance | **326 cas : 325 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
+| Conformance | **340 cas : 339 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption vérifiée) |
 | Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **8 tests** PASS |
-| Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0xcda2af33726b1343` |
+| Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0x338b9afe9926aa4f` |
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
 | Balayages CLI / stdlib | 13/13 PASS ; 64/64 PASS |
-| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 76BB56C9…90CD` |
-| SBOM | 64 paquets, 170 relations, digest `1eaa45fc…f00e` à époque fixée |
+| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 8B10B4B7…9ED2` |
+| SBOM | 64 paquets, 170 relations, digest `ca776dd8…aa14` à époque fixée |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
-| CI sur `16775b4` | **NOT_RUN** : commit local non poussé au moment de la mesure |
+| CI sur `63eda55` | **NOT_RUN** : commit local non poussé au moment de la mesure |
 
 Les statuts de gates ne changent pas : **T2 et T3 restent `PASS`**, mais leur
 preuve est désormais exécutable et bloquante au lieu d'être déclarative. T4, T10
@@ -259,3 +273,7 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
+
+
+
