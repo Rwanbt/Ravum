@@ -32,7 +32,7 @@
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les 21 correctifs) |
 | Conformance | `cargo run -p ravum-conformance -- run` | **323 cas : 322 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
-| Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **179/188** au critère strict |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **187/187 testables** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcda2af33726b1343`, 20,6 s (**rejoué après les 21 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 556 it/s, 18,0 s (**rejoué après les correctifs**) |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** (rejoué après les 21 correctifs) |
@@ -40,6 +40,7 @@
 | **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 1 conflit documenté** (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
+| **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
 | **Clone neuf** | `git clone --depth 1` puis toutes les commandes ci-dessus | **tout identique**, y compris `cargo test --workspace` (1020 passés) après correction des chemins de campagne (> MAX_PATH) |
 | **Performance** | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | `check` **38,7 / 86,4 / 296,6 ms** et **9,1 / 20,1 / 60,4 Mo** pour 100 / 500 / 2 000 fonctions (profil `dev`) |
 
@@ -108,21 +109,20 @@ Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
 - **Avant** : 99/188 règles citées par un cas, 107 cas, couverture non mesurée.
-- **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
-  **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
-  portant le code exigé).
-- **Aucun cas n'échoue** après l'alignement des codes sur le registre (§9 de
-  `T2-FINDINGS.md`), chacun documenté : 13 codes sont **émis par le
-  compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
-  `E-UNSUPPORTED-TURBOFISH`, …), 4 sont des divergences de nom sur des codes
-  pourtant documentés, 2 sont des défauts de comportement.
-- **1 règle non couvrable** : `F-META-006` n'a ni forme acceptée ni refus
-  exécutable (MACH-1.4 fixe l'interpréteur à `NOT_IMPLEMENTED`).
+- **Après** : **323 cas**, **187/188** règles tracées vers un cas existant,
+  **187/187 règles testables** satisfaisant le critère strict (cas d'acceptation
+  + cas de refus portant le code exigé).
+- **Aucun cas n'échoue** : les 17 codes émis hors registre ont été alignés sur
+  `diagnostics.md` §3 (« tout code absent est interdit »), 24 autres codes
+  légitimes ont été **enregistrés** plutôt que remplacés par des codes plus
+  génériques, et 3 contradictions internes de la table ont été corrigées
+  (F-SYN-021, F-SYN-024, F-STD-020) ainsi qu'une référence morte (F-LEX-001).
+- **1 règle non testable, déclarée par la spécification elle-même** :
+  `F-META-006` — colonne `Pass / Fail` = « aucun (oracle absent) », et MACH-1.4
+  interdit de citer un résultat machine comme preuve. Exemption explicite,
+  révocable.
 - **Aucun cas n'a été assoupli** : `expect_codes` vient de la spec, jamais de la
   sortie du compilateur.
-- **Codes** : les 13 codes émis hors registre ont été remplacés par les codes
-  canoniques (`diagnostics.md` §3 : « tout code absent est interdit »). Le
-  corpus est vert ; il reste à écrire les tests négatifs manquants (§9).
 
 ### T3 — Frontend — `FAIL`
 

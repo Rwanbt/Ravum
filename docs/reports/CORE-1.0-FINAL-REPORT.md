@@ -79,7 +79,7 @@ les deux. Ce n'est pas un `PASS` universel.
 
 Aucun échec. Les **13 codes non enregistrés** que le compilateur émettait ont été
 remplacés par les codes canoniques de `diagnostics.md` §3. Le corpus passe, mais
-le critère strict de traçabilité n'est satisfait que par **106/188** règles : il
+le critère strict de traçabilité est satisfait par **187/187 règles testables** : il
 reste **82 tests négatifs** à écrire. Détail :
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
@@ -168,8 +168,8 @@ audit externe, ni Go/No-Go humain, ni release signée.
 git fetch origin; git switch feat/lang-core-1.0-rc   # a277b86
 cargo build -p ravum-lang-cli
 cargo test --workspace --all-targets -- --test-threads=2   # 1020 pass
-cargo run -p ravum-conformance -- run                      # 268/0, 1 skip
-python tools/features_coverage.py --strict                 # 106/188 strictes
+cargo run -p ravum-conformance -- run                      # 323 cas, 322/0, 1 skip
+python tools/features_coverage.py --strict                 # 187/187 testables
 pwsh -File scripts/lang-smoke.ps1 -SkipBuild               # 31 PASS
 pwsh -File scripts/repro-check.ps1                         # bit-à-bit
 pwsh -File scripts/lang-bench.ps1 -Runs 3                  # perf
@@ -185,8 +185,8 @@ réutiliser le `target/` de la machine de développement.
 | Commande | Résultat dans le clone neuf | Attendu (ce rapport) |
 |---|---|---|
 | `cargo build -p ravum-lang-cli` | succès | succès |
-| `cargo run -p ravum-conformance -- run` | **322 cas, 321 PASS / 0 FAIL / 1 SKIP** | identique |
-| `python tools/features_coverage.py --strict` | **186/188** | identique |
+| `cargo run -p ravum-conformance -- run` | **323 cas, 322 PASS / 0 FAIL / 1 SKIP** | identique |
+| `python tools/features_coverage.py --strict` | **187/187 testables** | identique |
 | `python tools/registry_audit.py` | **112 codes, 1 hors registre** | identique |
 | `pwsh scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL** | identique |
 | `cargo test --workspace --all-targets` | **82 suites, 1020 passés / 0 échec / 2 ignorés** | identique |
