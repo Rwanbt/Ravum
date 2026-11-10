@@ -1,0 +1,6 @@
+fn f(s: str) -> i32 {
+    return 0;
+}
+
+fn main() {
+}

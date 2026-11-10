@@ -158,6 +158,48 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 > Les codes `reserved` sont documentés pour que la spécification soit complète, mais l'implémentation actuelle ne les émet pas. Un test de conformance qui les attend **doit** être marqué `PENDING_IMPL`, jamais `PASS`.
 
 ## 4. Ordre de production et déterminisme
+### 3.1 Codes ajoutés par la passe de qualification (2026-11-10)
+
+L'audit `python tools/registry_audit.py` compare **tous** les littéraux de code
+des sources à ce registre. Il a montré que le compilateur émettait des codes
+absents de §3, ce que DIAG-1.1 interdit. Plutôt que de les remplacer par des
+codes génériques — ce qui aurait dégradé des messages précis —, ils sont
+**enregistrés ici** avec leur phase et leur sens.
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-LIMIT-FILE-SIZE` | parse | fichier source au-delà de la taille maximale analysable |
+| `E-LIMIT-FILES` | parse | nombre de fichiers du paquet au-delà de la limite |
+| `E-OWN-LIMIT` | ownership | limite interne de l'analyse d'ownership atteinte |
+| `E-PARSE-BAD-SUFFIX` | parse | suffixe de littéral entier inconnu |
+| `E-RES-CONST-NOT-CONST` | resolve | valeur de constante non représentable dans les faits du checker |
+| `E-RES-IMPL-TARGET` | resolve | paramètres génériques d'`impl` incohérents avec la cible |
+| `E-RES-MODDECL` | resolve | déclaration `mod nom;` non étendue par le chargeur |
+| `E-RES-SELF-OUTSIDE-IMPL` | resolve | `Self` utilisé hors d'un `impl` |
+| `E-TYP-MISSING-FIELD` | types | champ manquant dans un littéral de struct |
+| `E-UNSUPPORTED-ALIAS` | parse | alias `use … as …` refusé |
+| `E-UNSUPPORTED-ASSOC-TYPE` | parse | type associé sur `Self` refusé |
+| `E-UNSUPPORTED-BOUNDS` | parse | bornes génériques (`T: X`) refusées |
+| `E-UNSUPPORTED-COMPOUND-ASSIGN` | parse | affectation composée refusée |
+| `E-UNSUPPORTED-FN-TYPE` | parse | type pointeur de fonction (`fn(...)`) refusé |
+| `E-UNSUPPORTED-MOVE` | parse | `move` refusé |
+| `E-UNSUPPORTED-NEG-PAT` | parse | motif de littéral négatif refusé |
+| `E-UNSUPPORTED-RANGE-PAT` | parse | motif de plage (`a..b`) refusé |
+| `E-UNSUPPORTED-REEXPORT` | parse | `pub use` (ré-export) refusé |
+| `E-UNSUPPORTED-REST-PAT` | parse | motif `..` (reste) refusé |
+| `E-UNSUPPORTED-STATIC` | parse | item `static` refusé |
+| `E-UNSUPPORTED-TUPLE-STRUCT` | parse | struct tuple (`struct S(...)`) refusée |
+| `E-UNSUPPORTED-TYPE-ALIAS` | parse | alias de type (`type`) refusé |
+| `E-UNSUPPORTED-UFCS` | parse | appel UFCS (`Type::method(receiver, …)`) refusé |
+| `E-UNSUPPORTED-VIS` | parse | visibilité restreinte `pub(...)` refusée |
+
+**Un code reste hors registre, volontairement** : `W-TYP-UNREACHABLE` (branche de
+`match` inatteignable). DIAG-1.6 déclare la liste des avertissements **fermée**
+(`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`) : enregistrer ce code
+contredirait un MUST. Soit la liste s'ouvre (changement de spécification), soit
+l'avertissement disparaît (perte de fonctionnalité). C'est une décision humaine,
+pas une correction de documentation.
+
 
 | Ordre | Phase | Codes |
 |---|---|---|

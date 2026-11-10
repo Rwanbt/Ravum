@@ -1,0 +1,5 @@
+test fn t(x: i32) {
+}
+
+fn main() {
+}
