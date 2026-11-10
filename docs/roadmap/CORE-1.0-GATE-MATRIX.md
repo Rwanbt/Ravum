@@ -20,7 +20,7 @@
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
 | **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité ; **fiabilité/tests `03774d6`/`e981f2f` ; position de valeur et audit borrow `63619a5`** (mutex crash + validation `-Sizes`) |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| **CI sur ce code** | **succès** sur `70dfacd` (code `a5744ea`, fiabilité `03774d6`, tests `e981f2f`) : runs [42830523091](https://github.com/Rwanbt/Ravum/actions/runs/42830523091) (Linux) et [42830538036](https://github.com/Rwanbt/Ravum/actions/runs/42830538036) (gate contracts) |
+| **CI sur ce code** | **succès** sur `e05f3ff` (code `63619a5`) : runs [42837268985](https://github.com/Rwanbt/Ravum/actions/runs/42837268985) (Linux) et [42837285517](https://github.com/Rwanbt/Ravum/actions/runs/42837285517) (gate contracts) |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
@@ -160,6 +160,22 @@ Le flake `crash_in_commit_msg_hook...` ne s'est **pas reproduit** sur ce run
 après sérialisation ; une seule exécution ne prouve pas l'absence du flake, mais
 elle est cohérente avec 5/5 runs locaux verts.
 
+## 1 sexies. CI sur `e05f3ff` (position de valeur des boucles, code `63619a5`) — **vert**
+
+Runs [42837268985](https://github.com/Rwanbt/Ravum/actions/runs/42837268985)
+(Linux) et [42837285517](https://github.com/Rwanbt/Ravum/actions/runs/42837285517)
+(gate contracts).
+
+| Job | Résultat exact |
+|---|---|
+| Workspace tests (Linux) | **succès — 83 suites, 1026 passés / 0 échec / 4 ignorés** |
+| Conformance corpus | **succès — `total=343 pass=341 fail=0 skip=2 not_run=0`** |
+| Miri (nightly) | **succès — 65 + 98 + 1 = 164 tests, 0 échec** |
+| Smoke, installateur, WASI, fuzz smoke, gate contracts | **succès** |
+
+Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
+(342 PASS / 1 SKIP sur Windows, 341 PASS / 2 SKIP sur Linux).
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
@@ -167,14 +183,14 @@ elle est cohérente avec 5/5 runs locaux verts.
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
 | T2 | `PASS` | 343 cas : **342 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1029 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `70dfacd` (159 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T3 | `PASS` | Lexer/parser/AST réels, **1029 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
 | T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et **2 rejeux verts consécutifs au repos** sur `63eda55` | **Sensible à la charge** : un rejeu sous charge concurrente (Miri+CI+cargo) a donné **3/10** (timeouts 90–120 s) ; le LSP en session directe répond, aucune régression fonctionnelle démontrée. Harnais E2E à stabiliser sous charge avant de revendiquer `PASS` | Flakiness E2E sous charge |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1029 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `70dfacd` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **75,0 %** (`types.rs` 100 %, `typeck` 63,7 %, `resolve` 67,2 %) sous les objectifs 90/85 ; mutation testing ciblé seul | Audit externe |
+| T10 | `PARTIAL` | 1029 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **75,0 %** (`types.rs` 100 %, `typeck` 63,7 %, `resolve` 67,2 %) sous les objectifs 90/85 ; mutation testing ciblé seul | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -418,6 +434,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
 
 
 

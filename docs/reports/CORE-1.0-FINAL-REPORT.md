@@ -63,7 +63,7 @@ Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
 | Performance | `check` 45,1 / 89,4 / 331,2 ms et `build` 329,9 / 647,1 / 2 151,7 ms pour 100 / 500 / 2 000 fonctions (Windows 11 x86-64, rustc 1.95.0, `dev`, 3 runs par taille) |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
-| CI sur le HEAD `70dfacd` (code `a5744ea`, fiabilité `03774d6`, tests `e981f2f`) | **succès** : workspace Linux **1024 passés / 0 échec / 4 ignorés**, conformance `343 cas / 340 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès (runs `42830523091`, `42830538036`). Le flake crash ne s'est pas reproduit. |
+| CI sur le HEAD `e05f3ff` (code `63619a5`) | **succès** : workspace Linux **1026 passés / 0 échec / 4 ignorés**, conformance `343 cas / 341 PASS / 0 FAIL / 2 SKIP`, Miri Linux **164 tests / 0 échec**, gate-contracts succès (runs `42837268985`, `42837285517`) |
 
 Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
 `PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
@@ -282,6 +282,7 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
 
 
 
