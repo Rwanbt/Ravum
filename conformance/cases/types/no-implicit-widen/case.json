@@ -1,0 +1,8 @@
+{
+  "id": "types/no-implicit-widen",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-019 (TYP-13.1): the only coercions are `&[T; N] -> &[T]` and `&String -> &str`; `i32 -> i64` is E-TYP-MISMATCH."
+}

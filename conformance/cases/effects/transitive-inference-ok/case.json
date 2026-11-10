@@ -1,0 +1,5 @@
+{
+  "id": "effects/transitive-inference-ok",
+  "mode": "compile-pass",
+  "notes": "`c()` contains no direct io call: its io effect is inferred transitively from `b()` and covered by the declaration (EFF-2.1)."
+}

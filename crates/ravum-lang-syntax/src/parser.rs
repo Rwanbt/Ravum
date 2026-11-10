@@ -3308,7 +3308,7 @@ impl<'a> Parser<'a> {
                 let span = self.cur_span();
                 self.bump();
                 self.diags.error(
-                    "E-UNSUPPORTED-STRUCT-UPDATE",
+                    "E-UNSUPPORTED-RANGE",
                     span,
                     "struct update syntax (`..base`) is not supported in Ravum Core 1.0",
                 );

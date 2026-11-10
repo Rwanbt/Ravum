@@ -1,0 +1,8 @@
+{
+  "id": "run/std-args-index-i32",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-INDEX"
+  ],
+  "notes": "`env::args()` is a `Vec<String>` indexed by `usize`; a literal is `usize` but an `i32` variable is E-TYP-INDEX (STD-4.1, TYP-9.3)."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/tuple-field-oob",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-FIELD"
+  ],
+  "notes": "F-TYP-007 (TYP-4.2): tuple arity is fixed, so a `.2` field access on a pair is E-TYP-FIELD."
+}

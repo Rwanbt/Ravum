@@ -1,0 +1,8 @@
+use std::io;
+
+fn log() effects(io, alloc) {
+    io::println("x");
+}
+
+fn main() {
+}

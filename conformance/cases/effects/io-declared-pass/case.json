@@ -1,0 +1,6 @@
+{
+  "id": "effects/io-declared-pass",
+  "mode": "compile-pass",
+  "expect_codes": [],
+  "notes": "Declares `effects(io)` on a function that performs `io::println`; the declaration is sufficient and the package compiles."
+}

@@ -2573,7 +2573,7 @@ fn read_text_limited(
         Err(_) => {
             err(
                 diags,
-                "E-IO-INVALID-UTF8",
+                "E-UNSUPPORTED-TOKEN",
                 Span::dummy(),
                 format!(
                     "`{}` is not valid UTF-8; Ravum Core 1.0 sources are UTF-8",

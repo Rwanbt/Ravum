@@ -1,0 +1,8 @@
+{
+  "id": "run/std-starts-with-char",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "`starts_with` takes `&str`; a `char` operand is E-TYP-MISMATCH (STD-9.7, F-STD-018 fail side)."
+}

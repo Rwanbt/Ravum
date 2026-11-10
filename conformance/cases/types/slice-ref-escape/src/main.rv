@@ -1,0 +1,6 @@
+fn f(s: &[f64]) {
+    let t = s;
+}
+
+fn main() {
+}

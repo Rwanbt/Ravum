@@ -1,0 +1,5 @@
+{
+  "id": "types/primitive-widths",
+  "mode": "compile-pass",
+  "notes": "F-TYP-001 (TYP-1.1): i128, i64, u64 and u8 primitives with guaranteed widths are accepted; layout (16 bytes for i128) is not observable in Core 1.0 (TYP-12)."
+}

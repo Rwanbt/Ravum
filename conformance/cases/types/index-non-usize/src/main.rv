@@ -1,0 +1,7 @@
+fn at(v: &Vec<i32>) -> i32 {
+    let i: i32 = 0;
+    return v[i];
+}
+
+fn main() {
+}

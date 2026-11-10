@@ -39,9 +39,15 @@ def main(argv: list[str]) -> int:
     mapping: dict[str, list[str]] = {}
     for path in paths:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        for rule_id, case_ids in (payload.get("rules") or {}).items():
+        for rule_id, entry in (payload.get("rules") or {}).items():
             if not RULE_ID.match(rule_id):
                 print(f"{path.name}: ignoring malformed rule id {rule_id!r}", file=sys.stderr)
+                continue
+            # Two accepted shapes: a bare list of case ids, or
+            # {"cases": [...], "why": "..."} from the strict-traceability pass.
+            case_ids = entry.get("cases") if isinstance(entry, dict) else entry
+            if not case_ids:
+                print(f"{path.name}: {rule_id} has no case list; skipped", file=sys.stderr)
                 continue
             missing = [case_id for case_id in case_ids if not (CASES / case_id).is_dir()]
             if missing:

@@ -1,0 +1,7 @@
+fn same(a: Vec<i32>, b: Vec<i32>) {
+    if a == b {
+    }
+}
+
+fn main() {
+}

@@ -1,0 +1,6 @@
+{
+  "id": "lexer/bad-number",
+  "mode": "compile-fail",
+  "expect_codes": ["E-LEX-NUMBER"],
+  "notes": "Malformed numeric literals: `0x_FF` (separator), `1.` (no fractional digit) and `1e999` (float overflow) are all E-LEX-NUMBER."
+}

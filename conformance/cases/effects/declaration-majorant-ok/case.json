@@ -1,0 +1,5 @@
+{
+  "id": "effects/declaration-majorant-ok",
+  "mode": "compile-pass",
+  "notes": "A declaration wider than the inferred set is legal and silent: `io::println` needs only io, yet `effects(io, alloc)` is accepted (EFF-3.2)."
+}

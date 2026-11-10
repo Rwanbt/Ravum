@@ -1,0 +1,8 @@
+{
+  "id": "run/std-string-to-string-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "`to_string` exists on primitives, not on `String`: `s.to_string()` on a `String` is E-RES-UNKNOWN (STD-9.11, STD-12.1)."
+}

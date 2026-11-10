@@ -1,0 +1,6 @@
+{
+  "id": "run/integer-boundary-no-overflow",
+  "mode": "run-pass",
+  "stdout_contains": "255\n",
+  "notes": "F-EXPR-003 (EXPR-3.1): 255u8 + 0 stays in range and does not panic; the overflow side is run/integer-overflow."
+}

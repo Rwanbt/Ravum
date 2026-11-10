@@ -15,11 +15,11 @@
 | Branche | `feat/lang-core-1.0-rc` |
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
-| Corpus | **269 cas** (`conformance/cases/`) |
-| Résultat corpus | **268 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (après l'alignement des codes, §9) |
+| Corpus | **313 cas** (`conformance/cases/`) |
+| Résultat corpus | **312 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
-| Règles satisfaisant le critère strict §2 | **106 / 188** |
+| Règles satisfaisant le critère strict §2 | **179 / 188** |
 | Rapport machine | `target/conformance-after-t2.json` |
 
 ## 1. Méthode
@@ -294,3 +294,41 @@ Le corpus passe, mais le **critère strict §2** n'est satisfait que par
 **106/188** règles : **82 règles nomment un code `E-*` dans leur colonne
 `Pass / Fail` sans qu'un cas cité ne l'assertent**. C'est un travail d'écriture
 de cas — 82 tests négatifs —, pas une décision.
+## 10. Deuxième vague de traçabilité stricte — 106/188 → 179/188
+
+Quatre workers ont repris les 82 règles qui nommaient un code sans qu''un cas cité
+ne l''asserte. Résultat : **313 cas**, **179/188** règles au critère strict, corpus
+**312 PASS / 0 FAIL / 1 SKIP**. La plupart des règles ont été reliées à des cas
+existants ; **~45 cas neufs** ont été écrits là où aucun ne couvrait la règle.
+
+### 10.1 L''audit du registre manquait, et il change la conclusion
+
+Mon affirmation de la passe précédente — « plus aucun code émis hors registre » —
+était **fausse**, parce que la mesure ne regardait que les codes apparaissant dans
+les cas **en échec**. Un code peut violer DIAG-1.1 sans qu''aucun cas ne le
+déclenche.
+
+`tools/registry_audit.py` balaie maintenant **tous** les littéraux `E-*`/`W-*` des
+sources et les compare à `diagnostics.md` §3, en séparant les préfixes de phase,
+les codes d''outillage et les codes de langage. Résultat :
+
+- **44 codes de langage émis hors registre** avant cette passe ;
+- **27** après le remplacement de 4 d''entre eux (`E-IO-INVALID-UTF8`,
+  `E-PARSE-TEST-SIG`, `E-UNSUPPORTED-STRUCT-UPDATE`, `E-TYP-UNKNOWN-TYPE`), qui
+  bloquaient quatre règles.
+
+Les 27 restants (`E-PARSE-BAD-SUFFIX`, `E-RES-CONST-NOT-CONST`,
+`E-UNSUPPORTED-VIS`, `E-LIMIT-FILE-SIZE`, `W-TYP-UNREACHABLE`, …) sont un
+**défaut de conformité mesuré**, pas une opinion : le registre interdit tout code
+absent. Les nommer un par un et les aligner est le travail restant de T2.
+
+### 10.2 Neuf règles restent hors critère
+
+| Règle | Cause |
+|---|---|
+| F-LEX-001, F-SYN-004, F-SYN-024, F-TYP-011 | débloquées par les 4 renommages ; cas restant à écrire |
+| F-SYN-021 | incohérence de spec : la ligne exige `E-TYP-RANGE`, le compilateur émet `E-TYP-MISMATCH` (les deux sont enregistrés) |
+| F-STD-013 | **défaut compilateur** : `assert_eq` n''a aucune contrainte de comparabilité, donc `E-TYP-EQ` est inatteignable |
+| F-STD-016 | **défaut compilateur** : la mutabilité de place n''est pas vérifiée ; `(&s).push_str` est accepté |
+| F-STD-020 | **incohérence de spec** : `stdlib.md` §9 définit `lines()` sur `&str`, donc le refus exigé est impossible |
+| F-META-006 | sans forme exécutable (MACH-1.4) |

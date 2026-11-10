@@ -2050,7 +2050,7 @@ pub(crate) fn resolve_type_syntax(
             if is_str_syntax(inner) {
                 if *mutable {
                     diags.error(
-                        "E-TYP-UNKNOWN-TYPE",
+                        "E-RES-UNKNOWN",
                         inner.span,
                         "`&mut str` does not exist in Core 1.0".to_string(),
                     );
@@ -2177,7 +2177,7 @@ fn resolve_type_args(
 /// `str` et `str` mut n'existent pas comme types autonomes.
 fn report_str(segment: &ast::PathSegment, diags: &mut DiagnosticBag) -> Type {
     diags.error(
-        "E-TYP-UNKNOWN-TYPE",
+        "E-RES-UNKNOWN",
         segment.name.span,
         "`str` is not a type in Core 1.0; use `&str`".to_string(),
     );

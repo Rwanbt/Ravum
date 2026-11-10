@@ -1,0 +1,17 @@
+use std::fs;
+
+fn save(path: &str) -> Result<(), Error> {
+    let body = String::from("x");
+    fs::write_string(path, body.as_str())?;
+    Ok(())
+}
+
+fn borrow_escapes() {
+    let text = String::from("y");
+    let leaked = &text;
+}
+
+fn main() -> Result<(), Error> {
+    save("out.txt")?;
+    Ok(())
+}

@@ -1,0 +1,9 @@
+struct D { s: String }
+
+fn f(d: D) -> usize {
+    let a = d;
+    return d.s.len();
+}
+
+fn main() {
+}

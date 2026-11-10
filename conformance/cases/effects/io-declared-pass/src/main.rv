@@ -1,0 +1,9 @@
+use std::io;
+
+fn log(s: &str) effects(io) {
+    io::println(s);
+}
+
+fn main() {
+    log("ok");
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/match-bool-exhaustive-pass",
+  "mode": "compile-pass",
+  "expect_codes": [],
+  "notes": "A `match` on `bool` with both `true` and `false` arms is statically exhaustive and compiles."
+}

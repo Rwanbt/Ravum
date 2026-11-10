@@ -1,0 +1,6 @@
+use std::io;
+
+fn main() {
+    let n: i32 = 1;
+    io::println("a={}", n);
+}

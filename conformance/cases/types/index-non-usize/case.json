@@ -1,0 +1,8 @@
+{
+  "id": "types/index-non-usize",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-INDEX"
+  ],
+  "notes": "F-TYP-025 (TYP-9.3): a `Vec`/&[T] index must be `usize`; an `i32` index is E-TYP-INDEX."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "run/std-write-string-ref-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "`fs::write_string` is exercised by `save`; storing a `&String` in a `let` is the E-OWN-REF-ESCAPE failure mandated for the borrow side of the rule (STD-3.3, OWN-6.3)."
+}

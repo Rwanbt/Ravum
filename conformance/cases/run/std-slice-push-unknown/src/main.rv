@@ -1,0 +1,6 @@
+fn f(samples: &[i32]) {
+    samples.push(1);
+}
+
+fn main() {
+}

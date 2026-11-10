@@ -1,0 +1,11 @@
+{
+  "id": "cli/check-text-diagnostic",
+  "mode": "cli",
+  "args": [
+    "check",
+    "."
+  ],
+  "exit_code": 1,
+  "stderr_contains": "error[E-OWN-USE-AFTER-MOVE]:",
+  "notes": "F-META-001 / DIAG-6: a failed `check` prints the §6 text form `error[CODE]: message` on stderr with the stable registry code; the human wording itself is not contractual (DIAG-6.4)."
+}

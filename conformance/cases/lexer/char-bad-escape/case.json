@@ -1,0 +1,6 @@
+{
+  "id": "lexer/char-bad-escape",
+  "mode": "compile-fail",
+  "expect_codes": ["E-LEX-ESCAPE"],
+  "notes": "An unknown escape in a character literal (backslash-q) is E-LEX-ESCAPE."
+}

@@ -1,0 +1,11 @@
+use std::fs;
+use std::io;
+
+fn probe(p: &str) -> bool effects(io, fs) {
+    io::println("probe");
+    return fs::exists(p);
+}
+
+fn main() {
+    let ok = probe("x");
+}

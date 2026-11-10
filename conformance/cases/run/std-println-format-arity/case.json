@@ -1,0 +1,8 @@
+{
+  "id": "run/std-println-format-arity",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ],
+  "notes": "`io::println` performs no interpolation: passing a second argument for its single `&str` parameter is E-TYP-ARITY (STD-2.4)."
+}

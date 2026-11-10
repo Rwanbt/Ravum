@@ -1,0 +1,13 @@
+use std::io;
+
+fn b() effects(io) {
+    io::println("b");
+}
+
+fn c() effects(io) {
+    b();
+}
+
+fn main() {
+    c();
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/for-over-ref-fail",
+  "mode": "compile-fail",
+  "expect_codes": ["E-TYP-MISMATCH"],
+  "notes": "`for x in &v` iterates a reference to an array/`Vec`, which Core 1.0 refuses (E-TYP-MISMATCH); `for` consumes a `Vec<T>` or iterates an integer range."
+}

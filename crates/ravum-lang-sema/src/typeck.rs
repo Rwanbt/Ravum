@@ -855,14 +855,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .unwrap_or(Span::dummy());
             if !sig.params.is_empty() {
                 self.error(
-                    "E-PARSE-TEST-SIG",
+                    "E-PARSE-EXPECTED",
                     span,
                     "a test function takes no parameter".to_string(),
                 );
             }
             if !(sig.ret == Type::Unit || self.is_result_unit_error(&sig.ret)) {
                 self.error(
-                    "E-PARSE-TEST-SIG",
+                    "E-PARSE-EXPECTED",
                     span,
                     "a test function returns `()` or `Result<(), Error>`".to_string(),
                 );

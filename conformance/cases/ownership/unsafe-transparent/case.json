@@ -1,0 +1,5 @@
+{
+  "id": "ownership/unsafe-transparent",
+  "mode": "compile-pass",
+  "notes": "F-OWN-016 / OWN-10: an `unsafe { ... }` block is transparent for ownership: a move out of the block and a borrow inside it are tracked like in a safe block."
+}
