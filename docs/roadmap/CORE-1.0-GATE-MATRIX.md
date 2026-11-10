@@ -157,8 +157,14 @@ Passe de traçabilité complète dans
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 
 Inchangé : le contrat exige un **auditeur humain indépendant**. Un audit mené
-par un autre agent reste un audit interne. Dossier prêt pour l'auditeur :
-`docs/audit/`, `docs/reports/`, `conformance/cases/ownership/`,
+par un autre agent reste un audit interne.
+
+**Dossier prêt pour l'auditeur** : [`docs/audit/AUDIT-BRIEF.md`](../audit/AUDIT-BRIEF.md)
+— périmètre exact, ce qui est déjà prouvé (et ne demande pas d'audit), **où
+attaquer** d'après les défauts réellement trouvés pendant la session, les cinq
+questions à trancher, et le format de rendu attendu. Complété par les deux audits
+internes antérieurs (`docs/audit/BACKEND-AUDIT.md`,
+`docs/audit/BORROW-CHECKER-AUDIT.md`), `conformance/cases/ownership/` et
 `crates/ravum-lang-sema/tests/own_audit.rs`.
 
 ### T5 — Codegen, ABI, exécution native — `PASS`
@@ -254,7 +260,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D1 | Licence | **RÉSOLUE** : `MIT OR Apache-2.0` |
 | D2 | Ratification des ADR / choix du backend | **OUVERTE** |
 | D3 | Fusion dans `main` et publication | **OUVERTE** |
-| D4 | Audit externe (T4/T10/T12) | **OUVERTE** — bloque T4 et T12 |
+| D4 | Audit externe (T4/T10/T12) | **OUVERTE** — bloque T4 et T12 ; cadre de mission prêt : [`AUDIT-BRIEF.md`](../audit/AUDIT-BRIEF.md) |
 | D5 | Périmètre Tier 1 | **PARTIELLE** : Windows local, Linux sur CI |
 | D6 | Périmètre des fonctionnalités universelles | **OUVERTE** |
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
