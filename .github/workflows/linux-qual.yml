@@ -158,6 +158,14 @@ jobs:
       - name: Run example smoke suite (bash)
         run: bash scripts/lang-smoke.sh --skip-build
 
+      # Build one small program per stdlib surface and require it to survive
+      # `build` (not just `check`). This is the guard for the
+      # "accepted by the checker, rejected by rustc" class: `math::sqrt(2.0)`
+      # was accepted and failed with E0689 because the emitted float literal had
+      # no suffix.
+      - name: Stdlib codegen sweep
+        run: pwsh -File scripts/stdlib-codegen-sweep.ps1
+
       - name: Scope notice
         if: always()
         run: |
