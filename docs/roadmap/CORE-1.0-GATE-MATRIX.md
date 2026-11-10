@@ -45,7 +45,7 @@ Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
 Windows. Chaque cas tourne sur au moins un OS, aucun sur les deux.
 
-## 1 bis. CI sur le SHA `4980355` (Linux, `ubuntu-latest`)
+## 1 bis. CI sur le SHA `9ca29de` (Linux, `ubuntu-latest`) — **tous les jobs verts**
 
 Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 
@@ -58,7 +58,7 @@ Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 | Fuzz smoke | **succès** |
 | **Miri (nightly)** | **succès — 65 + 93 + 1 = 159 tests, 0 échec** |
 | ThreadSanitizer | **SKIP explicite** `NOT_APPLICABLE` |
-| **Conformance corpus (Linux)** | **ÉCHEC — `total=268 pass=236 fail=30 skip=2`** |
+| **Conformance corpus (Linux)** | **SUCCÈS — `total=269 pass=267 fail=0 skip=2`** |
 
 Les **30 mêmes cas** échouaient alors sur Linux et sur Windows : les divergences
 spec ↔ implémentation ne sont pas spécifiques à une plateforme. Sept d'entre eux
