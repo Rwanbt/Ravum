@@ -152,6 +152,10 @@ pub enum TokenKind {
     Str(String),
     Char(char),
     Punct(Punct),
+    /// A lifetime (`'a`). Refused by the lexer with `E-UNSUPPORTED-TOKEN`; the
+    /// parser skips the token so the enclosing item still parses and the user
+    /// gets one diagnostic instead of a cascade.
+    Lifetime(String),
     Comment(String),
     Eof,
 }

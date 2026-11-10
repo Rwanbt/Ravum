@@ -487,6 +487,7 @@ impl<'a> Parser<'a> {
             TokenKind::Str(_) => "string literal".to_string(),
             TokenKind::Char(_) => "character literal".to_string(),
             TokenKind::Punct(p) => format!("`{}`", punct_str(*p)),
+            TokenKind::Lifetime(name) => format!("lifetime `'{name}`"),
             TokenKind::Comment(_) => "comment".to_string(),
             TokenKind::Eof => "end of file".to_string(),
         }
@@ -1153,6 +1154,18 @@ impl<'a> Parser<'a> {
         }
         let opener = self.cur_span();
         self.bump(); // `<`
+                     // `<'a>` is a lifetime parameter list: already refused by the lexer with
+                     // E-UNSUPPORTED-TOKEN, consumed here so `fn f<'a>()` does not cascade.
+        let mut lifetimes = 0;
+        while matches!(self.kind(), TokenKind::Lifetime(_)) {
+            self.bump();
+            lifetimes += 1;
+            self.eat(Punct::Comma);
+        }
+        if lifetimes > 0 && self.at(Punct::Gt) {
+            self.bump();
+            return out;
+        }
         if self.at(Punct::Gt) {
             self.expected("generic parameter name");
             self.bump();
@@ -1917,6 +1930,12 @@ impl<'a> Parser<'a> {
                     },
                     span: self.span_from(start),
                 }
+            }
+            TokenKind::Lifetime(_) => {
+                // Already refused by the lexer; skipping it lets `&''a i32` be
+                // read as `&i32` instead of producing a second diagnostic.
+                self.bump();
+                self.parse_type()
             }
             TokenKind::Punct(Punct::Star) => {
                 self.diags.error(

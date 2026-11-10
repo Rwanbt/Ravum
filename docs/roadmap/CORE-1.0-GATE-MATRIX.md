@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** |
-| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 250 PASS / 18 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 251 PASS / 17 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
@@ -63,7 +63,7 @@ Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 Les **30 mêmes cas** échouaient alors sur Linux et sur Windows : les divergences
 spec ↔ implémentation ne sont pas spécifiques à une plateforme. Sept d'entre eux
 ont depuis été corrigés dans le compilateur (mesure locale postérieure :
-**250 PASS / 18 FAIL**) ; la CI de conformance reste rouge **volontairement**
+**251 PASS / 17 FAIL**) ; la CI de conformance reste rouge **volontairement**
 tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
@@ -73,8 +73,8 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `FAIL` | 15 documents de spec ; 269 cas ; **187/188 règles tracées** ; **12 défauts corrigés** dans le compilateur | **18 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
-| T3 | `PARTIAL` | Lexer/parser/AST réels, 1019 tests, **fuzz complet rejoué**, **Miri rejoué (159 tests)** ; **3 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs) | Cascade de 4 erreurs sur le token `lifetime` au lieu d'un `E-UNSUPPORTED-TOKEN` unique | Correction de diagnostic |
+| T2 | `FAIL` | 15 documents de spec ; 269 cas ; **187/188 règles tracées** ; **13 défauts corrigés** dans le compilateur | **17 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
+| T3 | `PARTIAL` | Lexer/parser/AST réels, 1020 tests, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri rejoué (159 tests)** ; **4 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`) | **1 écart de phase** : `(a+b).0 = 1;` est diagnostiqué en phase types (`E-TYP-FIELD`) là où la spec impose une erreur de parse | Correction du parseur |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
@@ -110,7 +110,7 @@ Passe de traçabilité complète dans
 - **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
   **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
   portant le code exigé).
-- **18 cas échouent** après les douze correctifs de la seconde passe (§8 de
+- **17 cas échouent** après les treize correctifs de la seconde passe (§8 de
   `T2-FINDINGS.md`), chacun documenté : 13 codes sont **émis par le
   compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
   `E-UNSUPPORTED-TURBOFISH`, …), 4 sont des divergences de nom sur des codes
@@ -136,10 +136,13 @@ Passe de traçabilité complète dans
   alors que `effects` est contextuel (LEX-4.5), `pub test fn` accepté au lieu de
   `E-PARSE-EXPECTED`, et `while`/`loop`/`for` acceptés comme valeurs
   (`E-TYP-STATEMENT-VALUE`). Les cas correspondants sont passés au vert.
-- **Défaut restant** : le token `lifetime` (`'a`) produit une cascade de quatre
-  diagnostics de parse (`E-LEX-CHAR`, `E-PARSE-EXPECTED`, `E-PARSE-UNCLOSED`,
-  `E-PARSE-UNEXPECTED`) au lieu d'un unique `E-UNSUPPORTED-TOKEN` — c'est un
-  défaut de **qualité de diagnostic**, pas de reconnaissance.
+- **Corrigé en plus** : le token `lifetime` (`'a`) produisait une cascade de
+  quatre diagnostics. Le lexer émet maintenant `E-UNSUPPORTED-TOKEN` et le
+  parseur consomme le jeton (listes de génériques, derrière `&`) : un diagnostic
+  par occurrence, l'item continue de se parser.
+- **Défaut restant** : `(a+b).0 = 1;` est refusé en phase **types**
+  (`E-TYP-FIELD`) alors que la spécification en fait une erreur de **parse**.
+  C'est un écart de phase, pas de nommage — il ne relève donc pas de D8.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
 

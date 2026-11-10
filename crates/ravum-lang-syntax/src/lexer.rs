@@ -530,6 +530,38 @@ impl<'a> Lexer<'a> {
 
     fn char_literal(&mut self, start: usize) {
         self.bump(); // opening quote
+                     // `'a` with no closing quote is a lifetime. Core 1.0 refuses lifetimes;
+                     // the token is still emitted so the parser can skip it and report the
+                     // rest of the item normally (one diagnostic, no cascade).
+        if let Some(first) = self.peek_char() {
+            if first.is_alphabetic() || first == '_' {
+                let rest = &self.src[self.pos..];
+                let mut end = rest.len();
+                let mut terminator = None;
+                for (index, ch) in rest.char_indices().skip(1) {
+                    if ch.is_alphanumeric() || ch == '_' {
+                        continue;
+                    }
+                    terminator = Some(ch);
+                    end = index;
+                    break;
+                }
+                if terminator != Some('\'') {
+                    let name = rest[..end].to_string();
+                    for _ in rest[..end].chars() {
+                        self.bump();
+                    }
+                    self.error(
+                        "E-UNSUPPORTED-TOKEN",
+                        start,
+                        "lifetime parameters (`'a`) are not supported in Ravum Core 1.0",
+                    );
+                    self.tokens
+                        .push(Token::new(TokenKind::Lifetime(name), self.span(start)));
+                    return;
+                }
+            }
+        }
         let ch_start = self.pos;
         let value = match self.peek_char() {
             None => {
