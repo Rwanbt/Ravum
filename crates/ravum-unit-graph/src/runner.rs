@@ -553,7 +553,12 @@ fn cargo_fallback(
     state_dir: &Path,
     traces: &mut Vec<CargoTrace>,
 ) -> UnitOutcome {
-    let target_dir = state_dir.join("cargo-target");
+    // Short directory name + no incremental artifacts: the campaign runs inside a
+    // throwaway scratch tree under the caller's state root, and with a deep
+    // checkout `cargo-target/debug/incremental/<hash>/<hash>/*.o` crossed the
+    // Windows MAX_PATH limit, making `link.exe` fail with LNK1104 (exit 1104).
+    // Measured: 274-character paths from a clone under %TEMP%.
+    let target_dir = state_dir.join("ct");
     let args: Vec<String> = vec![
         "check".to_owned(),
         "-p".to_owned(),
@@ -571,6 +576,7 @@ fn cargo_fallback(
     let started = Instant::now();
     let output = match Command::new(cargo)
         .args(&args)
+        .env("CARGO_INCREMENTAL", "0")
         .env_remove("RUSTFLAGS")
         .env_remove("RUSTC_WRAPPER")
         .output()
