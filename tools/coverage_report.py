@@ -35,12 +35,27 @@ def load_coverage(path: Path) -> dict:
         return json.load(handle)
 
 
+TOP_LEVEL_DIRS = ("crates/", "tools/", "apps/", "examples/", "benchmarks/", "tests/", "src/")
+
+
 def relpath(filename: str) -> str:
-    """Normalise an llvm-cov filename to a repo-relative POSIX path."""
+    """Normalise an llvm-cov filename to a repo-relative POSIX path.
+
+    llvm-cov reports absolute paths on Windows (`D:\\App\\Ravum\\crates\\...`),
+    absolute paths on Linux CI (`/home/runner/work/Ravum/Ravum/crates/...`) and,
+    depending on the exporter, repository-relative paths (`Ravum/crates/...` or
+    `crates/...`). The first version only stripped `/Ravum/`, so the Linux report
+    kept the `Ravum/` prefix and every threshold looked "absent from the report"
+    (CI run 42881587154). Anchoring on the first known top-level directory is
+    stable across all three shapes.
+    """
     name = filename.replace("\\", "/")
-    marker = "/Ravum/"
-    if marker in name:
-        name = name.split(marker, 1)[1]
+    for directory in TOP_LEVEL_DIRS:
+        index = name.find("/" + directory)
+        if index >= 0:
+            return name[index + 1:]
+        if name.startswith(directory):
+            return name
     return name
 
 
