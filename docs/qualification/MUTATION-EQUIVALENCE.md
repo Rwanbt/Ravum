@@ -117,12 +117,17 @@ cargo mutants --file crates/ravum-lang-sema/src/typeck.rs  -F "check_struct_lit|
 
 | Fichier | Mutants | Tués | Survivants | Invivables | Durée |
 |---|---|---|---|---|---|
-| `own.rs` | 32 | 30 | 2 | 0 | 2 min |
+| `own.rs` | 32 | 31 | 1 | 0 | 2 min |
 | `resolve.rs` | 74 | 51 | 21 | 2 | 4 min |
 | `typeck.rs` | 106 | 71 | 28 | 7 | 5 min |
-| **Total** | **212** | **152** | **51** | **9** | **11 min** |
+| **Total** | **212** | **153** | **50** | **9** | **11 min** |
 
-Les 51 survivants sont triés en trois catégories. Un survivant n'est **pas**
+(`own.rs` : première campagne 30 tués / 2 survivants ; le test
+`audit_partial_move_then_borrow_is_use_after_move_not_double_move` ajouté
+ensuite tue le mutant L1455, revérifié par une seconde campagne ciblée
+`-F "check_availability"` : **1 survivant, 28 tués**.)
+
+Les 50 survivants sont triés en quatre catégories. Un survivant n'est **pas**
 « équivalent » par défaut : chaque ligne ci-dessous donne la raison, et la
 catégorie « lacune de test » est un aveu, pas une excuse.
 
@@ -157,14 +162,18 @@ pas être tués par un test de la crate sema.
 |---|---|---|
 | `!st.partial.is_empty() && !whole_reinit` → `\|\|` | `own.rs` `check_availability` L1417 | Le bloc ne s'exécute alors que `st.partial` est vide **et** `whole_reinit` vrai : la boucle ne fait rien, `relation` reste `Disjoint`, et `allowed` est vrai pour `Access::Write` comme pour les autres accès. Aucun diagnostic, aucun changement d'état. |
 
-### 7.4 Lacunes de test — 36 mutants (défaut de preuve, non corrigé)
+### 7.4 Lacunes de test — 31 mutants (défaut de preuve, non corrigé)
 
 Ces mutants **changent** un comportement observable, mais aucun test actuel ne
 distingue la version mutée. Ils sont la feuille de route des prochaines passes.
 
+Le mutant `own.rs` `check_availability` L1455 (`&&`→`\|\|`) n'est **plus** dans
+cette catégorie : `audit_partial_move_then_borrow_is_use_after_move_not_double_move`
+le tue (déplacement partiel puis emprunt nu ⇒ `E-OWN-USE-AFTER-MOVE`, pas
+`E-OWN-DOUBLE-MOVE`), revérifié par une campagne ciblée.
+
 | Cluster | Mutants | Ce qu'un test devrait observer |
 |---|---|---|
-| `own.rs` `check_availability` L1455 (`&&`→`\|\|`) | 1 | **Corrigé dans cette passe** : `audit_partial_move_then_borrow_is_use_after_move_not_double_move` (déplacement partiel puis emprunt ⇒ `E-OWN-USE-AFTER-MOVE`, pas `E-OWN-DOUBLE-MOVE`) |
 | `typeck.rs` `check_struct_lit` L3890/3896/3953 (`==`/`&&`, longueur d'arguments) | 8 | inférence des arguments génériques d'un littéral de struct/variante depuis le type attendu : `fn f() -> Enveloppe<i32> { Enveloppe { v: 1 } }` puis usage typé de `v` |
 | `typeck.rs` `check_const_expr` L4733-4864 (`<<`, gardes de type, `not` booléen/entier, bras `Block`) | 11 | évaluer la **valeur** d'une constante : longueur de tableau (`const N: usize = 1 << 2; let a: [i32; N]`), `!true`, `!0`, constante de type `f64` (doit rester `E-RES-CONST-NOT-CONST`), bloc constant |
 | `typeck.rs` `check_variant_call` L2243 | 1 | appel d'une variante avec un argument de type incompatible |
@@ -173,5 +182,8 @@ distingue la version mutée. Ils sont la feuille de route des prochaines passes.
 | `resolve.rs` `resolve_type_path` L2348/2427/2476 (`\|\|`→`&&`, bras `BuiltinModule`) | 3 | un module utilisé comme type (`fn f(x: math)`) et un type utilisé comme module (`Option::X` en type) |
 | `resolve.rs` `type_is_copy` L2792/2795 (`&&`/`\|\|`) | 2 | décider si un `ref struct`/`ref` de `String` est `Copy` (déplacement vs copie observé par un diagnostic d'ownership) |
 
-Aucun chiffre de score de mutation n'est publié : 152/212 mutants tués sur un
+Aucun chiffre de score de mutation n'est publié : 153/212 mutants tués sur un
 périmètre **ciblé** ne dit rien du reste de la crate (voir §1 pour la règle).
+
+
+

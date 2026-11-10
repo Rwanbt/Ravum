@@ -1537,17 +1537,18 @@ struct Paire {
     b: i32,
 }
 
-fn takes(s: &str) -> usize {
-    return s.len();
-}
-
 fn f() -> i32 {
     let p = Paire { a: String::from("x"), b: 1 };
     let moved = p.a;
-    let n = takes(&p.a);
+    // A bare borrow (not an argument of a call, so `call_depth == 0`) of the
+    // moved field. The borrow itself is E-OWN-REF-ESCAPE (OWN-6), but the
+    // *moved place* must be reported as a use-after-move, never as a second
+    // move.
+    let r = &p.a;
     p.b
 }
 "#,
         "E-OWN-USE-AFTER-MOVE",
     );
 }
+
