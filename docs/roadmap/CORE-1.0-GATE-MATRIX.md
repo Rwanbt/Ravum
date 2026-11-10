@@ -18,9 +18,9 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité ; **fiabilité tests/bench `03774d6`** (mutex crash + validation `-Sizes`) |
+| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité ; **fiabilité tests/bench `03774d6` + tests Type `e981f2f`** (mutex crash + validation `-Sizes`) |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| **CI sur ce code** | **succès** sur `1fb0568` (code `a5744ea`) : runs [42815650401](https://github.com/Rwanbt/Ravum/actions/runs/42815650401) (Linux) et [42815661183](https://github.com/Rwanbt/Ravum/actions/runs/42815661183) (gate contracts), détail §1 quater |
+| **CI sur ce code** | **succès** sur `39ebea2` (code `a5744ea` + fiabilité `03774d6`) : runs [42825171502](https://github.com/Rwanbt/Ravum/actions/runs/42825171502) (Linux) et [42825184740](https://github.com/Rwanbt/Ravum/actions/runs/42825184740) (gate contracts) |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
@@ -30,13 +30,15 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **83 suites, 1022 passés / 0 échec / 2 ignorés** (exit 0) |
+| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **83 suites, 1027 passés / 0 échec / 2 ignorés** (exit 0) |
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | 13 PASS / 0 FAIL (mesure antérieure, code inchangé) |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10/10 observé** sur `63eda55`, mais **rejeu non stable** (10/10 puis 3/10, timeouts du harnais) — voir T7, désormais `PARTIAL` ; non rejoué sur `a5744ea` |
 | Conformance | `cargo run -p ravum-conformance -- run --json target/p3-conformance.json` | **342 cas : 341 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées, **188/188 satisfaites** (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)), exit 0 |
-| **Contrats de validation** | `python -m unittest discover -s tools/tests -v` | **8 tests PASS** (vecteurs de faux PASS T2 et registre) |
+| **Contrats de validation** | `python -m unittest discover -s tools/tests -v` | **12 tests PASS** (vecteurs de faux PASS T2 et registre) |
+| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --tests --summary-only` | **74,6 % lignes / 74,9 % régions** sur sema ; `types.rs` 100 %, `own.rs` 88,8 %, `typeck.rs` 62,9 %, `resolve.rs` 67,2 % — **objectifs 90/85 non atteints** sur les composants critiques, mesure locale non câblée en CI |
+| **Mutation testing (ciblé)** | `cargo mutants -p ravum-lang-sema -f crates/ravum-lang-sema/src/types.rs -j 4 --timeout 120` | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués sur `types.rs` (tests ajoutés pour `is_*`, `int_bits`, `display`, `contains_never`) ; les fichiers critiques `typeck.rs`/`own.rs` ne sont pas encore couverts par une campagne complète |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0x338b9afe9926aa4f`, 26,2 s |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 4 132 it/s, 24,2 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
@@ -140,6 +142,23 @@ contenu du journal de hooks. Vérification locale : **5 exécutions consécutive
 15/15 tests vertes** (13–14 s chacune) ; la confirmation Linux reste à observer
 en CI.
 
+## 1 quinquies. CI sur `39ebea2` (fiabilité crash/bench, code `a5744ea`) — **vert**
+
+Runs [42825171502](https://github.com/Rwanbt/Ravum/actions/runs/42825171502)
+(Linux) et [42825184740](https://github.com/Rwanbt/Ravum/actions/runs/42825184740)
+(gate contracts).
+
+| Job | Résultat exact |
+|---|---|
+| Workspace tests (Linux) | **succès — 83 suites, 1019 passés / 0 échec / 4 ignorés**, dont `git_publication_crash` 15/15 |
+| Conformance corpus | **succès — `total=342 pass=340 fail=0 skip=2 not_run=0`** |
+| Miri (nightly) | **succès — 159 tests, 0 échec** |
+| Gate contracts, smoke, installateur, WASI, fuzz smoke | **succès** |
+
+Le flake `crash_in_commit_msg_hook...` ne s'est **pas reproduit** sur ce run
+après sérialisation ; une seule exécution ne prouve pas l'absence du flake, mais
+elle est cohérente avec 5/5 runs locaux verts.
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
@@ -147,14 +166,14 @@ en CI.
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
 | T2 | `PASS` | 342 cas : **341 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `b7e5c5c` (159 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T3 | `PASS` | Lexer/parser/AST réels, **1027 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `39ebea2` (159 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
 | T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et **2 rejeux verts consécutifs au repos** sur `63eda55` | **Sensible à la charge** : un rejeu sous charge concurrente (Miri+CI+cargo) a donné **3/10** (timeouts 90–120 s) ; le LSP en session directe répond, aucune régression fonctionnelle démontrée. Harnais E2E à stabiliser sous charge avant de revendiquer `PASS` | Flakiness E2E sous charge |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `a5744ea` | Audit externe |
+| T10 | `PARTIAL` | 1027 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `39ebea2` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **74,6 %** (`types.rs` 100 %, `typeck` 62,9 %, `resolve` 67,2 %) sous les objectifs 90/85 ; mutation testing ciblé seul | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -390,6 +409,11 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+
+
+
+
 
 
 

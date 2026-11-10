@@ -46,11 +46,13 @@ Détail : `docs/qualification/T2-FINDINGS.md` §14.
 Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **83 suites, 1022 passés / 0 échec / 2 ignorés** |
+| `cargo test --workspace --all-targets` | **83 suites, 1027 passés / 0 échec / 2 ignorés** |
 | Conformance | **342 cas : 341 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **12 tests** PASS |
+| Couverture sema (llvm-cov) | **74,6 % lignes / 74,9 % régions** ; `types.rs` 100 %, `own.rs` 88,8 %, `typeck.rs` 62,9 %, `resolve.rs` 67,2 % — objectifs 90/85 non atteints |
+| Mutation testing ciblé (`types.rs`) | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués |
 | Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0x338b9afe9926aa4f` |
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
@@ -60,7 +62,7 @@ Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
 | Performance | `check` 45,1 / 89,4 / 331,2 ms et `build` 329,9 / 647,1 / 2 151,7 ms pour 100 / 500 / 2 000 fonctions (Windows 11 x86-64, rustc 1.95.0, `dev`, 3 runs par taille) |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
-| CI sur le HEAD `1fb0568` (code `a5744ea`) | **succès après re-run** : conformance `342 cas / 340 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, workspace 1019 / 0 / 4, gate-contracts succès (runs `42815650401`, `42815661183`). Un test flaky de `ravum-workspace-coordinator` a échoué puis est passé au re-run sans modification de cette crate. |
+| CI sur le HEAD `39ebea2` (code `a5744ea` + fiabilité `03774d6`) | **succès** : conformance `342 cas / 340 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès (runs `42825171502`, `42825184740`). Le flake `crash_in_commit_msg_hook...` ne s'est pas reproduit après sérialisation de la fenêtre de test. |
 
 Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
 `PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
@@ -279,6 +281,8 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
+
 
 
 
