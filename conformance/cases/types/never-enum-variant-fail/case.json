@@ -1,0 +1,8 @@
+{
+  "id": "types/never-enum-variant-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-AMBIGUOUS"
+  ],
+  "notes": "TYP-1.6 / G-5.11: a tuple enum variant constructor must not infer its generic argument from a diverging value. Before this case `E::A(panic(\"x\"))` passed `check` and leaked an unresolved `T` into generated Rust (E0425)."
+}

@@ -1215,8 +1215,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let types = self.check_tuple_items(items, expected);
                 Type::Tuple(types)
             }
-            ExprKind::Array(items) => self.check_array(items),
-            ExprKind::ArrayRepeat { value, len } => self.check_array_repeat(expr, value, len),
+            ExprKind::Array(items) => self.check_array(items, expected),
+            ExprKind::ArrayRepeat { value, len } => {
+                self.check_array_repeat(expr, value, len, expected)
+            }
             ExprKind::StructLit { path, fields } => {
                 self.check_struct_lit(expr, path, fields, expected)
             }
@@ -1275,6 +1277,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             let expected_item = expected_items.as_ref().and_then(|list| list.get(index));
             let found = self.check_expr(item, expected_item);
+            let found = match expected_item {
+                // TYP-1.6: an annotated tuple supplies the element type, so a
+                // `!` element coerces instead of producing `(!, T)`.
+                Some(expected) => self.coerce(found, expected),
+                None => found,
+            };
             // TYP-1.6: without an expected element type, a diverging element
             // would make the tuple `(!, …)`, which is uninhabitable and not
             // representable by the reference backend. An explicit annotation
@@ -2220,6 +2228,26 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     if let Some(pattern) = variant_info.tuple_types.get(index) {
                         let expected_ty = substitute(pattern, &subst);
                         let arg_ty = self.check_arg(arg, &expected_ty);
+                        // TYP-1.6: `!` must not determine a generic variant
+                        // argument. `check_arg`/`coerce` returns the expected
+                        // type for a `!` argument, so the raw expression type is
+                        // read from the facts; an unsubstituted type parameter
+                        // means there is nothing to infer from.
+                        let raw_arg_ty = self
+                            .facts
+                            .expr_types
+                            .get(&arg.id)
+                            .cloned()
+                            .unwrap_or_else(|| arg_ty.clone());
+                        if contains_never(&raw_arg_ty) && has_unbound_param(&expected_ty) {
+                            self.error(
+                                "E-TYP-AMBIGUOUS",
+                                arg.span,
+                                "cannot infer a generic variant argument from a diverging \
+                                 expression; annotate the enum type or use a non-diverging value"
+                                    .to_string(),
+                            );
+                        }
                         if !self.unify_pattern(pattern, &arg_ty, &mut subst) {
                             self.error(
                                 "E-TYP-MISMATCH",
@@ -3582,7 +3610,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // Agrégats
     // ------------------------------------------------------------------
 
-    fn check_array(&mut self, items: &[Expr]) -> Type {
+    fn check_array(&mut self, items: &[Expr], expected: Option<&Type>) -> Type {
         if items.is_empty() {
             self.error(
                 "E-TYP-AMBIGUOUS",
@@ -3591,7 +3619,20 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
             return Type::Error;
         }
-        let types = self.check_expr_list(items, None);
+        // TYP-1.6: an annotation supplies the expected element type, so a
+        // diverging element coerces instead of forcing `[!; N]`.
+        let expected_elem = match expected {
+            Some(Type::Array { elem, len }) if *len == items.len() => Some((**elem).clone()),
+            _ => None,
+        };
+        let mut types = Vec::with_capacity(items.len());
+        for item in items {
+            let found = self.check_expr(item, expected_elem.as_ref());
+            types.push(match &expected_elem {
+                Some(elem) => self.coerce(found, elem),
+                None => found,
+            });
+        }
         // EXPR-5.11/6.7: control expressions are not values, so they cannot be
         // array elements either.
         for item in items {
@@ -3607,9 +3648,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
             }
         }
-        let elem = types[0].clone();
-        // TYP-1.6: `!` is not a `Vec`/array element type; `[panic(), …]` would
-        // otherwise generate `[!; N]`, which the reference backend cannot emit.
+        let elem = expected_elem.unwrap_or_else(|| types[0].clone());
+        // TYP-1.6: without an annotation, a leading `!` leaves the element type
+        // uninferable; `[panic(), …]` would otherwise generate `[!; N]`.
         if contains_never(&elem) {
             self.error(
                 "E-TYP-AMBIGUOUS",
@@ -3625,9 +3666,25 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
     }
 
-    fn check_array_repeat(&mut self, expr: &Expr, value: &Expr, len: &Expr) -> Type {
-        let value_ty = self.check_expr(value, None);
-        if contains_never(&value_ty) {
+    fn check_array_repeat(
+        &mut self,
+        expr: &Expr,
+        value: &Expr,
+        len: &Expr,
+        expected: Option<&Type>,
+    ) -> Type {
+        let expected_elem = match expected {
+            Some(Type::Array { elem, .. }) => Some((**elem).clone()),
+            _ => None,
+        };
+        let found = self.check_expr(value, expected_elem.as_ref());
+        let value_ty = match &expected_elem {
+            Some(elem) => self.coerce(found, elem),
+            None => found,
+        };
+        // TYP-1.6: an annotation supplies the element type; without one, a
+        // diverging repeat value leaves `[!; N]`, which is uninferable.
+        if expected_elem.is_none() && contains_never(&value_ty) {
             self.error(
                 "E-TYP-AMBIGUOUS",
                 value.span,
@@ -3946,7 +4003,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .cloned()
                 .unwrap_or_else(|| value_ty.clone());
             if contains_never(&raw_value_ty)
-                && matches!(expected_ty, Type::Param { .. } | Type::Error)
+                && (matches!(expected_ty, Type::Param { .. } | Type::Error)
+                    || has_unbound_param(&expected_ty))
             {
                 self.error(
                     "E-TYP-AMBIGUOUS",

@@ -46,14 +46,48 @@ TOOLING_CODES = {"E-BUILD", "E-TOOL", "E-CLI-WASM-RUNTIME", "E-INTERNAL-PARSER",
 WARNING_WHITELIST = {"W-RES-UNUSED-IMPORT", "W-OWN-UNUSED-VARIABLE"}
 
 
-def strip_comment(line: str) -> str:
-    """Drop a `//` comment so a code named in prose is not counted as emitted.
+def strip_comments(line: str, in_block: bool = False) -> tuple[str, bool]:
+    """Remove Rust comments from one line, preserving string literals.
 
-    The scan is lexical by nature; ignoring comments removes the easiest way to
-    make a registered-but-never-emitted code look emitted.
+    `in_block` carries the `/* … */` state across lines. String literals are
+    copied verbatim so a `//` inside a URL does not truncate a real emission
+    (which used to be reported as `never emitted`), and a code named only in a
+    comment (line or block) is not counted as emitted.
     """
-    index = line.find("//")
-    return line if index < 0 else line[:index]
+    out: list[str] = []
+    index = 0
+    length = len(line)
+    while index < length:
+        if in_block:
+            end = line.find("*/", index)
+            if end < 0:
+                return "".join(out), True
+            index = end + 2
+            in_block = False
+            continue
+        char = line[index]
+        if char == '"':
+            out.append(char)
+            index += 1
+            while index < length:
+                inner = line[index]
+                out.append(inner)
+                index += 1
+                if inner == "\\" and index < length:
+                    out.append(line[index])
+                    index += 1
+                elif inner == '"':
+                    break
+            continue
+        if char == "/" and index + 1 < length and line[index + 1] == "/":
+            break
+        if char == "/" and index + 1 < length and line[index + 1] == "*":
+            index += 2
+            in_block = True
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out), in_block
 
 
 def registry_codes(registry: pathlib.Path) -> set[str]:
@@ -66,8 +100,10 @@ def scan(crates: pathlib.Path, repo: pathlib.Path) -> dict[str, list[str]]:
     for path in sorted(crates.rglob("*.rs")):
         if "target" in path.parts:
             continue
+        in_block = False
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            for code in CODE_LITERAL.findall(strip_comment(line)):
+            cleaned, in_block = strip_comments(line, in_block)
+            for code in CODE_LITERAL.findall(cleaned):
                 where = f"{path.relative_to(repo).as_posix()}:{number}"
                 found.setdefault(code, []).append(where)
     return found

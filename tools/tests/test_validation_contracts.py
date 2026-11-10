@@ -257,6 +257,34 @@ class RegistryContract(unittest.TestCase):
             self.assertIn("closed W list", out)
             self.assertIn("W-TYP-UNREACHABLE", out)
 
+    def test_block_comment_is_not_an_emission(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = registry_root(
+                Path(tmp),
+                ["E-TYP-MISMATCH", "E-TYP-PROMISED"],
+                'fn f() {\n'
+                '    /* "E-TYP-PROMISED" only lives in this block comment. */\n'
+                '    diags.error("E-TYP-MISMATCH", span, "");\n'
+                '}',
+            )
+            code, out = run_registry(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("never emitted  : 1", out)
+
+    def test_url_in_string_does_not_hide_the_real_emission(self) -> None:
+        """A `//` inside a string must not truncate the scanned line."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = registry_root(
+                Path(tmp),
+                ["E-TYP-MISMATCH"],
+                'fn f() {\n'
+                '    let url = "http://example.invalid";\n'
+                '    diags.error("E-TYP-MISMATCH", span, url);\n'
+                '}',
+            )
+            code, out = run_registry(root)
+            self.assertEqual(code, 0, out)
+
 
 if __name__ == "__main__":
     unittest.main()
