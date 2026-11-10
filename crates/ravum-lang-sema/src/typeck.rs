@@ -57,6 +57,7 @@ pub(crate) fn typecheck_with_world(
         current_fn: None,
         scopes: Vec::new(),
         loop_depth: 0,
+        value_position: 0,
         unsafe_depth: 0,
         in_const: false,
         variant_pats: BTreeMap::new(),
@@ -387,6 +388,11 @@ struct TypeChecker<'p, 'w, 'f> {
     current_fn: Option<NodeId>,
     scopes: Vec<BTreeMap<String, Local>>,
     loop_depth: usize,
+    /// > 0 while checking a nested value position (argument, field, assignment
+    /// right-hand side, match arm/scrutinee, array repeat). EXPR-5.11/6.7/G-6.19
+    /// forbid `while`/`loop`/`for` as value expressions; only a direct statement
+    /// (or a `()`-block tail) may contain one.
+    value_position: usize,
     /// Profondeur d'imbrication des blocs `unsafe` (>= 1 = contexte unsafe).
     unsafe_depth: usize,
     in_const: bool,
@@ -508,6 +514,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn has_infer_var(&self, ty: &Type) -> bool {
         has_infer_var_rec(ty)
+    }
+
+    fn check_value_expr(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
+        self.value_position += 1;
+        let ty = self.check_expr(expr, expected);
+        self.value_position -= 1;
+        ty
     }
 
     fn record_expr_type(&mut self, id: NodeId, ty: &Type) {
@@ -1137,6 +1150,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // ------------------------------------------------------------------
 
     fn check_expr(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
+        // EXPR-5.11 / EXPR-6.7 / G-6.19: control expressions have type `()` and
+        // are not value expressions. They are allowed as direct statements and
+        // as the tail of a `()` block, not as arguments, fields, assignment
+        // values, match arms/scrutinees or repeated array values.
+        if self.value_position > 0
+            && matches!(
+                expr.kind,
+                ExprKind::While { .. } | ExprKind::Loop { .. } | ExprKind::For { .. }
+            )
+        {
+            self.error(
+                "E-TYP-STATEMENT-VALUE",
+                expr.span,
+                "a `while`/`loop`/`for` expression is a statement and cannot be used as a value"
+                    .to_string(),
+            );
+        }
         let ty = self.check_expr_inner(expr, expected);
         // TYP-1.6: `!` is not inhabitable, so it must never become a type
         // argument (`Option<!>`, `Result<!, E>`, `W<!>`). The bottom type only
@@ -1938,9 +1968,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             Type::Ref { inner, .. } if matches!(**inner, Type::Str | Type::Slice(_))
         );
         let found = if needs_late_coercion {
-            self.check_expr(arg, None)
+            self.check_value_expr(arg, None)
         } else {
-            self.check_expr(arg, Some(&expected))
+            self.check_value_expr(arg, Some(&expected))
         };
         self.coerce(found, &expected)
     }
@@ -2337,7 +2367,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let inner = match args.first() {
                     Some(arg) => match &inner_expected {
                         Some(expected) => self.check_arg(arg, expected),
-                        None => self.check_expr(arg, None),
+                        None => self.check_value_expr(arg, None),
                     },
                     None => inner_expected.unwrap_or(Type::Error),
                 };
@@ -2374,7 +2404,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         };
                         match expectation {
                             Some(expected) => self.check_arg(arg, &expected),
-                            None => self.check_expr(arg, None),
+                            None => self.check_value_expr(arg, None),
                         }
                     }
                     None => Type::Error,
@@ -3065,7 +3095,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_assign(&mut self, target: &Expr, value: &Expr) -> Type {
         let target_ty = self.check_expr(target, None);
-        let value_ty = self.check_expr(value, Some(&target_ty));
+        let value_ty = self.check_value_expr(value, Some(&target_ty));
         if !Self::compatible(&value_ty, &target_ty) {
             self.error(
                 "E-TYP-MISMATCH",
@@ -3157,7 +3187,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         let target_ty = self.check_expr(target, None);
-        let value_ty = self.check_expr(value, Some(&target_ty));
+        let value_ty = self.check_value_expr(value, Some(&target_ty));
         let ok = (target_ty.is_int() && value_ty.is_int())
             || (target_ty.is_float() && value_ty.is_float());
         if !ok || target_ty != value_ty {
@@ -3433,14 +3463,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         arms: &[MatchArm],
         expected: Option<&Type>,
     ) -> Type {
-        let scrutinee_ty = self.check_expr(scrutinee, None);
+        let scrutinee_ty = self.check_value_expr(scrutinee, None);
         let mut result: Option<Type> = None;
         let mut coverage = Coverage::new(&scrutinee_ty, self.facts);
         for arm in arms {
             self.push_scope();
             self.check_pattern(&arm.pat, &scrutinee_ty);
             let body_expected: Option<&Type> = result.as_ref().or(expected);
-            let body_ty = self.check_expr(&arm.body, body_expected);
+            let body_ty = self.check_value_expr(&arm.body, body_expected);
             self.pop_scope();
             // EXPR-5.9 / G-6.44 (MUST): an unreachable arm is neither an error
             // nor removed, and produces **no diagnostic**. DIAG-1.6 keeps the
@@ -3677,7 +3707,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             Some(Type::Array { elem, .. }) => Some((**elem).clone()),
             _ => None,
         };
-        let found = self.check_expr(value, expected_elem.as_ref());
+        let found = self.check_value_expr(value, expected_elem.as_ref());
         let value_ty = match &expected_elem {
             Some(elem) => self.coerce(found, elem),
             None => found,

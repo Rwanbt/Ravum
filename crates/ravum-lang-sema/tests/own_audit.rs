@@ -326,6 +326,42 @@ fn f(v: Vec<String>) -> String {
 // ===========================================================================
 
 #[test]
+fn audit_partial_move_then_disjoint_use_then_move_is_use_after_move() {
+    // A disjoint read (`d.b.len()`) proves the aggregate was used after the
+    // partial move, so moving the already-moved field again is a use-after-move,
+    // not a double move (the diagnostic depends on `used_since`).
+    rejected(
+        r#"
+struct D { a: String, b: String }
+fn f(d: D) -> String {
+    let t = d.a;
+    let len = d.b.len();
+    let u = d.a;
+    return u;
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
+fn audit_moved_value_in_array_repeat_is_rejected() {
+    // The repeated value is evaluated through a *read* of the place; a moved
+    // place must still report use-after-move even though the repeat itself is
+    // already rejected as non-Copy.
+    rejected(
+        r#"
+fn f() {
+    let s = String::from("a");
+    let t = s;
+    let a = [s; 3];
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
 fn audit_move_field_then_whole_struct_is_rejected() {
     rejected(
         r#"
