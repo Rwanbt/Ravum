@@ -104,3 +104,74 @@ ancres ajoutées dans `crates/ravum-lang-sema/tests/typeck_contracts.rs` :
 plage de motif entier, motifs littéraux des trois autres familles sur une
 scrutinee `!`, tableau répété annoté, et couverture wildcard pour `bool`, enum,
 `Option` et `Result` (12/12 mutants de `cover_pattern` tués après cette ancre).
+
+## 7. Campagne étendue — `own.rs`, `resolve.rs`, `typeck.rs` (2026-11-10)
+
+Commande (Windows 11 x86-64, rustc 1.95.0, `cargo-mutants 27.1.0`, `--no-shuffle -j 8`) :
+
+```
+cargo mutants --file crates/ravum-lang-sema/src/own.rs    -F "borrow_place|check_availability|place_mutability"
+cargo mutants --file crates/ravum-lang-sema/src/resolve.rs -F "resolve_type_path|resolve_imports|resolve_use_target|type_is_copy|nominal_is_copy"
+cargo mutants --file crates/ravum-lang-sema/src/typeck.rs  -F "check_struct_lit|check_variant_call|check_for|check_lit_pattern|cover_pattern|negative_value_fits|pattern_contains_float|check_const_expr"
+```
+
+| Fichier | Mutants | Tués | Survivants | Invivables | Durée |
+|---|---|---|---|---|---|
+| `own.rs` | 32 | 30 | 2 | 0 | 2 min |
+| `resolve.rs` | 74 | 51 | 21 | 2 | 4 min |
+| `typeck.rs` | 106 | 71 | 28 | 7 | 5 min |
+| **Total** | **212** | **152** | **51** | **9** | **11 min** |
+
+Les 51 survivants sont triés en trois catégories. Un survivant n'est **pas**
+« équivalent » par défaut : chaque ligne ci-dessous donne la raison, et la
+catégorie « lacune de test » est un aveu, pas une excuse.
+
+### 7.1 Morts par construction (inatteignables) — 14 mutants
+
+Preuve de non-atteignabilité : `parser.rs::parse_path` transforme les mots-clés
+`crate` / `self` / `super` en `PathRoot::{Crate, SelfMod, Super}` **avant** toute
+segmentation, et `Self` est `Kw::SelfType` (il ne peut pas être un segment
+`Ident`). Les branches `PathRoot::Plain` qui comparent le premier segment à
+`"crate"`, `"self"`, `"super"` ou `"Self"` ne s'exécutent donc jamais.
+
+| Mutants | Emplacement |
+|---|---|
+| delete match arm "crate"/"self"/"super", `==`→`!=`, `+=`→`*=`/`-=` | `resolve.rs` `resolve_use_target` L1290-1301 (6) |
+| idem | `resolve.rs` `resolve_type_path` L2388-2399 (6) |
+| `==`→`!=`, `!=`→`==` sur `segments[0] == "Self"` | `resolve.rs` `resolve_type_path` L2268-2269 (2) |
+
+### 7.2 Observables seulement par le codegen (faits de résolution) — 4 mutants
+
+Le harnais de mutation exécute `cargo test -p ravum-lang-sema`, qui n'émet pas de
+Rust et ne consomme pas les faits (`facts.resolutions`) : ces mutants ne peuvent
+pas être tués par un test de la crate sema.
+
+| Mutant | Emplacement | Ce qui le tuerait |
+|---|---|---|
+| delete match arm `ValuePath::Type`, `::Variant`, `::BuiltinConst` | `typeck.rs` `check_struct_lit` L3840/3845/3854 | un littéral de struct/variante compilé par le corpus (`cargo run -p ravum-conformance -- run`) |
+| delete match arm `Type::F32` | `typeck.rs` `check_lit_pattern` L4226 | un motif flottant sur un scrutation `f32` : le suffixe émis devient `f64` et `rustc` refuse. Le corpus `parser/match-float-literal-pass` contient `fn simple(x: f32)` et couvre ce chemin par la compilation, pas par le harnais sema |
+
+### 7.3 Équivalent par absence d'observateur — 1 mutant
+
+| Mutant | Emplacement | Raison |
+|---|---|---|
+| `!st.partial.is_empty() && !whole_reinit` → `\|\|` | `own.rs` `check_availability` L1417 | Le bloc ne s'exécute alors que `st.partial` est vide **et** `whole_reinit` vrai : la boucle ne fait rien, `relation` reste `Disjoint`, et `allowed` est vrai pour `Access::Write` comme pour les autres accès. Aucun diagnostic, aucun changement d'état. |
+
+### 7.4 Lacunes de test — 36 mutants (défaut de preuve, non corrigé)
+
+Ces mutants **changent** un comportement observable, mais aucun test actuel ne
+distingue la version mutée. Ils sont la feuille de route des prochaines passes.
+
+| Cluster | Mutants | Ce qu'un test devrait observer |
+|---|---|---|
+| `own.rs` `check_availability` L1455 (`&&`→`\|\|`) | 1 | **Corrigé dans cette passe** : `audit_partial_move_then_borrow_is_use_after_move_not_double_move` (déplacement partiel puis emprunt ⇒ `E-OWN-USE-AFTER-MOVE`, pas `E-OWN-DOUBLE-MOVE`) |
+| `typeck.rs` `check_struct_lit` L3890/3896/3953 (`==`/`&&`, longueur d'arguments) | 8 | inférence des arguments génériques d'un littéral de struct/variante depuis le type attendu : `fn f() -> Enveloppe<i32> { Enveloppe { v: 1 } }` puis usage typé de `v` |
+| `typeck.rs` `check_const_expr` L4733-4864 (`<<`, gardes de type, `not` booléen/entier, bras `Block`) | 11 | évaluer la **valeur** d'une constante : longueur de tableau (`const N: usize = 1 << 2; let a: [i32; N]`), `!true`, `!0`, constante de type `f64` (doit rester `E-RES-CONST-NOT-CONST`), bloc constant |
+| `typeck.rs` `check_variant_call` L2243 | 1 | appel d'une variante avec un argument de type incompatible |
+| `typeck.rs` `check_for` L3381 (`-=`→`+=`, `/=` ) | 2 | compteur de boucle décrémenté dans un `for` sur plage |
+| `resolve.rs` `resolve_use_target` L1315/1347 (`Sym::BuiltinModule`) | 2 | `use math;` / import d'un sous-module builtin (chemin `Ns::Module` → `BuiltinModule`) |
+| `resolve.rs` `resolve_type_path` L2348/2427/2476 (`\|\|`→`&&`, bras `BuiltinModule`) | 3 | un module utilisé comme type (`fn f(x: math)`) et un type utilisé comme module (`Option::X` en type) |
+| `resolve.rs` `type_is_copy` L2792/2795 (`&&`/`\|\|`) | 2 | décider si un `ref struct`/`ref` de `String` est `Copy` (déplacement vs copie observé par un diagnostic d'ownership) |
+
+Aucun chiffre de score de mutation n'est publié : 152/212 mutants tués sur un
+périmètre **ciblé** ne dit rien du reste de la crate (voir §1 pour la règle).

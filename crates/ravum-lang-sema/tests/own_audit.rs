@@ -1521,3 +1521,33 @@ fn f(s: String) {
         "E-OWN-USE-AFTER-MOVE",
     );
 }
+
+#[test]
+fn audit_partial_move_then_borrow_is_use_after_move_not_double_move() {
+    // OWN-5.4: moving one field leaves the aggregate partially moved; *reading*
+    // that field afterwards (here through a shared borrow) is a use-after-move,
+    // not a second move. The distinction is observable in the diagnostic code
+    // (E-OWN-USE-AFTER-MOVE vs E-OWN-DOUBLE-MOVE), and this case is what the
+    // mutant `access == Move && call_depth == 0` -> `||` in `check_availability`
+    // (own.rs:1455) gets wrong: it reports a double move for a borrow.
+    rejected(
+        r#"
+struct Paire {
+    a: String,
+    b: i32,
+}
+
+fn takes(s: &str) -> usize {
+    return s.len();
+}
+
+fn f() -> i32 {
+    let p = Paire { a: String::from("x"), b: 1 };
+    let moved = p.a;
+    let n = takes(&p.a);
+    p.b
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}

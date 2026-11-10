@@ -1,5 +1,11 @@
 # Brief d'audit externe — ce qu'un auditeur indépendant doit attaquer
 
+> **Prompt opérationnel** prêt à transmettre à un agent externe (Claude Code,
+> Codex CLI, agent outillé) : [`AUDIT-PROMPT.md`](AUDIT-PROMPT.md). Il fixe la
+> cible (SHA), les règles absolues, les méthodes d'attaque, le format du
+> livrable et le barème de sévérité ; ce brief-ci décrit le périmètre et les
+> preuves existantes.
+
 > **Statut : document de cadrage, écrit par l'implémenteur.** Il n'est **pas** un
 > audit : il dit ce qu'un auditeur doit faire pour que `T4`, `T10` et `T12`
 > puissent sortir de `BLOCKED`. Il est donc à lire comme une **cible**, pas comme
