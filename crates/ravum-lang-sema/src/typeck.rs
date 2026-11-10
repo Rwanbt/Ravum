@@ -1990,6 +1990,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 },
                 found_ty,
             ) => match (&**exp_inner, found_ty) {
+                // KNOWN DIVERGENCE (D-COERCE-1, `T2-FINDINGS.md` §19.2): TYP-13.1
+                // admits only `&String -> &str`, but this arm also accepts an
+                // owned `String` by value, which keeps `line.trim()` directly
+                // usable as a text argument (`examples/stats`,
+                // `conformance/cases/run/stats`). Removing it is a language
+                // decision, not a bug fix: it breaks a documented reference app
+                // and the corpus case that `features.md` F-STD-017 cites.
                 (Type::Str, Type::String) => expected.clone(),
                 (
                     Type::Str,

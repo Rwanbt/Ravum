@@ -621,3 +621,117 @@ atteints** : le déficit restant est concentré dans `resolve.rs` (67,4 %) et da
 les branches de `typeck.rs` liées aux génériques et à la visibilité
 inter-modules, qui demandent des programmes multi-fichiers et des cas
 d'exhaustivité supplémentaires. Ce chiffre est mesuré, pas estimé.
+
+## 18. D-PAT-1 résolue : G-6.36 et G-6.37 implémentées (option A)
+
+Décision du responsable (2026-11-10) : **option A**, implémenter les deux règles
+MUST plutôt que d'amender la spécification. Ce qui a changé :
+
+| Élément | Avant | Après |
+|---|---|---|
+| `match x { 1.5 => … }` (G-6.36) | `E-PARSE-EXPECTED` | accepté, comparé avec `==` ; `NaN` ne correspond jamais, `-0.0` correspond à `0.0` |
+| `match n { -1 => … }` (G-6.37) | `E-UNSUPPORTED-NEG-PAT` | accepté, y compris `-128` pour `i8` et `-2147483648` pour `i32` |
+| `match n { -x => … }`, `-(1+2)` | `E-UNSUPPORTED-NEG-PAT` | `E-PARSE-EXPECTED` (G-6.37) |
+| `E-UNSUPPORTED-NEG-PAT` | enregistré, émis | **retiré du registre** : 111 codes, 0 jamais émis |
+| `negative_ok` (`*value > i128::MAX`) | acceptait un littéral positif hors bornes | remplacé par un test de **signe** (`negative_value_fits`) |
+
+Détails qui comptent :
+
+- **Représentation** : `LitPat::Int` porte désormais un booléen `neg` et une
+  *magnitude* (jamais un complément à deux) ; `LitPat::Float` garde le texte
+  source et le suffixe.
+- **Codegen** : Rust n'a pas de motif flottant. Une branche contenant un motif
+  flottant est abaissée en `binding` + `garde` (`Some(__ravum_flt_0) if
+  __ravum_flt_0 == 1.5f64`) sur une liaison unique du scrutinee. Un bras gardé
+  ne couvre rien : `pattern_contains_float` empêche le checker de croire que
+  `Some(1.5)` couvre `Some`, sinon le `match` Rust émis serait non exhaustif.
+- **Exhaustivité** : un motif flottant exige `_` (`E-TYP-NONEXHAUSTIVE`),
+  exactement comme un motif entier.
+
+Preuves exécutables : 8 nouveaux contrats dans `typeck_contracts.rs` et 5 cas de
+corpus, dont deux `run-pass` qui **exécutent** la sémantique (`NaN` ne
+correspond jamais, `-0.0` correspond à `0.0`, `-128`/`-2147483648` sélectionnent
+la bonne branche), et un `compile-fail` pour `-y`. Corpus : 348 cas au moment de
+la rédaction, 0 FAIL.
+
+## 19. Défauts trouvés par les contrats de couverture et le remplissage du corpus
+
+Les passes de couverture (`typeck_contracts2.rs`, `resolve_contracts.rs`) et de
+complètement du corpus (31 cas) ont produit des **défauts réels**. Sept ont été
+corrigés dans cette passe, chacun avec un test de régression ; les autres sont
+consignés ici sans correction, avec la raison.
+
+### 19.1 Corrigés
+
+| Défaut | Symptôme mesuré | Correction |
+|---|---|---|
+| `None` nu en motif | `match o { None => …, Some(x) => … }` : `None` était une **liaison**, donc le premier bras était irréfutable et masquait le trou d'exhaustivité (G-6.41) | parseur : `Some`/`None`/`Ok`/`Err` sont des motifs de constructeur ; `match o { None => … }` seul est maintenant `E-TYP-NONEXHAUSTIVE` |
+| `None(payload)` | `None(v)` sur `Option<i32>` accepté, alors que toute variante unitaire utilisateur est `E-TYP-ARITY` (TYP-10.2/G-6.29) | checker : `E-TYP-ARITY` + vérification des sous-motifs |
+| `for x in &vec` / `&[T]` | accepté par le checker, puis rejeté par l'ownership en `E-OWN-REF-ESCAPE` : mauvaise phase, mauvais code (EXPR-6.4/TYP-5.8 MUST) | checker : `E-TYP-MISMATCH`, message qui cite l'itération par index |
+| `const MIN: i8 = -128` | `E-TYP-LITERAL-RANGE` + `E-RES-CONST-NOT-CONST` alors que `let a: i8 = -128;` était accepté (TYP-13.2) | évaluateur de constantes : le signe est traité avant la magnitude |
+| Budget de diagnostics | 150 erreurs de syntaxe produisaient 150 diagnostics (DIAG-1.7/DIAG-4.3 MUST) | `DiagnosticBag` : 100 par fichier puis un unique `E-PARSE-TOO-LARGE` |
+| Pile du parseur | 240 parenthèses imbriquées **plantaient** (0xC00000FD) avant la limite `MAX_DEPTH` du parseur | le CLI exécute la commande sur un thread de 64 Mio de pile |
+
+
+### 19.2 Ouverts (non corrigés, à décider)
+
+1. **Famille d'affectations composées** — `grammar.md` G-6.8 et `expressions.md`
+   EXPR-9.4 (MUST) déclarent la famille `-= *= /= %= &= |= ^= <<= >>=`
+   **acceptée**, alors que `diagnostics.md` enregistre
+   `E-UNSUPPORTED-COMPOUND-ASSIGN` et que l'implémentation ne supporte que `+=`.
+   Contradiction de spécification, pas défaut d'implémentation : elle demande une
+   décision (**D-CMP-1**, même forme que D-PAT-1).
+2. **Visibilité d'un module privé dans `use`** — `resolve.rs` passe l'id du
+   module lui-même comme module de définition, donc `mod geo { … }` est invisible
+   depuis la racine et ses descendants : `use crate::geo;` donne `E-RES-PRIVATE`
+   alors que MOD-4.3 impose l'acceptation (et MOD-3.7 attend `E-RES-DUPLICATE`
+   pour le doublon).
+3. **Segments de module non finaux d'un `use`** — la visibilité n'est vérifiée
+   que sur le dernier segment : `use crate::a::secret::X;` est **accepté** quand
+   `secret` n'est pas `pub`, alors que le même accès par chemin de valeur ou de
+   type donne correctement `E-RES-PRIVATE` (MOD-4.2/MOD-4.3/MOD-6.2). C'est un
+   trou de confidentialité, pas de confort.
+4. **`test fn` avec code de retour invalide** — `E-PARSE-EXPECTED` alors que
+   G-3.6/`diagnostics.md` nomment `E-TYP-MAIN`.
+5. **Comparaison mixte `f32`/`f64`** — `E-TYP-EQ`/`E-TYP-CMP` alors qu'EXPR-4.8
+   nomme `E-TYP-MISMATCH` (les codes EQ/CMP sont réservés au type non comparable).
+6. **`E-RES-CONFLICT`** — `diagnostics.md` l'assigne à une collision
+   import/local, `modules.md` MOD-3.7 l'assigne à `E-RES-DUPLICATE` (comportement
+   actuel). Le seul émetteur réel est une collision de nom de prélude, qu'aucune
+   règle ne décrit.
+7. **`E-RES-SELF` vs `E-RES-SELF-OUTSIDE-IMPL`** — deux lignes de
+   `diagnostics.md` décrivent le même cas.
+8. **Codes inatteignables** — `E-OWN-LIMIT` (le budget DIAG-4.3 coupe avant),
+   `E-PARSE-BAD-SUFFIX` (`E-LEX-INT-SUFFIX` gagne en amont), `E-RES-MODDECL`
+   (le chargeur retire la déclaration) et `E-UNSUPPORTED-UFCS`
+   (`resolve_associated` ne sélectionne que les méthodes sans récepteur). Ils
+   restent enregistrés et textuellement émis ; aucun cas de corpus ne peut les
+   atteindre honnêtement.
+9. **`E-LIMIT-FILE-SIZE`** — exige un fichier de plus de 8 Mio ; un fixture de
+   cette taille (≈50× le corpus) n'a pas été ajouté.
+10. **Harnais de conformance** — `runner.rs` valide tout code avec `is_valid_code`
+    qui n'accepte que `E-*` : un `W-*` dans `check --json` fait échouer la
+    validation de schéma, alors que DIAG-1.6 les autorise. Les deux cas `W-*`
+    ajoutés vérifient donc le fragment `code`+`severity` sans demander la
+    validation de schéma.
+11. **Phase des `E-LIMIT-*`** — le registre les classe `parse`, le JSON les
+    rapporte en `"phase":"tool"`.
+12. **Contradictions `unsupported.md`/`grammar.md`** sur les codes de `static`,
+    alias de type, ré-export, bornes, `move`, motifs de plage et affectation
+    composée (le même cas y est décrit par deux codes différents).
+13. **`Vec::new()` + `push`** — `let mut v = Vec::new(); v.push(1);` laisse le
+    type d'élément non résolu (`$0`) et `s += x` échoue : l'unification ne
+    remonte pas du `push` vers le type du `Vec`. L'annotation `Vec<i32>` est
+    nécessaire.
+14. **Coercition implicite `String → &str`** (**D-COERCE-1**) — TYP-13.1 (MUST)
+    n'admet que `&String → &str` et TYP-8.5 rend la conversion possédée
+    explicite, mais `coerce` accepte aussi un `String` par valeur en position
+    d'argument. Le resserrement a été **essayé puis retiré** : il casse
+    `examples/stats` et le cas `run/stats` (cité par F-STD-017), parce que
+    `line.trim()` rend un `String` possédé (STD-9.1, MUST). Deux MUST de la
+    spécification se contredisent donc en pratique ; l'arbitrage est une
+    décision de langage, pas une correction de bug. Le comportement actuel est
+    conservé et le test unitaire `string_by_value_is_coerced_to_str` documente
+    explicitement la divergence au lieu de la présenter comme conforme.
+
+

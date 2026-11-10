@@ -446,7 +446,10 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D6 | Périmètre des fonctionnalités universelles | **OUVERTE** |
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
 | **D8** | Arbitrage des codes de diagnostic | **RÉSOLUE** — le registre (`diagnostics.md` §3) déclare « tout code absent est interdit » ; les codes fautifs ont été remplacés. Le dernier restant, `W-TYP-UNREACHABLE`, n'a **pas** été enregistré : EXPR-5.9, G-6.44 et DIAG-1.6 imposent qu'un bras inatteignable ne produise aucun diagnostic, donc l'émission a été retirée et un test la verrouille |
-| **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **NOUVELLE — bloque la signature de release (T11)** |
+| **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **NOUVELLE — bloque la signature de release (T11)** ; procédure proposée : [`KEY-CUSTODY.md`](../release/KEY-CUSTODY.md) |
+| **D-PAT-1** | Motifs littéraux flottants/négatifs (`grammar.md` G-6.36/G-6.37 vs `diagnostics.md`) | **RÉSOLUE (2026-11-10, option A)** : les deux règles MUST sont **implémentées**, `E-UNSUPPORTED-NEG-PAT` est retiré du registre (111 codes, 0 jamais émis). Preuves : `T2-FINDINGS.md` §18, 8 contrats `typeck_contracts.rs`, 5 cas de corpus dont 2 `run-pass` |
+| **D-CMP-1** | Famille d'affectations composées (`grammar.md` G-6.8 / `expressions.md` EXPR-9.4 **MUST acceptées** vs `diagnostics.md` `E-UNSUPPORTED-COMPOUND-ASSIGN` et implémentation limitée à `+=`) | **NOUVELLE — OUVERTE** : contradiction de spécification de même forme que D-PAT-1. Soit implémenter la famille (`-= *= /= %= &= \|= ^= <<= >>=`), soit amender deux MUST. Détail : `T2-FINDINGS.md` §19.2 |
+| **D-COERCE-1** | Coercition implicite `String → &str` en position d'argument (`types.md` TYP-13.1 n'admet que `&String → &str`, TYP-8.5 rend la conversion explicite) | **NOUVELLE — OUVERTE** : comportement actuel accepté et **conservé** cette passe car `line.trim()` rend un `String` (STD-9.1) et que `examples/stats` + `conformance/cases/run/stats` (cité par F-STD-017) en dépendent. Détail : `T2-FINDINGS.md` §19.2 |
 
 ## 5. Règles de mise à jour
 

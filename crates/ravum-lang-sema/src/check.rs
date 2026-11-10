@@ -913,22 +913,50 @@ fn main() { let o: Option<i32> = None; let n = f(o); }
     }
 
     #[test]
-    fn string_to_str_coercions_are_applied() {
+    fn string_ref_to_str_coercion_is_applied() {
+        // TYP-13.1: `&String` coerces to `&str`.
         let (result, _) = run(
             "src/main.rv",
             r#"
 fn takes(s: &str) -> usize { return s.len(); }
 fn main() {
     let a = String::from("ab");
-    let b = String::from("cd");
     let n = takes(&a);
-    let m = takes(b);
 }
 "#,
         );
         assert!(
             result.checked.is_some(),
             "expected success: {:?}",
+            result
+                .diags
+                .iter()
+                .map(|d| (d.code.clone(), d.message.clone()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn string_by_value_is_coerced_to_str() {
+        // KNOWN DIVERGENCE (D-COERCE-1, T2-FINDINGS.md 19.2): TYP-13.1 admits
+        // only `&String -> &str`, yet an owned `String` is also accepted here.
+        // This test documents the current behaviour so a future change is
+        // deliberate; it is NOT a claim that the spec allows it, and
+        // `examples/stats` + `conformance/cases/run/stats` depend on it
+        // (`line.trim()` renders a `String` per STD-9.1).
+        let (result, _) = run(
+            "src/main.rv",
+            r#"
+fn takes(s: &str) -> usize { return s.len(); }
+fn main() {
+    let b = String::from("cd");
+    let m = takes(b);
+}
+"#,
+        );
+        assert!(
+            result.checked.is_some(),
+            "accepted today (divergence D-COERCE-1): {:?}",
             result
                 .diags
                 .iter()
@@ -1014,3 +1042,5 @@ fn main() {
             .any(|c| matches!(c, CallTarget::BuiltinFn { path } if path == "Result::Ok")));
     }
 }
+
+
