@@ -480,7 +480,21 @@ pub enum MethodSelfKind {
 }
 
 /// Signature statique d'une méthode builtin.
+/// Methods whose receiver is `&mut self` per `spec/language/stdlib.md`.
+///
+/// The signature table does not carry receiver mutability (it was added later),
+/// so the closed list is stated once, here, and checked by the type checker:
+/// calling one of these on an immutable place or a temporary is
+/// `E-OWN-IMMUTABLE` (OWN-7.2/7.4).
+pub fn builtin_method_takes_exclusive_receiver(kind: MethodSelfKind, name: &str) -> bool {
+    match kind {
+        MethodSelfKind::String => matches!(name, "push_str" | "push"),
+        MethodSelfKind::Vec => matches!(name, "push" | "pop" | "clear"),
+        _ => false,
+    }
+}
 #[derive(Debug, Clone, Copy)]
+
 pub struct BuiltinMethodSig {
     pub kinds: &'static [MethodSelfKind],
     pub name: &'static str,

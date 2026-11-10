@@ -567,7 +567,7 @@ fn signature_detail(function: &ravum_lang_syntax::ast::FnItem) -> String {
                 ravum_lang_syntax::ast::Receiver::Exclusive => "&mut self".to_string(),
                 ravum_lang_syntax::ast::Receiver::ByValue => "self".to_string(),
             },
-            ravum_lang_syntax::ast::ParamKind::Binding { name, ty } => {
+            ravum_lang_syntax::ast::ParamKind::Binding { name, ty, .. } => {
                 format!("{}: {}", name.name, type_text(ty))
             }
         })

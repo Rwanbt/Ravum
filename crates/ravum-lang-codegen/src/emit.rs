@@ -1100,7 +1100,7 @@ impl<'a> Emitter<'a> {
             let mut args = Vec::new();
             for param in &f.params {
                 match &param.kind {
-                    ParamKind::Binding { name, ty } => {
+                    ParamKind::Binding { name, ty, .. } => {
                         if !ast_ffi_safe(ty) {
                             return Err(err(format!(
                                 "extern function `{}` parameter `{}` has a non-FFI-safe type",
@@ -1207,7 +1207,7 @@ impl<'a> Emitter<'a> {
                     Receiver::Exclusive => "&mut self".to_string(),
                     Receiver::ByValue => "self".to_string(),
                 }),
-                ParamKind::Binding { name, ty } => {
+                ParamKind::Binding { name, ty, .. } => {
                     params.push(format!(
                         "{}: {}",
                         mangle_ident(&name.name),
@@ -2848,6 +2848,7 @@ mod tests {
         Param {
             id,
             kind: ParamKind::Binding {
+                mutable: false,
                 name: builder.ident(name),
                 ty,
             },

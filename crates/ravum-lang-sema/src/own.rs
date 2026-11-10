@@ -301,7 +301,7 @@ impl<'a> OwnChecker<'a> {
             // Fact table missing (checker not finished): fall back on the AST.
             for p in &f.params {
                 match &p.kind {
-                    ParamKind::Binding { name, ty } => {
+                    ParamKind::Binding { name, ty, .. } => {
                         let ty = self
                             .facts
                             .type_nodes

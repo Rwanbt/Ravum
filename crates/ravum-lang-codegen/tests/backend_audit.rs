@@ -351,6 +351,7 @@ fn make_param(b: &B, name: &str, ty: AstType) -> Param {
     Param {
         id,
         kind: ParamKind::Binding {
+            mutable: false,
             name: b.ident(name),
             ty,
         },

@@ -936,7 +936,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.scopes.clear();
         self.push_scope();
         for param in &sig.params {
-            let mutable = param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive));
+            let mutable = param.mutable
+                || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
             self.bind_local(&param.name, param.ty.clone(), mutable, false);
         }
         let body_ty = self.check_block(&f.body, Some(&sig.ret));
@@ -1900,6 +1901,36 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.resolve_vars(&ret)
     }
 
+    /// True when the expression can be borrowed mutably: a `let mut` binding, a
+    /// field or index of a mutable place, or a dereference of `&mut T`.
+    fn is_mutable_place(&self, expr: &Expr) -> bool {
+        // A value of type `&mut T` can always be reborrowed mutably, whatever
+        // the mutability of the binding that holds it.
+        if matches!(
+            self.facts.expr_types.get(&expr.id),
+            Some(Type::Ref { mutable: true, .. })
+        ) {
+            return true;
+        }
+        match &expr.kind {
+            ExprKind::Path(path) => matches!(
+                self.facts.resolutions.get(&path.id),
+                Some(crate::facts::Resolution::Local { mutable: true, .. })
+            ),
+            ExprKind::Field { base, .. }
+            | ExprKind::TupleIndex { base, .. }
+            | ExprKind::Index { base, .. } => self.is_mutable_place(base),
+            ExprKind::Unary { op, expr } => {
+                matches!(op, UnOp::Deref)
+                    && matches!(
+                        self.facts.expr_types.get(&expr.id),
+                        Some(Type::Ref { mutable: true, .. })
+                    )
+            }
+            _ => false,
+        }
+    }
+
     fn check_assert_eq(&mut self, args: &[Expr], _path: &'static str) -> Type {
         if args.len() != 2 {
             self.error(
@@ -2302,6 +2333,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let kind = method_self_kind(&base);
                 match kind.and_then(|k| builtins::builtin_method(k, name)) {
                     Some(sig) => {
+                        if builtins::builtin_method_takes_exclusive_receiver(kind.unwrap(), name)
+                            && !self.is_mutable_place(receiver)
+                        {
+                            self.error(
+                                "E-OWN-IMMUTABLE",
+                                *name_span,
+                                format!(
+                                    "`{name}` takes `&mut self`; the receiver must be a mutable \
+                                     place (`let mut …` or a `&mut` borrow)"
+                                ),
+                            );
+                        }
                         let env = method_env_for(&base);
                         let params = builtins::method_param_types(sig, &env);
                         if args.len() != params.len() {

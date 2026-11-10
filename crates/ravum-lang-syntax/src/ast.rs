@@ -258,7 +258,11 @@ pub struct Param {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParamKind {
     Receiver(Receiver),
-    Binding { name: Ident, ty: Type },
+    Binding {
+        mutable: bool,
+        name: Ident,
+        ty: Type,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

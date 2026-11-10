@@ -284,7 +284,7 @@ fn render_fn(function: &FnItem, public: bool) -> String {
                     Receiver::Exclusive => "&mut self".to_string(),
                     Receiver::ByValue => "self".to_string(),
                 },
-                ParamKind::Binding { name, ty } => {
+                ParamKind::Binding { name, ty, .. } => {
                     format!("{}: {}", name.name, render_type(ty))
                 }
             })

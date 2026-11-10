@@ -194,6 +194,8 @@ pub struct ParamSig {
     pub name: String,
     pub ty: Type,
     pub is_receiver: bool,
+    /// `mut name: Ty` — the binding is mutable inside the body.
+    pub mutable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1593,9 +1593,10 @@ fn resolve_fn_header(
                     name: "self".to_string(),
                     ty,
                     is_receiver: true,
+                    mutable: false,
                 });
             }
-            ast::ParamKind::Binding { name, ty } => {
+            ast::ParamKind::Binding { mutable, name, ty } => {
                 if params.iter().any(|p| p.name == name.name) {
                     ctx.error(
                         "E-RES-DUPLICATE",
@@ -1608,6 +1609,7 @@ fn resolve_fn_header(
                     name: name.name.clone(),
                     ty: resolved,
                     is_receiver: false,
+                    mutable: *mutable,
                 });
             }
         }
@@ -1691,7 +1693,7 @@ fn resolve_extern_block(
                             "`self` is not allowed in an `extern` function declaration".to_string(),
                         );
                     }
-                    ast::ParamKind::Binding { name, ty } => {
+                    ast::ParamKind::Binding { mutable, name, ty } => {
                         if params.iter().any(|p| p.name == name.name) {
                             ctx.error(
                                 "E-RES-DUPLICATE",
@@ -1714,6 +1716,7 @@ fn resolve_extern_block(
                             name: name.name.clone(),
                             ty: resolved,
                             is_receiver: false,
+                            mutable: false,
                         });
                     }
                 }

@@ -1476,29 +1476,31 @@ impl<'a> Parser<'a> {
                 self.bump();
                 ParamKind::Receiver(Receiver::ByValue)
             } else if self.at_kw(Kw::Mut) {
-                // `mut name: Ty` is accepted; the frozen AST has no mutable flag
-                // on parameters, so the modifier is ignored here.
+                // `mut name: Ty`: the mutability of the binding is now part of
+                // the AST, so `push_str`/`push` on the parameter are accepted.
+                let mutable = true;
                 self.bump();
                 let name = self.parse_ident("parameter name");
                 if self.eat(Punct::Colon) {
                     let ty = self.parse_type();
-                    ParamKind::Binding { name, ty }
+                    ParamKind::Binding { mutable, name, ty }
                 } else {
                     self.expected("`:` and a parameter type");
                     let span = self.zero_span();
                     let ty = self.infer_type(span);
-                    ParamKind::Binding { name, ty }
+                    ParamKind::Binding { mutable, name, ty }
                 }
             } else if matches!(self.kind(), TokenKind::Ident(_)) {
+                let mutable = false;
                 let name = self.parse_ident("parameter name");
                 if self.eat(Punct::Colon) {
                     let ty = self.parse_type();
-                    ParamKind::Binding { name, ty }
+                    ParamKind::Binding { mutable, name, ty }
                 } else {
                     self.expected("`:` and a parameter type");
                     let span = self.zero_span();
                     let ty = self.infer_type(span);
-                    ParamKind::Binding { name, ty }
+                    ParamKind::Binding { mutable, name, ty }
                 }
             } else {
                 self.expected("a parameter or `)`");
@@ -4288,7 +4290,7 @@ pub fn compute<T, U>(a: T, mut b: u32) -> Vec<T> effects(io, alloc) {
         assert_eq!(f.generics[1].name.name, "U");
         assert_eq!(f.params.len(), 2);
         match &f.params[0].kind {
-            ParamKind::Binding { name, ty } => {
+            ParamKind::Binding { name, ty, .. } => {
                 assert_eq!(name.name, "a");
                 assert!(matches!(&ty.kind, TypeKind::Path(p) if p.display() == "T"));
             }
@@ -4296,7 +4298,7 @@ pub fn compute<T, U>(a: T, mut b: u32) -> Vec<T> effects(io, alloc) {
         }
         match &f.params[1].kind {
             // `mut` on a parameter is accepted and ignored by the frozen AST.
-            ParamKind::Binding { name, ty } => {
+            ParamKind::Binding { name, ty, .. } => {
                 assert_eq!(name.name, "b");
                 assert!(matches!(&ty.kind, TypeKind::Path(p) if p.display() == "u32"));
             }

@@ -1,0 +1,4 @@
+[package]
+name = "mut-method-on-shared-ref-fail"
+version = "0.1.0"
+edition = "core-1.0"
