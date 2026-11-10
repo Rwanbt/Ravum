@@ -1721,9 +1721,11 @@ impl<'a> Emitter<'a> {
             Some(FloatTy::F64) => false,
             None => matches!(ty, Some(Type::F32)),
         };
-        if is_f32 {
-            out.push_str("f32");
-        }
+        // Always annotate the literal. Without a suffix, `2.0` reaches `rustc` as
+        // `{float}` and any method call on it fails with E0689
+        // (`math::sqrt(2.0)` was accepted by `check` and refused by `rustc`).
+        // The checker's recorded type decides f32 vs f64; the default is f64.
+        out.push_str(if is_f32 { "f32" } else { "f64" });
         out
     }
 
