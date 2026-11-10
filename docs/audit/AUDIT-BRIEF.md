@@ -61,6 +61,7 @@ c'est là qu'il faut chercher.
 | 17 codes émis hors du registre §3 | **contrat de diagnostic** : `python tools/registry_audit.py` en trouve encore un (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
 | `'a` produisait quatre diagnostics en cascade | **reprise après erreur** : toute construction non supportée produit-elle un seul code ? |
 | `r"…"` produisait deux tokens | **frontière lexer/parser** : les formes non supportées sont-elles reconnues assez tôt ? |
+| `W-OWN-UNUSED-VARIABLE` est déclaré par DIAG-1.6 et **jamais émis** | **capacités annoncées et absentes** : vérifier chaque ligne du registre §3 et chaque warning de DIAG-1.6 contre une émission réelle |
 
 ## 5. Questions auxquelles l'auditeur doit répondre
 

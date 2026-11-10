@@ -352,3 +352,29 @@ Aucun cas ne peut donc exister sans inventer un oracle. **T2 passe à `PASS` sur
 187/187 règles testables**, avec cette exemption écrite noir sur blanc et
 révocable : si un relecteur considère qu''un gate exige 188/188, la ligne est là
 et le downgrade tient en un mot.
+## 12. Constat ouvert — un avertissement promis, jamais émis
+
+`diagnostics.md` DIAG-1.6 déclare la liste des avertissements **fermée** et lui
+donne **deux** entrées : `W-RES-UNUSED-IMPORT` et `W-OWN-UNUSED-VARIABLE`.
+
+Mesure du 2026-11-10 : `W-RES-UNUSED-IMPORT` est bien émis (import inutilisé →
+avertissement, et `lint --deny W-RES-UNUSED-IMPORT` sort en code 1).
+**`W-OWN-UNUSED-VARIABLE` n'est émis par aucun programme** : un `let unused: i32 = 1;`
+jamais lu ne produit aucun diagnostic, et `grep` ne trouve cette chaîne nulle part
+dans `crates/` hors du registre.
+
+Deux lectures possibles, toutes deux à trancher par un humain :
+
+- **l'implémentation est incomplète** : la détection de variable inutilisée est
+  annoncée et absente ;
+- **le registre surestime** : la ligne doit être retirée de DIAG-1.6.
+
+Je ne l'ai pas implémentée : ajouter un avertissement sur des programmes existants
+change la sortie de `check --json` pour tous les cas qui contiennent une variable
+inutilisée, et les cas `compile-fail` comparent l'**ensemble exact** des codes.
+Une telle modification exige un audit du corpus, pas une addition de fin de
+session.
+
+Ce constat ne relève pas des règles `features.md` (donc pas de T2 tel que mesuré),
+mais il appartient au même dossier : une capacité promise par la spécification et
+non produite par l'outillage.
