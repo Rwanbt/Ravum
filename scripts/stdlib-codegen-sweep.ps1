@@ -170,6 +170,136 @@ fn main() {
     io::println(&n.to_string());
 }
 '@ },
+    @{ id = 'string-predicates'; expect = 'run:yes'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let s = String::from("Hello");
+    let a = s.starts_with("He");
+    let b = s.ends_with("lo");
+    let c = s.contains("ell");
+    let lower = s.to_lowercase();
+    if a && b && c && lower == "hello" {
+        io::println("yes");
+    }
+}
+'@ },
+    @{ id = 'string-push-and-clear'; expect = 'run:4'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let mut s = String::from("ab");
+    s.push_str("c");
+    s.push('d');
+    let n = s.len();
+    io::println(&n.to_string());
+    io::println(&n.to_string());
+}
+'@ },
+    @{ id = 'string-as-str'; expect = 'run:2'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let s = String::from("hi");
+    let n = s.as_str().len();
+    io::println(&n.to_string());
+}
+'@ },
+    @{ id = 'string-parse-f64'; expect = 'run:ok'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let parsed = string::parse_f64("2.5");
+    let v = parsed.unwrap_or(0.0);
+    if v > 2.0 {
+        io::println("ok");
+    }
+}
+'@ },
+    @{ id = 'vec-mutating-ops'; expect = 'run:1'; src = @'
+use std::io;
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.push(2);
+    let last = v.pop();
+    let n = v.len();
+    io::println(&n.to_string());
+    let empty = v.is_empty();
+    if empty {
+        io::println("0");
+    } else {
+        io::println("1");
+    }
+}
+'@ },
+    @{ id = 'vec-clone-and-slice'; expect = 'run:2'; src = @'
+use std::io;
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.push(2);
+    let w = v.clone();
+    let n = w.len();
+    let m = w.as_slice().len();
+    if n == m {
+        io::println(&n.to_string());
+    }
+}
+'@ },
+    @{ id = 'vec-clear'; expect = 'run:0'; src = @'
+use std::io;
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.clear();
+    let n = v.len();
+    io::println(&n.to_string());
+}
+'@ },
+    @{ id = 'option-predicates'; expect = 'run:9'; src = @'
+use std::io;
+fn main() {
+    let some: Option<i32> = Some(9);
+    let none: Option<i32> = None;
+    if some.is_some() && none.is_none() {
+        let v = some.unwrap_or(0);
+        io::println(&v.to_string());
+    }
+}
+'@ },
+    @{ id = 'result-predicates'; expect = 'run:both'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let good = string::parse_i64("7");
+    let bad = string::parse_i64("nope");
+    if good.is_ok() && bad.is_err() {
+        io::println("both");
+    }
+}
+'@ },
+    @{ id = 'result-err'; expect = 'run:yes'; src = @'
+use std::io;
+use std::string;
+fn main() {
+    let bad = string::parse_i64("nope");
+    let maybe = bad.err();
+    if maybe.is_some() {
+        io::println("yes");
+    }
+}
+'@ },
+    @{ id = 'option-ok-or'; expect = 'run:yes'; src = @'
+use std::io;
+fn main() {
+    let some: Option<i32> = Some(1);
+    let converted = some.ok_or(Error::new("bad"));
+    if converted.is_ok() {
+        io::println("yes");
+    }
+}
+'@ },
     @{ id = 'array-and-slice'; expect = 'run:6'; src = @'
 use std::io;
 fn main() {

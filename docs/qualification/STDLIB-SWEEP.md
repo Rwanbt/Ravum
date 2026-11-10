@@ -23,8 +23,8 @@ qu'aucun cas de conformance n'écrit `sqrt(<littéral non typé>)`.
 
 ## 2. Ce que le balayage couvre
 
-`scripts/stdlib-codegen-sweep.ps1`, 16 programmes, chacun `check` → `build` →
-`run` :
+`scripts/stdlib-codegen-sweep.ps1`, **27 programmes**, chacun `check` → `build` →
+`run`, couvrant **30/30 méthodes documentées** de `builtins.rs` :
 
 | Surface | Exemple |
 |---|---|
@@ -36,6 +36,12 @@ qu'aucun cas de conformance n'écrit `sqrt(<littéral non typé>)`.
 | `Option` / `Result` | `Some`/`unwrap`, `parse_i64`/`unwrap_or` |
 | conversions | `to_string` sur entier, `bool`, `char` |
 | `fs` | `read_to_string(...).unwrap_or(String::new())` |
+| prédicats `String` | `starts_with`, `ends_with`, `contains`, `to_lowercase` |
+| mutation `String` | `push_str`, `push` |
+| vues | `as_str`, `as_slice` (utilisées, jamais stockées : OWN-6) |
+| `Vec` mutable | `pop`, `clear`, `is_empty`, `clone` |
+| `Result` | `is_ok`, `is_err`, `err`, `ok` |
+| `Option` | `is_some`, `is_none`, `ok_or` |
 | tableaux | littéral, indexation, taille |
 
 Le balayage vérifie aussi, indirectement, que le compilateur **refuse** ce qui
@@ -57,8 +63,10 @@ dans le job CI **Linux qualification**.
 
 ## 4. Limites
 
-- **16 surfaces sur ~60 méthodes documentées** : le balayage échantillonne, il
-  n'énumère pas. Une méthode non listée peut toujours casser silencieusement.
+- **30/30 méthodes documentées** de `builtins.rs` sont exercées (mesuré par
+  `target/sweep_coverage.py`, script de mesure non versionné). Le balayage
+  couvre donc la surface des **méthodes**, pas celle des fonctions libres
+  (`math::*`, `string::parse_*`, `fs::*`), échantillonnée.
 - Il ne teste **pas** les combinaisons (génériques imbriqués, effets, FFI), ni le
   comportement sémantique — seulement « le Rust émis compile et le programme
   s'exécute ».
