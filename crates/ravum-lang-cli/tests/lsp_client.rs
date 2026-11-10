@@ -265,7 +265,7 @@ fn diagnostics_of(message: &Value) -> &Vec<Value> {
 // Tests
 // ---------------------------------------------------------------------------
 
-const SOURCE: &str = "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {\n    let total: i32 = add(1, 2);\n    io::println(\"done\");\n}\n";
+const SOURCE: &str = "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {\n    let total: i32 = add(1, 2);\n    io::println(&total.to_string());\n}\n";
 
 #[test]
 fn initialize_advertises_a_real_language_server() {

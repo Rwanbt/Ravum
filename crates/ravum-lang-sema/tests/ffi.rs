@@ -93,7 +93,12 @@ fn main() {
 "#,
     );
     let codes = package.check(Profile::Core);
-    assert!(codes.is_empty(), "expected no diagnostics, got {codes:?}");
+    // The binding is deliberately unused, so `W-OWN-UNUSED-VARIABLE` is expected;
+    // what this test asserts is that no *error* is produced.
+    assert!(
+        codes.iter().all(|code| !code.starts_with("E-")),
+        "expected no error, got {codes:?}"
+    );
 }
 
 #[test]

@@ -31,13 +31,13 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les 21 correctifs) |
-| Conformance | `cargo run -p ravum-conformance -- run` | **324 cas : 323 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **325 cas : 324 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **187/187 testables** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcda2af33726b1343`, 20,6 s (**rejoué après les 21 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 556 it/s, 18,0 s (**rejoué après les correctifs**) |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** (rejoué après les 21 correctifs) |
 | SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, **digest stable pour un arbre donné : `057f006e…492b`** (deux runs identiques) |
-| **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 1 conflit documenté** (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
+| **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 0 déclaré-jamais-émis ; 1 hors registre** (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |

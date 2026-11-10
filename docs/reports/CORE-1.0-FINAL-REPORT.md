@@ -44,7 +44,7 @@
 |---|---|---|
 | T0 | **PASS** | corpus sécurité du socle (overlays, Git, journal, symlinks) |
 | T1 | PARTIAL | voies A/B réelles ; **voie C non implémentée** |
-| T2 | **PASS** | 324 cas **323 PASS / 0 FAIL / 1 SKIP** ; **187/187 règles testables** au critère strict ; 112 codes enregistrés |
+| T2 | **PASS** | 325 cas **324 PASS / 0 FAIL / 1 SKIP** ; **187/187 règles testables** au critère strict ; 112 codes enregistrés |
 | T3 | **PASS** | frontend conforme : 5 défauts corrigés, fuzz + Miri rejoués |
 | T4 | **BLOCKED** | **audit externe humain absent** |
 | T5 | **PASS** | natifs Windows **et** Linux (CI) + WASI, smoke 31 PASS |
@@ -72,7 +72,7 @@
 
 ## 6. Conformance
 
-**324 cas : 323 PASS / 0 FAIL / 1 SKIP** (Windows) · **321 PASS / 0 FAIL / 2 SKIP** (Linux).
+**325 cas : 324 PASS / 0 FAIL / 1 SKIP** (Windows) · **321 PASS / 0 FAIL / 2 SKIP** (Linux).
 
 Le `SKIP` est **par plateforme** : chaque cas tourne sur au moins un OS, aucun sur
 les deux. Ce n'est pas un `PASS` universel.
@@ -168,7 +168,7 @@ audit externe, ni Go/No-Go humain, ni release signée.
 git fetch origin; git switch feat/lang-core-1.0-rc   # a277b86
 cargo build -p ravum-lang-cli
 cargo test --workspace --all-targets -- --test-threads=2   # 1020 pass
-cargo run -p ravum-conformance -- run                      # 324 cas, 323/0, 1 skip
+cargo run -p ravum-conformance -- run                      # 325 cas, 324/0, 1 skip
 python tools/features_coverage.py --strict                 # 187/187 testables
 pwsh -File scripts/lang-smoke.ps1 -SkipBuild               # 31 PASS
 pwsh -File scripts/repro-check.ps1                         # bit-à-bit
@@ -185,7 +185,7 @@ réutiliser le `target/` de la machine de développement.
 | Commande | Résultat dans le clone neuf | Attendu (ce rapport) |
 |---|---|---|
 | `cargo build -p ravum-lang-cli` | succès | succès |
-| `cargo run -p ravum-conformance -- run` | **324 cas, 323 PASS / 0 FAIL / 1 SKIP** | identique |
+| `cargo run -p ravum-conformance -- run` | **325 cas, 324 PASS / 0 FAIL / 1 SKIP** | identique |
 | `python tools/features_coverage.py --strict` | **187/187 testables** | identique |
 | `python tools/registry_audit.py` | **112 codes, 1 hors registre** | identique |
 | `pwsh scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL** | identique |

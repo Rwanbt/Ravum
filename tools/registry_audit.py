@@ -66,10 +66,17 @@ def main(argv: list[str]) -> int:
         code for code in emitted if code in PREFIX_LITERALS or code in TOOLING_CODES
     )
 
+    # The opposite direction: a code the registry *promises* that no source ever
+    # emits. `W-OWN-UNUSED-VARIABLE` is the case that motivated this check.
+    never_emitted = sorted(code for code in registered if code not in emitted)
+
     print(f"registry codes : {len(registered)}")
     print(f"codes emitted  : {len(emitted)}")
     print(f"unregistered   : {len(unregistered)} (language codes emitted but absent from §3)")
     print(f"ignored        : {len(ignored)} prefix/tooling literals")
+    print(f"never emitted  : {len(never_emitted)} (declared in §3, produced by no source literal)")
+    for code in never_emitted:
+        print(f"  {code}")
     for code in sorted(unregistered):
         places = unregistered[code]
         print(f"  {code}  ({len(places)} site(s))")

@@ -2871,10 +2871,16 @@ fn ajoute(v: &mut Vec<i32>) {
             result.checked.is_none(),
             "expected rejection for {code}, but the program was accepted"
         );
-        // The conformance runner compares the *set* of diagnostic codes
-        // exactly; online ownership must not add extra codes to the case.
-        let actual: std::collections::BTreeSet<String> =
-            result.diags.iter().map(|d| d.code.clone()).collect();
+        // The conformance runner compares the *set of error codes* exactly
+        // (warnings are not part of `expect_codes`); online ownership must not
+        // add extra errors to the case. `W-OWN-UNUSED-VARIABLE` may legitimately
+        // accompany a rejection, so only `E-*` codes are compared here.
+        let actual: std::collections::BTreeSet<String> = result
+            .diags
+            .iter()
+            .map(|d| d.code.clone())
+            .filter(|code| code.starts_with("E-"))
+            .collect();
         let expected: std::collections::BTreeSet<String> =
             std::iter::once(code.to_string()).collect();
         assert_eq!(

@@ -352,7 +352,7 @@ Aucun cas ne peut donc exister sans inventer un oracle. **T2 passe à `PASS` sur
 187/187 règles testables**, avec cette exemption écrite noir sur blanc et
 révocable : si un relecteur considère qu''un gate exige 188/188, la ligne est là
 et le downgrade tient en un mot.
-## 12. Constat ouvert — un avertissement promis, jamais émis
+## 12. Un avertissement promis, jamais émis — **corrigé**
 
 `diagnostics.md` DIAG-1.6 déclare la liste des avertissements **fermée** et lui
 donne **deux** entrées : `W-RES-UNUSED-IMPORT` et `W-OWN-UNUSED-VARIABLE`.
@@ -369,11 +369,20 @@ Deux lectures possibles, toutes deux à trancher par un humain :
   annoncée et absente ;
 - **le registre surestime** : la ligne doit être retirée de DIAG-1.6.
 
-Je ne l'ai pas implémentée : ajouter un avertissement sur des programmes existants
-change la sortie de `check --json` pour tous les cas qui contiennent une variable
-inutilisée, et les cas `compile-fail` comparent l'**ensemble exact** des codes.
-Une telle modification exige un audit du corpus, pas une addition de fin de
-session.
+**Corrigé depuis.** L'avertissement est implémenté dans le checker : un `let`
+dont le nom n''est résolu par aucun chemin dans la fonction est signalé, avec une
+gestion conservatrice de l''ombrage (un nom utilisé une fois vaut pour toutes ses
+liaisons : l''avertissement peut manquer, jamais être inventé).
+
+L''objection que j''avais formulée — « les cas `compile-fail` comparent l''ensemble
+exact des codes » — était **fausse** : le harnais n''extrait que les codes de
+sévérité `error` (`runner.rs`, `Some("error") => codes.insert`). Les
+avertissements n''entrent donc pas dans `expect_codes`. Trois tests internes
+comparaient en revanche la liste complète : ils comparent désormais les codes
+`E-*`, ce qui correspond à ce qu''ils vérifient réellement.
+
+Vérification : `python tools/registry_audit.py` affiche **`never emitted : 0`**,
+et le cas `cli/lint-unused-variable` verrouille l''émission via `lint`.
 
 Ce constat ne relève pas des règles `features.md` (donc pas de T2 tel que mesuré),
 mais il appartient au même dossier : une capacité promise par la spécification et

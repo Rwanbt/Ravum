@@ -60,6 +60,8 @@ pub(crate) fn typecheck_with_world(
         unsafe_depth: 0,
         in_const: false,
         variant_pats: BTreeMap::new(),
+        unused_candidates: Vec::new(),
+        used_locals: BTreeSet::new(),
         vars: Vec::new(),
         var_spans: Vec::new(),
     };
@@ -391,6 +393,11 @@ struct TypeChecker<'p, 'w, 'f> {
     /// Variante résolue pour chaque pattern (`pat.id -> (enum, index)`), utilisé
     /// par l'analyse d'exhaustivité.
     variant_pats: BTreeMap<NodeId, (NodeId, usize)>,
+    /// `let` bindings of the current function not resolved by any path yet, and
+    /// the local names actually resolved. Compared at the end of the function to
+    /// emit `W-OWN-UNUSED-VARIABLE` (DIAG-1.6 lists it among the two warnings).
+    unused_candidates: Vec<(String, Span)>,
+    used_locals: BTreeSet<String>,
     /// Variables d'inférence (index >= [`VAR_BASE`]), liées par unification.
     vars: Vec<Option<Type>>,
     var_spans: Vec<Span>,
@@ -935,12 +942,28 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.loop_depth = 0;
         self.scopes.clear();
         self.push_scope();
+        self.unused_candidates.clear();
+        self.used_locals.clear();
         for param in &sig.params {
             let mutable = param.mutable
                 || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
             self.bind_local(&param.name, param.ty.clone(), mutable, false);
         }
         let body_ty = self.check_block(&f.body, Some(&sig.ret));
+        // DIAG-1.6: `W-OWN-UNUSED-VARIABLE` is one of the two warnings Core 1.0
+        // documents. A binding is unused when no path resolved it inside the
+        // function; shadowing is handled conservatively (a name used once counts
+        // for every binding of that name, so the warning can be missed but never
+        // invented).
+        for (name, span) in std::mem::take(&mut self.unused_candidates) {
+            if !self.used_locals.contains(&name) {
+                self.warning(
+                    "W-OWN-UNUSED-VARIABLE",
+                    span,
+                    format!("variable `{name}` is never used"),
+                );
+            }
+        }
         let body_ty = self.resolve_vars(&body_ty);
         let ret = self.resolve_vars(&sig.ret);
         if !Self::compatible(&body_ty, &ret)
@@ -1030,6 +1053,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 };
                 self.check_let_pattern(&lets.pat, &final_ty, lets.init.is_none());
+                if let PatKind::Binding { name, .. } = &lets.pat.kind {
+                    self.unused_candidates
+                        .push((name.name.clone(), lets.pat.span));
+                }
                 Type::Unit
             }
             StmtKind::Expr { expr, semi } => {
@@ -1277,6 +1304,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if path.root == PathRoot::Plain && path.segments.len() == 1 {
             let name = &path.segments[0].name.name;
             if let Some(local) = self.lookup_local(name) {
+                self.used_locals.insert(name.clone());
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::Local {
