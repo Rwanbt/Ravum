@@ -75,7 +75,11 @@ pub fn run(json_output: bool) -> i32 {
     };
 
     if json_output {
+        // §7.2 requires `summary` to carry `errors` and `warnings`; `doctor`
+        // reports checks, and a failed check is not a compilation error.
         let summary = json!({
+            "errors": 0,
+            "warnings": 0,
             "environment": {
                 "ravum_lang": env!("CARGO_PKG_VERSION"),
                 "toolchain_edition": ravum_lang_syntax::LANGUAGE_EDITION,

@@ -178,6 +178,11 @@ jobs:
       - name: CLI documented-flag audit
         run: pwsh -File scripts/cli-flag-audit.ps1
 
+      # diagnostics.md §7-§8 is a contract (schema_version 1, exit codes, DIAG-7.x
+      # MUST rules). This validates the real `--json` output against it.
+      - name: JSON contract (diagnostics.md §7-§8)
+        run: python tools/json_contract.py
+
       - name: Scope notice
         if: always()
         run: |

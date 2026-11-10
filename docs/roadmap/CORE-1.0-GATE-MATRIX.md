@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les 21 correctifs) |
-| Conformance | `cargo run -p ravum-conformance -- run` | **325 cas : 324 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **326 cas : 325 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **187/187 testables** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcda2af33726b1343`, 20,6 s (**rejoué après les 21 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 556 it/s, 18,0 s (**rejoué après les correctifs**) |
@@ -41,6 +41,7 @@
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
+| **Contrat JSON** | `python tools/json_contract.py` | **6 scénarios** (`check` propre/erreur/avertissement/manifeste, `test`, `doctor`) : toutes les règles MUST de `diagnostics.md` §7-§8 tiennent ; **1 tension documentée** (`doctor` expose des chemins absolus, interdits par DIAG-7.5) |
 | **Audit des drapeaux CLI** | `pwsh -File scripts/cli-flag-audit.ps1` | **18 drapeaux documentés, 18 acceptés** par leur parseur (extraction limitée à la ligne USAGE) |
 | **Balayage CLI** | `pwsh -File scripts/cli-sweep.ps1` | **13 cas** : `lint` (propre, averti, `--deny`), `doc`, `cache status`/`clean`, `doctor --json`, `fmt`/`--check`, `watch --max-rebuilds 0` → **13 PASS / 0 FAIL** |
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 programmes** : 27 méthodes (`check`+`build`+`run`) + 37 fonctions libres générées (`check`+`build`), **64 PASS / 0 FAIL**, **30/30 méthodes** couvertes, **26 valeurs de retour affirmées** |

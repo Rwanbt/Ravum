@@ -278,7 +278,12 @@ fn test_summary(
             })
         })
         .collect::<Vec<_>>();
+    // `diagnostics.md` §7.2 requires `summary` to carry `errors` and `warnings`.
+    // `test` reports test counts, so both stay zero unless a case produced a
+    // diagnostic — the documented fields are present rather than omitted.
     let mut summary = json!({
+        "errors": 0,
+        "warnings": 0,
         "total": cases.len(),
         "passed": passed,
         "failed": failed,
