@@ -80,6 +80,90 @@ PRELUDE_STATEMENTS = {
     "std::mem::drop": 'drop(String::from("x"));',
 }
 
+# Functions whose value can only be observed through a hand-written shape:
+# `Result` has no `Display`, `Vec` needs `.len()`, and `()` needs a marker.
+# Each entry is (full source, expected stdout substring).
+CUSTOM_PROGRAMS = {
+    "std::string::parse_i64": (
+        'use std::io;\nuse std::string;\n\nfn main() {\n'
+        '    let v = string::parse_i64("42").unwrap_or(-1);\n'
+        '    io::println(&v.to_string());\n}\n',
+        "42",
+    ),
+    "std::string::parse_f64": (
+        'use std::io;\nuse std::string;\n\nfn main() {\n'
+        '    let v = string::parse_f64("2.5").unwrap_or(-1.0);\n'
+        '    io::println(&v.to_string());\n}\n',
+        "2.5",
+    ),
+    "std::env::var": (
+        'use std::io;\nuse std::env;\nuse std::string;\n\nfn main() {\n'
+        '    let v = env::var("RAVUM_SURELY_UNSET_VARIABLE").unwrap_or(String::new());\n'
+        '    let n = v.len();\n'
+        '    io::println(&n.to_string());\n}\n',
+        "0",
+    ),
+    "std::env::args": (
+        'use std::io;\nuse std::env;\n\nfn main() {\n'
+        '    let a = env::args();\n'
+        '    let n = a.len();\n'
+        '    if n > 0 {\n        io::println("args-ok");\n    }\n}\n',
+        "args-ok",
+    ),
+    "std::fs::read_to_string": (
+        'use std::io;\nuse std::fs;\nuse std::string;\n\nfn main() {\n'
+        '    let v = fs::read_to_string("ravum-absent-file.txt").unwrap_or(String::new());\n'
+        '    let n = v.len();\n'
+        '    io::println(&n.to_string());\n}\n',
+        "0",
+    ),
+    "std::fs::write_string": (
+        'use std::io;\nuse std::fs;\n\nfn main() {\n'
+        '    let r = fs::write_string("ravum-sweep-out.txt", "x");\n'
+        '    if r.is_ok() {\n        io::println("write-ok");\n    } else {\n'
+        '        io::println("write-err");\n    }\n}\n',
+        "write-ok",
+    ),
+    "std::panic::assert": (
+        'use std::io;\nuse std::panic;\n\nfn main() {\n'
+        '    panic::assert(true);\n'
+        '    io::println("assert-ok");\n}\n',
+        "assert-ok",
+    ),
+    "std::panic::assert_eq": (
+        'use std::io;\nuse std::panic;\n\nfn main() {\n'
+        '    panic::assert_eq(1, 1);\n'
+        '    io::println("assert-eq-ok");\n}\n',
+        "assert-eq-ok",
+    ),
+    "drop": (
+        'use std::io;\nuse std::string;\n\nfn main() {\n'
+        '    drop(String::from("x"));\n'
+        '    io::println("dropped");\n}\n',
+        "dropped",
+    ),
+    "std::mem::drop": (
+        'use std::io;\nuse std::string;\n\nfn main() {\n'
+        '    drop(String::from("x"));\n'
+        '    io::println("dropped");\n}\n',
+        "dropped",
+    ),
+    "Vec::new": (
+        'use std::io;\n\nfn main() {\n'
+        "    let v: Vec<i32> = Vec::new();\n"
+        '    let n = v.len();\n'
+        '    io::println(&n.to_string());\n}\n',
+        "0",
+    ),
+    "Vec::with_capacity": (
+        'use std::io;\n\nfn main() {\n'
+        "    let v: Vec<i32> = Vec::with_capacity(4);\n"
+        '    let n = v.len();\n'
+        '    io::println(&n.to_string());\n}\n',
+        "0",
+    ),
+}
+
 MODULE_OF = {
     "std::io": "io",
     "std::fs": "fs",
@@ -147,7 +231,10 @@ def main() -> int:
         prelude = PRELUDE_STATEMENTS.get(path)
         module = MODULE_OF.get(path.rsplit("::", 1)[0])
         expected = EXPECTED_OUTPUT.get(path)
-        if prelude:
+        custom = CUSTOM_PROGRAMS.get(path)
+        if custom:
+            source, expected = custom
+        elif prelude:
             body = [f"    {prelude}"]
             if expected is not None and "let result" in prelude:
                 # The assertion needs the value on stdout; `String` has no
@@ -159,42 +246,33 @@ def main() -> int:
             continue
         else:
             call = f"{path.split('::')[-2]}::{path.split('::')[-1]}({', '.join(literals)});"
-            source = "\n".join(
-                [f"use std::{module};", "", "fn main() {", f"    let result = {call}", "}", ""]
-            )
-        if expected is not None and not prelude:
             if entry["ret"] == "()":
-                source = "\n".join(
-                    [f"use std::{module};", "", "fn main() {", f"    {call}", "}", ""]
-                )
-            elif entry["ret"] == "String":
-                # `String` has no `to_string` in Core 1.0; print it directly.
-                source = "\n".join(
-                    [
-                        "use std::io;",
-                        f"use std::{module};",
-                        "",
-                        "fn main() {",
-                        f"    let result = {call}",
-                        "    io::println(&result);",
-                        "}",
-                        "",
-                    ]
-                )
+                # The observable result is the side effect itself.
+                body = [f"    {call}"]
             else:
-                source = "\n".join(
-                    [
-                        "use std::io;",
-                        f"use std::{module};",
-                        "",
-                        "fn main() {",
-                        f"    let result = {call}",
-                        "    io::println(&result.to_string());",
-                        "}",
-                        "",
-                    ]
-                )
+                body = [f"    let result = {call}"]
+                if expected is not None:
+                    if entry["ret"] == "String":
+                        # `String` has no `to_string` in Core 1.0.
+                        body.append("    io::println(&result);")
+                    else:
+                        body.append("    io::println(&result.to_string());")
+            source = "\n".join(
+                [
+                    *(["use std::io;"] if expected is not None and module != "io" else []),
+                    f"use std::{module};",
+                    "",
+                    "fn main() {",
+                    *body,
+                    "}",
+                    "",
+                ]
+            )
 
+        # The value-asserting shapes are decided *before* this point (custom
+        # programs, prelude statements, or the generic shape). An earlier version
+        # rebuilt `source` here from a stale `call`, which silently wrote another
+        # function's program into the wrong package.
         identifier = short_id(path)
         package = out / identifier
         (package / "src").mkdir(parents=True, exist_ok=True)

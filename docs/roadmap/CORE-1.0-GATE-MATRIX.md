@@ -41,7 +41,7 @@
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
-| **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 programmes** : 27 méthodes (`check`+`build`+`run`) + 37 fonctions libres générées (`check`+`build`), **64 PASS / 0 FAIL**, **30/30 méthodes** couvertes, **14 valeurs de retour affirmées** |
+| **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 programmes** : 27 méthodes (`check`+`build`+`run`) + 37 fonctions libres générées (`check`+`build`), **64 PASS / 0 FAIL**, **30/30 méthodes** couvertes, **26 valeurs de retour affirmées** |
 | **Clone neuf** | `git clone --depth 1` puis toutes les commandes ci-dessus | **tout identique**, y compris `cargo test --workspace` (1020 passés) après correction des chemins de campagne (> MAX_PATH) |
 | **Performance** | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | `check` **38,7 / 86,4 / 296,6 ms** et **9,1 / 20,1 / 60,4 Mo** pour 100 / 500 / 2 000 fonctions (profil `dev`) |
 

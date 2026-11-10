@@ -29,10 +29,14 @@ qu'aucun cas de conformance n'écrit `sqrt(<littéral non typé>)`.
    `build` → `run` ;
 2. **37 programmes générés** par [`tools/stdlib_surface.py`](../../tools/stdlib_surface.py),
    un par **fonction libre documentée** de `BUILTIN_FNS`, `check` → `build`.
-   **14 d'entre eux exécutent et affirment aussi la valeur de retour**
-   (`math::sqrt(1.0)` → `1`, `fs::exists("x")` → `false`, `String::new()` → chaîne
-   vide, …) ; les 23 autres sont **construits seulement** (effet de bord, type
-   `!`, ou pas de `Display` : `process::exit`, `panic`, `Result`).
+   **26 d'entre eux exécutent et affirment aussi la valeur de retour**
+   (`math::sqrt(1.0)` → `1`, `fs::exists` → `false`, `parse_i64("42")` → `42`,
+   `env::var` absent → longueur `0`, `fs::write_string` → `write-ok`, …) ; les 12
+   autres sont **construits seulement**, pour une raison écrite : `io::eprintln`
+   (écrit sur stderr), `io::read_line` (attend stdin), `process::exit` et
+   `panic` (type `!`), `Error::new` (pas de `Display`), et les six
+   transcendantes (`sin`, `cos`, `tan`, `exp`, `ln`, `log10`) dont la valeur
+   dépend de la libm de la plateforme.
 
 Couverture mesurée : **30/30 méthodes documentées** et **37 paquets pour 38
 entrées de table** (une entrée est dupliquée dans `BUILTIN_FNS`).
