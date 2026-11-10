@@ -189,27 +189,22 @@ réutiliser le `target/` de la machine de développement.
 | `python tools/features_coverage.py --strict` | **186/188** | identique |
 | `python tools/registry_audit.py` | **112 codes, 1 hors registre** | identique |
 | `pwsh scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL** | identique |
-| `cargo test --workspace --all-targets` | **1 échec** : `ravum-collab-oracle` → `cost_of_five_real_evaluations_on_the_multicrate_fixture` | 1020 passés |
+| `cargo test --workspace --all-targets` | **82 suites, 1020 passés / 0 échec / 2 ignorés** | identique |
 
-Les cinq mesures qui fondent les gates du **langage** se reproduisent à
-l'identique. La suite workspace, elle, **n'est pas verte depuis un clone neuf** :
-un test de `ravum-collab-oracle` (orchestration de collaboration, hors périmètre
-langage) échoue avec
+**Toutes les mesures se reproduisent à l'identique**, y compris la suite workspace
+complète.
 
-```
-Unavailable { reason: "the baseline snapshot does not compile (1 error(s));
-interface attribution is impossible (fail-closed)" }
-```
+Un défaut de reproductibilité a été trouvé puis corrigé pendant cette
+vérification : depuis un clone profond, `ravum-collab-oracle` échouait avec
+`linking with link.exe failed: exit code 1104`. Cause mesurée : les répertoires
+de campagne produisaient des chemins de **274 caractères**
+(`<state>/cargo-target/debug/incremental/<hash>/<hash>/*.o`), au-delà de la limite
+Windows de 260. Deux changements dans la campagne (`--target-dir` nommé `ct`,
+`CARGO_INCREMENTAL=0`) ramènent les chemins sous la limite. Le message
+fail-closed nomme désormais l'unité en échec et son premier diagnostic.
 
-alors que le fixture `fixtures/multicrate` **compile correctement** en `cargo
-check` dans ce même clone. Le défaut est donc dans la campagne de compilation
-unité par unité de l'oracle, pas dans le fixture.
-
-**Ce que cela signifie** : le point de reprise est fiable pour qualifier le
-langage ; la suite workspace complète, telle que documentée, dépend d'un état
-présent sur un poste déjà utilisé. C'est un défaut de reproductibilité du dépôt,
-mesuré et non corrigé ici — il touche une crate d'orchestration, pas le
-compilateur.
+Le point de reprise est donc vérifié **de bout en bout** depuis un clone neuf :
+build, suite workspace, conformance, traçabilité stricte, registre et smoke.
 ## 16. Ce que ce rapport ne prétend pas
 
 - Ce n'est **pas** un audit de sécurité indépendant.

@@ -40,7 +40,7 @@
 | **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 1 conflit documenté** (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 3B606F6B…9E9B` (racines et `target/` différents, après les 14 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
-| **Clone neuf** | `git clone --depth 1` puis les commandes ci-dessus | conformance, strict, registre et smoke **identiques** ; `cargo test --workspace` **1 échec** (`ravum-collab-oracle`, hors langage) |
+| **Clone neuf** | `git clone --depth 1` puis toutes les commandes ci-dessus | **tout identique**, y compris `cargo test --workspace` (1020 passés) après correction des chemins de campagne (> MAX_PATH) |
 | **Performance** | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | `check` **38,7 / 86,4 / 296,6 ms** et **9,1 / 20,1 / 60,4 Mo** pour 100 / 500 / 2 000 fonctions (profil `dev`) |
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
