@@ -30,15 +30,15 @@
 | Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **82 suites, 1020 passés / 0 échec / 2 ignorés** (exit 0) |
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
-| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les correctifs) |
+| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les 21 correctifs) |
 | Conformance | `cargo run -p ravum-conformance -- run` | **323 cas : 322 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **179/188** au critère strict |
-| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
-| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
-| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** (rejoué après les 14 correctifs) |
+| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcda2af33726b1343`, 20,6 s (**rejoué après les 21 correctifs**) |
+| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 5 556 it/s, 18,0 s (**rejoué après les correctifs**) |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** (rejoué après les 21 correctifs) |
 | SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, **digest stable pour un arbre donné : `057f006e…492b`** (deux runs identiques) |
 | **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 1 conflit documenté** (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
-| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 3B606F6B…9E9B` (racines et `target/` différents, après les 14 correctifs) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Clone neuf** | `git clone --depth 1` puis toutes les commandes ci-dessus | **tout identique**, y compris `cargo test --workspace` (1020 passés) après correction des chemins de campagne (> MAX_PATH) |
 | **Performance** | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | `check` **38,7 / 86,4 / 296,6 ms** et **9,1 / 20,1 / 60,4 Mo** pour 100 / 500 / 2 000 fonctions (profil `dev`) |
@@ -227,7 +227,7 @@ licence réconciliée.
 **Reproductibilité bit-à-bit : mesurée et verte** —
 [`docs/qualification/REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md).
 Deux builds depuis **deux racines différentes** et **deux répertoires de build
-différents** produisent le même `sha256` (`3B606F6B…9E9B`, valeur liée à cet arbre) avec
+différents** produisent le même `sha256` (`AA6C1AF1…870B0F`, valeur liée à cet arbre) avec
 `CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0`, `--remap-path-prefix` et
 `-C link-arg=/Brepro`. Sans ces drapeaux, trois builds donnaient trois binaires
 différents ; l'écart se limitait à 20 octets, tous des horodatages dans l'en-tête

@@ -12,7 +12,7 @@
 | Profil | `release` |
 | Cible vérifiée | `ravum-lang-cli` → `ravum-lang.exe` |
 | Commande | `pwsh -File scripts/repro-check.ps1` |
-| Résultat | **deux builds identiques**, `sha256 = 3B606F6BE6B76EF94D943A57169445CD1C666FFDB3B77E828E90C7801A579E9B` (arbre du 2026-11-10) |
+| Résultat | **deux builds identiques**, `sha256 = AA6C1AF14E4056E5902C698059D388929EBF45070035B6509D5D5A2361870B0F` (arbre du 2026-11-10) |
 
 ## 1. Ce que le test fait exactement
 
