@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "description": "Rules the specification itself declares non-testable. Every entry must name a FeatureId whose `Conformance` cell is NOT_COVERED, explain why no executable case can exist, cite the normative text, and state the condition under which the exemption must be re-examined. `python tools/features_coverage.py --strict` fails if an entry is malformed, unknown, stale or hides an uncited rule.",
+  "exemptions": [
+    {
+      "rule": "F-META-006",
+      "reason": "La ligne declare elle-meme « pass : aucun (oracle absent) » et sa colonne Conformance vaut NOT_COVERED. La machine abstraite du noyau pur n'a aucune forme executable : MACH-1.4 fixe son etat a NOT_IMPLEMENTED et interdit de citer un resultat machine comme preuve. Inventer un cas reviendrait a inventer un oracle, ce qui est precisement le faux PASS que T2 doit interdire.",
+      "normative_reference": "spec/language/core-machine.md MACH-1.4 ; spec/language/features.md F-META-006 (Conformance = NOT_COVERED)",
+      "review_condition": "Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption.",
+      "approved_by": "Definition du gate T2 (docs/roadmap/CORE-1.0-GATE-MATRIX.md, 187/187 regles testables)",
+      "date": "2026-11-10"
+    }
+  ]
+}

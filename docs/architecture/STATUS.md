@@ -1,5 +1,14 @@
 # Statut architectural — Ravum (mise à jour intégration `dev`, 9 novembre 2026)
 
+> **Deux lignes de travail, deux statuts — ne pas mélanger leurs chiffres.**
+> Ce document décrit la **ligne plateforme Rust** (`dev`, MVP-0a/b/c/d) : boucle
+> analyse → build → vérification → hot patch. Le **noyau de langage
+> expérimental** vit sur `feat/lang-core-1.0-rc` : c'est un sous-ensemble Core
+> 1.0 **DRAFT**, mesuré par le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md)
+> et [l'état du langage](../reports/LANGUAGE-CORE-STATUS.md). Il n'est ni ratifié
+> par un ADR, ni un compilateur complet, ni une preuve générale — et il ne
+> contredit pas les limites de ce document, qui porte sur l'autre ligne.
+
 > **Document de situation, non un certificat de réalisation.** Ce qui est marqué
 > « mesuré » l'a été sur la machine de référence locale, avec les limites publiées dans
 > les rapports liés. Aucun ADR n'est accepté, aucune release n'existe, aucune garantie
@@ -15,7 +24,7 @@
 | MVP-0d / Lot B — overlays | **Prototype testé, partiel** : `BaseSnapshot` content-adressée, overlays privés, intégration tout ou rien, CAS de base, conflits de chemin refusés, 9 tests dont concurrence 8 threads ; stockage mesuré −92,0 % vs 8 copies complètes ; **publication Git non branchée**, campagne A/B/C/D non exécutée — [MVP-0d-overlays](../mvp/MVP-0d-overlays.md) |
 | MVP-0d / Lot C — groupement adaptatif | **Implémenté et mesuré** (trace synthétique) : fenêtre bornée 10–100 ms, croissance sur densité, rétrécissement sur rareté ; fixe 0/50/100 = 12/4/4 lots, attente 200/360/510 ms ; adaptative = 4 lots / 450 ms — [MVP-0d-batch-window](../mvp/MVP-0d-batch-window.md) |
 | MVP-0d / Lot D — projets représentatifs | **`NOT_RUN`** : aucun corpus externe exécuté pendant ce cycle — [rapport](../mvp/MVP-0d-REPORT.md) |
-| Compilateur Ravum / frontend / runtime | Non implémentés |
+| Compilateur Ravum / frontend / runtime | **Hors périmètre de ce document** (ligne plateforme `dev`) : le noyau de langage expérimental est sur `feat/lang-core-1.0-rc`, décrit par [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md) et le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md) — sous-ensemble DRAFT, pas d'ADR ratifié, pas de `PROVED` |
 | Outil Rust MVP-0a (M1) | **Implémenté, expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
 | MVP-0b / L0 — audit et baseline | **Fait** : 139/139 tests reproduits, démonstrations M1–M4 reproduites, risques R1–R10 publiés — [MVP-0b-audit.md](../mvp/MVP-0b-audit.md) |
@@ -41,7 +50,7 @@
 | Verticale full-stack (M4) | Application témoin : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E API + **E2E navigateur** ; pas de TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | Protection de branches | **Appliquée** sur `main` et `dev` : PR requises (0 approbation), force push et suppression interdits, check `mvp` requis sur `main` (#77) |
-| Licence | **Analyse publiée, aucune licence choisie** ; audit automatique qui refuse une décision implicite — [MVP-0b-licence-analysis.md](../mvp/MVP-0b-licence-analysis.md) |
+| Licence | **`MIT OR Apache-2.0`** sur les 23 membres du workspace (D1 résolue ; PR de licence fusionnée) — [décision](../adr/README.md) |
 | Gate M5 pour un nouveau langage | Proposed, **pas accepté** |
 | Code de release | Aucun |
 

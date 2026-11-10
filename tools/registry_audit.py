@@ -8,10 +8,14 @@ code can be emitted on a path that no conformance case exercises.
 
 It scans the Rust sources for string literals of the form `E-…`/`W-…` (the shape
 used by every `diags.error(...)` call) and reports the ones that are not in the
-registry.
+registry. It also checks the opposite direction: a code the registry *promises*
+but no source emits is a divergence too (the gate matrix claims
+"0 déclaré-jamais-émis"), so it fails the audit instead of printing a warning
+nobody reads.
 
 Usage: python tools/registry_audit.py [--json PATH]
-Exit code 0 when every emitted code is registered, 1 otherwise.
+Exit code 0 when every emitted code is registered and every registered code is
+emitted, 1 otherwise.
 """
 
 from __future__ import annotations
@@ -22,8 +26,8 @@ import re
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-REGISTRY = REPO / "spec" / "language" / "diagnostics.md"
-CRATES = REPO / "crates"
+REGISTRY_REL = pathlib.Path("spec") / "language" / "diagnostics.md"
+CRATES_REL = pathlib.Path("crates")
 CODE_LITERAL = re.compile(r'"((?:E|W)-[A-Z0-9-]+)"')
 
 # `crates/ravum-lang-cli/src/json.rs` maps a *prefix* to a phase ("E-TYP" ->
@@ -37,26 +41,31 @@ TOOLING_CODES = {"E-BUILD", "E-TOOL", "E-CLI-WASM-RUNTIME", "E-INTERNAL-PARSER",
                  "E-INTERNAL-CHECKER"}
 
 
-def registry_codes() -> set[str]:
-    text = REGISTRY.read_text(encoding="utf-8")
+def registry_codes(registry: pathlib.Path) -> set[str]:
+    text = registry.read_text(encoding="utf-8")
     return set(re.findall(r"^\| `((?:E|W)-[A-Z0-9-]+)`", text, flags=re.M))
 
 
-def scan() -> dict[str, list[str]]:
+def scan(crates: pathlib.Path, repo: pathlib.Path) -> dict[str, list[str]]:
     found: dict[str, list[str]] = {}
-    for path in sorted(CRATES.rglob("*.rs")):
+    for path in sorted(crates.rglob("*.rs")):
         if "target" in path.parts:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for code in CODE_LITERAL.findall(line):
-                where = f"{path.relative_to(REPO).as_posix()}:{number}"
+                where = f"{path.relative_to(repo).as_posix()}:{number}"
                 found.setdefault(code, []).append(where)
     return found
 
 
-def main(argv: list[str]) -> int:
-    registered = registry_codes()
-    emitted = scan()
+def main(argv: list[str], repo_root: pathlib.Path | None = None) -> int:
+    repo = pathlib.Path(repo_root) if repo_root is not None else REPO
+    registry = repo / REGISTRY_REL
+    if not registry.is_file():
+        print(f"missing {registry}", file=sys.stderr)
+        return 2
+    registered = registry_codes(registry)
+    emitted = scan(repo / CRATES_REL, repo)
     unregistered = {
         code: places
         for code, places in emitted.items()
@@ -88,10 +97,11 @@ def main(argv: list[str]) -> int:
         target.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "registered": sorted(registered),
                     "emitted": {code: places for code, places in sorted(emitted.items())},
                     "unregistered": {code: places for code, places in sorted(unregistered.items())},
+                    "never_emitted": never_emitted,
                 },
                 indent=2,
             )
@@ -100,7 +110,7 @@ def main(argv: list[str]) -> int:
         )
         print(f"wrote {target}", file=sys.stderr)
 
-    return 0 if not unregistered else 1
+    return 0 if not unregistered and not never_emitted else 1
 
 
 if __name__ == "__main__":

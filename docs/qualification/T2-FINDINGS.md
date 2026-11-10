@@ -352,6 +352,26 @@ Aucun cas ne peut donc exister sans inventer un oracle. **T2 passe à `PASS` sur
 187/187 règles testables**, avec cette exemption écrite noir sur blanc et
 révocable : si un relecteur considère qu''un gate exige 188/188, la ligne est là
 et le downgrade tient en un mot.
+
+**Correction P0 du 2026-11-10 — l''exemption n''est plus une simple prose.**
+Tant qu''elle vivait uniquement dans ce rapport, `python
+tools/features_coverage.py --strict` sortait **1** et aucun job CI ne l''exécutait :
+le `PASS` de T2 reposait sur une affirmation non vérifiée. L''exemption est
+désormais un artefact machine-lisible, `tools/coverage_exemptions.json`, et le
+calculateur la valide :
+
+- une règle non couverte sans exemption valide fait échouer le gate ;
+- une exemption inconnue, mal formée, **obsolète** (la règle est recouverte) ou
+  qui tente de masquer une règle dont la cellule `Conformance` ne dit pas
+  littéralement `NOT_COVERED` fait échouer le gate ;
+- chaque entrée porte une raison, une référence normative, un approbateur, une
+  date et une **condition de réexamen** ;
+- `tools/tests/test_validation_contracts.py` reproduit ces cas, dont le vecteur
+  de faux PASS historique (règle non couverte + exemption de complaisance).
+
+Mesure : `python tools/features_coverage.py --strict` → **188/188 règles
+satisfaites (1 exemption justifiée)**, exit **0**. Le fichier d''exemption est
+lui-même audité par la CI (`.github/workflows/gate-contracts.yml`, bloquant).
 ## 12. Un avertissement promis, jamais émis — **corrigé**
 
 `diagnostics.md` DIAG-1.6 déclare la liste des avertissements **fermée** et lui
@@ -387,3 +407,29 @@ et le cas `cli/lint-unused-variable` verrouille l''émission via `lint`.
 Ce constat ne relève pas des règles `features.md` (donc pas de T2 tel que mesuré),
 mais il appartient au même dossier : une capacité promise par la spécification et
 non produite par l'outillage.
+
+## 13. `W-TYP-UNREACHABLE` — émission retirée, contrat verrouillé (2026-11-10)
+
+Le code était bien enregistré nulle part, et l''audit le signalait depuis deux
+passes : `crates/ravum-lang-sema/src/typeck.rs` émettait `W-TYP-UNREACHABLE` pour
+un bras de `match` inatteignable. La conclusion « décision humaine » écrite
+précédemment était **erronée** : le contrat normatif avait déjà tranché.
+
+- EXPR-5.9 (MUST) : un bras inatteignable « n''est **pas** une erreur, n''est pas
+  supprimé et ne produit **aucun diagnostic** (liste d''avertissements fermée) ».
+- G-6.44 (MUST) : même règle au niveau grammaire.
+- DIAG-1.6 (MUST) : la liste des avertissements est fermée à
+  `W-RES-UNUSED-IMPORT` et `W-OWN-UNUSED-VARIABLE` ; Q-DIAG-3 nomme
+  explicitement « bras inatteignable » parmi les exclusions.
+
+Enregistrer le code aurait contredit trois MUST ; le contrat prime sur le
+comportement. L''émission a donc été **supprimée** (ce n''est pas une perte de
+fonctionnalité : aucun diagnostic n''était dû), et
+`crates/ravum-lang-sema/tests/diagnostics_contract.rs` vérifie, via le vrai
+parseur et le vrai checker, qu''aucun diagnostic n''est produit pour un bras
+inatteignable — y compris après un `_` couvrant.
+
+`python tools/registry_audit.py` est désormais bloquant en CI dans les **deux**
+sens : code émis absent du registre §3 **et** code enregistré qu''aucune source
+n''émet. Mesure : **112 codes enregistrés, 130 émis, 0 hors registre, 0
+déclaré-jamais-émis**, exit **0**.

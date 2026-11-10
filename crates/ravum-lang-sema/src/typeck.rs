@@ -3284,15 +3284,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             let body_expected: Option<&Type> = result.as_ref().or(expected);
             let body_ty = self.check_expr(&arm.body, body_expected);
             self.pop_scope();
-            let was_exhaustive = coverage.is_exhaustive();
+            // EXPR-5.9 / G-6.44 (MUST): an unreachable arm is neither an error
+            // nor removed, and produces **no diagnostic**. DIAG-1.6 keeps the
+            // warning list closed to `W-RES-UNUSED-IMPORT` and
+            // `W-OWN-UNUSED-VARIABLE`. An earlier `W-TYP-UNREACHABLE` emission
+            // violated both rules and was removed; `registry_audit.py` now keeps
+            // it from coming back.
             self.cover_pattern(&mut coverage, &arm.pat);
-            if was_exhaustive {
-                self.warning(
-                    "W-TYP-UNREACHABLE",
-                    arm.pat.span,
-                    "unreachable match arm".to_string(),
-                );
-            }
             result = Some(match result {
                 None => body_ty,
                 Some(acc) => {

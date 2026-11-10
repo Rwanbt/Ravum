@@ -193,12 +193,16 @@ codes génériques — ce qui aurait dégradé des messages précis —, ils son
 | `E-UNSUPPORTED-UFCS` | parse | appel UFCS (`Type::method(receiver, …)`) refusé |
 | `E-UNSUPPORTED-VIS` | parse | visibilité restreinte `pub(...)` refusée |
 
-**Un code reste hors registre, volontairement** : `W-TYP-UNREACHABLE` (branche de
-`match` inatteignable). DIAG-1.6 déclare la liste des avertissements **fermée**
-(`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`) : enregistrer ce code
-contredirait un MUST. Soit la liste s'ouvre (changement de spécification), soit
-l'avertissement disparaît (perte de fonctionnalité). C'est une décision humaine,
-pas une correction de documentation.
+**Résolu le 2026-11-10 — l'émission a été supprimée.** `W-TYP-UNREACHABLE`
+(branche de `match` inatteignable) était émis par `crates/ravum-lang-sema` alors
+que DIAG-1.6 ferme la liste des avertissements **et** que EXPR-5.9 et G-6.44
+(MUST) exigent qu'un bras inatteignable **ne produise aucun diagnostic**. Le
+contrat normatif prime sur le comportement observé : l'émission a été retirée.
+Ce n'est pas une perte de fonctionnalité — aucun diagnostic n'était dû — et
+`crates/ravum-lang-sema/tests/diagnostics_contract.rs` verrouille désormais
+l'absence de diagnostic. `python tools/registry_audit.py` échoue si un code émis
+est hors registre **ou** si un code enregistré n'est émis par aucune source ; il
+est bloquant en CI.
 
 
 | Ordre | Phase | Codes |
