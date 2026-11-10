@@ -39,3 +39,5 @@ conventions.json
 
 # Ravum language build outputs (generated per package)
 .ravum/
+mutants.out/
+mutants.out.old/
