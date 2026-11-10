@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "measured_on": "2026-11-10, Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
+  "command": "cargo llvm-cov -p ravum-lang-sema --json --output-path target/cov-sema.json",
+  "checked_by": "python tools/coverage_report.py --input target/cov-sema.json --check",
+  "policy": "Ratchet. A floor never goes down: lowering one requires changing this file in the same commit with a justification, and the reviewer must ask why the code that used to be covered no longer is. Floors sit one point below the measurement of the commit that introduced them so a compiler or llvm-cov upgrade cannot flip the gate on rounding noise; the real target is the gate target below, not the floor.",
+  "gate_targets": {
+    "files": [
+      "crates/ravum-lang-sema/src/typeck.rs",
+      "crates/ravum-lang-sema/src/resolve.rs"
+    ],
+    "lines": 90,
+    "regions": 85,
+    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Not met yet on these two files: the floors below are the current proven level, and they are raised whenever a pass raises the measurement."
+  },
+  "files": {
+    "crates/ravum-lang-sema/src/types.rs": {
+      "lines": 100,
+      "regions": 97,
+      "measured_lines": 100.0,
+      "measured_regions": 98.1
+    },
+    "crates/ravum-lang-sema/src/effects.rs": {
+      "lines": 91,
+      "regions": 93,
+      "measured_lines": 92.09,
+      "measured_regions": 94.38
+    },
+    "crates/ravum-lang-sema/src/builtins.rs": {
+      "lines": 90,
+      "regions": 87,
+      "measured_lines": 91.81,
+      "measured_regions": 88.56
+    },
+    "crates/ravum-lang-sema/src/own.rs": {
+      "lines": 89,
+      "regions": 86,
+      "measured_lines": 90.05,
+      "measured_regions": 87.45
+    },
+    "crates/ravum-lang-sema/src/check.rs": {
+      "lines": 80,
+      "regions": 72,
+      "measured_lines": 81.07,
+      "measured_regions": 73.14
+    },
+    "crates/ravum-lang-sema/src/facts.rs": {
+      "lines": 78,
+      "regions": 72,
+      "measured_lines": 79.29,
+      "measured_regions": 73.26
+    },
+    "crates/ravum-lang-sema/src/loader.rs": {
+      "lines": 76,
+      "regions": 80,
+      "measured_lines": 77.24,
+      "measured_regions": 81.26
+    },
+    "crates/ravum-lang-sema/src/typeck.rs": {
+      "lines": 76,
+      "regions": 77,
+      "measured_lines": 77.11,
+      "measured_regions": 78.48
+    },
+    "crates/ravum-lang-sema/src/resolve.rs": {
+      "lines": 66,
+      "regions": 66,
+      "measured_lines": 67.44,
+      "measured_regions": 67.98
+    }
+  }
+}
