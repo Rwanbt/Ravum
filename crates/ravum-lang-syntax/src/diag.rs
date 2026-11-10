@@ -4,7 +4,7 @@
 //! A code is never reused for a different meaning and never silently removed.
 
 use crate::source::SourceMap;
-use crate::span::Span;
+use crate::span::{FileId, Span};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
@@ -72,10 +72,20 @@ impl Diagnostic {
     }
 }
 
+/// DIAG-1.7 / DIAG-4.3 (MUST): the per-file diagnostic budget is 100. Beyond it
+/// exactly one `E-PARSE-TOO-LARGE` is reported for that file and every later
+/// diagnostic for the same file is dropped, so a pathological input cannot turn
+/// one mistake into thousands of lines of output.
+pub const DIAGNOSTIC_BUDGET: usize = 100;
+
 /// Accumulates diagnostics; the driver decides when a phase is fatal.
 #[derive(Debug, Default, Clone)]
 pub struct DiagnosticBag {
     diags: Vec<Diagnostic>,
+    /// Diagnostics already accepted per file, to enforce [`DIAGNOSTIC_BUDGET`].
+    per_file: std::collections::BTreeMap<FileId, usize>,
+    /// Files whose budget was exhausted; a single `E-PARSE-TOO-LARGE` exists.
+    exhausted: std::collections::BTreeSet<FileId>,
 }
 
 impl DiagnosticBag {
@@ -83,7 +93,30 @@ impl DiagnosticBag {
         Self::default()
     }
 
+    /// Applies the per-file budget, then stores the diagnostic.
+    ///
+    /// The budget counts every diagnostic of a file. When the 101st arrives the
+    /// bag stores one `E-PARSE-TOO-LARGE` for that file and drops the rest,
+    /// including the 101st: the observable stream is 100 diagnostics plus the
+    /// marker, never a cascade whose length depends on the input size.
     pub fn push(&mut self, d: Diagnostic) {
+        let file = d.span.file;
+        if self.exhausted.contains(&file) {
+            return;
+        }
+        let seen = self.per_file.entry(file).or_insert(0);
+        if *seen >= DIAGNOSTIC_BUDGET {
+            self.exhausted.insert(file);
+            self.diags.push(Diagnostic::error(
+                "E-PARSE-TOO-LARGE",
+                d.span,
+                format!(
+                    "more than {DIAGNOSTIC_BUDGET} diagnostics in this file; further analysis of the file stopped"
+                ),
+            ));
+            return;
+        }
+        *seen += 1;
         self.diags.push(d);
     }
 
@@ -96,7 +129,11 @@ impl DiagnosticBag {
     }
 
     pub fn extend(&mut self, other: DiagnosticBag) {
-        self.diags.extend(other.diags);
+        // Route through `push` so the per-file budget also applies to merged
+        // bags; a phase that extends another must not double the budget.
+        for diagnostic in other.diags {
+            self.push(diagnostic);
+        }
     }
 
     pub fn has_errors(&self) -> bool {

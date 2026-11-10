@@ -1,0 +1,9 @@
+{
+  "id": "parser/diagnostic-budget",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-UNEXPECTED",
+    "E-PARSE-TOO-LARGE"
+  ],
+  "notes": "DIAG-1.7 / DIAG-4.3 (MUST): the per-file budget is 100 diagnostics; beyond it exactly one E-PARSE-TOO-LARGE is reported and the file stops accumulating. This file contains 150 syntax errors, so the observable stream is 100 E-PARSE-UNEXPECTED plus the single marker. Before the budget existed the cascade length was a function of the input size."
+}

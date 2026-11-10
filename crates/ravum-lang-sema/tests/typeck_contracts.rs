@@ -2296,3 +2296,191 @@ fn resultat(x: Result<i32, Error>) -> i32 {
 "#,
     );
 }
+
+#[test]
+fn bare_none_is_a_constructor_pattern_not_a_binding() {
+    // G-6.41: the four prelude constructors are constructor patterns. A bare
+    // `None` used to reach the binding case, so the first arm bound the whole
+    // `Option` and the match was silently exhaustive. The hole below is the
+    // regression guard: `None` alone must NOT cover `Some`.
+    accept(
+        r#"
+fn deux_valeurs(o: Option<i32>) -> i32 {
+    match o {
+        None => 0,
+        Some(x) => x,
+    }
+}
+"#,
+    );
+    expect_code(
+        r#"
+fn manquant(o: Option<i32>) -> i32 {
+    match o {
+        None => 0,
+    }
+}
+"#,
+        "E-TYP-NONEXHAUSTIVE",
+    );
+    expect_code(
+        r#"
+fn manquant_inverse(o: Option<i32>) -> i32 {
+    match o {
+        Some(x) => x,
+    }
+}
+"#,
+        "E-TYP-NONEXHAUSTIVE",
+    );
+}
+
+#[test]
+fn none_pattern_with_a_payload_is_an_arity_error() {
+    // TYP-10.2 / G-6.29: `None` is a unit constructor. Its payload was never
+    // validated, so `None(v)` was accepted on an `Option<i32>`.
+    expect_code(
+        r#"
+fn lire(o: Option<i32>) -> i32 {
+    match o {
+        None(v) => v,
+        Some(x) => x,
+    }
+}
+"#,
+        "E-TYP-ARITY",
+    );
+    expect_code(
+        r#"
+fn lire_struct(o: Option<i32>) -> i32 {
+    match o {
+        None { v } => 0,
+        Some(x) => x,
+    }
+}
+"#,
+        "E-TYP-ARITY",
+    );
+}
+
+#[test]
+fn bare_some_is_rejected_and_not_a_binding() {
+    // A payload-less `Some`/`Ok`/`Err` must not become a binding. It is
+    // rejected, but the *code* is not pinned here: `spec/language/` names no
+    // code for "constructor without its payload in a pattern", and the resolver
+    // currently answers `E-RES-UNKNOWN` ("variant must be qualified") where the
+    // user-variant path answers `E-TYP-ARITY`. Recorded as a code-choice gap in
+    // `docs/qualification/T2-FINDINGS.md`; the regression that matters is that
+    // it is not silently accepted as a binding.
+    for source in [
+        r#"
+fn lire(o: Option<i32>) -> i32 {
+    match o {
+        Some => 1,
+        None => 0,
+    }
+}
+"#,
+        r#"
+fn lire(r: Result<i32, Error>) -> i32 {
+    match r {
+        Ok => 1,
+        Err(e) => 0,
+    }
+}
+"#,
+    ] {
+        let result = run(source);
+        assert!(
+            result.checked.is_none(),
+            "a payload-less constructor must be rejected, not bound: {source}"
+        );
+    }
+}
+
+
+#[test]
+fn const_signed_minimum_literal_is_accepted() {
+    // TYP-13.2 / G-6.37: the sign is part of the literal, so `-128` fits `i8`
+    // and `-2147483648` fits `i32`, even though the magnitudes do not fit the
+    // positive range. The const evaluator used to recurse first, range-check
+    // the magnitude, and then report E-RES-CONST-NOT-CONST.
+    accept(
+        r#"
+const PETIT_MIN: i8 = -128;
+const INT_MIN: i32 = -2147483648;
+
+fn lire() -> i32 {
+    let a = PETIT_MIN;
+    a as i32 + INT_MIN
+}
+"#,
+    );
+    expect_code(
+        r#"
+const TROP_PETIT: i8 = -129;
+"#,
+        "E-TYP-LITERAL-RANGE",
+    );
+    expect_code(
+        r#"
+const POSITIF_TROP_GRAND: i8 = 128;
+"#,
+        "E-TYP-LITERAL-RANGE",
+    );
+}
+
+#[test]
+fn for_over_a_borrowed_collection_is_a_type_mismatch() {
+    // EXPR-6.4 / TYP-5.8 (MUST): the collection form consumes an **owned**
+    // `Vec<T>`; a `&Vec<T>` or `&[T]` is iterated by index. The checker used to
+    // accept both and the ownership pass then reported E-OWN-REF-ESCAPE, i.e. a
+    // rule owned by the type checker was enforced by the wrong phase with the
+    // wrong code.
+    expect_code(
+        r#"
+fn total(v: &Vec<i32>) -> i32 {
+    let mut s = 0;
+    for x in v {
+        s += x;
+    }
+    s
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    expect_code(
+        r#"
+fn total(s: &[i32]) -> i32 {
+    let mut t = 0;
+    for x in s {
+        t += x;
+    }
+    t
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    // The sanctioned forms: an owned `Vec<T>` and a range.
+    accept(
+        r#"
+fn total() -> i32 {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.push(2);
+    v.push(3);
+    let mut s = 0;
+    for x in v {
+        s += x;
+    }
+    let mut t = 0;
+    for i in 0..s {
+        t += i;
+    }
+    t
+}
+"#,
+    );
+}
+
+

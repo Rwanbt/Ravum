@@ -3337,24 +3337,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             let iter_ty = self.check_expr(iter, None);
             match &iter_ty {
                 Type::Vec(elem) => (**elem).clone(),
-                Type::Ref { inner, .. } => match &**inner {
-                    Type::Vec(elem) | Type::Slice(elem) => Type::Ref {
-                        mutable: false,
-                        inner: elem.clone(),
-                    },
-                    _ => {
-                        self.error(
-                            "E-TYP-MISMATCH",
-                            iter.span,
-                            format!("cannot iterate over `{iter_ty}`"),
-                        );
-                        Type::Error
-                    }
-                },
-                Type::Slice(elem) => Type::Ref {
-                    mutable: false,
-                    inner: elem.clone(),
-                },
+                // EXPR-6.4 / TYP-5.8 (MUST): the collection form consumes an
+                // **owned** `Vec<T>`; `&Vec<T>` and `&[T]` are E-TYP-MISMATCH and
+                // are iterated by index (`for i in 0..s.len()`). The checker used
+                // to accept both and yield `&T` items, which the ownership pass
+                // then rejected with E-OWN-REF-ESCAPE: the wrong phase and the
+                // wrong code for a rule the type checker owns.
                 // TYP-1.6: `for` cannot consume a `!` value; before this
                 // check the program was accepted and rustc rejected `() is not
                 // an iterator`.
@@ -3372,7 +3360,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         "E-TYP-MISMATCH",
                         iter.span,
                         format!(
-                            "`for` iterates a range, `Vec<T>`, `&Vec<T>` or `&[T]`, found `{other}`"
+                            "`for` iterates a range or an owned `Vec<T>`, found `{other}`; a `&Vec<T>` or `&[T]` is iterated by index (EXPR-6.4)"
                         ),
                     );
                     Type::Error
@@ -4630,6 +4618,37 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         format!("`None` pattern cannot match type `{expected}`"),
                     );
                 }
+                // TYP-10.2 / G-6.29: `None` is a unit constructor. Its payload
+                // was never validated, so `match o { None(v) => … }` on an
+                // `Option<i32>` was accepted while every user unit variant
+                // correctly reports E-TYP-ARITY. A payload on `None` is never
+                // reachable at run time.
+                match fields {
+                    VariantPatFields::Tuple(pats) if pats.is_empty() => {}
+                    VariantPatFields::Tuple(pats) => {
+                        self.error(
+                            "E-TYP-ARITY",
+                            pat.span,
+                            format!(
+                                "`None` pattern takes no field, {} given",
+                                pats.len()
+                            ),
+                        );
+                        for sub in pats {
+                            self.check_pattern(sub, &Type::Error);
+                        }
+                    }
+                    VariantPatFields::Struct(struct_fields) => {
+                        self.error(
+                            "E-TYP-ARITY",
+                            pat.span,
+                            "`None` pattern takes no field".to_string(),
+                        );
+                        for field in struct_fields {
+                            self.check_pattern(&field.pat, &Type::Error);
+                        }
+                    }
+                }
                 expected.clone()
             }
             _ => Type::Error,
@@ -4725,6 +4744,46 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             ExprKind::Unary { op, expr: operand } => match op {
                 UnOp::Neg => {
+                    // TYP-13.2 / G-6.37: `const MIN: i8 = -128;` is valid even
+                    // though the positive magnitude 128 does not fit `i8`.
+                    // Recursing first range-checked `128` and then reported a
+                    // spurious E-RES-CONST-NOT-CONST ("not a constant"), while
+                    // the same expression was accepted in a `let` (`check_unary`
+                    // handles the sign before checking the magnitude).
+                    if let ExprKind::Int { value, suffix } = &operand.kind {
+                        let ty = match suffix {
+                            Some(suffix) => int_type(*suffix),
+                            None => match expected {
+                                Some(t) if t.is_int() => t.clone(),
+                                _ => Type::I32,
+                            },
+                        };
+                        self.facts.expr_types.insert(operand.id, ty.clone());
+                        if !ty.is_signed_int() {
+                            self.error(
+                                "E-TYP-MISMATCH",
+                                expr.span,
+                                format!("cannot negate a value of type `{ty}`"),
+                            );
+                            return (ty, None);
+                        }
+                        let (min_magnitude, _, _) = int_bounds(&ty);
+                        if *value > min_magnitude {
+                            self.error(
+                                "E-TYP-LITERAL-RANGE",
+                                operand.span,
+                                format!("integer literal `-{value}` does not fit in `{ty}`"),
+                            );
+                            return (ty, None);
+                        }
+                        let magnitude = *value;
+                        let negated = if magnitude == 1u128 << 127 {
+                            i128::MIN
+                        } else {
+                            -(magnitude as i128)
+                        };
+                        return (ty, Some(ConstValue::Int(negated)));
+                    }
                     let (operand_ty, operand_value) = self.check_const_expr(operand, expected);
                     match operand_value {
                         Some(ConstValue::Int(v)) => {

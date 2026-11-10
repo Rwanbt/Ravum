@@ -2474,7 +2474,15 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Ident(name) => {
                 let binding_span = start;
-                if self.peek_punct(1, Punct::ColonColon)
+                // G-6.41 (MUST): the four prelude constructors are constructor
+                // patterns. Without this branch a bare `None` fell through to
+                // the binding case, so `match o { None => …, Some(x) => … }`
+                // made the first arm irrefutable: it bound the whole `Option`
+                // and hid the exhaustiveness hole instead of matching `None`.
+                let prelude_constructor =
+                    matches!(name.as_str(), "Some" | "None" | "Ok" | "Err");
+                if prelude_constructor
+                    || self.peek_punct(1, Punct::ColonColon)
                     || self.peek_punct(1, Punct::LParen)
                     || self.peek_punct(1, Punct::LBrace)
                     || self.peek_punct(1, Punct::DotDot)
