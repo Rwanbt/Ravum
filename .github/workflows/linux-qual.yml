@@ -166,6 +166,11 @@ jobs:
       - name: Stdlib codegen sweep
         run: pwsh -File scripts/stdlib-codegen-sweep.ps1
 
+      # lint / doc / cache / doctor / watch have no end-to-end coverage in the
+      # example smoke; this sweep exercises them on a throwaway package.
+      - name: CLI surface sweep
+        run: pwsh -File scripts/cli-sweep.ps1
+
       - name: Scope notice
         if: always()
         run: |
