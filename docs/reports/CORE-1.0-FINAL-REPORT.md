@@ -58,7 +58,7 @@ Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
 | Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 8B10B4B7…9ED2` |
 | SBOM | 64 paquets, 170 relations, digest `ca776dd8…aa14` à époque fixée |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
-| CI sur `63eda55` | **NOT_RUN** : commit local non poussé au moment de la mesure |
+| CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
 
 Les statuts de gates ne changent pas : **T2 et T3 restent `PASS`**, mais leur
 preuve est désormais exécutable et bloquante au lieu d'être déclarative. T4, T10
@@ -273,6 +273,7 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
 
 
 

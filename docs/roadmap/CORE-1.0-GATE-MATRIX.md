@@ -20,7 +20,7 @@
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
 | **SHA des preuves de cette passe** | **`63eda55`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| CI sur `63eda55` | **`NOT_RUN`** — commit local non poussé au moment de la mesure ; les résultats Linux/Miri ci-dessous restent liés à `9ca29de`/`c43dafd` |
+| **CI sur ce code** | **succès** sur `b7e5c5c` (même arbre que `63eda55`) : runs [42809676443](https://github.com/Rwanbt/Ravum/actions/runs/42809676443) et [42809676594](https://github.com/Rwanbt/Ravum/actions/runs/42809676594), détail §1 ter |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
@@ -49,7 +49,7 @@
 | **Audit des drapeaux CLI** | `pwsh -File scripts/cli-flag-audit.ps1` | **18 drapeaux documentés, 18 acceptés** |
 | **Balayage CLI** | `pwsh -File scripts/cli-sweep.ps1` | **13 cas, 13 PASS / 0 FAIL** |
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 PASS / 0 FAIL** |
-| **Miri (Windows)** | `cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests -- --skip loader::tests` | **93 + 2 PASS**, mais **`tests/ffi` NOT_RUN** : Miri Windows refuse `GetTempPathW`. Pas un défaut du programme ; **Miri complet reste lié à la CI Linux** (`9ca29de`, 159 tests) |
+| **Miri (Windows)** | `cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests -- --skip loader::tests` | **93 + 2 PASS**, mais **`tests/ffi` NOT_RUN** : Miri Windows refuse `GetTempPathW`. Pas un défaut du programme ; **Miri complet a été rejoué en CI Linux sur `b7e5c5c`** (159 tests) |
 | Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
 | Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
 
@@ -78,11 +78,28 @@ ont depuis été corrigés dans le compilateur (mesure locale postérieure :
 **268 PASS / 0 FAIL / 1 SKIP**) ; la CI de conformance reste rouge **volontairement** tant que le travail de cas de T2 n'est pas terminé. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
-**Ce tableau ne couvre pas `63eda55`.** Le commit de cette passe n'a pas été
-poussé au moment de la mesure : aucune affirmation CI n'est transférée
-automatiquement. Un nouveau workflow local, `.github/workflows/gate-contracts.yml`,
-exécute les contrôles de la §1 et devra être observé sur un run réel avant d'être
-compté comme preuve CI.
+## 1 ter. CI sur le SHA poussé `b7e5c5c` (code `63eda55`, Linux) — **tous les jobs verts**
+
+Runs [42809676443](https://github.com/Rwanbt/Ravum/actions/runs/42809676443)
+(qualification Linux) et
+[42809676594](https://github.com/Rwanbt/Ravum/actions/runs/42809676594)
+(gate contracts). Le push couvre `63eda55` (code) et `b7e5c5c` (docs) ; les deux
+ont le même arbre de code.
+
+| Job | Résultat exact |
+|---|---|
+| Workspace tests (stable 1.95.0) | **succès — 83 suites, 1019 passés / 0 échec / 4 ignorés** |
+| **Conformance corpus (Linux)** | **succès — `total=340 pass=338 fail=0 skip=2 not_run=0`** (2 SKIP Windows) |
+| **Miri (nightly, syntax + sema)** | **succès — 65 + 93 + 1 = 159 tests, 0 échec** (rejoué sur ce SHA) |
+| Example smoke suite | **succès** |
+| Installer contract | **succès** |
+| `wasm32-wasip1` (build + run Node) | **succès** |
+| Fuzz smoke | **succès** |
+| ThreadSanitizer | **SKIP explicite** `NOT_APPLICABLE` |
+| **Gate contracts (coverage/registry/tests)** | **succès** |
+
+La CI ne prouve pas l'absence de bug : elle exécute le corpus et les contrôles
+de gates sur un SHA précis, avec les limites listées au §3.
 
 ## 2. Matrice
 
@@ -91,14 +108,14 @@ compté comme preuve CI.
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
 | T2 | `PASS` | 340 cas : **339 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, vérifiée par l'outil et bloquante en CI | Exemption vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, Miri Linux antérieur (159 tests) + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `b7e5c5c` (159 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
-| T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
+| T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
 | T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `9ca29de` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri complet et Linux **non rejoués sur `63eda55`** | Audit externe |
+| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `63eda55` | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -327,6 +344,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+
 
 
 
