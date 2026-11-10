@@ -1551,4 +1551,3 @@ fn f() -> i32 {
         "E-OWN-USE-AFTER-MOVE",
     );
 }
-

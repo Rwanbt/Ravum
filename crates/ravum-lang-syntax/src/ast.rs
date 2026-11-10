@@ -473,7 +473,10 @@ pub enum LitPat {
     },
     /// G-6.36: float literal pattern, compared with `==` (no bit comparison).
     /// `text` keeps the source spelling and carries the sign for `-1.5`.
-    Float { text: String, suffix: Option<FloatTy> },
+    Float {
+        text: String,
+        suffix: Option<FloatTy>,
+    },
     Bool(bool),
     Char(char),
     Str(String),

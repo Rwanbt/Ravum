@@ -4154,11 +4154,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_lit_pattern(&mut self, pat: &Pat, lit: &LitPat, expected: &Type) -> Type {
         match lit {
-            LitPat::Int {
-                value,
-                suffix,
-                neg,
-            } => {
+            LitPat::Int { value, suffix, neg } => {
                 let ty = match suffix {
                     Some(suffix) => int_type(*suffix),
                     None => match expected {
@@ -4636,10 +4632,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         self.error(
                             "E-TYP-ARITY",
                             pat.span,
-                            format!(
-                                "`None` pattern takes no field, {} given",
-                                pats.len()
-                            ),
+                            format!("`None` pattern takes no field, {} given", pats.len()),
                         );
                         for sub in pats {
                             self.check_pattern(sub, &Type::Error);
@@ -5470,9 +5463,9 @@ fn pattern_contains_float(pat: &Pat) -> bool {
         PatKind::Tuple(items) => items.iter().any(pattern_contains_float),
         PatKind::Variant { fields, .. } => match fields {
             VariantPatFields::Tuple(items) => items.iter().any(pattern_contains_float),
-            VariantPatFields::Struct(fields) => {
-                fields.iter().any(|field| pattern_contains_float(&field.pat))
-            }
+            VariantPatFields::Struct(fields) => fields
+                .iter()
+                .any(|field| pattern_contains_float(&field.pat)),
         },
         _ => false,
     }

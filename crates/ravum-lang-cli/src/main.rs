@@ -35,7 +35,9 @@ fn main() -> ExitCode {
     {
         // A panic inside `run` has already printed its message; do not report
         // success for a command that never returned.
-        Ok(handle) => handle.join().unwrap_or(ExitCode::from(util::EXIT_FAIL as u8)),
+        Ok(handle) => handle
+            .join()
+            .unwrap_or(ExitCode::from(util::EXIT_FAIL as u8)),
         Err(error) => {
             eprintln!("error: cannot start the compiler thread: {error}");
             ExitCode::from(util::EXIT_FAIL as u8)

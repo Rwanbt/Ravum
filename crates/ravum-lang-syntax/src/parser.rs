@@ -2479,8 +2479,7 @@ impl<'a> Parser<'a> {
                 // the binding case, so `match o { None => …, Some(x) => … }`
                 // made the first arm irrefutable: it bound the whole `Option`
                 // and hid the exhaustiveness hole instead of matching `None`.
-                let prelude_constructor =
-                    matches!(name.as_str(), "Some" | "None" | "Ok" | "Err");
+                let prelude_constructor = matches!(name.as_str(), "Some" | "None" | "Ok" | "Err");
                 if prelude_constructor
                     || self.peek_punct(1, Punct::ColonColon)
                     || self.peek_punct(1, Punct::LParen)

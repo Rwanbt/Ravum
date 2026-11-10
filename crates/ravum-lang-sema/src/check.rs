@@ -1042,5 +1042,3 @@ fn main() {
             .any(|c| matches!(c, CallTarget::BuiltinFn { path } if path == "Result::Ok")));
     }
 }
-
-

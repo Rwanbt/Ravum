@@ -63,9 +63,9 @@ fn pattern_contains_float(pat: &Pat) -> bool {
         PatKind::Tuple(items) => items.iter().any(pattern_contains_float),
         PatKind::Variant { fields, .. } => match fields {
             VariantPatFields::Tuple(items) => items.iter().any(pattern_contains_float),
-            VariantPatFields::Struct(fields) => {
-                fields.iter().any(|field| pattern_contains_float(&field.pat))
-            }
+            VariantPatFields::Struct(fields) => fields
+                .iter()
+                .any(|field| pattern_contains_float(&field.pat)),
         },
         _ => false,
     }
@@ -1720,7 +1720,8 @@ impl<'a> Emitter<'a> {
         for arm in arms {
             let mut counter = 0usize;
             let mut conditions: Vec<String> = Vec::new();
-            let pattern = self.pattern_with_float_guards(&arm.pat, &mut counter, &mut conditions)?;
+            let pattern =
+                self.pattern_with_float_guards(&arm.pat, &mut counter, &mut conditions)?;
             let body = self.expr(&arm.body, indent + 2)?;
             text.push_str(&indent_text(indent + 2));
             text.push_str(&pattern);
@@ -2268,12 +2269,9 @@ impl<'a> Emitter<'a> {
 
     fn literal_pattern(&self, pat: &Pat, literal: &LitPat) -> Result<String, CodegenError> {
         Ok(match literal {
-            LitPat::Int {
-                value,
-                suffix,
-                neg,
-            } => {
-                let text = self.int_literal_text(*value, *suffix, self.facts().pat_types.get(&pat.id));
+            LitPat::Int { value, suffix, neg } => {
+                let text =
+                    self.int_literal_text(*value, *suffix, self.facts().pat_types.get(&pat.id));
                 if *neg {
                     format!("-{text}")
                 } else {

@@ -2398,7 +2398,6 @@ fn lire(r: Result<i32, Error>) -> i32 {
     }
 }
 
-
 #[test]
 fn const_signed_minimum_literal_is_accepted() {
     // TYP-13.2 / G-6.37: the sign is part of the literal, so `-128` fits `i8`
@@ -2482,5 +2481,3 @@ fn total() -> i32 {
 "#,
     );
 }
-
-
