@@ -42,6 +42,7 @@
 | **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --summary-only` | **79,4 % lignes / 79,7 % régions** sur sema ; `types.rs` 100 %, `own.rs` 90,1 %, `typeck.rs` 76,9 %, `resolve.rs` 67,4 % — **objectifs 90/85 non atteints** ; mesure locale non câblée en CI |
 | **Mutation `own.rs`** | `cargo mutants ... --regex 'eval_loop\|eval_for\|eval_call'` | **22 mutants : 12 caught, 10 équivalents, 0 non expliqué** ; `eval_method_call` **4/4 caught** — voir [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
 | **Mutation `typeck.rs` (passe 1)** | `cargo mutants ... --file crates/ravum-lang-sema/src/typeck.rs --regex 'check_lit_pattern\|check_path_pattern\|cover_pattern\|check_array'` | **49 mutants : 38 tués, 7 survivants expliqués, 4 unviables** (dont 4 morts par construction tant que D-PAT-1 refuse les motifs négatifs) |
+| **CI sur `a6e71e7` (docs `7e065d3`)** | runs `42862021582` (Linux), `42862021707` (VS Code push), `42862029061` (VS Code PR), `42862021037` (gate contracts) | **succès** : workspace Linux **89 suites / 1292 passés / 0 échec / 5 ignorés** ; conformance **346 cas / 344 PASS / 0 FAIL / 2 SKIP** ; Miri, smoke, installateur, WASI et fuzz smoke verts ; VS Code e2e **43–45 s** |
 
 ### Passe 2 — mesures antérieures (SHA `a5744ea`)
 

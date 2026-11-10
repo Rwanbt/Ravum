@@ -86,6 +86,7 @@ Mesures locales sur `a6e71e7` (Windows 11 x86-64, rustc 1.95.0) :
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
 | CI sur le HEAD `e05f3ff` (code `63619a5`) | **succès** : workspace Linux **1026 passés / 0 échec / 4 ignorés**, conformance `343 cas / 341 PASS / 0 FAIL / 2 SKIP`, Miri Linux **164 tests / 0 échec**, gate-contracts succès (runs `42837268985`, `42837285517`) |
+| CI sur `a6e71e7` (docs `7e065d3`) | **succès** : workspace Linux **89 suites / 1292 passés / 0 échec / 5 ignorés**, conformance **346 cas / 344 PASS / 0 FAIL / 2 SKIP**, Miri, smoke, installateur, WASI et fuzz verts ; `vscode-e2e` vert sur le push (`42862021707`, 43 s) et la PR (`42862029061`, 45 s) ; gate contracts `42862021037` |
 
 Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
 `PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
