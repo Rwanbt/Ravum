@@ -476,10 +476,23 @@ les règles de type spécifiques.
 
 Les autres trous révélés par la même contre-expertise sont fermés :
 `x as !` → `E-TYP-CAST` ; une inférence qui produirait `Option<!>`, `Vec<!>`,
-`[!; N]`, `(!, T)` ou `W<!>` → `E-TYP-AMBIGUOUS` (le backend Rust stable refuse
-`!` en argument générique) ; `for x in panic("x")` → `E-TYP-MISMATCH` ;
+`[!; N]`, `(!, T)`, `W<!>` **ou `E::A(panic(…))` sur une variante d''enum
+générique** → `E-TYP-AMBIGUOUS` (le backend Rust stable refuse `!` en argument
+générique) ; `for x in panic("x")` → `E-TYP-MISMATCH` ;
 `while`/`loop`/`for` en élément de tuple ou de tableau →
-`E-TYP-STATEMENT-VALUE`.
+`E-TYP-STATEMENT-VALUE`. Les agrégats **annotés** (`[i32; 2]`,
+`(i32, i32)`, `[i32; 3]`, `E<i32>`) acceptent en revanche un élément `panic(…)`,
+conformément à TYP-1.6 (« aucun `E-TYP-MISMATCH` n''est émis pour `!` ») : le
+type attendu vient de l''annotation, et un `!` en tête sans annotation est
+`E-TYP-AMBIGUOUS`.
+
+**Limite connue, non corrigée** : l''interdiction EXPR-5.11/6.7/G-6.19 des
+expressions de contrôle en position de valeur n''est vérifiée que pour
+l''initialiseur `let`, les éléments de tuple et les éléments de tableau. Un
+`loop {}` reste accepté comme argument d''une fonction `()`, comme valeur
+d''affectation, comme champ de struct `()`, comme bras de `match` ou comme
+scrutinée ; c''est un écart de contrat documenté, sans conséquence backend
+(le type reste `()` et le Rust généré compile).
 
 Deux restrictions vont au-delà de la liste littérale de TYP-1.6 (qui nomme
 paramètre, champ, élément de `Vec` et retour non divergent) : les annotations
@@ -521,7 +534,7 @@ relâchée**. Le type des boucles est inchangé (`()`) ; les changements qui
 modifient l''acceptation sont tous des **resserrements** exigés par TYP-1.6
 (`as !`, `Vec<!>`/`Option<!>` inférés, `for` sur `!`, contrôle en élément de
 tuple), plus l''acceptation des tuples hétérogènes, exigée par TYP-4 et
-auparavant refusée à tort. Le corpus passe de 326 à **340 cas, 339 PASS /
+auparavant refusée à tort. Le corpus passe de 326 à **342 cas, 341 PASS /
 0 FAIL / 1 SKIP**. Ces mesures ne prouvent ni l''absence d''autres écarts, ni une
 conformité générale.
 
@@ -531,3 +544,4 @@ de réexamen, absence d''exemption obsolète) ; la vérité sémantique de la
 justification reste une **revue humaine**, pas un fait machine. Aucune
 ratification humaine n''a eu lieu sur ce point : le statut `PASS` de T2 est un
 claim interne, pas une certification.
+

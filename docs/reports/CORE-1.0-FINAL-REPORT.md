@@ -26,7 +26,7 @@ condition de réexamen) ; outil qui refuse une exemption inconnue, mal formée,
 obsolète ou masquant une règle non marquée `NOT_COVERED` ; émission
 `W-TYP-UNREACHABLE` **retirée** conformément à la spécification et verrouillée par
 un test Rust ; audit du registre bloquant dans les **deux** sens ; nouveau
-workflow `gate-contracts.yml` ; 8 tests Python de régression.
+workflow `gate-contracts.yml` ; 12 tests Python de régression.
 
 Puis, en vérifiant les affirmations « vertes » du frontend : deux défauts réels
 mesurés et corrigés — le type `!` était refusé dans **toute** position alors que
@@ -47,10 +47,10 @@ Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
 | `cargo test --workspace --all-targets` | **83 suites, 1022 passés / 0 échec / 2 ignorés** |
-| Conformance | **340 cas : 339 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
-| Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption vérifiée) |
+| Conformance | **342 cas : 341 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
+| Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
-| Contrats de validation | **8 tests** PASS |
+| Contrats de validation | **12 tests** PASS |
 | Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0x338b9afe9926aa4f` |
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
@@ -59,11 +59,16 @@ Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
 | SBOM | 64 paquets, 170 relations, digest `ca776dd8…aa14` à époque fixée |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
+| CI sur le HEAD `043e36b` | **succès des 5 workflows** de la branche (dont Linux qualification `42811025492`) |
 
-Les statuts de gates ne changent pas : **T2 et T3 restent `PASS`**, mais leur
-preuve est désormais exécutable et bloquante au lieu d'être déclarative. T4, T10
-et T12 restent bloqués par l'audit externe et le Go/No-Go humain ; T1, T6, T8,
-T9 et T11 restent partiels pour les raisons structurelles déjà listées.
+Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
+`PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
+déclarative), et **T7 passe de `PASS` à `PARTIAL`** : le rejeu VS Code du
+2026-11-10 donne 10/10 puis 3/10 sur le même arbre (timeouts du harnais), donc la
+preuve E2E n'est pas reproductible de façon stable. T4, T10 et T12 restent
+bloqués par l'audit externe et le Go/No-Go humain ; T1, T6, T8, T9 et T11 restent
+partiels pour les raisons structurelles déjà listées. Bilan courant :
+**4 `PASS` · 0 `FAIL` · 7 `PARTIAL` · 2 `BLOCKED`**.
 
 ## 1. Dépôt GitHub — état initial et final
 
@@ -116,7 +121,7 @@ T9 et T11 restent partiels pour les raisons structurelles déjà listées.
 | T11 | PARTIAL | bit-à-bit + performance mesurés ; **signature sans clé (D9)** |
 | T12 | **BLOCKED** | **Go/No-Go humain** |
 
-**5 `PASS` · 0 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED`.**
+**5 `PASS` · 0 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED` (état de la session du 2026-11-09 ; voir §0 pour l'état courant).**
 
 ## 5. Tests — exécutés, ignorés, non exécutés
 
@@ -273,6 +278,8 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
+
 
 
 

@@ -33,9 +33,9 @@
 | Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **83 suites, 1022 passés / 0 échec / 2 ignorés** (exit 0) |
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | 13 PASS / 0 FAIL (mesure antérieure, code inchangé) |
-| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** — mesure antérieure `1b7b4f1`, **non rejouée** dans cette passe |
-| Conformance | `cargo run -p ravum-conformance -- run --json target/p2-conformance.json` | **340 cas : 339 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
-| Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées, **188/188 satisfaites** (187 par cas + 1 exemption justifiée et vérifiée), exit 0 |
+| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** — **rejoué sur `63eda55`** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) |
+| Conformance | `cargo run -p ravum-conformance -- run --json target/p3-conformance.json` | **342 cas : 341 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées, **188/188 satisfaites** (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)), exit 0 |
 | **Contrats de validation** | `python -m unittest discover -s tools/tests -v` | **8 tests PASS** (vecteurs de faux PASS T2 et registre) |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0x338b9afe9926aa4f`, 20,2 s |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 5 376 it/s, 18,6 s |
@@ -55,7 +55,7 @@
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
-Windows. Chaque cas tourne sur au moins un OS, aucun sur les deux.
+Windows. Chaque cas est exécuté sur au moins un OS ; seuls trois SKIP sont liés à la plateforme (deux cas Windows sur Linux, un cas Unix sur Windows), aucun cas n'est sauté sur les deux.
 
 ## 1 bis. CI sur le SHA `9ca29de` (Linux, `ubuntu-latest`) — **tous les jobs verts**
 
@@ -101,18 +101,23 @@ ont le même arbre de code.
 La CI ne prouve pas l'absence de bug : elle exécute le corpus et les contrôles
 de gates sur un SHA précis, avec les limites listées au §3.
 
+Sur le HEAD documentaire `043e36b` (même arbre de code que `63eda55`), les cinq
+workflows de la branche sont également `success` : Documentation integrity,
+Gate contracts, MVP, MVP impact-selected et Linux qualification
+(run [42811025492](https://github.com/Rwanbt/Ravum/actions/runs/42811025492)).
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PASS` | 340 cas : **339 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, vérifiée par l'outil et bloquante en CI | Exemption vérifiée, révocable |
+| T2 | `PASS` | 342 cas : **341 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
 | T3 | `PASS` | Lexer/parser/AST réels, **1022 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `b7e5c5c` (159 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **7 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
-| T7 | `PASS` | CLI complète ; **LSP réel** (10 tests tubes) ; **session VS Code réelle 10/10** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) | — | — |
+| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et une fois sur `63eda55` | **Rejeu VS Code non reproductible** : 10/10 puis **3/10** (timeouts symboles/complétion/survol, erreur « not part of the analysed package ») sur le même arbre ; harnais E2E à stabiliser avant de revendiquer `PASS` | Flakiness E2E |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
 | T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `63eda55` | Audit externe |
@@ -141,8 +146,8 @@ Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
 - **Avant** : 99/188 règles citées par un cas, 107 cas, couverture non mesurée.
-- **Après (2026-11-10)** : **340 cas**, **188/188** règles tracées vers un cas
-  existant ou vers une exemption vérifiée, **188/188 satisfaites** au critère
+- **Après (2026-11-10)** : **342 cas**, **188/188** règles tracées vers un cas
+  existant ou vers une exemption déclarée et structurellement vérifiée, **188/188 satisfaites** au critère
   strict (cas d'acceptation + cas de refus portant le code exigé) : **187 par
   cas + `F-META-006` exemptée**.
 - **Aucun cas n'échoue** : les codes émis hors registre ont été alignés sur
@@ -209,8 +214,8 @@ Passe de traçabilité complète dans
   désormais tout le tuple, donc `match t { (a, b) => a }` n'est plus déclaré
   non exhaustif. Deux cas de conformance et une exécution réelle (`t.0` → `7`)
   le verrouillent.
-- **Pourquoi T3 est `PASS` (mesure du 2026-11-10)** : les 340 cas de conformance
-  passent (331 PASS, 1 SKIP par plateforme, 0 FAIL) et **aucun code émis hors
+- **Pourquoi T3 est `PASS` (mesure du 2026-11-10)** : les 342 cas de conformance
+  passent (341 PASS, 1 SKIP par plateforme, 0 FAIL) et **aucun code émis hors
   registre** ne subsiste. L'ancien écart résiduel — des identifiants de diagnostic
   différents sur 16 cas, dont 13 non enregistrés — est clos : les codes ont été
   alignés ou enregistrés, et le dernier code interdit (`W-TYP-UNREACHABLE`) a été
@@ -246,19 +251,21 @@ temps réel dur explicitement `UNSUPPORTED` — conformément à la spec, donc p
 périmètre réduit inventé. Les exigences T6 obligatoires non couvertes restent
 absentes.
 
-### T7 — Environnement de développement — `PASS`
+### T7 — Environnement de développement — `PARTIAL` (rejeu VS Code contesté)
 
-Preuve : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md).
+Preuve historique : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md).
 
 - Extension réelle `tools/vscode-ravum` (grammaire TextMate, serveur `ravum-lang
   lsp` en stdio), **10 tests d'intégration exécutés dans un VS Code réel**
-  (1.145.2), **10 PASS / 0 FAIL** — **rejoué après les correctifs du compilateur**.
-- Assertions via l'API publique `vscode` : langue, absence de faux positif,
-  symboles, complétion, survol, définition, références, formatage, renommage
-  multi-occurrences, diagnostic `E-*` publié.
-- Deux défauts réels trouvés par ce test et corrigés côté serveur : navigation
-  impossible depuis une déclaration, et `textDocument/prepareRename` absent (ce
-  qui faisait échouer le renommage VS Code même avec une édition valide).
+  (1.145.2), **10 PASS / 0 FAIL** sur `1b7b4f1`.
+- **Rejeu du 2026-11-10 sur `63eda55` non concluant** : une exécution donne
+  **10/10**, une seconde **3/10** avec des timeouts (symboles, complétion,
+  survol, définition, références) et l'erreur « `…/src/main.rv` is not part of
+  the analysed package ». Le LSP en session directe répond correctement aux deux
+  formes d'URI ; le diff LSP depuis `1b7b4f1` n'est que la branche `Never` de
+  `walk.rs`. Ce n'est donc pas une régression fonctionnelle démontrée, mais la
+  preuve E2E n'est **pas reproductible de façon stable** : T7 redescend à
+  `PARTIAL` jusqu'à stabilisation du harnais.
 
 ### T8 — Compilation continue et hot reload — `PARTIAL`
 
@@ -344,6 +351,10 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+
+
+
 
 
 

@@ -5,7 +5,7 @@
 > machine-lisible et vérifiée (`tools/coverage_exemptions.json`), et
 > `W-TYP-UNREACHABLE` a été retiré parce que EXPR-5.9/G-6.44 imposent qu'un bras
 > inatteignable ne produise aucun diagnostic. Mesures courantes : **83 suites,
-> 1022 passés / 0 échec / 2 ignorés** ; conformance **340 cas, 339 PASS / 0 FAIL
+> 1022 passés / 0 échec / 2 ignorés** ; conformance **342 cas, 341 PASS / 0 FAIL
 > / 1 SKIP** ; **188/188** règles satisfaites (1 exemption) ; registre **112
 > codes, 0 hors registre, 0 jamais émis**. Le corps de ce document et son tableau
 > de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
@@ -190,5 +190,6 @@ cargo test -p ravum-lang-cli --test lsp_client
 pwsh -File scripts\sbom.ps1
 python tools\validate_repo_docs.py
 ```
+
 
 
