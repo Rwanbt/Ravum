@@ -5,6 +5,52 @@
 > Aucun `PROVED`, aucune maturité « production », aucune release. Le registre
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
+> **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
+> (SHA `a277b86`). La **section 0** ci-dessous porte la passe P0 du **2026-11-10**
+> (SHA `16775b4`) et **prévaut pour les chiffres courants**.
+
+## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `16775b4`)
+
+Deux vecteurs de faux `PASS` mesurés au début de la passe :
+
+1. `python tools/features_coverage.py --strict` sortait **1** (`F-META-006`
+   non couverte) alors que T2 était déclarée `PASS` par une exemption rédigée
+   uniquement dans un rapport, et aucun job CI n'exécutait ce contrôle.
+2. `python tools/registry_audit.py` sortait **1** : `W-TYP-UNREACHABLE` était émis
+   par `typeck.rs` alors que EXPR-5.9, G-6.44 et DIAG-1.6 interdisent tout
+   diagnostic pour un bras de match inatteignable.
+
+Traitement (commit `16775b4`) : exemption **machine-lisible** et validée dans
+`tools/coverage_exemptions.json` (raison, référence normative, approbateur,
+condition de réexamen) ; outil qui refuse une exemption inconnue, mal formée,
+obsolète ou masquant une règle non marquée `NOT_COVERED` ; émission
+`W-TYP-UNREACHABLE` **retirée** conformément à la spécification et verrouillée par
+un test Rust ; audit du registre bloquant dans les **deux** sens ; nouveau
+workflow `gate-contracts.yml` ; 8 tests Python de régression.
+
+Mesures locales sur `16775b4` (Windows 11 x86-64, rustc 1.95.0) :
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace --all-targets` | **83 suites, 1022 passés / 0 échec / 2 ignorés** |
+| Conformance | **326 cas : 325 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
+| Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption vérifiée) |
+| Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
+| Contrats de validation | **8 tests** PASS |
+| Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0xcda2af33726b1343` |
+| Fuzz sema | 100 000 itérations, 0 échec |
+| Smoke exemples | 31 PASS / 0 FAIL |
+| Balayages CLI / stdlib | 13/13 PASS ; 64/64 PASS |
+| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 76BB56C9…90CD` |
+| SBOM | 64 paquets, 170 relations, digest `1eaa45fc…f00e` à époque fixée |
+| Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
+| CI sur `16775b4` | **NOT_RUN** : commit local non poussé au moment de la mesure |
+
+Les statuts de gates ne changent pas : **T2 et T3 restent `PASS`**, mais leur
+preuve est désormais exécutable et bloquante au lieu d'être déclarative. T4, T10
+et T12 restent bloqués par l'audit externe et le Go/No-Go humain ; T1, T6, T8,
+T9 et T11 restent partiels pour les raisons structurelles déjà listées.
+
 ## 1. Dépôt GitHub — état initial et final
 
 | Élément | Initial | Final |

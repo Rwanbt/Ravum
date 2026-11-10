@@ -1,5 +1,17 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour P0 — 2026-11-10, SHA `16775b4`.** Les deux faux `PASS` de
+> validation sont corrigés : l'exemption `F-META-006` est désormais
+> machine-lisible et vérifiée (`tools/coverage_exemptions.json`), et
+> `W-TYP-UNREACHABLE` a été retiré parce que EXPR-5.9/G-6.44 imposent qu'un bras
+> inatteignable ne produise aucun diagnostic. Mesures courantes : **83 suites,
+> 1022 passés / 0 échec / 2 ignorés** ; conformance **326 cas, 325 PASS / 0 FAIL
+> / 1 SKIP** ; **188/188** règles satisfaites (1 exemption) ; registre **112
+> codes, 0 hors registre, 0 jamais émis**. Le corps de ce document et son tableau
+> de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
+> comme l'état courant, le registre canonique est
+> [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
+
 > **Document de situation, pas un certificat.** Chaque chiffre est lié à une
 > commande exécutée sur cette machine. Le registre canonique des gates est
 > [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).

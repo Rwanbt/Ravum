@@ -26,9 +26,12 @@ REPORT = REPO / "docs" / "reports" / "CORE-1.0-FINAL-REPORT.md"
 
 CONFORMANCE = re.compile(r"(\d+) cas : (\d+) PASS / (\d+) FAIL / (\d+) SKIP / (\d+) NOT_RUN")
 TESTS = re.compile(r"(\d+) suites, (\d+) passés / (\d+) échec / (\d+) ignorés")
-STRICT = re.compile(r"\*\*(\d+)/(\d+)\*\* règles tracées, \*\*(\d+)/(\d+)\*\*")
+STRICT = re.compile(r"(\d+)/(\d+)\*\* règles tracées, \*\*(\d+)/(\d+)")
 STRICT_TESTABLE = re.compile(
     r"\*\*(\d+)/(\d+)\*\* règles tracées, \*\*(\d+)/(\d+) testables\*\*"
+)
+STRICT_SATISFIED = re.compile(
+    r"\*\*(\d+)/(\d+)\*\* règles tracées, \*\*(\d+)/(\d+) satisfaites\*\*"
 )
 
 
@@ -47,7 +50,7 @@ def figures() -> list[tuple[str, str]]:
         out.append(("tests", f"{match.group(1)} suites"))
         out.append(("tests", f"{match.group(2)} passés"))
 
-    match = STRICT_TESTABLE.search(matrix) or STRICT.search(matrix)
+    match = STRICT_SATISFIED.search(matrix) or STRICT_TESTABLE.search(matrix) or STRICT.search(matrix)
     if match:
         out.append(("strict", f"{match.group(3)}/{match.group(4)}"))
     else:
