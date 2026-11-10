@@ -48,6 +48,26 @@ LITERALS = {
     "T": "1",
 }
 
+# Free functions whose value is deterministic for the generated arguments:
+# the program prints the result and the sweep asserts it. Everything else is
+# build-only (side effects, `!`, or a type with no `Display`).
+EXPECTED_OUTPUT = {
+    "std::fs::exists": "false",
+    "std::string::from": "x",
+    "std::math::abs": "1",
+    "std::math::sqrt": "1",
+    "std::math::floor": "1",
+    "std::math::ceil": "1",
+    "std::math::round": "1",
+    "std::math::pow": "1",
+    "std::math::min": "1",
+    "std::math::max": "1",
+    "std::io::println": "x",
+    "std::io::print": "x",
+    "String::from": "x",
+    "String::new": "",
+}
+
 # Associated functions need an annotation (`Vec::new()` alone is ambiguous) and
 # must not use the turbofish, which Core 1.0 refuses (E-PARSE-UNEXPECTED).
 PRELUDE_STATEMENTS = {
@@ -136,6 +156,40 @@ def main() -> int:
             source = "\n".join(
                 [f"use std::{module};", "", "fn main() {", f"    let result = {call}", "}", ""]
             )
+        expected = EXPECTED_OUTPUT.get(path)
+        if expected is not None and not prelude:
+            if entry["ret"] == "()":
+                source = "\n".join(
+                    [f"use std::{module};", "", "fn main() {", f"    {call}", "}", ""]
+                )
+            elif entry["ret"] == "String":
+                # `String` has no `to_string` in Core 1.0; print it directly.
+                source = "\n".join(
+                    [
+                        "use std::io;",
+                        f"use std::{module};",
+                        "",
+                        "fn main() {",
+                        f"    let result = {call}",
+                        "    io::println(&result);",
+                        "}",
+                        "",
+                    ]
+                )
+            else:
+                source = "\n".join(
+                    [
+                        "use std::io;",
+                        f"use std::{module};",
+                        "",
+                        "fn main() {",
+                        f"    let result = {call}",
+                        "    io::println(&result.to_string());",
+                        "}",
+                        "",
+                    ]
+                )
+
         identifier = short_id(path)
         package = out / identifier
         (package / "src").mkdir(parents=True, exist_ok=True)
@@ -144,7 +198,10 @@ def main() -> int:
             encoding="utf-8",
         )
         (package / "src" / "main.rv").write_text(source, encoding="utf-8")
-        manifest.append({"id": identifier, "path": path, "params": entry["params"]})
+        record = {"id": identifier, "path": path, "params": entry["params"]}
+        if expected is not None:
+            record["expect"] = expected
+        manifest.append(record)
 
     ids = [entry["id"] for entry in manifest]
     duplicates = sorted({identifier for identifier in ids if ids.count(identifier) > 1})

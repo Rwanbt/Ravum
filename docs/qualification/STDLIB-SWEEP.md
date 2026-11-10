@@ -28,9 +28,11 @@ qu'aucun cas de conformance n'écrit `sqrt(<littéral non typé>)`.
 1. **27 programmes écrits à la main**, un par surface de méthode, `check` →
    `build` → `run` ;
 2. **37 programmes générés** par [`tools/stdlib_surface.py`](../../tools/stdlib_surface.py),
-   un par **fonction libre documentée** de `BUILTIN_FNS`, `check` → `build`
-   seulement (jamais `run` : `process::exit` et `panic` termineraient le
-   processus).
+   un par **fonction libre documentée** de `BUILTIN_FNS`, `check` → `build`.
+   **14 d'entre eux exécutent et affirment aussi la valeur de retour**
+   (`math::sqrt(1.0)` → `1`, `fs::exists("x")` → `false`, `String::new()` → chaîne
+   vide, …) ; les 23 autres sont **construits seulement** (effet de bord, type
+   `!`, ou pas de `Display` : `process::exit`, `panic`, `Result`).
 
 Couverture mesurée : **30/30 méthodes documentées** et **37 paquets pour 38
 entrées de table** (une entrée est dupliquée dans `BUILTIN_FNS`).
@@ -50,6 +52,7 @@ entrées de table** (une entrée est dupliquée dans `BUILTIN_FNS`).
 | vues | `as_str`, `as_slice` (utilisées, jamais stockées : OWN-6) |
 | `Vec` mutable | `pop`, `clear`, `is_empty`, `clone` |
 | `Result` | `is_ok`, `is_err`, `err`, `ok` |
+| **valeurs de retour affirmées** | `math::abs/sqrt/floor/ceil/round/pow/min/max`, `fs::exists`, `string::from`, `String::from`, `String::new`, `io::println`, `io::print` |
 | `Option` | `is_some`, `is_none`, `ok_or` |
 | tableaux | littéral, indexation, taille |
 

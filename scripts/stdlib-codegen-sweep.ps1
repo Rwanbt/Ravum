@@ -357,20 +357,45 @@ if ($LASTEXITCODE -ne 0) {
     $results += [pscustomobject]@{ Case = 'free-functions'; Stage = 'generate'; Status = 'FAIL'; Detail = 'generator failed' }
 }
 else {
+    # The manifest says which generated programs also assert their *value*; the
+    # rest are build-only by design.
+    $manifest = Get-Content (Join-Path $surfaceRoot 'manifest.json') -Raw | ConvertFrom-Json
+    $expected = @{}
+    foreach ($function in $manifest.functions) {
+        if ($function.PSObject.Properties.Name -contains 'expect') {
+            $expected[$function.id] = $function.expect
+        }
+    }
     foreach ($directory in Get-ChildItem $surfaceRoot -Directory) {
+        $identifier = $directory.Name
         $check = & $binary check $directory.FullName 2>&1
         if ($LASTEXITCODE -ne 0) {
             $detail = ($check | Select-String -Pattern 'error' | Select-Object -First 1).Line
-            $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'check'; Status = 'FAIL'; Detail = $detail }
+            $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'check'; Status = 'FAIL'; Detail = $detail }
             continue
         }
         $build = & $binary build $directory.FullName 2>&1
         if ($LASTEXITCODE -ne 0) {
             $detail = ($build | Select-String -Pattern 'error' | Select-Object -First 1).Line
-            $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'build'; Status = 'FAIL'; Detail = $detail }
+            $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'build'; Status = 'FAIL'; Detail = $detail }
             continue
         }
-        $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'ok'; Status = 'PASS'; Detail = '' }
+        if ($expected.ContainsKey($identifier)) {
+            $want = $expected[$identifier]
+            $output = & $binary run $directory.FullName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                $detail = ($output | Select-String -Pattern 'error' | Select-Object -First 1).Line
+                $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'run'; Status = 'FAIL'; Detail = $detail }
+                continue
+            }
+            $text = Get-Content ($directory.FullName + '\.ravum\bin\' + (Split-Path $directory.Name -Leaf) + '.exe') -ErrorAction SilentlyContinue
+            $raw = ($output | Out-String)
+            if ($want -ne '' -and $raw -notlike "*$want*") {
+                $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'stdout'; Status = 'FAIL'; Detail = "expected $want, got $($raw.Trim())" }
+                continue
+            }
+        }
+        $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'ok'; Status = 'PASS'; Detail = '' }
     }
 }
 
