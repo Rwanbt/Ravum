@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les correctifs) |
-| Conformance | `cargo run -p ravum-conformance -- run` | **319 cas : 318 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **321 cas : 320 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **179/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
