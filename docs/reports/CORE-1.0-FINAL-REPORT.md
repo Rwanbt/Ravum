@@ -59,22 +59,23 @@ Deux défauts supplémentaires ont été mesurés et traités pendant la passe :
   spécification se contredit. Aucun changement unilatéral ; décision
   **D-PAT-1** demandée. Détail : §16 de `T2-FINDINGS.md`.
 
-Mesures locales sur `29cc79e` (Windows 11 x86-64, rustc 1.95.0) :
+Mesures locales sur `a6e71e7` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **84 suites, 1122 passés / 0 échec / 2 ignorés** |
+| `cargo test --workspace --all-targets` | **84 suites, 1129 passés / 0 échec / 2 ignorés** |
 | Conformance | **346 cas : 345 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **12 tests** PASS |
-| Couverture sema (llvm-cov) | **78,3 % lignes / 78,8 % régions** ; `types.rs` 100 %, `own.rs` 89,9 %, `typeck.rs` 73,6 %, `resolve.rs` 67,3 % — objectifs 90/85 non atteints |
+| Couverture sema (llvm-cov) | **79,4 % lignes / 79,7 % régions** ; `types.rs` 100 %, `own.rs` 90,1 %, `typeck.rs` 76,9 %, `resolve.rs` 67,4 % — objectifs 90/85 non atteints |
 | Mutation testing ciblé (`types.rs`) | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués |
 | Mutation testing `own.rs` (sous-ensemble) | **22 mutants : 12 caught, 10 équivalents documentés, 0 non expliqué** ; `eval_method_call` **4/4 caught** — les 10 survivants sont prouvés équivalents dans [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
-| Contrats du typechecker | **88 tests** (`typeck_contracts.rs`) ; `typeck.rs` 63,7 % → **73,6 %** de lignes |
+| Mutation testing `typeck.rs` (passe 1) | **49 mutants : 38 tués, 7 survivants expliqués, 4 unviables** ; 7 ancres ajoutées dans `typeck_contracts.rs` (motifs littéraux, scrutinee `!`, tableaux annotés divergents, wildcard exhaustif) |
+| Contrats du typechecker | **95 tests** (`typeck_contracts.rs`) ; `typeck.rs` 63,7 % → **76,9 %** de lignes |
 | Audit du borrow checker | **92 tests** (`own_audit.rs`) |
 | VS Code réel — au repos | **10/10 en 5 s** |
 | VS Code réel — sous charge | **10/10 en 4 s** pendant `cargo test --workspace` concurrent |
-| CI VS Code | workflow `vscode-e2e.yml` **créé** ; premier run à confirmer |
+| CI VS Code | workflow `vscode-e2e.yml` **vert** : push `42858553296` (49 s) et PR `42858866200` (1 m 04 s) sur `9972391` |
 | Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0x338b9afe9926aa4f` |
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
@@ -93,11 +94,13 @@ déclarative), et **T7 passe de `PASS` à `PARTIAL`** : le rejeu VS Code du
 preuve E2E n'est pas reproductible de façon stable. Le harnais est depuis
 **corrigé** (budgets 300 s/180 s, barrière de disponibilité LSP) et donne 10/10
 au repos comme sous `cargo test --workspace` concurrent ; un job CI
-`vscode-e2e.yml` est ajouté. **T7 reste `PARTIAL` jusqu'au premier run vert de
-ce job** : la preuve locale n'est pas convertie en `PASS`. T4, T10 et T12 restent
+`vscode-e2e.yml` est ajouté. **T7 passe à `PASS`** : le job CI `vscode-e2e` est vert sur le push
+`42858553296` et la PR `42858866200` (SHA `9972391`), en plus des deux runs
+locaux (au repos et sous charge). Bilan : **5 `PASS` · 0 `FAIL` · 6 `PARTIAL` ·
+2 `BLOCKED`**. T4, T10 et T12 restent
 bloqués par l'audit externe et le Go/No-Go humain ; T1, T6, T8, T9 et T11 restent
 partiels pour les raisons structurelles déjà listées. Bilan courant :
-**4 `PASS` · 0 `FAIL` · 7 `PARTIAL` · 2 `BLOCKED`**.
+**5 `PASS` · 0 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED`**.
 
 ## 1. Dépôt GitHub — état initial et final
 

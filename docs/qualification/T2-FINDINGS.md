@@ -605,7 +605,7 @@ aucun test ne fige le refus des flottants/négatifs comme « attendu ».
 
 La couverture de `crates/ravum-lang-sema/src/typeck.rs` était de **63,7 %** de
 lignes. Un fichier de contrats indépendant,
-`crates/ravum-lang-sema/tests/typeck_contracts.rs` (88 tests), couvre désormais
+`crates/ravum-lang-sema/tests/typeck_contracts.rs` (95 tests), couvre désormais
 les chemins d'erreur et les formes nominales qu'aucun cas de conformance
 n'exerçait : appels non appelables et arités, champs et indices, transtypages,
 égalité/comparaison, inférence ambiguë, `if` sans `else` en valeur, `?`,
@@ -614,10 +614,10 @@ constantes (arithmétique, décalages, casts tronquants, rejets), motifs
 (littéraux, variantes avec payload, tuple, exhaustivité), génériques imbriqués,
 méthodes utilisateur et builtins, agrégats, coercitions admises.
 
-Mesure `cargo llvm-cov -p ravum-lang-sema` : `typeck.rs` **72,5 % → 73,6 %** de
-lignes (régions 75,1 % → 76,0 %), `own.rs` 89,9 %, `types.rs` 100 %, total sema
-**78,3 %** de lignes. **Les objectifs 90 % lignes / 85 % branches ne sont pas
-atteints** : le déficit restant est concentré dans `resolve.rs` (67,3 %) et dans
+Mesure `cargo llvm-cov -p ravum-lang-sema` : `typeck.rs` **63,7 % → 76,9 %** de
+lignes (régions 78,5 %), `own.rs` 90,1 %, `types.rs` 100 %, total sema **79,4 %**
+de lignes / 79,7 % de régions. **Les objectifs 90 % lignes / 85 % branches ne sont pas
+atteints** : le déficit restant est concentré dans `resolve.rs` (67,4 %) et dans
 les branches de `typeck.rs` liées aux génériques et à la visibilité
 inter-modules, qui demandent des programmes multi-fichiers et des cas
 d'exhaustivité supplémentaires. Ce chiffre est mesuré, pas estimé.

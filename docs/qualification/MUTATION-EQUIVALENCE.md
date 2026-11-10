@@ -70,3 +70,37 @@ crates/ravum-lang-sema/src/own.rs --regex eval_method_call` → **4 mutants,
   il n'est pas lui-même vérifié par un outil de preuve.
 - Les mutants tués prouvent que les tests distinguent ces comportements ; ils ne
   prouvent pas que le checker est correct.
+
+## 5. Campagne `typeck.rs` (passe 1, 2026-11-10)
+
+Portée : quatre fonctions du vérificateur de types qui portent les chemins
+d'erreur les plus denses — `check_lit_pattern`, `check_path_pattern`,
+`cover_pattern` et `check_array`/`check_array_repeat`.
+
+| Élément | Valeur |
+|---|---|
+| Commande | `cargo mutants -p ravum-lang-sema --file crates/ravum-lang-sema/src/typeck.rs --regex 'check_lit_pattern\|check_path_pattern\|cover_pattern\|check_array'` |
+| Résultat | **49 mutants : 38 tués, 7 survivants expliqués, 4 unviables** |
+| Preuves | `target/mutants-typeck2/mutants.out/` (49 mutants), `target/mutants-cover/mutants.out/` (12/12 tués sur `cover_pattern` après les ancres) |
+
+Les sept survivants ne sont pas « à couvrir plus tard » en bloc : quatre sont
+morts par construction, un est équivalent, un est hors de portée du harnais, et
+un dépend d'une décision de spécification.
+
+| Mutant | Ligne | Classement |
+|---|---|---|
+| `negative_ok` : `&&`→`\|\|`, `>`→`==`, `>`→`<`, `>`→`>=` | 4194 | **Mort par construction** : les motifs négatifs sont refusés par le parseur (`E-UNSUPPORTED-NEG-PAT`, voir `T2-FINDINGS.md` §16/D-PAT-1), donc la branche `*value > i128::MAX as u128` est inatteignable. Testable seulement si D-PAT-1 implémente G-6.37. |
+| `delete match arm "Option::None"` | 4260 | **Équivalent** : le bras renvoie `expected` au lieu de `Type::Error` ; le type du motif n'est comparé à rien d'autre (l'exhaustivité utilise `pattern_kind`, pas `pat_types`), donc aucun diagnostic ni acceptation ne change. |
+| `delete !` (compatibilité du motif de constante) | 4280 | **Hors portée du harnais** : un motif de constante n'est atteignable que par un chemin qualifié multi-module ; `cargo test` analyse un programme mono-fichier, et le corpus de conformance (qui a des modules) n'est pas lancé par `cargo-mutants`. L'équivalence n'est donc **pas** prouvée. |
+| garde `*len == items.len()` → `true` | 3655 | **Non tranché** : le mutant ne change le diagnostic que pour une annotation de longueur contradictoire avec un premier élément divergent (`[i32; 3] = [panic(…), 1]` : `E-TYP-AMBIGUOUS` disparaît). La spécification ne dit pas si une annotation de longueur fausse fournit quand même le type d'élément ; classer ce mutant demanderait de trancher cette sémantique, pas d'écrire un test. |
+
+La garde `→ false` et `==`→`!=` sont, elles, **tuées** par
+`annotated_array_accepts_a_diverging_first_element` : sans la garde, un tableau
+annoté de bonne longueur dont le premier élément diverge devenait
+`E-TYP-AMBIGUOUS` au lieu d'être accepté (TYP-1.6).
+
+Les autres mutants survivants de la campagne initiale ont été tués par sept
+ancres ajoutées dans `crates/ravum-lang-sema/tests/typeck_contracts.rs` :
+plage de motif entier, motifs littéraux des trois autres familles sur une
+scrutinee `!`, tableau répété annoté, et couverture wildcard pour `bool`, enum,
+`Option` et `Result` (12/12 mutants de `cover_pattern` tués après cette ancre).

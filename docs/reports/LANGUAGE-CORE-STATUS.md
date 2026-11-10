@@ -1,15 +1,17 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour passe 3 — 2026-11-10, SHA `29cc79e`.** En plus des deux faux
-> `PASS` de validation corrigés en P0, un défaut de soundness du typechecker a
-> été corrigé (tableaux hétérogènes acceptés : `[1, true]` passait le checker
-> alors que le codegen émettait du Rust invalide). Mesures courantes : **84
-> suites, 1122 passés / 0 échec / 2 ignorés** ; conformance **346 cas, 345 PASS
-> / 0 FAIL / 1 SKIP** ; **188/188** règles satisfaites (1 exemption) ; registre
-> **112 codes, 0 hors registre, 0 jamais émis** ; couverture sema **78,3 %** de
-> lignes (`typeck.rs` 73,6 %, `own.rs` 89,9 %, `types.rs` 100 %), objectifs
-> 90/85 non atteints ; harnais VS Code stabilisé (10/10 au repos et sous
-> charge), job CI `vscode-e2e.yml` ajouté mais pas encore exécuté. Le corps de ce document et son tableau
+> **Mise à jour passe 3 — 2026-11-10, SHA `a6e71e7`.** En plus des deux faux
+> `PASS` de validation corrigés en P0, deux défauts réels ont été corrigés : les
+> tableaux hétérogènes étaient acceptés (`[1, true]` passait le checker alors
+> que le codegen émettait du Rust invalide) et un motif entier sur une
+> scrutinee `!` était refusé alors que les motifs bool/caractère/texte étaient
+> acceptés. Mesures courantes : **84 suites, 1129 passés / 0 échec / 2
+> ignorés** ; conformance **346 cas, 345 PASS / 0 FAIL / 1 SKIP** ; **188/188**
+> règles satisfaites (1 exemption) ; registre **112 codes, 0 hors registre, 0
+> jamais émis** ; couverture sema **79,4 %** de lignes (`typeck.rs` 76,9 %,
+> `own.rs` 90,1 %, `types.rs` 100 %), objectifs 90/85 non atteints ; harnais VS
+> Code stabilisé et **job CI `vscode-e2e` vert** (push `42858553296`, PR
+> `42858866200`) ; gates **5 PASS / 6 PARTIAL / 2 BLOCKED**. Le corps de ce document et son tableau
 > de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
 > comme l'état courant, le registre canonique est
 > [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).

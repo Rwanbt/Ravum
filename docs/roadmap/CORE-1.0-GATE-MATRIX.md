@@ -26,21 +26,22 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures (passe 3, SHA `29cc79e`, 2026-11-10)
+## 1. Mesures (passe 3, SHA `a6e71e7`, 2026-11-10)
 
 ### Passe 3 — mesures courantes
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **84 suites, 1122 passés / 0 échec / 2 ignorés** (exit 0) |
+| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **84 suites, 1129 passés / 0 échec / 2 ignorés** (exit 0) |
 | **VS Code réel — au repos** | `node tools/vscode-ravum/test/runTest.js` | **10/10 en 5 s** |
 | **VS Code réel — sous charge** | idem, pendant `cargo test --workspace` concurrent | **10/10 en 4 s** ; harnais corrigé (timeout Mocha 300 s, attente 180 s, barrière de disponibilité LSP) |
 | **CI VS Code** | workflow `vscode-e2e.yml` | **créé** (build CLI + `npm ci` + `xvfb-run` + suite réelle) ; premier run à confirmer |
 | Conformance | `cargo run -p ravum-conformance -- run` | **346 cas : 345 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
-| **Contrats typechecker** | `cargo test -p ravum-lang-sema --test typeck_contracts` | **88 PASS / 0 FAIL** |
+| **Contrats typechecker** | `cargo test -p ravum-lang-sema --test typeck_contracts` | **95 PASS / 0 FAIL** |
 | **Audit borrow checker** | `cargo test -p ravum-lang-sema --test own_audit` | **92 PASS / 0 FAIL** |
-| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --summary-only` | **78,3 % lignes / 78,8 % régions** sur sema ; `types.rs` 100 %, `own.rs` 89,9 %, `typeck.rs` 73,6 %, `resolve.rs` 67,3 % — **objectifs 90/85 non atteints** ; mesure locale non câblée en CI |
+| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --summary-only` | **79,4 % lignes / 79,7 % régions** sur sema ; `types.rs` 100 %, `own.rs` 90,1 %, `typeck.rs` 76,9 %, `resolve.rs` 67,4 % — **objectifs 90/85 non atteints** ; mesure locale non câblée en CI |
 | **Mutation `own.rs`** | `cargo mutants ... --regex 'eval_loop\|eval_for\|eval_call'` | **22 mutants : 12 caught, 10 équivalents, 0 non expliqué** ; `eval_method_call` **4/4 caught** — voir [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
+| **Mutation `typeck.rs` (passe 1)** | `cargo mutants ... --file crates/ravum-lang-sema/src/typeck.rs --regex 'check_lit_pattern\|check_path_pattern\|cover_pattern\|check_array'` | **49 mutants : 38 tués, 7 survivants expliqués, 4 unviables** (dont 4 morts par construction tant que D-PAT-1 refuse les motifs négatifs) |
 
 ### Passe 2 — mesures antérieures (SHA `a5744ea`)
 
@@ -199,14 +200,14 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
 | T2 | `PASS` | 346 cas : **345 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées ; 1 contradiction `grammar.md` ↔ `diagnostics.md` **enregistrée** (motifs flottants/négatifs, décision **D-PAT-1**) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1122 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
-| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** : timeouts 300 s, attente 180 s, barrière de disponibilité LSP ; **10/10 au repos et 10/10 sous `cargo test --workspace` concurrent** (4–5 s) ; workflow CI `vscode-e2e.yml` ajouté | La preuve E2E reste **locale** : le job CI `vscode-e2e` n'a pas encore tourné. Aucune régression fonctionnelle connue | Confirmation CI du job `vscode-e2e` |
+| T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1122 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **78,3 %** (`types.rs` 100 %, `own.rs` 89,9 %, `typeck` 73,6 %, `resolve` 67,3 %) sous les objectifs 90/85 ; mutation testing ciblé seul (équivalents documentés) | Audit externe |
+| T10 | `PARTIAL` | 1129 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** ; mutation ciblée `types.rs` (53 mutants, 0 survivant viable), `own.rs` (22 mutants, 0 survivant non expliqué) et `typeck.rs` (49 mutants, 7 survivants expliqués) | **Audit externe absent** ; couverture lignes sema **79,4 %** (`types.rs` 100 %, `own.rs` 90,1 %, `typeck` 76,9 %, `resolve` 67,4 %) sous les objectifs 90/85 ; campagne de mutation non exhaustive (4 fonctions de `own.rs`, 4 de `typeck.rs`) | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -345,7 +346,7 @@ temps réel dur explicitement `UNSUPPORTED` — conformément à la spec, donc p
 périmètre réduit inventé. Les exigences T6 obligatoires non couvertes restent
 absentes.
 
-### T7 — Environnement de développement — `PARTIAL` (rejeu VS Code contesté)
+### T7 — Environnement de développement — `PASS` (harnais stabilisé et rejoué en CI)
 
 Preuve historique : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md).
 
@@ -366,9 +367,14 @@ Preuve historique : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md)
 - **Preuves après correction** : **10/10 en 5 s au repos**, puis **10/10 en
   4 s** pendant que `cargo test --workspace` tournait en parallèle — le scénario
   exact qui produisait 3/10.
-- **Reste à confirmer** : le workflow `vscode-e2e.yml` (xvfb + VS Code réel +
-  build CLI) est ajouté mais n'a pas encore tourné en CI. T7 reste `PARTIAL`
-  jusqu'à ce run ; la preuve locale est documentée, pas convertie en `PASS`.
+- **Rejeu en CI (2026-11-10, SHA `9972391`, code `29cc79e`)** : le workflow
+  `vscode-e2e.yml` (build CLI + `npm ci` + `xvfb-run` + VS Code réel + LSP réel)
+  est **vert** sur le push (`42858553296`, 49 s) **et** sur la PR
+  (`42858866200`, 1 m 04 s). C'est la preuve qui manquait : la suite s'exécute
+  désormais dans un job CI, pas seulement sur la machine de l'auteur.
+- **Risque résiduel** : flakiness E2E ordinaire d'une suite Electron sur un
+  runner partagé, et aucune couverture Windows/macOS de ce job. Aucun échec
+  observé depuis le correctif (2 runs locaux sous charge, 2 runs CI).
 
 ### T8 — Compilation continue et hot reload — `PARTIAL`
 
