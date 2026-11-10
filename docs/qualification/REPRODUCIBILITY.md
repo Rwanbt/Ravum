@@ -12,7 +12,7 @@
 | Profil | `release` |
 | Cible vérifiée | `ravum-lang-cli` → `ravum-lang.exe` |
 | Commande | `pwsh -File scripts/repro-check.ps1` |
-| Résultat | **deux builds identiques**, `sha256 = 75786AEF92B4B69356A1DD9F4639FE95E3FA0F4B8BC6A6C51FF7D4B772033EEB` |
+| Résultat | **deux builds identiques**, `sha256 = 3B606F6BE6B76EF94D943A57169445CD1C666FFDB3B77E828E90C7801A579E9B` (arbre du 2026-11-10) |
 
 ## 1. Ce que le test fait exactement
 
@@ -63,8 +63,8 @@ remise à zéro des chemins absolus :
 
 | Configuration | Hashes | Verdict |
 |---|---|---|
-| Deux `target/` différents, même racine, `SOURCE_DATE_EPOCH=0` + `/Brepro` | `75786AEF…` deux fois | **identiques** |
-| Racine A + `target/` A **vs** racine B (copie) + `target/` B, avec `--remap-path-prefix` | `75786AEF…` deux fois | **identiques** |
+| Deux `target/` différents, même racine, `SOURCE_DATE_EPOCH=0` + `/Brepro` | `3B606F6B…` deux fois | **identiques** |
+| Racine A + `target/` A **vs** racine B (copie) + `target/` B, avec `--remap-path-prefix` | `3B606F6B…` deux fois | **identiques** |
 
 Le second point est le seul qui compte : il montre que le binaire ne dépend ni du
 chemin absolu de l'arbre, ni du répertoire de build, ni de l'heure.
@@ -73,7 +73,7 @@ chemin absolu de l'arbre, ni du répertoire de build, ni de l'heure.
 
 ```powershell
 pwsh -File scripts/repro-check.ps1
-# repro-check: A = 75786AEF…
+# repro-check: A = 3B606F6B…
 # repro-check: B = 75786AEF…
 # repro-check: PASS — the two builds are bit-for-bit identical
 ```
@@ -83,7 +83,7 @@ supprime tout par défaut.
 
 ## 5. Limites explicites
 
-- **Un seul binaire** : `ravum-lang.exe`. Les autres binaires du workspace
+- **La valeur du hash dépend de l'arbre** : elle change dès qu'une ligne de code change ; c'est le but, et ce n'est donc pas une constante à citer hors de son SHA.\n- **Un seul binaire** : `ravum-lang.exe`. Les autres binaires du workspace
   (outillage, coordonnateur) ne sont pas couverts.
 - **Une seule plateforme** : Windows x86-64. Sur Linux, le drapeau `/Brepro`
   n'existe pas ; le script substitue `-Wl,--build-id=sha1`, mais **cette branche

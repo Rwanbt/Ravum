@@ -14,7 +14,7 @@
 | Extension | `tools/vscode-ravum` (extension de développement, `publisher.ravum-lang`) |
 | Serveur | `target/debug/ravum-lang.exe lsp` — binaire réel, `stdio` |
 | Lanceur | `node tools/vscode-ravum/test/runTest.js` |
-| Résultat | **10 tests, 10 PASS / 0 FAIL** (~4 s après démarrage de la fenêtre) |
+| Résultat | **10 tests, 10 PASS / 0 FAIL** — rejoué après les 14 correctifs du compilateur |
 
 ## 1. Ce qui est réellement prouvé
 
