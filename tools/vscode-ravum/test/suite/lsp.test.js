@@ -12,13 +12,14 @@ const path = require("path");
 const vscode = require("vscode");
 
 const workspace = process.env.RAVUM_E2E_WORKSPACE;
+assert.ok(workspace, "RAVUM_E2E_WORKSPACE must be set by test/runTest.js");
 const mainPath = path.join(workspace, "src", "main.rv");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitFor(label, predicate, timeoutMs = 90000, intervalMs = 200) {
+async function waitFor(label, predicate, timeoutMs = 180000, intervalMs = 250) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const value = await predicate();
@@ -103,6 +104,23 @@ describe("Ravum language support inside a real VS Code session", () => {
 
     document = await vscode.workspace.openTextDocument(vscode.Uri.file(mainPath));
     editor = await vscode.window.showTextDocument(document);
+
+    // Readiness barrier: prove once, with a generous budget, that the language
+    // server is answering before the timed assertions start. On a loaded
+    // machine the first analysis of the workspace can take minutes; failing a
+    // *feature* test on that startup latency reported a false defect (T7).
+    await waitFor(
+      "the ravum-lang server to answer documentSymbol",
+      async () => {
+        const found = await vscode.commands.executeCommand(
+          "vscode.executeDocumentSymbolProvider",
+          document.uri
+        );
+        return found && found.length > 0 ? found : undefined;
+      },
+      240000,
+      500
+    );
   });
 
   it("opens the package as a Ravum buffer with the syntax grammar", async () => {

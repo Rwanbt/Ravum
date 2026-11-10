@@ -3678,7 +3678,27 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
             }
         }
+        let annotated_elem = expected_elem.is_some();
         let elem = expected_elem.unwrap_or_else(|| types[0].clone());
+        // TYP-4: an array is homogeneous (`[T; N]`). Without an annotation the
+        // first element fixes `T`, so every later element must have the same
+        // type; otherwise `[1, true]` would be accepted and the generated Rust
+        // (`[1, true]`) would not compile. With an annotation each element was
+        // already checked against the expected element type above.
+        if !annotated_elem {
+            for (item, ty) in items.iter().zip(types.iter()).skip(1) {
+                if !Self::compatible(ty, &elem) {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        item.span,
+                        format!(
+                            "array elements must all have the same type: \
+                             the first element has type `{elem}`, this one has type `{ty}`"
+                        ),
+                    );
+                }
+            }
+        }
         // TYP-1.6: without an annotation, a leading `!` leaves the element type
         // uninferable; `[panic(), …]` would otherwise generate `[!; N]`.
         if contains_never(&elem) {

@@ -6,7 +6,11 @@ const Mocha = require("mocha");
 function run() {
   const mocha = new Mocha({
     ui: "bdd",
-    timeout: 180000,
+    // The extension host starts a real `ravum-lang lsp` child process. Under a
+    // loaded machine (concurrent cargo builds, CI runners) activation and the
+    // first LSP round-trip can take far longer than the old 3-minute budget,
+    // which used to fail the suite as a timeout rather than a real defect.
+    timeout: 300000,
     color: true,
   });
   mocha.addFile(path.join(__dirname, "lsp.test.js"));

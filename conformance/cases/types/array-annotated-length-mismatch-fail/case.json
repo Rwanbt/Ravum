@@ -1,0 +1,8 @@
+{
+  "id": "types/array-annotated-length-mismatch-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "An array annotation carries its length: `[i32; 3] = [1, 2]` is E-TYP-MISMATCH."
+}

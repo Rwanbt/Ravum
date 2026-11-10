@@ -1419,3 +1419,105 @@ fn f() {
         "E-OWN-REF-ESCAPE",
     );
 }
+
+// ===========================================================================
+// Method-signature argument mapping (receiver excluded from `params`)
+// ===========================================================================
+
+#[test]
+fn audit_method_reference_argument_is_reborrowed_not_stored() {
+    // OWN-6.2: the declared parameter after `self` is `&String`, so passing an
+    // existing reference variable is a reborrow for the call, not a storing
+    // write of the referent. If the receiver signature (`self: D`) were used as
+    // the first argument type instead, the checker would report a spurious
+    // ref-escape. This is the regression anchor for that off-by-one mapping.
+    accepted(
+        r#"
+struct D { n: i32 }
+impl D {
+    fn consomme(self, autre: &String) -> usize {
+        return autre.len();
+    }
+}
+fn f(d: D, r: &String) -> usize {
+    return d.consomme(r);
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_method_shared_receiver_accepts_reference_argument() {
+    // Same mapping for a `&self` receiver: the argument must be checked against
+    // `autre: &String`, not against the receiver type.
+    accepted(
+        r#"
+struct D { n: i32 }
+impl D {
+    fn lit(&self, autre: &String) -> usize {
+        return autre.len();
+    }
+}
+fn f(d: &D, r: &String) -> usize {
+    return d.lit(r);
+}
+"#,
+    );
+}
+
+// ===========================================================================
+// Loop fixpoint semantics (OWN-5.7)
+// ===========================================================================
+
+#[test]
+fn audit_for_loop_body_move_then_use_after_is_rejected() {
+    // The `for` header fixpoint joins the body state: a move performed by the
+    // body is visible on the exit path.
+    rejected(
+        r#"
+fn f(v: Vec<String>) -> usize {
+    for item in v {
+        drop(item);
+    }
+    return v.len();
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
+fn audit_while_continue_rejoins_header_state() {
+    // `continue` contributes to the header fixpoint: a move before `continue`
+    // makes the loop variable moved on later iterations, so using it after the
+    // loop is rejected.
+    rejected(
+        r#"
+fn f(c: bool, s: String) -> usize {
+    while c {
+        drop(s);
+        continue;
+    }
+    return s.len();
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
+fn audit_loop_body_move_is_visible_on_next_iteration() {
+    // `loop` always re-enters its body: the header fixpoint carries the move
+    // performed by the body, so the second iteration moves `s` again. This is
+    // the regression anchor for the body-state join in the fixpoint pass.
+    rejected(
+        r#"
+fn f(s: String) {
+    loop {
+        drop(s);
+    }
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}

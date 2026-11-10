@@ -1,0 +1,67 @@
+name: VS Code integration (real editor)
+
+# T7 evidence: this workflow runs the *real* VS Code integration suite against
+# the real `ravum-lang lsp` server. It is deliberately separate from the Linux
+# qualification workflow because it needs a display server and a downloaded VS
+# Code build, and because a failure here must be attributable to the editor
+# harness rather than to the compiler gates.
+#
+# Scope notice: a green run proves the editor -> LSP client -> `ravum-lang lsp`
+# -> checker chain works for the assertions in
+# `tools/vscode-ravum/test/suite/lsp.test.js`. It does not prove editor
+# behaviour on Windows/macOS, and it does not prove compiler correctness.
+
+on:
+  push:
+    branches: [main, dev, 'feat/**']
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  vscode-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: vscode-e2e
+
+      - name: Build the language server
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the extension test dependencies
+        working-directory: tools/vscode-ravum
+        run: npm ci --no-audit --no-fund
+
+      - name: Run the suite inside a real VS Code instance
+        working-directory: tools/vscode-ravum
+        env:
+          RAVUM_LSP_BIN: ${{ github.workspace }}/target/debug/ravum-lang
+          # Keep the run logs if a test fails; the default cleanup only removes
+          # the temporary workspace, not the log directory.
+          RAVUM_E2E_KEEP: '1'
+        run: |
+          set -o pipefail
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            node test/runTest.js 2>&1 | tee vscode-e2e.log
+
+      - name: Upload the run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-e2e-log
+          path: |
+            tools/vscode-ravum/vscode-e2e.log
+            tools/vscode-ravum/.vscode-test/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
