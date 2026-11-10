@@ -4,5 +4,5 @@
   "expect_codes": [
     "E-RES-UNKNOWN"
   ],
-  "notes": "F-TYP-018 (TYP-12.2): no size_of intrinsic exists in Core 1.0."
+  "notes": "F-TYP-018 (TYP-12.2): no size_of intrinsic exists in Core 1.0, so any use is a resolution failure. The original source used `size_of::<i32>()`, which DIAG-1.4 makes unreachable: the turbofish is a parse error (F-UNS-019), and an early phase prevents later phases on the same node, so the expected resolution code could never be produced. The source now uses the reachable form; the expected code and the requirement are unchanged."
 }

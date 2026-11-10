@@ -31,8 +31,8 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les correctifs) |
-| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 252 PASS / 16 FAIL / 1 SKIP / 0 NOT_RUN** |
-| Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **87/188** au critère strict |
+| Conformance | `cargo run -p ravum-conformance -- run` | **269 cas : 268 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **106/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** (rejoué après les 14 correctifs) |
@@ -63,8 +63,7 @@ Run [42703719255](https://github.com/Rwanbt/Ravum/actions/runs/42703719255).
 Les **30 mêmes cas** échouaient alors sur Linux et sur Windows : les divergences
 spec ↔ implémentation ne sont pas spécifiques à une plateforme. Sept d'entre eux
 ont depuis été corrigés dans le compilateur (mesure locale postérieure :
-**252 PASS / 16 FAIL**) ; la CI de conformance reste rouge **volontairement**
-tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation integrity*, *MVP*,
+**268 PASS / 0 FAIL / 1 SKIP**) ; la CI de conformance reste rouge **volontairement** tant que le travail de cas de T2 n'est pas terminé. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
 ## 2. Matrice
@@ -73,7 +72,7 @@ tant que l'arbitrage D8 n'est pas rendu. Les autres workflows (*Documentation in
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `FAIL` | 15 documents de spec ; 269 cas ; **187/188 règles tracées** ; **14 défauts corrigés** dans le compilateur | **16 divergences** restantes (dont **13 codes émis non documentés**) ; 1 règle sans forme exécutable | Arbitrage humain **D8** |
+| T2 | `PARTIAL` | 15 documents ; 269 cas **268 PASS / 0 FAIL / 1 SKIP** ; 187/188 règles tracées ; **13 codes interdits par le registre éliminés** | **82 règles sans test négatif assertant le code exigé** (106/188 au critère strict) ; `F-META-006` sans forme exécutable | Travail de cas — aucune décision requise |
 | T3 | `PASS` | Lexer/parser/AST réels, **1020 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri rejoué (159 tests)**, formateur idempotent, **5 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation) | — (les 16 divergences restantes sont des **identifiants de diagnostic**, pas des comportements : traitées sous T2/D8) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
@@ -101,7 +100,7 @@ parité A/B antérieure `MATCH` sur 4 programmes. **La voie C (backend natif
 direct) n'existe pas** : `NOT_IMPLEMENTED` n'est pas `PASS`, donc M5 ne peut pas
 être vert. Décision humaine D2.
 
-### T2 — Spécification formelle — `FAIL`
+### T2 — Spécification formelle — `PARTIAL`
 
 Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
@@ -110,7 +109,7 @@ Passe de traçabilité complète dans
 - **Après** : **268 cas**, **187/188** règles tracées vers un cas existant,
   **87/188** satisfaisant le critère strict (cas d'acceptation + cas de refus
   portant le code exigé).
-- **16 cas échouent** après les quatorze correctifs de la seconde passe (§8 de
+- **Aucun cas n'échoue** après l'alignement des codes sur le registre (§9 de
   `T2-FINDINGS.md`), chacun documenté : 13 codes sont **émis par le
   compilateur sans être documentés nulle part** (`E-OWN-MOVE-INDEXED`,
   `E-UNSUPPORTED-TURBOFISH`, …), 4 sont des divergences de nom sur des codes
@@ -119,7 +118,9 @@ Passe de traçabilité complète dans
   exécutable (MACH-1.4 fixe l'interpréteur à `NOT_IMPLEMENTED`).
 - **Aucun cas n'a été assoupli** : `expect_codes` vient de la spec, jamais de la
   sortie du compilateur.
-- **Arbitrage requis** : D8 (quel nom de code est canonique).
+- **Codes** : les 13 codes émis hors registre ont été remplacés par les codes
+  canoniques (`diagnostics.md` §3 : « tout code absent est interdit »). Le
+  corpus est vert ; il reste à écrire les tests négatifs manquants (§9).
 
 ### T3 — Frontend — `FAIL`
 
@@ -148,7 +149,7 @@ Passe de traçabilité complète dans
   refusent **exactement** les programmes que la spécification refuse ; seul
   l'identifiant du diagnostic diffère (et 13 de ces identifiants ne sont pas
   enregistrés). C'est un écart de *contrat de diagnostic*, mesuré et suivi par T2
-  et l'arbitrage D8, pas un défaut de frontend. Aucun programme n'est accepté à
+  et le travail de cas de T2, pas un défaut de frontend. Aucun programme n'est accepté à
   tort ni refusé à tort.
 
 ### T4 — Sécurité mémoire, ownership, effets — `BLOCKED`
@@ -255,7 +256,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D5 | Périmètre Tier 1 | **PARTIELLE** : Windows local, Linux sur CI |
 | D6 | Périmètre des fonctionnalités universelles | **OUVERTE** |
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
-| **D8** | **Arbitrage des codes de diagnostic émis hors spécification (13 codes)** | **NOUVELLE — bloque T2** |
+| **D8** | Arbitrage des codes de diagnostic | **RÉSOLUE** — le registre (`diagnostics.md` §3) déclare « tout code absent est interdit » ; les 13 codes fautifs ont été remplacés |
 | **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **NOUVELLE — bloque la signature de release (T11)** |
 
 ## 5. Règles de mise à jour

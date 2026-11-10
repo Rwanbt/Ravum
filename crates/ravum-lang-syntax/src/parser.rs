@@ -309,6 +309,9 @@ struct Parser<'a> {
     /// True only while parsing the iterator of a `for`: a range is legal there
     /// and nowhere else (E-UNSUPPORTED-RANGE, parse phase).
     in_for_iter: bool,
+    /// True while parsing the return type of a function: `!` there is
+    /// `E-TYP-RETURN`, elsewhere `E-TYP-MISMATCH`.
+    in_return_type: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -334,6 +337,7 @@ impl<'a> Parser<'a> {
             forbid_assign: 0,
             paren_exprs: BTreeSet::new(),
             in_for_iter: false,
+            in_return_type: false,
         }
     }
 
@@ -1115,7 +1119,7 @@ impl<'a> Parser<'a> {
             let star = self.peek_at(1).span;
             self.bump_n(2);
             self.diags.error(
-                "E-UNSUPPORTED-GLOB",
+                "E-UNSUPPORTED-TOKEN",
                 star,
                 "glob imports (`use foo::*;`) are not supported in Ravum Core 1.0",
             );
@@ -1123,7 +1127,7 @@ impl<'a> Parser<'a> {
             let star = self.cur_span();
             self.bump();
             self.diags.error(
-                "E-UNSUPPORTED-GLOB",
+                "E-UNSUPPORTED-TOKEN",
                 star,
                 "glob imports (`use foo::*;`) are not supported in Ravum Core 1.0",
             );
@@ -1365,7 +1369,11 @@ impl<'a> Parser<'a> {
             self.expected("`(`");
         }
         let ret = if self.eat(Punct::Arrow) {
-            self.parse_type()
+            let outer = self.in_return_type;
+            self.in_return_type = true;
+            let ty = self.parse_type();
+            self.in_return_type = outer;
+            ty
         } else {
             let span = self.zero_span();
             self.unit_type(span)
@@ -1747,8 +1755,18 @@ impl<'a> Parser<'a> {
         if self.at_kw(Kw::For) {
             let span = self.cur_span();
             self.bump();
+            // `impl Drop` has its own registered code (`E-UNSUPPORTED-DROP-IMPL`);
+            // every other trait implementation is covered by `E-UNSUPPORTED-TRAIT`.
+            let is_drop = matches!(
+                &self_ty.kind,
+                crate::ast::TypeKind::Path(path) if path.display() == "Drop"
+            );
             self.diags.error(
-                "E-UNSUPPORTED-TRAIT-IMPL",
+                if is_drop {
+                    "E-UNSUPPORTED-DROP-IMPL"
+                } else {
+                    "E-UNSUPPORTED-TRAIT"
+                },
                 span,
                 "trait implementations (`impl Trait for Type`) are not supported in Ravum Core 1.0",
             );
@@ -2076,8 +2094,15 @@ impl<'a> Parser<'a> {
                 self.infer_type(self.span_from(start))
             }
             TokenKind::Punct(Punct::Bang) => {
+                // `!` is not nameable (G-5.11). In return position the failure is
+                // about the signature (`E-TYP-RETURN`); anywhere else it is a type
+                // mismatch. Both codes are registered; `E-UNSUPPORTED-TYPE` was not.
                 self.diags.error(
-                    "E-UNSUPPORTED-TYPE",
+                    if self.in_return_type {
+                        "E-TYP-RETURN"
+                    } else {
+                        "E-TYP-MISMATCH"
+                    },
                     start,
                     "the never type (`!`) is not supported in Ravum Core 1.0",
                 );
@@ -2400,7 +2425,7 @@ impl<'a> Parser<'a> {
             let op = self.cur_span();
             self.bump();
             self.diags.error(
-                "E-UNSUPPORTED-OR-PAT",
+                "E-UNSUPPORTED-TOKEN",
                 op,
                 "or-patterns (`a | b`) are not supported in Ravum Core 1.0",
             );
@@ -2439,7 +2464,7 @@ impl<'a> Parser<'a> {
             TokenKind::Ident(ref name) if name == "ref" && self.starts_pattern_at(1) => {
                 let span = start;
                 self.diags.error(
-                    "E-UNSUPPORTED-REF-PAT",
+                    "E-UNSUPPORTED-TOKEN",
                     span,
                     "`ref`/`ref mut` patterns are not supported in Ravum Core 1.0",
                 );
@@ -5242,7 +5267,7 @@ mod inner {
             ("#[derive(Clone)]\nstruct S;", "E-UNSUPPORTED-ATTR", 0),
             ("fn f<T>() where T: X {}", "E-UNSUPPORTED-WHERE", 10),
             ("fn f<T: Clone>() {}", "E-UNSUPPORTED-BOUNDS", 6),
-            ("use foo::*;", "E-UNSUPPORTED-GLOB", 9),
+            ("use foo::*;", "E-UNSUPPORTED-TOKEN", 9),
             ("use foo as bar;", "E-UNSUPPORTED-ALIAS", 8),
             ("pub use foo::bar;", "E-UNSUPPORTED-REEXPORT", 0),
             ("pub(crate) fn f() {}", "E-UNSUPPORTED-VIS", 0),

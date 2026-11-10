@@ -48,12 +48,12 @@
 //!   Réaffecter exactement la projection déplacée la réinitialise. Un move de
 //!   champ hors de `self` possédé (`fn into_titre(self) -> String`) est accepté.
 //! * **Moves interdits** : le move à travers une référence (`*r` mobile) est
-//!   `E-OWN-MOVE-BORROWED` ; le move d'un élément de `Vec` par indexation est
-//!   `E-OWN-MOVE-INDEXED` (`spec/language/ownership.md` §5.5). Le code retenu
-//!   est celui du contrat (`E-OWN-MOVE-BORROWED`) ; `E-OWN-MOVE-OUT-OF-BORROW`,
+//!   `E-OWN-MOVE-OUT-OF-BORROW` ; le move d'un élément de `Vec` par indexation est
+//!   `E-OWN-PARTIAL-MOVE` (`spec/language/ownership.md` §5.5). Le code retenu
+//!   est celui du contrat (`E-OWN-MOVE-OUT-OF-BORROW`) ; `E-OWN-MOVE-OUT-OF-BORROW`,
 //!   cité par la mission, n'est pas émis pour ne pas dupliquer un code.
 //! * **Répétition de tableau** : `[e; n]` exige une valeur `Copy`, sinon
-//!   `E-OWN-NOT-COPY` (OWN-2.5).
+//!   `E-TYP-ARRAY-REPEAT` (OWN-2.5).
 //! * **Non couvert volontairement** : mutabilité des places (`E-OWN-IMMUTABLE`,
 //!   émise par le type-checker), l'ordre de destruction (non observable en
 //!   Core 1.0), et la vérification des signatures de retour de référence
@@ -82,11 +82,11 @@ const E_UNINIT: &str = "E-OWN-UNINIT";
 const E_USE_AFTER_MOVE: &str = "E-OWN-USE-AFTER-MOVE";
 const E_DOUBLE_MOVE: &str = "E-OWN-DOUBLE-MOVE";
 const E_PARTIAL_MOVE: &str = "E-OWN-PARTIAL-MOVE";
-const E_MOVE_INDEXED: &str = "E-OWN-MOVE-INDEXED";
-const E_MOVE_BORROWED: &str = "E-OWN-MOVE-BORROWED";
+const E_MOVE_INDEXED: &str = "E-OWN-PARTIAL-MOVE";
+const E_MOVE_BORROWED: &str = "E-OWN-MOVE-OUT-OF-BORROW";
 const E_BORROW_CONFLICT: &str = "E-OWN-BORROW-CONFLICT";
 const E_REF_ESCAPE: &str = "E-OWN-REF-ESCAPE";
-const E_NOT_COPY: &str = "E-OWN-NOT-COPY";
+const E_NOT_COPY: &str = "E-TYP-ARRAY-REPEAT";
 const E_LIMIT: &str = "E-OWN-LIMIT";
 
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
@@ -2796,7 +2796,7 @@ fn f(d: &mut D) -> String {
     return d.titre;
 }
 "#,
-            "E-OWN-MOVE-BORROWED",
+            "E-OWN-MOVE-OUT-OF-BORROW",
         );
     }
 
@@ -2808,7 +2808,7 @@ fn f(v: Vec<String>) -> String {
     return v[0];
 }
 "#,
-            "E-OWN-MOVE-INDEXED",
+            "E-OWN-PARTIAL-MOVE",
         );
     }
 

@@ -547,7 +547,7 @@ impl PathError {
 
     fn variant_unqualified(name: &str, enum_name: &str) -> Self {
         Self {
-            code: "E-RES-VARIANT-UNQUALIFIED",
+            code: "E-RES-UNKNOWN",
             message: format!(
                 "variant `{name}` must be qualified as `{enum_name}::{name}` in Core 1.0"
             ),
@@ -583,7 +583,7 @@ pub(crate) fn resolve_value_path(
         let name = &segments[0].name.name;
         if !segments[0].args.is_empty() {
             return Err(PathError {
-                code: "E-UNSUPPORTED-TURBOFISH",
+                code: "E-PARSE-UNEXPECTED",
                 message: "explicit generic arguments are not supported in expressions".to_string(),
             });
         }
@@ -1161,7 +1161,7 @@ fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
             }
             UseTarget::Variant => {
                 diags.error(
-                    "E-RES-VARIANT-UNQUALIFIED",
+                    "E-RES-UNKNOWN",
                     use_item.span,
                     format!("variant import `{display}` is not supported in Core 1.0"),
                 );
@@ -1920,7 +1920,7 @@ fn resolve_impl(
             Type::Nominal { def, .. } if ctx.world.nominal_kind(*def).is_some() => *def,
             _ => {
                 ctx.error(
-                    "E-RES-IMPL-FOREIGN",
+                    "E-RES-IMPL-SELF-TYPE",
                     imp.self_ty.span,
                     "`impl` target must be a nominal type defined in this package".to_string(),
                 );
@@ -2127,14 +2127,14 @@ fn array_length(
         } => {
             if *value == 0 {
                 diags.error(
-                    "E-TYP-ARRAY-LEN",
+                    "E-TYP-ARRAY-REPEAT",
                     len.span,
                     "array length must be greater than zero".to_string(),
                 );
                 None
             } else if *value > usize::MAX as u128 {
                 diags.error(
-                    "E-TYP-ARRAY-LEN",
+                    "E-TYP-ARRAY-REPEAT",
                     len.span,
                     "array length does not fit in `usize`".to_string(),
                 );
@@ -2145,7 +2145,7 @@ fn array_length(
         }
         _ => {
             diags.error(
-                "E-TYP-ARRAY-LEN",
+                "E-TYP-ARRAY-REPEAT",
                 len.span,
                 "array length must be a positive decimal integer literal".to_string(),
             );

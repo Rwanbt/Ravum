@@ -1,5 +1,5 @@
 fn g() -> usize {
-    return size_of::<i32>();
+    return size_of(1);
 }
 
 fn main() {

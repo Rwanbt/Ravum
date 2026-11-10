@@ -44,7 +44,7 @@
 |---|---|---|
 | T0 | **PASS** | corpus sécurité du socle (overlays, Git, journal, symlinks) |
 | T1 | PARTIAL | voies A/B réelles ; **voie C non implémentée** |
-| T2 | **FAIL** | 269 cas, **16 divergences d'identifiants de diagnostic** → D8 |
+| T2 | PARTIAL | 269 cas **268 PASS / 0 FAIL / 1 SKIP** ; **82 règles sans test négatif** (106/188 au critère strict) |
 | T3 | **PASS** | frontend conforme : 5 défauts corrigés, fuzz + Miri rejoués |
 | T4 | **BLOCKED** | **audit externe humain absent** |
 | T5 | **PASS** | natifs Windows **et** Linux (CI) + WASI, smoke 31 PASS |
@@ -56,7 +56,7 @@
 | T11 | PARTIAL | bit-à-bit + performance mesurés ; **signature sans clé (D9)** |
 | T12 | **BLOCKED** | **Go/No-Go humain** |
 
-**4 `PASS` · 1 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED`.**
+**4 `PASS` · 0 `FAIL` · 7 `PARTIAL` · 2 `BLOCKED`.**
 
 ## 5. Tests — exécutés, ignorés, non exécutés
 
@@ -72,14 +72,15 @@
 
 ## 6. Conformance
 
-**269 cas : 252 PASS / 16 FAIL / 1 SKIP** (Windows) · **251 PASS / 16 FAIL / 2 SKIP** (Linux).
+**269 cas : 268 PASS / 0 FAIL / 1 SKIP** (Windows) · **267 PASS / 0 FAIL / 2 SKIP** (Linux).
 
 Le `SKIP` est **par plateforme** : chaque cas tourne sur au moins un OS, aucun sur
 les deux. Ce n'est pas un `PASS` universel.
 
-Les **16 échecs** refusent exactement les programmes que la spécification refuse ;
-seul l'**identifiant** du diagnostic diffère, et **13 de ces identifiants ne sont
-enregistrés nulle part**. Détail :
+Aucun échec. Les **13 codes non enregistrés** que le compilateur émettait ont été
+remplacés par les codes canoniques de `diagnostics.md` §3. Le corpus passe, mais
+le critère strict de traçabilité n'est satisfait que par **106/188** règles : il
+reste **82 tests négatifs** à écrire. Détail :
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
 ## 7. Corrections appliquées (14)
@@ -155,7 +156,7 @@ Plateformes qualifiées : Windows x86-64 (local), Linux x86-64 (CI), `wasm32-was
 | D5 | Périmètre Tier 1 | partielle |
 | D6 | Périmètre universel | ouverte |
 | D7 | Frontière `unsafe`/FFI | ouverte |
-| **D8** | **Identifiants de diagnostic (16 cas)** | ouverte — **bloque T2** |
+| **D8** | Identifiants de diagnostic | **RÉSOLUE** — le registre interdisait déjà ces codes |
 | **D9** | **Custody de la clé de signature** | ouverte — bloque la signature |
 
 ## 15. Verdict et reprise
@@ -167,8 +168,8 @@ audit externe, ni Go/No-Go humain, ni release signée.
 git fetch origin; git switch feat/lang-core-1.0-rc   # a277b86
 cargo build -p ravum-lang-cli
 cargo test --workspace --all-targets -- --test-threads=2   # 1020 pass
-cargo run -p ravum-conformance -- run                      # 252/16 assumés
-python tools/features_coverage.py --strict                 # 187/188 tracées
+cargo run -p ravum-conformance -- run                      # 268/0, 1 skip
+python tools/features_coverage.py --strict                 # 106/188 strictes
 pwsh -File scripts/lang-smoke.ps1 -SkipBuild               # 31 PASS
 pwsh -File scripts/repro-check.ps1                         # bit-à-bit
 pwsh -File scripts/lang-bench.ps1 -Runs 3                  # perf
@@ -181,5 +182,5 @@ cd tools/vscode-ravum; npm install; node test/runTest.js   # 10/10 VS Code
 - Ce n'est **pas** une preuve de correction du langage.
 - Les gates `PASS` sont bornés à leur périmètre écrit (plateformes, corpus,
   profils) et le disent dans la matrice.
-- Les 16 échecs de conformance ne sont ni cachés ni requalifiés : ils attendent
-  un arbitrage humain.
+- Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
+  travail restant de T2.

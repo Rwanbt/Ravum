@@ -74,6 +74,9 @@ def parse_rows(text: str) -> tuple[list[dict], list[str]]:
                 "pass_fail": record.get("Pass / Fail", record.get("Fonctionnalité refusée", "")),
                 "status": record.get("Statut", ""),
                 "conformance": record["Conformance"],
+                # The `F-UNS` table has no `Pass / Fail` column: every row is a
+                # pure refusal, so no accepting case can exist.
+                "refusal_table": "Pass / Fail" not in record,
             }
         )
     return rows, problems
@@ -142,11 +145,19 @@ def strict_check(row: dict) -> dict:
     for payload in fail_cases.values():
         produced.update(payload.get("expect_codes") or [])
     text = row["pass_fail"]
+    # The pass side may legitimately be empty: a pure-refusal rule says
+    # "pass : aucune" (F-UNS-*, F-OWN-015, ...). Requiring an accepting case
+    # there would demand a program the specification says does not exist.
+    pass_part = text.split("fail", 1)[0] if "fail" in text else text
+    refusal_only = row.get("refusal_table", False) or (
+        "aucun" in pass_part.lower()
+        or not pass_part.replace("pass", "").replace(":", "").strip(" .—-")
+    )
     fail_part = text.split("fail", 1)[1] if "fail" in text else ""
     mandated = set(CODE.findall(fail_part))
     missing_codes = sorted(mandated - produced)
     problems = []
-    if not has_pass:
+    if not has_pass and not refusal_only:
         problems.append("no accepting case")
     if mandated and not fail_cases:
         problems.append("no failing case")

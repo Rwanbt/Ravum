@@ -279,7 +279,7 @@ fn f(s: &String) -> usize {
     return t.len();
 }
 "#,
-        "E-OWN-MOVE-BORROWED",
+        "E-OWN-MOVE-OUT-OF-BORROW",
     );
 }
 
@@ -292,7 +292,7 @@ fn f(d: &mut D) -> String {
     return d.titre;
 }
 "#,
-        "E-OWN-MOVE-BORROWED",
+        "E-OWN-MOVE-OUT-OF-BORROW",
     );
 }
 
@@ -305,7 +305,7 @@ fn f(d: &D) -> String {
     return d.titre;
 }
 "#,
-        "E-OWN-MOVE-BORROWED",
+        "E-OWN-MOVE-OUT-OF-BORROW",
     );
 }
 
@@ -317,7 +317,7 @@ fn f(v: Vec<String>) -> String {
     return v[0];
 }
 "#,
-        "E-OWN-MOVE-INDEXED",
+        "E-OWN-PARTIAL-MOVE",
     );
 }
 
@@ -943,7 +943,7 @@ impl D {
     }
 }
 "#,
-        "E-OWN-MOVE-BORROWED",
+        "E-OWN-MOVE-OUT-OF-BORROW",
     );
 }
 
@@ -958,7 +958,7 @@ impl D {
     }
 }
 "#,
-        "E-OWN-MOVE-BORROWED",
+        "E-OWN-MOVE-OUT-OF-BORROW",
     );
 }
 

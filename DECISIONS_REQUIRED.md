@@ -81,7 +81,7 @@
 - **Sans décision** : FFI utilisable en interne, jamais présentée comme certifiée
   mémoire, jamais dans un profil `pure`/`rt`.
 
-## D8 — Arbitrage des codes de diagnostic émis hors spécification
+## D8 — Codes de diagnostic hors spécification — **RÉSOLUE (auto-corrigée)**
 
 - **Constat mesuré** (2026-11-09, `docs/qualification/T2-FINDINGS.md`) : la passe
   de traçabilité T2 a produit **268 cas** de conformance dont **30 échouent**
@@ -92,8 +92,17 @@
   `E-TYP-ARRAY-LEN`, `E-UNSUPPORTED-GLOB`, `E-UNSUPPORTED-LET-PATTERN`,
   `E-UNSUPPORTED-OR-PAT`, `E-UNSUPPORTED-REF-PAT`, `E-UNSUPPORTED-TRAIT-IMPL`,
   `E-UNSUPPORTED-TURBOFISH`, `E-UNSUPPORTED-TYPE`.
-- **Question posée** : pour chaque condition concernée, quel nom est
-  **canonique** ? Deux options, exclusives :
+- **Correction** : la question ne se posait pas. `spec/language/diagnostics.md`
+  §3 déclare : « La liste des codes ci-dessous est **canonique** : c'est celle
+  que l'implémentation émet. **Tout code absent est interdit.** » (DIAG-1.1
+  impose aussi que tout diagnostic porte un code de §3.) Les 13 codes fautifs
+  violaient donc une règle déjà écrite ; ils ont été **remplacés par les codes
+  enregistrés** que `features.md` exige déjà. **Mon classement initial en
+  « décision humaine » était une erreur** : la spécification avait tranché.
+- **Ce qu'une éventuelle décision humaine pourrait encore changer** (facultatif,
+  non bloquant) : réintroduire des codes plus spécifiques en les **enregistrant**
+  d'abord dans §3, ce qui donnerait des messages plus précis :
+
   - **(a) le nom émis gagne** : l'enregistrer dans `diagnostics.md` §3 (le code
     est plus spécifique) et mettre à jour la colonne `Pass / Fail` de
     `features.md` ;

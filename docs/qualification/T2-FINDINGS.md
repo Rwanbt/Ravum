@@ -16,10 +16,10 @@
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
 | Corpus | **269 cas** (`conformance/cases/`) |
-| Résultat corpus | **252 PASS / 16 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
+| Résultat corpus | **268 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (après l'alignement des codes, §9) |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
-| Règles satisfaisant le critère strict §2 | **87 / 188** |
+| Règles satisfaisant le critère strict §2 | **106 / 188** |
 | Rapport machine | `target/conformance-after-t2.json` |
 
 ## 1. Méthode
@@ -81,7 +81,7 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
   morte corrigée vers le cas qui existe.
 - Aucune exigence n'a été supprimée, abaissée ou marquée `PASS` par décret.
 
-## 4. Les 16 divergences restantes
+## 4. Les divergences restantes (aucune)
 
 | Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
 |---|---|---|---|---|
@@ -250,3 +250,47 @@ Les 24 échecs restants se répartissent en :
 - **2 défauts de comportement** : `Vec<String>::clone()` accepté et le token
   `lifetime` qui produit une cascade de quatre erreurs de parse au lieu d'un
   `E-UNSUPPORTED-TOKEN` unique.
+
+## 9. Alignement des codes sur le registre — le corpus passe au vert
+
+`spec/language/diagnostics.md` §3 est explicite : « La liste des codes
+ci-dessous est **canonique** : c'est celle que l'implémentation émet. **Tout code
+absent est interdit.** » Et DIAG-1.1 impose que tout diagnostic porte un code de
+§3.
+
+Le compilateur émettait **13 codes absents de ce registre** :
+
+`E-OWN-MOVE-BORROWED`, `E-OWN-MOVE-INDEXED`, `E-OWN-NOT-COPY`,
+`E-RES-IMPL-FOREIGN`, `E-RES-VARIANT-UNQUALIFIED`, `E-TYP-ARRAY-LEN`,
+`E-UNSUPPORTED-GLOB`, `E-UNSUPPORTED-LET-PATTERN`, `E-UNSUPPORTED-OR-PAT`,
+`E-UNSUPPORTED-REF-PAT`, `E-UNSUPPORTED-TRAIT-IMPL`, `E-UNSUPPORTED-TURBOFISH`,
+`E-UNSUPPORTED-TYPE`.
+
+Ils ont été **remplacés par les codes enregistrés** que `features.md` exigeait
+déjà. Deux cas ont demandé plus qu'un renommage :
+
+- `impl Drop` vs les autres implémentations de trait : le registre a
+  `E-UNSUPPORTED-DROP-IMPL` **et** `E-UNSUPPORTED-TRAIT`. Le parseur choisit
+  selon le nom du trait.
+- `E-UNSUPPORTED-TYPE` servait au type `!`, avec **deux attentes différentes**
+  selon la position : `E-TYP-RETURN` en type de retour, `E-TYP-MISMATCH`
+  ailleurs. Le parseur porte désormais un contexte de type de retour.
+
+**Correction d'une erreur de ma part** : j'avais classé ces 13 codes comme une
+« décision humaine (D8) ». C'était faux. Le registre tranchait déjà ; c'était un
+défaut d'implémentation, pas un choix de nommage. D8 est donc **résolue**.
+
+### 9.1 Le dernier cas rouge était un défaut de spécification
+
+`types/size-of-unknown` attendait `E-RES-UNKNOWN` pour `size_of::<i32>()`. Or
+DIAG-1.4 dit qu'une phase précoce empêche les phases suivantes sur le même
+nœud, et F-UNS-019 fait du turbofish une erreur de **parse** : le code de
+résolution attendu était **inatteignable**. La source du cas utilise désormais la
+forme atteignable `size_of(1)` ; le code attendu et l'exigence sont inchangés.
+
+### 9.2 Ce qui reste à faire pour T2
+
+Le corpus passe, mais le **critère strict §2** n'est satisfait que par
+**106/188** règles : **82 règles nomment un code `E-*` dans leur colonne
+`Pass / Fail` sans qu'un cas cité ne l'assertent**. C'est un travail d'écriture
+de cas — 82 tests négatifs —, pas une décision.

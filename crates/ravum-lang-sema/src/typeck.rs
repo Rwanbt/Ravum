@@ -1057,7 +1057,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             _ => {
                 self.error(
-                    "E-UNSUPPORTED-LET-PATTERN",
+                    "E-PARSE-EXPECTED",
                     pat.span,
                     "`let` binds exactly one identifier in Core 1.0".to_string(),
                 );
@@ -3370,7 +3370,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         match length {
             Some(n) if n == 0 => {
                 self.error(
-                    "E-TYP-ARRAY-LEN",
+                    "E-TYP-ARRAY-REPEAT",
                     len.span,
                     "array length must be greater than zero".to_string(),
                 );
@@ -3892,7 +3892,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             Ok(other) => {
                 let _ = other;
                 self.error(
-                    "E-RES-VARIANT-UNQUALIFIED",
+                    "E-RES-UNKNOWN",
                     pat.span,
                     "pattern does not name a variant or a constant".to_string(),
                 );
@@ -4010,7 +4010,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             _ => {
                 self.error(
-                    "E-RES-VARIANT-UNQUALIFIED",
+                    "E-RES-UNKNOWN",
                     pat.span,
                     "pattern does not name a variant".to_string(),
                 );
