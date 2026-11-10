@@ -183,7 +183,6 @@ codes génériques — ce qui aurait dégradé des messages précis —, ils son
 | `E-UNSUPPORTED-COMPOUND-ASSIGN` | parse | affectation composée refusée |
 | `E-UNSUPPORTED-FN-TYPE` | parse | type pointeur de fonction (`fn(...)`) refusé |
 | `E-UNSUPPORTED-MOVE` | parse | `move` refusé |
-| `E-UNSUPPORTED-NEG-PAT` | parse | motif de littéral négatif refusé |
 | `E-UNSUPPORTED-RANGE-PAT` | parse | motif de plage (`a..b`) refusé |
 | `E-UNSUPPORTED-REEXPORT` | parse | `pub use` (ré-export) refusé |
 | `E-UNSUPPORTED-REST-PAT` | parse | motif `..` (reste) refusé |

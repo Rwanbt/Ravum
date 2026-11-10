@@ -1400,13 +1400,10 @@ fn partiel(p: (i32, i32)) -> i32 {
 
 #[test]
 fn text_literal_patterns_are_accepted() {
-    // NOTE: `spec/language/grammar.md` G-6.36 (float patterns) and G-6.37
-    // (negative literal patterns) are MUST rules that the implementation does
-    // not accept yet: float patterns are rejected with `E-PARSE-EXPECTED` and
-    // `-N` with `E-UNSUPPORTED-NEG-PAT`. Both are recorded as
-    // `PAT-LIT-1` / `PAT-LIT-2` in `docs/qualification/T2-FINDINGS.md`; the
-    // implementation is fail-closed, and the gap is not frozen as "expected"
-    // here. Text literal patterns *are* accepted (this case).
+    // G-6.36 also covers float literal patterns and G-6.37 negative literal
+    // patterns; both are implemented (D-PAT-1 option A) and pinned by
+    // `float_literal_patterns_are_accepted`, `negative_literal_patterns_are_accepted`
+    // and the range/mismatch cases below. Text literal patterns *are* accepted.
     accept(
         r#"
 fn texte(s: &str) -> i32 {
@@ -1416,6 +1413,144 @@ fn texte(s: &str) -> i32 {
     }
 }
 "#,
+    );
+}
+
+#[test]
+fn float_literal_patterns_are_accepted() {
+    // G-6.36: a float literal pattern is accepted and compared with `==`.
+    // The scrutinee stays `f64`, and a `_` arm is required because a float
+    // pattern is not exhaustive.
+    accept(
+        r#"
+fn reel(x: f64) -> i32 {
+    match x {
+        1.5 => 1,
+        -2.0 => 2,
+        _ => 0,
+    }
+}
+
+fn simple(x: f32) -> i32 {
+    match x {
+        0.5 => 1,
+        _ => 0,
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn float_literal_pattern_requires_a_wildcard() {
+    // A float pattern can never be exhaustive: without `_` the match is
+    // `E-TYP-NONEXHAUSTIVE` (the same rule as an integer pattern).
+    expect_code(
+        r#"
+fn reel(x: f64) -> i32 {
+    match x {
+        1.5 => 1,
+    }
+}
+"#,
+        "E-TYP-NONEXHAUSTIVE",
+    );
+}
+
+#[test]
+fn float_literal_pattern_on_int_is_mismatch() {
+    expect_code(
+        r#"
+fn nombre(x: i32) -> i32 {
+    match x {
+        1.5 => 1,
+        _ => 0,
+    }
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+}
+
+#[test]
+fn negative_literal_patterns_are_accepted() {
+    // G-6.37: `-N` is admitted for an integer and for a float.
+    accept(
+        r#"
+fn entier(x: i32) -> i32 {
+    match x {
+        -1 => 1,
+        -128 => 2,
+        _ => 0,
+    }
+}
+
+fn petit(x: i8) -> i32 {
+    match x {
+        -128 => 1,
+        _ => 0,
+    }
+}
+
+fn reel(x: f64) -> i32 {
+    match x {
+        -1.5 => 1,
+        _ => 0,
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn negative_literal_pattern_range_is_reported() {
+    // `-129` fits `i8`? No: the minimum is `-128`. The check uses the sign, so
+    // an out-of-range negative magnitude is `E-TYP-LITERAL-RANGE` (it was
+    // accepted before D-PAT-1 because the checker guessed the sign from a
+    // two's-complement `value > i128::MAX`).
+    expect_code(
+        r#"
+fn petit(x: i8) -> i32 {
+    match x {
+        -129 => 1,
+        _ => 0,
+    }
+}
+"#,
+        "E-TYP-LITERAL-RANGE",
+    );
+}
+
+#[test]
+fn negative_literal_pattern_on_unsigned_is_out_of_range() {
+    expect_code(
+        r#"
+fn u(x: u32) -> i32 {
+    match x {
+        -1 => 1,
+        _ => 0,
+    }
+}
+"#,
+        "E-TYP-LITERAL-RANGE",
+    );
+}
+
+#[test]
+fn huge_positive_literal_pattern_is_out_of_range() {
+    // Regression: the old `negative_ok` guessed a negative literal from
+    // `value > i128::MAX`, so this positive literal was silently accepted on a
+    // signed type. With G-6.37 the sign is explicit and this is a range error.
+    expect_code(
+        r#"
+fn petit(x: i8) -> i32 {
+    match x {
+        340282366920938463463374607431768211455 => 1,
+        _ => 0,
+    }
+}
+"#,
+        "E-TYP-LITERAL-RANGE",
     );
 }
 

@@ -7,7 +7,7 @@
 > scrutinee `!` était refusé alors que les motifs bool/caractère/texte étaient
 > acceptés. Mesures courantes : **84 suites, 1129 passés / 0 échec / 2
 > ignorés** ; conformance **346 cas, 345 PASS / 0 FAIL / 1 SKIP** ; **188/188**
-> règles satisfaites (1 exemption) ; registre **112 codes, 0 hors registre, 0
+> règles satisfaites (1 exemption) ; registre **111 codes, 0 hors registre, 0
 > jamais émis** ; couverture sema **79,4 %** de lignes (`typeck.rs` 76,9 %,
 > `own.rs` 90,1 %, `types.rs` 100 %), objectifs 90/85 non atteints ; harnais VS
 > Code stabilisé et **job CI `vscode-e2e` vert** (push `42858553296`, PR

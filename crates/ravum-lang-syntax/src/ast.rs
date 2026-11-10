@@ -464,7 +464,16 @@ pub enum PatKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LitPat {
-    Int { value: u128, suffix: Option<IntTy> },
+    /// `-N` keeps the magnitude in `value` and sets `neg` (G-6.37); `value` is
+    /// never a two's-complement encoding, so `-128i8` stores `128` + `neg`.
+    Int {
+        value: u128,
+        suffix: Option<IntTy>,
+        neg: bool,
+    },
+    /// G-6.36: float literal pattern, compared with `==` (no bit comparison).
+    /// `text` keeps the source spelling and carries the sign for `-1.5`.
+    Float { text: String, suffix: Option<FloatTy> },
     Bool(bool),
     Char(char),
     Str(String),

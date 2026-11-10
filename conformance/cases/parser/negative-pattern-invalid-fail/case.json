@@ -1,0 +1,8 @@
+{
+  "id": "parser/negative-pattern-invalid-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-6.37: any negative form other than a literal (`-y`, `-(1 + 2)`) is E-PARSE-EXPECTED. `E-UNSUPPORTED-NEG-PAT` no longer exists: it was removed from the registry when D-PAT-1 implemented the two MUST rules."
+}

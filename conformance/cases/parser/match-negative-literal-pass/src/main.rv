@@ -1,0 +1,22 @@
+use std::io;
+
+fn signe(n: i32) -> i32 {
+    match n {
+        -1 => 1,
+        -2147483648 => 2,
+        _ => 0,
+    }
+}
+
+fn petit(n: i8) -> i32 {
+    match n {
+        -128 => 1,
+        _ => 0,
+    }
+}
+
+fn main() {
+    io::println(&signe(-1).to_string());
+    io::println(&signe(-2147483648).to_string());
+    io::println(&petit(-128).to_string());
+}

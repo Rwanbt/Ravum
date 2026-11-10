@@ -705,8 +705,10 @@ impl<'a> Parser<'a> {
 
     fn starts_pattern_kind(kind: &TokenKind) -> bool {
         match kind {
+            // G-6.36: a float literal is a pattern too.
             TokenKind::Ident(_)
             | TokenKind::Int { .. }
+            | TokenKind::Float { .. }
             | TokenKind::Str(_)
             | TokenKind::Char(_) => true,
             TokenKind::Kw(kw) => matches!(
@@ -2533,7 +2535,23 @@ impl<'a> Parser<'a> {
                 let id = self.id();
                 Pat {
                     id,
-                    kind: PatKind::Lit(LitPat::Int { value, suffix }),
+                    kind: PatKind::Lit(LitPat::Int {
+                        value,
+                        suffix,
+                        neg: false,
+                    }),
+                    span: self.span_from(start),
+                }
+            }
+            // G-6.36: a float literal is a valid pattern, compared with `==`.
+            TokenKind::Float { text, suffix } => {
+                let span = self.cur_span();
+                self.bump();
+                let suffix = self.float_suffix(suffix, span);
+                let id = self.id();
+                Pat {
+                    id,
+                    kind: PatKind::Lit(LitPat::Float { text, suffix }),
                     span: self.span_from(start),
                 }
             }
@@ -2592,24 +2610,47 @@ impl<'a> Parser<'a> {
                     span: self.span_from(start),
                 }
             }
+            // G-6.37 (MUST): `-N` is admitted for an integer and for a float.
+            // Any other negative form (`-x`, `-(1 + 2)`) is `E-PARSE-EXPECTED`.
             TokenKind::Punct(Punct::Minus) => {
                 self.bump();
-                self.diags.error(
-                    "E-UNSUPPORTED-NEG-PAT",
-                    start,
-                    "negative literal patterns are not supported in Ravum Core 1.0",
-                );
-                if matches!(self.kind(), TokenKind::Int { .. }) {
-                    self.bump();
-                }
-                let id = self.id();
-                Pat {
-                    id,
-                    kind: PatKind::Lit(LitPat::Int {
-                        value: 0,
-                        suffix: None,
-                    }),
-                    span: self.span_from(start),
+                match self.kind().clone() {
+                    TokenKind::Int { value, suffix } => {
+                        let span = self.cur_span();
+                        self.bump();
+                        let suffix = self.int_suffix(suffix, span);
+                        let id = self.id();
+                        Pat {
+                            id,
+                            kind: PatKind::Lit(LitPat::Int {
+                                value,
+                                suffix,
+                                neg: true,
+                            }),
+                            span: self.span_from(start),
+                        }
+                    }
+                    TokenKind::Float { text, suffix } => {
+                        let span = self.cur_span();
+                        self.bump();
+                        let suffix = self.float_suffix(suffix, span);
+                        let id = self.id();
+                        Pat {
+                            id,
+                            kind: PatKind::Lit(LitPat::Float {
+                                text: format!("-{text}"),
+                                suffix,
+                            }),
+                            span: self.span_from(start),
+                        }
+                    }
+                    _ => {
+                        self.expected("an integer or float literal after `-` in a pattern");
+                        if !self.is_pattern_stopper() && !self.at_eof() {
+                            self.bump();
+                        }
+                        self.wild_pat(self.span_from(start))
+                    }
                 }
             }
             TokenKind::Punct(Punct::DotDot) | TokenKind::Punct(Punct::DotDotEq) => {

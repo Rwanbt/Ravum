@@ -54,6 +54,23 @@ fn err(message: impl Into<String>) -> CodegenError {
     }
 }
 
+/// G-6.36: a float literal anywhere inside a pattern forces the guard lowering
+/// of the enclosing `match` arm. Mirrors `typeck::pattern_contains_float`, which
+/// keeps exhaustiveness conservative for the same reason.
+fn pattern_contains_float(pat: &Pat) -> bool {
+    match &pat.kind {
+        PatKind::Lit(LitPat::Float { .. }) => true,
+        PatKind::Tuple(items) => items.iter().any(pattern_contains_float),
+        PatKind::Variant { fields, .. } => match fields {
+            VariantPatFields::Tuple(items) => items.iter().any(pattern_contains_float),
+            VariantPatFields::Struct(fields) => {
+                fields.iter().any(|field| pattern_contains_float(&field.pat))
+            }
+        },
+        _ => false,
+    }
+}
+
 /// Types the backend accepts at the C ABI boundary in Core 1.0, checked on the
 /// syntax tree so a hand-built `CheckedProgram` cannot smuggle an ABI-unsafe
 /// signature into the output.
@@ -1680,6 +1697,54 @@ impl<'a> Emitter<'a> {
         arms: &[MatchArm],
         indent: usize,
     ) -> Result<String, CodegenError> {
+        // G-6.36: Rust has no float patterns. When an arm mentions a float
+        // literal, bind the scrutinee once and lower every float sub-pattern to
+        // a guard (`Some(__ravum_flt_0) if __ravum_flt_0 == 1.5f64`). The
+        // checker requires a `_` arm for any float pattern, so the guards cannot
+        // make the emitted match non-exhaustive.
+        if !arms.iter().any(|arm| pattern_contains_float(&arm.pat)) {
+            return self.plain_match_text(scrutinee, arms, indent);
+        }
+        let temp = "__ravum_match_scrutinee";
+        let mut text = format!("{{\n");
+        text.push_str(&indent_text(indent + 1));
+        text.push_str("let ");
+        text.push_str(temp);
+        text.push_str(" = ");
+        text.push_str(&self.operand(scrutinee, indent + 1)?);
+        text.push_str(";\n");
+        text.push_str(&indent_text(indent + 1));
+        text.push_str("match ");
+        text.push_str(temp);
+        text.push_str(" {\n");
+        for arm in arms {
+            let mut counter = 0usize;
+            let mut conditions: Vec<String> = Vec::new();
+            let pattern = self.pattern_with_float_guards(&arm.pat, &mut counter, &mut conditions)?;
+            let body = self.expr(&arm.body, indent + 2)?;
+            text.push_str(&indent_text(indent + 2));
+            text.push_str(&pattern);
+            if !conditions.is_empty() {
+                text.push_str(" if ");
+                text.push_str(&conditions.join(" && "));
+            }
+            text.push_str(" => ");
+            text.push_str(&body);
+            text.push_str(",\n");
+        }
+        text.push_str(&indent_text(indent + 1));
+        text.push_str("}\n");
+        text.push_str(&indent_text(indent));
+        text.push('}');
+        Ok(text)
+    }
+
+    fn plain_match_text(
+        &self,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+        indent: usize,
+    ) -> Result<String, CodegenError> {
         let mut text = format!("match {} {{\n", self.operand(scrutinee, indent)?);
         for arm in arms {
             let pattern = self.pattern(&arm.pat)?;
@@ -1693,6 +1758,65 @@ impl<'a> Emitter<'a> {
         text.push_str(&indent_text(indent));
         text.push('}');
         Ok(text)
+    }
+
+    /// Renders `pat` replacing every float literal by a fresh binding and
+    /// recording `binding == literal` in `conditions` (G-6.36).
+    fn pattern_with_float_guards(
+        &self,
+        pat: &Pat,
+        counter: &mut usize,
+        conditions: &mut Vec<String>,
+    ) -> Result<String, CodegenError> {
+        match &pat.kind {
+            PatKind::Lit(LitPat::Float { text, suffix }) => {
+                let name = format!("__ravum_flt_{counter}");
+                *counter += 1;
+                let literal =
+                    self.float_literal(*suffix, text, self.facts().pat_types.get(&pat.id));
+                conditions.push(format!("{name} == {literal}"));
+                Ok(name)
+            }
+            PatKind::Tuple(items) => {
+                let mut rendered = Vec::new();
+                for item in items {
+                    rendered.push(self.pattern_with_float_guards(item, counter, conditions)?);
+                }
+                if rendered.len() == 1 {
+                    Ok(format!("({},)", rendered[0]))
+                } else {
+                    Ok(format!("({})", rendered.join(", ")))
+                }
+            }
+            PatKind::Variant { path, fields } => {
+                let base = self.variant_pattern_base(path)?;
+                match fields {
+                    VariantPatFields::Tuple(items) => {
+                        let mut rendered = Vec::new();
+                        for item in items {
+                            rendered
+                                .push(self.pattern_with_float_guards(item, counter, conditions)?);
+                        }
+                        Ok(format!("{base}({})", rendered.join(", ")))
+                    }
+                    VariantPatFields::Struct(fields) => {
+                        if fields.is_empty() {
+                            return Ok(format!("{base} {{}}"));
+                        }
+                        let mut rendered = Vec::new();
+                        for field in fields {
+                            rendered.push(format!(
+                                "{}: {}",
+                                mangle_ident(&field.name.name),
+                                self.pattern_with_float_guards(&field.pat, counter, conditions)?
+                            ));
+                        }
+                        Ok(format!("{base} {{ {} }}", rendered.join(", ")))
+                    }
+                }
+            }
+            _ => self.pattern(pat),
+        }
     }
 
     // -- literals ----------------------------------------------------------
@@ -2114,23 +2238,7 @@ impl<'a> Emitter<'a> {
                 ))),
             },
             PatKind::Variant { path, fields } => {
-                let base = match self.facts().resolutions.get(&path.id) {
-                    Some(Resolution::Variant { enum_item, variant }) => {
-                        match self.variant_name_opt(*enum_item, *variant) {
-                            Some(name) => format!("{}::{}", self.enum_path(*enum_item)?, name),
-                            None => self.plain_path_text(path)?,
-                        }
-                    }
-                    Some(Resolution::Item { item }) => self.item_path(*item)?,
-                    Some(_) => self.plain_path_text(path)?,
-                    None => {
-                        return Err(err(format!(
-                            "missing resolution fact for pattern path `{}` (path node {})",
-                            path.display(),
-                            path.id
-                        )));
-                    }
-                };
+                let base = self.variant_pattern_base(path)?;
                 match fields {
                     VariantPatFields::Tuple(items) => {
                         let mut rendered = Vec::new();
@@ -2160,8 +2268,26 @@ impl<'a> Emitter<'a> {
 
     fn literal_pattern(&self, pat: &Pat, literal: &LitPat) -> Result<String, CodegenError> {
         Ok(match literal {
-            LitPat::Int { value, suffix } => {
-                self.int_literal_text(*value, *suffix, self.facts().pat_types.get(&pat.id))
+            LitPat::Int {
+                value,
+                suffix,
+                neg,
+            } => {
+                let text = self.int_literal_text(*value, *suffix, self.facts().pat_types.get(&pat.id));
+                if *neg {
+                    format!("-{text}")
+                } else {
+                    text
+                }
+            }
+            // G-6.36: Rust has no float literal patterns. `match_text` lowers
+            // them to guards; reaching this point means a float pattern sits in
+            // a position that cannot be lowered (`let`, parameter, `for`), and
+            // emitting the literal here would produce Rust that `rustc` rejects.
+            LitPat::Float { .. } => {
+                return Err(err(
+                    "float literal patterns are only supported in `match` arms",
+                ));
             }
             LitPat::Bool(value) => {
                 if *value {
@@ -2173,6 +2299,25 @@ impl<'a> Emitter<'a> {
             LitPat::Char(value) => char_literal(*value),
             LitPat::Str(value) => string_literal(value),
         })
+    }
+
+    /// Resolves the `Enum::Variant` prefix shared by the two pattern renderers.
+    fn variant_pattern_base(&self, path: &Path) -> Result<String, CodegenError> {
+        match self.facts().resolutions.get(&path.id) {
+            Some(Resolution::Variant { enum_item, variant }) => {
+                match self.variant_name_opt(*enum_item, *variant) {
+                    Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
+                    None => self.plain_path_text(path),
+                }
+            }
+            Some(Resolution::Item { item }) => self.item_path(*item),
+            Some(_) => self.plain_path_text(path),
+            None => Err(err(format!(
+                "missing resolution fact for pattern path `{}` (path node {})",
+                path.display(),
+                path.id
+            ))),
+        }
     }
 
     // -- calls -------------------------------------------------------------

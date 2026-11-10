@@ -56,7 +56,7 @@ def figures() -> list[tuple[str, str]]:
     else:
         out.append(("strict", "<figure introuvable dans le registre>"))
 
-    out.append(("registry", "112 codes"))
+    out.append(("registry", "111 codes"))
     return out
 
 

@@ -35,7 +35,7 @@ son temps à ce qui n'a **pas** été prouvé.
 | Suite workspace | `cargo test --workspace --all-targets -- --test-threads=2` | 82 suites, 1020 passés, 0 échec, 2 ignorés |
 | Conformance | `cargo run -p ravum-conformance -- run` | 323 cas, 322 PASS / 0 FAIL / 1 SKIP |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | 187/187 règles testables |
-| Codes de diagnostic | `python tools/registry_audit.py` | 112 codes, 1 conflit documenté |
+| Codes de diagnostic | `python tools/registry_audit.py` | 111 codes, 0 hors registre, 0 jamais émis |
 | Fuzz lexer/parser | `RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | 0 échec |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | 0 échec |
 | Miri | job CI *Linux qualification* | 159 tests, 0 échec |

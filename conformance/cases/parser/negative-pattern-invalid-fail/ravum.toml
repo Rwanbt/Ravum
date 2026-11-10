@@ -1,0 +1,4 @@
+[package]
+name = "parser-negative-pattern-invalid-fail"
+version = "0.1.0"
+edition = "core-1.0"

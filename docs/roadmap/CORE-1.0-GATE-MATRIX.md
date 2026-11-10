@@ -62,7 +62,7 @@
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 4 132 it/s, 24,2 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
 | SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = 7c532967…93ee3` à époque fixée |
-| **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 130 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
+| **Registre des codes** | `python tools/registry_audit.py` | **111 codes enregistrés ; 129 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = EC3133FB…4865` (racines et `target/` différents) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |

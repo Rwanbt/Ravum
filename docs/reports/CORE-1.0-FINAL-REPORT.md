@@ -65,7 +65,7 @@ Mesures locales sur `a6e71e7` (Windows 11 x86-64, rustc 1.95.0) :
 | `cargo test --workspace --all-targets` | **84 suites, 1129 passés / 0 échec / 2 ignorés** |
 | Conformance | **346 cas : 345 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
-| Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
+| Registre des diagnostics | **111 codes** ; 129 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **12 tests** PASS |
 | Couverture sema (llvm-cov) | **79,4 % lignes / 79,7 % régions** ; `types.rs` 100 %, `own.rs` 90,1 %, `typeck.rs` 76,9 %, `resolve.rs` 67,4 % — objectifs 90/85 non atteints |
 | Mutation testing ciblé (`types.rs`) | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués |

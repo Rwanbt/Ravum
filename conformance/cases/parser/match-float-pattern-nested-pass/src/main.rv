@@ -1,0 +1,20 @@
+use std::io;
+
+enum Mesure {
+    Valeur(f64),
+    Absent,
+}
+
+fn lire(m: Mesure) -> i32 {
+    match m {
+        Mesure::Valeur(1.5) => 1,
+        Mesure::Valeur(_) => 2,
+        Mesure::Absent => 3,
+    }
+}
+
+fn main() {
+    io::println(&lire(Mesure::Valeur(1.5)).to_string());
+    io::println(&lire(Mesure::Valeur(2.5)).to_string());
+    io::println(&lire(Mesure::Absent).to_string());
+}

@@ -22,8 +22,8 @@ use crate::facts::{
 use crate::resolve::{self, ModuleId, NominalKind, PathError, ValuePath, World};
 use crate::types::{contains_never, Type};
 use ravum_lang_syntax::ast::{
-    self, Block, ConstItem, Expr, ExprKind, FieldInit, FnItem, IntTy, Item, ItemKind, LitPat,
-    MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,
+    self, Block, ConstItem, Expr, ExprKind, FieldInit, FloatTy, FnItem, IntTy, Item, ItemKind,
+    LitPat, MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,
     Type as AstType, UnOp, VariantPatFields,
 };
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
@@ -4159,7 +4159,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_lit_pattern(&mut self, pat: &Pat, lit: &LitPat, expected: &Type) -> Type {
         match lit {
-            LitPat::Int { value, suffix } => {
+            LitPat::Int {
+                value,
+                suffix,
+                neg,
+            } => {
                 let ty = match suffix {
                     Some(suffix) => int_type(*suffix),
                     None => match expected {
@@ -4190,13 +4194,49 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         format!("integer pattern cannot match type `{expected}`"),
                     );
                 }
-                let positive_ok = int_value_fits(*value, &ty);
-                let negative_ok = ty.is_signed_int() && *value > i128::MAX as u128;
-                if !positive_ok && !negative_ok {
+                // G-6.37: the sign decides which bound applies. A negative
+                // pattern never fits an unsigned type, and `-128` fits `i8`
+                // while `128` does not (`int_bounds` gives the magnitude of the
+                // minimum). Before G-6.37 was implemented the checker guessed a
+                // negative from a two's-complement `value > i128::MAX`, which
+                // also accepted an out-of-range positive literal.
+                let fits = if *neg {
+                    negative_value_fits(*value, &ty)
+                } else {
+                    int_value_fits(*value, &ty)
+                };
+                if !fits {
+                    let shown = if *neg {
+                        format!("-{value}")
+                    } else {
+                        format!("{value}")
+                    };
                     self.error(
                         "E-TYP-LITERAL-RANGE",
                         pat.span,
-                        format!("integer pattern `{value}` does not fit in `{ty}`"),
+                        format!("integer pattern `{shown}` does not fit in `{ty}`"),
+                    );
+                }
+                ty
+            }
+            // G-6.36: a float pattern compares with `==`; the literal type is
+            // the suffix, else the scrutinee type, else `f64` (the default of
+            // float expressions). `NaN` never matches and `-0.0` matches `0.0`
+            // because no bit comparison is made.
+            LitPat::Float { suffix, .. } => {
+                let ty = match suffix {
+                    Some(FloatTy::F32) => Type::F32,
+                    Some(FloatTy::F64) => Type::F64,
+                    None => match expected {
+                        Type::F32 => Type::F32,
+                        _ => Type::F64,
+                    },
+                };
+                if !matches!(expected, Type::F32 | Type::F64 | Type::Error | Type::Never) {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        pat.span,
+                        format!("float pattern cannot match type `{expected}`"),
                     );
                 }
                 ty
@@ -4965,6 +5005,17 @@ fn int_value_fits(value: u128, ty: &Type) -> bool {
     value <= max
 }
 
+/// G-6.37: `-value` fits `ty` when `ty` is signed and the magnitude does not
+/// exceed the magnitude of its minimum (`-128` fits `i8`, `-129` does not, and
+/// no negative pattern fits an unsigned type).
+fn negative_value_fits(value: u128, ty: &Type) -> bool {
+    if !ty.is_int() {
+        return false;
+    }
+    let (min_magnitude, _, signed) = int_bounds(ty);
+    signed && value <= min_magnitude
+}
+
 fn int_i128_fits(value: i128, ty: &Type) -> bool {
     if !ty.is_int() {
         return false;
@@ -5343,6 +5394,24 @@ fn pattern_is_irrefutable(pat: &Pat) -> bool {
     }
 }
 
+/// G-6.36: a float literal cannot be a Rust pattern, so codegen lowers it to a
+/// guard. A guarded arm never contributes to exhaustiveness, so such a pattern
+/// must not make the checker believe a variant is covered (`Some(1.5)` does not
+/// cover `Some`); this predicate keeps the two phases consistent.
+fn pattern_contains_float(pat: &Pat) -> bool {
+    match &pat.kind {
+        PatKind::Lit(LitPat::Float { .. }) => true,
+        PatKind::Tuple(items) => items.iter().any(pattern_contains_float),
+        PatKind::Variant { fields, .. } => match fields {
+            VariantPatFields::Tuple(items) => items.iter().any(pattern_contains_float),
+            VariantPatFields::Struct(fields) => {
+                fields.iter().any(|field| pattern_contains_float(&field.pat))
+            }
+        },
+        _ => false,
+    }
+}
+
 impl Coverage {
     fn new(scrutinee: &Type, facts: &Facts) -> Coverage {
         match scrutinee {
@@ -5449,6 +5518,13 @@ impl Coverage {
 
 impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     fn cover_pattern(&mut self, coverage: &mut Coverage, pat: &Pat) {
+        // G-6.36: codegen lowers a float literal sub-pattern to a guard, and a
+        // guarded arm covers nothing. Treating it as coverage here would accept
+        // `match o { Some(1.5) => …, None => … }` and emit a Rust match that
+        // `rustc` rejects as non-exhaustive.
+        if pattern_contains_float(pat) {
+            return;
+        }
         match coverage {
             Coverage::Wild => {}
             Coverage::Tuple { covered } => {
