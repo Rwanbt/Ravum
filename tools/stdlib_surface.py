@@ -146,8 +146,14 @@ def main() -> int:
 
         prelude = PRELUDE_STATEMENTS.get(path)
         module = MODULE_OF.get(path.rsplit("::", 1)[0])
+        expected = EXPECTED_OUTPUT.get(path)
         if prelude:
-            source = "\n".join(["fn main() {", f"    {prelude}", "}", ""])
+            body = [f"    {prelude}"]
+            if expected is not None and "let result" in prelude:
+                # The assertion needs the value on stdout; `String` has no
+                # `to_string` in Core 1.0, so print it directly.
+                body.append("    io::println(&result);")
+            source = "\n".join(["use std::io;", "", "fn main() {", *body, "}", ""])
         elif module is None:
             unsupported.append(f"{path}: unknown module")
             continue
@@ -156,7 +162,6 @@ def main() -> int:
             source = "\n".join(
                 [f"use std::{module};", "", "fn main() {", f"    let result = {call}", "}", ""]
             )
-        expected = EXPECTED_OUTPUT.get(path)
         if expected is not None and not prelude:
             if entry["ret"] == "()":
                 source = "\n".join(

@@ -310,6 +310,14 @@ fn main() {
 '@ }
 )
 
+# `ravum-lang run` prints its own `running: <path>` line on stdout; comparing the
+# whole capture would let a path segment satisfy the expectation.
+function Get-ProgramOutput([object[]]$Raw) {
+    ($Raw | Out-String) -split "`n" |
+        Where-Object { $_ -notmatch '^(running|generated|built|lockfile|package): ' } |
+        Join-String -Separator "`n"
+}
+
 $results = @()
 foreach ($case in $cases) {
     $directory = Join-Path $work $case.id
@@ -336,7 +344,7 @@ foreach ($case in $cases) {
             $results += [pscustomobject]@{ Case = $case.id; Stage = 'run'; Status = 'FAIL'; Detail = ($output | Select-Object -Last 1) }
             continue
         }
-        $text = ($output | Out-String)
+        $text = Get-ProgramOutput $output
         if ($text -notlike "*$expected*") {
             $results += [pscustomobject]@{ Case = $case.id; Stage = 'stdout'; Status = 'FAIL'; Detail = "expected $expected, got $($text.Trim())" }
             continue
@@ -388,8 +396,7 @@ else {
                 $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'run'; Status = 'FAIL'; Detail = $detail }
                 continue
             }
-            $text = Get-Content ($directory.FullName + '\.ravum\bin\' + (Split-Path $directory.Name -Leaf) + '.exe') -ErrorAction SilentlyContinue
-            $raw = ($output | Out-String)
+            $raw = Get-ProgramOutput $output
             if ($want -ne '' -and $raw -notlike "*$want*") {
                 $results += [pscustomobject]@{ Case = "free/$identifier"; Stage = 'stdout'; Status = 'FAIL'; Detail = "expected $want, got $($raw.Trim())" }
                 continue
