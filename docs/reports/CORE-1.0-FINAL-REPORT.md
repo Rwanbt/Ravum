@@ -57,6 +57,7 @@ Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
 | Balayages CLI / stdlib | 13/13 PASS ; 64/64 PASS |
 | Reproductibilité | deux builds bit-à-bit identiques, `sha256 = EC3133FB…4865` |
 | SBOM | 64 paquets, 170 relations, digest `7c532967…93ee3` à époque fixée |
+| Performance | `check` 45,1 / 89,4 / 331,2 ms et `build` 329,9 / 647,1 / 2 151,7 ms pour 100 / 500 / 2 000 fonctions (Windows 11 x86-64, rustc 1.95.0, `dev`, 3 runs par taille) |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
 | CI sur le HEAD `1fb0568` (code `a5744ea`) | **succès après re-run** : conformance `342 cas / 340 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, workspace 1019 / 0 / 4, gate-contracts succès (runs `42815650401`, `42815661183`). Un test flaky de `ravum-workspace-coordinator` a échoué puis est passé au re-run sans modification de cette crate. |

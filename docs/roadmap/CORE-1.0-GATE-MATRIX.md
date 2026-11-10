@@ -18,7 +18,7 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité |
+| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité ; **fiabilité tests/bench `03774d6`** (mutex crash + validation `-Sizes`) |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
 | **CI sur ce code** | **succès** sur `1fb0568` (code `a5744ea`) : runs [42815650401](https://github.com/Rwanbt/Ravum/actions/runs/42815650401) (Linux) et [42815661183](https://github.com/Rwanbt/Ravum/actions/runs/42815661183) (gate contracts), détail §1 quater |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
@@ -51,7 +51,8 @@
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 PASS / 0 FAIL** |
 | **Miri (Windows)** | `cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests -- --skip loader::tests` | **93 + 2 PASS**, mais **`tests/ffi` NOT_RUN** : Miri Windows refuse `GetTempPathW`. Pas un défaut du programme ; **Miri complet a été rejoué en CI Linux sur `b7e5c5c`** (159 tests) |
 | Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `a5744ea` |
-| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `a5744ea` |
+| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` (invoqué par taille) | `check` **45,1 / 89,4 / 331,2 ms** (pic **9,1 / 20,2 / 60,8 Mo**) ; `build` **329,9 / 647,1 / 2 151,7 ms** (pic **10,0 / 21,7 / 64,2 Mo**) pour 100 / 500 / 2 000 fonctions (Windows 11 x86-64, rustc 1.95.0, profil `dev`, 3 runs par taille) |
+| **Outil de benchmark** | `scripts/lang-bench.ps1` | liste `-Sizes` validée (entiers 1..20 000, séparés par virgules) : l’ancienne conversion `[int[]]` transformait `100,500` en **100 500** et pouvait générer un programme géant ; corrigé et vérifié (liste combinée + rejet immédiat de `1005002000`) |
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
@@ -131,6 +132,14 @@ aucune modification de cette crate entre `b7e5c5c` (vert) et `1fb0568`
 flaky**, pas une régression démontrée ; il reste à instrumenter (fenêtre de
 kill du harnais) et ne doit pas être compté comme stable.
 
+**Correctif de fiabilité appliqué (2026-11-10)** : la fenêtre
+« installation des hooks → spawn → attente de la mort de l'enfant » est
+désormais sérialisée par un mutex, car les tests de crash partagent le helper
+de kill et `target/ravum-tests`. Le diagnostic de l'assertion inclut aussi le
+contenu du journal de hooks. Vérification locale : **5 exécutions consécutives,
+15/15 tests vertes** (13–14 s chacune) ; la confirmation Linux reste à observer
+en CI.
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
@@ -142,7 +151,7 @@ kill du harnais) et ne doit pas être compté comme stable.
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
-| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et une fois sur `63eda55` | **Rejeu VS Code non reproductible** : 10/10 puis **3/10** (timeouts symboles/complétion/survol, erreur « not part of the analysed package ») sur le même arbre ; harnais E2E à stabiliser avant de revendiquer `PASS` | Flakiness E2E |
+| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et **2 rejeux verts consécutifs au repos** sur `63eda55` | **Sensible à la charge** : un rejeu sous charge concurrente (Miri+CI+cargo) a donné **3/10** (timeouts 90–120 s) ; le LSP en session directe répond, aucune régression fonctionnelle démontrée. Harnais E2E à stabiliser sous charge avant de revendiquer `PASS` | Flakiness E2E sous charge |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
 | T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `a5744ea` | Audit externe |
@@ -291,6 +300,11 @@ Preuve historique : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md)
   `walk.rs`. Ce n'est donc pas une régression fonctionnelle démontrée, mais la
   preuve E2E n'est **pas reproductible de façon stable** : T7 redescend à
   `PARTIAL` jusqu'à stabilisation du harnais.
+- **Complément de mesure (machine au repos)** : deux exécutions consécutives
+  donnent **10/10 en 4–7 s**. L'échec de 3/10 a été observé pendant que Miri, la
+  CI et la suite workspace tournaient en parallèle : l'harnais est **sensible à
+  la charge** (timeouts), pas le serveur LSP. T7 reste `PARTIAL` tant que cette
+  sensibilité n'est pas corrigée et rejouée en CI.
 
 ### T8 — Compilation continue et hot reload — `PARTIAL`
 
@@ -376,6 +390,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
 
 
 
