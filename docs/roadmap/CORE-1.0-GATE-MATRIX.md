@@ -26,7 +26,23 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures de cette passe (SHA `a5744ea`)
+## 1. Mesures (passe 3, SHA `29cc79e`, 2026-11-10)
+
+### Passe 3 — mesures courantes
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **84 suites, 1122 passés / 0 échec / 2 ignorés** (exit 0) |
+| **VS Code réel — au repos** | `node tools/vscode-ravum/test/runTest.js` | **10/10 en 5 s** |
+| **VS Code réel — sous charge** | idem, pendant `cargo test --workspace` concurrent | **10/10 en 4 s** ; harnais corrigé (timeout Mocha 300 s, attente 180 s, barrière de disponibilité LSP) |
+| **CI VS Code** | workflow `vscode-e2e.yml` | **créé** (build CLI + `npm ci` + `xvfb-run` + suite réelle) ; premier run à confirmer |
+| Conformance | `cargo run -p ravum-conformance -- run` | **346 cas : 345 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
+| **Contrats typechecker** | `cargo test -p ravum-lang-sema --test typeck_contracts` | **88 PASS / 0 FAIL** |
+| **Audit borrow checker** | `cargo test -p ravum-lang-sema --test own_audit` | **92 PASS / 0 FAIL** |
+| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --summary-only` | **78,3 % lignes / 78,8 % régions** sur sema ; `types.rs` 100 %, `own.rs` 89,9 %, `typeck.rs` 73,6 %, `resolve.rs` 67,3 % — **objectifs 90/85 non atteints** ; mesure locale non câblée en CI |
+| **Mutation `own.rs`** | `cargo mutants ... --regex 'eval_loop\|eval_for\|eval_call'` | **22 mutants : 12 caught, 10 équivalents, 0 non expliqué** ; `eval_method_call` **4/4 caught** — voir [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
+
+### Passe 2 — mesures antérieures (SHA `a5744ea`)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
@@ -182,15 +198,15 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PASS` | 343 cas : **342 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
-| T3 | `PASS` | Lexer/parser/AST réels, **1029 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
+| T2 | `PASS` | 346 cas : **345 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées ; 1 contradiction `grammar.md` ↔ `diagnostics.md` **enregistrée** (motifs flottants/négatifs, décision **D-PAT-1**) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
+| T3 | `PASS` | Lexer/parser/AST réels, **1122 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
 | T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale | Threads, réseau, async explicitement `UNSUPPORTED` | — |
-| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et **2 rejeux verts consécutifs au repos** sur `63eda55` | **Sensible à la charge** : un rejeu sous charge concurrente (Miri+CI+cargo) a donné **3/10** (timeouts 90–120 s) ; le LSP en session directe répond, aucune régression fonctionnelle démontrée. Harnais E2E à stabiliser sous charge avant de revendiquer `PASS` | Flakiness E2E sous charge |
+| T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** : timeouts 300 s, attente 180 s, barrière de disponibilité LSP ; **10/10 au repos et 10/10 sous `cargo test --workspace` concurrent** (4–5 s) ; workflow CI `vscode-e2e.yml` ajouté | La preuve E2E reste **locale** : le job CI `vscode-e2e` n'a pas encore tourné. Aucune régression fonctionnelle connue | Confirmation CI du job `vscode-e2e` |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1029 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **75,0 %** (`types.rs` 100 %, `typeck` 63,7 %, `resolve` 67,2 %) sous les objectifs 90/85 ; mutation testing ciblé seul | Audit externe |
+| T10 | `PARTIAL` | 1122 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; couverture lignes sema **78,3 %** (`types.rs` 100 %, `own.rs` 89,9 %, `typeck` 73,6 %, `resolve` 67,3 %) sous les objectifs 90/85 ; mutation testing ciblé seul (équivalents documentés) | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -216,7 +232,7 @@ Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
 
 - **Avant** : 99/188 règles citées par un cas, 107 cas, couverture non mesurée.
-- **Après (2026-11-10)** : **343 cas**, **188/188** règles tracées vers un cas
+- **Après (2026-11-10)** : **346 cas**, **188/188** règles tracées vers un cas
   existant ou vers une exemption déclarée et structurellement vérifiée, **188/188 satisfaites** au critère
   strict (cas d'acceptation + cas de refus portant le code exigé) : **187 par
   cas + `F-META-006` exemptée**.
@@ -340,15 +356,19 @@ Preuve historique : [`docs/qualification/VSCODE.md`](../qualification/VSCODE.md)
   **10/10**, une seconde **3/10** avec des timeouts (symboles, complétion,
   survol, définition, références) et l'erreur « `…/src/main.rv` is not part of
   the analysed package ». Le LSP en session directe répond correctement aux deux
-  formes d'URI ; le diff LSP depuis `1b7b4f1` n'est que la branche `Never` de
-  `walk.rs`. Ce n'est donc pas une régression fonctionnelle démontrée, mais la
-  preuve E2E n'est **pas reproductible de façon stable** : T7 redescend à
-  `PARTIAL` jusqu'à stabilisation du harnais.
-- **Complément de mesure (machine au repos)** : deux exécutions consécutives
-  donnent **10/10 en 4–7 s**. L'échec de 3/10 a été observé pendant que Miri, la
-  CI et la suite workspace tournaient en parallèle : l'harnais est **sensible à
-  la charge** (timeouts), pas le serveur LSP. T7 reste `PARTIAL` tant que cette
-  sensibilité n'est pas corrigée et rejouée en CI.
+  formes d'URI ; aucune régression fonctionnelle n'était démontrée, mais la
+  preuve E2E n'était pas reproductible de façon stable.
+- **Correction du harnais (2026-11-10, SHA `29cc79e`)** : le budget Mocha passe
+  de 180 s à **300 s**, l'attente des fonctionnalités de 90 s à **180 s**, et
+  une **barrière de disponibilité** interroge `executeDocumentSymbolProvider`
+  (budget 240 s) avant le premier test : une machine chargée ne peut plus faire
+  échouer un test fonctionnel sur la latence de démarrage du serveur.
+- **Preuves après correction** : **10/10 en 5 s au repos**, puis **10/10 en
+  4 s** pendant que `cargo test --workspace` tournait en parallèle — le scénario
+  exact qui produisait 3/10.
+- **Reste à confirmer** : le workflow `vscode-e2e.yml` (xvfb + VS Code réel +
+  build CLI) est ajouté mais n'a pas encore tourné en CI. T7 reste `PARTIAL`
+  jusqu'à ce run ; la preuve locale est documentée, pas convertie en `PASS`.
 
 ### T8 — Compilation continue et hot reload — `PARTIAL`
 

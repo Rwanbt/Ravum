@@ -43,17 +43,38 @@ directions, dont `never-return-run` qui **compile et exécute** une fonction
 `-> !`, et une exécution réelle d'un tuple déstructuré par `match` (`t.0` → `7`).
 Détail : `docs/qualification/T2-FINDINGS.md` §14.
 
-Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
+Deux défauts supplémentaires ont été mesurés et traités pendant la passe :
+
+- **Tableaux hétérogènes acceptés** : `check_array` ne comparait les éléments
+  que sous annotation ; `let a = [1, true];` était accepté alors que le codegen
+  émet `[1, true]`, que `rustc` refuse. Correction : sans annotation, chaque
+  élément est comparé au premier (`E-TYP-MISMATCH` sur l'élément fautif).
+  Cas neufs `types/array-heterogeneous-fail` et
+  `types/array-annotated-length-mismatch-fail`, plus 88 contrats dans
+  `crates/ravum-lang-sema/tests/typeck_contracts.rs`. Détail : §15 de
+  [`T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
+- **Motifs littéraux flottants et négatifs** : G-6.36 et G-6.37 (MUST) les
+  admettent, l'implémentation les refuse (`E-PARSE-EXPECTED`,
+  `E-UNSUPPORTED-NEG-PAT`) et `diagnostics.md` documente ce refus : la
+  spécification se contredit. Aucun changement unilatéral ; décision
+  **D-PAT-1** demandée. Détail : §16 de `T2-FINDINGS.md`.
+
+Mesures locales sur `29cc79e` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **83 suites, 1029 passés / 0 échec / 2 ignorés** |
-| Conformance | **343 cas : 342 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
+| `cargo test --workspace --all-targets` | **84 suites, 1122 passés / 0 échec / 2 ignorés** |
+| Conformance | **346 cas : 345 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **112 codes** ; 130 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **12 tests** PASS |
-| Couverture sema (llvm-cov) | **75,0 % lignes / 75,3 % régions** ; `types.rs` 100 %, `own.rs` 89,4 %, `typeck.rs` 63,7 %, `resolve.rs` 67,2 % — objectifs 90/85 non atteints |
+| Couverture sema (llvm-cov) | **78,3 % lignes / 78,8 % régions** ; `types.rs` 100 %, `own.rs` 89,9 %, `typeck.rs` 73,6 %, `resolve.rs` 67,3 % — objectifs 90/85 non atteints |
 | Mutation testing ciblé (`types.rs`) | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués |
-| Mutation testing `own.rs` (sous-ensemble) | **27 mutants : 16 caught, 11 missed** — 2 tests d'audit ajoutés ; survivants = fixpoints de boucle et filtres de receiver, à instruire |
+| Mutation testing `own.rs` (sous-ensemble) | **22 mutants : 12 caught, 10 équivalents documentés, 0 non expliqué** ; `eval_method_call` **4/4 caught** — les 10 survivants sont prouvés équivalents dans [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
+| Contrats du typechecker | **88 tests** (`typeck_contracts.rs`) ; `typeck.rs` 63,7 % → **73,6 %** de lignes |
+| Audit du borrow checker | **92 tests** (`own_audit.rs`) |
+| VS Code réel — au repos | **10/10 en 5 s** |
+| VS Code réel — sous charge | **10/10 en 4 s** pendant `cargo test --workspace` concurrent |
+| CI VS Code | workflow `vscode-e2e.yml` **créé** ; premier run à confirmer |
 | Fuzz lexer/parser | 249 054 entrées, 0 échec, digest `0x338b9afe9926aa4f` |
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
@@ -69,7 +90,11 @@ Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
 `PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
 déclarative), et **T7 passe de `PASS` à `PARTIAL`** : le rejeu VS Code du
 2026-11-10 donne 10/10 puis 3/10 sur le même arbre (timeouts du harnais), donc la
-preuve E2E n'est pas reproductible de façon stable. T4, T10 et T12 restent
+preuve E2E n'est pas reproductible de façon stable. Le harnais est depuis
+**corrigé** (budgets 300 s/180 s, barrière de disponibilité LSP) et donne 10/10
+au repos comme sous `cargo test --workspace` concurrent ; un job CI
+`vscode-e2e.yml` est ajouté. **T7 reste `PARTIAL` jusqu'au premier run vert de
+ce job** : la preuve locale n'est pas convertie en `PASS`. T4, T10 et T12 restent
 bloqués par l'audit externe et le Go/No-Go humain ; T1, T6, T8, T9 et T11 restent
 partiels pour les raisons structurelles déjà listées. Bilan courant :
 **4 `PASS` · 0 `FAIL` · 7 `PARTIAL` · 2 `BLOCKED`**.
@@ -227,6 +252,7 @@ Plateformes qualifiées : Windows x86-64 (local), Linux x86-64 (CI), `wasm32-was
 | D7 | Frontière `unsafe`/FFI | ouverte |
 | **D8** | Identifiants de diagnostic | **RÉSOLUE** — le registre interdisait déjà ces codes |
 | **D9** | **Custody de la clé de signature** | ouverte — bloque la signature |
+| **D-PAT-1** | Motifs littéraux flottants/négatifs (`grammar.md` G-6.36/G-6.37 vs `diagnostics.md`) | ouverte — soit implémenter, soit amender deux MUST |
 
 ## 15. Verdict et reprise
 

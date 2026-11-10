@@ -550,3 +550,74 @@ claim interne, pas une certification.
 
 
 
+
+## 15. Tableaux hétérogènes acceptés — défaut de soundness corrigé (2026-11-10)
+
+`check_array` ne comparait les éléments entre eux que lorsqu'une annotation
+fournissait le type attendu (`let a: [i32; 3] = [...]`). Sans annotation, le
+premier élément fixait `T` et **les suivants n'étaient pas vérifiés** :
+`let a = [1, true];` était accepté. Le codegen émet alors `[1, true]`, que
+`rustc` refuse (E0308) : un programme « accepté par le checker » ne compilait
+pas, et le contrat TYP-4 (tableau homogène) n'était pas appliqué.
+
+Correction : quand aucun type d'élément n'est fourni, chaque élément suivant est
+comparé au premier (`Type::Never` et `<error>` restent compatibles, comme
+partout ailleurs) et l'écart produit `E-TYP-MISMATCH` sur l'élément fautif. Le
+chemin annoté est inchangé : chaque élément y était déjà vérifié contre
+l'annotation, et une longueur contradictoire (`[i32; 3] = [1, 2]`) reste un
+`E-TYP-MISMATCH` via la comparaison des types de tableau.
+
+Preuves exécutables : `types/array-heterogeneous-fail`,
+`types/array-annotated-length-mismatch-fail` (compile-fail) et les cas positifs
+`array_rules` de `crates/ravum-lang-sema/tests/typeck_contracts.rs` (tableaux
+homogènes, imbriqués, annotés, répétés). Le corpus passe de 343 à **346 cas,
+345 PASS / 0 FAIL / 1 SKIP**. Aucun code de diagnostic nouveau, aucune règle
+relâchée : c'est un resserrement exigé par TYP-4.
+
+## 16. Motifs littéraux flottants et négatifs — deux MUST non implémentés (constat, non corrigé)
+
+Deux règles de `spec/language/grammar.md` sont contredites par
+l'implémentation, et la spécification est elle-même contradictoire :
+
+| Règle | Exigence | Comportement mesuré |
+|---|---|---|
+| G-6.36 (MUST) | un pattern littéral **flottant** est accepté (`match x { 1.5 => … }`) | `E-PARSE-EXPECTED` |
+| G-6.37 (MUST) | `-N` est admis en pattern pour un entier (`-1`) et un flottant (`-1.0`) | `E-UNSUPPORTED-NEG-PAT` |
+
+Or `spec/language/diagnostics.md` documente `E-UNSUPPORTED-NEG-PAT` comme code
+canonique pour « motif de littéral négatif refusé ». Il y a donc **contradiction
+interne** : grammar.md impose l'acceptation, diagnostics.md documente le refus.
+
+Décision de cette passe : **ne rien changer unilatéralement**. Implémenter
+G-6.36/G-6.37 est une fonctionnalité de langage (parseur, checker, codegen,
+retrait du code `E-UNSUPPORTED-NEG-PAT` du registre et de diagnostics.md) ;
+aligner la spécification sur l'implémentation revient à modifier deux MUST. Les
+deux options exigent l'accord du responsable (voir la demande de décision
+D-PAT-1). L'implémentation est **fail-closed** : elle refuse, elle n'accepte
+jamais un motif non conforme, donc il n'y a pas de risque de sonorité, seulement
+un déficit de fonctionnalité.
+
+Les motifs littéraux **entiers, caractères, booléens et textuels** sont, eux,
+acceptés et couverts par `crates/ravum-lang-sema/tests/typeck_contracts.rs` ;
+aucun test ne fige le refus des flottants/négatifs comme « attendu ».
+
+## 17. Couverture du vérificateur de types — campagne de contrats (2026-11-10)
+
+La couverture de `crates/ravum-lang-sema/src/typeck.rs` était de **63,7 %** de
+lignes. Un fichier de contrats indépendant,
+`crates/ravum-lang-sema/tests/typeck_contracts.rs` (88 tests), couvre désormais
+les chemins d'erreur et les formes nominales qu'aucun cas de conformance
+n'exerçait : appels non appelables et arités, champs et indices, transtypages,
+égalité/comparaison, inférence ambiguë, `if` sans `else` en valeur, `?`,
+`return`, points d'entrée, `break`/`continue` hors boucle, plages, `[e; n]`,
+constantes (arithmétique, décalages, casts tronquants, rejets), motifs
+(littéraux, variantes avec payload, tuple, exhaustivité), génériques imbriqués,
+méthodes utilisateur et builtins, agrégats, coercitions admises.
+
+Mesure `cargo llvm-cov -p ravum-lang-sema` : `typeck.rs` **72,5 % → 73,6 %** de
+lignes (régions 75,1 % → 76,0 %), `own.rs` 89,9 %, `types.rs` 100 %, total sema
+**78,3 %** de lignes. **Les objectifs 90 % lignes / 85 % branches ne sont pas
+atteints** : le déficit restant est concentré dans `resolve.rs` (67,3 %) et dans
+les branches de `typeck.rs` liées aux génériques et à la visibilité
+inter-modules, qui demandent des programmes multi-fichiers et des cas
+d'exhaustivité supplémentaires. Ce chiffre est mesuré, pas estimé.
