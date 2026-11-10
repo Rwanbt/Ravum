@@ -1,0 +1,185 @@
+# Ravum Core 1.0 — rapport consolidé de fin de session
+
+> **Rapport de situation, pas un certificat.** Tous les chiffres ci-dessous ont
+> été produits par une commande exécutée pendant la session, sur le SHA indiqué.
+> Aucun `PROVED`, aucune maturité « production », aucune release. Le registre
+> canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
+
+## 1. Dépôt GitHub — état initial et final
+
+| Élément | Initial | Final |
+|---|---|---|
+| `main` | `ca675497` | **`ca675497` — intacte** |
+| `dev` | `fbaa506` | **`fbaa506` — intacte** |
+| Branche de travail | `feat/lang-core-1.0-rc` @ `16d4e5c` | **`feat/lang-core-1.0-rc` @ `a277b86`** |
+| Commits ajoutés | — | **29** |
+| PR | [#101](https://github.com/Rwanbt/Ravum/pull/101), draft | **draft, base `dev`, `MERGEABLE`** |
+| Réécriture d'historique | — | **aucune** (pas de force-push, pas de `main`) |
+
+## 2. Vault Obsidian
+
+- Note de session : `projects/ravum/operations/sessions/2026-11-09-t2-traceability-and-vscode-session.md`
+  dans le dépôt `Rwanbt/obsidian-dev-brain` (branche `master`). Le vault est un
+  dépôt séparé : aucun lien relatif ne le traverse depuis ce dépôt-ci.
+- Commit vérifié présent sur `origin/master` (`git cat-file -e`).
+- `python _system/tooling/vault.py check --format json` : `lint`, `links`,
+  `idempotence`, `root-cleanup` **verts** ; `migrate` signale **4 hashes
+  préexistants** dans `projects/rimatrix` et `projects/seno-daw`, hors périmètre
+  Ravum et non modifiés ici.
+
+## 3. SHA exacts des preuves
+
+| Preuve | SHA |
+|---|---|
+| Code et tests | **`a277b86`** |
+| CI Linux (dernier run complet vert sauf conformance) | `a277b86` |
+| Corpus de conformance | `a277b86` |
+| Rejeu fuzz | `0dc93a1` (arbre identique côté compilateur) |
+| Reproductibilité bit-à-bit | `a277b86` |
+| Session VS Code | `a277b86` |
+
+## 4. Matrice T0–T12
+
+| Gate | État | Base |
+|---|---|---|
+| T0 | **PASS** | corpus sécurité du socle (overlays, Git, journal, symlinks) |
+| T1 | PARTIAL | voies A/B réelles ; **voie C non implémentée** |
+| T2 | **FAIL** | 269 cas, **16 divergences d'identifiants de diagnostic** → D8 |
+| T3 | **PASS** | frontend conforme : 5 défauts corrigés, fuzz + Miri rejoués |
+| T4 | **BLOCKED** | **audit externe humain absent** |
+| T5 | **PASS** | natifs Windows **et** Linux (CI) + WASI, smoke 31 PASS |
+| T6 | PARTIAL | threads/réseau/async explicitement `UNSUPPORTED` |
+| T7 | **PASS** | **session VS Code réelle 10/10** + LSP 11 tests |
+| T8 | PARTIAL | oracle cold vs warm ; **pas de préservation d'état** |
+| T9 | PARTIAL | 9 verticales ; pas de HTTP+SQLite, DSP hôte, E2E navigateur |
+| T10 | PARTIAL | fuzz + Miri rejoués ; **audit externe absent** |
+| T11 | PARTIAL | bit-à-bit + performance mesurés ; **signature sans clé (D9)** |
+| T12 | **BLOCKED** | **Go/No-Go humain** |
+
+**4 `PASS` · 1 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED`.**
+
+## 5. Tests — exécutés, ignorés, non exécutés
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace --all-targets` | **82 suites, 1020 passés, 0 échec, 2 ignorés** |
+| Les 2 ignorés | `fuzz_*` de longue durée (`#[ignore]`), rejoués séparément |
+| LSP (tubes réels) | **11 passés** |
+| VS Code (session réelle) | **10 passés / 10** |
+| Smoke exemples | **31 passés / 0** |
+| `cargo fmt --all -- --check` | exit 0 |
+| `python tools/validate_repo_docs.py` | exit 0 |
+
+## 6. Conformance
+
+**269 cas : 252 PASS / 16 FAIL / 1 SKIP** (Windows) · **251 PASS / 16 FAIL / 2 SKIP** (Linux).
+
+Le `SKIP` est **par plateforme** : chaque cas tourne sur au moins un OS, aucun sur
+les deux. Ce n'est pas un `PASS` universel.
+
+Les **16 échecs** refusent exactement les programmes que la spécification refuse ;
+seul l'**identifiant** du diagnostic diffère, et **13 de ces identifiants ne sont
+enregistrés nulle part**. Détail :
+[`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).
+
+## 7. Corrections appliquées (14)
+
+LSP : navigation depuis la déclaration, `prepareRename`, `item_name_at`.
+Compilateur : `effects` contextuel, `ref` identifiant, `pub test fn`,
+`while`/`loop`/`for` en position de valeur, `int::abs`, zéros signés de
+`math::min`/`max`, `Vec<T>::clone` exigeant `Copy`, méthode sans appel,
+arité de motif tuple, chaînes raw/byte, plages hors `for`, `'a` sans cascade,
+cible d'affectation devant être une place.
+
+**Aucun `expect_codes` n'a été aligné sur le comportement observé** : ce sont les
+comportements qui ont été alignés sur la spécification.
+
+## 8. Fuzzing
+
+| Campagne | Résultat |
+|---|---|
+| lexer/parser, 200 000 itérations (249 054 entrées) | **0 échec**, digest `0xcb1740aef51d2879` |
+| sema, 100 000 itérations | **0 échec** |
+
+Rejouées **après** les correctifs : les chiffres antérieurs ne valaient plus.
+
+## 9. Miri et sanitizers
+
+- **Miri** : 65 + 93 + 1 = **159 tests, 0 échec** (CI Linux, `a277b86`).
+- **ThreadSanitizer** : `SKIP` explicite `NOT_APPLICABLE` — Core 1.0 n'expose ni
+  threads ni async. Justifié, pas supprimé.
+
+## 10. Benchmarks et ressources
+
+| N fonctions | lignes | `check` (médiane) | pic | `build` (médiane) | pic |
+|---:|---:|---:|---:|---:|---:|
+| 100 | 1 106 | 38,7 ms | 9,1 Mo | 284,9 ms | 10,0 Mo |
+| 500 | 5 506 | 86,4 ms | 20,1 Mo | 543,5 ms | 21,7 Mo |
+| 2 000 | 22 006 | 296,6 ms | 60,4 Mo | 1 789,6 ms | 63,8 Mo |
+
+`build` est dominé par `rustc` (~1,49 s sur 1,79 s à 2 000 fonctions). Détail et
+limites : [`PERFORMANCE.md`](../qualification/PERFORMANCE.md).
+
+## 11. Reproductibilité et chaîne de distribution
+
+- **Bit-à-bit** : deux builds depuis deux racines et deux `target/` donnent
+  `sha256 = 3B606F6B…9E9B` (`scripts/repro-check.ps1`). Sans drapeaux, trois
+  builds donnaient trois binaires ; l'écart se limitait à 20 octets d'horodatage
+  PE.
+- **SBOM** : 64 paquets, 170 relations, digest `057f006e…492b` à époque fixée.
+- **Licences** : 23/23 membres en `MIT OR Apache-2.0`.
+- **Signature** : mécanisme qualifié (accepte l'intact, rejette l'altéré d'un
+  octet) — **aucune clé de projet**, donc aucune release signée.
+
+## 12. Applications `.rv` et plateformes
+
+9 verticales exécutées : `hello`, `fib`, `calculator`, `file-tool`, `stats`,
+`dsp-gain-iir`, `package-demo`, `tests-demo`, `ffi-abs`.
+Plateformes qualifiées : Windows x86-64 (local), Linux x86-64 (CI), `wasm32-wasip1`.
+
+## 13. Limites de sécurité
+
+- `unsafe`/FFI : frontière documentée et testée, **non auditée par un humain**
+  (D7).
+- Aucune garantie ABI stable, aucune revendication macOS/ARM.
+- Le corpus est fini : l'absence d'échec n'est pas une preuve d'absence de bug.
+
+## 14. Décisions humaines
+
+| ID | Sujet | État |
+|---|---|---|
+| D1 | Licence | **RÉSOLUE** |
+| D2 | Ratification ADR / backend | ouverte |
+| D3 | Fusion `main` + release | ouverte |
+| D4 | **Audit externe** | ouverte — bloque T4/T12 |
+| D5 | Périmètre Tier 1 | partielle |
+| D6 | Périmètre universel | ouverte |
+| D7 | Frontière `unsafe`/FFI | ouverte |
+| **D8** | **Identifiants de diagnostic (16 cas)** | ouverte — **bloque T2** |
+| **D9** | **Custody de la clé de signature** | ouverte — bloque la signature |
+
+## 15. Verdict et reprise
+
+**Verdict de maturité : `CORE_RC_CANDIDATE`.** Jamais `RELEASED` : il n'y a ni
+audit externe, ni Go/No-Go humain, ni release signée.
+
+```powershell
+git fetch origin; git switch feat/lang-core-1.0-rc   # a277b86
+cargo build -p ravum-lang-cli
+cargo test --workspace --all-targets -- --test-threads=2   # 1020 pass
+cargo run -p ravum-conformance -- run                      # 252/16 assumés
+python tools/features_coverage.py --strict                 # 187/188 tracées
+pwsh -File scripts/lang-smoke.ps1 -SkipBuild               # 31 PASS
+pwsh -File scripts/repro-check.ps1                         # bit-à-bit
+pwsh -File scripts/lang-bench.ps1 -Runs 3                  # perf
+cd tools/vscode-ravum; npm install; node test/runTest.js   # 10/10 VS Code
+```
+
+## 16. Ce que ce rapport ne prétend pas
+
+- Ce n'est **pas** un audit de sécurité indépendant.
+- Ce n'est **pas** une preuve de correction du langage.
+- Les gates `PASS` sont bornés à leur périmètre écrit (plateformes, corpus,
+  profils) et le disent dans la matrice.
+- Les 16 échecs de conformance ne sont ni cachés ni requalifiés : ils attendent
+  un arbitrage humain.
