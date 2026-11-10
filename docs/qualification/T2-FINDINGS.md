@@ -545,3 +545,4 @@ justification reste une **revue humaine**, pas un fait machine. Aucune
 ratification humaine n''a eu lieu sur ce point : le statut `PASS` de T2 est un
 claim interne, pas une certification.
 
+

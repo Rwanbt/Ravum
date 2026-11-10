@@ -1,6 +1,6 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour P0 — 2026-11-10, SHA `63eda55`.** Les deux faux `PASS` de
+> **Mise à jour P0 — 2026-11-10, SHA `a5744ea`.** Les deux faux `PASS` de
 > validation sont corrigés : l'exemption `F-META-006` est désormais
 > machine-lisible et vérifiée (`tools/coverage_exemptions.json`), et
 > `W-TYP-UNREACHABLE` a été retiré parce que EXPR-5.9/G-6.44 imposent qu'un bras
@@ -190,6 +190,7 @@ cargo test -p ravum-lang-cli --test lsp_client
 pwsh -File scripts\sbom.ps1
 python tools\validate_repo_docs.py
 ```
+
 
 
 

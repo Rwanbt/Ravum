@@ -7,9 +7,9 @@
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
 > (SHA `a277b86`). La **section 0** ci-dessous porte la passe P0 du **2026-11-10**
-> (SHA `63eda55`) et **prévaut pour les chiffres courants**.
+> (SHA `a5744ea`) et **prévaut pour les chiffres courants**.
 
-## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `63eda55`)
+## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `a5744ea`)
 
 Deux vecteurs de faux `PASS` mesurés au début de la passe :
 
@@ -43,7 +43,7 @@ directions, dont `never-return-run` qui **compile et exécute** une fonction
 `-> !`, et une exécution réelle d'un tuple déstructuré par `match` (`t.0` → `7`).
 Détail : `docs/qualification/T2-FINDINGS.md` §14.
 
-Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
+Mesures locales sur `a5744ea` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
 | `cargo test --workspace --all-targets` | **83 suites, 1022 passés / 0 échec / 2 ignorés** |
@@ -55,11 +55,11 @@ Mesures locales sur `63eda55` (Windows 11 x86-64, rustc 1.95.0) :
 | Fuzz sema | 100 000 itérations, 0 échec |
 | Smoke exemples | 31 PASS / 0 FAIL |
 | Balayages CLI / stdlib | 13/13 PASS ; 64/64 PASS |
-| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 8B10B4B7…9ED2` |
-| SBOM | 64 paquets, 170 relations, digest `ca776dd8…aa14` à époque fixée |
+| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = EC3133FB…4865` |
+| SBOM | 64 paquets, 170 relations, digest `7c532967…93ee3` à époque fixée |
 | Miri Windows | 95 tests PASS ; tests utilisant `std::env::temp_dir` **NOT_RUN** (`GetTempPathW` non supporté) — Miri complet reste lié à la CI Linux antérieure |
 | CI sur `b7e5c5c` (code `63eda55`) | **succès** : 83 suites / 1019 passés Linux, conformance `340 cas / 338 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, gate-contracts succès |
-| CI sur le HEAD `043e36b` | **succès des 5 workflows** de la branche (dont Linux qualification `42811025492`) |
+| CI sur le HEAD `1fb0568` (code `a5744ea`) | **succès après re-run** : conformance `342 cas / 340 PASS / 0 FAIL / 2 SKIP`, Miri Linux **159 tests / 0 échec**, workspace 1019 / 0 / 4, gate-contracts succès (runs `42815650401`, `42815661183`). Un test flaky de `ravum-workspace-coordinator` a échoué puis est passé au re-run sans modification de cette crate. |
 
 Les statuts de gates évoluent sur deux points seulement : **T2 et T3 restent
 `PASS`** (leur preuve devient exécutable et bloquante au lieu d'être
@@ -278,6 +278,8 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
   profils) et le disent dans la matrice.
 - Les 82 règles sans test négatif sont comptées, pas dissimulées : c'est le
   travail restant de T2.
+
+
 
 
 

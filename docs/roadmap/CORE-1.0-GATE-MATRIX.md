@@ -18,31 +18,31 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de cette passe** | **`63eda55`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité |
+| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| **CI sur ce code** | **succès** sur `b7e5c5c` (même arbre que `63eda55`) : runs [42809676443](https://github.com/Rwanbt/Ravum/actions/runs/42809676443) et [42809676594](https://github.com/Rwanbt/Ravum/actions/runs/42809676594), détail §1 ter |
+| **CI sur ce code** | **succès** sur `1fb0568` (code `a5744ea`) : runs [42815650401](https://github.com/Rwanbt/Ravum/actions/runs/42815650401) (Linux) et [42815661183](https://github.com/Rwanbt/Ravum/actions/runs/42815661183) (gate contracts), détail §1 quater |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures de cette passe (SHA `63eda55`)
+## 1. Mesures de cette passe (SHA `a5744ea`)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
 | Tests workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **83 suites, 1022 passés / 0 échec / 2 ignorés** (exit 0) |
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | 13 PASS / 0 FAIL (mesure antérieure, code inchangé) |
-| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** — **rejoué sur `63eda55`** (diagnostics, survol, définition, références, renommage, complétion, symboles, formatage) |
+| **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10/10 observé** sur `63eda55`, mais **rejeu non stable** (10/10 puis 3/10, timeouts du harnais) — voir T7, désormais `PARTIAL` ; non rejoué sur `a5744ea` |
 | Conformance | `cargo run -p ravum-conformance -- run --json target/p3-conformance.json` | **342 cas : 341 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées, **188/188 satisfaites** (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)), exit 0 |
 | **Contrats de validation** | `python -m unittest discover -s tools/tests -v` | **8 tests PASS** (vecteurs de faux PASS T2 et registre) |
-| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0x338b9afe9926aa4f`, 20,2 s |
-| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 5 376 it/s, 18,6 s |
+| Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture` | **249 054 entrées, 0 échec**, digest `0x338b9afe9926aa4f`, 26,2 s |
+| Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec**, 4 132 it/s, 24,2 s |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
-| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = ca776dd8…aa14` à époque fixée |
+| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = 7c532967…93ee3` à époque fixée |
 | **Registre des codes** | `python tools/registry_audit.py` | **112 codes enregistrés ; 130 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
-| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 8B10B4B7…9ED2` (racines et `target/` différents) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = EC3133FB…4865` (racines et `target/` différents) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
 | **Contrat JSON** | `python tools/json_contract.py` | **6 scénarios**, 0 violation, **1 tension documentée** (`doctor` expose des chemins absolus, interdits par DIAG-7.5) |
@@ -50,8 +50,8 @@
 | **Balayage CLI** | `pwsh -File scripts/cli-sweep.ps1` | **13 cas, 13 PASS / 0 FAIL** |
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 PASS / 0 FAIL** |
 | **Miri (Windows)** | `cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests -- --skip loader::tests` | **93 + 2 PASS**, mais **`tests/ffi` NOT_RUN** : Miri Windows refuse `GetTempPathW`. Pas un défaut du programme ; **Miri complet a été rejoué en CI Linux sur `b7e5c5c`** (159 tests) |
-| Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
-| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `63eda55` |
+| Clone neuf | `git clone --depth 1` puis toutes les commandes ci-dessus | mesure antérieure `1b7b4f1` ; **non rejouée** sur `a5744ea` |
+| Performance | `pwsh -File scripts/lang-bench.ps1 -Runs 3 -Sizes 100,500,2000` | mesure antérieure `1b7b4f1` ; **non rejouée** sur `a5744ea` |
 
 Les deux SKIP de conformance sont **par plateforme** : Windows saute
 `security/dependency-absolute-unix`, Linux saute les deux cas spécifiques
@@ -78,12 +78,12 @@ ont depuis été corrigés dans le compilateur (mesure locale postérieure :
 **268 PASS / 0 FAIL / 1 SKIP**) ; la CI de conformance reste rouge **volontairement** tant que le travail de cas de T2 n'est pas terminé. Les autres workflows (*Documentation integrity*, *MVP*,
 *MVP impact-selected*) sont verts sur ce SHA.
 
-## 1 ter. CI sur le SHA poussé `b7e5c5c` (code `63eda55`, Linux) — **tous les jobs verts**
+## 1 ter. CI sur le SHA poussé `b7e5c5c` (code `a5744ea`, Linux) — **tous les jobs verts**
 
 Runs [42809676443](https://github.com/Rwanbt/Ravum/actions/runs/42809676443)
 (qualification Linux) et
 [42809676594](https://github.com/Rwanbt/Ravum/actions/runs/42809676594)
-(gate contracts). Le push couvre `63eda55` (code) et `b7e5c5c` (docs) ; les deux
+(gate contracts). Le push couvre `a5744ea` (code) et `b7e5c5c` (docs) ; les deux
 ont le même arbre de code.
 
 | Job | Résultat exact |
@@ -106,6 +106,31 @@ workflows de la branche sont également `success` : Documentation integrity,
 Gate contracts, MVP, MVP impact-selected et Linux qualification
 (run [42811025492](https://github.com/Rwanbt/Ravum/actions/runs/42811025492)).
 
+## 1 quater. CI sur `1fb0568` (code `a5744ea`, Linux) — **tous les jobs verts après un re-run**
+
+Runs [42815650401](https://github.com/Rwanbt/Ravum/actions/runs/42815650401)
+(Linux) et [42815661183](https://github.com/Rwanbt/Ravum/actions/runs/42815661183)
+(gate contracts).
+
+| Job | Résultat exact |
+|---|---|
+| Workspace tests | **succès — 83 suites, 1019 passés / 0 échec / 4 ignorés** |
+| Conformance corpus | **succès — `total=342 pass=340 fail=0 skip=2 not_run=0`** |
+| Miri (nightly) | **succès — 65 + 93 + 1 = 159 tests, 0 échec** |
+| Smoke, installateur, `wasm32-wasip1`, fuzz smoke | **succès** |
+| Documentation integrity | **succès** |
+| Gate contracts | **succès** |
+| ThreadSanitizer | `NOT_APPLICABLE` |
+
+**Flakiness identifiée (transparente)** : au premier passage, le job workspace a
+échoué sur `crash_in_commit_msg_hook_publishes_nothing_and_restarts_cleanly`
+(`ravum-workspace-coordinator`, assertion « the child should have been killed,
+but it exited successfully »). Le re-run du seul job en échec est **vert**, sans
+aucune modification de cette crate entre `b7e5c5c` (vert) et `1fb0568`
+(`git diff` ne touche que sema/registry/conformance/docs). C'est un **test
+flaky**, pas une régression démontrée ; il reste à instrumenter (fenêtre de
+kill du harnais) et ne doit pas être compté comme stable.
+
 ## 2. Matrice
 
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
@@ -120,7 +145,7 @@ Gate contracts, MVP, MVP impact-selected et Linux qualification
 | T7 | `PARTIAL` | CLI complète ; **LSP réel** (11 tests client) ; session VS Code **10/10** observée sur `1b7b4f1` et une fois sur `63eda55` | **Rejeu VS Code non reproductible** : 10/10 puis **3/10** (timeouts symboles/complétion/survol, erreur « not part of the analysed package ») sur le même arbre ; harnais E2E à stabiliser avant de revendiquer `PASS` | Flakiness E2E |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `63eda55` | Audit externe |
+| T10 | `PARTIAL` | 1022 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `b7e5c5c` (159 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** | **Audit externe absent** ; Miri Linux rejoué sur le même arbre que `a5744ea` | Audit externe |
 | T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
@@ -173,8 +198,8 @@ Passe de traçabilité complète dans
 - **Prouvé** : lexer/parser/AST réels, récupération, garde-fous, formateur
   idempotent, corpus négatif, interfaces LSP effectives.
 - **Fuzz complet rejoué sur le SHA de cette passe** : 249 054 entrées lexer/parser
-  (**0 échec**, digest `0x338b9afe9926aa4f`, 20,2 s) et 100 000 itérations `sema`
-  (**0 échec**, 5 376 it/s, 18,6 s). Le digest a changé par rapport à la campagne
+  (**0 échec**, digest `0x338b9afe9926aa4f`, 26,2 s) et 100 000 itérations `sema`
+  (**0 échec**, 4 132 it/s, 24,2 s). Le digest a changé par rapport à la campagne
   précédente, ce qui est attendu : `!` est désormais un type syntaxique et les
   tuples hétérogènes sont acceptés, donc l'ensemble des programmes acceptés
   change. L'empreinte reste donc liée au compilateur, pas une constante.
@@ -351,6 +376,10 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+
+
+
 
 
 
