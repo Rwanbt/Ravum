@@ -1,0 +1,13 @@
+{
+  "id": "cli/check-json-lexer-phase",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"code\":\"E-LEX-INT-SUFFIX\",\"severity\":\"error\",\"phase\":\"lex\"",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-1.1 / §4 phase 1: a lexer diagnostic reports `phase: lex`, not `parse` (the CLI used to derive `parse` from the code prefix; fixed, and `phase_for_code` is now locked against the registry by a unit test in crates/ravum-lang-cli/src/json.rs). The exact code+severity+phase fragment is asserted so a drift in any of the three is a failure."
+}

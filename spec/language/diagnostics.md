@@ -61,11 +61,11 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
-| `E-UNSUPPORTED-EFFECT` | sema | déclaration d'un effet non implémenté (`net`, `unsafe`, `ffi`, `async`) |
+| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté (`net`, `unsafe`, `ffi`, `async`) |
 | `E-UNSUPPORTED-EDITION` | modules | `edition` de `ravum.toml` inconnue |
 | `E-UNSUPPORTED-RANGE` | parse | `..`/`..=` hors `for`, slicing `&v[a..b]`, `..base` |
 | `E-UNSUPPORTED-CLOSURE` | parse | `|x| e` |
-| `E-UNSUPPORTED-DROP-IMPL` | sema | `impl Drop` / destructeur utilisateur |
+| `E-UNSUPPORTED-DROP-IMPL` | parse | `impl Drop` / destructeur utilisateur |
 
 ### 3.2 Résolution des noms
 
@@ -74,8 +74,8 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-RES-UNKNOWN` | resolve | nom, module, fonction, méthode, champ de module, variante non qualifiée d'un enum utilisateur, `str` seul, `io.println` (point) |
 | `E-RES-PRIVATE` | resolve | item, champ ou module privé accédé hors de son sous-arbre |
 | `E-RES-DUPLICATE` | resolve | deux items/imports de même nom dans le même module |
-| `E-RES-CONFLICT` | resolve | un import entre en collision avec une déclaration locale ou un autre import ambigu |
-| `E-RES-SELF` | resolve | `self`/`Self` hors contexte valide (`Self` hors `impl`, `self` param hors `impl`) |
+| `E-RES-CONFLICT` | resolve | un `use` nu se résout deux fois (module courant **et** racine, MOD-3.2) ou un nom déclaré entre en collision avec un nom du prélude |
+| `E-RES-SELF` | resolve | `self` hors contexte valide (paramètre `self` hors `impl`, pas en première position, ou dans `extern` ; expression `self` hors méthode) |
 | `E-RES-IMPL-UNKNOWN` | resolve | cible d'`impl` qui n'est pas un type nominal |
 | `E-RES-IMPL-DUPLICATE` | resolve | deux méthodes de même nom dans le même `impl` (ou impls redondants) |
 | `E-RES-IMPL-SELF-TYPE` | resolve | `impl` sur un type étranger (`i32`, `String`, `Vec<T>`) |
@@ -171,7 +171,6 @@ codes génériques — ce qui aurait dégradé des messages précis —, ils son
 | `E-LIMIT-FILE-SIZE` | parse | fichier source au-delà de la taille maximale analysable |
 | `E-LIMIT-FILES` | parse | nombre de fichiers du paquet au-delà de la limite |
 | `E-OWN-LIMIT` | ownership | limite interne de l'analyse d'ownership atteinte |
-| `E-PARSE-BAD-SUFFIX` | parse | suffixe de littéral entier inconnu |
 | `E-RES-CONST-NOT-CONST` | resolve | valeur de constante non représentable dans les faits du checker |
 | `E-RES-IMPL-TARGET` | resolve | paramètres génériques d'`impl` incohérents avec la cible |
 | `E-RES-MODDECL` | resolve | déclaration `mod nom;` non étendue par le chargeur |
@@ -180,7 +179,6 @@ codes génériques — ce qui aurait dégradé des messages précis —, ils son
 | `E-UNSUPPORTED-ALIAS` | parse | alias `use … as …` refusé |
 | `E-UNSUPPORTED-ASSOC-TYPE` | parse | type associé sur `Self` refusé |
 | `E-UNSUPPORTED-BOUNDS` | parse | bornes génériques (`T: X`) refusées |
-| `E-UNSUPPORTED-COMPOUND-ASSIGN` | parse | affectation composée refusée |
 | `E-UNSUPPORTED-FN-TYPE` | parse | type pointeur de fonction (`fn(...)`) refusé |
 | `E-UNSUPPORTED-MOVE` | parse | `move` refusé |
 | `E-UNSUPPORTED-RANGE-PAT` | parse | motif de plage (`a..b`) refusé |
@@ -189,7 +187,6 @@ codes génériques — ce qui aurait dégradé des messages précis —, ils son
 | `E-UNSUPPORTED-STATIC` | parse | item `static` refusé |
 | `E-UNSUPPORTED-TUPLE-STRUCT` | parse | struct tuple (`struct S(...)`) refusée |
 | `E-UNSUPPORTED-TYPE-ALIAS` | parse | alias de type (`type`) refusé |
-| `E-UNSUPPORTED-UFCS` | parse | appel UFCS (`Type::method(receiver, …)`) refusé |
 | `E-UNSUPPORTED-VIS` | parse | visibilité restreinte `pub(...)` refusée |
 
 **Résolu le 2026-11-10 — l'émission a été supprimée.** `W-TYP-UNREACHABLE`
@@ -444,3 +441,7 @@ error[E-TYP-MISMATCH]: mismatched types
 - **Q-DIAG-5** — Le format texte (DIAG-6) est spécifié mais non contractuel. Faut-il un mode stable (`--error-format=json` suffit-il) pour les agents ? Recommandation : oui, JSON uniquement.
 - **Q-DIAG-6** — `run` propage le code du programme (DIAG-8.1), ce qui rend `1` ambigu. Un mode `--wrap-exit` (préfixe `10+`) n'existe pas ; à décider si un CI en a besoin.
 - **Q-DIAG-7** — Le budget de 100 diagnostics par fichier (DIAG-4.3) n'est pas dans le design ; il est nécessaire à P0-H (bornes). Valeur à ratifier.
+- **Q-DIAG-8 (résolue le 2026-11-10)** — `E-PARSE-BAD-SUFFIX` est **retiré du registre**. Il dupliquait `E-LEX-INT-SUFFIX` (LEX-8.3 MUST : « suffixe inconnu → `E-LEX-INT-SUFFIX`, span du suffixe »), aucune règle ne l'attribuait au parseur, et le lexer validant déjà tous les suffixes il ne pouvait pas être atteint. Le parseur garde un chemin **défensif** qui émet `E-LEX-INT-SUFFIX` (entier) ou `E-LEX-NUMBER` (flottant) si un token portait un suffixe inconnu, de sorte que l'invariant reste *fail-closed*. Conséquence : **109 codes** enregistrés (voir `docs/qualification/T2-FINDINGS.md` §20).
+- **Q-DIAG-9 (résolue le 2026-11-10)** — Deux lignes de §3.1 portaient la phase `sema`, qui n'existe pas dans §4. `E-UNSUPPORTED-EFFECT` est désormais `resolve` (émis par `resolve.rs` et par le contrôle de profil) et `E-UNSUPPORTED-DROP-IMPL` est `parse` (émis par le parseur). `phase_for_code` (sortie JSON) dérive maintenant exactement la phase du registre pour **tous** les codes, et un test lit ce fichier pour empêcher toute dérive (`crates/ravum-lang-cli/src/json.rs`).
+- **Q-DIAG-10 (résolue le 2026-11-10)** — `E-UNSUPPORTED-COMPOUND-ASSIGN` est **retiré** : `grammar.md` G-6.8 et `expressions.md` EXPR-9.4 (MUST) déclarent la famille complète acceptée et Q-GRAM-3 précise « aucun `E-*` spécifique ». L'implémentation accepte désormais `+= -= *= /= %= &= |= ^= <<= >>=` avec la sémantique `place = place op e` (une seule évaluation de `place`, garantie par l'abaissement Rust `place op= e`).
+- **Q-DIAG-11 (résolue le 2026-11-10)** — `E-UNSUPPORTED-UFCS` est **retiré** : EXPR-7.8 (MUST) dit explicitement qu'un `Type::methode(receveur, ...)` explicite n'existe pas et que le code est `E-RES-UNKNOWN` ; `E-UNSUPPORTED-UFCS` n'était nommé que par le catalogue `unsupported.md` et n'était émis par aucun chemin atteignable (même situation que `E-PARSE-BAD-SUFFIX`, Q-DIAG-8). Conséquence : **108 codes** enregistrés ; la ligne UFCS de `unsupported.md` renvoie de nouveau à `E-RES-UNKNOWN`.

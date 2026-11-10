@@ -871,6 +871,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
 
         // `test fn` : pas de paramètre, retour `()` ou `Result<(), Error>`.
+        // Une signature invalide est une erreur de **typage** nommée
+        // `E-TYP-MAIN` par `diagnostics.md` (« `test fn` invalide »), et non une
+        // erreur de syntaxe : G-3.6 et MOD-4.10 décrivent la contrainte de
+        // signature, pas une forme grammaticale refusée par le parseur.
         let tests = self.facts.test_fns.clone();
         for id in tests {
             let Some(sig) = self.facts.fn_sigs.get(&id).cloned() else {
@@ -884,14 +888,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .unwrap_or(Span::dummy());
             if !sig.params.is_empty() {
                 self.error(
-                    "E-PARSE-EXPECTED",
+                    "E-TYP-MAIN",
                     span,
                     "a test function takes no parameter".to_string(),
                 );
             }
             if !(sig.ret == Type::Unit || self.is_result_unit_error(&sig.ret)) {
                 self.error(
-                    "E-PARSE-EXPECTED",
+                    "E-TYP-MAIN",
                     span,
                     "a test function returns `()` or `Result<(), Error>`".to_string(),
                 );
@@ -1187,6 +1191,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .to_string(),
             );
         }
+        // TYP-13.2 / TYP-13.4 : les variables d'inférence sont une
+        // représentation interne. Une fois qu'une contrainte les a liées
+        // (`v.push(1)` lie l'élément de `Vec::new()`), tout type remis à un
+        // appelant doit refléter la liaison, sinon une comparaison brute
+        // (`s += v[i]`, `y = v[i]`, ...) voit encore `$0` et émet un faux
+        // `E-TYP-MISMATCH`. `resolve_vars` ne lie rien : il substitue seulement
+        // les variables déjà liées, donc aucune inférence n'est ajoutée.
+        let ty = self.resolve_vars(&ty);
         self.record_expr_type(expr.id, &ty);
         ty
     }
@@ -1854,13 +1866,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     "extern function `{}` can only be called inside an `unsafe {{ ... }}` block",
                     sig.name
                 ),
-            );
-        }
-        if sig.receiver.is_some() {
-            self.error(
-                "E-UNSUPPORTED-UFCS",
-                span,
-                "UFCS (`Type::method(receiver, ...)`) is not supported in Core 1.0".to_string(),
             );
         }
         // Correspondance impl génériques <-> type de retour attendu.
@@ -3046,13 +3051,30 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
             B::Eq | B::Ne => {
-                if (is_text_like(&l_ty) && is_text_like(&r_ty))
-                    || (l_ty == r_ty
-                        && (l_ty.is_int()
-                            || l_ty.is_float()
-                            || l_ty == Type::Bool
-                            || l_ty == Type::Char))
-                {
+                // TYP-7.3 : `==`/`!=` sont définis sur tous les entiers,
+                // `f32`/`f64`, `bool`, `char`, et sur le texte (`String`, `&str`
+                // et tout mélange des deux). Les agrégats restent non
+                // comparables (`E-TYP-EQ`).
+                let same_scalar = l_ty == r_ty
+                    && (l_ty.is_int()
+                        || l_ty.is_float()
+                        || l_ty == Type::Bool
+                        || l_ty == Type::Char);
+                if (is_text_like(&l_ty) && is_text_like(&r_ty)) || same_scalar {
+                    Type::Bool
+                } else if l_ty.is_numeric() && r_ty.is_numeric() {
+                    // EXPR-4.8 / TYP-13.2 : deux types numériques différents ne
+                    // se mélangent jamais implicitement (`f32` vs `f64`,
+                    // `i32` vs `i64`, ...) : c'est un désaccord d'opérandes
+                    // (`E-TYP-MISMATCH`), pas un type non comparable.
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operands of `{}` must have the same type: `{l_ty}` vs `{r_ty}`",
+                            op.as_str()
+                        ),
+                    );
                     Type::Bool
                 } else {
                     self.error(
@@ -3067,8 +3089,22 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
             B::Lt | B::Le | B::Gt | B::Ge => {
-                let ok = l_ty == r_ty && (l_ty.is_int() || l_ty.is_float() || l_ty == Type::Char);
-                if ok {
+                // TYP-7.4 : `< <= > >=` ne sont définis que sur les entiers,
+                // `f32`/`f64` et `char` (jamais sur le texte).
+                let same_scalar =
+                    l_ty == r_ty && (l_ty.is_int() || l_ty.is_float() || l_ty == Type::Char);
+                if same_scalar {
+                    Type::Bool
+                } else if l_ty.is_numeric() && r_ty.is_numeric() {
+                    // EXPR-4.8 / TYP-13.2 : même règle que pour `==`/`!=`.
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operands of `{}` must have the same type: `{l_ty}` vs `{r_ty}`",
+                            op.as_str()
+                        ),
+                    );
                     Type::Bool
                 } else {
                     self.error(
@@ -3183,28 +3219,86 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         target: &Expr,
         value: &Expr,
     ) -> Type {
-        if op != ast::BinOp::Add {
-            self.error(
-                "E-UNSUPPORTED-COMPOUND-ASSIGN",
-                expr.span,
-                format!(
-                    "compound assignment `{}` is not supported in Core 1.0 (only `+=`)",
-                    op.as_str()
-                ),
-            );
-        }
+        // G-6.8 / EXPR-9.4 (MUST) : toute la famille des affectations
+        // composées est **acceptée** (`+= -= *= /= %= &= |= ^= <<= >>=`), avec
+        // la sémantique `place = place op e`. `place` n'est évaluée qu'une
+        // fois : c'est l'affectation composée du Rust émis (`place op= e`) qui
+        // le garantit ; le vérificateur de types ne contrôle donc que les
+        // types des opérandes et la mutabilité de la place.
+        use ast::BinOp as B;
+        let sym = format!("{}=", op.as_str());
         let target_ty = self.check_expr(target, None);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
-        let ok = (target_ty.is_int() && value_ty.is_int())
-            || (target_ty.is_float() && value_ty.is_float());
-        if !ok || target_ty != value_ty {
-            self.error(
-                "E-TYP-MISMATCH",
-                expr.span,
-                format!(
-                    "`+=` requires operands of the same numeric type, found `{target_ty}` and `{value_ty}`"
-                ),
-            );
+        match op {
+            B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
+                // TYP-13.2 : aucune conversion implicite, pas même entre deux
+                // entiers (`i32` vs `i64`) ni entre `f32` et `f64` (EXPR-4.8).
+                let same_numeric = (target_ty.is_int() && value_ty.is_int())
+                    || (target_ty.is_float() && value_ty.is_float());
+                if !same_numeric {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operator `{sym}` is not defined for `{target_ty}` and `{value_ty}`"
+                        ),
+                    );
+                } else if target_ty != value_ty {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operands of `{sym}` must have the same type: `{target_ty}` vs `{value_ty}`"
+                        ),
+                    );
+                }
+            }
+            B::BitAnd | B::BitOr | B::BitXor => {
+                let ok = (target_ty.is_int() && value_ty.is_int() && target_ty == value_ty)
+                    || (target_ty == Type::Bool && value_ty == Type::Bool);
+                if !ok {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operator `{sym}` requires two integers of the same type or two `bool`"
+                        ),
+                    );
+                }
+            }
+            B::Shl | B::Shr => {
+                // EXPR-3.4 : comme pour `<<`/`>>`, les deux opérandes doivent
+                // être entiers mais leurs types peuvent différer (le résultat a
+                // le type de la gauche) ; un décalage littéral négatif est
+                // refusé statiquement.
+                if target_ty.is_int() && value_ty.is_int() {
+                    if is_negative_int_literal(value) {
+                        self.error(
+                            "E-TYP-SHIFT",
+                            value.span,
+                            "shift amount must not be negative".to_string(),
+                        );
+                    }
+                } else {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        expr.span,
+                        format!(
+                            "operator `{sym}` requires integer operands, found `{target_ty}` and `{value_ty}`"
+                        ),
+                    );
+                }
+            }
+            // Le parseur ne construit un `AssignOp` qu'avec l'un des dix
+            // opérateurs ci-dessus (G-6.8) ; ce bras n'est donc pas atteignable,
+            // mais un refus typé vaut mieux qu'un silence.
+            B::And | B::Or | B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge => {
+                self.error(
+                    "E-TYP-MISMATCH",
+                    expr.span,
+                    format!("`{sym}` is not a compound assignment operator"),
+                );
+            }
         }
         if !matches!(target_ty, Type::Error) && !self.place_is_mutable(target) {
             self.error(

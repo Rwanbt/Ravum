@@ -76,7 +76,13 @@ use std::collections::BTreeMap;
 /// Bornes de robustesse / performance (P0-H).
 const MAX_DEPTH: u32 = 256;
 const MAX_FIXPOINT: u32 = 16;
-const MAX_DIAGS_PER_FN: u32 = 200;
+/// Per-function borrow-error bound. It **must** stay strictly below the
+/// per-file diagnostic budget (`ravum_lang_syntax::diag::DIAGNOSTIC_BUDGET`,
+/// 100, DIAG-1.7/DIAG-4.3): otherwise the file budget would emit
+/// `E-PARSE-TOO-LARGE` first and `E-OWN-LIMIT` could never be observed.
+/// 50 keeps the limit reachable even when earlier phases already spent part of
+/// the file budget.
+const MAX_DIAGS_PER_FN: u32 = 50;
 
 const E_UNINIT: &str = "E-OWN-UNINIT";
 const E_USE_AFTER_MOVE: &str = "E-OWN-USE-AFTER-MOVE";

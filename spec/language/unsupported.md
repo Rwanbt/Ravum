@@ -22,15 +22,15 @@ Le design §5 énumère les limites de l'itération. Une liste en prose se perd 
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
 | Traits | `trait T { ... }` | `E-UNSUPPORTED-TRAIT` | parse | `struct`/`enum` + `impl` inhérent |
-| Bornes de type | `fn f<T: Ord>(...)` | `E-UNSUPPORTED-TRAIT` | parse | génériques sans bornes |
+| Bornes de type | `fn f<T: Ord>(...)` | `E-UNSUPPORTED-BOUNDS` | parse | génériques sans bornes |
 | `where` | `fn f<T>(...) where T: X` | `E-UNSUPPORTED-WHERE` | parse | aucune |
 | `impl Trait` | `fn f() -> impl T` | `E-UNSUPPORTED-IMPL-TRAIT` | parse | type concret ou générique |
 | Objets-trait | `Box<dyn T>`, `dyn T` | `E-RES-UNKNOWN` (`dyn` est un identifiant valide, Q-LEX-1) | types | enum fermé |
 | HRTB | `for<'a> fn(...)` | `E-UNSUPPORTED-TRAIT` | parse | aucune |
 | GAT / types associés | `type Item;` | `E-UNSUPPORTED-TRAIT` | parse | aucune |
-| `impl Drop` | `impl Drop for T { fn drop(...) }` | `E-UNSUPPORTED-DROP-IMPL` (R) | resolve | destruction structurelle ; `drop(x)` |
-| `static` | `static X: i32 = 1;` | `E-UNSUPPORTED-TOKEN` | parse | `const` (mot-clé réservé, non supporté) |
-| Alias de type | `type A = B;` | `E-UNSUPPORTED-TOKEN` | parse | répéter le type (`type` est réservé) |
+| `impl Drop` | `impl Drop for T { fn drop(...) }` | `E-UNSUPPORTED-DROP-IMPL` (R) | parse | destruction structurelle ; `drop(x)` |
+| `static` | `static X: i32 = 1;` | `E-UNSUPPORTED-STATIC` | parse | `const` |
+| Alias de type | `type A = B;` | `E-UNSUPPORTED-TYPE-ALIAS` | parse | répéter le type (`type` est réservé) |
 | `union` | `union U { ... }` | `E-PARSE-EXPECTED` | parse | `struct` + `enum` |
 | Const generics | `struct A<const N: usize>` | `E-PARSE-EXPECTED` | parse | tableau `[T; N]` littéral |
 | Variadiques | `fn f(x: i32, ...)` | `E-PARSE-EXPECTED` | parse | `Vec<T>` explicite |
@@ -57,7 +57,8 @@ struct P { x: i32 }
 
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
-| Closures | `|x| x + 1`, `move |x| ...` | `E-UNSUPPORTED-CLOSURE` | parse | fonction nommée ; pas de capture |
+| Closures | `|x| x + 1` | `E-UNSUPPORTED-CLOSURE` | parse | fonction nommée ; pas de capture |
+| `move` | `move |x| ...`, item `move` | `E-UNSUPPORTED-MOVE` | parse | aucune |
 | `async`/`await` | `async fn`, `.await` | `E-UNSUPPORTED-ASYNC` | parse | aucune |
 | `unsafe fn` | `unsafe fn f() {}` | `E-UNSUPPORTED-UNSAFE` | parse | bloc `unsafe { }` + `extern "C"` |
 | Pointeurs bruts | `*const T`, `*mut T`, `&raw` | `E-UNSUPPORTED-UNSAFE` | parse | références `&T`/`&mut T` |
@@ -76,7 +77,7 @@ struct P { x: i32 }
 | Mise à jour de struct | `P { x: 1, ..old }` | `E-UNSUPPORTED-RANGE` | parse | affecter les champs |
 | Pattern de `let` | `let (a, b) = t;` | `E-PARSE-EXPECTED` | parse | `match` |
 | Pattern de paramètre | `fn f((a, b): (i32, i32))` | `E-PARSE-EXPECTED` | parse | paramètres séparés / `match` |
-| UFCS | `Type::methode(recv, ...)` | `E-RES-UNKNOWN` | resolve | `recv.methode(...)` |
+| UFCS | `Type::methode(recv, ...)` | `E-RES-UNKNOWN` (EXPR-7.8) | resolve | `recv.methode(...)` |
 | Appel de module avec point | `io.println("x")` | `E-RES-UNKNOWN` | resolve | `io::println("x")` |
 | `+` sur `String` | `a + b` (texte) | `E-TYP-EQ`/`E-TYP-MISMATCH` | types | `push_str` |
 | Surcharge d'opérateurs | `impl Add for T` | `E-UNSUPPORTED-TRAIT` | parse | méthodes nommées |
@@ -84,11 +85,11 @@ struct P { x: i32 }
 | Indexation de `String` | `s[0]` | `E-TYP-INDEX` | types | `lines`, `contains`, `as_str` |
 
 ```rv
-// NÉGATIF (cumul) — E-UNSUPPORTED-RANGE, E-PARSE-EXPECTED (compound), E-RES-UNKNOWN (point)
+// NÉGATIF (cumul) — E-UNSUPPORTED-RANGE, E-RES-UNKNOWN (point)
 fn f(v: Vec<i32>) {
     let r = 0..3;
     let mut n = 1;
-    n *= 2;
+    n += 1; // les affectations composées sont supportées (EXPR-9.4)
     io.println("x");
 }
 ```
@@ -101,9 +102,9 @@ fn f(v: Vec<i32>) {
 | Pattern ou | `1 | 2 => ...` | `E-UNSUPPORTED-TOKEN` | parse | deux bras |
 | Garde de pattern | `n if n > 0 => ...` | `E-UNSUPPORTED-TOKEN` | parse | `if` dans le corps |
 | `@` (binding) | `x @ 1..=5` | `E-UNSUPPORTED-TOKEN` | parse | bras séparés |
-| Pattern de plage | `1..=5 => ...` | `E-UNSUPPORTED-RANGE` | parse | `_` + `if` |
+| Pattern de plage | `1..=5 => ...` | `E-UNSUPPORTED-RANGE-PAT` | parse | `_` + `if` |
 | Pattern de struct | `Point { x, y }` | `E-PARSE-EXPECTED` | parse | accès de champ / méthode |
-| Reste de tuple | `(a, ..)` | `E-UNSUPPORTED-RANGE` | parse | tuple complet |
+| Reste de tuple | `(a, ..)` | `E-UNSUPPORTED-REST-PAT` | parse | tuple complet |
 | `match` sur `String` | `match s { "a" => ... }` avec `s: String` | `E-TYP-EQ` | types | `match s.as_str()` |
 
 > Les patterns de **littéraux flottants** sont **acceptés** (sémantique `==`, `NaN` ne correspond jamais ; `-0.0` correspond à `0.0`). Voir [`grammar.md`](grammar.md) G-6.36.

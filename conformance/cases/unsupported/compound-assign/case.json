@@ -1,9 +1,0 @@
-{
-  "id": "unsupported/compound-assign",
-  "mode": "compile-fail",
-  "expect_codes": [
-    "E-UNSUPPORTED-COMPOUND-ASSIGN"
-  ],
-  "unsupported": true,
-  "notes": "diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-COMPOUND-ASSIGN: only `+=` is accepted. Contradicts grammar G-6.8 / Q-GRAM-3, which declare the whole compound family accepted (contradiction reported)."
-}

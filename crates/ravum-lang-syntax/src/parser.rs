@@ -4000,6 +4000,15 @@ impl<'a> Parser<'a> {
     // Literal suffix validation
     // ---------------------------------------------------------------------
 
+    // The lexer validates literal suffixes (LEX-8.3) and reports
+    // `E-LEX-INT-SUFFIX` / `E-LEX-NUMBER`, so a token never carries an unknown
+    // suffix in practice. These parsers are the defensive, fail-closed path:
+    // should an unknown suffix ever reach the parser, it is reported with the
+    // same canonical lexer code instead of being dropped. `E-PARSE-BAD-SUFFIX`
+    // used to be registered for this case; it duplicated `E-LEX-INT-SUFFIX`
+    // with no rule assigning it to the parser and was unreachable
+    // (`docs/qualification/T2-FINDINGS.md` §20).
+
     fn int_suffix(&mut self, suffix: Option<String>, span: Span) -> Option<IntTy> {
         match suffix {
             None => None,
@@ -4007,7 +4016,7 @@ impl<'a> Parser<'a> {
                 Some(ty) => Some(ty),
                 None => {
                     self.diags.error(
-                        "E-PARSE-BAD-SUFFIX",
+                        "E-LEX-INT-SUFFIX",
                         span,
                         format!("unknown integer literal suffix `{name}`"),
                     );
@@ -4024,7 +4033,7 @@ impl<'a> Parser<'a> {
                 Some(ty) => Some(ty),
                 None => {
                     self.diags.error(
-                        "E-PARSE-BAD-SUFFIX",
+                        "E-LEX-NUMBER",
                         span,
                         format!("unknown float literal suffix `{name}`"),
                     );

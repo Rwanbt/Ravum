@@ -1387,3 +1387,38 @@ fn wasm_missing_node_reports_runtime_error() {
         stderr(&output)
     );
 }
+
+/// `E-LIMIT-FILE-SIZE` (P0-H robustness bound, `MAX_FILE_SIZE` = 8 MiB): a real
+/// source file above the limit is refused before parsing with exactly that code
+/// (`diagnostics.md` §3.1). The fixture is generated at run time: an 8 MiB file
+/// committed to the repository would be roughly fifty times the whole
+/// conformance corpus.
+#[test]
+fn oversized_source_file_is_refused_with_e_limit_file_size() {
+    let temp = TempDir::new("oversized");
+    temp.write("ravum.toml", &manifest("oversized", ""));
+    let mut source = String::from("fn main() { }\n");
+    // 8 MiB of padding guarantees `len() > MAX_FILE_SIZE` in the loader.
+    source.push_str(&" ".repeat(8 * 1024 * 1024));
+    temp.write("src/main.rv", &source);
+
+    let output = run(&["check", "--json", temp.path().to_str().unwrap()]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an oversized file must fail the check; stderr: {}",
+        stderr(&output)
+    );
+    let value = json(&output);
+    assert_json_envelope(&value, "check");
+    let codes: Vec<String> = value["diagnostics"]
+        .as_array()
+        .expect("diagnostics array")
+        .iter()
+        .filter_map(|diagnostic| diagnostic["code"].as_str().map(str::to_string))
+        .collect();
+    assert!(
+        codes.iter().any(|code| code == "E-LIMIT-FILE-SIZE"),
+        "expected E-LIMIT-FILE-SIZE, got {codes:?}"
+    );
+}

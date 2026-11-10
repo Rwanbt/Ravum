@@ -66,7 +66,7 @@ self_param     = "&" [ "mut" ] "self" | "self" ;
 | G-3.2 | `effects(...)` vient **après** le type de retour (ou après `)` si le retour est omis) et **avant** le bloc. Toute autre position est `E-PARSE-UNEXPECTED`. | MUST |
 | G-3.3 | Un effet inconnu (pas un des 9 groupes) est `E-EFF-UNKNOWN`, pas une erreur de parse. | MUST |
 | G-3.4 | Un paramètre est **toujours** `IDENT ":" type`. Le pattern de paramètre (`(a, b): (i32, i32)`) n'existe pas en Core 1.0 (`E-PARSE-EXPECTED`). | MUST |
-| G-3.5 | `generic_params` déclare uniquement des paramètres de type nus ; aucune borne, aucun `where`, aucune lifetime. `where` produit `E-UNSUPPORTED-WHERE` ; `T: Trait` produit `E-UNSUPPORTED-TRAIT`. | MUST |
+| G-3.5 | `generic_params` déclare uniquement des paramètres de type nus ; aucune borne, aucun `where`, aucune lifetime. `where` produit `E-UNSUPPORTED-WHERE` ; `T: Trait` produit `E-UNSUPPORTED-BOUNDS`. | MUST |
 | G-3.6 | `test_item` **MUST NOT** être `pub` et n'a **aucun paramètre**. Son type de retour est `()` ou `Result<(), Error>` (`E-TYP-MAIN` sinon) ; un test qui rend `Err` est un **échec de test** (code de sortie `1`). | MUST |
 | G-3.7 | `self_param` est obligatoire en premier paramètre d'une méthode d'`impl` qui porte `self` ; une fonction associée n'a pas de `self`. Un `self` hors `impl` produit `E-RES-SELF`. | MUST |
 | G-3.8 | Aucune valeur de retour « nulle part » : `->` sans type est `E-PARSE-EXPECTED`. | MUST |
@@ -183,7 +183,7 @@ generic_args   = "<" type { "," type } [ "," ] ">" ;
 | G-5.7 | Il n'existe **aucun** pointeur brut (`*const T`, `*mut T`) : `E-UNSUPPORTED-UNSAFE`. | MUST |
 | G-5.8 | Il n'existe **aucun** `impl Trait`, `Box<T>`, ni `str` autonome : `E-UNSUPPORTED-IMPL-TRAIT`, `E-RES-UNKNOWN`. `dyn` est un **identifiant valide** : `dyn T` est un nom de type inconnu (`E-RES-UNKNOWN`). | MUST |
 | G-5.9 | Les arguments génériques ne sont admis **qu'en position de type**. Le turbofish `f::<i32>(x)` n'existe pas : `E-PARSE-UNEXPECTED`. | MUST |
-| G-5.10 | `Self` est un alias du type cible de l'`impl` englobant ; hors `impl`, `E-RES-SELF`. | MUST |
+| G-5.10 | `Self` est un alias du type cible de l'`impl` englobant ; hors `impl`, `E-RES-SELF-OUTSIDE-IMPL`. | MUST |
 | G-5.11 | `!` est le **type Never** : aucune valeur, aucune taille. Il est le type des expressions divergentes (`return`, `break`, `continue`, `panic`, `process::exit`) et **coerce implicitement vers tout type**. Il n'est ni constructible, ni un type de paramètre, de champ, de `Vec` ou de retour d'une fonction non divergente. | MUST |
 
 ```rv
@@ -500,18 +500,19 @@ expr_path      = ( "crate" | "super" | "self" | IDENT ) { "::" ( IDENT | "self" 
 | Construction | Code |
 |---|---|
 | `#[...]`, `#![...]` | `E-UNSUPPORTED-ATTR` |
-| `trait`, `impl Trait`, `where`, bornes | `E-UNSUPPORTED-TRAIT`, `E-UNSUPPORTED-IMPL-TRAIT`, `E-UNSUPPORTED-WHERE` |
+| `trait`, `impl Trait`, `where`, bornes | `E-UNSUPPORTED-TRAIT`, `E-UNSUPPORTED-IMPL-TRAIT`, `E-UNSUPPORTED-WHERE`, `E-UNSUPPORTED-BOUNDS` |
 | `dyn T` | `E-RES-UNKNOWN` (`dyn` = identifiant valide) |
 | closures `|x| e` | `E-UNSUPPORTED-CLOSURE` |
-| `async`, `await`, `move` | `E-UNSUPPORTED-ASYNC`, `-AWAIT`, `-MOVE-KEYWORD` |
+| `async`, `await`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-AWAIT`, `E-UNSUPPORTED-MOVE` |
 | `unsafe`, `extern`, pointeurs bruts | `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN` (`*const`/`*mut` → `E-UNSUPPORTED-UNSAFE`) |
 | `macro!`, `macro_rules!` | `E-UNSUPPORTED-MACRO` |
-| `static`, `type` alias, `union` | `E-PARSE-EXPECTED` (ce ne sont pas des mots-clés, voir Q-LEX-1) |
-| `use a::*`, `use a as b`, `pub use` | `E-UNSUPPORTED-TOKEN`, `-ALIAS`, `-REEXPORT` |
+| `static` | `E-UNSUPPORTED-STATIC` (`static` est un mot-clé réservé, Q-LEX-1) |
+| `type` alias | `E-UNSUPPORTED-TYPE-ALIAS` |
+| `union` | `E-PARSE-EXPECTED` (`union` n'est pas un mot-clé) |
+| `use a::*` / `use a as b` / `pub use` | `E-UNSUPPORTED-TOKEN` / `E-UNSUPPORTED-ALIAS` / `E-UNSUPPORTED-REEXPORT` |
 | patterns `ref`, `@`, gardes, `\|` | `E-PARSE-EXPECTED` (`ref` = identifiant), `E-UNSUPPORTED-TOKEN` (garde, `\|`) |
 | `..=`, ranges hors `for` | `E-UNSUPPORTED-RANGE`, `-RANGE` |
 | `break e` | `E-PARSE-EXPECTED` |
-| compound `-= *= /= %= <<= >>= &= ^= |=` | `E-PARSE-EXPECTED` |
 | turbofish `f::<T>(..)` | `E-PARSE-UNEXPECTED` |
 | shorthand de champ en **expression** | `E-PARSE-EXPECTED` |
 | `..base` (struct update) | `E-UNSUPPORTED-RANGE` |

@@ -1552,21 +1552,12 @@ impl<'a> Emitter<'a> {
                 self.operand(target, indent)?,
                 self.expr(value, indent)?
             )),
-            ExprKind::AssignOp { op, target, value } => {
-                if !op.is_arithmetic() {
-                    return Err(err(format!(
-                        "compound assignment with `{}` is not supported (expression node {})",
-                        op.as_str(),
-                        expr.id
-                    )));
-                }
-                Ok(format!(
-                    "{} {}= {}",
-                    self.operand(target, indent)?,
-                    op.as_str(),
-                    self.expr(value, indent)?
-                ))
-            }
+            ExprKind::AssignOp { op, target, value } => Ok(format!(
+                "{} {}= {}",
+                self.operand(target, indent)?,
+                op.as_str(),
+                self.expr(value, indent)?
+            )),
             ExprKind::Cast { expr: inner, ty } => Ok(format!(
                 "{} as {}",
                 self.operand(inner, indent)?,

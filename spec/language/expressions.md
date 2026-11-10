@@ -344,7 +344,6 @@ fn g() { assert_eq(1); }
 | `E-OWN-BORROW-CONFLICT` | assignation sous emprunt actif |
 | `E-OWN-USE-AFTER-MOVE` | lecture/écriture d'une place déplacée |
 | `E-OWN-PARTIAL-MOVE` | déplacement hors d'un `Vec` |
-| `E-PARSE-EXPECTED` | opérateur composé autre que `+=` |
 | `E-UNSUPPORTED-TOKEN` | étiquette de boucle |
 | `E-RES-UNKNOWN` | appel `Type::methode(recv, ...)` |
 

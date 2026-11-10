@@ -140,12 +140,27 @@ fn span_object(sources: &SourceMap, span: Span) -> JsonSpan {
 }
 
 /// Phase from the code prefix, as defined by the canonical registry
-/// (`spec/language/diagnostics.md` §3/§4).
+/// (`spec/language/diagnostics.md` §3). Every registered code reports exactly
+/// the phase its registry row names (§4 fixes the phase order); the irregular
+/// codes whose prefix lies about their phase are listed explicitly below, and
+/// `every_registered_code_reports_its_registry_phase` fails when a registry
+/// row and this mapping drift apart.
 pub fn phase_for_code(code: &str) -> &'static str {
     match code {
         "E-UNSUPPORTED-EDITION" | "E-MOD-BOTH-ROOTS" | "E-MOD-RESERVED-NAME" => "modules",
+        // Lexical despite the `E-UNSUPPORTED-` prefix (§4 phase 1).
+        "E-UNSUPPORTED-IDENT" | "E-UNSUPPORTED-TOKEN" => "lex",
+        // Emitted by the parser on `impl Drop` / destructors.
+        "E-UNSUPPORTED-DROP-IMPL" => "parse",
+        // Declared-effect and FFI-safety checks run in the resolver.
+        "E-UNSUPPORTED-EFFECT" | "E-FFI-TYPE" => "resolve",
+        "E-UNSAFE-CONTEXT" => "types",
+        // Resource limits are enforced by the loader before any analysis: the
+        // registry files them under `parse` (§3, §4).
+        "E-LIMIT-FILE-SIZE" | "E-LIMIT-FILES" => "parse",
         _ if code.starts_with("E-MOD") => "modules",
-        _ if code.starts_with("E-LEX") || code.starts_with("E-PARSE") => "parse",
+        _ if code.starts_with("E-LEX") => "lex",
+        _ if code.starts_with("E-PARSE") => "parse",
         _ if code.starts_with("E-UNSUPPORTED") => "parse",
         _ if code.starts_with("E-RES") || code.starts_with("W-RES") => "resolve",
         _ if code.starts_with("E-TYP") => "types",
@@ -275,5 +290,73 @@ pub fn print(envelope: &JsonEnvelope) {
                  \"summary\":{{}},\"diagnostics\":[]}}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::phase_for_code;
+
+    /// DIAG-1.1: every diagnostic carries the phase that produced it, and the
+    /// registry (`spec/language/diagnostics.md` §3) is the contract. This test
+    /// reads the registry and checks the mapping for every registered code, so
+    /// adding or re-phasing a code without updating `phase_for_code` fails the
+    /// build instead of drifting silently into the JSON output.
+    #[test]
+    fn every_registered_code_reports_its_registry_phase() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../spec/language/diagnostics.md");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
+
+        let mut checked = 0usize;
+        let mut mismatches: Vec<String> = Vec::new();
+        for line in text.lines() {
+            let line = line.trim();
+            // Registry rows look like: | `E-CODE` | phase | meaning |
+            let Some(rest) = line.strip_prefix("| `") else {
+                continue;
+            };
+            let mut parts = rest.split('|');
+            let Some(code_cell) = parts.next() else {
+                continue;
+            };
+            let Some(phase_cell) = parts.next() else {
+                continue;
+            };
+            let Some(code) = code_cell.trim().strip_suffix('`') else {
+                continue;
+            };
+            // Skip wildcard rows such as `E-LEX-*` (order table) and rows that
+            // are not a single canonical code.
+            if code.contains('*') || code.contains(' ') || code.contains(',') {
+                continue;
+            }
+            let phase_cell = phase_cell.trim();
+            let Some(expected) = phase_cell.split('/').next() else {
+                continue;
+            };
+            if !matches!(
+                expected,
+                "lex" | "parse" | "modules" | "resolve" | "types" | "ownership" | "effects"
+            ) {
+                continue;
+            }
+            checked += 1;
+            let actual = phase_for_code(code);
+            if actual != expected {
+                mismatches.push(format!("{code}: registry `{expected}`, json `{actual}`"));
+            }
+        }
+
+        assert!(
+            checked >= 100,
+            "registry parse found only {checked} codes; the table format changed?"
+        );
+        assert!(
+            mismatches.is_empty(),
+            "codes whose JSON phase differs from the registry:\n{}",
+            mismatches.join("\n")
+        );
     }
 }

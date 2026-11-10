@@ -1871,14 +1871,26 @@ fn main() -> Result<(), Error> {
 
 #[test]
 fn test_fn_signature_rules() {
-    // F-SYN-004 / G-3.6: a `test fn` has no parameter; a parameter is
-    // reported (the documented fail case) and a valid `test fn` is accepted.
+    // F-SYN-004 / G-3.6 / MOD-4.10 / diagnostics.md: a `test fn` has no
+    // parameter, and an invalid signature is a *typing* error named
+    // `E-TYP-MAIN` by the registry ("`test fn` invalide"), not a parse error.
+    // This contract previously encoded `E-PARSE-EXPECTED`, which contradicted
+    // all three rules; `T2-FINDINGS.md` §19.2 item 4 tracked the defect.
     expect_code(
         r#"
 test fn t(x: i32) {
 }
 "#,
-        "E-PARSE-EXPECTED",
+        "E-TYP-MAIN",
+    );
+    // The return type must be `()` or `Result<(), Error>` (G-3.6).
+    expect_code(
+        r#"
+test fn t() -> i32 {
+    return 1;
+}
+"#,
+        "E-TYP-MAIN",
     );
     accept(
         r#"

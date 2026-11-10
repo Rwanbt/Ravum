@@ -1551,3 +1551,40 @@ fn f() -> i32 {
         "E-OWN-USE-AFTER-MOVE",
     );
 }
+
+/// Robustesse (P0-H) : la borne par fonction doit être **observable**, donc
+/// strictement inférieure au budget de diagnostics par fichier
+/// (DIAG-1.7/DIAG-4.3 : 100 diagnostics puis un `E-PARSE-TOO-LARGE`). 60
+/// écritures sous un emprunt actif produisent 50 `E-OWN-BORROW-CONFLICT` puis un
+/// unique `E-OWN-LIMIT`; avec l'ancienne borne (200), le budget de fichier
+/// coupait avant et le code enregistré `E-OWN-LIMIT` restait inatteignable.
+#[test]
+fn per_function_budget_reports_e_own_limit_before_the_file_budget() {
+    // OWN-7 / E-OWN-BORROW-CONFLICT: `h(&x, &mut x)` is one shared-then-
+    // exclusive conflict per call. Repeating it is the cheapest way to reach
+    // the per-function bound with real diagnostics.
+    let mut src = String::from("fn h(a: &i32, b: &mut i32) {}\nfn f() {\n    let mut x = 1;\n");
+    for _ in 0..60 {
+        src.push_str("    h(&x, &mut x);\n");
+    }
+    src.push_str("}\n");
+    let result = run(&src);
+    let codes = own_codes(&result);
+    let conflicts = codes
+        .iter()
+        .filter(|c| c.as_str() == "E-OWN-BORROW-CONFLICT")
+        .count();
+    let limits = codes.iter().filter(|c| c.as_str() == "E-OWN-LIMIT").count();
+    assert_eq!(
+        limits, 1,
+        "expected exactly one E-OWN-LIMIT before the file budget: {codes:?}"
+    );
+    assert_eq!(
+        conflicts, 50,
+        "the per-function bound must keep reporting real diagnostics up to 50: {codes:?}"
+    );
+    assert!(
+        !codes.iter().any(|c| c == "E-PARSE-TOO-LARGE"),
+        "the file budget must not be reached before the per-function limit: {codes:?}"
+    );
+}

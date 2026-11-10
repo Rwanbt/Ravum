@@ -114,7 +114,7 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 
 | ID | Règle | Niveau |
 |---|---|---|
-| LEX-5.1 | Les **35** mots-clés ci-dessus sont réservés dans **toutes** les positions ; ils ne peuvent pas servir d'identifiant. `static` et `type` sont réservés (Q-LEX-1) mais **non supportés** à l'usage : `E-UNSUPPORTED-TOKEN`. | MUST |
+| LEX-5.1 | Les **35** mots-clés ci-dessus sont réservés dans **toutes** les positions ; ils ne peuvent pas servir d'identifiant. `static` et `type` sont réservés (Q-LEX-1) mais **non supportés** à l'usage : `E-UNSUPPORTED-STATIC` / `E-UNSUPPORTED-TYPE-ALIAS`. | MUST |
 | LEX-5.2 | `Self`, `self`, `crate`, `super` ont un sens de chemin (§ [`modules.md`](modules.md)) ; `Self` n'est valide que dans un `impl`. | MUST |
 | LEX-5.3 | `true`/`false` sont des littéraux booléens, pas des identifiants ni des constantes du prélude. | MUST |
 | LEX-5.4 | Les mots-clés réservés mais sans construction Core 1.0 (`extern`, `move`, `trait`, `where`, `unsafe`, `async`) sont **reconnus par le lexer** puis rejetés par le parser avec le code `E-UNSUPPORTED-*` correspondant (§ [`unsupported.md`](unsupported.md)). Ils ne doivent jamais être acceptés silencieusement. | MUST |
@@ -460,7 +460,7 @@ any_except_eol= ? tout scalaire sauf LF et CR ? ;
 
 ## 14. Questions ouvertes
 
-- **Q-LEX-1 (résolue par le Lead)** — `static` et `type` sont **réservés** (et refusés à l'usage : `E-UNSUPPORTED-TOKEN`). `ref`, `dyn`, `await` restent des **identifiants valides** (mangling par le codegen), donc `dyn T` → `E-RES-UNKNOWN`, `x.await` → `E-RES-UNKNOWN`, `ref x` en pattern → `E-PARSE-EXPECTED`.
+- **Q-LEX-1 (résolue par le Lead)** — `static` et `type` sont **réservés** (et refusés à l'usage : `E-UNSUPPORTED-STATIC` pour un item `static`, `E-UNSUPPORTED-TYPE-ALIAS` pour un alias de type, codes dédiés enregistrés dans [`diagnostics.md`](diagnostics.md) §3.1). `ref`, `dyn`, `await` restent des **identifiants valides** (mangling par le codegen), donc `dyn T` → `E-RES-UNKNOWN`, `x.await` → `E-RES-UNKNOWN`, `ref x` en pattern → `E-PARSE-EXPECTED`.
 - **Q-LEX-2** — `effects` et `str` sont des mots-clés contextuels. Le design ne les liste pas. Confirmer le statut contextuel plutôt que réservé.
 - **Q-LEX-3** — Les continuations de ligne `\` en fin de chaîne (Rust) sont refusées (LEX-8.27). Si des corpus multi-lignes en ont besoin, cette décision doit être révisée.
 - **Q-LEX-4** — Le refus de `1.` (LEX-8.8) et la règle `Dot` (LEX-8.9) sont cohérents entre eux mais diffèrent de Rust sur `1.f32` ; confirmer.

@@ -403,7 +403,8 @@ fn parse_spec(entries: &[(String, Json)]) -> Result<CaseSpec, String> {
     for code in &expect_codes {
         if !is_valid_code(code) {
             return Err(format!(
-                "invalid diagnostic code `{code}` (expected E-SEGMENT[-SEGMENT...], uppercase)"
+                "invalid diagnostic code `{code}` (expected E-SEGMENT[-SEGMENT...] or \
+                 W-SEGMENT[-SEGMENT...], uppercase)"
             ));
         }
     }
@@ -684,9 +685,16 @@ fn parse_fixtures(object: &Json) -> Result<Vec<Fixture>, String> {
     Ok(fixtures)
 }
 
+/// A canonical diagnostic code: `E-SEGMENT[-SEGMENT...]` for an error or
+/// `W-SEGMENT[-SEGMENT...]` for a warning.
+///
+/// DIAG-1.6 closes the warning list to `W-RES-UNUSED-IMPORT` and
+/// `W-OWN-UNUSED-VARIABLE`; both are legitimate codes, so the harness must
+/// accept `W-*` exactly like `E-*` (it used to reject them, which forced the
+/// `W-*` cases to skip schema validation).
 pub(crate) fn is_valid_code(code: &str) -> bool {
     let mut segments = code.split('-');
-    if segments.next() != Some("E") {
+    if !matches!(segments.next(), Some("E") | Some("W")) {
         return false;
     }
     let rest: Vec<&str> = segments.collect();
@@ -956,6 +964,10 @@ mod tests {
             "E-TYP-LITERAL-RANGE",
             "E-UNSUPPORTED-IDENT",
             "E-MOD-DEP-CONFLICT",
+            // DIAG-1.6 closes the warning list on these two codes; they are as
+            // canonical as an `E-*` code and must be accepted by the harness.
+            "W-RES-UNUSED-IMPORT",
+            "W-OWN-UNUSED-VARIABLE",
         ] {
             assert!(is_valid_code(code), "{code}");
         }
@@ -964,7 +976,10 @@ mod tests {
             "E",
             "E-",
             "E-lower",
-            "W-LEX-CHAR",
+            "W",
+            "W-",
+            "W-lower",
+            "X-LEX-CHAR",
             "E--X",
             "E-LEX-CHAR-",
         ] {
