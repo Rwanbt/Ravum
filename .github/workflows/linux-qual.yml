@@ -171,6 +171,13 @@ jobs:
       - name: CLI surface sweep
         run: pwsh -File scripts/cli-sweep.ps1
 
+      # Every flag declared in a command's USAGE line must be accepted by its
+      # parser. Extracting flags from the description text rather than the USAGE
+      # line produces false positives: the prose quotes `rustc --edition` and
+      # `lint --deny`.
+      - name: CLI documented-flag audit
+        run: pwsh -File scripts/cli-flag-audit.ps1
+
       - name: Scope notice
         if: always()
         run: |

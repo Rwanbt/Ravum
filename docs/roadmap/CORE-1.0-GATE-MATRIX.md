@@ -41,6 +41,7 @@
 | **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = AA6C1AF1…870B0F` (racines et `target/` différents, après les 21 correctifs) |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 | **Cohérence des documents** | `python tools/report_consistency.py` | le rapport consolidé porte **les mêmes chiffres que ce registre** (6 contrôles) |
+| **Audit des drapeaux CLI** | `pwsh -File scripts/cli-flag-audit.ps1` | **18 drapeaux documentés, 18 acceptés** par leur parseur (extraction limitée à la ligne USAGE) |
 | **Balayage CLI** | `pwsh -File scripts/cli-sweep.ps1` | **13 cas** : `lint` (propre, averti, `--deny`), `doc`, `cache status`/`clean`, `doctor --json`, `fmt`/`--check`, `watch --max-rebuilds 0` → **13 PASS / 0 FAIL** |
 | **Balayage stdlib** | `pwsh -File scripts/stdlib-codegen-sweep.ps1` | **64 programmes** : 27 méthodes (`check`+`build`+`run`) + 37 fonctions libres générées (`check`+`build`), **64 PASS / 0 FAIL**, **30/30 méthodes** couvertes, **26 valeurs de retour affirmées** |
 | **Clone neuf** | `git clone --depth 1` puis toutes les commandes ci-dessus | **tout identique**, y compris `cargo test --workspace` (1020 passés) après correction des chemins de campagne (> MAX_PATH) |
