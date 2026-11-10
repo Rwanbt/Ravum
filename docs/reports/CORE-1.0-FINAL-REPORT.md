@@ -44,7 +44,7 @@
 |---|---|---|
 | T0 | **PASS** | corpus sécurité du socle (overlays, Git, journal, symlinks) |
 | T1 | PARTIAL | voies A/B réelles ; **voie C non implémentée** |
-| T2 | PARTIAL | 269 cas **268 PASS / 0 FAIL / 1 SKIP** ; **82 règles sans test négatif** (106/188 au critère strict) |
+| T2 | **PASS** | 323 cas **322 PASS / 0 FAIL / 1 SKIP** ; **187/187 règles testables** au critère strict ; 112 codes enregistrés |
 | T3 | **PASS** | frontend conforme : 5 défauts corrigés, fuzz + Miri rejoués |
 | T4 | **BLOCKED** | **audit externe humain absent** |
 | T5 | **PASS** | natifs Windows **et** Linux (CI) + WASI, smoke 31 PASS |
@@ -56,7 +56,7 @@
 | T11 | PARTIAL | bit-à-bit + performance mesurés ; **signature sans clé (D9)** |
 | T12 | **BLOCKED** | **Go/No-Go humain** |
 
-**4 `PASS` · 0 `FAIL` · 7 `PARTIAL` · 2 `BLOCKED`.**
+**5 `PASS` · 0 `FAIL` · 6 `PARTIAL` · 2 `BLOCKED`.**
 
 ## 5. Tests — exécutés, ignorés, non exécutés
 
@@ -72,7 +72,7 @@
 
 ## 6. Conformance
 
-**269 cas : 268 PASS / 0 FAIL / 1 SKIP** (Windows) · **267 PASS / 0 FAIL / 2 SKIP** (Linux).
+**323 cas : 322 PASS / 0 FAIL / 1 SKIP** (Windows) · **321 PASS / 0 FAIL / 2 SKIP** (Linux).
 
 Le `SKIP` est **par plateforme** : chaque cas tourne sur au moins un OS, aucun sur
 les deux. Ce n'est pas un `PASS` universel.
