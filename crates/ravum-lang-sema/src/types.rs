@@ -250,3 +250,288 @@ impl fmt::Display for Type {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn integers() -> Vec<Type> {
+        vec![
+            Type::I8,
+            Type::I16,
+            Type::I32,
+            Type::I64,
+            Type::I128,
+            Type::U8,
+            Type::U16,
+            Type::U32,
+            Type::U64,
+            Type::U128,
+            Type::Isize,
+            Type::Usize,
+        ]
+    }
+
+    #[test]
+    fn constructors_produce_the_expected_shape() {
+        assert_eq!(Type::i32(), Type::I32);
+        assert_eq!(Type::unit(), Type::Unit);
+        assert_eq!(Type::string(), Type::String);
+        assert_eq!(
+            Type::str_ref(),
+            Type::Ref {
+                mutable: false,
+                inner: Box::new(Type::Str)
+            }
+        );
+        assert_eq!(Type::vec(Type::I32), Type::Vec(Box::new(Type::I32)));
+        assert_eq!(Type::option(Type::I32), Type::Option(Box::new(Type::I32)));
+        assert_eq!(
+            Type::result(Type::I32, Type::String),
+            Type::Result(Box::new(Type::I32), Box::new(Type::String))
+        );
+    }
+
+    #[test]
+    fn predicates_are_exact_for_every_variant() {
+        for ty in integers() {
+            assert!(ty.is_int(), "{ty} must be an integer");
+            assert!(ty.is_numeric(), "{ty} must be numeric");
+            assert!(!ty.is_float(), "{ty} is not a float");
+            assert!(!ty.is_error(), "{ty} is not an error type");
+            assert!(!ty.is_reference(), "{ty} is not a reference");
+            assert!(!ty.is_str_like(), "{ty} is not text");
+        }
+        for ty in [Type::F32, Type::F64] {
+            assert!(ty.is_float());
+            assert!(ty.is_numeric());
+            assert!(!ty.is_int());
+            assert!(!ty.is_signed_int());
+            assert!(!ty.is_error());
+        }
+        for ty in [
+            Type::I8,
+            Type::I16,
+            Type::I32,
+            Type::I64,
+            Type::I128,
+            Type::Isize,
+        ] {
+            assert!(ty.is_signed_int(), "{ty} must be signed");
+        }
+        for ty in [
+            Type::U8,
+            Type::U16,
+            Type::U32,
+            Type::U64,
+            Type::U128,
+            Type::Usize,
+        ] {
+            assert!(!ty.is_signed_int(), "{ty} must be unsigned");
+        }
+        for ty in [
+            Type::Bool,
+            Type::Char,
+            Type::Unit,
+            Type::Never,
+            Type::Str,
+            Type::String,
+            Type::Ref {
+                mutable: false,
+                inner: Box::new(Type::I32),
+            },
+        ] {
+            assert!(!ty.is_int(), "{ty} is not an integer");
+            assert!(!ty.is_float(), "{ty} is not a float");
+            assert!(!ty.is_numeric(), "{ty} is not numeric");
+            assert!(!ty.is_signed_int(), "{ty} is not a signed integer");
+            assert!(!ty.is_error(), "{ty} is not an error type");
+        }
+        assert!(Type::Error.is_error());
+        assert!(Type::Error.is_error() && Type::Error.display() == "<error>");
+        assert!(Type::String.is_str_like());
+        assert!(Type::Str.is_str_like());
+        assert!(Type::str_ref().is_str_like());
+        assert!(Type::Ref {
+            mutable: true,
+            inner: Box::new(Type::Str)
+        }
+        .is_str_like());
+        assert!(!Type::Ref {
+            mutable: false,
+            inner: Box::new(Type::I32)
+        }
+        .is_str_like());
+        assert!(Type::Ref {
+            mutable: false,
+            inner: Box::new(Type::I32)
+        }
+        .is_reference());
+        assert!(!Type::I32.is_reference());
+    }
+
+    #[test]
+    fn int_bits_covers_every_integer_width() {
+        let expected = [
+            (Type::I8, 8),
+            (Type::U8, 8),
+            (Type::I16, 16),
+            (Type::U16, 16),
+            (Type::I32, 32),
+            (Type::U32, 32),
+            (Type::I64, 64),
+            (Type::U64, 64),
+            (Type::I128, 128),
+            (Type::U128, 128),
+            (Type::Isize, 64),
+            (Type::Usize, 64),
+        ];
+        for (ty, bits) in expected {
+            assert_eq!(ty.int_bits(), Some(bits), "width of {ty}");
+        }
+        for ty in [Type::Bool, Type::F32, Type::F64, Type::String, Type::Error] {
+            assert_eq!(ty.int_bits(), None, "{ty} has no integer width");
+        }
+    }
+
+    #[test]
+    fn contains_never_recurses_through_every_compound() {
+        let never_ref = Type::Ref {
+            mutable: false,
+            inner: Box::new(Type::Never),
+        };
+        let nominal_never = Type::Nominal {
+            def: 0,
+            name: "W".to_string(),
+            args: vec![Type::Never],
+        };
+        for ty in [
+            Type::Never,
+            never_ref,
+            Type::Slice(Box::new(Type::Never)),
+            Type::Vec(Box::new(Type::Never)),
+            Type::Option(Box::new(Type::Never)),
+            Type::Array {
+                elem: Box::new(Type::Never),
+                len: 2,
+            },
+            Type::Tuple(vec![Type::I32, Type::Never]),
+            Type::Result(Box::new(Type::Never), Box::new(Type::I32)),
+            Type::Result(Box::new(Type::I32), Box::new(Type::Never)),
+            nominal_never,
+        ] {
+            assert!(contains_never(&ty), "{ty} contains the never type");
+        }
+        for ty in [
+            Type::I32,
+            Type::Error,
+            Type::Param {
+                name: "T".to_string(),
+                index: 0,
+            },
+            Type::Ref {
+                mutable: false,
+                inner: Box::new(Type::I32),
+            },
+            Type::Slice(Box::new(Type::I32)),
+            Type::Vec(Box::new(Type::I32)),
+            Type::Option(Box::new(Type::I32)),
+            Type::Array {
+                elem: Box::new(Type::I32),
+                len: 2,
+            },
+            Type::Tuple(vec![Type::I32, Type::Bool]),
+            Type::Result(Box::new(Type::I32), Box::new(Type::String)),
+            Type::Nominal {
+                def: 0,
+                name: "Point".to_string(),
+                args: vec![Type::I32],
+            },
+        ] {
+            assert!(!contains_never(&ty), "{ty} does not contain the never type");
+        }
+    }
+
+    #[test]
+    fn display_is_stable_for_every_family() {
+        let cases = [
+            (Type::I8, "i8"),
+            (Type::I16, "i16"),
+            (Type::I32, "i32"),
+            (Type::I64, "i64"),
+            (Type::I128, "i128"),
+            (Type::U8, "u8"),
+            (Type::U16, "u16"),
+            (Type::U32, "u32"),
+            (Type::U64, "u64"),
+            (Type::U128, "u128"),
+            (Type::Isize, "isize"),
+            (Type::Usize, "usize"),
+            (Type::F32, "f32"),
+            (Type::F64, "f64"),
+            (Type::Bool, "bool"),
+            (Type::Char, "char"),
+            (Type::Unit, "()"),
+            (Type::Never, "!"),
+            (Type::Str, "text"),
+            (Type::String, "String"),
+            (Type::Error, "<error>"),
+            (
+                Type::Ref {
+                    mutable: false,
+                    inner: Box::new(Type::I32),
+                },
+                "&i32",
+            ),
+            (
+                Type::Ref {
+                    mutable: true,
+                    inner: Box::new(Type::I32),
+                },
+                "&mut i32",
+            ),
+            (
+                Type::Array {
+                    elem: Box::new(Type::I32),
+                    len: 3,
+                },
+                "[i32; 3]",
+            ),
+            (Type::Slice(Box::new(Type::I32)), "[i32]"),
+            (Type::Tuple(vec![Type::I32]), "(i32,)"),
+            (Type::Tuple(vec![Type::I32, Type::Bool]), "(i32, bool)"),
+            (Type::Vec(Box::new(Type::I32)), "Vec<i32>"),
+            (Type::Option(Box::new(Type::I32)), "Option<i32>"),
+            (
+                Type::Result(Box::new(Type::I32), Box::new(Type::String)),
+                "Result<i32, String>",
+            ),
+            (
+                Type::Nominal {
+                    def: 0,
+                    name: "Point".to_string(),
+                    args: vec![],
+                },
+                "Point",
+            ),
+            (
+                Type::Nominal {
+                    def: 0,
+                    name: "Pair".to_string(),
+                    args: vec![Type::I32, Type::Bool],
+                },
+                "Pair<i32, bool>",
+            ),
+            (
+                Type::Param {
+                    name: "T".to_string(),
+                    index: 0,
+                },
+                "T",
+            ),
+        ];
+        for (ty, text) in cases {
+            assert_eq!(ty.display(), text, "display of {ty:?}");
+        }
+    }
+}
