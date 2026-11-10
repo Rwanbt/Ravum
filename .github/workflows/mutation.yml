@@ -1,0 +1,139 @@
+name: Mutation evidence (weekly, non-blocking gate)
+
+# Purpose: stop the mutation campaign from being a one-shot manual measurement.
+# `docs/qualification/MUTATION-EQUIVALENCE.md` §7 records 212 mutants / 153
+# killed on a TARGETED scope (three function sets of `own.rs`, `resolve.rs`,
+# `typeck.rs`). Nothing re-ran it after a code change, so a regression in the
+# test suite could silently stop killing mutants.
+#
+# Scope and honesty rules:
+#   * the same targeted `-F` filters are used, so the numbers stay comparable
+#     with the published table;
+#   * this job is EVIDENCE, not a release gate: surviving mutants are expected
+#     and triaged in MUTATION-EQUIVALENCE.md §7.1-§7.4. The job therefore does
+#     not fail on survivors; it fails only when the campaign itself could not
+#     run (missing report, crashed tool), which is a real infrastructure defect;
+#   * no mutation score is published for the whole crate: 153/212 on a targeted
+#     scope says nothing about the rest (MUTATION-EQUIVALENCE.md §1).
+#
+# The report is uploaded as an artifact; a maintainer diffs it against the
+# published table and records any new survivor with a reason.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every Monday at 03:17 UTC (off the top of the hour to avoid the CI rush).
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  mutation:
+    name: cargo-mutants on the three targeted function sets
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Install cargo-mutants 27.1.0
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-mutants-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mutants-
+
+      # `--no-shuffle` keeps the reported order stable; `-j 8` matches the
+      # published campaign. The `--file`/`-F` pairs are the exact ones recorded
+      # in MUTATION-EQUIVALENCE.md §7; changing them requires updating the doc.
+      #
+      # `|| true` + `continue-on-error` are deliberate: cargo-mutants exits
+      # non-zero when mutants survive, and survivors are triaged, not fatal.
+      # The next step still fails the job when a report is missing entirely.
+      - name: own.rs (borrow bookkeeping)
+        continue-on-error: true
+        run: |
+          mkdir -p target/mutants/own
+          cargo mutants --no-shuffle -j 8 \
+            --file crates/ravum-lang-sema/src/own.rs \
+            -F 'borrow_place|check_availability|place_mutability' \
+            2>&1 | tee target/mutants/own/campaign.log || true
+          if [ -d mutants.out ]; then mv mutants.out target/mutants/own/; fi
+
+      - name: resolve.rs (imports, type paths, Copy)
+        continue-on-error: true
+        run: |
+          mkdir -p target/mutants/resolve
+          cargo mutants --no-shuffle -j 8 \
+            --file crates/ravum-lang-sema/src/resolve.rs \
+            -F 'resolve_type_path|resolve_imports|resolve_use_target|type_is_copy|nominal_is_copy' \
+            2>&1 | tee target/mutants/resolve/campaign.log || true
+          if [ -d mutants.out ]; then mv mutants.out target/mutants/resolve/; fi
+
+      - name: typeck.rs (patterns, consts, struct literals, for)
+        continue-on-error: true
+        run: |
+          mkdir -p target/mutants/typeck
+          cargo mutants --no-shuffle -j 8 \
+            --file crates/ravum-lang-sema/src/typeck.rs \
+            -F 'check_struct_lit|check_variant_call|check_for|check_lit_pattern|cover_pattern|negative_value_fits|pattern_contains_float|check_const_expr' \
+            2>&1 | tee target/mutants/typeck/campaign.log || true
+          if [ -d mutants.out ]; then mv mutants.out target/mutants/typeck/; fi
+
+      # A campaign that produced no report is an infrastructure failure, not a
+      # mutation result: there is nothing to triage, so the job must fail.
+      - name: Verify that every campaign produced a report
+        run: |
+          set -e
+          missing=0
+          for name in own resolve typeck; do
+            if [ ! -f "target/mutants/$name/mutants.out/outcomes.json" ]; then
+              echo "::error::campaign $name produced no mutants.out/outcomes.json (see its log)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Summarize outcomes (never hides survivors)
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          for name in ("own", "resolve", "typeck"):
+              path = pathlib.Path(f"target/mutants/{name}/mutants.out/outcomes.json")
+              if not path.is_file():
+                  print(f"{name}: NO REPORT")
+                  continue
+              outcomes = json.loads(path.read_text())
+              counts = {}
+              for item in outcomes:
+                  key = item.get("summary") or item.get("outcome") or "unknown"
+                  counts[key] = counts.get(key, 0) + 1
+              print(f"{name}: {counts}")
+          PY
+
+      - name: Upload mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-targeted
+          path: target/mutants
+          if-no-files-found: warn
+          retention-days: 90
