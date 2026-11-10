@@ -20,7 +20,7 @@ use crate::facts::{
     CallTarget, CheckedProgram, ConstInfo, ConstValue, Facts, MethodTarget, Resolution,
 };
 use crate::resolve::{self, ModuleId, NominalKind, PathError, ValuePath, World};
-use crate::types::Type;
+use crate::types::{contains_never, Type};
 use ravum_lang_syntax::ast::{
     self, Block, ConstItem, Expr, ExprKind, FieldInit, FnItem, IntTy, Item, ItemKind, LitPat,
     MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,
@@ -540,6 +540,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if self.var_occurs(index, &ty) {
             return false;
         }
+        // TYP-1.6: `!` is not an inhabitable type argument. Binding an
+        // inference variable to `!` (or to e.g. `Vec<!>`) would generate
+        // uninhabitable Rust (`Vec<!>` needs a nightly feature). `!` coerces to
+        // the expected type; it must never *determine* it. Leaving the variable
+        // unbound lets a real constraint bind it, or yields E-TYP-AMBIGUOUS
+        // instead of a false accept.
+        if contains_never(&ty) {
+            return true;
+        }
         if let Some(slot) = self.vars.get_mut(index) {
             *slot = Some(ty);
             true
@@ -966,6 +975,22 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
         let body_ty = self.resolve_vars(&body_ty);
         let ret = self.resolve_vars(&sig.ret);
+        // G-5.11 / TYP-1.6: a function declared `-> !` must have a divergent
+        // body. `compatible` treats `!` as bottom in both directions, so the
+        // normal body check below cannot catch a body that has type `()`.
+        // EXPR-5.11/6.7/G-6.19 type `loop`/`while`/`for` as `()`, even when the
+        // loop diverges, so only `panic`, `return` or a call to a divergent
+        // function can make the body divergent.
+        if matches!(ret, Type::Never) && !matches!(body_ty, Type::Never | Type::Error) {
+            self.error(
+                "E-TYP-RETURN",
+                f.body.span,
+                "a function returning `!` requires a divergent body; `loop`/`while`/`for` \
+                 have type `()` (EXPR-5.11/6.7), so use `panic`, `return` or a call to a \
+                 divergent function"
+                    .to_string(),
+            );
+        }
         if !Self::compatible(&body_ty, &ret)
             && !self.unify(&body_ty, &ret, f.body.span, "function body")
         {
@@ -1010,6 +1035,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         match &stmt.kind {
             StmtKind::Let(lets) => {
                 let declared = lets.ty.as_ref().map(|t| self.resolve_type(t));
+                // G-5.11 / TYP-1.6: `!` is not a storable local type. A diverging
+                // initializer still coerces to its expected type; the annotation
+                // itself would make the generated Rust bind a never-typed place,
+                // which the reference backend cannot represent.
+                if let (Some(declared_ty), Some(annotation)) = (&declared, lets.ty.as_ref()) {
+                    if crate::types::contains_never(declared_ty) {
+                        let message = format!(
+                            "the never type (`!`) is not a valid local type annotation in Core 1.0 (found `{declared_ty}`)"
+                        );
+                        let span = annotation.span;
+                        self.error("E-TYP-MISMATCH", span, message);
+                    }
+                }
                 // A loop is a statement, never a value (G-6.19, F-SYN-019/033).
                 // Without this check `let x = while c { 1 };` type-checks as `()`
                 // and silently binds a unit, which the specification forbids.
@@ -1100,6 +1138,25 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_expr(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
         let ty = self.check_expr_inner(expr, expected);
+        // TYP-1.6: `!` is not inhabitable, so it must never become a type
+        // argument (`Option<!>`, `Result<!, E>`, `W<!>`). The bottom type only
+        // coerces towards an expected type; when an aggregate constructor or
+        // literal *infers* its argument from a diverging expression, the type is
+        // genuinely ambiguous. Emitting E-TYP-AMBIGUOUS here avoids generating
+        // Rust that needs the unstable `never_type` feature.
+        if matches!(
+            ty,
+            Type::Option(_) | Type::Result(_, _) | Type::Nominal { .. }
+        ) && contains_never(&ty)
+        {
+            self.error(
+                "E-TYP-AMBIGUOUS",
+                expr.span,
+                "cannot infer an aggregate type from a diverging expression; \
+                 annotate it or use a non-diverging value"
+                    .to_string(),
+            );
+        }
         self.record_expr_type(expr.id, &ty);
         ty
     }
@@ -1151,7 +1208,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 ty
             }
             ExprKind::Tuple(items) => {
-                let types = self.check_expr_list(items, expected.and_then(|_| None));
+                // Tuples are heterogeneous by design (TYP-1.2): each element is
+                // checked against the corresponding expected element, never
+                // unified with its siblings. Reusing the array checker here
+                // wrongly rejected `(i32, bool)`.
+                let types = self.check_tuple_items(items, expected);
                 Type::Tuple(types)
             }
             ExprKind::Array(items) => self.check_array(items),
@@ -1187,6 +1248,49 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 Type::Never
             }
         }
+    }
+
+    fn check_tuple_items(&mut self, items: &[Expr], expected: Option<&Type>) -> Vec<Type> {
+        // Only a same-arity tuple expectation can guide individual elements; a
+        // different arity is reported by the enclosing unification, not here.
+        let expected_items = match expected {
+            Some(Type::Tuple(expected_items)) if expected_items.len() == items.len() => {
+                Some(expected_items.clone())
+            }
+            _ => None,
+        };
+        let mut types = Vec::with_capacity(items.len());
+        for (index, item) in items.iter().enumerate() {
+            // EXPR-5.11/6.7: `while`/`loop`/`for` are not value expressions.
+            if matches!(
+                item.kind,
+                ExprKind::While { .. } | ExprKind::Loop { .. } | ExprKind::For { .. }
+            ) {
+                self.error(
+                    "E-TYP-STATEMENT-VALUE",
+                    item.span,
+                    "a `while`/`loop`/`for` expression is a statement and cannot be a tuple element"
+                        .to_string(),
+                );
+            }
+            let expected_item = expected_items.as_ref().and_then(|list| list.get(index));
+            let found = self.check_expr(item, expected_item);
+            // TYP-1.6: without an expected element type, a diverging element
+            // would make the tuple `(!, …)`, which is uninhabitable and not
+            // representable by the reference backend. An explicit annotation
+            // (or a non-diverging value) is required.
+            if expected_item.is_none() && contains_never(&found) {
+                self.error(
+                    "E-TYP-AMBIGUOUS",
+                    item.span,
+                    "cannot infer a tuple element type from a diverging expression; \
+                     annotate the tuple or use a non-diverging value"
+                        .to_string(),
+                );
+            }
+            types.push(found);
+        }
+        types
     }
 
     fn check_expr_list(&mut self, items: &[Expr], _expected: Option<&Type>) -> Vec<Type> {
@@ -3049,6 +3153,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_cast(&mut self, value: &Expr, ty: &AstType) -> Type {
         let target = self.resolve_type(ty);
+        // TYP-1.6 / G-5.11: `!` is not constructible, so it cannot be a cast
+        // target (`x as !` would generate invalid Rust). Checked before the
+        // `Never` source shortcut, which otherwise returns the target as-is.
+        if crate::types::contains_never(&target) {
+            self.check_expr(value, None);
+            self.error(
+                "E-TYP-CAST",
+                ty.span,
+                "the never type (`!`) is not a valid cast target in Core 1.0".to_string(),
+            );
+            return Type::Error;
+        }
         let source = self.check_expr(value, None);
         if matches!(source, Type::Never) || matches!(target, Type::Error) {
             return target;
@@ -3140,6 +3256,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     fn check_loop(&mut self, body: &Block) -> Type {
+        // EXPR-5.11 / EXPR-6.7 / G-6.19 (MUST): `loop` has type `()`, even when
+        // it has no reachable `break` and diverges semantically (EXPR-6.2).
+        // Divergence is not used to widen the expression type.
         self.loop_depth += 1;
         self.check_block(body, None);
         self.loop_depth -= 1;
@@ -3178,7 +3297,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     mutable: false,
                     inner: elem.clone(),
                 },
-                Type::Never | Type::Error => Type::Error,
+                // TYP-1.6: `for` cannot consume a `!` value; before this
+                // check the program was accepted and rustc rejected `() is not
+                // an iterator`.
+                Type::Never => {
+                    self.error(
+                        "E-TYP-MISMATCH",
+                        iter.span,
+                        "`for` cannot iterate over a diverging expression of type `!`".to_string(),
+                    );
+                    Type::Error
+                }
+                Type::Error => Type::Error,
                 other => {
                     self.error(
                         "E-TYP-MISMATCH",
@@ -3412,6 +3542,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         value.span,
                         "`return` with a value is invalid in a function returning `()`".to_string(),
                     );
+                } else if matches!(ret, Type::Never) {
+                    // Nothing inhabits `!`: `return 1;` cannot produce a value
+                    // of the divergent return type. The symmetric `compatible`
+                    // predicate would otherwise accept it (it treats `!` as
+                    // bottom on either side).
+                    let found = self.check_expr(value, Some(&ret));
+                    let found = self.resolve_vars(&found);
+                    if !matches!(found, Type::Never | Type::Error) {
+                        self.error(
+                            "E-TYP-RETURN",
+                            value.span,
+                            format!(
+                                "`return` cannot produce a value in a function returning `!` \
+                                 (found `{found}`)"
+                            ),
+                        );
+                    }
                 } else {
                     let found = self.check_expr(value, Some(&ret));
                     let found = self.resolve_vars(&found);
@@ -3445,7 +3592,33 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             return Type::Error;
         }
         let types = self.check_expr_list(items, None);
+        // EXPR-5.11/6.7: control expressions are not values, so they cannot be
+        // array elements either.
+        for item in items {
+            if matches!(
+                item.kind,
+                ExprKind::While { .. } | ExprKind::Loop { .. } | ExprKind::For { .. }
+            ) {
+                self.error(
+                    "E-TYP-STATEMENT-VALUE",
+                    item.span,
+                    "a `while`/`loop`/`for` expression is a statement and cannot be an array element"
+                        .to_string(),
+                );
+            }
+        }
         let elem = types[0].clone();
+        // TYP-1.6: `!` is not a `Vec`/array element type; `[panic(), …]` would
+        // otherwise generate `[!; N]`, which the reference backend cannot emit.
+        if contains_never(&elem) {
+            self.error(
+                "E-TYP-AMBIGUOUS",
+                items[0].span,
+                "cannot infer an array element type from a diverging expression; \
+                 annotate the array or use a non-diverging value"
+                    .to_string(),
+            );
+        }
         Type::Array {
             elem: Box::new(elem),
             len: items.len(),
@@ -3454,6 +3627,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     fn check_array_repeat(&mut self, expr: &Expr, value: &Expr, len: &Expr) -> Type {
         let value_ty = self.check_expr(value, None);
+        if contains_never(&value_ty) {
+            self.error(
+                "E-TYP-AMBIGUOUS",
+                value.span,
+                "cannot infer an array element type from a diverging expression; \
+                 annotate the array or use a non-diverging value"
+                    .to_string(),
+            );
+        }
         let length = self.const_int_value(len);
         match length {
             Some(n) if n == 0 => {
@@ -3752,6 +3934,28 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             let expected_ty = substitute(&decl.ty, subst);
             let value_ty = self.check_arg(&field.value, &expected_ty);
+            // TYP-1.6: `!` must not determine a generic field type. Without
+            // this check, `W { v: panic("x") }` leaks the unresolved `T` into
+            // the generated Rust (E0425). `check_arg`/`coerce` returns the
+            // expected type for a `!` argument, so the raw expression type is
+            // read from the facts recorded by `check_expr`.
+            let raw_value_ty = self
+                .facts
+                .expr_types
+                .get(&field.value.id)
+                .cloned()
+                .unwrap_or_else(|| value_ty.clone());
+            if contains_never(&raw_value_ty)
+                && matches!(expected_ty, Type::Param { .. } | Type::Error)
+            {
+                self.error(
+                    "E-TYP-AMBIGUOUS",
+                    field.value.span,
+                    "cannot infer a generic field type from a diverging expression; \
+                     annotate the field type or use a non-diverging value"
+                        .to_string(),
+                );
+            }
             if !self.unify_pattern(&decl.ty, &value_ty, subst) {
                 self.error(
                     "E-TYP-MISMATCH",
@@ -4298,6 +4502,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             .get(&c.ty.id)
             .cloned()
             .unwrap_or_else(|| self.resolve_type(&c.ty));
+        // G-5.11 / TYP-1.6: a constant of type `!` is not constructible.
+        if crate::types::contains_never(&declared) {
+            self.error(
+                "E-TYP-MISMATCH",
+                c.ty.span,
+                "the never type (`!`) is not a valid constant type in Core 1.0".to_string(),
+            );
+        }
         let (value_ty, value) = self.check_const_expr(&c.value, Some(&declared));
         if !Self::compatible(&value_ty, &declared) {
             self.error(
@@ -4998,8 +5210,24 @@ enum Coverage {
         ok: bool,
         err: bool,
     },
+    /// A tuple is a product type: one irrefutable tuple pattern covers every
+    /// value. Refutable component patterns (literals, variants) do not.
+    Tuple {
+        covered: bool,
+    },
     /// Type sans énumération possible : exige `_`.
     RequiresWild,
+}
+
+/// A pattern matches every value of its type (and therefore must be the last
+/// arm of a `match`). Used for tuple coverage: `(a, b)` is irrefutable, while
+/// `(1, b)` is not.
+fn pattern_is_irrefutable(pat: &Pat) -> bool {
+    match &pat.kind {
+        PatKind::Wild | PatKind::Binding { .. } => true,
+        PatKind::Tuple(items) => items.iter().all(pattern_is_irrefutable),
+        _ => false,
+    }
 }
 
 impl Coverage {
@@ -5025,6 +5253,7 @@ impl Coverage {
                 ok: false,
                 err: false,
             },
+            Type::Tuple(_) => Coverage::Tuple { covered: false },
             Type::Error | Type::Never => Coverage::Wild,
             _ => Coverage::RequiresWild,
         }
@@ -5044,6 +5273,7 @@ impl Coverage {
             } => seen.len() >= variants.len(),
             Coverage::Option { some, none } => *some && *none,
             Coverage::Result { ok, err } => *ok && *err,
+            Coverage::Tuple { covered } => *covered,
             Coverage::RequiresWild => false,
         }
     }
@@ -5108,6 +5338,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     fn cover_pattern(&mut self, coverage: &mut Coverage, pat: &Pat) {
         match coverage {
             Coverage::Wild => {}
+            Coverage::Tuple { covered } => {
+                if pattern_is_irrefutable(pat) {
+                    *covered = true;
+                }
+            }
             Coverage::Bool {
                 true_seen,
                 false_seen,

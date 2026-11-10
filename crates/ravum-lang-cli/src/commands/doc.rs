@@ -362,6 +362,7 @@ fn render_type(ty: &Type) -> String {
         }
         TypeKind::Slice(inner) => format!("[{}]", render_type(inner)),
         TypeKind::Unit => "()".to_string(),
+        TypeKind::Never => "!".to_string(),
         TypeKind::Infer => "_".to_string(),
         TypeKind::SelfType => "Self".to_string(),
     }

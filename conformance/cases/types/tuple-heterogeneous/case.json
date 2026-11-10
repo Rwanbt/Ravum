@@ -1,0 +1,5 @@
+{
+  "id": "types/tuple-heterogeneous",
+  "mode": "compile-pass",
+  "notes": "F-TYP-007 / TYP-4: tuples are heterogeneous product types. `(i32, bool)` is valid; the checker previously unified sibling elements and rejected it with E-TYP-MISMATCH."
+}

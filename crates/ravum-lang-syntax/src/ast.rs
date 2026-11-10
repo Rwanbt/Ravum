@@ -344,11 +344,20 @@ pub struct Type {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeKind {
     Path(Path),
-    Ref { mutable: bool, inner: Box<Type> },
+    Ref {
+        mutable: bool,
+        inner: Box<Type>,
+    },
     Tuple(Vec<Type>),
-    Array { elem: Box<Type>, len: Box<Expr> },
+    Array {
+        elem: Box<Type>,
+        len: Box<Expr>,
+    },
     Slice(Box<Type>),
     Unit,
+    /// `!` — the Never type (G-5.11, TYP-1.6). Nameable as a whole return type;
+    /// `sema` rejects it in parameters, fields and generic arguments.
+    Never,
     Infer,
     SelfType,
 }

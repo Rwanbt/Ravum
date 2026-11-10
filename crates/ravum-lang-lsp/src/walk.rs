@@ -363,7 +363,7 @@ impl AstIndex {
             }
             TypeKind::Array { elem, .. } => self.walk_type(elem),
             TypeKind::Slice(inner) => self.walk_type(inner),
-            TypeKind::Unit | TypeKind::Infer | TypeKind::SelfType => {}
+            TypeKind::Unit | TypeKind::Never | TypeKind::Infer | TypeKind::SelfType => {}
         }
     }
 
@@ -437,6 +437,7 @@ pub fn type_text(ty: &Type) -> String {
         }
         TypeKind::Slice(inner) => format!("[{}]", type_text(inner)),
         TypeKind::Unit => "()".to_string(),
+        TypeKind::Never => "!".to_string(),
         TypeKind::Infer => "_".to_string(),
         TypeKind::SelfType => "Self".to_string(),
     }

@@ -1,0 +1,5 @@
+{
+  "id": "types/tuple-match-exhaustive",
+  "mode": "compile-pass",
+  "notes": "F-SYN-030 / G-6.38: `(a, b)` is an irrefutable pattern over the whole tuple, so `match t { (a, b) => a }` is exhaustive. The checker previously demanded a `_` arm."
+}

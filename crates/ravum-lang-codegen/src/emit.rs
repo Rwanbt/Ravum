@@ -1918,6 +1918,7 @@ impl<'a> Emitter<'a> {
     fn syntactic_type(&self, ty: &AstType) -> Result<String, CodegenError> {
         match &ty.kind {
             TypeKind::Unit => Ok("()".to_string()),
+            TypeKind::Never => Ok("!".to_string()),
             TypeKind::SelfType => Ok("Self".to_string()),
             TypeKind::Ref { mutable, inner } => Ok(format!(
                 "&{}{}",

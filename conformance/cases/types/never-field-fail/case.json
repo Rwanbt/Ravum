@@ -1,0 +1,8 @@
+{
+  "id": "types/never-field-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-004 (G-5.11/TYP-1.6): `!` is not a field type, so a struct field of type `!` is rejected even if the struct is never constructed."
+}

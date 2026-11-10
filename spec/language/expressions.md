@@ -306,7 +306,7 @@ fn h(x: f64) -> char { return x as char; }
 |---|---|---|
 | EXPR-11.1 | `panic(msg)` est un **intrinsèque** du prélude ([`stdlib.md`](stdlib.md) §10) : il imprime `panic: <msg>` sur stderr et termine avec le code `1`. Son type est divergent (compatible avec tout type attendu). | MUST |
 | EXPR-11.2 | Les intrinsèques `assert`, `assert_eq`, `panic` sont les seules sources de panic **explicites** du langage ; les panic **implicites** sont : débordement, division/reste par zéro, décalage hors largeur, index hors bornes, `unwrap` sur `None`/`Err`, `process::exit` (sortie, pas panic). | MUST |
-| EXPR-11.3 | Une expression divergente (`return`, `break`, `continue`, `panic`, appel de fonction divergente) est compatible avec n'importe quel type attendu (`!` interne, non nommable). | MUST |
+| EXPR-11.3 | Une expression divergente (`return`, `break`, `continue`, `panic`, appel de fonction divergente) est compatible avec n'importe quel type attendu (`!` interne ; sa forme **nommable** est limitée par G-5.11 et TYP-1.6, qui priment sur l'ancienne formulation « non nommable »). | MUST |
 | EXPR-11.4 | Un panic déclenché pendant l'évaluation d'un agrégat laisse l'agrégat non construit et n'écrit rien de partiel dans une place existante. | MUST |
 | EXPR-11.5 | Aucun `Result` n'est produit par un panic : un panic n'est **pas** rattrapable. | MUST |
 

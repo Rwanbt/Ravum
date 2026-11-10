@@ -7,6 +7,26 @@
 use ravum_lang_syntax::ast::NodeId;
 use std::fmt;
 
+/// True when `!` appears anywhere in `ty`.
+///
+/// G-5.11 / TYP-1.6 make `!` legal **only** as the whole return type of a
+/// divergent function: it is neither a parameter type, nor a field type, nor a
+/// `Vec`/generic argument. This helper is the single predicate used by the
+/// resolver to enforce that restriction.
+pub fn contains_never(ty: &Type) -> bool {
+    match ty {
+        Type::Never => true,
+        Type::Ref { inner, .. } | Type::Slice(inner) | Type::Vec(inner) | Type::Option(inner) => {
+            contains_never(inner)
+        }
+        Type::Array { elem, .. } => contains_never(elem),
+        Type::Tuple(items) => items.iter().any(contains_never),
+        Type::Result(ok, err) => contains_never(ok) || contains_never(err),
+        Type::Nominal { args, .. } => args.iter().any(contains_never),
+        _ => false,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     I8,

@@ -309,9 +309,6 @@ struct Parser<'a> {
     /// True only while parsing the iterator of a `for`: a range is legal there
     /// and nowhere else (E-UNSUPPORTED-RANGE, parse phase).
     in_for_iter: bool,
-    /// True while parsing the return type of a function: `!` there is
-    /// `E-TYP-RETURN`, elsewhere `E-TYP-MISMATCH`.
-    in_return_type: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -337,7 +334,6 @@ impl<'a> Parser<'a> {
             forbid_assign: 0,
             paren_exprs: BTreeSet::new(),
             in_for_iter: false,
-            in_return_type: false,
         }
     }
 
@@ -572,6 +568,15 @@ impl<'a> Parser<'a> {
         Type {
             id,
             kind: TypeKind::Unit,
+            span,
+        }
+    }
+
+    fn never_type(&mut self, span: Span) -> Type {
+        let id = self.id();
+        Type {
+            id,
+            kind: TypeKind::Never,
             span,
         }
     }
@@ -1369,11 +1374,7 @@ impl<'a> Parser<'a> {
             self.expected("`(`");
         }
         let ret = if self.eat(Punct::Arrow) {
-            let outer = self.in_return_type;
-            self.in_return_type = true;
-            let ty = self.parse_type();
-            self.in_return_type = outer;
-            ty
+            self.parse_type()
         } else {
             let span = self.zero_span();
             self.unit_type(span)
@@ -2096,20 +2097,12 @@ impl<'a> Parser<'a> {
                 self.infer_type(self.span_from(start))
             }
             TokenKind::Punct(Punct::Bang) => {
-                // `!` is not nameable (G-5.11). In return position the failure is
-                // about the signature (`E-TYP-RETURN`); anywhere else it is a type
-                // mismatch. Both codes are registered; `E-UNSUPPORTED-TYPE` was not.
-                self.diags.error(
-                    if self.in_return_type {
-                        "E-TYP-RETURN"
-                    } else {
-                        "E-TYP-MISMATCH"
-                    },
-                    start,
-                    "the never type (`!`) is not supported in Ravum Core 1.0",
-                );
+                // G-5.11 / TYP-1.6: `!` is nameable. It is legal as the whole
+                // return type of a divergent function; the checker rejects it in
+                // parameters, fields, generic arguments, and on a body that
+                // completes normally (E-TYP-RETURN).
                 self.bump();
-                self.infer_type(self.span_from(start))
+                self.never_type(self.span_from(start))
             }
             TokenKind::Ident(ref name) if name == "dyn" => {
                 self.diags.error(
@@ -5026,7 +5019,7 @@ mod inner {
                 collect_expr(len, out);
             }
             TypeKind::Slice(elem) => collect_type(elem, out),
-            TypeKind::Unit | TypeKind::Infer | TypeKind::SelfType => {}
+            TypeKind::Unit | TypeKind::Never | TypeKind::Infer | TypeKind::SelfType => {}
         }
     }
 

@@ -30,7 +30,7 @@ use crate::facts::{
     Effect, EffectSet, EnumInfo, Facts, FieldInfo, FnSig, ParamSig, StructInfo, VariantInfo,
     VariantKind,
 };
-use crate::types::Type;
+use crate::types::{contains_never, Type};
 use ravum_lang_syntax::ast::{
     self, ConstItem, EnumItem, Expr, FnItem, Item, ItemKind, Module, NodeId, Path, PathRoot,
     Receiver, StructItem, Type as AstType, TypeKind, UseItem, VariantDefFields, Vis,
@@ -1605,6 +1605,18 @@ fn resolve_fn_header(
                     );
                 }
                 let resolved = ctx.resolve_type(ty);
+                // G-5.11 / TYP-1.6: `!` is not a parameter type.
+                if contains_never(&resolved) {
+                    ctx.error(
+                        "E-TYP-MISMATCH",
+                        ty.span,
+                        format!(
+                            "the never type (`!`) is not a valid parameter type in Core 1.0 \
+                             (parameter `{}`, type `{resolved}`)",
+                            name.name
+                        ),
+                    );
+                }
                 params.push(ParamSig {
                     name: name.name.clone(),
                     ty: resolved,
@@ -1616,6 +1628,18 @@ fn resolve_fn_header(
     }
 
     let ret = ctx.resolve_type(&f.ret);
+    // `!` is legal only as the *whole* return type of a divergent function: a
+    // compound such as `Vec<!>` or `Result<!, E>` is not inhabitable.
+    if contains_never(&ret) && !matches!(ret, Type::Never) {
+        ctx.error(
+            "E-TYP-MISMATCH",
+            f.ret.span,
+            format!(
+                "the never type (`!`) is only allowed as a whole return type; \
+                 `{ret}` is not a valid return type"
+            ),
+        );
+    }
 
     let declared_effects = f.effects.as_ref().map(|idents| {
         let mut set = EffectSet::default();
@@ -1802,6 +1826,18 @@ fn resolve_struct(
             continue;
         }
         let ty = ctx.resolve_type(&field.ty);
+        // G-5.11 / TYP-1.6: `!` is not a field type.
+        if contains_never(&ty) {
+            ctx.error(
+                "E-TYP-MISMATCH",
+                field.ty.span,
+                format!(
+                    "the never type (`!`) is not a valid field type in Core 1.0 \
+                     (field `{}` of `{}`, type `{ty}`)",
+                    field.name.name, s.name.name
+                ),
+            );
+        }
         fields.push(FieldInfo {
             name: field.name.name.clone(),
             rust_name: rust_ident(&field.name.name),
@@ -1852,7 +1888,19 @@ fn resolve_enum(
             VariantDefFields::Tuple(types) => {
                 let mut out = Vec::with_capacity(types.len());
                 for ty in types {
-                    out.push(ctx.resolve_type(ty));
+                    let resolved = ctx.resolve_type(ty);
+                    if contains_never(&resolved) {
+                        ctx.error(
+                            "E-TYP-MISMATCH",
+                            ty.span,
+                            format!(
+                                "the never type (`!`) is not a valid variant field type in Core 1.0 \
+                                 (variant `{}`, type `{resolved}`)",
+                                variant.name.name
+                            ),
+                        );
+                    }
+                    out.push(resolved);
                 }
                 (VariantKind::Tuple, out, Vec::new())
             }
@@ -1868,6 +1916,17 @@ fn resolve_enum(
                         continue;
                     }
                     let ty = ctx.resolve_type(&field.ty);
+                    if contains_never(&ty) {
+                        ctx.error(
+                            "E-TYP-MISMATCH",
+                            field.ty.span,
+                            format!(
+                                "the never type (`!`) is not a valid variant field type in Core 1.0 \
+                                 (variant `{}`, field `{}`, type `{ty}`)",
+                                variant.name.name, field.name.name
+                            ),
+                        );
+                    }
                     out.push(FieldInfo {
                         name: field.name.name.clone(),
                         rust_name: rust_ident(&field.name.name),
@@ -2030,6 +2089,7 @@ pub(crate) fn resolve_type_syntax(
 ) -> Type {
     let resolved = match &ty.kind {
         TypeKind::Unit => Type::Unit,
+        TypeKind::Never => Type::Never,
         TypeKind::Infer => {
             diags.error(
                 "E-TYP-AMBIGUOUS",

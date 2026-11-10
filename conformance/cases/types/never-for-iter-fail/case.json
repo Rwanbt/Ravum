@@ -1,0 +1,8 @@
+{
+  "id": "types/never-for-iter-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-004 (TYP-1.6, EXPR-6.4): a diverging expression has type `!` and is not a `Vec`, a range or a slice, so `for` cannot iterate over it. Before this case the checker silently accepted it and rustc rejected the generated code."
+}
