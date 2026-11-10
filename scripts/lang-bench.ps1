@@ -19,11 +19,31 @@
 [CmdletBinding()]
 param(
     [int]$Runs = 3,
-    [int[]]$Sizes = @(100, 500, 2000),
+    [string[]]$Sizes = @('100', '500', '2000'),
     [switch]$Keep
 )
 
 $ErrorActionPreference = 'Stop'
+
+# A comma list can reach this script either as a real array (`100,500`) or as a
+# single string (`100,500`) depending on the caller. `[int[]]` conversion of the
+# string silently concatenates the digits (`100,500` -> 100500), which used to
+# generate a runaway program instead of three size classes. Parse explicitly and
+# bound the sizes so a malformed invocation fails fast.
+$parsedSizes = [System.Collections.Generic.List[int]]::new()
+foreach ($raw in $Sizes) {
+    foreach ($piece in ($raw -split ',')) {
+        $trimmed = $piece.Trim()
+        if ($trimmed -eq '') { continue }
+        $value = 0
+        if (-not [int]::TryParse($trimmed, [ref]$value) -or $value -lt 1 -or $value -gt 20000) {
+            throw "invalid size '${piece}': expected an integer in 1..20000; separate multiple sizes with commas"
+        }
+        $parsedSizes.Add($value)
+    }
+}
+if ($parsedSizes.Count -eq 0) { throw 'no size class provided' }
+$Sizes = $parsedSizes.ToArray()
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $binary = Join-Path $root 'target\debug\ravum-lang.exe'
 if (-not (Test-Path $binary)) {

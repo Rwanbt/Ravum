@@ -69,6 +69,20 @@ const CHILD_COMPLETED: &str = "RAVUM_TEST_CRASH_COMPLETED";
 const CHILD_EXPECTED_OLD: &str = "RAVUM_TEST_CRASH_EXPECTED_OLD";
 const CHILD_KILLER: &str = "RAVUM_TEST_CRASH_KILLER";
 
+/// Crash tests share mutable harness artifacts in `target/ravum-tests` (the
+/// platform-specific kill helper, per-scenario pid/hook logs) and each test
+/// rewrites the shared helper through `ensure_kill_helper`. Running two crash
+/// tests concurrently could let one test rewrite the helper while the other's
+/// hook is executing it, or race on the shared directory. The CI failure of
+/// `crash_in_commit_msg_hook_publishes_nothing_and_restarts_cleanly` (child
+/// exited successfully, then green on re-run with no source change) is
+/// consistent with that class of interference. Serialise only the
+/// spawn-and-observe window; the tests themselves stay independent.
+fn crash_window_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+}
+
 // ---------------------------------------------------------------------------
 // fixtures (throw-away repositories only: the Ravum checkout is never touched)
 // ---------------------------------------------------------------------------
@@ -383,6 +397,9 @@ fn run_crash_child(
     scenario: &str,
     hooks: &[(&str, String)],
 ) -> (ChildRun, ChildPaths) {
+    let _window = crash_window_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     for (name, body) in hooks {
         install_hook(repo, name, body);
     }
@@ -440,16 +457,16 @@ fn run_crash_child(
 }
 
 fn assert_child_killed_at(run: &ChildRun, paths: &ChildPaths, scenario: &str, hook: &str) {
+    let hook_log = fs::read_to_string(&paths.hook_log).unwrap_or_default();
     assert!(
         !run.status.success(),
-        "scenario {scenario}: the child should have been killed, but it exited successfully.\nstdout: {}\nstderr: {}",
+        "scenario {scenario}: the child should have been killed, but it exited successfully.\nhook log: {hook_log:?}\nstdout: {}\nstderr: {}",
         run.stdout, run.stderr
     );
     assert!(
         !paths.completed.exists(),
         "scenario {scenario}: the child reached the end of publish_request — the injected kill did not happen"
     );
-    let hook_log = fs::read_to_string(&paths.hook_log).unwrap_or_default();
     assert!(
         hook_log.contains(hook),
         "scenario {scenario}: hook log must prove the injected stage ran; log was {hook_log:?}"
