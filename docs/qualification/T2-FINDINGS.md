@@ -675,6 +675,11 @@ consignés ici sans correction, avec la raison.
 
 ### 19.2 Ouverts (non corrigés, à décider)
 
+> **Mise à jour (passe 5, 2026-11-10)** : les quatorze points ci-dessous ont été
+> traités en **§20**. Ce paragraphe est conservé tel qu'il a été écrit pour que
+> l'écart entre le diagnostic et le correctif reste lisible ; ne le citez pas
+> comme l'état courant.
+
 1. **Famille d'affectations composées** — `grammar.md` G-6.8 et `expressions.md`
    EXPR-9.4 (MUST) déclarent la famille `-= *= /= %= &= |= ^= <<= >>=`
    **acceptée**, alors que `diagnostics.md` enregistre
@@ -733,5 +738,75 @@ consignés ici sans correction, avec la raison.
     décision de langage, pas une correction de bug. Le comportement actuel est
     conservé et le test unitaire `string_by_value_is_coerced_to_str` documente
     explicitement la divergence au lieu de la présenter comme conforme.
+
+
+## 20. Passe 5 — traitement des quatorze points de §19.2 (2026-11-10)
+
+Chaque point de §19.2 est soit **corrigé** (avec test de régression), soit
+**tranché** (contradiction de spécification), soit **documenté comme restant**
+avec la raison. Aucun test n'a été supprimé ; les deux fichiers de cas modifiés
+sont signalés explicitement.
+
+### 20.1 Défauts corrigés
+
+| # | Défaut (avant) | Comportement après | Preuve |
+|---|---|---|---|
+| 2 | `use crate::geo;` sur un module privé → `E-RES-PRIVATE` alors que MOD-4.3 l'autorise depuis le module déclarant et ses descendants | accepté depuis le sous-arbre déclarant ; même-module → `E-RES-DUPLICATE` (MOD-3.7), plus de code trompeur | 4 contrats `resolve_contracts2` |
+| 3 | `use crate::a::secret::X;` accepté alors que `secret` est privé (trou de confidentialité) | `E-RES-PRIVATE` citant le segment privé, pour chaque segment non final | 3 contrats (dont profondeur ≥ 3 segments) |
+| — | **MOD-3.2** : `use util::helper;` depuis un sous-module → `E-RES-UNKNOWN` (programme valide refusé), repli racine jamais tenté | repli module courant → racine ; **double résolution → `E-RES-CONFLICT`** ; `crate::`/`self::`/`super::` inchangés | 9 contrats (repli, priorité locale, conflit, inconnu, 1 segment, même entité) |
+| 4 | `test fn` avec paramètre ou retour invalide → `E-PARSE-EXPECTED` | `E-TYP-MAIN` (G-3.6, MOD-4.10, `diagnostics.md`) | 4 contrats + cas `parser/test-fn-param-fail` corrigé |
+| 5 | `f32 == f64` / `f32 < f64` → `E-TYP-EQ`/`E-TYP-CMP` | `E-TYP-MISMATCH` (EXPR-4.8) ; EQ/CMP restent pour le **même** type non comparable/non ordonné (TYP-7.3/7.4) | 7 contrats (dont littéraux contextuels et texte mixte) |
+| 13 | `let mut v = Vec::new(); v.push(1);` laissait `$0` et `v[0]`/`s += v[0]` échouaient | l'inférence est substituée en sortie de `check_expr` (cause réelle : `$0` brut, pas la contrainte de `push`) ; `Vec::new()` non contraint reste `E-TYP-AMBIGUOUS` | 5 contrats + exécution de bout en bout |
+| 1 | famille d'affectations composées refusée (`E-UNSUPPORTED-COMPOUND-ASSIGN`, seul `+=`) | les **dix** opérateurs acceptés (G-6.8/EXPR-9.4), règles par opérateur, codegen `place op= e` (place évaluée une fois) | 9 contrats + cas `run/compound-assign` **exécuté** (imprime `22 2 false`) + cas `types/compound-assign-mismatch` |
+| 8 | `E-OWN-LIMIT` inatteignable (borne 200 > budget fichier 100) | borne par fonction **50**, strictement sous le budget 100 ; 50 conflits réels puis un `E-OWN-LIMIT` | contrat `own_audit::per_function_budget_…` |
+| 8 | `E-PARSE-BAD-SUFFIX` : doublon de `E-LEX-INT-SUFFIX`, jamais atteint | code **retiré** ; le parseur garde un chemin défensif qui émet `E-LEX-INT-SUFFIX`/`E-LEX-NUMBER` | `diagnostics.md` Q-DIAG-8 |
+| 8 | `E-UNSUPPORTED-UFCS` : jamais atteint et contraire à EXPR-7.8 | code **retiré**, `resolve_associated` inchangé (`P::len(&p)` → `E-RES-UNKNOWN`, comportement canonique) | `diagnostics.md` Q-DIAG-11, `typeck_contracts2::ufcs_is_e_res_unknown` |
+| 9 | `E-LIMIT-FILE-SIZE` sans preuve bout-en-bout | test CLI qui **génère** 8 Mio + 1 octet à l'exécution et attend ce code | `crates/ravum-lang-cli/tests/cli.rs` |
+| 10 | le harnais rejetait tout code `W-*` comme invalide → les cas d'avertissement contournaient le schéma | `E-*` et `W-*` acceptés (DIAG-1.6) ; les 2 cas `W-*` font la validation complète | `tools/conformance/src/case.rs` + 2 `case.json` |
+| 11 | phase JSON `tool` pour `E-LIMIT-*`, `parse` pour `E-LEX-*`, `sema` dans le registre | `phase_for_code` suit **exactement** le registre ; un test lit `diagnostics.md` et échoue sur toute dérive | `json::tests::every_registered_code_reports_its_registry_phase` |
+
+### 20.2 Contradictions de spécification tranchées
+
+| Décision | Contradiction | Arbitrage retenu | Raison |
+|---|---|---|---|
+| **D-CMP-1** | G-6.8 + EXPR-9.4 (MUST acceptées) vs §7 de `grammar.md` et §12 de `expressions.md` (refus) et `E-UNSUPPORTED-COMPOUND-ASSIGN` | **famille acceptée** ; ligne §7, ligne §12 et code retirés | Q-GRAM-3 (résolue par le Lead) dit « famille complète acceptée, **aucun `E-*` spécifique** » : les deux tables étaient des restes |
+| **Q-DIAG-8** | `E-PARSE-BAD-SUFFIX` vs `E-LEX-INT-SUFFIX` | code parse retiré | LEX-8.3 (MUST) assigne le code au lexer ; le parse n'était qu'un doublon inatteignable |
+| **Q-DIAG-11** | `E-UNSUPPORTED-UFCS` (`unsupported.md`) vs EXPR-7.8 (MUST, `E-RES-UNKNOWN`) | code dédié retiré | précédent identique : la règle MUST nomme le code, le catalogue nommait un code mort |
+| **Q-DIAG-9** | phase `sema` (2 lignes) absente de §4 | `E-UNSUPPORTED-EFFECT` → `resolve`, `E-UNSUPPORTED-DROP-IMPL` → `parse` | phase = phase qui émet (resolve.rs / parser.rs) |
+| **Q-DIAG-12** | `E-RES-SELF` décrivait aussi `Self` hors `impl`, et G-5.10 nommait `E-RES-SELF` | `E-RES-SELF` = `self` (paramètre/valeur) ; `E-RES-SELF-OUTSIDE-IMPL` = type `Self` ; G-5.10 aligné | le corpus `resolve/self-type-outside-impl` verrouillait déjà le code dédié |
+| **Q-DIAG-13** | codes de `static`, alias de type, bornes, `move`, motifs de plage/`..`, ré-export : `unsupported.md`/`lexical.md`/`grammar.md` citaient `E-UNSUPPORTED-TOKEN` ou `E-PARSE-EXPECTED`, l'implémentation et le registre §3.1 nommaient les codes dédiés | tables alignées sur les **codes dédiés déjà enregistrés** (`E-UNSUPPORTED-STATIC`, `-TYPE-ALIAS`, `-BOUNDS`, `-MOVE`, `-RANGE-PAT`, `-REST-PAT`, `-REEXPORT`) | le registre §3.1 fait foi (DIAG-1.1) et ces codes étaient déjà ceux du corpus |
+
+Conséquences sur le registre : **111 → 108 codes** (`E-PARSE-BAD-SUFFIX`,
+`E-UNSUPPORTED-COMPOUND-ASSIGN`, `E-UNSUPPORTED-UFCS` retirés, 0 code
+déclaré-jamais-émis, 0 hors registre).
+
+### 20.3 Ce qui reste ouvert, et pourquoi
+
+1. **D-COERCE-1** — contradiction réelle entre TYP-13.1/TYP-8.5 et STD-9.1
+   (`trim()` rend un `String`). Comportement conservé ; l'arbitrage est une
+   décision de langage, pas un correctif. Un test documente la divergence.
+2. **`E-LIMIT-FILES`** — atteignable en principe (4097 fichiers ou 200 modules
+   chargés) mais aucun test dédié : le coût du fixture n'est pas justifié tant
+   que la limite n'a pas bougé.
+3. **Sites inatteignables restants** — `E-RES-SELF` (resolve.rs L559) et
+   `E-RES-SELF-OUTSIDE-IMPL` (resolve.rs L2281) ne peuvent pas être produits :
+   le parseur refuse `Self` en premier segment (`E-PARSE-UNEXPECTED`) et abaisse
+   `Self` en `TypeKind::SelfType`. Deux contrats « parse-only » le prouvent au
+   lieu de laisser croire à une couverture.
+4. **D-COERCE-1, D2, D6, D9, D4** — décisions humaines (backend natif,
+   périmètre universel, signature de release, audit externe).
+5. **Lacunes de mutation** — la campagne a été rejouée après ces correctifs ;
+   voir `MUTATION-EQUIVALENCE.md` §8 pour les survivants restants et leur tri.
+
+### 20.4 Mesures de la passe (Windows 11, rustc 1.95.0)
+
+| Mesure | Valeur |
+|---|---|
+| Tests workspace | **89 suites, 1405 passés / 0 échec / 2 ignorés** |
+| Conformance | **386 cas : 385 PASS / 0 FAIL / 1 SKIP** |
+| Registre | **108 codes ; 126 émis ; 0 hors registre ; 0 jamais émis** |
+| Nouveaux contrats | `resolve_contracts2` 31, `typeck_contracts3` 25, `own_audit` +1, CLI +1, `json` +1 |
+| Corpus | +3 cas (`run/compound-assign`, `types/compound-assign-mismatch`, `cli/check-json-lexer-phase`), −1 obsolète (`unsupported/compound-assign`) |
+
 
 

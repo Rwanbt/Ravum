@@ -330,3 +330,28 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
 
 
 
+
+## Addendum — passe 5 (2026-11-10, SHA `b032e7d`)
+
+Les chiffres du corps ci-dessus décrivent `67a2a2e` (passe 4) et restent
+historiques. Mesures de la passe 5, mêmes commandes :
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace --all-targets` | **89 suites, 1405 passés / 0 échec / 2 ignorés** |
+| Conformance | **386 cas : 385 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
+| Registre des diagnostics | **108 codes** ; 126 émis ; **0 hors registre** ; **0 jamais émis** |
+| Couverture sema (llvm-cov) | **89,2 % lignes / 88,6 % régions** ; `types.rs` 100 %, `own.rs` 91,1 %, `typeck.rs` **93,8 %**, `resolve.rs` **93,1 %** — seuils bloquants tenus |
+| Mutation ciblée (3 fichiers) | **195 mutants : 165 tués (84,6 %), 21 survivants triés (14 inatteignables, 2 équivalents, 5 lacunes), 9 invivables, 0 timeout** ; `MUTATION-EQUIVALENCE.md` §8 |
+| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 86F575CF…D49F3457` |
+| SBOM | 64 paquets, 170 relations, `sha256 = dc7b4e0d…c2134f1` |
+| Smoke exemples | **31 PASS / 0 FAIL / 0 NOT_RUN** |
+| Installateur | `sha256 = 4da36485…73b834`, manifeste `locked = true` |
+| Gates | **5 PASS / 6 PARTIAL / 2 BLOCKED** (inchangés : T4/T12 restent bloqués par l'audit externe et le Go/No-Go humains) |
+
+Cette passe traite les quatorze points de `T2-FINDINGS.md` §19.2 (privacy du
+résolveur, MOD-3.2, `test fn`, comparaisons mixtes, `Vec::new()+push`, famille
+complète des affectations composées, codes inatteignables, harnais `W-*`,
+phases JSON) et résout **D-CMP-1**, **D-UFCS-1** et **D-MOD-3.2**. Détail et
+tri des survivants : `T2-FINDINGS.md` §20 et `MUTATION-EQUIVALENCE.md` §8.

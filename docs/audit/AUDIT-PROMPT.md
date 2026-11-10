@@ -83,9 +83,9 @@ travail est de les **reproduire ou de les contredire**.
 
 | Élément | Revendication | Où le vérifier |
 |---|---|---|
-| Tests workspace | 86 suites, 0 échec, 2 ignorés | `cargo test --workspace --all-targets` |
-| Conformance | 384 cas, 383 `PASS`, 0 `FAIL`, 1 `SKIP` | `cargo run -p ravum-conformance -- run` |
-| Registre des codes | 111 codes, 0 hors registre, 0 jamais émis | `python tools/registry_audit.py` |
+| Tests workspace | 89 suites, 1405 passés, 0 échec, 2 ignorés | `cargo test --workspace --all-targets` |
+| Conformance | 386 cas, 385 `PASS`, 0 `FAIL`, 1 `SKIP` | `cargo run -p ravum-conformance -- run` |
+| Registre des codes | 108 codes, 0 hors registre, 0 jamais émis | `python tools/registry_audit.py` |
 | Règles tracées | 188/188 (1 exemption machine-lisible) | `python tools/features_coverage.py --strict` |
 | Couverture `typeck.rs` | ≥ 90 % lignes / ≥ 85 % régions | `cargo llvm-cov -p ravum-lang-sema`, `python tools/coverage_report.py --check` |
 | Couverture `resolve.rs` | ≥ 90 % / ≥ 85 % | idem |
@@ -164,29 +164,41 @@ erreur de ta part : documente OS/toolchain et joins la sortie.
 
 ### 6. Ce que le projet sait déjà défectueux (à confirmer, pas à redécouvrir)
 
-Liste issue de `docs/qualification/T2-FINDINGS.md` §19.2. Confirme ou infirme
-chaque point, puis **cherche ce qui n'est pas dans cette liste** :
+Liste issue de `docs/qualification/T2-FINDINGS.md`. Les points **corrigés en
+passe 5** sont désormais des **revendications à attaquer** (le correctif est-il
+complet, ou n'a-t-il fermé qu'un cas ?) ; les points **ouverts** sont à confirmer.
+Puis **cherche ce qui n'est pas dans cette liste** :
 
-- `use crate::geo;` sur un module privé donne `E-RES-PRIVATE` au lieu d'être
-  accepté (visibilité d'un module privé depuis son module et ses descendants).
-- Les segments de module **non finaux** d'un `use` ne sont pas contrôlés :
-  `use crate::a::secret::X;` est accepté alors que `secret` n'est pas `pub`.
-- Famille d'affectations composées : deux MUST de la spec se contredisent
-  (`G-6.8`/`EXPR-9.4` « acceptées » vs `E-UNSUPPORTED-COMPOUND-ASSIGN`), seule
-  `+=` fonctionne (décision ouverte `D-CMP-1`).
+**Corrigés en passe 5 — attaque le correctif, pas la description d'origine :**
+- `use crate::geo;` sur un module privé : censé être accepté depuis le module
+  déclarant et ses descendants (MOD-4.3), avec `E-RES-DUPLICATE` dans le module
+  déclarant (MOD-3.7).
+- Segments non finaux d'un `use` : `use crate::a::secret::X;` doit produire
+  `E-RES-PRIVATE` (trou de confidentialité fermé) — cherche un chemin qui
+  contourne encore la vérification (ré-export interdit, `super`, import via un
+  alias, profondeur > 2).
+- Famille complète des affectations composées : `+= -= *= /= %= &= |= ^= <<= >>=`
+  censées être acceptées (G-6.8/EXPR-9.4) — attaque la sémantique `place op= e`
+  (évaluation unique de la place, types mélangés, `bool`, décalages).
+- `test fn` invalide → `E-TYP-MAIN` ; comparaisons entre types numériques
+  différents → `E-TYP-MISMATCH` ; `Vec::new()` + `push` infère l'élément.
+- MOD-3.2 : `use` relatif nu résolu du module courant vers la racine, double
+  résolution → `E-RES-CONFLICT` — cherche de fausses acceptations ou de faux
+  conflits.
+- Codes inatteignables supprimés (`E-PARSE-BAD-SUFFIX`, `E-UNSUPPORTED-UFCS`,
+  `E-UNSUPPORTED-COMPOUND-ASSIGN`) ; `E-OWN-LIMIT` rendu atteignable (borne par
+  fonction 50 < budget fichier 100).
+- Harnais : `W-*` acceptés (DIAG-1.6) ; phases JSON alignées sur le registre.
+
+**Encore ouverts / suspects :**
 - Coercition implicite `String → &str` : `TYP-13.1` ne l'admet pas, mais
   `line.trim()` rend un `String` (`STD-9.1`) et les exemples en dépendent
-  (décision ouverte `D-COERCE-1`).
-- `test fn` avec code de retour invalide : `E-PARSE-EXPECTED` au lieu de
-  `E-TYP-MAIN` ; comparaison mixte `f32`/`f64` : `E-TYP-EQ`/`E-TYP-CMP` au lieu de
-  `E-TYP-MISMATCH`.
-- Codes enregistrés mais inatteignables en pratique : `E-OWN-LIMIT`,
-  `E-PARSE-BAD-SUFFIX`, `E-RES-MODDECL`, `E-UNSUPPORTED-UFCS`.
-- `E-RES-CONFLICT` : `diagnostics.md` et `modules.md` MOD-3.7 ne s'accordent pas ;
-  `E-RES-SELF` et `E-RES-SELF-OUTSIDE-IMPL` décrivent le même cas.
-- Le harnais de conformance valide les codes avec un prédicat `E-*` : un `W-*`
-  fait échouer la validation de schéma alors que DIAG-1.6 les autorise.
-- `E-LIMIT-*` : phase `parse` au registre, `"phase":"tool"` dans le JSON.
+  (décision ouverte `D-COERCE-1`) — c'est une divergence assumée, à qualifier.
+- `E-LIMIT-FILES` : aucun test dédié (4097 fichiers ou 200 modules) ; la limite
+  n'a pas bougé mais la preuve manque.
+- Deux sites de résolution restent inatteignables par construction
+  (`E-RES-SELF` L559, `E-RES-SELF-OUTSIDE-IMPL` L2281) ; des tests « parse-only »
+  documentent l'inatteignabilité.
 - Aucun backend natif (voie C) : `T1` reste `PARTIAL` (décision `D2`).
 - Réseau, async, threads, hot-state : absents et refusés par le langage
   (décision `D6`).

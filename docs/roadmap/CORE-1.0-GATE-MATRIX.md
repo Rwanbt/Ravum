@@ -26,9 +26,36 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures (passe 4, SHA `67a2a2e`, 2026-11-10)
+## 1. Mesures (passe 5, SHA `b032e7d`, 2026-11-10)
 
-### Passe 4 — mesures courantes
+### Passe 5 — mesures courantes
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Tests workspace | `cargo test --workspace --all-targets` | **89 suites, 1405 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance | `cargo run -p ravum-conformance -- run` | **386 cas : 385 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
+| Contrats typechecker | `cargo test -p ravum-lang-sema --test typeck_contracts --test typeck_contracts2 --test typeck_contracts3` | **107 + 65 + 25 PASS / 0 FAIL** |
+| Contrats résolution | `cargo test -p ravum-lang-sema --test resolve_contracts --test resolve_contracts2` | **112 + 31 PASS / 0 FAIL** |
+| Audit borrow checker | `cargo test -p ravum-lang-sema --test own_audit` | **94 PASS / 0 FAIL** (dont la preuve que `E-OWN-LIMIT` est atteignable) |
+| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --json` puis `python tools/coverage_report.py --check` | **89,2 % lignes / 88,6 % régions** sur sema ; `types.rs` 100 %, `own.rs` 91,1 %, `typeck.rs` **93,8 %** (régions 93,0 %), `resolve.rs` **93,1 %** (régions 93,4 %) — **tous les seuils déclarés sont tenus**, `coverage.yml` bloquant |
+| **Mutation (3 fichiers, ciblée)** | `cargo mutants --file … -F … --no-shuffle -j 8` | **195 mutants : 165 tués, 21 survivants triés (14 inatteignables par construction, 2 équivalents, 5 lacunes de test), 9 invivables, 0 timeout** — 72,2 % → **84,6 %** de tués sur le périmètre ciblé ; voir `MUTATION-EQUIVALENCE.md` §8 |
+| **Registre des codes** | `python tools/registry_audit.py` | **108 codes enregistrés ; 126 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées et satisfaites, 1 exemption machine-lisible (revue humaine non faite) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 86F575CF…D49F3457` (racines et `target/` différents) |
+| SBOM | `$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = dc7b4e0d…c2134f1` |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
+| Installateur | `pwsh -File scripts/install.ps1 -Prefix <tmp>` | manifeste de provenance, `sha256 = 4da36485…73b834`, `locked = true` |
+| Cohérence des documents | `python tools/report_consistency.py` | PASS — 6 contrôles, chiffres identiques |
+
+Cette passe **traite les quatorze points de `T2-FINDINGS.md` §19.2** : les
+défauts de confidentialité du résolveur, la famille complète des affectations
+composées (D-CMP-1), le repli `use` de MOD-3.2, les codes erronés du typage,
+l'inférence `Vec::new()`/`push`, les codes inatteignables, le harnais `W-*` et
+les phases JSON. Détail : `T2-FINDINGS.md` §20. Aucun test existant n'a été
+supprimé ; deux cas de corpus ont été mis à jour (code de `test fn`, cas
+`unsupported/compound-assign` devenu sans objet).
+
+### Passe 4 — mesures (SHA `67a2a2e`, historique)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
@@ -238,7 +265,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PASS` | **384 cas : 383 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; **111 codes enregistrés, 0 hors registre, 0 jamais émis** (`E-UNSUPPORTED-NEG-PAT` retiré par D-PAT-1) ; 3 contradictions internes corrigées ; **D-PAT-1 RÉSOLUE** : G-6.36/G-6.37 implémentées et prouvées par 2 cas `run-pass` (`NaN` ne correspond jamais, `-0.0` correspond à `0.0`) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
+| T2 | `PASS` | **386 cas : 385 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; **108 codes enregistrés, 0 hors registre, 0 jamais émis** (trois doublons inatteignables retirés, `diagnostics.md` Q-DIAG-8/10/11) ; **D-PAT-1, D-CMP-1, D-UFCS-1 et D-MOD-3.2 RÉSOLUES** en passe 5 : G-6.36/G-6.37, la famille complète des affectations composées (10 opérateurs, cas `run/compound-assign` **exécuté**) et le repli `use` relatif (MOD-3.2, 9 contrats) sont implémentés ; 14 findings de §19.2 traités (§20) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
@@ -246,8 +273,8 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | **1320 tests** (86 suites), conformance **384 cas**, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows : **95 PASS, tests FS `NOT_RUN`** ; mutation ciblée `types.rs` (53 mutants, 0 survivant viable), `own.rs` (32 mutants, 1 survivant équivalent), `resolve.rs` (74 mutants, 21 survivants triés) et `typeck.rs` (106 mutants, 28 survivants triés) — **212 mutants, 153 tués** ; **couverture sema 88,9 % lignes / 88,3 % régions**, `typeck.rs` **93,4 %** et `resolve.rs` **93,0 %** : **objectifs 90/85 atteints** et **seuils bloquants en CI** (`coverage.yml`) | **Audit externe absent** ; **31 lacunes de test** de mutation identifiées et documentées (`MUTATION-EQUIVALENCE.md` §7.4) ; pas de score de mutation global | Audit externe |
-| T11 | `PARTIAL` | Installateur (`sha256 5257d20d…`, manifeste, `--version`), SBOM **reproductible** (64 paquets, `b637b03e…`), provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** (`67F2934B…`), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
+| T10 | `PARTIAL` | **1405 tests** (89 suites), conformance **386 cas**, smoke **31/0/0**, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows : **95 PASS, tests FS `NOT_RUN`** ; mutation ciblée après la passe 5 : `own.rs` 32 mutants (1 équivalent), `resolve.rs` 57 (15 survivants : 14 inatteignables + 1 équivalent), `typeck.rs` 106 (5 lacunes) — **195 mutants, 165 tués (84,6 %)**, 9 invivables, 0 timeout ; **couverture sema 89,2 % lignes / 88,6 % régions**, `typeck.rs` **93,8 %** et `resolve.rs` **93,1 %** : **objectifs 90/85 atteints** et **seuils bloquants en CI** (`coverage.yml`) ; campagne de mutation désormais **rejouée chaque semaine** par `.github/workflows/mutation.yml` | **Audit externe absent** ; **5 lacunes de test** de mutation résiduelles documentées (`MUTATION-EQUIVALENCE.md` §8.1) ; pas de score de mutation global | Audit externe |
+| T11 | `PARTIAL` | Installateur (`sha256 4da36485…73b834`, manifeste `locked=true`, `--version`), SBOM **reproductible** (64 paquets / 170 relations, `dc7b4e0d…c2134f1`), provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** (`86F575CF…D49F3457`), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate
@@ -485,9 +512,11 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** |
 | **D8** | Arbitrage des codes de diagnostic | **RÉSOLUE** — le registre (`diagnostics.md` §3) déclare « tout code absent est interdit » ; les codes fautifs ont été remplacés. Le dernier restant, `W-TYP-UNREACHABLE`, n'a **pas** été enregistré : EXPR-5.9, G-6.44 et DIAG-1.6 imposent qu'un bras inatteignable ne produise aucun diagnostic, donc l'émission a été retirée et un test la verrouille |
 | **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **NOUVELLE — bloque la signature de release (T11)** ; procédure proposée : [`KEY-CUSTODY.md`](../release/KEY-CUSTODY.md) |
-| **D-PAT-1** | Motifs littéraux flottants/négatifs (`grammar.md` G-6.36/G-6.37 vs `diagnostics.md`) | **RÉSOLUE (2026-11-10, option A)** : les deux règles MUST sont **implémentées**, `E-UNSUPPORTED-NEG-PAT` est retiré du registre (111 codes, 0 jamais émis). Preuves : `T2-FINDINGS.md` §18, 8 contrats `typeck_contracts.rs`, 5 cas de corpus dont 2 `run-pass` |
-| **D-CMP-1** | Famille d'affectations composées (`grammar.md` G-6.8 / `expressions.md` EXPR-9.4 **MUST acceptées** vs `diagnostics.md` `E-UNSUPPORTED-COMPOUND-ASSIGN` et implémentation limitée à `+=`) | **NOUVELLE — OUVERTE** : contradiction de spécification de même forme que D-PAT-1. Soit implémenter la famille (`-= *= /= %= &= \|= ^= <<= >>=`), soit amender deux MUST. Détail : `T2-FINDINGS.md` §19.2 |
-| **D-COERCE-1** | Coercition implicite `String → &str` en position d'argument (`types.md` TYP-13.1 n'admet que `&String → &str`, TYP-8.5 rend la conversion explicite) | **NOUVELLE — OUVERTE** : comportement actuel accepté et **conservé** cette passe car `line.trim()` rend un `String` (STD-9.1) et que `examples/stats` + `conformance/cases/run/stats` (cité par F-STD-017) en dépendent. Détail : `T2-FINDINGS.md` §19.2 |
+| **D-PAT-1** | Motifs littéraux flottants/négatifs (`grammar.md` G-6.36/G-6.37 vs `diagnostics.md`) | **RÉSOLUE (2026-11-10, option A)** : les deux règles MUST sont **implémentées**, `E-UNSUPPORTED-NEG-PAT` est retiré du registre (0 jamais émis). Preuves : `T2-FINDINGS.md` §18, 8 contrats `typeck_contracts.rs`, 5 cas de corpus dont 2 `run-pass` |
+| **D-CMP-1** | Famille d'affectations composées (`grammar.md` G-6.8 / `expressions.md` EXPR-9.4 **MUST acceptées** vs `diagnostics.md` `E-UNSUPPORTED-COMPOUND-ASSIGN` et implémentation limitée à `+=`) | **RÉSOLUE (2026-11-10, passe 5)** : les **deux MUST** gagnent (Q-GRAM-3 disait déjà « famille complète acceptée, aucun `E-*` spécifique »). La famille est **implémentée** (sema + codegen `place op= e`), la ligne §7 de `grammar.md`, la ligne §12 de `expressions.md` et le code `E-UNSUPPORTED-COMPOUND-ASSIGN` sont retirés. Preuves : `T2-FINDINGS.md` §20, 9 contrats `typeck_contracts3.rs`, cas `run/compound-assign` **exécuté** (les 10 opérateurs) + `types/compound-assign-mismatch` |
+| **D-UFCS-1** | UFCS : `unsupported.md` (`E-UNSUPPORTED-UFCS`) vs EXPR-7.8 (MUST : `E-RES-UNKNOWN`) | **RÉSOLUE (2026-11-10, passe 5)** : la règle MUST gagne ; le code dédié, jamais atteignable, est retiré du registre. `P::len(&p)` donne `E-RES-UNKNOWN`. Même précédent que `E-PARSE-BAD-SUFFIX` (cf. `diagnostics.md` Q-DIAG-8/Q-DIAG-11) |
+| **D-MOD-3.2** | `use` relatif nu : repli module courant → racine (MUST) non implémenté ; double résolution jamais signalée | **RÉSOLUE (2026-11-10, passe 5)** : repli implémenté, double résolution → `E-RES-CONFLICT`. Preuves : 9 contrats `resolve_contracts2.rs` (dont non-faux-conflit et cas 1 segment) |
+| **D-COERCE-1** | Coercition implicite `String → &str` en position d'argument (`types.md` TYP-13.1 n'admet que `&String → &str`, TYP-8.5 rend la conversion explicite) | **OUVERTE** : comportement actuel accepté et **conservé** car `line.trim()` rend un `String` (STD-9.1) et que `examples/stats` + `conformance/cases/run/stats` (cité par F-STD-017) en dépendent. Détail : `T2-FINDINGS.md` §20.3 |
 
 ## 5. Règles de mise à jour
 
