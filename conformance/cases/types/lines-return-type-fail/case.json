@@ -1,0 +1,8 @@
+{
+  "id": "types/lines-return-type-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-STD-020 / STD-9.1 / STD-9.9: every text operation returns an owned `String`-based value, so `lines()` yields `Vec<String>` and cannot be used as `usize`. The original example (`for line in text.lines()` on `&str`) was unreachable: stdlib.md §9 defines `lines()` on `&str`, so the call itself is legal and the mandated mismatch never occurs."
+}

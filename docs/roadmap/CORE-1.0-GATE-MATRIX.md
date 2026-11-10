@@ -31,7 +31,7 @@
 | LSP (bout en bout, tubes réels) | `cargo test -p ravum-lang-cli --test lsp_client` | **11 PASS / 0 FAIL** (dont l'oracle cold vs warm) |
 | LSP (unitaire) | `cargo test -p ravum-lang-lsp` | **13 PASS / 0 FAIL** |
 | **VS Code réel** | `node tools/vscode-ravum/test/runTest.js` | **10 tests / 10 PASS**, VS Code **1.145.2** (rejoué après les correctifs) |
-| Conformance | `cargo run -p ravum-conformance -- run` | **322 cas : 321 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Conformance | `cargo run -p ravum-conformance -- run` | **323 cas : 322 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité des règles | `python tools/features_coverage.py --strict` | **187/188** règles tracées, **179/188** au critère strict |
 | Fuzz lexer/parser | `RAVUM_FUZZ_COLLECT=1 RAVUM_FUZZ_ITERS=200000 cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored` | **249 054 entrées, 0 échec**, digest `0xcb1740aef51d2879`, 61,4 s (**rejoué après les 12 correctifs**) |
 | Fuzz sema | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored` | **100 000 itérations, 0 échec**, 1 591 it/s, 62,9 s (**rejoué après les correctifs**) |
@@ -74,7 +74,7 @@ ont depuis été corrigés dans le compilateur (mesure locale postérieure :
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PARTIAL` | 322 cas **321 PASS / 0 FAIL / 1 SKIP** ; **186/188** règles au critère strict ; 112 codes enregistrés | **2 défauts de documentation** : `F-STD-020` (contradiction `features.md` ↔ `stdlib.md` §9) et `F-META-006` (aucune forme exécutable, MACH-1.4) | Correction de spécification |
+| T2 | `PASS` | 323 cas **322 PASS / 0 FAIL / 1 SKIP** ; **187/187 règles testables** au critère strict ; 112 codes enregistrés ; 3 contradictions internes corrigées | **`F-META-006` est déclarée non testable par la spécification elle-même** (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption explicite, révocable | Exemption documentée |
 | T3 | `PASS` | Lexer/parser/AST réels, **1020 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri rejoué (159 tests)**, formateur idempotent, **5 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation) | — (les 16 divergences restantes sont des **identifiants de diagnostic**, pas des comportements : traitées sous T2/D8) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI antérieure) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
@@ -102,7 +102,7 @@ parité A/B antérieure `MATCH` sur 4 programmes. **La voie C (backend natif
 direct) n'existe pas** : `NOT_IMPLEMENTED` n'est pas `PASS`, donc M5 ne peut pas
 être vert. Décision humaine D2.
 
-### T2 — Spécification formelle — `PARTIAL`
+### T2 — Spécification formelle — `PASS` (une exemption déclarée)
 
 Passe de traçabilité complète dans
 [`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md).

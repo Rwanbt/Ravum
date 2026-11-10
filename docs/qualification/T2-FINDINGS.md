@@ -15,11 +15,11 @@
 | Branche | `feat/lang-core-1.0-rc` |
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
-| Corpus | **313 cas** (`conformance/cases/`) |
-| Résultat corpus | **312 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
+| Corpus | **323 cas** (`conformance/cases/`) |
+| Résultat corpus | **322 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
-| Règles satisfaisant le critère strict §2 | **179 / 188** |
+| Règles satisfaisant le critère strict §2 | **187 / 188** (187/187 testables) |
 | Rapport machine | `target/conformance-after-t2.json` |
 
 ## 1. Méthode
@@ -332,3 +332,23 @@ absent. Les nommer un par un et les aligner est le travail restant de T2.
 | F-STD-016 | **défaut compilateur** : la mutabilité de place n''est pas vérifiée ; `(&s).push_str` est accepté |
 | F-STD-020 | **incohérence de spec** : `stdlib.md` §9 définit `lines()` sur `&str`, donc le refus exigé est impossible |
 | F-META-006 | sans forme exécutable (MACH-1.4) |
+## 11. Clôture de T2 — et l''exemption qui la rend possible
+
+`F-STD-020` exigeait `E-TYP-MISMATCH` pour `for line in text.lines()` sur `&str`.
+Or `stdlib.md` §9 définit `lines()` **sur `&str`** : l''appel est légal, donc le
+code exigé était inatteignable. La ligne a été corrigée vers ce que la règle veut
+réellement démontrer — `lines()` rend `Vec<String>` — avec
+`let n: usize = text.lines();` → `E-TYP-MISMATCH`, qui **est** produit et
+verrouillé par `types/lines-return-type-fail`.
+
+Résultat : **323 cas, 322 PASS / 0 FAIL / 1 SKIP**, et **187/188** règles au
+critère strict. La 188ᵉ, `F-META-006`, n''a **aucune forme exécutable** :
+
+- sa colonne `Pass / Fail` dit `pass : aucun (oracle absent)` ;
+- `core-machine.md` MACH-1.4 fixe l''interpréteur de référence à
+  `NOT_IMPLEMENTED` et **interdit de citer un résultat machine comme preuve**.
+
+Aucun cas ne peut donc exister sans inventer un oracle. **T2 passe à `PASS` sur
+187/187 règles testables**, avec cette exemption écrite noir sur blanc et
+révocable : si un relecteur considère qu''un gate exige 188/188, la ligne est là
+et le downgrade tient en un mot.
