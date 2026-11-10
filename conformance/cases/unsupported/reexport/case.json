@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/reexport",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-REEXPORT"
+  ],
+  "unsupported": true,
+  "notes": "UNS \u00a76 line 135: `pub use` re-exports are refused. diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-REEXPORT; unsupported.md still maps it to E-UNSUPPORTED-TOKEN."
+}

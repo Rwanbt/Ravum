@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/move-keyword",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-MOVE"
+  ],
+  "unsupported": true,
+  "notes": "Grammar G-6.34 / diagnostics.md \u00a73 (added): `move` is refused. The registry names E-UNSUPPORTED-MOVE where G-6.34 still names E-UNSUPPORTED-TOKEN and unsupported.md \u00a73 line 60 names E-UNSUPPORTED-CLOSURE."
+}

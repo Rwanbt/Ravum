@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/static-item",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-STATIC"
+  ],
+  "unsupported": true,
+  "notes": "UNS \u00a72 line 32: a `static` item is refused. diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-STATIC; unsupported.md still maps it to E-UNSUPPORTED-TOKEN."
+}

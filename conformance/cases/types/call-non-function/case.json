@@ -1,0 +1,8 @@
+{
+  "id": "types/call-non-function",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CALL"
+  ],
+  "notes": "diagnostics.md \u00a73.4: E-TYP-CALL is a call of a value that is not a function; here the integer local `x` is called. The unused-variable warning is not an E-* code and is ignored by the compile-fail code set."
+}

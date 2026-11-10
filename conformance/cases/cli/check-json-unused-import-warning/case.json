@@ -1,0 +1,12 @@
+{
+  "id": "cli/check-json-unused-import-warning",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"code\":\"W-RES-UNUSED-IMPORT\",\"severity\":\"warning\"",
+  "notes": "DIAG-1.6 closes the warning list to W-RES-UNUSED-IMPORT and W-OWN-UNUSED-VARIABLE. `check --json` exports the resolve warning in the diagnostics array and exits 0 (DIAG-2: a warning never fails compilation). The case asserts the exact code+severity fragment rather than `expect_json_schema_version` because the harness JSON-schema validator currently rejects every W-* code as an invalid E-* code (reported)."
+}

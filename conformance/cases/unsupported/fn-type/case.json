@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/fn-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-FN-TYPE"
+  ],
+  "unsupported": true,
+  "notes": "diagnostics.md \u00a73 (added): function-pointer types (`fn(...)`) are outside Core 1.0 (E-UNSUPPORTED-FN-TYPE)."
+}

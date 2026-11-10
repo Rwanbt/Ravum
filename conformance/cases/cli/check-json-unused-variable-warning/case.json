@@ -1,0 +1,12 @@
+{
+  "id": "cli/check-json-unused-variable-warning",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"code\":\"W-OWN-UNUSED-VARIABLE\",\"severity\":\"warning\"",
+  "notes": "DIAG-1.6 / DIAG-2: an unread `let` binding is the ownership warning W-OWN-UNUSED-VARIABLE; `check --json` exports it and still exits 0. An existing cli case asserts the same code through `lint`; this one locks the `check --json` path. Schema validation is not requested because the harness validator rejects W-* codes (reported)."
+}

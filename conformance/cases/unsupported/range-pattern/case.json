@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/range-pattern",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-RANGE-PAT"
+  ],
+  "unsupported": true,
+  "notes": "Grammar G-6.39 / diagnostics.md \u00a73 (added): range patterns are refused. The registry names E-UNSUPPORTED-RANGE-PAT where G-6.39 and unsupported.md name E-UNSUPPORTED-TOKEN / E-UNSUPPORTED-RANGE."
+}

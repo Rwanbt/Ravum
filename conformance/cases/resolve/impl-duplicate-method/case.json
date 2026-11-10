@@ -1,0 +1,8 @@
+{
+  "id": "resolve/impl-duplicate-method",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-IMPL-DUPLICATE"
+  ],
+  "notes": "diagnostics.md \u00a73.2: two methods with the same name in the same `impl` are E-RES-IMPL-DUPLICATE (a type has exactly one method per name)."
+}

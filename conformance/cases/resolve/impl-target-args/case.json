@@ -1,0 +1,8 @@
+{
+  "id": "resolve/impl-target-args",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-IMPL-TARGET"
+  ],
+  "notes": "diagnostics.md \u00a73 (added): the generic parameters of an `impl` must match its target type arguments in order. `impl S<i32>` on `struct S<T>` provides none, so the target is rejected."
+}
