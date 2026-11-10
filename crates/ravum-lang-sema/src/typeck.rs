@@ -4178,7 +4178,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         _ => Type::I32,
                     },
                 };
-                if !expected.is_int() {
+                // TYP-1.6: `!` coerces to every type, so a literal pattern on a
+                // diverging scrutinee is not a type mismatch (the bool, char and
+                // text patterns below already exempt `!`/`<error>`). Without
+                // this exemption `match panic("x") { 1 => …, _ => … }` was
+                // rejected while the same match with `true`/`'a'`/`"a"` was not.
+                if !expected.is_int() && !matches!(expected, Type::Error | Type::Never) {
                     self.error(
                         "E-TYP-MISMATCH",
                         pat.span,

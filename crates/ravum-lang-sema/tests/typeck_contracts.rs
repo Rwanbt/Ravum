@@ -1984,3 +1984,180 @@ fn c(x: i32) -> i32 {
 "#,
     );
 }
+
+// ===========================================================================
+// Fourth batch: mutation anchors for typeck.rs
+//
+// `cargo-mutants` runs `cargo test`, which does not execute the CLI
+// conformance corpus. These cases replicate, inside the sema test binary, the
+// behaviours that otherwise survived only in `conformance/` and were reported
+// as missed mutants.
+// ===========================================================================
+
+#[test]
+fn integer_pattern_is_range_checked_against_the_scrutinee_type() {
+    // A `u8` scrutinee makes the pattern type `u8` (not the i32 default), so an
+    // out-of-range literal pattern must be rejected.
+    expect_code(
+        r#"
+fn f(x: u8) -> i32 {
+    match x {
+        300 => 1,
+        _ => 0,
+    }
+}
+"#,
+        "E-TYP-LITERAL-RANGE",
+    );
+}
+
+#[test]
+fn literal_patterns_are_checked_against_each_primitive_scrutinee() {
+    accept(
+        r#"
+fn entier(x: u8) -> i32 {
+    match x {
+        1 => 1,
+        255 => 2,
+        _ => 0,
+    }
+}
+
+fn caractere(c: char) -> i32 {
+    match c {
+        'a' => 1,
+        _ => 0,
+    }
+}
+
+fn texte(s: &str) -> i32 {
+    match s {
+        "a" => 1,
+        _ => 0,
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn literal_patterns_on_a_diverging_scrutinee_are_accepted() {
+    // TYP-1.6: the scrutinee has type `!`; a literal pattern must not be
+    // rejected just because the expected type is `!` (only `Error`/`Never` are
+    // exempt from the mismatch).
+    accept(
+        r#"
+fn entier() -> i32 {
+    match panic("x") {
+        1 => 1,
+        _ => 0,
+    }
+}
+
+fn caractere() -> i32 {
+    match panic("x") {
+        'a' => 1,
+        _ => 0,
+    }
+}
+
+fn texte() -> i32 {
+    match panic("x") {
+        "a" => 1,
+        _ => 0,
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_identifier_pattern_is_a_binding_not_a_constant() {
+    // G-6.38: `IDENT` binds by value. A bare uppercase name is therefore a
+    // binding (irrefutable), not a reference to a `const`; the following `_`
+    // arm is unreachable and, per EXPR-5.9/G-6.44, produces no diagnostic.
+    accept(
+        r#"
+const N: i32 = 3;
+
+fn f(x: i32) -> i32 {
+    match x {
+        N => 1,
+        _ => 0,
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn annotated_array_accepts_a_diverging_first_element() {
+    // TYP-1.6: the annotation supplies the element type, so a leading `!`
+    // coerces instead of forcing `E-TYP-AMBIGUOUS`. This is the mutation anchor
+    // for the `len == items.len()` guard in `check_array`.
+    accept(
+        r#"
+fn f() -> [i32; 2] {
+    let a: [i32; 2] = [panic("x"), 1];
+    return a;
+}
+"#,
+    );
+}
+
+#[test]
+fn annotated_array_repeat_uses_the_annotation_element_type() {
+    // `[0; 3]` under `[u8; 3]`: the element must be checked against `u8`, not
+    // the i32 default.
+    accept(
+        r#"
+fn f() -> [u8; 3] {
+    let a: [u8; 3] = [0; 3];
+    return a;
+}
+"#,
+    );
+}
+
+#[test]
+fn wildcard_covers_every_scrutinee_shape() {
+    // The exhaustiveness engine must treat `_` (and a binding) as covering the
+    // whole type for bool, enums, Option and Result; otherwise `match x { _ => }`
+    // would be reported as non-exhaustive.
+    accept(
+        r#"
+enum Couleur { Rouge, Vert }
+
+fn booleen(x: bool) -> i32 {
+    match x {
+        _ => 0,
+    }
+}
+
+fn booleen_partiel(x: bool) -> i32 {
+    match x {
+        true => 1,
+        _ => 0,
+    }
+}
+
+fn enumeration(c: Couleur) -> i32 {
+    match c {
+        _ => 0,
+    }
+}
+
+fn option(x: Option<i32>) -> i32 {
+    match x {
+        _ => 0,
+    }
+}
+
+fn resultat(x: Result<i32, Error>) -> i32 {
+    match x {
+        _ => 0,
+    }
+}
+"#,
+    );
+}
