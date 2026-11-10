@@ -345,6 +345,35 @@ foreach ($case in $cases) {
     $results += [pscustomobject]@{ Case = $case.id; Stage = 'ok'; Status = 'PASS'; Detail = '' }
 }
 
+# ---------------------------------------------------------------------------
+# Free functions of the stdlib: generated one program per documented signature.
+# Only `check` + `build` are exercised (never `run`): `process::exit` and
+# `panic` would end the process.
+# ---------------------------------------------------------------------------
+$surfaceRoot = Join-Path $root (Join-Path 'target' 'stdlib-surface')
+$generator = Join-Path $root (Join-Path 'tools' 'stdlib_surface.py')
+& python $generator --out $surfaceRoot 2>&1 | Where-Object { $_ -like 'generated*' } | ForEach-Object { Write-Host $_ }
+if ($LASTEXITCODE -ne 0) {
+    $results += [pscustomobject]@{ Case = 'free-functions'; Stage = 'generate'; Status = 'FAIL'; Detail = 'generator failed' }
+}
+else {
+    foreach ($directory in Get-ChildItem $surfaceRoot -Directory) {
+        $check = & $binary check $directory.FullName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $detail = ($check | Select-String -Pattern 'error' | Select-Object -First 1).Line
+            $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'check'; Status = 'FAIL'; Detail = $detail }
+            continue
+        }
+        $build = & $binary build $directory.FullName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $detail = ($build | Select-String -Pattern 'error' | Select-Object -First 1).Line
+            $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'build'; Status = 'FAIL'; Detail = $detail }
+            continue
+        }
+        $results += [pscustomobject]@{ Case = "free/$($directory.Name)"; Stage = 'ok'; Status = 'PASS'; Detail = '' }
+    }
+}
+
 $results | Format-Table -AutoSize
 $failed = @($results | Where-Object { $_.Status -ne 'PASS' })
 Write-Host ("RESUME: {0} PASS / {1} FAIL (of {2})" -f ($results.Count - $failed.Count), $failed.Count, $results.Count)

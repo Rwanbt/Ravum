@@ -23,8 +23,17 @@ qu'aucun cas de conformance n'écrit `sqrt(<littéral non typé>)`.
 
 ## 2. Ce que le balayage couvre
 
-`scripts/stdlib-codegen-sweep.ps1`, **27 programmes**, chacun `check` → `build` →
-`run`, couvrant **30/30 méthodes documentées** de `builtins.rs` :
+`scripts/stdlib-codegen-sweep.ps1`, **64 programmes** en deux volets :
+
+1. **27 programmes écrits à la main**, un par surface de méthode, `check` →
+   `build` → `run` ;
+2. **37 programmes générés** par [`tools/stdlib_surface.py`](../../tools/stdlib_surface.py),
+   un par **fonction libre documentée** de `BUILTIN_FNS`, `check` → `build`
+   seulement (jamais `run` : `process::exit` et `panic` termineraient le
+   processus).
+
+Couverture mesurée : **30/30 méthodes documentées** et **37 paquets pour 38
+entrées de table** (une entrée est dupliquée dans `BUILTIN_FNS`).
 
 | Surface | Exemple |
 |---|---|
@@ -54,7 +63,7 @@ corrects ; ce sont mes programmes qui étaient faux.
 
 ```powershell
 cargo build -p ravum-lang-cli
-pwsh -File scripts/stdlib-codegen-sweep.ps1        # 16 PASS / 0 FAIL attendu
+pwsh -File scripts/stdlib-codegen-sweep.ps1        # 64 PASS / 0 FAIL attendu
 pwsh -File scripts/stdlib-codegen-sweep.ps1 -Keep  # conserve les paquets générés
 ```
 
@@ -63,10 +72,12 @@ dans le job CI **Linux qualification**.
 
 ## 4. Limites
 
-- **30/30 méthodes documentées** de `builtins.rs` sont exercées (mesuré par
-  `target/sweep_coverage.py`, script de mesure non versionné). Le balayage
-  couvre donc la surface des **méthodes**, pas celle des fonctions libres
-  (`math::*`, `string::parse_*`, `fs::*`), échantillonnée.
+- **Surface couverte** : 30/30 méthodes documentées et 37 programmes générés pour
+  les fonctions libres. Les arguments générés sont **minimaux** (littéraux) : un
+  programme généré prouve que le codegen du builtin compile, pas qu'il se
+  comporte correctement pour toutes ses entrées.
+- Les fonctions libres générées ne sont **jamais exécutées** : seulement
+  construites.
 - Il ne teste **pas** les combinaisons (génériques imbriqués, effets, FFI), ni le
   comportement sémantique — seulement « le Rust émis compile et le programme
   s'exécute ».
