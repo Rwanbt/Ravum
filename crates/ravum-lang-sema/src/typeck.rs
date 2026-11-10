@@ -3206,8 +3206,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             (s, e)
         };
         if !(start_ty.is_int() && end_ty.is_int() && start_ty == end_ty) {
+            // `diagnostics.md` §3 assigns "bornes de plage de types différents ou
+            // non entières" to E-TYP-RANGE, not to the generic type mismatch.
             self.error(
-                "E-TYP-MISMATCH",
+                "E-TYP-RANGE",
                 iter.span,
                 format!(
                     "range bounds must be integers of the same type: `{start_ty}` vs `{end_ty}`"
