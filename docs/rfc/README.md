@@ -15,6 +15,8 @@ Ce répertoire contient les **propositions d'ingénierie** qui ne sont ni des AD
 | RFC | Sujet | Statut | Date | Prototype | ADR liés |
 |---|---|---|---|---|---|
 | [RFC-SHARED-WORKSPACE-MULTIAGENT](RFC-SHARED-WORKSPACE-MULTIAGENT.md) | Coordination multi-agents sur un espace partagé : snapshots immuables, overlays, ChangeProposals, niveaux de fusion, écrivain Git unique | `PROPOSED` | 2026-11-08 | COLLAB-1 partiel (`ravum-workspace-coordinator`) | 008, 012, 021, 022, 027, 041 |
+| [RFC-BACKEND-NATIF-VOIE-C](RFC-BACKEND-NATIF-VOIE-C.md) | Backend natif (voie C) : options, coût, oracle de parité A/B/C, critère de réouverture | `PROPOSED` | 2026-11-10 | aucun (voie C absente) | 000, 001 |
+| [RFC-PERIMETRE-UNIVERSEL-D6](RFC-PERIMETRE-UNIVERSEL-D6.md) | Périmètre « universel » : réseau bloquant, async déterministe, threads, hot-state | `PROPOSED` | 2026-11-10 | aucun (surface refusée par le langage) | 000, 002, 041 |
 
 ## Relation avec les autres documents
 
