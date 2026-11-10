@@ -8,7 +8,7 @@
 > Windows 11 x86-64, rustc 1.95.0, branche `feat/lang-core-1.0-rc` @ `1b7b4f1`.
 > Tests workspace : **1020 passés / 0 échec / 2 ignorés / 82 suites**. Smoke des
 > exemples : **31 PASS / 0 FAIL** (`scripts/lang-smoke.ps1 -SkipBuild`).
-> Conformance : **269 cas, 251 PASS / 17 FAIL / 1 SKIP** — les 17 échecs restants
+> Conformance : **269 cas, 252 PASS / 16 FAIL / 1 SKIP** — les 16 échecs restants
 > sont des divergences spec ↔ implémentation, documentées et non assouplies
 > ([`docs/qualification/T2-FINDINGS.md`](../qualification/T2-FINDINGS.md)) ; six
 > défauts frontend ont été corrigés dans le compilateur pendant la passe, et un cas neuf verrouille `min(-0.0, +0.0) = -0.0`.

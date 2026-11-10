@@ -16,7 +16,7 @@
 | Toolchain | `rustc 1.95.0`, `cargo 1.95.0`, Windows 11 x86-64 |
 | Date de la passe | 2026-11-09 (Europe/Paris) |
 | Corpus | **269 cas** (`conformance/cases/`) |
-| Résultat corpus | **251 PASS / 17 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
+| Résultat corpus | **252 PASS / 16 FAIL / 1 SKIP / 0 NOT_RUN** (après les correctifs §8) |
 | Règles de `features.md` | **188** |
 | Règles tracées vers ≥ 1 cas existant | **187 / 188** |
 | Règles satisfaisant le critère strict §2 | **87 / 188** |
@@ -81,7 +81,7 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
   morte corrigée vers le cas qui existe.
 - Aucune exigence n'a été supprimée, abaissée ou marquée `PASS` par décret.
 
-## 4. Les 17 divergences restantes
+## 4. Les 16 divergences restantes
 
 | Cas | Règle(s) | Code attendu (spec) | Codes émis | Code émis non documenté |
 |---|---|---|---|---|
@@ -93,7 +93,6 @@ des **30 divergences** ci-dessous, pas d'un manque de cas.
 | `types/array-zero-length` | - | `E-TYP-ARRAY-REPEAT` | `E-TYP-ARRAY-LEN` | `E-TYP-ARRAY-LEN` |
 | `types/never-field` | - | `E-TYP-MISMATCH` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
 | `types/never-return-body` | - | `E-TYP-RETURN` | `E-UNSUPPORTED-TYPE` | `E-UNSUPPORTED-TYPE` |
-| `types/place-non-place-assign` | - | `E-PARSE-EXPECTED` | `E-TYP-FIELD` | — |
 | `types/size-of-unknown` | - | `E-RES-UNKNOWN` | `E-UNSUPPORTED-TURBOFISH` | `E-UNSUPPORTED-TURBOFISH` |
 | `ownership/drop-impl` | - | `E-UNSUPPORTED-DROP-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` | `E-UNSUPPORTED-TRAIT-IMPL` |
 | `ownership/move-out-of-mut-borrow` | - | `E-OWN-MOVE-OUT-OF-BORROW` | `E-OWN-MOVE-BORROWED` | `E-OWN-MOVE-BORROWED` |
@@ -199,11 +198,11 @@ cargo run -p ravum-conformance -- run --filter ownership/vec-index-move
   reviendrait à effacer les défauts qu'ils documentent, ce que le mandat
   interdit explicitement.
 
-## 8. Correctifs appliqués après la passe (treize cas sortis du rouge)
+## 8. Correctifs appliqués après la passe (quatorze cas sortis du rouge)
 
 Chaque correctif est un changement de **comportement**, pas d'`expect_codes` :
 le cas reste écrit comme la spécification l'exige, c'est le compilateur qui a
-été aligné. Corpus après correctifs : **269 cas, 251 PASS / 17 FAIL / 1 SKIP** ;
+été aligné. Corpus après correctifs : **269 cas, 252 PASS / 16 FAIL / 1 SKIP** ;
 tests workspace **82 suites, 1019 passés / 0 échec / 2 ignorés** (aucune
 régression).
 
@@ -221,7 +220,7 @@ régression).
 | `run/vec-clone-non-copy` | `Vec<T>::clone` n'existe que pour `T: Copy` (STD-10.4) : le checker émet `E-RES-UNKNOWN` quand l'élément est mobile, au lieu d'accepter un clone implicite |
 | `run/string-parse-method-no-call` | une méthode utilisée **sans appel** (`s.parse_i64`) est une erreur de résolution (`E-RES-UNKNOWN`), plus une « absence de champ » (`E-TYP-FIELD`) : le message pointe la correction |### 8.4 `math::min`/`max` et le zéro signé — corrigé
 | `unsupported/lifetime-token` | `'a` produisait **quatre** diagnostics en cascade (`E-LEX-CHAR`, `E-PARSE-EXPECTED`, `E-PARSE-UNCLOSED`, `E-PARSE-UNEXPECTED`). Le lexer reconnaît désormais la durée de vie et émet `E-UNSUPPORTED-TOKEN` ; le parseur consomme le jeton dans les listes de génériques et derrière `&`, donc l'item continue de se parser et l'utilisateur reçoit un diagnostic par occurrence |
-`run/math-max-signed-zero` échouait pour une raison **différente d'un nom de
+| `types/place-non-place-assign` | `(a+b).0 = 1;` était accepté par le parseur puis refusé par le checker (`E-TYP-FIELD`). La spécification en fait une **erreur de parse** : le parseur vérifie désormais que la cible est une *place* (nom, champ, index, déréférence) et émet `E-PARSE-EXPECTED` |`run/math-max-signed-zero` échouait pour une raison **différente d'un nom de
 code** : `math::max(a, b)` était émis comme `(a).max(b)`, c'est-à-dire
 `f64::max`. Or le résultat de `f64::max(-0.0, 0.0)` dépend de l'abaissement LLVM :
 

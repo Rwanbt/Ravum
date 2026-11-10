@@ -2774,6 +2774,18 @@ impl<'a> Parser<'a> {
                 return lhs;
             }
             let start = lhs.span;
+            if !Self::is_place(&lhs) {
+                // The left side of an assignment must denote a place: a name, a
+                // field, an index, or a dereference (G-6.11, F-TYP-005). This is
+                // given as a parse error by the specification, so it is reported
+                // here and not reclassified later by the checker.
+                self.diags.error(
+                    "E-PARSE-EXPECTED",
+                    lhs.span,
+                    "left side of an assignment must be a place (a name, a field, an \
+                     index or a dereference)",
+                );
+            }
             self.bump_n(count);
             let value = self.parse_assign(allow_struct);
             let span = start.join(value.span);
@@ -2799,6 +2811,20 @@ impl<'a> Parser<'a> {
             };
         }
         lhs
+    }
+
+    /// True when the expression can be assigned to: a path, or a field/index
+    /// access whose receiver is itself a place, or a dereference. Parentheses
+    /// leave no node of their own, so `(t).0` and `t.0` behave identically.
+    fn is_place(expr: &Expr) -> bool {
+        match &expr.kind {
+            ExprKind::Path(_) | ExprKind::SelfValue => true,
+            ExprKind::Field { base, .. }
+            | ExprKind::TupleIndex { base, .. }
+            | ExprKind::Index { base, .. } => Self::is_place(base),
+            ExprKind::Unary { op, expr } => matches!(op, UnOp::Deref) && Self::is_place(expr),
+            _ => false,
+        }
     }
 
     /// Assignment operators are the lowest precedence level, right-associative.
