@@ -136,6 +136,7 @@ class CoverageExemptionContract(unittest.TestCase):
             (dict(EXEMPTION, rule="F-NOPE-999"), "unknown rule"),
             (dict(EXEMPTION, extra="typo"), "unknown field"),
             (dict(EXEMPTION, date="2026-13-40"), "ISO-8601"),
+            (dict(EXEMPTION, date="20261110"), "YYYY-MM-DD"),
         ]
         for bad, expected in cases:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
@@ -146,6 +147,31 @@ class CoverageExemptionContract(unittest.TestCase):
                 code, out = run_coverage(root)
                 self.assertEqual(code, 1, out)
                 self.assertIn(expected, out)
+
+    def test_exemption_without_date_fails(self) -> None:
+        entry = dict(EXEMPTION)
+        del entry["date"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = coverage_root(Path(tmp), features_document(
+                "| `F-META-006` | oracle | pass : aucun (oracle absent) | experimental | NOT_COVERED |"
+            ))
+            write_exemptions(root, entry)
+            code, out = run_coverage(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("`date` is required", out)
+
+    def test_duplicate_feature_ids_fail(self) -> None:
+        """Duplicate rows would let an exemption hide the real rule."""
+        with tempfile.TemporaryDirectory() as tmp:
+            row = (
+                "| `F-META-006` | oracle | pass : aucun (oracle absent) | "
+                "experimental | NOT_COVERED |"
+            )
+            root = coverage_root(Path(tmp), features_document(row, row))
+            write_exemptions(root, EXEMPTION)
+            code, out = run_coverage(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("duplicate FeatureId", out)
 
 
 def registry_root(tmp: Path, codes: list[str], source: str) -> Path:
@@ -201,6 +227,35 @@ class RegistryContract(unittest.TestCase):
             self.assertEqual(code, 1, out)
             self.assertIn("E-TYP-PROMISED", out)
             self.assertIn("never emitted  : 1", out)
+
+    def test_code_named_only_in_a_comment_is_not_emitted(self) -> None:
+        """A code mentioned in prose must not count as emitted."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = registry_root(
+                Path(tmp),
+                ["E-TYP-MISMATCH", "E-TYP-PROMISED"],
+                'fn f() {\n'
+                '    // "E-TYP-PROMISED" is only a comment here.\n'
+                '    diags.error("E-TYP-MISMATCH", span, "");\n'
+                '}',
+            )
+            code, out = run_registry(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("never emitted  : 1", out)
+            self.assertIn("E-TYP-PROMISED", out)
+
+    def test_warning_list_is_closed(self) -> None:
+        """DIAG-1.6 closes the warning list; re-registering W-TYP fails."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = registry_root(
+                Path(tmp),
+                ["W-TYP-UNREACHABLE"],
+                'fn f() { diags.warning("W-TYP-UNREACHABLE", span, ""); }',
+            )
+            code, out = run_registry(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("closed W list", out)
+            self.assertIn("W-TYP-UNREACHABLE", out)
 
 
 if __name__ == "__main__":

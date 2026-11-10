@@ -40,6 +40,21 @@ PREFIX_LITERALS = {"E-LEX", "E-PARSE", "E-RES", "E-TYP", "E-OWN", "E-OWN-", "E-E
 TOOLING_CODES = {"E-BUILD", "E-TOOL", "E-CLI-WASM-RUNTIME", "E-INTERNAL-PARSER",
                  "E-INTERNAL-CHECKER"}
 
+# DIAG-1.6 declares the warning list *closed*: only these two `W-*` codes may be
+# registered or emitted. Without this table, re-adding `W-TYP-UNREACHABLE` to
+# §3 and emitting it would pass the audit (found by independent review).
+WARNING_WHITELIST = {"W-RES-UNUSED-IMPORT", "W-OWN-UNUSED-VARIABLE"}
+
+
+def strip_comment(line: str) -> str:
+    """Drop a `//` comment so a code named in prose is not counted as emitted.
+
+    The scan is lexical by nature; ignoring comments removes the easiest way to
+    make a registered-but-never-emitted code look emitted.
+    """
+    index = line.find("//")
+    return line if index < 0 else line[:index]
+
 
 def registry_codes(registry: pathlib.Path) -> set[str]:
     text = registry.read_text(encoding="utf-8")
@@ -52,7 +67,7 @@ def scan(crates: pathlib.Path, repo: pathlib.Path) -> dict[str, list[str]]:
         if "target" in path.parts:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            for code in CODE_LITERAL.findall(line):
+            for code in CODE_LITERAL.findall(strip_comment(line)):
                 where = f"{path.relative_to(repo).as_posix()}:{number}"
                 found.setdefault(code, []).append(where)
     return found
@@ -79,11 +94,27 @@ def main(argv: list[str], repo_root: pathlib.Path | None = None) -> int:
     # emits. `W-OWN-UNUSED-VARIABLE` is the case that motivated this check.
     never_emitted = sorted(code for code in registered if code not in emitted)
 
+    # DIAG-1.6 closure: the warning list is closed, so any other `W-*` code is a
+    # specification violation whether it is registered, emitted, or both.
+    extra_warnings = sorted(
+        {
+            code
+            for code in registered | set(emitted)
+            if code.startswith("W-")
+            and code not in PREFIX_LITERALS
+            and code not in TOOLING_CODES
+        }
+        - WARNING_WHITELIST
+    )
+
     print(f"registry codes : {len(registered)}")
     print(f"codes emitted  : {len(emitted)}")
     print(f"unregistered   : {len(unregistered)} (language codes emitted but absent from §3)")
     print(f"ignored        : {len(ignored)} prefix/tooling literals")
     print(f"never emitted  : {len(never_emitted)} (declared in §3, produced by no source literal)")
+    print(f"closed W list  : {len(extra_warnings)} extra warning code(s) outside DIAG-1.6")
+    for code in extra_warnings:
+        print(f"  {code}")
     for code in never_emitted:
         print(f"  {code}")
     for code in sorted(unregistered):
@@ -102,6 +133,7 @@ def main(argv: list[str], repo_root: pathlib.Path | None = None) -> int:
                     "emitted": {code: places for code, places in sorted(emitted.items())},
                     "unregistered": {code: places for code, places in sorted(unregistered.items())},
                     "never_emitted": never_emitted,
+                    "extra_warnings": extra_warnings,
                 },
                 indent=2,
             )
@@ -110,7 +142,7 @@ def main(argv: list[str], repo_root: pathlib.Path | None = None) -> int:
         )
         print(f"wrote {target}", file=sys.stderr)
 
-    return 0 if not unregistered and not never_emitted else 1
+    return 0 if not unregistered and not never_emitted and not extra_warnings else 1
 
 
 if __name__ == "__main__":

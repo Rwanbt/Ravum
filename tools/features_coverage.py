@@ -13,6 +13,11 @@ rejects an exemption that is malformed, unknown, stale (the rule is covered
 again) or that tries to hide an uncited rule (`Conformance` cell must literally
 say `NOT_COVERED`). A prose exemption in a report is not enough.
 
+What this tool **cannot** do is verify that an exemption's normative claim is
+true: it checks structure, the literal `NOT_COVERED` marker, and that the rule
+exists. A reviewer still owns the semantic judgment; the report must not present
+an exemption as a machine-proven fact.
+
 Usage:
     python tools/features_coverage.py            # human summary + exit code
     python tools/features_coverage.py --json f   # machine report
@@ -43,8 +48,9 @@ RULE_ID = re.compile(r"^F-[A-Z0-9]+-\d{3}$")
 CASE_REF = re.compile(r"cases/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 # A table that parses to fewer rows means the document format changed under the
-# tool's feet; refusing to publish a reassuring number is the safe default.
-MIN_RULES = 100
+# tool's feet (or normative rows were deleted). It is also the only guard on the
+# published "188/188" denominator; update it deliberately when rules are added.
+MIN_RULES = 188
 
 EXEMPTION_FIELDS = {
     "rule",
@@ -248,6 +254,12 @@ def load_exemptions(path: Path) -> tuple[list[dict], list[str]]:
             except ValueError:
                 problems.append(f"{where}: `date` must be ISO-8601 (YYYY-MM-DD)")
                 invalid = True
+        else:
+            problems.append(f"{where}: `date` is required (ISO-8601, YYYY-MM-DD)")
+            invalid = True
+        if "date" in entry and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(entry["date"])):
+            problems.append(f"{where}: `date` must be YYYY-MM-DD, not `{entry['date']}`")
+            invalid = True
         if not invalid:
             exemptions.append(entry)
     return exemptions, problems
@@ -302,10 +314,16 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     rows, problems = parse_rows(text)
     if len(rows) < MIN_RULES:
         print(
-            f"only {len(rows)} rules parsed; the table format changed",
+            f"only {len(rows)} rules parsed; the table format changed or normative "
+            f"rows were deleted (baseline: {MIN_RULES})",
             file=sys.stderr,
         )
         return 2
+    ids = [row["id"] for row in rows]
+    duplicates = sorted({rule_id for rule_id in ids if ids.count(rule_id) > 1})
+    if duplicates:
+        # Two rows with the same FeatureId let an exemption hide the real rule.
+        problems.append("duplicate FeatureId(s): " + ", ".join(duplicates))
     rows = classify(rows, cases_root)
 
     exemptions, exemption_problems = load_exemptions(exemptions_path)
