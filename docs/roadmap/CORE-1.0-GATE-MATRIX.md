@@ -50,6 +50,21 @@ Cette passe corrige **sept défauts mesurés** (dont deux de soundness : `None` 
 en motif, `None(payload)`), applique la décision **D-PAT-1** (G-6.36/G-6.37
 implémentées, `E-UNSUPPORTED-NEG-PAT` retiré) et rend la couverture **bloquante
 en CI**. Détail : `T2-FINDINGS.md` §18-19.
+### Passe 4 — CI observée sur `29ef8be`
+
+| Workflow | Run | Résultat exact |
+|---|---|---|
+| Linux qualification | [42882234365](https://github.com/Rwanbt/Ravum/actions/runs/42882234365) | **succès** : workspace **86 suites / 1317 passés / 0 échec / 4 ignorés** ; conformance **384 cas / 382 PASS / 0 FAIL / 2 SKIP** ; smoke, installateur, WASI, fuzz smoke et **Miri** verts ; TSan `NOT_APPLICABLE` (aucun chemin concurrent) |
+| **Coverage ratchet** (nouveau) | 42882234248 (push), 42882250559 (PR) | **succès**. Premier run sur `dea7f43` **rouge** pour une raison réelle : `tools/coverage_report.py` ne retirait que `/Ravum/` alors que llvm-cov rapporte `Ravum/crates/...` sur le runner, donc tous les seuils semblaient absents. Corrigé dans `29ef8be` (ancrage sur le premier répertoire racine connu) et verrouillé par 8 tests `tools/tests/test_coverage_report.py` |
+| Gate contracts | 42882234269 (push), 42882250616 (PR) | succès |
+| Documentation integrity | 42882250276 | succès |
+| VS Code e2e | 42882234259 (push), 42882250425 (PR) | succès |
+| MVP product checks | 42882234370 | succès |
+
+Différence Windows/Linux assumée et documentée : Windows 1320 passés / 2 ignorés et
+conformance 383 PASS / 1 SKIP ; Linux 1317 / 4 ignorés et 382 PASS / 2 SKIP (tests
+dépendants de l'OS, aucun échec de chaque côté).
+
 
 ### Passe 3 — mesures antérieures (SHA `a6e71e7`)
 
