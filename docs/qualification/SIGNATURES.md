@@ -82,3 +82,30 @@ publique. Le mécanisme est prêt ; il ne manque que l'ancre de confiance.
 - `ssh-keygen -Y verify` lit le message sur l'entrée standard : sous PowerShell
   la redirection est déléguée à `cmd.exe`. Un pipe PowerShell corromprait un
   binaire.
+## 5. Manifeste de provenance — l''artefact à signer existe maintenant
+
+Une signature sur un binaire nu ne dit pas **ce qu''on** a signé. Un manifeste de
+provenance est donc produit par [`scripts/provenance.ps1`](../../scripts/provenance.ps1) :
+un JSON qui lie, dans un seul document,
+
+- le **commit** source, la branche, et l''état `dirty` (avec la liste des fichiers) ;
+- la **toolchain** exacte : version `rustc`, hôte cible, version `cargo` ;
+- les **digests** du binaire et du SBOM ;
+- les **réglages de reproductibilité** (`CARGO_INCREMENTAL=0`,
+  `SOURCE_DATE_EPOCH=0`, `--remap-path-prefix`, `-C link-arg=/Brepro`) pour que le
+  binaire puisse être reconstruit ;
+- `signed: false` et `signed_by: null` **tant qu''aucune clé n''existe**.
+
+Mode `-Verify` : recalcule les digests et le commit, et compare au manifeste.
+
+Mesure du 2026-11-10 :
+
+| Cas | Résultat |
+|---|---|
+| manifeste généré puis vérifié sur les mêmes artefacts | `provenance: PASS`, code de sortie 0 |
+| binaire altéré d''un octet puis vérifié | `MISMATCH : binary digest mismatch …`, code de sortie **1** |
+
+Ce que cela change pour T11 : l''**attestation** a désormais un contenu
+vérifiable, et il ne manque que la clé. Un manifeste non signé est une
+**déclaration** ; le jour où D9 est tranchée, `attest-release.ps1` la transforme
+en attestation sans changer une ligne du manifeste.
