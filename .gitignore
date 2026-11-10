@@ -41,3 +41,4 @@ conventions.json
 .ravum/
 mutants.out/
 mutants.out.old/
+mutants-*.out/

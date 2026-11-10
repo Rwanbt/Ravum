@@ -1,18 +1,23 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour passe 3 — 2026-11-10, SHA `a6e71e7`.** En plus des deux faux
-> `PASS` de validation corrigés en P0, deux défauts réels ont été corrigés : les
-> tableaux hétérogènes étaient acceptés (`[1, true]` passait le checker alors
-> que le codegen émettait du Rust invalide) et un motif entier sur une
-> scrutinee `!` était refusé alors que les motifs bool/caractère/texte étaient
-> acceptés. Mesures courantes : **84 suites, 1129 passés / 0 échec / 2
-> ignorés** ; conformance **346 cas, 345 PASS / 0 FAIL / 1 SKIP** ; **188/188**
-> règles satisfaites (1 exemption) ; registre **111 codes, 0 hors registre, 0
-> jamais émis** ; couverture sema **79,4 %** de lignes (`typeck.rs` 76,9 %,
-> `own.rs` 90,1 %, `types.rs` 100 %), objectifs 90/85 non atteints ; harnais VS
-> Code stabilisé et **job CI `vscode-e2e` vert** (push `42858553296`, PR
-> `42858866200`) ; gates **5 PASS / 6 PARTIAL / 2 BLOCKED**. Le corps de ce document et son tableau
-> de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
+> **Mise à jour passe 4 — 2026-11-10, SHA `67a2a2e`.** Cette passe applique la
+> décision **D-PAT-1** (option A) : les règles MUST G-6.36 (motifs flottants) et
+> G-6.37 (motifs négatifs) sont **implémentées** — un motif flottant est abaissé
+> en garde Rust, `NaN` ne correspond jamais, `-0.0` correspond à `0.0` — et
+> le code `E-UNSUPPORTED-NEG-PAT` disparaît du registre. Sept défauts mesurés
+> sont corrigés, dont deux de soundness (`None` nu lu comme une liaison,
+> `None(payload)` accepté), `for` sur `&Vec`/`&[T]` (mauvaise phase),
+> `const MIN: i8 = -128`, le budget de diagnostics DIAG-1.7/4.3, un
+> débordement de pile à 240 parenthèses, et l'absence de CI de couverture.
+> Mesures courantes : **86 suites, 1320 passés / 0 échec / 2 ignorés** ;
+> conformance **384 cas, 383 PASS / 0 FAIL / 1 SKIP** ; **188/188** règles
+> satisfaites (1 exemption) ; registre **111 codes, 0 hors registre, 0 jamais
+> émis** ; couverture sema **88,9 %** de lignes (`typeck.rs` **93,4 %**,
+> `resolve.rs` **93,0 %**, `own.rs` 90,9 %, `types.rs` 100 %) — objectifs
+> 90/85 **atteints et bloquants en CI** ; mutation ciblée **212 mutants, 153
+> tués**, 50 survivants triés ; build bit-à-bit identique (`67F2934B…`) ;
+> gates **5 PASS / 6 PARTIAL / 2 BLOCKED**.
+> Le corps de ce document et son tableau de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
 > comme l'état courant, le registre canonique est
 > [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 

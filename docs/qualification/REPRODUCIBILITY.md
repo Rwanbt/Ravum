@@ -98,3 +98,20 @@ supprime tout par défaut.
 - **La signature des artefacts n'existe pas** : la reproductibilité permet de
   vérifier qu'un binaire correspond à une source, elle ne prouve pas **qui** l'a
   construit. C'est une exigence distincte du gate T11, toujours ouverte.
+
+## Mesure complémentaire — passe 4 (2026-11-10, SHA `67a2a2e`)
+
+Rejeu après les corrections de la passe 4 (motifs flottants/négatifs, budget de
+diagnostics, pile du CLI) :
+
+```
+pwsh -File scripts/repro-check.ps1
+repro-check: A = 67F2934B169BEF9B47A1D947CAAAA4E4CF0239E3B63CC3D07EFABC8AAB2FA7D3
+repro-check: B = 67F2934B169BEF9B47A1D947CAAAA4E4CF0239E3B63CC3D07EFABC8AAB2FA7D3
+repro-check: PASS — the two builds are bit-for-bit identical
+```
+
+Contexte : Windows 11 x86-64, `rustc 1.95.0`, deux racines et deux `target/`
+distincts. Les limites listées ci-dessus sont inchangées : ceci prouve la
+**reproductibilité locale** du binaire courant, pas la reproductibilité
+inter-machines ni l'identité de l'auteur du binaire.

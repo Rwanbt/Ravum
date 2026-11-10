@@ -59,20 +59,20 @@ Deux défauts supplémentaires ont été mesurés et traités pendant la passe :
   spécification se contredit. Aucun changement unilatéral ; décision
   **D-PAT-1** demandée. Détail : §16 de `T2-FINDINGS.md`.
 
-Mesures locales sur `a6e71e7` (Windows 11 x86-64, rustc 1.95.0) :
+Mesures locales sur `67a2a2e` (Windows 11 x86-64, rustc 1.95.0) :
 | Mesure | Résultat |
 |---|---|
-| `cargo test --workspace --all-targets` | **84 suites, 1129 passés / 0 échec / 2 ignorés** |
-| Conformance | **346 cas : 345 PASS / 0 FAIL / 1 SKIP** (0 NOT_RUN) |
+| `cargo test --workspace --all-targets` | **86 suites, 1320 passés / 0 échec / 2 ignorés** |
+| Conformance | **384 cas : 383 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** |
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **111 codes** ; 129 émis ; **0 hors registre** ; **0 jamais émis** |
 | Contrats de validation | **12 tests** PASS |
-| Couverture sema (llvm-cov) | **79,4 % lignes / 79,7 % régions** ; `types.rs` 100 %, `own.rs` 90,1 %, `typeck.rs` 76,9 %, `resolve.rs` 67,4 % — objectifs 90/85 non atteints |
+| Couverture sema (llvm-cov) | **88,9 % lignes / 88,3 % régions** ; `types.rs` 100 %, `own.rs` 90,9 %, `typeck.rs` **93,4 %**, `resolve.rs` **93,0 %** — **objectifs 90/85 atteints** sur les deux fichiers du gate, seuils bloquants en CI |
 | Mutation testing ciblé (`types.rs`) | **53 mutants : 46 caught, 7 unviable, 0 missed** — 100 % des mutants viables tués |
-| Mutation testing `own.rs` (sous-ensemble) | **22 mutants : 12 caught, 10 équivalents documentés, 0 non expliqué** ; `eval_method_call` **4/4 caught** — les 10 survivants sont prouvés équivalents dans [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
-| Mutation testing `typeck.rs` (passe 1) | **49 mutants : 38 tués, 7 survivants expliqués, 4 unviables** ; 7 ancres ajoutées dans `typeck_contracts.rs` (motifs littéraux, scrutinee `!`, tableaux annotés divergents, wildcard exhaustif) |
-| Contrats du typechecker | **95 tests** (`typeck_contracts.rs`) ; `typeck.rs` 63,7 % → **76,9 %** de lignes |
-| Audit du borrow checker | **92 tests** (`own_audit.rs`) |
+| Mutation testing (`own.rs`, `resolve.rs`, `typeck.rs`) | **212 mutants : 153 tués, 50 survivants triés (14 inatteignables, 4 observables seulement via le codegen, 1 équivalent, 31 lacunes de test), 9 invivables** ; détail dans `MUTATION-EQUIVALENCE.md` §7 |
+| Contrats du typechecker | **107 + 65 tests** (`typeck_contracts.rs`, `typeck_contracts2.rs`) ; `typeck.rs` 63,7 % → **93,4 %** de lignes |
+| Contrats de résolution | **112 tests** (`resolve_contracts.rs`) ; `resolve.rs` 67,4 % → **93,0 %** |
+| Audit du borrow checker | **93 tests** (`own_audit.rs`) |
 | VS Code réel — au repos | **10/10 en 5 s** |
 | VS Code réel — sous charge | **10/10 en 4 s** pendant `cargo test --workspace` concurrent |
 | CI VS Code | workflow `vscode-e2e.yml` **vert** : push `42858553296` (49 s) et PR `42858866200` (1 m 04 s) sur `9972391` |

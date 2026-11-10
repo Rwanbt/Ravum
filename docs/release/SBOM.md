@@ -134,3 +134,15 @@ namespace `https://spdx.ravum.invalid/ravum-workspace-8fd154726ae9`.
 
 Le SBOM doit être archivé **avec** le manifeste d'installation
 (`ravum-install.json`) et le commit exact, jamais seul.
+
+## Mesure complémentaire — passe 4 (2026-11-10, SHA `67a2a2e`)
+
+```
+$env:SOURCE_DATE_EPOCH='0'; pwsh -File scripts/sbom.ps1
+sbom: packages=64 (workspace=23, dependencies=41) relationships=170 created=1970-01-01T00:00:00Z
+sbom: sha256=b637b03e899e5de0a626ce3eed89b09204e5b2e34e88716f64e795a94b24acd6
+```
+
+64 paquets et 170 relations, horodatage figé : le fichier est reproductible
+octet pour octet pour ces métadonnées. Le SBOM décrit `Cargo.lock`, pas le
+binaire installé ; il n'est **pas signé** (D9).

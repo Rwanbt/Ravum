@@ -26,9 +26,32 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures (passe 3, SHA `a6e71e7`, 2026-11-10)
+## 1. Mesures (passe 4, SHA `67a2a2e`, 2026-11-10)
 
-### Passe 3 — mesures courantes
+### Passe 4 — mesures courantes
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Tests workspace | `cargo test --workspace --all-targets` | **86 suites, 1320 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance | `cargo run -p ravum-conformance -- run` | **384 cas : 383 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (exit 0) |
+| Contrats typechecker | `cargo test -p ravum-lang-sema --test typeck_contracts --test typeck_contracts2` | **107 + 65 PASS / 0 FAIL** |
+| Contrats résolution | `cargo test -p ravum-lang-sema --test resolve_contracts` | **112 PASS / 0 FAIL** |
+| Audit borrow checker | `cargo test -p ravum-lang-sema --test own_audit` | **93 PASS / 0 FAIL** |
+| **Couverture (llvm-cov)** | `cargo llvm-cov -p ravum-lang-sema --json` puis `python tools/coverage_report.py --check` | **88,9 % lignes / 88,3 % régions** sur sema ; `types.rs` 100 %, `own.rs` 90,9 %, `typeck.rs` **93,4 %** (régions 92,3 %), `resolve.rs` **93,0 %** (régions 93,5 %) — **objectifs 90/85 atteints sur les deux fichiers du gate**, et **seuils bloquants en CI** (`coverage.yml`, `tools/coverage_thresholds.json`) |
+| **Mutation (3 fichiers, ciblée)** | `cargo mutants --file … -F … --no-shuffle -j 8` | **212 mutants : 153 tués, 50 survivants triés (14 inatteignables par construction, 4 observables seulement via le codegen, 1 équivalent, 31 lacunes de test), 9 invivables** — voir `MUTATION-EQUIVALENCE.md` §7 |
+| **Registre des codes** | `python tools/registry_audit.py` | **111 codes enregistrés ; 129 émis ; 0 hors registre ; 0 déclaré-jamais-émis** (exit 0) |
+| Traçabilité des règles | `python tools/features_coverage.py --strict` | **188/188** règles tracées et satisfaites, 1 exemption machine-lisible (revue humaine non faite) |
+| **Build bit-à-bit** | `pwsh -File scripts/repro-check.ps1` | **deux binaires identiques**, `sha256 = 67F2934B…A2FA7D3` (racines et `target/` différents) |
+| SBOM | `='0'; pwsh -File scripts/sbom.ps1` | 64 paquets, 170 relations, `sha256 = b637b03e…b24acd6` |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1` | **31 PASS / 0 FAIL / 0 NOT_RUN** |
+| Cohérence des documents | `python tools/report_consistency.py` | PASS — 6 contrôles, chiffres identiques |
+
+Cette passe corrige **sept défauts mesurés** (dont deux de soundness : `None` nu
+en motif, `None(payload)`), applique la décision **D-PAT-1** (G-6.36/G-6.37
+implémentées, `E-UNSUPPORTED-NEG-PAT` retiré) et rend la couverture **bloquante
+en CI**. Détail : `T2-FINDINGS.md` §18-19.
+
+### Passe 3 — mesures antérieures (SHA `a6e71e7`)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
@@ -200,7 +223,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PASS` | 346 cas : **345 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; 112 codes enregistrés, **0 hors registre, 0 jamais émis** ; 3 contradictions internes corrigées ; 1 contradiction `grammar.md` ↔ `diagnostics.md` **enregistrée** (motifs flottants/négatifs, décision **D-PAT-1**) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
+| T2 | `PASS` | **384 cas : 383 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** règles tracées, **188/188 satisfaites** au critère strict (187 par cas + 1 exemption justifiée) ; **111 codes enregistrés, 0 hors registre, 0 jamais émis** (`E-UNSUPPORTED-NEG-PAT` retiré par D-PAT-1) ; 3 contradictions internes corrigées ; **D-PAT-1 RÉSOLUE** : G-6.36/G-6.37 implémentées et prouvées par 2 cas `run-pass` (`NaN` ne correspond jamais, `-0.0` correspond à `0.0`) | **`F-META-006`** reste sans forme exécutable (pass : « aucun (oracle absent) » ; MACH-1.4 interdit de citer un résultat machine) — exemption **machine-lisible** dans `tools/coverage_exemptions.json`, structurellement vérifiée par l'outil (revue humaine non faite) et bloquante en CI | Exemption déclarée, structurellement vérifiée, révocable |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 31 PASS) et Linux (CI `42809676443` sur `b7e5c5c`) ; WASI exécuté | ABI stable non revendiquée ; sanitizers non exécutés | — |
@@ -208,8 +231,8 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` = rebuild + redémarrage ; overlays/snapshots ; **oracle cold vs warm** : 36 éditions incrémentales comparées à une analyse froide, arbre de symboles identique à chaque lot | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint | Implémentation |
 | T9 | `PARTIAL` | 9 verticales `.rv` exécutées | HTTP + SQLite, DSP hôte, E2E navigateur absents | Implémentation |
-| T10 | `PARTIAL` | 1129 tests, conformance, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows cette passe : **95 PASS, tests FS `NOT_RUN`** ; mutation ciblée `types.rs` (53 mutants, 0 survivant viable), `own.rs` (22 mutants, 0 survivant non expliqué) et `typeck.rs` (49 mutants, 7 survivants expliqués) | **Audit externe absent** ; couverture lignes sema **79,4 %** (`types.rs` 100 %, `own.rs` 90,1 %, `typeck` 76,9 %, `resolve` 67,4 %) sous les objectifs 90/85 ; campagne de mutation non exhaustive (4 fonctions de `own.rs`, 4 de `typeck.rs`) | Audit externe |
-| T11 | `PARTIAL` | Installateur, SBOM **reproductible**, provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`**, **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
+| T10 | `PARTIAL` | **1320 tests** (86 suites), conformance **384 cas**, smoke, **fuzz complet rejoué (2 campagnes)**, **Miri Linux en CI sur `e05f3ff` (164 tests, 0 échec)** ; Miri Windows : **95 PASS, tests FS `NOT_RUN`** ; mutation ciblée `types.rs` (53 mutants, 0 survivant viable), `own.rs` (32 mutants, 1 survivant équivalent), `resolve.rs` (74 mutants, 21 survivants triés) et `typeck.rs` (106 mutants, 28 survivants triés) — **212 mutants, 153 tués** ; **couverture sema 88,9 % lignes / 88,3 % régions**, `typeck.rs` **93,4 %** et `resolve.rs` **93,0 %** : **objectifs 90/85 atteints** et **seuils bloquants en CI** (`coverage.yml`) | **Audit externe absent** ; **31 lacunes de test** de mutation identifiées et documentées (`MUTATION-EQUIVALENCE.md` §7.4) ; pas de score de mutation global | Audit externe |
+| T11 | `PARTIAL` | Installateur (`sha256 5257d20d…`, manifeste, `--version`), SBOM **reproductible** (64 paquets, `b637b03e…`), provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** (`67F2934B…`), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate
