@@ -3848,3 +3848,95 @@ fn main() {
     );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+// ---------------------------------------------------------------------------
+// 21. P0-A round 9: the two shapes that were still a loud rustc E0508 — descents
+//     in two distinct branches of one `if`, and several descents in one nested
+//     block — now share one level-0 destructuring anchored at the statement of the
+//     binder's own block that contains them. The hoist is emitted before that
+//     anchor, so the bindings are visible to every branch and to later statements
+//     of the block. Also locks the ordering rule: a read in an *earlier* statement
+//     of the block is left in place (it sees the intact place), a read at or after
+//     the anchor is rewritten to the slot.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn audit_branch_and_nested_descent_hoists_build_and_run() {
+    if skip("audit_branch_and_nested_descent_hoists_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-branch-nested-descent",
+        r#"fn pick(c: bool, a: [([String; 2], i32); 2]) -> String {
+    if c {
+        let x = a[0].0[1];
+        return x;
+    } else {
+        let y = a[1].0[0];
+        return y;
+    }
+}
+
+fn nested(a: [([String; 2], i32); 2]) -> String {
+    if true {
+        let x = a[0].0[1];
+        let y = a[1].0[0];
+        io::println(y.as_str());
+        return x;
+    }
+    return String::from("none");
+}
+
+fn mixed(a: [([String; 2], i32); 2]) -> (String, i32, i32) {
+    let n = a[1].1;
+    let x = a[0].0[1];
+    let m = a[1].1;
+    return (x, n, m);
+}
+
+fn order(c: bool) -> (String, i32) {
+    let mut out = (String::from("none"), 0);
+    if c {
+        let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+        let n = a[1].1;
+        let x = a[0].0[1];
+        out = (x, n);
+    }
+    return out;
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(pick(true, a).as_str());
+    let b = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(pick(false, b).as_str());
+    let c = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(nested(c).as_str());
+    let d = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    let t = mixed(d);
+    io::println(t.0.as_str());
+    io::println(t.1.to_string().as_str());
+    io::println(t.2.to_string().as_str());
+    let u = order(true);
+    io::println(u.0.as_str());
+    io::println(u.1.to_string().as_str());
+}
+"#,
+    );
+    let pick_at = code.find("fn pick(c: bool").expect("fn pick is missing");
+    let hoist_at = code[pick_at..]
+        .find("let [mut __rv_el_")
+        .expect("no level-0 destructuring was emitted for the branched descents");
+    let branch_at = code[pick_at..].find("if c {").expect("if c is missing");
+    assert!(
+        hoist_at < branch_at,
+        "the destructuring must be hoisted before the `if`, not inside a branch:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-branch-nested-descent");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "x1\ny0\ny0\nx1\nx1\n2\n2\nx1\n2\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}

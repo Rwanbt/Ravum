@@ -1,0 +1,28 @@
+fn mixed(a: [([String; 2], i32); 2]) -> (String, i32, i32) {
+    let n = a[1].1;
+    let x = a[0].0[1];
+    let m = a[1].1;
+    return (x, n, m);
+}
+
+fn nested(c: bool) -> (String, i32) {
+    let mut out = (String::from("none"), 0);
+    if c {
+        let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+        let n = a[1].1;
+        let x = a[0].0[1];
+        out = (x, n);
+    }
+    return out;
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    let t = mixed(a);
+    io::println(t.0.as_str());
+    io::println(t.1.to_string().as_str());
+    io::println(t.2.to_string().as_str());
+    let u = nested(true);
+    io::println(u.0.as_str());
+    io::println(u.1.to_string().as_str());
+}

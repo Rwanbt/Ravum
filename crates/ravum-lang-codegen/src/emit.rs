@@ -3228,19 +3228,21 @@ impl<'a> Emitter<'a> {
 // let y = a[1].0[0];`, or a descent plus a read of another element) share one
 // level-0 destructuring: the hoist binds every element of the place once and each
 // use continues from its slot (`let [e0, e1] = a; let x = <e0.0[1]>; let y =
-// <e1.0[0]>;`). They must be direct statements of the binder's own block, because
-// the hoist is emitted before the first of them.
+// <e1.0[0]>;`). The anchor of a group is the *earliest* statement of the binder's
+// own block among the descents' enclosing statements, so the descents may sit in
+// distinct branches of the same `if`, several of them in one nested block, or in
+// plain sibling statements: the bindings live in the anchor's block, hence every
+// statement of that block at or after the anchor — and everything nested inside
+// those statements — sees them. A use in an *earlier* statement of the same block
+// still sees the intact place, so it is left alone when it reads; a move there
+// refuses the group (and keeps the plain form). Loop bodies are excluded: a hoist
+// there would destructure the same place once per iteration.
 //
 // When the proof fails the emitter keeps the plain `a[i]`, which rustc rejects
-// loudly (`E0508`) — never a silent semantic change. The shapes that stay in that
-// state (measured `check` exit 0 / `build` exit 1 with a loud E0508) are:
-// * element-projection descents on the same array from *different* nested blocks
-//   (`if c { let x = a[0].0[1]; return x; } else { let y = a[1].0[0]; return y; }`):
-//   no single statement of the binder's block precedes both, so the hoist has no
-//   valid anchor and the plain indexed form stays;
-// * a descent whose base place is also read at or after the descent in the same
-//   statement (`let x = a[0].0[1]; let n = a[1].1;` in one statement) — a read in a
-//   different, earlier statement is fine and the shared hoist rewrites it.
+// loudly (`E0508`) — never a silent semantic change. The shapes still in that state
+// are measured, reproduced and listed in
+// `docs/qualification/CONFORMANCE-BUILD-CONTRACT.md` §9 (never here, so the list
+// cannot drift away from a measurement).
 // A dynamic index at the first level combined with a *later* use of the same place
 // (`let x = a[i]; let n = a[0].len();`) never reaches this lowering: the checker
 // already rejects it (`E-OWN-USE-AFTER-MOVE` / `E-OWN-PARTIAL-MOVE`), so no plain
@@ -3447,6 +3449,9 @@ struct Descent {
     /// Walk order of the enclosing statement(s), outermost first.
     stmt_chain: Vec<NodeId>,
     top: usize,
+    /// `true` when the access is inside a `while`/`loop`/`for` body (no hoist is
+    /// planned there, see [`MovePlanner::plan_slot_groups`]).
+    in_loop: bool,
 }
 
 /// A use of the whole place (as opposed to one element access).
@@ -3560,6 +3565,9 @@ struct MovePlanner<'e, 'a> {
     descents: Vec<Descent>,
     /// Innermost enclosing `match` arm body (see [`Access::arm_body`]).
     arm_anchor: Option<NodeId>,
+    /// Nesting depth of `while`/`loop`/`for` bodies: a destructuring hoisted inside
+    /// one of them would run once per iteration and move the same place twice.
+    loop_depth: usize,
     /// Walk order of every statement id (and block-tail expression id).
     statement_order: BTreeMap<NodeId, usize>,
     /// Enclosing statement ids, outermost first.
@@ -3577,6 +3585,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             whole_uses: Vec::new(),
             descents: Vec::new(),
             arm_anchor: None,
+            loop_depth: 0,
             statement_order: BTreeMap::new(),
             statement_chain: Vec::new(),
             order: 0,
@@ -3847,6 +3856,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                             lens,
                             stmt_chain: self.statement_chain.clone(),
                             top,
+                            in_loop: self.loop_depth > 0,
                         });
                     } else if !roots_at_local(deep_root, &self.emitter.facts().resolutions) {
                         // An rvalue root: a call result, a temporary aggregate,
@@ -3859,6 +3869,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                             lens: Vec::new(),
                             stmt_chain: self.statement_chain.clone(),
                             top,
+                            in_loop: self.loop_depth > 0,
                         });
                     }
                 }
@@ -3971,15 +3982,23 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::While { cond, body } => {
                 self.walk_expr(cond, false, top, block_depth);
+                self.loop_depth += 1;
                 self.walk_nested_block(body, false, top, block_depth);
+                self.loop_depth -= 1;
             }
-            ExprKind::Loop { body } => self.walk_nested_block(body, false, top, block_depth),
+            ExprKind::Loop { body } => {
+                self.loop_depth += 1;
+                self.walk_nested_block(body, false, top, block_depth);
+                self.loop_depth -= 1;
+            }
             ExprKind::For { pat, iter, body } => {
                 self.walk_expr(iter, false, top, block_depth);
                 let order = self.order;
                 self.push_scope();
                 self.walk_pattern(pat, BinderKind::ForPattern, block_depth + 1, top, order);
+                self.loop_depth += 1;
                 self.walk_nested_block(body, false, top, block_depth);
+                self.loop_depth -= 1;
                 self.pop_scope();
             }
             ExprKind::ArrayRepeat { value, len } => {
@@ -4302,17 +4321,24 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         sequence: &mut usize,
         handled: &mut BTreeSet<NodeId>,
     ) {
-        let mut groups: BTreeMap<(PlaceKey, Vec<NodeId>), Vec<&Descent>> = BTreeMap::new();
+        // One group per place: the anchor is the *earliest* statement of the
+        // binder's own block among the descents' enclosing statements, so the
+        // destructuring is emitted immediately before it. It dominates every later
+        // statement of that block (and everything nested inside them), which covers
+        // descents in sibling branches of one `if`, several descents in one nested
+        // block, and plain sibling statements alike: the bindings live in the
+        // anchor's block, so all of them see them.
+        let mut groups: BTreeMap<PlaceKey, Vec<&Descent>> = BTreeMap::new();
         for descent in &self.descents {
             let Some(base) = &descent.base else { continue };
             let Some(first_index) = descent.first_index else {
                 continue;
             };
             let binder = &self.binders[base.binder.0 as usize];
-            let Some(stmt_key) = descent.stmt_chain.get(binder.block_depth).copied() else {
+            let Some(anchor) = descent.stmt_chain.get(binder.block_depth).copied() else {
                 continue;
             };
-            let Some(order) = self.statement_order.get(&stmt_key).copied() else {
+            let Some(order) = self.statement_order.get(&anchor).copied() else {
                 continue;
             };
             if binder.order >= order {
@@ -4324,23 +4350,21 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             if first_index >= len {
                 continue;
             }
-            // Only direct statements of the binder's own block can share one hoist:
-            // statements in sibling branches (then/else) would not see it.
-            if descent.stmt_chain.len() != binder.block_depth + 1 {
+            // A hoist inside a loop body would destructure the same place once per
+            // iteration and move it twice; those descents keep the inline lowering
+            // (or the loud plain form).
+            if descent.in_loop {
                 continue;
             }
-            let prefix: Vec<NodeId> = Vec::new();
-            groups
-                .entry((base.clone(), prefix))
-                .or_default()
-                .push(descent);
+            groups.entry(base.clone()).or_default().push(descent);
         }
-        for ((place, prefix), members) in groups {
+        for (place, members) in groups {
             let lens = members[0].lens.clone();
+            let binder = &self.binders[place.binder.0 as usize];
+            let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
             let mut ordered: Vec<(usize, NodeId)> = members
                 .iter()
                 .map(|descent| {
-                    let binder = &self.binders[place.binder.0 as usize];
                     let key = descent.stmt_chain[binder.block_depth];
                     (
                         self.statement_order
@@ -4355,7 +4379,6 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             let Some((_, hoist_key)) = ordered.first().copied() else {
                 continue;
             };
-            let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
             // Other uses of the place must be visible from the hoist and lowerable
             // from the slots.
             let mut ok = true;
@@ -4365,7 +4388,28 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 if !Self::places_overlap(&access.place, &place) {
                     continue;
                 }
-                if access.top < hoist_top {
+                // The access runs at or after the hoist when it is nested inside the
+                // anchor statement, or when it is a later statement of the anchor's
+                // block: the destructuring is a statement of that block, so its
+                // bindings are in scope for all of them. An access in an *earlier*
+                // statement of the same block still sees the intact place and must be
+                // left alone (a move there would be observed by the destructuring).
+                let Some(key) = access.stmt_chain.get(binder.block_depth).copied() else {
+                    ok = false;
+                    break;
+                };
+                let after = if key == hoist_key {
+                    true
+                } else {
+                    match (
+                        self.statement_order.get(&key).copied(),
+                        self.statement_order.get(&hoist_key).copied(),
+                    ) {
+                        (Some(access_order), Some(anchor_order)) => access_order > anchor_order,
+                        _ => false,
+                    }
+                };
+                if !after {
                     if access.consumed {
                         ok = false;
                         break;
@@ -4376,7 +4420,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                     ok = false;
                     break;
                 };
-                if first >= lens[0] || !access.stmt_chain.starts_with(&prefix) {
+                if first >= lens[0] {
                     ok = false;
                     break;
                 }
