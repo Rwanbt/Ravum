@@ -1871,7 +1871,11 @@ fn resolve_extern_block(
                             "`self` is not allowed in an `extern` function declaration".to_string(),
                         );
                     }
-                    ast::ParamKind::Binding { mutable, name, ty } => {
+                    // `mut` on an `extern` parameter is ignored on purpose: the
+                    // declaration only fixes the ABI (see `ffi_safe` below) and
+                    // an extern callee cannot mutate a caller binding, so the
+                    // signature is always recorded immutable.
+                    ast::ParamKind::Binding { name, ty, .. } => {
                         if params.iter().any(|p| p.name == name.name) {
                             ctx.error(
                                 "E-RES-DUPLICATE",
