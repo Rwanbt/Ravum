@@ -3,6 +3,13 @@
 //! Native targets are executed directly. `wasm32-wasip1` artifacts are executed
 //! through a generated Node.js WASI preview1 launcher (no external crate, no
 //! network, no preopened host directory).
+//!
+//! Exit codes are forwarded honestly (`child_exit_code`): a normal program code
+//! `0..=255` passes through unchanged, a value above `255` is truncated to the
+//! low 8 bits as POSIX shells do (a non-zero status that would truncate to `0`
+//! is reported as `1` instead, so a failure is never disguised as success), and
+//! a negative Windows exception/NTSTATUS is reported as `1` with its exact hex
+//! code — never silently clamped to `0`.
 
 use ravum_lang_sema::Profile;
 use std::path::Path;
@@ -126,13 +133,10 @@ fn run_wasm(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[
         .args(child_args);
     command.current_dir(frontend.root());
     match command.status() {
-        Ok(status) => match status.code() {
-            Some(code) => code.clamp(0, 255),
-            None => {
-                util::err("run: the Node.js WASI runtime was terminated by a signal");
-                util::EXIT_FAIL
-            }
-        },
+        Ok(status) => report_child_exit(
+            child_exit_code(status.code()),
+            "run: the Node.js WASI runtime",
+        ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             util::err(format!(
                 "E-CLI-WASM-RUNTIME: cannot execute `{}`: {error}",
@@ -152,13 +156,7 @@ fn run_wasm(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[
 
 fn forward_status(status: std::io::Result<std::process::ExitStatus>, binary: &Path) -> i32 {
     match status {
-        Ok(status) => match status.code() {
-            Some(code) => code.clamp(0, 255),
-            None => {
-                util::err("run: the program was terminated by a signal");
-                util::EXIT_FAIL
-            }
-        },
+        Ok(status) => report_child_exit(child_exit_code(status.code()), "run: the program"),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             util::err(format!(
                 "run: cannot execute `{}`: {error}",
@@ -173,5 +171,166 @@ fn forward_status(status: std::io::Result<std::process::ExitStatus>, binary: &Pa
             ));
             util::EXIT_FAIL
         }
+    }
+}
+
+/// The exit code the CLI returns for a child process, with an honest note when
+/// the raw status cannot be forwarded verbatim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChildExit {
+    pub code: i32,
+    pub note: Option<String>,
+}
+
+/// Map a raw child status code to the CLI exit code.
+///
+/// * `None` — killed without an exit code (a signal on Unix, an unknown
+///   termination on Windows). Reported as `1`, never `0`.
+/// * `Some(0)` — success.
+/// * `Some(1..=255)` — a normal program code, forwarded verbatim.
+/// * `Some(code)` with `code > 255` — the low 8 bits, as POSIX shells truncate
+///   (`code & 0xFF`), with a note. If the truncated value is `0`, the CLI
+///   reports `1` instead: a non-zero program status is never turned into a
+///   success by truncation.
+/// * `Some(code)` with `code < 0` — a Windows exception/NTSTATUS (for example
+///   `-1073741819` is `0xC0000005`, access violation). Reported as `1` with the
+///   exact 32-bit hex code; `clamp(0, 255)` must never turn it into `0`.
+pub(crate) fn child_exit_code(raw: Option<i32>) -> ChildExit {
+    match raw {
+        None => ChildExit {
+            code: util::EXIT_FAIL,
+            note: Some(
+                "was terminated without an exit code (signal or abrupt termination); \
+                 reporting exit code 1"
+                    .to_string(),
+            ),
+        },
+        Some(code) if code == 0 => ChildExit {
+            code: util::EXIT_OK,
+            note: None,
+        },
+        Some(code) if (1..=255).contains(&code) => ChildExit { code, note: None },
+        Some(code) if code > 255 => {
+            let low = code & 0xFF;
+            if low == 0 {
+                ChildExit {
+                    code: util::EXIT_FAIL,
+                    note: Some(format!(
+                        "exited with status {code}; POSIX truncates statuses to 8 bits ({low}), \
+                         which would report success — reporting exit code 1 instead"
+                    )),
+                }
+            } else {
+                ChildExit {
+                    code: low,
+                    note: Some(format!(
+                        "exited with status {code}; POSIX truncates statuses to 8 bits, \
+                         reporting {low}"
+                    )),
+                }
+            }
+        }
+        Some(code) => ChildExit {
+            code: util::EXIT_FAIL,
+            note: Some(format!(
+                "was terminated by exception 0x{:08X}{}; reporting exit code 1",
+                code as u32,
+                exception_name(code)
+            )),
+        },
+    }
+}
+
+/// Short name for the Windows exceptions most often seen from a Ravum program.
+fn exception_name(code: i32) -> &'static str {
+    match code as u32 {
+        0xC000_0005 => " (access violation)",
+        0xC000_001D => " (illegal instruction)",
+        0xC000_0094 => " (integer division by zero)",
+        0xC000_00FD => " (stack overflow)",
+        0xC000_013A => " (control-C / break)",
+        0xC000_0409 => " (abort / stack buffer overrun)",
+        _ => "",
+    }
+}
+
+fn report_child_exit(exit: ChildExit, context: &str) -> i32 {
+    if let Some(note) = exit.note {
+        util::err(format!("{context} {note}"));
+    }
+    exit.code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn success_is_zero() {
+        let exit = child_exit_code(Some(0));
+        assert_eq!(exit.code, 0);
+        assert!(exit.note.is_none());
+    }
+
+    #[test]
+    fn ordinary_program_codes_pass_through() {
+        for code in [1, 2, 3, 7, 42, 127, 255] {
+            let exit = child_exit_code(Some(code));
+            assert_eq!(exit.code, code, "code {code}");
+            assert!(exit.note.is_none(), "code {code} should need no note");
+        }
+    }
+
+    #[test]
+    fn windows_access_violation_is_never_success() {
+        // 0xC0000005 as Windows reports it through `ExitStatus::code()`.
+        let exit = child_exit_code(Some(-1073741819));
+        assert_eq!(exit.code, 1);
+        let note = exit.note.expect("an exception must be explained");
+        assert!(note.contains("0xC0000005"), "note: {note}");
+        assert!(note.contains("access violation"), "note: {note}");
+    }
+
+    #[test]
+    fn windows_control_c_is_never_success() {
+        // 0xC000013A = STATUS_CONTROL_C_EXIT.
+        let exit = child_exit_code(Some(-1073741510));
+        assert_eq!(exit.code, 1);
+        let note = exit.note.expect("an exception must be explained");
+        assert!(note.contains("0xC000013A"), "note: {note}");
+    }
+
+    #[test]
+    fn negative_codes_always_report_failure() {
+        for code in [-1, -2, i32::MIN, -1073741819, -1073741510] {
+            let exit = child_exit_code(Some(code));
+            assert_eq!(exit.code, 1, "raw code {code}");
+            assert!(exit.note.as_deref().is_some_and(|n| n.contains("0x")));
+        }
+    }
+
+    #[test]
+    fn no_exit_code_is_a_failure() {
+        let exit = child_exit_code(None);
+        assert_eq!(exit.code, 1);
+        assert!(exit.note.is_some());
+    }
+
+    #[test]
+    fn above_255_is_truncated_like_posix() {
+        let exit = child_exit_code(Some(300));
+        assert_eq!(exit.code, 44);
+        let note = exit.note.expect("truncation must be explained");
+        assert!(note.contains("300"), "note: {note}");
+    }
+
+    #[test]
+    fn truncation_never_turns_a_failure_into_success() {
+        // 256 & 0xFF == 0: POSIX would report success, which would be a lie.
+        let exit = child_exit_code(Some(256));
+        assert_eq!(exit.code, 1);
+        let note = exit.note.expect("the substitution must be explained");
+        assert!(note.contains("256"), "note: {note}");
+        assert!(note.contains("exit code 1"), "note: {note}");
     }
 }

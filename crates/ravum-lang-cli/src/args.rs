@@ -551,14 +551,21 @@ pub fn help_for(topic: &str) -> String {
                   (Node.js 22+; `RAVUM_NODE` overrides the executable).\n",
         "watch" => "USAGE: ravum-lang watch [PATH] [--run] [--release]   (alias: dev)\n\n\
                     Polls `.rv`, `ravum.toml` and `ravum.lock` (250 ms, no external dependency),\n\
-                    ignoring `.ravum/`, `target/` and `*.ravum-tmp`. Rebuilds on change; with\n\
-                    `--run` the previous child is killed before the new binary is launched.\n\
-                    A build failure is reported and polling continues. Ctrl+C stops cleanly.\n\
-                    Internal test hook: `--max-rebuilds N` stops after N rebuilds.\n",
+                    ignoring `.ravum/`, `target/` and `*.ravum-tmp`. Rebuild + restart with\n\
+                    continuity of service: the previous version keeps running until a new build\n\
+                    is ready and valid, then it is stopped and replaced. This is NOT hot code\n\
+                    replacement and no state is preserved. A failed build is reported, the old\n\
+                    version keeps running and polling continues. Ctrl+C stops cleanly and reaps\n\
+                    the child. Internal test hook: `--max-rebuilds N` stops after N rebuild\n\
+                    events (`N = 0`: after the initial build).\n",
         "test" => "USAGE: ravum-lang test [PATH] [--filter TEXT] [--json]\n\n\
-                   Builds the generated test runner and executes it (`test <name> ... ok/FAILED`).\n\
-                   --filter is forwarded to the runner as `--filter <TEXT>`. Exit 1 if any test\n\
-                   fails or the runner exits non-zero.\n",
+                   Builds the generated test runner and executes it (`test <name> ... ok/FAILED`),\n\
+                   then validates the reported counts and verdicts against the tests declared by\n\
+                   the checked program. Exit 1 if a test fails, the run is partial, the summary\n\
+                   and the exit code disagree, or the runner exits non-zero. --filter is\n\
+                   forwarded to the runner (substring match on the test name); the CLI checks\n\
+                   the reported filter accounting (`test result: ... K filtered out`) and fails\n\
+                   closed with an explicit message when the runner does not report it.\n",
         "fmt" => "USAGE: ravum-lang fmt [PATH] [--check]\n\n\
                   Formats every `.rv` file under `src/` (or the given file) with the Ravum\n\
                   formatter. --check writes nothing and exits 1 if a file would change.\n",

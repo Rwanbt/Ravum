@@ -47,8 +47,21 @@ fabricates success. `doctor` makes the current stage status visible
 | `2` | invalid command line (unknown command/option, missing argument, invalid `--profile`, invalid path) |
 | `3` | external tool missing (`rustc`) or explicitly UNSUPPORTED command (`lsp`) |
 
-`run` forwards the child process exit code (clamped to 0..255); a killed child
-is reported as 1. `--json` never changes the exit code.
+`run` forwards a normal child exit code (`0..=255`). A value above `255` is
+truncated to the low 8 bits as POSIX shells do, except that a non-zero status
+which would truncate to `0` (e.g. `256`) is reported as `1` — a failure is never
+turned into a success. On Windows, `ExitStatus::code()` returns exception codes
+as negative `i32` (an access violation is `-1073741819` = `0xC0000005`); such a
+child exits `1` and stderr names the exact exception code. A killed child is
+reported as 1. `--json` never changes the exit code.
+
+Manual reproduction note for a genuine exception: a native dependency reached
+through `extern` that dereferences a NULL pointer terminates the host process
+with `STATUS_ACCESS_VIOLATION` (`0xC0000005`); `run` then exits `1` and prints
+`exception 0xC0000005 (access violation)`. No such program is shipped because
+the safe Core tests cannot produce a real crash; the mapping itself is covered by
+unit tests plus an end-to-end run of a program that chooses the same status with
+`std::process::exit(-1073741819)`.
 
 ## JSON output (`schema_version: 1`)
 
@@ -114,8 +127,13 @@ still go to stderr.
   `errors`, `warnings`, `effects` (`[{name, path, effects, declared, is_test}]`),
   `dependencies` (`[{name, version, digest}]`), `dependencies_digest`,
   `lockfile` (`created|current|stale|missing|invalid|not_applicable`).
-* `test` summary keys: `total`, `passed`, `failed`, `ignored`, `filter`,
-  `exit_code`, `tests` (`[{name, status}]`), and `error` on toolchain failure.
+* `test` summary keys: `total` (tests executed), `declared` (tests the checked
+  program declares), `passed`, `failed`, `ignored`, `filtered`, `filter`,
+  `exit_code` (raw runner status, may be negative/`null`), `validation_errors`
+  (empty on a consistent run), `tests` (`[{name, status}]`), and `error` on
+  toolchain failure. `test` refuses to report a partial run as complete: it
+  validates the runner's counts and final summary against the declared tests and
+  the process exit code, and rejects unparsable result lines.
 * `doctor` summary keys: `environment`, `frontend`, `checks`, `verdict`.
 
 Warnings do not fail `check`. `lint --deny CODE` (or `--deny all`) turns a
@@ -245,11 +263,21 @@ digest, `MAX_LOCKFILE_SIZE = 1 MiB`. Non-UTF-8 sources are `E-IO-INVALID-UTF8`.
   directory, no threads/FFI, Node.js 22+).
 * `run` executes from the package root and forwards args (after `--`), stdin,
   stdout, stderr and the exit code.
-* `test` forwards `--filter <S>` to the generated runner, parses
-  `test <name> ... ok|FAILED|ignored`, prints the runner output and a
-  `N passed; M failed; K ignored` summary. A non-zero runner status or any
-  `FAILED` line exits 1; `test fn -> Result<(), Error>` returning `Err` is a
-  runner failure.
+* `test` builds the generated runner, parses `test <name> ... ok|FAILED|ignored`,
+  prints the runner output and then **one** accounting line: the emitted runner's
+  own `test result: ok|FAILED; P passed; F failed; I ignored; K filtered out` is
+  the primary output, followed by `test cases: D declared; K filtered out; E
+  executed`. (With a runner that prints no `test result:` line, the CLI prints
+  `test result: ...` itself, so there is never a duplicate.) Before claiming
+  success the run is validated: declared tests must equal executed + filtered,
+  the runner's final summary must agree with the parsed verdicts and the exit
+  code, and result-looking lines that cannot be parsed are a failure. A non-zero
+  runner status, a partial run or any `FAILED` line exits 1;
+  `test fn -> Result<(), Error>` returning `Err` is a runner failure.
+  `--filter <S>` is forwarded to the runner (substring match on the test name);
+  the CLI also verifies that no executed test contradicts the filter, and it
+  fails closed with an explicit message if the runner reports no filter
+  accounting (`test result: ... K filtered out`).
 * `fmt` writes atomically; `--check` writes nothing and exits 1 on any
   difference. The `init` templates are already in canonical form.
 * `doc` writes `index.md` (default `<package>/.ravum/doc/`), public items only,
