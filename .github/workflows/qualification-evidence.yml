@@ -368,7 +368,7 @@ jobs:
             @('### Reproducible build', '', ('- exit code: {0}' -f $code), ('- {0}' -f $label)) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
           }
           if ($code -ne 0) {
-            Write-Host "::error::repro-check exited $code: the two builds are not bit-for-bit identical"
+            Write-Host "::error::repro-check exited ${code}: the two builds are not bit-for-bit identical"
             exit 1
           }
           if (-not $measured) {
