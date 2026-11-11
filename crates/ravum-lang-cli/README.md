@@ -335,4 +335,9 @@ uses the documented `W-RES-UNUSED-IMPORT` warning (exit 0) and
 `lint_deny_turns_warning_into_error` verifies `--deny CODE`/`--deny all` exit 1.
 Watch tests read stdout through bounded channels/timeouts (rebuild, failure
 recovery, child reaping); WASM tests skip explicitly when the `wasm32-wasip1`
-rustc target or Node.js is missing. Current total: **53 unit + 76 integration** across six test binaries (`cli`, `build_isolation`, `exit_codes`, `test_runner_contract`, `watch_continuity`, `lsp_client`).
+rustc target or Node.js is missing. Current total: **53 unit + 76 integration**
+across six test binaries (`cli`, `build_isolation`, `exit_codes`,
+`test_runner_contract`, `watch_continuity`, `lsp_client`). The source declares
+**78** `#[test]` functions in those binaries: two are `#[cfg(windows)]` /
+`#[cfg(unix)]` pairs, so 76 run on any single platform (measured:
+`cargo test -p ravum-lang-cli`, 53 + 7 + 44 + 6 + 11 + 5 + 3 = 129 passing).

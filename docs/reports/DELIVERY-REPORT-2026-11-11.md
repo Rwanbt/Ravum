@@ -354,3 +354,53 @@ changements de la passe 7 (le ratchet CI reste vert) ; **reproductibilité bit-�
 SBOM, provenance, installateur** non rejoués sur ce SHA ; **audit externe** (D4)
 toujours absent, donc T4/T10/T12 restent bloqués.
 
+
+## Passe 8 — preuves continues et véracité documentaire (2026-11-11, `7696e2a`)
+
+Cette passe ne change pas les gates (`4 PASS / 7 PARTIAL / 2 BLOCKED`) ; elle ferme
+des formes, rend cinq preuves continues et corrige la documentation.
+
+**Fermé.** Les quatre formes `check`-pass / `build`-fail laissées ouvertes par la
+passe 7 (index dynamique imbriqué, racine non-place, plusieurs accès dans un bras
+de `match` en expression, récepteur builtin *by value*) et les deux signalées par
+la revue (descentes multiples sur des éléments différents, base relue) sont
+abaissées (`5268838`, `d693162`). Chacune a un test qui compile réellement, exécute
+le binaire et vérifie la valeur, plus un cas de corpus : la conformance passe de
+**448 à 453 cas** et le périmètre build de **187 à 192**.
+
+**Encore ouvert.** Deux variantes bruyantes (`E0508`) restent : descentes dans
+deux branches distinctes, et deux descentes dans un même bloc imbriqué.
+Programmes minimaux et mécanisme dans `docs/qualification/CONFORMANCE-BUILD-CONTRACT.md`
+§9 ter. **`P0-A` reste `PARTIAL`**, et aucun test ne verrouille le défaut.
+
+**Continu.** Nouveau workflow `qualification-evidence.yml` : conformance Windows,
+reproductibilité bit-à-bit, SBOM, provenance et installateur Windows sont rejoués
+à chaque push et chaque PR. Runs `43064500916` (push) et `43064513146` (PR) :
+`success`, conformance **453 cas / 452 PASS / 0 FAIL / 1 SKIP**, `build_verified`
+vrai, installateur **16/16**, provenance **8/8**, SBOM déterministe, repro **PASS**
+(`C281A035…` sur le runner, `847DF0D1…` en local — le digest est propre à
+l'environnement, d'où la portée « même toolchain, même linker »).
+
+**Deux défauts trouvés par la CI dans ce workflow, pas dans le langage.** Une
+étape qui prouve un refus (`exit 1`) héritait de ce code et affichait rouge avec
+8/8 assertions vertes ; et un `$code:` dans un message est une référence de
+variable à portée, donc un bloc entier n'était jamais analysé. Les deux sont
+corrigés (`7696e2a`, `abe7d88`) et un contrôle de syntaxe couvre désormais chaque
+bloc `pwsh` du workflow.
+
+**Véracité documentaire.** Sept commits corrigent une quarantaine d'affirmations
+fausses dans `spec/` et `docs/` — LSP « UNSUPPORTED », WASM, `--emit-ir`,
+FFI/`unsafe`, licence « à décider », signature « non implémentée »,
+reproductibilité « non revendiquée », codes `E-TYP-RETURN` et `E-MOD-BOTH-ROOTS`,
+inventaires de tests. Motif commun : un document écrit à une passe antérieure et
+jamais revu quand le code avançait.
+
+**Mesures.** `cargo test --workspace` : **113 suites, 1536 passés / 0 échec /
+2 ignorés**. Couverture sema re-mesurée : **88,94 % lignes / 88,46 % régions**
+(contre 89,2 % / 88,6 % publiés en passe 5 ; `typeck.rs` 92,74 % contre 93,8 %) —
+la baisse est rapportée, aucun seuil n'a été abaissé et tous tiennent.
+Traçabilité et registre inchangés (188/188 ; 108 codes, 126 émis ; MUST 463/807).
+
+**Non prouvé, inchangé.** Audit externe (D4), signature (D9), release,
+reproductibilité inter-machines, campagne de mutation non rejouée (workflow absent
+de la branche par défaut), fuzz complet non rejoué, macOS/ARM, hard-RT.

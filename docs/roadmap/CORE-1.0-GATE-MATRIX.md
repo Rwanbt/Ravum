@@ -8,18 +8,20 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-11 (passe 7 « CI réelle et places de tableau » :
-> la CI tourne sur la branche et est verte 12/12, les cinq formes de déplacement
-> d'élément précédemment refusées par `rustc` sont abaissées, deux défauts de nos
-> propres tests révélés par Linux sont corrigés — T2 reste `PARTIAL` sur la
-> métrique MUST, inchangée).
+> Dernière mise à jour : 2026-11-11 (passe 8 « preuves continues et véracité
+> documentaire » : les six dernières formes `check`-pass / `build`-fail connues
+> sont fermées sauf deux variantes bruyantes documentées, les preuves lourdes
+> (conformance Windows, reproductibilité, SBOM, provenance, installateur)
+> deviennent des jobs CI, et une quarantaine d'affirmations fausses sont
+> corrigées dans `spec/` et `docs/` — T2 et P0-A restent `PARTIAL`).
 >
-> **Chiffres courants (passe 7, commit `c6b4537`, mesurés le 2026-11-11)** :
-> **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
-> `--verify-build`, `build_verified: true`) ;
-> **113 suites, 1530 passés / 0 échec / 2 ignorés** (workspace) ;
-> **188/188** règles tracées, **188/188 satisfaites** (inchangé) ;
-> **108** codes enregistrés, **126** émis ; CI **12/12 verte** sur `c6b4537`.
+> **Chiffres courants (passe 8, commit `7696e2a`, mesurés le 2026-11-11)** :
+> **453 cas : 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
+> `--verify-build`, `build_verified: true`, `perimeter 192`) ;
+> **113 suites, 1536 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
+> **188/188** règles tracées, **188/188** satisfaites ;
+> **108** codes enregistrés, **126** émis ; couverture **88,94 %** lignes /
+> **88,46 %** régions ; reproductibilité `847DF0D1…59335CB96`.
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 
@@ -107,7 +109,72 @@ Ce que cette passe a réellement changé, et ce qu'elle ne prouve pas :
   seuil n'a été modifié pour obtenir du vert.
 
 
-## 1. Mesures (passe 5, SHA `ea7df46`, 2026-11-10)
+## 0 quater. Passe 8 — formes restantes, preuves continues, véracité documentaire (2026-11-11)
+
+| Élément | Valeur |
+|---|---|
+| Base de cette passe | `7e0c77a` (passe 7 poussée, CI 12/12 verte) |
+| Commits de code | `5268838` (quatre formes d'abaissement), `d693162` (deux formes de descente partagée) |
+| Commits de doc | `566ca7d`, `a82cf08`, `2037cbc`, `e48a461`, `66c8a78`, `afba4a0`, `a77333f` (audit de véracité documentaire) |
+| Commits de CI | `c06a882` (nouveau workflow de preuves), `7696e2a` et `abe7d88` (deux défauts de ce workflow trouvés **par la CI elle-même**) |
+| Tests workspace | **113 suites, 1536 passés / 0 échec / 2 ignorés** (exit 0) — `cargo test --workspace` |
+| Conformance + build | **453 cas : 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=192 covered=192 verified=120 implicit=72 failed=0 environment=0 not_measured=0` ; `build_verified: true` — `ravum-conformance run --verify-build` |
+| **Couverture re-mesurée** | **88,94 % lignes / 88,46 % régions** sur sema (`11923/13406` lignes) ; `types.rs` 100 %, `own.rs` 91,41 %, `check.rs` 80,26 % (seuil 80), `typeck.rs` 92,74 % (régions 92,23 %), `resolve.rs` 93,13 % (régions 93,36 %) — **tous les seuils déclarés tenus, aucun seuil modifié** |
+| **Build bit-à-bit** | **deux binaires identiques**, `sha256 = 847DF0D11C1E2D00ABD049E8035E371D531D86DF90C6EA30184880759335CB96` (`scripts/repro-check.ps1`, deux racines et deux `target/`) |
+| SBOM | SPDX 2.3 **déterministe** (deux runs, un digest, horodatage fixe) ; 64 paquets / 170 relations ; le digest intègre le commit dans `documentNamespace`, il change donc à chaque commit par construction |
+| Installateur Windows | contrat exécuté en CI : installation, `--version`, champs du manifeste (`locked`, `git_commit`, `sha256`, `rustc`), désinstallation deux fois (idempotente), réinstallation `-SkipBuild` — **16/16** |
+| Provenance | `emit` + `verify` + **refus d'un binaire altéré** (exit 1, motif vérifié) ; **fail-closed** si le binaire ou le SBOM manque (défaut corrigé cette passe) |
+| Sondage round-3 | **47 programmes × 11 axes : 47 build-pass, 0 divergence** (inchangé) |
+| Traçabilité | FeatureId **188/188** ; MUST **807 / 463 atteignables (57,4 %)** — métriques et seuils inchangés |
+| Registre | **126 émis / 0 hors registre / 0 jamais émis** |
+| **CI sur ce code** | **14/14 verts sur `abe7d88`** (7 `push` + 7 `pull_request`) : Linux qualification [43064500949](https://github.com/Rwanbt/Ravum/actions/runs/43064500949), MVP product checks Windows [43064500628](https://github.com/Rwanbt/Ravum/actions/runs/43064500628), **qualification evidence Windows** [43064500916](https://github.com/Rwanbt/Ravum/actions/runs/43064500916) / PR [43064513146](https://github.com/Rwanbt/Ravum/actions/runs/43064513146) — le nouveau workflow, avec conformance 453 cas, repro, SBOM, provenance et installateur —, gate contracts `43064501003`, coverage `43064501032`, impact `43064500697`, VS Code `43064500883`, documentation integrity `43064513246` |
+| Portée | Aucune ratification d'ADR, aucun merge, aucun tag, aucune release, aucun changement de protection de branche. `main` intacte. |
+
+Ce que cette passe a réellement changé, et ce qu'elle ne prouve pas :
+
+* **Six formes `check`-pass / `build`-fail sont fermées**, dont les quatre laissées
+  ouvertes par la passe 7 (index dynamique imbriqué, racine non-place, plusieurs
+  accès dans un bras de `match` en corps d'expression, récepteur builtin *by
+  value*) et les deux trouvées par la revue de cette passe (plusieurs descentes
+  de projection sur des éléments différents, base relue après la descente).
+  Chacune a un test `rustc`-vérifié (compilation + exécution + valeur) et un cas
+  de corpus `conformance/cases/run/array-move-*`. Le corpus passe de 448 à 453
+  cas et de `perimeter 187` à `192`.
+* **Deux formes restent ouvertes, bruyantes (E0508) et documentées** : descentes
+  dans deux branches distinctes (`if`/`else`) et deux descentes dans un même bloc
+  imbriqué. `P0-A` reste donc **`PARTIAL`**, jamais `PASS`, et aucun test ne
+  verrouille le défaut. Voir `docs/qualification/CONFORMANCE-BUILD-CONTRACT.md`
+  §9 ter pour les programmes minimaux et le mécanisme exact.
+* **Les preuves lourdes sont devenues continues.** Un nouveau workflow
+  `qualification-evidence.yml` exécute sur `windows-latest` la conformance
+  `check ⇒ build`, la reproductibilité bit-à-bit, le SBOM, la provenance et le
+  contrat d'installateur. C'était le trou principal du dossier : ces cinq
+  preuves n'existaient que dans des logs locaux recopiés à la main dans des
+  tableaux, donc elles ne pouvaient pas vieillir honnêtement. Windows n'avait
+  **aucun** job de conformance.
+* **La CI a trouvé deux défauts dans ce workflow, pas dans le langage** : une
+  étape qui prouve un refus (`exit 1`) héritait de ce code de sortie et
+  apparaissait rouge avec 8/8 assertions vertes ; et un `$code:` dans un message
+  est une référence de variable à portée, donc un bloc entier n'était **jamais
+  analysé**. Les deux sont corrigés ; le second example vaut d'être retenu : un
+  job qu'on n'a jamais lancé est une affirmation, pas une preuve.
+* **La couverture a été re-mesurée** après les changements de sema de la passe 7 :
+  88,94 % / 88,46 % contre 89,2 % / 88,6 % publiés, `typeck.rs` 92,74 % contre
+  93,8 %. La baisse est **rapportée, pas cachée** ; elle vient de code ajouté
+  depuis, les seuils par fichier restent tenus et **aucun seuil n'a été
+  abaissé**. La marge la plus mince est `check.rs` (80,26 % pour un seuil à 80).
+* **Véracité documentaire** : sept commits corrigent une quarantaine
+  d'affirmations fausses dans `spec/` et `docs/` (LSP « UNSUPPORTED », WASM,
+  `--emit-ir`, FFI/`unsafe`, licence « à décider », signature « non
+  implémentée », repro « non revendiquée », `E-TYP-RETURN`, `E-MOD-BOTH-ROOTS`,
+  codes de sortie, inventaires de tests). Le motif commun : un document écrit à
+  une passe antérieure et jamais revu quand le code avançait.
+* **Ce que cette passe ne prouve pas** : pas d'audit externe (D4), pas de
+  signature (D9), pas de release, pas de reproductibilité inter-machines (deux
+  builds du même runner), pas de fermeture des deux formes ci-dessus, et la
+  campagne de mutation n'a pas été rejouée.
+
+
 
 ### Passe 5 — mesures courantes
 
@@ -372,7 +439,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PARTIAL` | **FeatureIds : 386 → 448 cas, 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` désormais **mesuré et bloquant** (`--verify-build` : périmètre 163, couverts 163, vérifiés 101, implicites 62, échoués 0) ; 11 divergences `check`-pass/build-fail fermées (T2-FINDINGS §21) | **La seconde métrique change le verdict** : 807 énoncés MUST, **463/807 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; `F-META-006` reste sans oracle ; 3 formes de move restent des divergences ouvertes documentées, hors corpus | `F-META-006` sans oracle ; décision humaine sur le dénominateur (D10) |
+| T2 | `PARTIAL` | **FeatureIds : 386 → 453 cas, 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` **mesuré et bloquant** (`--verify-build` : périmètre **192**, couverts 192, vérifiés 120, implicites 72, échoués 0) et désormais **rejoué en CI sur Windows** (`qualification-evidence.yml`) ; 17 divergences `check`-pass/build-fail fermées (T2-FINDINGS §21-23) | **La seconde métrique change le verdict** : 807 énoncés MUST, **463/807 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; `F-META-006` reste sans oracle ; **2 variantes** de move restent des divergences ouvertes documentées, hors corpus (CONFORMANCE-BUILD-CONTRACT §9 ter) | `F-META-006` sans oracle ; décision humaine sur le dénominateur (D10) |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke **43 PASS**) et Linux (CI antérieure `42809676443` sur `b7e5c5c`) ; WASI exécuté ; `build` publie une identité déterministe et un artefact atomique (`.ravum/build/<id16>/` → `.ravum/bin/<name>` + manifeste) | ABI stable non revendiquée ; sanitizers non exécutés ; CI **NOT_RUN** sur les commits de la passe 6 | — |
@@ -380,8 +447,8 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` **fail-closed** : compilation avant arrêt de la version active, rejet des résultats obsolètes (digest de publication + re-scan), copie privée par processus, repli sur la dernière version valide, aucun orphelin (preuve `scripts/watch-fail-closed-check.ps1`) ; overlays/snapshots ; oracle cold vs warm (36 éditions) | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint ; « continuité de service » n'est pas « hot reload » | Implémentation |
 | T9 | `PARTIAL` | **10 verticales `.rv` exécutées**, dont `examples/file-store` (magasin clé/valeur versionné en Ravum pur : put/get/list/history/delete, erreurs typées, refus de traversée de chemin), avec 13 assertions de smoke et 3 cas de conformance | HTTP + SQLite, DSP hôte, E2E navigateur absents ; `file-store` n'est **pas** une base de données ni un service | Implémentation + décision D6/D7 |
-| T10 | `PARTIAL` | **1530 tests** (113 suites), conformance **448 cas** avec **build vérifié bloquant** (`perimeter 187`, `verified 120`, `implicit 67`, `failed 0`), smoke **43/0/0**, contrats Python **33**, **Miri Linux vert en CI sur `c67f17e`**, **fuzz smoke vert en CI** ; couverture sema 89,2 % (passe 5, ratchet CI vert) ; mutation ciblée 195 mutants / 166 tués (passe 5) | **Audit externe absent** ; campagne de mutation **non rejouée** sur la passe 7 (workflow `mutation.yml` en `schedule`/`dispatch`, absent de la branche par défaut donc non déclenchable par `gh workflow run`) ; fuzz **complet** non rejoué (seul le garde-fou `fuzz_*` tourne) ; couverture non re-mesurée après les changements de la passe 7 ; aucune mesure de performance au repos (machine chargée) | Audit externe |
-| T11 | `PARTIAL` | Installateur (`sha256 28ba4b1c…f427dce680`, manifeste `locked=true`, `--version`), SBOM **reproductible** (64 paquets / 170 relations, `dc7b4e0d…c2134f1`), provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** (`83372F4F…D0546DD`), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
+| T10 | `PARTIAL` | **1536 tests** (113 suites), conformance **453 cas** avec **build vérifié bloquant** (`perimeter 192`, `verified 120`, `implicit 72`, `failed 0`), smoke **43/0/0**, contrats Python **33**, **Miri Linux vert en CI sur `c67f17e`**, **fuzz smoke vert en CI** ; couverture sema **88,94 % lignes / 88,46 % régions** (re-mesurée en passe 8, seuils tenus) ; mutation ciblée 195 mutants / 166 tués (passe 5) ; **conformance Windows, reproductibilité, SBOM, provenance et installateur désormais rejoués par la CI** (`qualification-evidence.yml`, run `43064500916`) | **Audit externe absent** ; campagne de mutation **non rejouée** depuis la passe 5 (workflow `mutation.yml` en `schedule`/`dispatch`, absent de la branche par défaut donc non déclenchable par `gh workflow run`) ; fuzz **complet** non rejoué (seul le garde-fou `fuzz_*` tourne) ; 2 variantes de move encore ouvertes (`check` accepte, `build` refuse bruyamment) ; aucune mesure de performance au repos (machine chargée) | Audit externe |
+| T11 | `PARTIAL` | Installateur **rejoué en CI** (`qualification-evidence.yml` : installation, `--version`, manifeste `locked=true`/`git_commit`/`sha256`/`rustc`, désinstallation idempotente, réinstallation `-SkipBuild` — **16/16**, binaire CI `6437db9d…ab6adf66`), SBOM **déterministe** (64 paquets / 170 relations, deux runs un digest, CI `63060489…4fa0dc8c`), provenance émise/vérifiée en CI avec **refus d'un binaire altéré** et fail-closed, licence `MIT OR Apache-2.0`, **build bit-à-bit identique entre deux racines et deux `target/`** (local `847DF0D1…59335CB96` ; CI `C281A035…588C2F70` — le digest est propre à l'environnement, c'est pourquoi la revendication reste « même toolchain, même linker »), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** ; reproductibilité **inter-machines** non testée | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 
 ## 3. Détail par gate

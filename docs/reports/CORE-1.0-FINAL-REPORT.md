@@ -6,15 +6,73 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 quater** ci-dessous porte la passe du
-> **2026-11-11 (passe 7, SHA `c6b4537`)** et **prévaut pour les chiffres courants** ;
-> la section 0 ter est la passe 6 (`5d88ecb` → `9da9b12`).
+> (SHA `a277b86`). La **section 0 quinquies** ci-dessous porte la passe du
+> **2026-11-11 (passe 8, SHA `7696e2a`)** et **prévaut pour les chiffres courants** ;
+> la section 0 quater est la passe 7 (`c6b4537`), la section 0 ter la passe 6
+> (`5d88ecb` → `9da9b12`).
+
+## 0 quinquies. Addendum passe 8 — preuves continues et véracité documentaire (2026-11-11, SHA `7696e2a`)
+
+Cette section **prévaut sur 0 quater et sur toutes les suivantes** pour les
+chiffres courants. Elle porte sur trois choses : les dernières formes
+`check`-pass / `build`-fail, le passage des preuves lourdes en CI, et un audit de
+véracité de `spec/` et `docs/`.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace` | **113 suites, 1536 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance (`run --verify-build`) | **453 cas : 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **192/192** couverts, **120** vérifiés, **72** implicites, **0 échec**, `build_verified: true` |
+| Sondage round-3 (`check ⇒ build`) | **47 programmes × 11 axes : 47 build-pass, 0 divergence** (inchangé) |
+| Reproductibilité bit-à-bit | **deux builds identiques**, `sha256 = 847DF0D1…59335CB96` (deux racines, deux `target/`) |
+| Couverture sema (`llvm-cov`) | **88,94 % lignes / 88,46 % régions** ; `typeck.rs` 92,74 %, `resolve.rs` 93,13 %, `check.rs` 80,26 % (seuil 80) — **seuils tenus, aucun seuil modifié** |
+| SBOM | SPDX 2.3 **déterministe** (deux runs, un digest), 64 paquets / 170 relations |
+| Installateur Windows | contrat CI complet (installation, `--version`, manifeste, désinstallation idempotente, réinstallation) — **16/16** |
+| Provenance | `emit` + `verify` + refus d'un binaire altéré ; **fail-closed** si un artefact manque (défaut corrigé) |
+| Traçabilité FeatureId (inchangée) | **188/188** (187 cas + 1 exemption `F-META-006`) |
+| Traçabilité MUST (inchangée) | **807 MUST ; 463/807 atteints (57,4 %) ; 344 non atteints** |
+| Registre | **108 codes enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Binaire épinglé | `ravum-lang.exe` sha256 `333C08AF…A100777F` (Windows 11 x64, `rustc 1.95.0`) |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` reste `PARTIAL` (deux variantes bruyantes documentées), T2 reste `PARTIAL` (463/807) |
+
+Ce qui a changé, en une phrase par point :
+
+* **Six formes de déplacement d'élément sont fermées** : les quatre laissées
+  ouvertes par la passe 7 et deux trouvées par la revue de cette passe. Chacune a
+  un test qui compile réellement avec `rustc` et exécute le binaire.
+* **Deux variantes restent ouvertes** (descentes dans deux branches distinctes ;
+  deux descentes dans un même bloc imbriqué) : `check` exit 0 puis `build` exit 1
+  avec un `E0508` bruyant, jamais de valeur fausse. Programmes minimaux et
+  mécanisme dans `docs/qualification/CONFORMANCE-BUILD-CONTRACT.md` §9 ter.
+  Aucun test ne verrouille le défaut.
+* **Les cinq preuves lourdes sont devenues des jobs CI** sur `windows-latest`
+  (`qualification-evidence.yml`), alors qu'elles n'existaient que dans des logs
+  locaux recopiés à la main. Windows n'avait aucun job de conformance.
+* **La CI a trouvé deux défauts dans ce nouveau workflow** : une étape qui prouve
+  un refus héritait du code de sortie `1` malgré 8/8 assertions vertes, et un
+  `$code:` dans un message est une référence à portée, donc un bloc entier
+  n'était jamais analysé. Corrigés ; c'est l'argument même pour faire tourner les
+  preuves en CI plutôt qu'à la main.
+* **Une quarantaine d'affirmations fausses sont corrigées** dans `spec/` et
+  `docs/` (LSP « UNSUPPORTED », WASM, `--emit-ir`, FFI/`unsafe`, licence,
+  signature, reproductibilité, codes `E-TYP-RETURN` / `E-MOD-BOTH-ROOTS`,
+  inventaires de tests). Motif commun : un document écrit à une passe antérieure
+  et jamais revu.
+* **La couverture a été re-mesurée** : 88,94 % / 88,46 % contre 89,2 % / 88,6 %
+  publiés, `typeck.rs` 92,74 % contre 93,8 %. La baisse est rapportée, pas
+  cachée ; elle vient du code ajouté depuis, et les seuils par fichier tiennent.
+
+Ce que cette passe **ne prouve pas** : pas d'audit externe (D4), pas de signature
+(D9), pas de release, pas de reproductibilité inter-machines, pas de fermeture des
+deux variantes ci-dessus, et la campagne de mutation n'a pas été rejouée.
+
+
 
 ## 0 quater. Addendum passe 7 — CI réelle et places de tableau (2026-11-11, SHA `c6b4537`)
 
 Cette section **prévaut sur 0 ter et sur toutes les suivantes** pour les chiffres
-courants. Elle a deux objets : la CI, qui n'avait jamais tourné sur ces commits, et
-la fermeture des formes `check`-pass / `build`-fail restantes.
+courants de la passe 7 (les chiffres de la passe 8 sont en 0 quinquies). Elle a
+deux objets : la CI, qui n'avait jamais tourné sur ces commits, et la fermeture
+des formes `check`-pass / `build`-fail restantes.
 
 | Mesure | Résultat |
 |---|---|

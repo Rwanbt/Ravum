@@ -362,32 +362,38 @@ que la spec exige `E-OWN-REF-ESCAPE` — a été **corrigé pendant la session**
 P0-F et est désormais figé par le cas négatif
 `ownership/ref-field-escape-fail`.
 
-## 9. Divergences connues — état au commit `c6b4537`
+## 9. Divergences connues — état au commit `7696e2a`
 
 Le corpus build-vérifié **ne prouve pas** l'absence de divergences en dehors de
 lui. Cette section liste les formes `check`-pass / `build`-fail connues.
 
-**Les cinq formes (a)–(e) de cette section sont fermées** (commit `0f73738`) :
-elles passent `check` **et** `build`, ont un test `rustc`-vérifié dans
+**Les cinq formes (a)–(e) de cette section sont fermées** (commit `0f73738`).
+Les **quatre formes restantes de la passe 7** — index dynamique dans un tableau
+imbriqué, racine de chaîne qui n'est pas une place, plusieurs accès dans un bras
+de `match` en corps d'expression, récepteur *by value* d'une méthode builtin —
+sont fermées par `5268838`. Les **deux formes signalées à la revue de la passe
+8** — plusieurs descentes de projection sur des éléments différents du même
+tableau, base relue après la descente — sont fermées par `d693162`. Toutes
+passent `check` **et** `build`, ont un test `rustc`-vérifié dans
 `crates/ravum-lang-codegen/tests/backend_audit.rs` et un cas de corpus
 `conformance/cases/run/array-move-*`. Les reproducers restent ci-dessous comme
 archive de la mesure rouge et de la preuve de fermeture.
 
-**Quatre formes restent ouvertes** au même commit, toutes `check` exit 0 /
-`build` exit 1 avec un `E0508` **bruyant** (jamais de miscompile silencieux, aucune
-sémantique modifiée). Elles ne sont pas dans le corpus : les ajouter en
+**Deux formes restent ouvertes** au commit `7696e2a`, toutes deux `check` exit 0 /
+`build` exit 1 avec un `E0508` **bruyant** (jamais de miscompile silencieux,
+aucune sémantique modifiée). Elles ne sont pas dans le corpus : les ajouter en
 `compile-fail` serait faux (la spec les accepte) et en `compile-pass` rendrait la
-porte rouge pour un élément ouvert déjà identifié.
+porte rouge pour un élément ouvert déjà identifié. Aucun test ne verrouille le
+défaut.
 
 | Forme restante | Repro | Raison |
 |---|---|---|
-| index dynamique dans un tableau imbriqué | `a[0][i]`, `a[i][j]` | il faudrait déstructurer le préfixe constant puis appliquer la forme inline `into_iter().nth(i)` à un slot, pas à une place |
-| racine de chaîne qui n'est pas une place | `make()[0]`, `a[0].0[1]` | une racine rvalue n'a pas de stockage à déstructurer |
-| plusieurs accès dans un bras de `match` en corps d'expression | `E::Items(a) => (a[0], a[1])` | la forme inline est mono-usage par construction (le corps en bloc fonctionne) |
-| récepteur *by value* d'une méthode **builtin** | `a[0].unwrap()` sur `[Option<String>; 2]` | les récepteurs builtins ne sont pas modélisés par le backend (seules les méthodes `self` utilisateur le sont) |
+| descentes de projection dans **deux branches distinctes** (`if`/`else`) | §9 ter (a) | le hiss partagé exige une instruction du bloc du binder qui précède *tous* les usages ; deux branches n'ont pas d'ancêtre commun qui les domine |
+| deux descentes dans un **même bloc imbriqué** | §9 ter (b) | le plan ne suit pas l'identité de bloc : il ne peut pas prouver qu'un ancêtre domine un usage d'une autre branche, donc il n'ouvre pas de groupe pour un bloc imbriqué |
 
 C'est la raison pour laquelle `P0-A` reste `PARTIAL` : la porte est mesurée et
-bloquante, mais son périmètre ne couvre pas ces quatre formes.
+bloquante sur son périmètre (**453 cas, `perimeter 192`, `build_verified: true`**
+au commit `7696e2a`), mais elle ne couvre pas ces deux formes.
 
 ### (a) chaîne de tableaux imbriqués
 
@@ -501,6 +507,50 @@ et lors du round-3 de 13:47 ; elle casse depuis l'arbre de travail non commité
 de codegen-pipeline (13:49:40). C'est une **régression collatérale** du travail
 D12, routée ; elle reste hors corpus jusqu'au correctif. Le cas
 `ownership/enum-array-payload-move-pass` a été retiré pour cette raison.
+
+## 9 ter. Les deux formes encore ouvertes (mesurées le 2026-11-11)
+
+Reproduites sur `7696e2a` (Windows 11 x64, rustc 1.95.0) : `check` exit 0,
+`build` exit 1, `error[E0508]: cannot move out of type
+[([String; 2], i32); 2], a non-copy array`.
+
+### (a) descentes de projection dans deux branches distinctes
+
+```rv
+fn f(c: bool, a: [([String; 2], i32); 2]) -> String {
+    if c { let x = a[0].0[1]; return x; } else { let y = a[1].0[0]; return y; }
+}
+
+fn main() {
+}
+```
+
+Le code généré conserve `let x: String = a[0usize].0[1usize];` (et
+symétriquement `a[1usize].0[0usize]`) : le hiss partagé n'est ouvert que pour des
+descentes en instructions **directes** du bloc du binder, parce qu'il doit être
+émis avant le premier usage. Aucune instruction ne précède les deux branches.
+
+### (b) deux descentes dans un même bloc imbriqué
+
+```rv
+fn f(a: [([String; 2], i32); 2]) -> String {
+    if true { let x = a[0].0[1]; let y = a[1].0[0]; return x; }
+    return String::from("none");
+}
+
+fn main() {
+}
+```
+
+Un ancêtre valide existerait (première instruction du bloc `if`), mais le plan ne
+suit pas l'identité de bloc et ne peut donc pas prouver qu'il domine les usages ;
+le formulaire indexé reste et rustc le rejette.
+
+Fermer ces deux formes demande de suivre une identité de bloc dans le *walker*
+puis de valider la dominance (estimation : une quinzaine de lignes plus les
+tests) ; ce n'était pas dans le budget de la passe 8. Les deux formes sont
+bruyantes : jamais de valeur fausse, seulement un refus de `build` après un
+`check` accepté.
 
 ## 10. Interprétation
 

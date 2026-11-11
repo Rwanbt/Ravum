@@ -76,11 +76,18 @@ target\debug\ravum-conformance.exe run --verify-build --json target\final-pass2\
 → total=448 pass=447 fail=0 skip=1 not_run=0
 → build: perimeter=187 covered=187 verified=120 implicit=67 failed=0
 → build_verified: true
+
+# passe 8, SHA 7696e2a (local), puis rejoué en CI sur abe7d88 (§3.2)
+ravum-conformance run --verify-build --json target/conformance-report.json
+→ total=453 pass=452 fail=0 skip=1 not_run=0
+→ build: perimeter=192 covered=192 verified=120 implicit=72 failed=0 environment=0 not_measured=0
+→ build_verified: true
 ```
 
-La conformance Windows est **locale** (arbre commité, `c6b4537`) ; le job CI
-Windows (§3.2) ne l'exécute pas et porte sur un autre SHA (`c67f17e`). Ne pas
-fusionner les deux preuves en une seule phrase.
+La conformance Windows n'est plus seulement locale : elle est **rejouée par la
+CI** depuis la passe 8 (§3.2, `qualification-evidence.yml`), qui produit le même
+verdict sur `abe7d88` (453 cas, `perimeter 192`). Les mesures locales ci-dessus
+restent datées par SHA — ne pas les fusionner en une seule phrase.
 
 ### 2.2 WASI — commande et sortie exactes
 
@@ -170,15 +177,25 @@ Ce job a trouvé un défaut réel — du formatage absent — corrigé par
 `ab51b17` (`style: apply the pinned rustfmt 1.9.0 to the pass-6 changes`),
 après quoi il est passé au vert.
 
-**Ce que ce job ne couvre pas, et qui reste donc local ou `NOT_RUN` :**
-la conformance Windows (448 cas, mesure locale §2.1), la reproductibilité
-bit-à-bit, le SBOM et l'installateur Windows. Il n'y a **aucun** job CI Windows
-pour ces quatre preuves.
+**Ce que ce job ne couvrait pas, et qui a changé en passe 8 :** la conformance
+Windows, la reproductibilité bit-à-bit, le SBOM, la provenance et l'installateur
+Windows n'avaient **aucun** job CI. Le workflow
+`.github/workflows/qualification-evidence.yml` (ajouté en passe 8) les exécute
+désormais sur `windows-latest`, en deux jobs :
 
-**Conséquence honnête :** Windows n'est plus « sans CI ». Il est **exercé en CI
-pour le produit** (build, tests, démos, navigateur réel) mais **pas qualifié en
-CI pour la distribution** (repro, SBOM, installateur) ni pour la conformance.
-Les deux phrases doivent être lues ensemble ; aucune des deux ne va sans l'autre.
+| Job | Ce qu'il exécute | Preuve sur `abe7d88` (runs `43064500916` / `43064513146`) |
+|---|---|---|
+| `conformance-windows` | `ravum-conformance run --verify-build` puis une assertion fail-closed sur le rapport lui-même (`build_verified`, `failed`/`environment`/`not_measured` à 0, `verified + implicit == perimeter`, `not_run` à 0, plancher de corpus) | **453 cas : 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN**, `perimeter 192`, `build_verified: true`, **9/9 assertions**, `success` |
+| `release-evidence` | SBOM deux fois (un seul digest), contrat d'installateur, provenance émise/vérifiée + refus d'un binaire altéré, `scripts/repro-check.ps1` | SBOM déterministe `63060489…`, installateur **16/16**, provenance **8/8** (`dirty=False`), repro **PASS** `C281A035…588C2F70`, `success` |
+
+**Conséquence honnête :** Windows est maintenant **exercé en CI pour le produit**
+(build, tests, démos, navigateur réel) **et pour la distribution** (conformance,
+repro, SBOM, provenance, installateur). Ce qui reste hors CI Windows : macOS et
+ARM (aucun runner), le hard-RT (matériel dédié), l'audit externe (D4) et la
+signature (D9, pas de clé). Une reproductibilité **inter-machines** n'est
+toujours pas revendiquée : le digest local (`847DF0D1…`) et celui du runner
+(`C281A035…`) diffèrent, ce qui est exactement la raison pour laquelle la
+revendication porte sur « deux builds, même toolchain, même linker ».
 
 Le job frère `auto-gc` (même workflow, `windows-latest`) est également vert sur
 ces runs ; il qualifie la GC automatique optionnelle, pas le langage.

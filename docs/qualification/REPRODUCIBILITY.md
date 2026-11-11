@@ -83,7 +83,8 @@ supprime tout par défaut.
 
 ## 5. Limites explicites
 
-- **La valeur du hash dépend de l'arbre** : elle change dès qu'une ligne de code change ; c'est le but, et ce n'est donc pas une constante à citer hors de son SHA.\n- **Un seul binaire** : `ravum-lang.exe`. Les autres binaires du workspace
+- **La valeur du hash dépend de l'arbre** : elle change dès qu'une ligne de code change ; c'est le but, et ce n'est donc pas une constante à citer hors de son SHA.
+- **Un seul binaire** : `ravum-lang.exe`. Les autres binaires du workspace
   (outillage, coordonnateur) ne sont pas couverts.
 - **Une seule plateforme** : Windows x86-64. Sur Linux, le drapeau `/Brepro`
   n'existe pas ; le script substitue `-Wl,--build-id=sha1`, mais **cette branche
@@ -115,3 +116,33 @@ Contexte : Windows 11 x86-64, `rustc 1.95.0`, deux racines et deux `target/`
 distincts. Les limites listées ci-dessus sont inchangées : ceci prouve la
 **reproductibilité locale** du binaire courant, pas la reproductibilité
 inter-machines ni l'identité de l'auteur du binaire.
+
+## Mesure complémentaire — passe 8 (2026-11-11, SHA `7696e2a`) et passage en CI
+
+Rejeu après la fermeture des six dernières formes `check`-pass / `build`-fail :
+
+```
+pwsh -File scripts/repro-check.ps1
+repro-check: A = 847DF0D11C1E2D00ABD049E8035E371D531D86DF90C6EA30184880759335CB96
+repro-check: B = 847DF0D11C1E2D00ABD049E8035E371D531D86DF90C6EA30184880759335CB96
+repro-check: PASS — the two builds are bit-for-bit identical
+```
+
+Deux changements par rapport à la passe 4 :
+
+1. **La preuve est devenue continue.** `scripts/repro-check.ps1` est exécuté par
+   le job `release-evidence` de `.github/workflows/qualification-evidence.yml`
+   sur `windows-latest` à chaque push et à chaque PR. Run `43064500916`
+   (push, `abe7d88`) et `43064513146` (PR) : `success`, deux builds identiques
+   `C281A0357024910BD4553A68472BEA87AC11149A11F094016965BA55588C2F70`. Une
+   preuve qui n'existe que dans un log local ne peut pas vieillir honnêtement.
+2. **Le digest est propre à l'environnement, et c'est mesuré.** Le même arbre
+   donne `847DF0D1…` sur la machine de référence et `C281A035…` sur
+   `windows-latest`. La revendication reste donc strictement « deux builds, même
+   toolchain, même linker » — la reproductibilité **inter-machines** n'est
+   toujours pas revendiquée, et cet écart en est la démonstration directe plutôt
+   qu'une omission.
+
+Le pas d'étape `repro` refuse par ailleurs un code de sortie 0 qui ne
+contiendrait pas deux digests de 64 caractères identiques : un script qui ne
+mesure rien sort aussi 0, et ce cas ne doit pas passer pour un succès.

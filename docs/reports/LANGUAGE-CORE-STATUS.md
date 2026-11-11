@@ -1,5 +1,27 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour passe 8 — 2026-11-11, commit `7696e2a`.** Les **six dernières
+> formes `check`-pass / `build`-fail connues** sont fermées sauf deux variantes
+> bruyantes : index dynamique imbriqué, racine non-place (`make()[i]`,
+> `a[0].0[1]`, `self.items[0]`), plusieurs accès dans un bras de `match` en
+> expression, récepteur builtin *by value* (`a[0].unwrap()`), descentes multiples
+> sur des éléments différents, base relue après la descente. Il reste
+> **deux variantes** (`E0508` bruyant, jamais de valeur fausse) : descentes dans
+> deux branches distinctes, et deux descentes dans un même bloc imbriqué —
+> **`P0-A` reste donc `PARTIAL`**, jamais `PASS`. Mesures : **113 suites,
+> 1536 passés / 0 échec / 2 ignorés** ; conformance **453 cas, 452 PASS / 0 FAIL
+> / 1 SKIP**, build vérifié **192/192** (120 vérifiés, 72 implicites, 0 échec),
+> `build_verified: true` ; couverture sema re-mesurée **88,94 % lignes / 88,46 %
+> régions** (seuils tenus, aucun abaissé) ; reproductibilité bit-à-bit **PASS**
+> (`847DF0D1…` en local, `C281A035…` sur le runner — le digest est propre à
+> l'environnement) ; registre **108 codes / 126 émis / 0 écart** ; FeatureIds
+> **188/188** ; **MUST 463/807** (T2 `PARTIAL`). Les cinq preuves lourdes
+> (conformance Windows, repro, SBOM, provenance, installateur) sont désormais
+> **rejouées par la CI** (`qualification-evidence.yml`, runs `43064500916` /
+> `43064513146`, `success`). Côté documentation, une quarantaine d'affirmations
+> fausses ont été corrigées dans `spec/` et `docs/`. Gates : **4 PASS / 7 PARTIAL
+> / 2 BLOCKED** (T4/T12 exigent l'audit externe et le Go/No-Go humains).
+
 > **Mise à jour passe 7 — 2026-11-11, commit `c6b4537`.** La CI, qui n'avait
 > jamais tourné sur ces commits, est **verte 12/12** (Linux qualification, Windows
 > build/tests/démos, gate contracts, coverage, impact, VS Code). Elle a révélé

@@ -1030,3 +1030,91 @@ Binaires de mesure épinglés de la passe 7 (Windows 11 x64, `rustc 1.95.0`) :
 `ravum-conformance.exe` sha256
 `9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58`.
 
+
+## 23. Passe 8 — les six dernières formes connues, deux variantes restantes, couverture re-mesurée (2026-11-11)
+
+> **Base : `7e0c77a`.** Commits de code `5268838` (quatre formes) et `d693162`
+> (deux formes). Windows 11 x86-64, `rustc 1.95.0`.
+
+### 23.1 Les quatre formes restantes de la passe 7 sont fermées (`5268838`)
+
+| Forme | Repro | Mécanisme d'abaissement |
+|---|---|---|
+| index dynamique dans un tableau imbriqué | `a[0][i]`, `a[i][j]` | le préfixe constant est déstructuré une fois, chaque niveau dynamique continue en `into_iter().nth(i)` **sur le slot** (plus sur la place) ; la panique hors bornes garde le texte de rustc |
+| racine de chaîne qui n'est pas une place | `make()[i]`, `a[0].0[1]`, `h.items[0].0[1]`, `self.items[0]` | descente *inline* : la racine est matérialisée une fois puis chaque projection/index est appliqué en un bind par étape |
+| plusieurs accès dans un bras de `match` en corps d'expression | `E::Items(a) => (a[0], a[1])` | le corps du bras est enveloppé dans un bloc, ce qui crée la frontière d'instruction manquante |
+| récepteur *by value* d'une méthode builtin | `a[0].unwrap()`, `unwrap_or`, `ok`, `err` | table STD-11.3 des récepteurs consommants (`Option::{unwrap, unwrap_or, ok_or}`, `Result::{unwrap, unwrap_or, ok, err}`) ; les `is_*` restent des lectures |
+
+### 23.2 Les deux formes signalées à la revue sont fermées (`d693162`)
+
+* `let x = a[0].0[1]; let y = a[1].0[0];` — deux descentes sur des éléments
+  **différents** du même tableau.
+* `let x = a[0].0[1]; let n = a[1].1;` — descente puis lecture d'un autre
+  élément.
+
+Mécanisme : **une seule déstructuration de niveau 0** de la place est hissée
+avant le premier usage (`let [e0, e1] = a;`), chaque descente continue depuis son
+slot, et un accès constant du même élément est réécrit vers son slot (`e1.1`).
+Le groupe n'est ouvert que si le hiss peut dominer tous les usages : descentes en
+instructions **directes** du bloc du binder, tout usage à/après le hiss
+abaissable depuis un slot, aucun accès consommé avant, aucune autre descente sur
+la même place. Sinon le formulaire indexé reste et rustc échoue bruyamment.
+
+Effets de bord observables : les slots de niveau 0 deviennent des locaux
+`__rv_el_*` (les non utilisés tombent à la fin de la portée englobante ; sans
+`Drop`, inobservable en Core 1.0) ; l'ordre d'évaluation d'origine est conservé ;
+le corps d'un bras de `match` en expression est désormais un bloc.
+
+### 23.3 Deux variantes restent ouvertes — mêmes règles d'honnêteté qu'en §22.2
+
+`check` exit 0 puis `build` exit 1, `E0508` bruyant, jamais de valeur fausse.
+Elles ne sont **pas** dans le corpus et aucun test ne verrouille le défaut.
+
+**(a) descentes dans deux branches distinctes :**
+
+```rv
+fn f(c: bool, a: [([String; 2], i32); 2]) -> String {
+    if c { let x = a[0].0[1]; return x; } else { let y = a[1].0[0]; return y; }
+}
+
+fn main() {
+}
+```
+
+Le hiss partagé exige une instruction du bloc du binder qui précède *tous* les
+usages ; deux branches n'ont pas d'ancêtre commun, donc le groupe n'est pas
+ouvert et le code généré garde `let x: String = a[0usize].0[1usize];`.
+
+**(b) deux descentes dans un même bloc imbriqué :**
+
+```rv
+fn f(a: [([String; 2], i32); 2]) -> String {
+    if true { let x = a[0].0[1]; let y = a[1].0[0]; return x; }
+    return String::from("none");
+}
+
+fn main() {
+}
+```
+
+Un ancêtre valide existerait (première instruction du bloc `if`), mais le plan ne
+suit pas l'identité de bloc : il ne peut pas prouver la dominance et n'ouvre donc
+pas de groupe. Fermer ces deux variantes demande de suivre une identité de bloc
+dans le *walker* puis de valider la dominance (≈15 lignes + tests), hors du budget
+de la passe 8. **`P0-A` reste `PARTIAL`** tant qu'elles existent.
+
+### 23.4 Mesures de la passe 8
+
+| Mesure | Résultat |
+|---|---|
+| Tests workspace (`cargo test --workspace`) | **113 suites, 1536 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance + build (`run --verify-build`) | **453 cas : 452 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; périmètre **192**, couverts **192**, vérifiés **120**, implicites **72**, échoués **0** ; `build_verified: true` |
+| Corpus | **448 → 453 cas**, `perimeter` **187 → 192** ; cinq cas `run/array-move-*` ajoutés, tous `check`+`build`+`run` réels |
+| Sondage round-3 | **47/47 build-pass, 0 divergence** (inchangé) |
+| Sweep `check`/`build` | **118/118 build-pass, 0 divergence** |
+| Couverture sema (`llvm-cov`) | **88,94 % lignes / 88,46 % régions** ; `typeck.rs` 92,74 %, `resolve.rs` 93,13 %, `check.rs` 80,26 % (seuil 80) — **tous les seuils tenus, aucun seuil abaissé** |
+| CI | conformance Windows **453 cas** `success` (run `43064500916`), et les mêmes chiffres au run PR `43064513146` |
+
+La couverture baisse par rapport au chiffre publié en passe 5 (89,2 % / 88,6 %,
+`typeck.rs` 93,8 %) : du code a été ajouté depuis. La baisse est **rapportée, pas
+atténuée** ; la marge la plus mince est `check.rs` (80,26 % pour un seuil à 80).
