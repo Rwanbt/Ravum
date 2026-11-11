@@ -5,6 +5,26 @@
 > non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-11
 > (passe 9 : D12 close, `P0-A` vert sur son périmètre mesuré).
 
+## 0. Réponses du responsable — 2026-11-11 (soirée)
+
+Les sections D1…D13 ci-dessous restent le **dossier d'instruction** (contexte,
+options, preuves). Le tableau ci-dessous est l'**état des décisions** après les
+arbitrages du 2026-11-11 ; la feuille de suite détaillée est
+[`docs/decisions/ANSWER-SHEET-2026-11-11.md`](docs/decisions/ANSWER-SHEET-2026-11-11.md).
+
+| ID | Réponse | Suite appliquée / attendue |
+|---|---|---|
+| **D2** | Cible **production ready**, pas MVP | `docs/roadmap/PRODUCTION-READINESS.md` (14 critères, état mesuré, plan) ; **ratification** du backend + socle normatif encore à signer |
+| **D3** | **Fusion dans `main` autorisée**, aucune release | Fusion exécutée (`dev` puis `main`, commit de fusion, aucun squash, aucun tag) ; rollback = un `revert` du commit de fusion |
+| **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | **Aucun blocage de code** ; les trois textes doivent être versés dans `docs/audit/2026-11-reviews/` pour triage ; un audit **humain** reste requis pour le label production |
+| **D5** | Tests sur **Windows et Linux**, pas de macOS | D5 **close** : Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; macOS/ARM/Android/iOS `NOT_RUN` |
+| **D6** | OK — périmètre gelé | Périmètre écrit (`PRODUCTION-READINESS.md` §6) ; extension = 1.x |
+| **D7** | « Il faut la rendre safe » | Programme de durcissement FFI (`PRODUCTION-READINESS.md` §5) : contrats ABI/lifetime/unwinding/callbacks/ressources, refus outillés, tests négatifs |
+| **D9** | Sans intérêt avant la mise en production | **DIFFÉRÉE** : aucune clé générée, aucun mécanisme bloqué ; T11 reste `PARTIAL` sur ce seul point |
+| **D10** | Pas bloquant ; travailler la couverture | Deux métriques adoptées ; couverture **étendue au codegen** (première mesure 87,04/86,05 ; seuils ajoutés) ; plan dans `PRODUCTION-READINESS.md` §7 |
+| **D11** | OK | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, collisions `G-5.11`/`G-6.40` documentées (`Q-GRAM-11`) |
+| **D13** | Explication demandée | Explication refaite avec programmes concrets (`ANSWER-SHEET` §5) ; **arbitrage A/B encore attendu** |
+
 ## D1 — Licence du code et gouvernance (#34) — **RÉSOLUE**
 
 - **Décision appliquée** : **`MIT OR Apache-2.0`** (double licence, au choix du
