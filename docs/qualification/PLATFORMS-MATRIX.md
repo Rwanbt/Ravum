@@ -5,6 +5,10 @@
 > (mesuré sur un sous-ensemble), `NOT_RUN` (aucune exécution), `UNSUPPORTED`
 > (inexprimable : le CLI refuse la cible ou la cible n'existe pas). Aucune
 > compilation croisée n'est présentée comme un support qualifié.
+>
+> **Correction du 2026-11-11 :** la phrase « aucun job CI Windows » était fausse.
+> Le workflow `mvp.yml` exécute un job `windows-latest` (build, tests, démos) ;
+> voir §3.2. Les limites qui subsistent sont nommées, pas effacées.
 
 ## 0. Règles de lecture
 
@@ -19,7 +23,9 @@
 - Les mesures locales ont été faites sur un binaire construit depuis un export
   propre de `HEAD` **`5d88ecb`** (voir §1), pas sur `target/debug/` partagé avec
   d'autres agents. Les mesures CI sont des exécutions tierces sur
-  `ubuntu-latest`, vérifiées via l'API GitHub (voir §3).
+  `ubuntu-latest` (Linux) et `windows-latest` (MVP product checks), vérifiées
+  via l'API GitHub (voir §3) ; les deux ne portent pas forcément sur le même SHA
+  que les mesures locales, chaque preuve est datée par son SHA.
 
 ## 1. Environnement de mesure local
 
@@ -35,7 +41,7 @@
 
 | Plateforme | Compilation | Exécution | Conformance | Installation | FFI | CI | État |
 |---|---|---|---|---|---|---|---|
-| **Windows x86-64** | **PASS** — `run examples/hello` etc. (§2.1) | **PASS** — 4 exemples exécutés, exit 0 | **PASS local** — 386 cas, 385 PASS / 0 FAIL / 1 SKIP (`security/dependency-absolute-unix`, `skip_on: windows`) | **NOT_RUN** cette passe (mesure antérieure : `scripts/install.ps1`, manifeste, hash) | **PASS** — `ffi-abs` → `42` | **AUCUN job CI Windows** — preuve locale uniquement | **PASS (plateforme primaire, CI absente)** |
+| **Windows x86-64** | **PASS** — `run examples/hello` etc. (§2.1) + build/tests workspace en CI (§3.2) | **PASS** — 4 exemples exécutés, exit 0 ; démos M1/COLLAB-1/M2/DSP/M4 + browser E2E en CI | **PASS local** — 386 cas, 385 PASS / 0 FAIL / 1 SKIP (`security/dependency-absolute-unix`, `skip_on: windows`) ; **pas de job CI conformance Windows** | **NOT_RUN** cette passe (mesure antérieure : `scripts/install.ps1`, manifeste, hash) ; **pas de job CI installateur Windows** | **PASS** — `ffi-abs` → `42` | `mvp.yml` job `MVP product checks (build, tests, demos)` sur `windows-latest` : **vert** sur `c67f17e` (runs 43026622466 / 43026630105, §3.2) ; **pas de CI** pour repro/SBOM/installateur/conformance | **PASS (plateforme primaire ; CI produit, pas CI de distribution)** |
 | **Linux x86-64** | **PASS (CI)** — `cargo test --workspace --all-targets` vert | **PASS (CI)** — smoke Linux + conformance + installateur | **PASS (CI)** — corpus exécuté sur `ubuntu-latest` | **PASS (CI)** — `scripts/install.sh` dans un préfixe temporaire + `--version` | **PARTIAL (CI)** — `run/ffi-abs` dans le corpus ; pas de test FFI dédié Linux | `linux-qual.yml`, 7 jobs verts + TSan `SKIPPED` (run 42936163958) | **PASS sur une seule image**, non mesuré localement |
 | **WASI (`wasm32-wasip1`)** | **PASS** — `run --target wasm32-wasip1 examples/hello` | **PASS** — stdout `hello, ravum` via Node WASI (§2.2) | **NOT_RUN** — le corpus n'est pas exécuté sous WASI | **NOT_RUN** | **NOT_RUN** — aucun `extern` sous WASI | **PASS (CI)** — job `wasm32-wasip1 (build + run via Node WASI)` vert | **PARTIAL** (qualifié séparément, périmètre étroit) |
 | **macOS x86-64** | **UNSUPPORTED** — `--target x86_64-apple-darwin` refusé (exit 2) | **NOT_RUN** | **NOT_RUN** | **NOT_RUN** — `install.sh` a des branches `darwin` mais n'a jamais tourné | **NOT_RUN** | **AUCUN** | **NOT_RUN** |
@@ -65,6 +71,10 @@ cargo run -p ravum-conformance -- run --json target/conformance-head.json
 → total=386 pass=385 fail=0 skip=1 not_run=0   (SKIP = security/dependency-absolute-unix)
 ```
 
+Cette conformance Windows est **locale** (SHA local `5d88ecb`) ; le job CI
+Windows (§3.2) ne l'exécute pas et porte sur un autre SHA (`c67f17e`). Ne pas
+fusionner les deux preuves en une seule phrase.
+
 ### 2.2 WASI — commande et sortie exactes
 
 ```
@@ -93,7 +103,9 @@ C'est un comportement **fail-closed** correct : le CLI ne prétend pas
 cross-compiler. Il ne faut pas en déduire un support ARM/macOS/Linux : seule une
 exécution sur la plateforme le donnerait.
 
-## 3. Preuve CI Linux — vérifiée via l'API GitHub
+## 3. Preuves CI — vérifiées via l'API GitHub
+
+### 3.1 Linux x86-64
 
 Le run `linux-qual.yml` sur le SHA complet
 `5d88ecbdb1839287aecd13fd6ba914b911b75f5b` a été interrogé le 2026-11-11 :
@@ -119,10 +131,53 @@ cette machine : elles qualifient Linux sur **cette image** (`ubuntu-latest`) à
 **ce SHA**, et rien de plus. Aucune reproduction multi-images, aucun runner
 auto-hébergé, aucune version de noyau épinglée.
 
-**Trou structurel :** il n'existe **aucun job CI Windows**, alors que Windows est
-la plateforme primaire de développement. Toute la preuve Windows de ce document
-est locale et liée à une machine ; elle n'est pas rejouée en intégration
-continue. C'est le principal risque de la matrice.
+**Passe ultérieure (2026-11-11)** : le run
+[43026622427](https://github.com/Rwanbt/Ravum/actions/runs/43026622427) sur le
+SHA `c67f17e` est vert (7 jobs `success` + TSan `skipped`), avec la conformance
+`--verify-build` et l'assertion bloquante `build_verified: true`. Détail,
+commandes et échecs intermédiaires :
+[`LINUX-QUALIFICATION.md`](LINUX-QUALIFICATION.md) §11.
+
+### 3.2 Windows x86-64 (MVP product checks)
+
+Le workflow `.github/workflows/mvp.yml` possède un job **`mvp`** nommé
+« MVP product checks (build, tests, demos) » qui tourne sur **`windows-latest`**
+(`timeout-minutes: 40`). Sur le SHA `c67f17e`, ses deux runs
+`43026622466` et `43026630105` sont **`success`** (API GitHub, vérifié le
+2026-11-11). Étapes du job, d'après le fichier de workflow :
+
+| Étape | Ce qu'elle exerce réellement |
+|---|---|
+| `Check formatting (rustfmt, pinned toolchain)` | `cargo fmt --all -- --check` |
+| `Build workspace` | `cargo build --workspace` |
+| `Test workspace` | `cargo test --workspace -- --test-threads=1` |
+| `Demo M1 - hot patch in a living process` | `scripts/demo-m1.ps1` |
+| `Demo COLLAB-1 - multi-agent proposals and single Git writer` | `scripts/demo-collab.ps1 -Commit` |
+| `Prove a bounded obligation (M2)` | `ravum prove fixtures/proof/positive.rs --claim finite …` |
+| `Refuse a violated obligation (M2)` | la même commande doit sortir **1** (sinon l'étape échoue) |
+| `Demo DSP - block processing with a hot swap (M3)` | `ravum dsp fixtures/dsp/iir_v1.rs --next …` |
+| `Demo M4 - UI + API + SQLite end to end` | `scripts/demo-m4.ps1` |
+| `Browser E2E - real Chromium/Edge via CDP` | `scripts/demo-m4-browser.ps1 -RequireBrowser` (Edge de `windows-latest`) |
+
+Ce job a trouvé un défaut réel — du formatage absent — corrigé par
+`ab51b17` (`style: apply the pinned rustfmt 1.9.0 to the pass-6 changes`),
+après quoi il est passé au vert.
+
+**Ce que ce job ne couvre pas, et qui reste donc local ou `NOT_RUN` :**
+la conformance Windows (386 cas, mesure locale §2.1), la reproductibilité
+bit-à-bit, le SBOM et l'installateur Windows. Il n'y a **aucun** job CI Windows
+pour ces quatre preuves.
+
+**Conséquence honnête :** Windows n'est plus « sans CI ». Il est **exercé en CI
+pour le produit** (build, tests, démos, navigateur réel) mais **pas qualifié en
+CI pour la distribution** (repro, SBOM, installateur) ni pour la conformance.
+Les deux phrases doivent être lues ensemble ; aucune des deux ne va sans l'autre.
+
+Le job frère `auto-gc` (même workflow, `windows-latest`) est également vert sur
+ces runs ; il qualifie la GC automatique optionnelle, pas le langage.
+
+Aucune de ces conclusions n'est une exécution sur cette machine : ce sont des
+données GitHub, liées au SHA `c67f17e` et à l'image `windows-latest` du moment.
 
 ## 4. Ce qui n'est pas qualifié, et ce qu'il faudrait pour le devenir
 
@@ -133,14 +188,19 @@ continue. C'est le principal risque de la matrice.
 | WASI « qualifié » | exécution du **corpus** sous WASI, pas seulement `hello` ; gestion des arguments/préopens ; FFI WASI absente | un harnais conformance sous Node WASI avec les mêmes `case.json` |
 | Navigateur WASM | cible `wasm32-unknown-unknown` + liaisons JS + tests navigateur | décision de périmètre (ADR-025) puis implémentation |
 | Android / iOS | toolchains, cibles, exécution sur appareil/émulateur | hors périmètre Core 1.0 ; aucune décision en cours |
-| Windows CI | un runner Windows et les mêmes jobs que Linux | `runs-on: windows-latest` + smoke/conformance/install |
+| Windows CI | la conformance, le smoke, l'installateur, la reproductibilité et le SBOM ne sont **pas** dans `mvp.yml` ; le job couvre build/tests/démos/navigateur | ajouter des jobs `runs-on: windows-latest` réutilisant `ravum-conformance run`, `lang-smoke.ps1`, `install.ps1`, `repro-check.ps1` et `sbom.ps1` |
 
 ## 5. Ce que cette matrice ne fait pas
 
 - Elle ne convertit aucune compilation croisée en support : les refus exit 2
   sont enregistrés comme des refus, pas comme des preuves d'absence de bug.
 - Elle ne présente pas Linux comme « universel » : une image, un run, un SHA.
+- Elle ne présente pas la CI Windows comme une qualification complète : le job
+  `mvp` couvre le produit (build, tests, démos, navigateur), pas la conformance,
+  la distribution, la reproductibilité ni le SBOM.
 - Elle ne rejoue ni l'installateur Windows ni le SBOM cette passe ; ces mesures
   restent celles publiées antérieurement (`docs/release/INSTALL.md`,
   `docs/qualification/REPRODUCIBILITY.md`) et sont marquées `NOT_RUN` ici.
-- Elle ne modifie aucun workflow CI ni aucun script d'installation.
+- Elle ne modifie aucun workflow CI ni aucun script d'installation ; les
+  constats de §3.2 sont des lectures de `.github/workflows/mvp.yml` et de l'API
+  GitHub.
