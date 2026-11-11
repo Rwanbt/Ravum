@@ -3224,17 +3224,23 @@ impl<'a> Emitter<'a> {
 // is inherent only), so no user code can run at either point; only the instant
 // memory is released can differ.
 //
+// Several descents that move elements of the same array place (`let x = a[0].0[1];
+// let y = a[1].0[0];`, or a descent plus a read of another element) share one
+// level-0 destructuring: the hoist binds every element of the place once and each
+// use continues from its slot (`let [e0, e1] = a; let x = <e0.0[1]>; let y =
+// <e1.0[0]>;`). They must be direct statements of the binder's own block, because
+// the hoist is emitted before the first of them.
+//
 // When the proof fails the emitter keeps the plain `a[i]`, which rustc rejects
 // loudly (`E0508`) — never a silent semantic change. The shapes that stay in that
-// state (all measured `check` exit 0 / `build` exit 1 with a loud E0508) are:
-// * two element-projection descents on *different* elements of the same array in one
-//   function (`let x = a[0].0[1]; let y = a[1].0[0];`): each descent would
-//   materialize the whole array, and sharing one destructuring between them is not
-//   implemented (the second access keeps the plain indexed form);
+// state (measured `check` exit 0 / `build` exit 1 with a loud E0508) are:
+// * element-projection descents on the same array from *different* nested blocks
+//   (`if c { let x = a[0].0[1]; return x; } else { let y = a[1].0[0]; return y; }`):
+//   no single statement of the binder's block precedes both, so the hoist has no
+//   valid anchor and the plain indexed form stays;
 // * a descent whose base place is also read at or after the descent in the same
-//   statement (`let x = a[0].0[1]; let n = a[1].1;`): conservative refusal, because
-//   the descent consumes the whole base place. A read in an *earlier* statement is
-//   fine and is lowered inline (the place is still intact there).
+//   statement (`let x = a[0].0[1]; let n = a[1].1;` in one statement) — a read in a
+//   different, earlier statement is fine and the shared hoist rewrites it.
 // A dynamic index at the first level combined with a *later* use of the same place
 // (`let x = a[i]; let n = a[0].len();`) never reaches this lowering: the checker
 // already rejects it (`E-OWN-USE-AFTER-MOVE` / `E-OWN-PARTIAL-MOVE`), so no plain
@@ -3433,6 +3439,13 @@ struct Descent {
     /// The local place consumed by the descent, when the root is a place
     /// (`a[0].0[1]` -> `Some(a)`); `None` for an rvalue root.
     base: Option<PlaceKey>,
+    /// Constant index of the first path step when the descent starts with an
+    /// element move out of the base place (`a[0].0[1]` -> `Some(0)`).
+    first_index: Option<usize>,
+    /// Array layers of the base place, outermost first.
+    lens: Vec<usize>,
+    /// Walk order of the enclosing statement(s), outermost first.
+    stmt_chain: Vec<NodeId>,
     top: usize,
 }
 
@@ -3820,9 +3833,19 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                         // A path over a local place, with at least one index step
                         // before the indexed array: the descent materializes the
                         // place once and walks the steps.
+                        let (first_index, lens) = match steps.first() {
+                            Some(PathStep::Index { level_base, index }) => (
+                                constant_index(index),
+                                array_layers(self.emitter.facts().expr_types.get(&level_base.id)),
+                            ),
+                            _ => (None, Vec::new()),
+                        };
                         self.descents.push(Descent {
                             node: expr.id,
                             base: Some(place),
+                            first_index,
+                            lens,
+                            stmt_chain: self.statement_chain.clone(),
                             top,
                         });
                     } else if !roots_at_local(deep_root, &self.emitter.facts().resolutions) {
@@ -3832,6 +3855,9 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                         self.descents.push(Descent {
                             node: expr.id,
                             base: None,
+                            first_index: None,
+                            lens: Vec::new(),
+                            stmt_chain: self.statement_chain.clone(),
                             top,
                         });
                     }
@@ -4138,6 +4164,14 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         access.indices.iter().copied().collect()
     }
 
+    /// True when two places share the same binder and one projection chain is a
+    /// prefix of the other (so moving one can affect the other).
+    fn places_overlap(a: &PlaceKey, b: &PlaceKey) -> bool {
+        a.binder == b.binder
+            && (a.projections.starts_with(&b.projections)
+                || b.projections.starts_with(&a.projections))
+    }
+
     /// True when `use_site` is a whole use of `place` or of one of its ancestors
     /// (the root binding included) at or after `top`.
     ///
@@ -4256,6 +4290,192 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         Some(())
     }
 
+    /// Plan one shared level-0 destructuring for descents that start with an
+    /// element move out of the same array place (`let x = a[0].0[1]; let
+    /// y = a[1].0[0];`, or a descent plus a read of another element). One hoist
+    /// binds every element, each descent continues from its slot, and the element
+    /// accesses of the same place are rewritten to their slots. A single descent
+    /// with no other use is left to the inline form (which needs no hoist).
+    fn plan_slot_groups(
+        &self,
+        plan: &mut ArrayMovePlan,
+        sequence: &mut usize,
+        handled: &mut BTreeSet<NodeId>,
+    ) {
+        let mut groups: BTreeMap<(PlaceKey, Vec<NodeId>), Vec<&Descent>> = BTreeMap::new();
+        for descent in &self.descents {
+            let Some(base) = &descent.base else { continue };
+            let Some(first_index) = descent.first_index else {
+                continue;
+            };
+            let binder = &self.binders[base.binder.0 as usize];
+            let Some(stmt_key) = descent.stmt_chain.get(binder.block_depth).copied() else {
+                continue;
+            };
+            let Some(order) = self.statement_order.get(&stmt_key).copied() else {
+                continue;
+            };
+            if binder.order >= order {
+                continue;
+            }
+            let Some(len) = descent.lens.first().copied() else {
+                continue;
+            };
+            if first_index >= len {
+                continue;
+            }
+            // Only direct statements of the binder's own block can share one hoist:
+            // statements in sibling branches (then/else) would not see it.
+            if descent.stmt_chain.len() != binder.block_depth + 1 {
+                continue;
+            }
+            let prefix: Vec<NodeId> = Vec::new();
+            groups
+                .entry((base.clone(), prefix))
+                .or_default()
+                .push(descent);
+        }
+        for ((place, prefix), members) in groups {
+            let lens = members[0].lens.clone();
+            let mut ordered: Vec<(usize, NodeId)> = members
+                .iter()
+                .map(|descent| {
+                    let binder = &self.binders[place.binder.0 as usize];
+                    let key = descent.stmt_chain[binder.block_depth];
+                    (
+                        self.statement_order
+                            .get(&key)
+                            .copied()
+                            .unwrap_or(usize::MAX),
+                        key,
+                    )
+                })
+                .collect();
+            ordered.sort_by_key(|(order, _)| *order);
+            let Some((_, hoist_key)) = ordered.first().copied() else {
+                continue;
+            };
+            let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
+            // Other uses of the place must be visible from the hoist and lowerable
+            // from the slots.
+            let mut ok = true;
+            let mut rewrites: Vec<(NodeId, String)> = Vec::new();
+            let mut chains: Vec<(NodeId, String, usize)> = Vec::new();
+            for access in &self.accesses {
+                if !Self::places_overlap(&access.place, &place) {
+                    continue;
+                }
+                if access.top < hoist_top {
+                    if access.consumed {
+                        ok = false;
+                        break;
+                    }
+                    continue;
+                }
+                let Some(first) = access.indices.first().copied().flatten() else {
+                    ok = false;
+                    break;
+                };
+                if first >= lens[0] || !access.stmt_chain.starts_with(&prefix) {
+                    ok = false;
+                    break;
+                }
+                let binding = element_binding(*sequence, &[first]);
+                if access.indices.len() == 1 {
+                    rewrites.push((access.node, binding));
+                } else {
+                    chains.push((access.node, binding, 1));
+                }
+            }
+            if !ok {
+                continue;
+            }
+            for use_site in &self.whole_uses {
+                if use_site.top >= hoist_top && Self::places_overlap(&use_site.place, &place) {
+                    ok = false;
+                    break;
+                }
+            }
+            // Descents handled outside this group cannot share the same place.
+            let group_nodes: BTreeSet<NodeId> = members.iter().map(|d| d.node).collect();
+            for other in &self.descents {
+                if group_nodes.contains(&other.node) {
+                    continue;
+                }
+                if other
+                    .base
+                    .as_ref()
+                    .is_some_and(|other_base| Self::places_overlap(other_base, &place))
+                {
+                    ok = false;
+                    break;
+                }
+            }
+            if !ok {
+                continue;
+            }
+            // A single descent with no conflicting use is already handled inline.
+            if members.len() == 1 {
+                let descent = members[0];
+                let conflicted = self.accesses.iter().any(|access| {
+                    Self::places_overlap(&access.place, &place)
+                        && (access.consumed || access.top >= descent.top)
+                }) || self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, &place) && use_site.top >= descent.top
+                });
+                if !conflicted {
+                    continue;
+                }
+            }
+            // Emit `let [mut e0, mut e1, ...] = <place>;` before the earliest member.
+            let mut pattern = String::new();
+            let mut path = Vec::new();
+            pattern_text(
+                &SlotTree::default(),
+                &lens,
+                0,
+                *sequence,
+                &mut path,
+                &mut pattern,
+            );
+            plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
+                base: self.place_text(&place),
+                pattern,
+            });
+            for (node, binding) in rewrites {
+                plan.rewrites.insert(node, binding);
+            }
+            for (node, binding, skip) in chains {
+                plan.single.insert(
+                    node,
+                    SingleMove::Chain {
+                        base: ChainBase::Slot {
+                            text: binding,
+                            skip,
+                        },
+                    },
+                );
+            }
+
+            for descent in &members {
+                let Some(first_index) = descent.first_index else {
+                    continue;
+                };
+                plan.single.insert(
+                    descent.node,
+                    SingleMove::Chain {
+                        base: ChainBase::Slot {
+                            text: element_binding(*sequence, &[first_index]),
+                            skip: 1,
+                        },
+                    },
+                );
+                handled.insert(descent.node);
+            }
+            *sequence += 1;
+        }
+    }
+
     fn plan(&self) -> ArrayMovePlan {
         let mut plan = ArrayMovePlan::default();
         let mut by_place: BTreeMap<PlaceKey, Vec<&Access>> = BTreeMap::new();
@@ -4366,9 +4586,14 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 }
             }
         }
-        // Descents: an rvalue root, or a path that moves an element before the
-        // projected array. Each is lowered inline at its own access.
+        // Descents that move elements of the same place share one level-0
+        // destructuring; the others are lowered inline at their own access.
+        let mut handled: BTreeSet<NodeId> = BTreeSet::new();
+        self.plan_slot_groups(&mut plan, &mut sequence, &mut handled);
         for (index, descent) in self.descents.iter().enumerate() {
+            if handled.contains(&descent.node) {
+                continue;
+            }
             if let Some(base) = &descent.base {
                 // The descent moves the whole base place, so every other use of it
                 // (or of an overlapping place) at/after the access must be absent.

@@ -3778,3 +3778,73 @@ fn main() {
     );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+// ---------------------------------------------------------------------------
+// 20. P0-A round 5: several descents that move elements of the same array place
+//     (`a[0].0[1]` and `a[1].0[0]`, or a descent plus a read of another element).
+//     One level-0 destructuring binds every element and each use continues from
+//     its slot. Before this change both shapes were a loud rustc E0508.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn audit_shared_descent_slot_hoist_builds_and_runs() {
+    if skip("audit_shared_descent_slot_hoist_builds_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-shared-descent",
+        r#"fn two_descents(a: [([String; 2], i32); 2]) -> (String, String) {
+    let x = a[0].0[1];
+    let y = a[1].0[0];
+    return (x, y);
+}
+
+fn descent_then_read(a: [([String; 2], i32); 2]) -> (String, i32) {
+    let x = a[0].0[1];
+    let n = a[1].1;
+    return (x, n);
+}
+
+fn descent_and_element(a: [([String; 2], i32); 2]) -> (String, i32) {
+    let x = a[0].0[1];
+    let z = a[0].1;
+    return (x, z);
+}
+
+fn single(a: [([String; 2], i32); 2]) -> String {
+    return a[0].0[1];
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    let t = two_descents(a);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+
+    let b = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    let v = descent_then_read(b);
+    io::println(v.0.as_str());
+    io::println(v.1.to_string().as_str());
+
+    let c = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    let u = descent_and_element(c);
+    io::println(u.0.as_str());
+    io::println(u.1.to_string().as_str());
+
+    let d = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    io::println(single(d).as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("= a;") && code.contains("__rv_el_"),
+        "the shared place is destructured once:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-shared-descent");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "x1\ny0\nx1\n8\nx1\n7\nx1\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
