@@ -18,7 +18,7 @@
 | `Pass` / `Fail` | cas attendus : `pass` = programme accepté et résultat attendu ; `fail` = diagnostic attendu |
 | `Backend` | `B` = voie B (`rustc` généré, design §1) ; `—` = non supporté |
 | `Statut` | `candidate-stable` \| `experimental` \| `unsupported` |
-| `Conformance` | présence **réelle** d'un cas dans `conformance/cases/` (le corpus existe : **106 cas**, worker qa). La présence d'un cas n'est **pas** un `PASS` : le statut d'exécution est tenu par `ravum-conformance run`. |
+| `Conformance` | présence **réelle** d'un cas dans `conformance/cases/` (instantané historique : **106 cas** au 2026-11-09 ; l'état courant est mesuré par `tools/features_coverage.py --strict`). La présence d'un cas n'est **pas** un `PASS` : le statut d'exécution est tenu par `ravum-conformance run`. |
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -271,43 +271,56 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 
 ## 12. Couverture et fermeture
 
-| Indicateur | Valeur |
+> **Instantané historique du 2026-11-09, avant l'arrivée du corpus.** Les valeurs
+> ci-dessous ne sont **pas** l'état courant : la couverture est mesurée par
+> `python tools/features_coverage.py --strict` et les résultats par
+> `cargo run -p ravum-conformance -- run`. Ne pas citer ces chiffres comme
+> métrique de complétude.
+
+| Indicateur | Valeur au 2026-11-09 (historique) |
 |---|---|
 | Fonctionnalités supportées (`candidate-stable` + `experimental`) | **130** lignes `F-*` hors refus |
 | Fonctionnalités refusées (`F-UNS`) | **20** lignes (chacune renvoie à `unsupported.md`) |
-| Cas de conformance réellement présents | **0** — `conformance/` absent |
-| Cas `NOT_COVERED` | **tous** |
-| Cas `PENDING_IMPL` | 0 (aucun corpus) |
-| Résultats `PASS` | **aucun** |
+| Cas de conformance réellement présents | **0** à cette date — `conformance/` a été ajouté ensuite |
+| Cas `NOT_COVERED` | **tous** à cette date |
+| Cas `PENDING_IMPL` | 0 à cette date |
+| Résultats `PASS` | **aucun** à cette date |
 
 | ID | Règle | Niveau |
 |---|---|---|
-| FEAT-12.1 | Tant que `conformance/` n'existe pas, aucune fonctionnalité ne peut être présentée comme « testée ». Le statut maximal est `candidate-stable` **spécifié**. | MUST |
+| FEAT-12.1 | Tant qu'une fonctionnalité n'a pas de cas exécutable, elle ne peut pas être présentée comme « testée ». Le statut maximal est `candidate-stable` **spécifié**. (Le corpus `conformance/` existe depuis le 2026-11-09 ; la règle s'applique par fonctionnalité, pas au corpus entier.) | MUST |
 | FEAT-12.2 | Une fonctionnalité acceptée par le checker sans ligne ici est un **défaut de spécification** : elle doit être ajoutée (avec `FeatureId`) ou refusée. | MUST |
 | FEAT-12.3 | Une ligne `unsupported` doit avoir un test négatif dans la conformance (T4) : c'est la garantie qu'elle n'est pas acceptée « par accident ». | MUST |
 | FEAT-12.4 | Le mapping `FeatureId → code` doit rester cohérent avec [`diagnostics.md`](diagnostics.md) ; un code cité ici doit exister dans le registre. | MUST |
 | FEAT-12.5 | Les lignes `experimental` (F-SYN-004, F-SYN-022, F-EXPR-018, F-TYP-020, F-EFF-006, F-STD-010) sont les seules susceptibles de changer sans édition majeure ; elles doivent être signalées dans tout rapport d'usage. | MUST |
 
 
-### 12.2 Couverture réelle (corpus `conformance/`, 95 cas)
+### 12.2 Couverture réelle au 2026-11-09 (corpus de 95 cas, historique)
 
-Présence d'un cas ≠ `PASS` : `ravum-conformance run` décide. Le corpus emploie encore les **anciens noms de codes** (voir §12.3).
+> Instantané historique. Le corpus et la couverture ont été étendus depuis ; les
+> chiffres courants sont produits par `tools/features_coverage.py --strict`
+> (FeatureId → cas → critère strict) et par `ravum-conformance run` (résultats
+> d'exécution), jamais recopiés ici.
 
-| Indicateur | Valeur |
+Présence d'un cas ≠ `PASS` : `ravum-conformance run` décide. À cette date, le corpus employait encore les anciens noms de codes (voir §12.3).
+
+| Indicateur | Valeur au 2026-11-09 (historique) |
 |---|---|
-| FeatureIds suivis | 184 |
-| FeatureIds avec au moins un cas | 94 |
-| FeatureIds `NOT_COVERED` | 90 |
-| Cas du corpus | 95 |
+| FeatureIds suivis | 184 à cette date (188 aujourd'hui) |
+| FeatureIds avec au moins un cas | 94 à cette date |
+| FeatureIds `NOT_COVERED` | 90 à cette date |
+| Cas du corpus | 95 à cette date |
 | Résultats `PASS` revendiqués ici | **0** |
 
-**FeatureIds sans aucun cas (`NOT_COVERED`)** :
+**FeatureIds sans aucun cas à cette date (`NOT_COVERED`, liste historique)** :
 
 `F-LEX-004`, `F-SYN-001`, `F-SYN-002`, `F-SYN-005`, `F-SYN-006`, `F-SYN-007`, `F-SYN-008`, `F-SYN-013`, `F-SYN-015`, `F-SYN-016`, `F-SYN-017`, `F-SYN-019`, `F-SYN-020`, `F-SYN-025`, `F-SYN-027`, `F-SYN-028`, `F-SYN-029`, `F-SYN-030`, `F-SYN-031`, `F-SYN-033`, `F-SYN-034`, `F-TYP-002`, `F-TYP-003`, `F-TYP-004`, `F-TYP-005`, `F-TYP-006`, `F-TYP-008`, `F-TYP-014`, `F-TYP-016`, `F-TYP-017`, `F-TYP-018`, `F-TYP-022`, `F-TYP-023`, `F-TYP-024`, `F-TYP-026`, `F-EXPR-001`, `F-EXPR-002`, `F-EXPR-005`, `F-EXPR-006`, `F-EXPR-007`, `F-EXPR-008`, `F-EXPR-011`, `F-EXPR-012`, `F-EXPR-013`, `F-EXPR-015`, `F-OWN-004`, `F-OWN-005`, `F-OWN-006`, `F-OWN-008`, `F-OWN-010`, `F-OWN-012`, `F-OWN-014`, `F-OWN-015`, `F-EFF-004`, `F-EFF-006`, `F-EFF-008`, `F-MOD-002`, `F-MOD-005`, `F-MOD-012`, `F-MOD-013`, `F-STD-007`, `F-STD-008`, `F-STD-009`, `F-STD-010`, `F-STD-011`, `F-STD-019`, `F-STD-021`, `F-STD-024`, `F-STD-026`, `F-STD-027`, `F-STD-029`, `F-STD-031`, `F-STD-032`, `F-UNS-002`, `F-UNS-005`, `F-UNS-007`, `F-UNS-010`, `F-UNS-011`, `F-UNS-012`, `F-UNS-013`, `F-UNS-014`, `F-UNS-015`, `F-UNS-017`, `F-UNS-018`, `F-UNS-019`, `F-UNS-020`, `F-META-004`, `F-META-005`, `F-META-006`, `F-META-007`
 
-### 12.3 Écarts de codes entre le corpus et le registre canonique
+### 12.3 Écarts de codes : table de correspondance historique
 
-Le corpus (`conformance/cases/*/case.json`) attend encore des noms antérieurs. À aligner par le worker qa :
+Au 2026-11-09, le corpus (`conformance/cases/*/case.json`) employait encore des noms
+antérieurs ; l'alignement a été fait depuis (voir `docs/qualification/T2-FINDINGS.md` §9).
+La table ci-dessous reste la correspondance de référence pour lire les anciens cas.
 
 | Ancien code (corpus) | Code canonique |
 |---|---|
@@ -330,7 +343,7 @@ Nouveaux cas à ajouter : `E-MOD-BOTH-ROOTS` (F-MOD-013), `E-MOD-RESERVED-NAME` 
 
 ## 13. Questions ouvertes
 
-- **Q-FEAT-1 (partiellement résolue)** — `conformance/` existe désormais (95 cas, worker qa) mais ses `expect_codes` utilisent encore les **anciens noms** de codes (voir §12.3). La couverture réelle est indiquée par ligne ; elle ne vaut pas `PASS`. Aucun résultat n'est revendiqué ici.
+- **Q-FEAT-1 (résolue)** — `conformance/` existe ; les anciens noms de codes ont été alignés sur le registre (`docs/qualification/T2-FINDINGS.md` §9) et la couverture courante est produite par `tools/features_coverage.py --strict`, jamais recopiée dans ce document. Aucun résultat n'est revendiqué ici.
 - **Q-FEAT-2 (résolue par le Lead)** — `for x in Vec` (F-SYN-022), `test fn -> Result` (F-SYN-004), `pow`/trig (F-STD-010/031) et l'absence d'unification rétroactive (F-TYP-020) restent `experimental` : supportés, mais susceptibles de changer.
 - **Q-FEAT-3** — Les lignes `F-UNS-011..020` dépendent de la décision sur les mots-clés (`static`, `type`, `ref`, `dyn`, `await`) : si Q-LEX-1 change, plusieurs codes passent de `E-RES-UNKNOWN`/`E-PARSE-EXPECTED` à `E-UNSUPPORTED-TOKEN`.
 - **Q-FEAT-4** — `F-STD-010` (`pow`/`powf`) est supporté mais non vérifiable bit-exact ; faut-il le rétrograder en `experimental` avec exclusion explicite de la conformance ? Ce document le fait déjà (`experimental`).
