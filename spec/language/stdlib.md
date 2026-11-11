@@ -3,7 +3,10 @@
 > **Statut : DRAFT — CANDIDATE, non ratifiée.**
 > **Version : `core-1.0-draft.1`** · **Date : 2026-11-09** · **Portée : Ravum Core 1.0** · **Base : `dev` @ `5408d9b`** · **Source de conception : `docs/architecture/RAVUM-CORE-DESIGN.md` §3.8.** Les signatures ci-dessous intègrent les décisions du Lead (2026-11-09) ; elles sont **normatives**.
 >
-> Ce document est une **candidate**. Il **ne ratifie aucun ADR**. **Aucune fonction n'est implémentée ni testée** à ce jour (`NOT_IMPLEMENTED`).
+> Ce document est une **candidate**. Il **ne ratifie aucun ADR** et ne certifie pas la
+> conformité de l'implémentation. Les fonctions décrites ci-dessous **sont implémentées et
+> exercées** sur le sous-ensemble Core 1.0 (cas `cases/run/*` et `features.md` F-STD-*) ;
+> leur état exact est tenu par la conformance, pas par ce document.
 > Effets : [`effects.md`](effects.md) ; types : [`types.md`](types.md) ; codes : [`diagnostics.md`](diagnostics.md) ; exemples réels : `examples/` (hello, fib, calculator, file-tool, stats, dsp-gain-iir, package-demo, tests-demo).
 
 ## 1. Prélude, imports, règles générales

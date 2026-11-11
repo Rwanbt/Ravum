@@ -16,8 +16,8 @@
 
 ### Pourquoi
 
-1. **Aucun besoin réel** : il n'y a ni FFI (`unsafe`/`extern` refusés), ni plugins, ni bibliothèques précompilées, ni registre public. Les packages sont compilés **depuis la source** dans un seul programme ([`modules.md`](modules.md) MOD-6.6).
-2. **Le layout n'est pas observable** : sans pointeur, `size_of`, `transmute`, ni FFI, aucun programme ne peut dépendre d'une disposition d'octets ([`types.md`](types.md) TYP-12). Figer un ABI n'apporterait aucune garantie utilisable et créerait une dette irréversible.
+1. **Aucun besoin réel** : la seule frontière native est une **FFI minimale expérimentale** (`extern "C"` avec primitives scalaires, appelable dans `unsafe`), sans plugin, sans bibliothèque précompilée, sans registre public, et sans ABI Ravum stable. Les packages sont compilés **depuis la source** dans un seul programme ([`modules.md`](modules.md) MOD-6.6).
+2. **Le layout n'est pas observable** : sans pointeur, `size_of`, `transmute`, ni type FFI composé, aucun programme ne peut dépendre d'une disposition d'octets ([`types.md`](types.md) TYP-12). Figer un ABI n'apporterait aucune garantie utilisable et créerait une dette irréversible.
 3. **Le backend est provisoire** : la voie B (`rustc` comme générateur de code) est retenue pour cette itération, la voie C (IR propre → Cranelift) est expérimentale. Un ABI figé maintenant lierait le langage à un backend non ratifié.
 4. **Fail-closed** : un ABI implicite (« ça marche par accident ») est plus dangereux qu'une absence déclarée. L'absence est explicite et testable.
 5. **Le hot swap n'est pas livré** : sans activation à chaud (T8 = `UNSUPPORTED`), il n'y a pas de contrainte de compatibilité de code chargé.
@@ -30,7 +30,7 @@
 | ABI-2.2 | **Déterminisme du compilateur** : mêmes sources + même configuration ⇒ mêmes diagnostics, même binaire fonctionnellement équivalent, même code Rust généré (hors commentaires de mapping si le chemin change). | MUST |
 | ABI-2.3 | **Auto-contenu** : le code généré est un **unique fichier Rust autonome**, prélude inclus, sans dépendance hors `std`, compilable par `rustc --edition 2021` (design §4). | MUST |
 | ABI-2.4 | **Auditabilité** : le code généré contient, avant chaque item/instruction, un commentaire `// rv: <fichier>:<ligne>` permettant de relier le Rust émis au source Ravum ; `--emit-rust FILE` l'écrit. | MUST |
-| ABI-2.5 | **Pas de `unsafe` généré** : le backend **MUST NOT** émettre de bloc `unsafe`, d'appel `unsafe`, ni de pointeur brut. | MUST |
+| ABI-2.5 | **Pas de `unsafe` généré hors frontière FFI** : pour un programme **sans `extern`**, le backend **MUST NOT** émettre de bloc `unsafe`, d'appel `unsafe`, ni de pointeur brut. Pour un programme avec `extern`, il émet **exactement** un wrapper `unsafe` par fonction `extern` (sous `deny(unsafe_code)`), et rien d'autre. | MUST |
 | ABI-2.6 | **Pas de contournement du checker** : le backend ne « répare » aucune erreur, n'insère aucune conversion implicite supplémentaire, ne réintroduit aucun effet non déclaré. | MUST |
 | ABI-2.7 | **Pas d'API privée de `rustc`** : le backend invoque `rustc` en **CLI** uniquement, avec des options documentées ; aucune dépendance à `rustc_*` (INV-11). | MUST |
 | ABI-2.8 | **Tailles des primitifs** : `i8..i128`, `u8..u128`, `f32`, `f64`, `bool`, `char` ont les tailles de [`types.md`](types.md) TYP-1.1. `isize`/`usize` suivent la cible. | MUST |
@@ -49,12 +49,13 @@ fn main() { io::println("hello"); }        // affiche "hello\n", code 0
 // « deux versions de Ravum peuvent partager un module compilé »
 ```
 
-## 3. Frontières : ce qui est refusé
+## 3. Frontières : ce qui est accepté et ce qui est refusé
 
 | Frontière | Forme | Code |
 |---|---|---|
-| FFI | `extern "C"`, `#[no_mangle]`, `libc`, `link` | `E-UNSUPPORTED-EXTERN` |
-| Unsafe | `unsafe { }`, `unsafe fn`, pointeurs bruts | `E-UNSUPPORTED-UNSAFE` |
+| FFI minimale (acceptée) | `extern "C" { fn f(primitives) -> primitives; }`, appel dans `unsafe` | acceptée ; appel hors `unsafe` → `E-UNSAFE-CONTEXT` |
+| FFI hors sous-ensemble | `#[no_mangle]`, `#[link]`, ABI non-C, types composés/pointeurs dans la signature, `extern "C" fn` avec corps | `E-UNSUPPORTED-ATTR`, `E-UNSUPPORTED-ABI`, `E-FFI-TYPE`, `E-UNSUPPORTED-EXTERN` |
+| Unsafe | `unsafe fn`, pointeurs bruts ; le **bloc** `unsafe { }` est accepté (effet `unsafe`, aucune capacité nouvelle) | `E-UNSUPPORTED-UNSAFE` |
 | ABI explicite | `#[repr(C)]`, `#[repr(u8)]` | `E-UNSUPPORTED-ATTR` |
 | Layout observable | `size_of`, `align_of`, `offset_of`, `transmute` | `E-RES-UNKNOWN` |
 | Bibliothèque précompilée | `.rlib`, `.so`, `.dll` en dépendance | `E-MOD-DEPENDENCY` |
@@ -65,9 +66,9 @@ fn main() { io::println("hello"); }        // affiche "hello\n", code 0
 
 | ID | Règle | Niveau |
 |---|---|---|
-| ABI-3.1 | Toute tentative d'exprimer une frontière native est refusée **au parse ou à la résolution**, jamais ignorée. | MUST |
-| ABI-3.2 | Le refus est un diagnostic `E-UNSUPPORTED-*` avec la justification « aucune ABI stable en Core 1.0 ». | MUST |
-| ABI-3.3 | Le code généré ne contient **aucun** `extern`, `#[repr]`, ni `unsafe` : vérifiable par inspection de `--emit-rust` et par un test de conformité. | MUST |
+| ABI-3.1 | Toute frontière native **hors** du sous-ensemble FFI minimal est refusée au parse ou à la résolution, jamais ignorée : ABI non-C, types composés/pointeurs dans une signature `extern`, attributs de linkage. | MUST |
+| ABI-3.2 | Le refus est un diagnostic explicite : `E-UNSUPPORTED-*` pour les formes syntaxiques, `E-FFI-TYPE` pour un type non FFI-sûr, avec la justification « aucune ABI stable en Core 1.0 ». | MUST |
+| ABI-3.3 | Le code généré ne contient **aucun** `extern`, `#[repr]`, ni `unsafe` **pour un programme sans `extern`** ; pour un programme avec `extern`, il contient uniquement les déclarations `extern "C"` et un bloc `unsafe` par wrapper, vérifiable par `--emit-rust` et par l'audit backend. | MUST |
 
 ## 4. Contrat d'émission (backend)
 
@@ -97,9 +98,9 @@ fn main() { io::println("ok"); }
 
 ```text
 // NÉGATIF — le backend ne doit jamais produire :
-// unsafe { ... }
+// unsafe { ... }                 (sauf le wrapper d'une déclaration `extern`, un par fonction)
 // #[repr(C)]
-// extern "C" fn ...
+// extern "C" fn ...              (le code généré ne contient que des déclarations `extern`, pas de définition)
 // a + b + c  réassocié en (a + c) + b
 ```
 

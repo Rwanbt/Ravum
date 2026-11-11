@@ -376,24 +376,29 @@ impl Drop for Doc { fn drop(&mut self) { } }
 
 | ID | Règle | Niveau |
 |---|---|---|
-| OWN-10.1 | `unsafe`, les blocs `unsafe { }`, les pointeurs bruts (`*const T`, `*mut T`), `transmute`, `offset`, et toute opération non vérifiée sont **absents** : `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-UNSAFE`. | MUST |
-| OWN-10.2 | Il n'existe aucune frontière FFI : `extern`, `#[no_mangle]`, `libc` sont refusés (`E-UNSUPPORTED-EXTERN`). | MUST |
-| OWN-10.3 | Le code émis par le backend n'utilise que des constructions Rust **sûres** ; aucune `unsafe` n'est générée. | MUST |
-| OWN-10.4 | **Argument de conception (non prouvé)** : parce que (a) aucune référence ne survit à son instruction, (b) toute référence est exclusive ou partagée sans recouvrement, (c) aucun pointeur brut ni `unsafe` n'existe, un programme accepté ne peut pas produire d'aliasing non vérifié. Cette affirmation est un **argument**, pas un théorème ; elle ne doit jamais être publiée comme `PROVED`. | MUST |
-| OWN-10.5 | Corollaire : il n'y a **aucun** moyen d'exprimer une référence pendante, un double-free ou un use-after-free au niveau source ; ces fautes ne peuvent venir que d'un bug du compilateur ou du runtime (voir [`abi.md`](abi.md) §6). | MUST |
+| OWN-10.1 | `unsafe fn`, les pointeurs bruts (`*const T`, `*mut T`), `transmute`, `offset` et toute opération non vérifiée sont **absents** : `E-UNSUPPORTED-UNSAFE`. En revanche le **bloc** `unsafe { ... }` est supporté : il ajoute l'effet `unsafe` et reste transparent pour l'ownership (OWN-10.4), mais il n'ouvre **aucune** capacité nouvelle (pas de pointeur, pas de `transmute`). | MUST |
+| OWN-10.2 | La frontière FFI est limitée à `extern "C" { fn f(primitives); }` (FFI-1..7) : seules les primitives FFI-sûres traversent (`E-FFI-TYPE` sinon), l'ABI doit être `"C"` (`E-UNSUPPORTED-ABI` sinon), `#[no_mangle]`/`#[link]` sont refusés (`E-UNSUPPORTED-ATTR`), et un appel `extern` n'est admis que dans un bloc `unsafe` (`E-UNSAFE-CONTEXT`). Aucune bibliothèque arbitraire n'est liée : seuls les symboles déjà présents à l'édition de liens par défaut sont atteignables. | MUST |
+| OWN-10.3 | Le code émis pour un programme **sans `extern`** n'utilise que des constructions Rust **sûres** (`#![forbid(unsafe_code)]`). Un programme avec `extern` émet un wrapper `unsafe` par déclaration, sous `deny(unsafe_code)` : c'est le **seul** `unsafe` généré (ABI-4.9, audit `backend_audit`). | MUST |
+| OWN-10.4 | **Argument de conception (non prouvé)**, valable pour un programme **sans `extern`** : parce que (a) aucune référence ne survit à son instruction, (b) toute référence est exclusive ou partagée sans recouvrement, (c) aucun pointeur brut ni `unsafe` généré n'existe, un programme accepté ne peut pas produire d'aliasing non vérifié. Avec `extern`, la frontière FFI est une TCB externe : la bibliothèque C peut violer les invariants mémoire, et l'argument ne s'y applique pas. Cette affirmation est un **argument**, pas un théorème ; elle ne doit jamais être publiée comme `PROVED`. | MUST |
+| OWN-10.5 | Corollaire, pour un programme **sans `extern`** : il n'y a aucun moyen d'exprimer une référence pendante, un double-free ou un use-after-free au niveau source ; ces fautes ne peuvent venir que d'un bug du compilateur ou du runtime (voir [`abi.md`](abi.md) §6). Avec `extern`, une faute mémoire dans la bibliothèque C peut produire ces effets au niveau du processus, hors du modèle source. | MUST |
 
 ```rv
-// POSITIF — aucune unsafe n'est nécessaire
+// POSITIF — aucune unsafe n'est nécessaire pour un programme sûr
 fn f(v: &mut Vec<i32>) { v.push(1); }
+
+// POSITIF — bloc unsafe : effet `unsafe`, ownership inchangé, aucune capacité nouvelle
+fn g() { unsafe { } }
 ```
 
 ```rv
-// NÉGATIF — E-UNSUPPORTED-UNSAFE
-fn g() { unsafe { } }
-// NÉGATIF — E-UNSUPPORTED-UNSAFE
+// NÉGATIF — E-UNSUPPORTED-UNSAFE (pointeur brut et unsafe fn)
 fn h(p: *const i32) { }
-// NÉGATIF — E-UNSUPPORTED-EXTERN
-extern "C" { fn puts(s: *const u8) -> i32; }
+unsafe fn k() { }
+// NÉGATIF — E-FFI-TYPE (une String ne traverse pas la frontière scalaire)
+extern "C" { fn puts(s: String) -> i32; }
+// NÉGATIF — E-UNSAFE-CONTEXT (appel extern hors bloc unsafe)
+extern "C" { fn abs(x: i32) -> i32; }
+fn m() { let _ = abs(-1); }
 ```
 
 ## 11. Ordre de vérification (déterminisme des diagnostics)

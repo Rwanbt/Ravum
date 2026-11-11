@@ -43,7 +43,7 @@ Le design §5 énumère les limites de l'itération. Une liste en prose se perd 
 | Types récursifs infinis | `struct N { next: Option<N> }` | `E-TYP-RECURSIVE` (R) | types | `Vec<T>` (indirection interne) |
 | `str` seul | `fn f(s: str)` | `E-RES-UNKNOWN` | resolve | `&str` |
 | `Box<T>`, `Rc<T>`, `Cell<T>` | toute utilisation | `E-RES-UNKNOWN` | resolve | `String`/`Vec`/types nominaux |
-| Type `!` nommé en retour non divergent | `fn f() -> !` avec corps qui termine | `E-TYP-MISMATCH` | types | `!` réservé à `exit`/`panic` |
+| Type `!` nommé en retour non divergent | `fn f() -> !` avec corps qui termine | `E-TYP-RETURN` | types | `!` réservé à `exit`/`panic` |
 
 ```rv
 // NÉGATIF (cumul) — E-UNSUPPORTED-TRAIT, E-UNSUPPORTED-WHERE, E-UNSUPPORTED-ATTR
@@ -137,7 +137,7 @@ fn f(v: Vec<i32>) {
 | Import de variante | `use Option::Some;` | `E-RES-UNKNOWN` | resolve | qualifier à l'usage |
 | Import groupé | `use std::io::{print, println};` | `E-PARSE-UNEXPECTED` | parse | un `use` par nom/module |
 | `extern crate` | `extern crate foo;` | `E-UNSUPPORTED-EXTERN` | parse | `use foo::...` |
-| Bibliothèque du même package | binaire important `src/lib.rv` | `E-RES-UNKNOWN` | resolve | deux packages, ou dépendance locale |
+| Bibliothèque du même package | binaire important `src/lib.rv` | `E-MOD-BOTH-ROOTS` (les deux racines sont refusées) ; `E-RES-UNKNOWN` si le module importé n'existe pas | modules/resolve | deux packages, ou dépendance locale |
 | Dépendance distante | `git`, `registry`, `version` seule | `E-MOD-DEPENDENCY` (R) | modules | `path` local |
 | Registre public de packages | publication, téléchargement | `UNSUPPORTED` (aucune commande) | CLI | chemins locaux |
 | Plages de versions | `^1.2`, `~1`, `>=1` | `E-MOD-DEPENDENCY` (R) | modules | version exacte, chemin |
@@ -152,13 +152,13 @@ fn f(v: Vec<i32>) {
 
 | Fonctionnalité | Forme refusée / état | Manifestation | Alternative Core 1.0 |
 |---|---|---|---|
-| WASM | cible `wasm32`, export WASM | `UNSUPPORTED` (T9, selon temps) | natif uniquement |
+| WASM navigateur / composant | cible `wasm32-unknown-unknown`, export WASM, bindings JS | `UNSUPPORTED` (cible refusée par le CLI, exit 2) | natif ; `wasm32-wasip1` supporté séparément (`build`/`run` via Node WASI) |
 | GPU / accélérateurs | kernels, `gpu` effect | `UNSUPPORTED` (design §5) | CPU |
 | Mobile | cibles iOS/Android | `UNSUPPORTED` | desktop |
 | Embarqué / `no_std` | runtime absent | `UNSUPPORTED` (design §5) | runtime `std` |
 | Hard-RT certifié | WCET, plateforme qualifiée | `UNSUPPORTED` | `rt` expérimental |
-| LSP complet | protocole LSP | `UNSUPPORTED` explicite si absent (`lsp`) | `check --json` |
-| `--emit-ir` | IR propre | `UNSUPPORTED` explicite (voie C non qualifiée) | `--emit-rust` |
+| LSP complet (au-delà du sous-ensemble) | code actions, sémantique de tokens, signature help, workspace edits | non implémentés ; le serveur `lsp` existe (LSP 3.17 : cycle de vie, diagnostics, hover, définition, références, rename, complétion, symboles, formatage) | `check --json` pour l'analyse hors LSP |
+| IR propre (`--emit-ir`) | IR stable et contractuelle | non exposée : `--emit-ir` imprime un dump de faits de typage de débogage, non stable (ABI-4.9) | `--emit-rust` pour l'audit du code généré |
 | Débogueur intégré | DAP, breakpoints | `UNSUPPORTED` | journaux |
 | Formateur configurable | options `fmt` | partiel (LF + indentation) | `fmt` par défaut |
 | Couverture / profilage | instrumentation | `UNSUPPORTED` | mesures externes |
@@ -200,6 +200,6 @@ Ces éléments sont souvent supposés `UNSUPPORTED` à tort :
 
 - **Q-UNS-1 (résolue par le Lead)** — Tous les codes nécessaires sont désormais canoniques (`E-MOD-MANIFEST/DEPENDENCY/BUILD-SCRIPT/LOCK/BOTH-ROOTS/PATH-ESCAPE/RESERVED-NAME`, `E-OWN-IMMUTABLE`, `E-TYP-RECURSIVE/CONST`, `E-UNSUPPORTED-DROP-IMPL`) ; `E-RES-VISIBILITY` est remplacé par `E-RES-PRIVATE`. Aucun code réservé.
 - **Q-UNS-2 (résolue par le Lead)** — `static` et `type` sont **réservés** (`E-UNSUPPORTED-TOKEN` à l'usage) ; `ref`, `dyn`, `await` sont des **identifiants valides** : `dyn T` → `E-RES-UNKNOWN`, `x.await` → `E-RES-UNKNOWN`, `ref x` en pattern → `E-PARSE-EXPECTED`.
-- **Q-UNS-3** — Les fonctionnalités de plateforme (WASM, GPU, mobile, `no_std`) n'ont **aucun** code de diagnostic : elles sont absentes du CLI. Faut-il une sous-commande `ravum-lang targets` listant explicitement `UNSUPPORTED` pour éviter l'ambiguïté « ça n'existe pas » vs « ce n'est pas fait » ?
+- **Q-UNS-3** — Les fonctionnalités de plateforme (GPU, mobile, `no_std`, WASM navigateur) n'ont **aucun** code de diagnostic : elles sont absentes du CLI, ou refusées comme cible (`wasm32-unknown-unknown` → exit 2). `wasm32-wasip1` est supporté et n'est donc pas concerné. Faut-il une sous-commande `ravum-lang targets` listant explicitement `UNSUPPORTED` pour éviter l'ambiguïté « ça n'existe pas » vs « ce n'est pas fait » ?
 - **Q-UNS-4** — `impl Trait`, `dyn`, `where` sont refusés avec des codes distincts ; `Box`/`Rc` avec `E-RES-UNKNOWN`. Cette granularité hétérogène est-elle acceptable pour les agents qui réparent ? Recommandation : oui, mais le message doit toujours nommer la fonctionnalité.
 - **Q-UNS-5** — Le hot swap est `UNSUPPORTED` alors qu'il est un objectif produit (`docs/specs/03`). Il doit rester hors de `spec/language/` (c'est une propriété de runtime/daemon) ; à clarifier dans le design pour éviter une promesse implicite.
