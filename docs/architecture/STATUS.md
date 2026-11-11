@@ -46,7 +46,7 @@
 | MVP-0c / L4 — qualification | **Partiel** : **495 tests / 0 échec / 78 suites**, CI par impact (59 cas / 655 assertions, E2E navigateur déclenchés par impact et **vérifiés sur CI réelle** : runs + dispatch, +26–29 s), 10/10 E2E local+CI, 9 tests de stress DSP, reclassification des échecs transitoires, flake auto-GC corrigé, preuves de test opt-in et anonymisées, gate `fmt` ; CI produit+impact verte sur `8fc1345` ; CI par impact sur une vraie PR vers `dev` bloquée (`dev` sans crate) ; aucun prouveur externe (Kani bloqué, WSL indisponible) — [rapport](../mvp/MVP-0c-REPORT.md), [qualification](../mvp/MVP-0c-qualification.md) |
 | MVP-0c / L5 — intégration | **Avancé** : CLI `ravum unit-check` + `collab-cycle --protocol v2 --oracle unit-graph` (47 tests), **audit final `READY_FOR_HUMAN_REVIEW`** (0 bloquant, 0 secret, 0 conflit simulé), **gate `fmt` rustfmt 1.95 + toolchain épinglée**, **preuves anonymisées** (63 JSON, 0 chemin utilisateur), simulation de fusion rejouée (0 conflit, arbres documentés), rapport consolidé, sessions Obsidian, PR #82 draft ; **fusionné dans `dev`** le 9 novembre 2026 via une chaîne d'intégration propre (PR #83/#84/#85, `dev` = `6b0ac7b`), sans le commit d'outillage local `16b1ff2` ; aucun ADR accepté — [checklist](../mvp/MVP-0c-integration-checklist.md), [intégration](../mvp/INTEGRATION-0abc.md) |
 | Vérification bornée (M2) | `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
-| DSP de bloc (M3) | Démonstrateur : ABI de bloc, état possédé par l'hôte, swap sans verrou, crossfade optionnel ; **pas d'hôte audio réel** |
+| DSP de bloc (M3) | Démonstrateur : ABI de bloc, état possédé par l'hôte, swap sans verrou, crossfade optionnel ; **pas d'hôte audio réel dans ce démonstrateur** (l'hôte L4-C, distinct, est décrit plus haut) |
 | Verticale full-stack (M4) | Application témoin : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E API + **E2E navigateur** ; pas de TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | Protection de branches | **Appliquée** sur `main` et `dev` : PR requises (0 approbation), force push et suppression interdits, check `mvp` requis sur `main` (#77) |
@@ -68,20 +68,25 @@
 
 ## Ce qui reste non démontré (extrait)
 
-- Aucune garantie hard-RT, aucun XRUN mesuré, aucun hôte audio réel.
+- Aucune garantie hard-RT, aucun XRUN mesuré ; l'hôte audio de démonstration L4-C existe
+  (`waveOut`/WASAPI, MMCSS mesurés) mais n'est pas qualifié temps réel
+  ([audio réel](../mvp/MVP-0b-audio-host.md)).
 - Cible P0-A « diagnostic p95 < 50 ms sur code modifié » **non atteinte** ; cible
   « petit patch p95 < 500 ms » non re-mesurée de bout en bout.
 - Aucune preuve que le workspace partagé est plus productif que les worktrees avec de
   vrais agents LLM (S8 utilise des éditeurs scriptés ; tokens non mesurés).
-- Le groupement de patches (L2) n'est **pas implémenté** ; sa rentabilité mesurée est
-  conditionnelle (seuil `p*` = 27–68 % selon N) et le régime de conflits réel en
-  production n'est pas mesuré.
+- Le regroupement adaptatif de patches est **implémenté et mesuré** (MVP-0d, Lot C) ; le
+  Lot D (projets représentatifs) reste `NOT_RUN`. Sa rentabilité mesurée est conditionnelle
+  (seuil `p*` = 27–68 % selon N) et le régime de conflits réel en production n'est pas mesuré.
 - La campagne S8 avec de vrais agents et statistiques d'usage reste à exécuter ; la
   procédure est prête mais aucun token réel n'a encore été mesuré.
-- Le CLI ne branche pas encore l'analyse inter-crates ni l'oracle sémantique, et la CI
-  par impact n'a pas été exercée sur une vraie PR vers `dev` (`dev` sans crate).
-- `cargo fmt --check` n'est pas un gate : ~305 fichiers ne sont pas au format
-  rustfmt 1.95 (dérive de version), sans impact fonctionnel démontré.
+- Le CLI expose `ravum unit-check` et `collab-cycle --oracle unit-graph`
+  (MVP-0c / L5) ; l'oracle sémantique de contrats n'est pas branché. La CI par impact a
+  été exercée sur une vraie PR vers `dev` (PR #101, check `impact` vert) ; il manque une
+  campagne sur plusieurs PR réelles.
+- `cargo fmt --check` est un **gate bloquant** dans `mvp.yml` ; la dérive de formatage a été
+  corrigée (`ab51b17`, rustfmt 1.95 épinglé). Le nombre de fichiers concernés avant
+  correction (~305, chiffre du 9 novembre) n'est pas re-mesuré ici.
 - Aucun prouveur externe, aucune propriété générale, aucun certificat indépendant.
 - Aucune mesure de productivité humaine/agent jusqu'au livraison vérifié (P0-I).
 

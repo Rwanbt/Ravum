@@ -43,18 +43,19 @@ Commandes **réellement implémentées** (une commande non implémentée n'est p
 affichée dans `--help`, ou est listée `UNSUPPORTED` explicitement) :
 
 ```
-ravum-lang --version
+ravum-lang --version | --help | help [COMMAND]
 ravum-lang doctor [--json]
-ravum-lang init <dir> [--lib]
-ravum-lang check [PATH] [--json] [--profile core|pure|rt]
-ravum-lang build [PATH] [--release] [--emit-rust FILE] [--emit-ir]
-ravum-lang run [PATH] [-- ARGS...]
+ravum-lang init <dir> [--lib] [--force]
+ravum-lang check [PATH] [--json] [--profile core|pure|rt] [--locked]
+ravum-lang build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]
+ravum-lang run [PATH] [--target TRIPLE] [-- ARGS...]
+ravum-lang watch [PATH] [--run] [--release] [--max-rebuilds N]   (alias: `dev`)
 ravum-lang test [PATH] [--filter SUBSTR] [--json]
 ravum-lang fmt [PATH] [--check]
-ravum-lang lint [PATH] [--deny CODE]
+ravum-lang lint [PATH] [--deny CODE]...
 ravum-lang doc [PATH] [--out DIR]
-ravum-lang cache status|clean
-ravum-lang lsp            # si T7-LSP livré, sinon UNSUPPORTED explicite
+ravum-lang cache status|clean [PATH]
+ravum-lang lsp
 ```
 
 Codes de sortie : `0` succès ; `1` erreur de compilation/diagnostic ou test en
@@ -65,8 +66,9 @@ tableau selon la commande, jamais de couleur ni de bruit non structuré.
 
 ## 3. Surface du langage Core 1.0 (candidate)
 
-Fichier `.rv`, UTF-8 sans BOM, fins de ligne `\n` (les `\r\n` sont acceptés à la
-lecture et normalisés par `fmt`). Commentaires `//` et `/* ... */` (non imbriqués).
+Fichier `.rv`, UTF-8 (un BOM de tête est accepté et ignoré, LEX-2.2), fins de ligne `\n`
+(les `\r\n` sont acceptés à la lecture et normalisés par `fmt`). Commentaires `//` et
+`/* ... */` (non imbriqués).
 Identifiants ASCII `[A-Za-z_][A-Za-z0-9_]*` (identifiants Unicode : UNSUPPORTED
 en Core 1.0, erreur `E-UNSUPPORTED-IDENT`). Mots-clés réservés :
 `fn let mut const struct enum impl use pub mod match if else while loop for in
@@ -308,8 +310,8 @@ crates/ravum-lang-sema     résolution, types, exhaustivité, ownership, effets,
                            faits typés (CheckedProgram)
 crates/ravum-lang-codegen  Rust généré + prélude runtime
 crates/ravum-lang-cli      binaire `ravum-lang` (init/check/build/run/test/…)
-crates/ravum-lang-lsp      (T7, optionnel ; UNSUPPORTED explicite si absent)
-conformance/               corpus déclaratif exécuté par `ravum-lang conformance`
+crates/ravum-lang-lsp      serveur LSP 3.17 (sous-ensemble) ; `ravum-lang lsp`
+conformance/               corpus déclaratif exécuté par `ravum-conformance run`
 spec/language/             spécification candidate (DRAFT)
 ```
 
@@ -332,12 +334,19 @@ avant chaque item/instruction) pour l'audit ; `--emit-rust` l'écrit.
 
 ## 5. Limites explicites de cette itération (UNSUPPORTED, jamais silencieux)
 
-Traits/bornes/HRTB, closures, async/await, threads/atomiques, unsafe/pointeurs
-bruts/FFI, macros (déclaratives ou procédurales), réflexion, WASM, GPU, mobile,
-hard-RT certifié, hot reload général, LSP complet, registre public de packages,
-récursion de types infinie, `Drop` utilisateur, `where`, `dyn`, `impl Trait`,
-littéraux de byte, identifiants Unicode, ré-exports, alias d'import, glob,
-attributs. Chacun produit un diagnostic `E-UNSUPPORTED-*` explicite.
+Traits/bornes/HRTB, closures, async/await, threads/atomiques, `unsafe fn`/pointeurs
+bruts/`transmute`, FFI au-delà du sous-ensemble `extern "C"` scalaire, macros
+(déclaratives ou procédurales), réflexion, WASM navigateur (WASI `wasm32-wasip1`
+supporté séparément), GPU, mobile, hard-RT certifié, hot reload général, LSP
+complet (le sous-ensemble `ravum-lang lsp` est implémenté), registre public de
+packages, récursion de types infinie, `Drop` utilisateur, `where`, `dyn`,
+`impl Trait`, littéraux de byte, identifiants Unicode, ré-exports, alias d'import,
+glob, attributs.
+
+Les formes **de langage** listées ci-dessus produisent un diagnostic
+`E-UNSUPPORTED-*` explicite. Les **cibles** de plateforme non supportées (WASM
+navigateur, mobile, GPU) n'ont pas de code de diagnostic : le CLI refuse la cible
+(`exit 2`) ou ne l'expose pas (`unsupported.md` §7 et Q-UNS-3).
 
 ## 6. Gates de cette itération
 
