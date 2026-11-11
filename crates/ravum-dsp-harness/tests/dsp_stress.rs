@@ -1399,6 +1399,34 @@ fn concurrent_publications_render_whole_versions_only() {
 // `RAVUM_STRESS_EVIDENCE` names a path. This keeps `cargo test` free of repository writes.
 // ---------------------------------------------------------------------------------------
 
+/// UTC calendar date (`YYYY-MM-DD`) of the moment the evidence is written.
+///
+/// The evidence file must carry the date of its own run: a hard-coded constant
+/// silently back-dates every file, which is exactly the kind of stale evidence
+/// INV-08 forbids. No dependency is added: days since the Unix epoch are converted
+/// with Howard Hinnant's `civil_from_days` algorithm (proleptic Gregorian).
+fn utc_date() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0);
+    let days = seconds.div_euclid(86_400);
+
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // day of era, [0, 146096]
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let day = doy - (153 * mp + 2) / 5 + 1; // [1, 31]
+    let month = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
+    let mut year = yoe + era * 400;
+    if month <= 2 {
+        year += 1;
+    }
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 #[test]
 fn stress_evidence_campaign() {
     let _serial = serial();
@@ -1466,7 +1494,7 @@ fn stress_evidence_campaign() {
     let evidence = json!({
         "schema_version": 1,
         "kind": "dsp-stress-campaign",
-        "date": "2026-11-09",
+        "date": utc_date(),
         "tool": "cargo test -p ravum-dsp-harness --test dsp_stress",
         "profile": "test (debug)",
         "platform": std::env::consts::OS,

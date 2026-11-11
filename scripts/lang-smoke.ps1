@@ -31,14 +31,20 @@ function Record($case, $status, $detail) {
 }
 
 function Invoke-Case {
-    param([string]$Case, [string]$Dir, [string[]]$CmdArgs, [string]$ExpectStdout = "", [int]$ExpectExit = 0, [int]$TimeoutSec = 120)
+    param([string]$Case, [string]$Dir, [string[]]$CmdArgs, [string]$ExpectStdout = "", [int]$ExpectExit = 0, [int]$TimeoutSec = 120, [string]$Stdin = "")
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ravum-smoke-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     try {
         $work = if ($Dir) { $Dir } else { $tmp }
         $outFile = Join-Path $tmp "stdout.txt"
         $errFile = Join-Path $tmp "stderr.txt"
-        $p = Start-Process -FilePath $binPath -ArgumentList $CmdArgs -WorkingDirectory $work -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        $stdinArgs = @{}
+        if ($Stdin) {
+            $stdinFile = Join-Path $tmp "stdin.txt"
+            Set-Content -Path $stdinFile -Value $Stdin -NoNewline
+            $stdinArgs = @{ RedirectStandardInput = $stdinFile }
+        }
+        $p = Start-Process -FilePath $binPath -ArgumentList $CmdArgs -WorkingDirectory $work -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outFile -RedirectStandardError $errFile @stdinArgs
         $stdout = (Get-Content $outFile -Raw -ErrorAction SilentlyContinue) ?? ""
         $stderr = (Get-Content $errFile -Raw -ErrorAction SilentlyContinue) ?? ""
         if ($p.ExitCode -ne $ExpectExit) {
@@ -93,6 +99,38 @@ Run-Example "package-demo\app" "42"
 Run-Example "ffi-abs" "42"
 Invoke-Case "test:tests-demo" (Join-Path $root "examples\tests-demo") @("test") "passed" 0 | Out-Null
 Invoke-Case "fmt-check:hello" (Join-Path $root "examples\hello") @("fmt", "--check") "" 0 | Out-Null
+
+# --- file-store : verticale P2 adossée à des fichiers (pas une base de données) ---
+# Le répertoire du magasin doit exister : Core 1.0 n'a pas de `create_dir`.
+# Il est créé sous `examples/file-store/.ravum/` parce que le binaire tourne
+# depuis le `.ravum/bin` du paquet : sur cette machine de développement, un
+# processus lancé depuis un paquet ne peut écrire que dans ce paquet (confinement
+# de l'outillage, pas une règle Ravum — le même binaire copié sous `target/`
+# écrit ailleurs). Un répertoire temporaire hors paquet ferait donc échouer le
+# cas pour une raison d'environnement, pas pour un défaut du programme.
+Run-Example "file-store" "usage"
+$storeRoot = Join-Path $root "examples\file-store\.ravum\smoke-store"
+Remove-Item -Recurse -Force $storeRoot -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $storeRoot | Out-Null
+try {
+    $storeDir = Join-Path $root ("examples\file-store")
+    Invoke-Case "run:file-store-put-v1" $storeDir @("run", "--", $storeRoot, "put", "greeting") "stored greeting v1" 0 -Stdin "hello world" | Out-Null
+    Invoke-Case "run:file-store-get-v1" $storeDir @("run", "--", $storeRoot, "get", "greeting") "hello world" 0 | Out-Null
+    Invoke-Case "run:file-store-put-v2" $storeDir @("run", "--", $storeRoot, "put", "greeting") "stored greeting v2" 0 -Stdin "hello again" | Out-Null
+    # Nouveau processus : la valeur doit survivre au redémarrage.
+    Invoke-Case "run:file-store-get-v2" $storeDir @("run", "--", $storeRoot, "get", "greeting") "hello again" 0 | Out-Null
+    Invoke-Case "run:file-store-list" $storeDir @("run", "--", $storeRoot, "list") "greeting" 0 | Out-Null
+    Invoke-Case "run:file-store-history" $storeDir @("run", "--", $storeRoot, "history", "greeting") "v2" 0 | Out-Null
+    Invoke-Case "run:file-store-missing-key" $storeDir @("run", "--", $storeRoot, "get", "ghost") "" 1 | Out-Null
+    Invoke-Case "run:file-store-traversal" $storeDir @("run", "--", $storeRoot, "get", "../etc/passwd") "" 1 | Out-Null
+    if ((Test-Path (Join-Path $storeRoot "greeting.v2")) -and (Test-Path (Join-Path $storeRoot "greeting.v1"))) {
+        Record "run:file-store-versions" "PASS" ""
+    } else {
+        Record "run:file-store-versions" "FAIL" "les fichiers de version v1/v2 sont absents"
+    }
+} finally {
+    Remove-Item -Recurse -Force $storeRoot -ErrorAction SilentlyContinue
+}
 
 # --- échecs attendus (diagnostics) ---
 $badDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ravum-bad-" + [guid]::NewGuid().ToString("N"))
