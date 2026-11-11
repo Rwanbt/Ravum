@@ -528,7 +528,7 @@ impl<'a> OwnChecker<'a> {
                 self.loans.clear();
                 self.eval_value(tail);
                 if fn_body && self.is_nonstatic_ref(tail) {
-                    self.report_ref_escape(tail.span, "retourner");
+                    self.report_ref_escape(tail.span, "retournée");
                 }
                 self.loans.clear();
             }
@@ -568,7 +568,7 @@ impl<'a> OwnChecker<'a> {
                 .unwrap_or(Type::Error);
             let static_ref = ty.is_reference() && init_static;
             if ty.is_reference() && !static_ref {
-                self.report_ref_escape(stmt_span, "stocker");
+                self.report_ref_escape(stmt_span, "stockée");
             }
             let slot = self.declare_slot(&name.name, ty, static_ref, l.pat.span);
             let st = if has_init {
@@ -587,7 +587,7 @@ impl<'a> OwnChecker<'a> {
             if ty.is_reference() {
                 // Provenance of a reference extracted by a pattern cannot be
                 // proven static: refuse conservatively.
-                self.report_ref_escape(span, "stocker");
+                self.report_ref_escape(span, "stockée");
             }
             let slot = self.declare_slot(&name, ty, false, span);
             let st = if has_init {
@@ -720,7 +720,7 @@ impl<'a> OwnChecker<'a> {
                 self.eval_value(value);
                 let target_ty = self.expr_type(target);
                 if target_ty.is_reference() && self.is_nonstatic_ref(value) {
-                    self.report_ref_escape(value.span, "stocker");
+                    self.report_ref_escape(value.span, "stockée");
                 }
                 if let Some(place) = self.eval_place_expr(target) {
                     self.write_place(&place, target.span);
@@ -752,7 +752,7 @@ impl<'a> OwnChecker<'a> {
                 for item in items {
                     self.eval_value(item);
                     if self.is_nonstatic_ref(item) {
-                        self.report_ref_escape(item.span, "stocker");
+                        self.report_ref_escape(item.span, "stockée");
                     }
                 }
             }
@@ -782,7 +782,7 @@ impl<'a> OwnChecker<'a> {
                 for field in fields {
                     self.eval_value(&field.value);
                     if self.is_nonstatic_ref(&field.value) {
-                        self.report_ref_escape(field.value.span, "stocker");
+                        self.report_ref_escape(field.value.span, "stockée");
                     }
                 }
             }
@@ -817,7 +817,7 @@ impl<'a> OwnChecker<'a> {
                 if let Some(value) = value {
                     self.eval_value(value);
                     if self.is_nonstatic_ref(value) {
-                        self.report_ref_escape(value.span, "retourner");
+                        self.report_ref_escape(value.span, "retournée");
                     }
                 }
                 self.diverged = true;
@@ -984,7 +984,7 @@ impl<'a> OwnChecker<'a> {
             let mut arm_slots: Vec<SlotId> = Vec::new();
             for (name, ty, span) in bindings {
                 if ty.is_reference() {
-                    self.report_ref_escape(span, "stocker");
+                    self.report_ref_escape(span, "stockée");
                 }
                 let slot = self.declare_slot(&name, ty, false, span);
                 arm_slots.push(slot);
@@ -1154,7 +1154,7 @@ impl<'a> OwnChecker<'a> {
         let mut loop_slots: Vec<SlotId> = Vec::new();
         for (name, ty, span) in &bindings {
             if ty.is_reference() {
-                self.report_ref_escape(*span, "stocker");
+                self.report_ref_escape(*span, "stockée");
             }
             let slot = self.declare_slot(name, ty.clone(), false, *span);
             loop_slots.push(slot);
@@ -1283,7 +1283,7 @@ impl<'a> OwnChecker<'a> {
                     for arg in args {
                         self.eval_value(arg);
                         if self.is_nonstatic_ref(arg) {
-                            self.report_ref_escape(arg.span, "stocker");
+                            self.report_ref_escape(arg.span, "stockée");
                         }
                     }
                 } else {
@@ -1296,7 +1296,7 @@ impl<'a> OwnChecker<'a> {
                 for arg in args {
                     self.eval_value(arg);
                     if self.is_nonstatic_ref(arg) {
-                        self.report_ref_escape(arg.span, "stocker");
+                        self.report_ref_escape(arg.span, "stockée");
                     }
                 }
             }
@@ -1415,13 +1415,13 @@ impl<'a> OwnChecker<'a> {
                     if allow_ref_temporaries {
                         self.eval_value(arg);
                     } else {
-                        self.report_ref_escape(arg.span, "stocker");
+                        self.report_ref_escape(arg.span, "stockée");
                         self.eval_value(arg);
                     }
                 }
                 None => {
                     if !allow_ref_temporaries {
-                        self.report_ref_escape(arg.span, "stocker");
+                        self.report_ref_escape(arg.span, "stockée");
                     }
                     self.eval_value(arg);
                 }
