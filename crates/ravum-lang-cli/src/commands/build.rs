@@ -35,8 +35,14 @@ pub fn run(
     };
     match pipeline::compile_program(&frontend, &options) {
         Ok(artifacts) => {
+            // The documented user-facing paths come first (`.ravum/gen/main.rs`,
+            // `.ravum/bin/<name>`), then the build identity that produced them and
+            // the manifest a caller can use to verify artifact ↔ sources.
             println!("generated: {}", util::pretty_path(&artifacts.generated));
             println!("built: {}", util::pretty_path(&artifacts.binary));
+            println!("identity: {}", artifacts.identity.digest);
+            println!("manifest: {}", util::pretty_path(&artifacts.manifest));
+            println!("isolated: {}", util::pretty_path(&artifacts.build_dir));
             util::EXIT_OK
         }
         Err(error) => {

@@ -77,6 +77,33 @@ pub fn write_bytes_atomic(path: &Path, contents: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Publish `source` at `target` with a single atomic rename.
+///
+/// Both paths must live on the same volume (the isolated build directory is
+/// created under `<package>/.ravum/build/`, i.e. inside the package). Platform
+/// limits, measured rather than assumed:
+/// * Windows: `fs::rename` is `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING)`. It
+///   replaces an existing file atomically, but it fails while the previous
+///   artifact is memory-mapped/running (a running `.exe` cannot be replaced);
+///   the previous artifact is then left untouched and the error is reported.
+/// * Unix: `rename(2)`, atomic within a filesystem.
+/// * There is deliberately **no** copy fallback: a copy would publish a partial
+///   file, so a cross-volume rename is reported as an error instead of silently
+///   weakening the publication guarantee.
+pub fn publish_rename(source: &Path, target: &Path) -> Result<(), String> {
+    let parent = target.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent).map_err(|e| format!("cannot create `{}`: {e}", parent.display()))?;
+    fs::rename(source, target).map_err(|e| {
+        format!(
+            "cannot publish `{}` as `{}`: {e}; the previously published artifact, if any, was \
+             left untouched (a rename never crosses volumes and Windows refuses to replace a \
+             running executable)",
+            source.display(),
+            target.display()
+        )
+    })
+}
+
 /// Resolve the package root used by `cache`/`doctor`: the first ancestor of
 /// `start` (directories only) that contains `ravum.toml`, else `start`.
 pub fn find_package_root(start: &Path) -> PathBuf {
@@ -132,7 +159,12 @@ pub fn ensure_cache_dir(root: &Path) -> Result<PathBuf, String> {
             cache.display()
         ));
     }
-    Ok(canonical_cache)
+    // Return the *non-verbatim* form: on Windows `fs::canonicalize` yields a
+    // `\\?\C:\...` path, and the MSVC linker (`link.exe`, which rustc spawns)
+    // mis-parses verbatim paths in some positions ("LNK1181: cannot open input
+    // file '.obj'"). The canonical form is only needed for the containment check
+    // above, which is already done.
+    Ok(strip_verbatim(&canonical_cache))
 }
 
 /// Collect every `.rv` file under `dir` (sorted, symlinks refused).
