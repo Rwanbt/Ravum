@@ -12,7 +12,7 @@
 | ABI-1.1 | Core 1.0 **ne définit aucun ABI public stable** : ni convention d'appel, ni disposition mémoire, ni nommage de symboles, ni format de bibliothèque. | MUST |
 | ABI-1.2 | Aucun artefact binaire n'est **destiné** à être lié par un autre langage, un autre compilateur, ou une version différente de Ravum. | MUST |
 | ABI-1.3 | Le seul « ABI » existant est **interne et privé** : la forme du fichier Rust généré, qui n'est pas un contrat et peut changer à chaque version. | MUST |
-| ABI-1.4 | Toute affirmation d'ABI stable, de compatibilité binaire, ou d'interopérabilité native en Core 1.0 est **fausse** et doit être refusée dans une revue. | MUST |
+| ABI-1.4 | Toute affirmation d'ABI stable ou de compatibilité binaire en Core 1.0 est **fausse** et doit être refusée dans une revue. L'interopérabilité native se limite au sous-ensemble FFI scalaire expérimental (§3) : pas de layout exposé, pas de symbole Ravum exporté, aucune garantie de version. | MUST |
 
 ### Pourquoi
 
