@@ -1118,3 +1118,78 @@ de la passe 8. **`P0-A` reste `PARTIAL`** tant qu'elles existent.
 La couverture baisse par rapport au chiffre publié en passe 5 (89,2 % / 88,6 %,
 `typeck.rs` 93,8 %) : du code a été ajouté depuis. La baisse est **rapportée, pas
 atténuée** ; la marge la plus mince est `check.rs` (80,26 % pour un seuil à 80).
+
+## 24. Passe 9 — les deux dernières variantes sont fermées (2026-11-11)
+
+> **Base : `000708f`.** Commit `21cf7d4` (planificateur + test `rustc` + trois cas
+> de corpus). Windows 11 x86-64, `rustc 1.95.0`.
+
+### 24.1 Ce qui était faux
+
+Les deux variantes de la §23.3 n'étaient pas un défaut de sémantique : le
+planificateur ne formait un groupe de descentes que si chacune était une
+**instruction directe** du bloc du binder. Deux branches d'un `if` et un bloc
+imbriqué n'ont pas d'instruction commune dans ce bloc, donc aucun hiss n'était
+possible et le formulaire indexé restait (`a[0usize].0[1usize]`, `E0508`).
+
+### 24.2 La correction
+
+Un groupe est désormais formé par **place** et ancré sur la **plus ancienne
+instruction du bloc du binder** qui contient une descente. Le déstructurage de
+niveau 0 est émis juste avant cette instruction :
+
+* les liaisons sont visibles par tout ce qui est imbriqué dans l'instruction
+  d'ancrage (les deux branches de la variante (a), le bloc imbriqué de (b)) ;
+* elles le sont aussi par les instructions **suivantes** du même bloc, donc le
+  hiss partagé des instructions sœurs (§23.2) reste unique ;
+* une utilisation dans une instruction **antérieure** du même bloc voit encore la
+  place intacte : elle est laissée telle quelle si elle lit, et elle **refuse** le
+  groupe si elle déplace ;
+* les corps de boucle restent exclus : un hiss y déstructurerait la même place à
+  chaque itération.
+
+### 24.3 Mesure avant / après
+
+| Variante | `000708f` | `21cf7d4` |
+|---|---|---|
+| (a) deux branches distinctes | `check` 0 / `build` 1 (`E0508`) | `build` 0, exécution `x1` puis `y0` |
+| (b) deux descentes dans un bloc imbriqué | `check` 0 / `build` 1 (`E0508`) | `build` 0, exécution `y0` puis `x1` |
+
+Ces deux mesures sont reproduites par
+`conformance/cases/run/array-move-branch-descents` et
+`conformance/cases/run/array-move-nested-descents`, et par le test
+`audit_branch_and_nested_descent_hoists_build_and_run` qui compile réellement le
+Rust généré, l'exécute et vérifie que le déstructurage est émis **avant** le
+`if`.
+
+Un troisième cas, `run/array-move-read-order`, verrouille la règle d'ordre :
+lecture avant l'ancre laissée en place (place intacte), lecture après réécrite
+vers le slot, y compris quand le binder est déclaré dans un bloc imbriqué.
+
+### 24.4 Une régression attrapée par la suite, pas par la CI
+
+La première version du correctif groupait par **instruction d'ancrage**, ce qui
+séparait deux descentes situées dans des instructions sœurs d'un même bloc et
+rouvrait `E0508` sur `array-move-shared-descent` (fermé en passe 8). Le test
+`audit_shared_descent_slot_hoist_builds_and_runs` l'a rejetée immédiatement ; le
+regroupement se fait désormais par place. C'est l'argument pour garder des tests
+qui compilent réellement : le correctif « évident » cassait une forme fermée.
+
+### 24.5 Mesures de la passe 9
+
+| Mesure | Résultat |
+|---|---|
+| Tests workspace (`cargo test --workspace`) | **113 suites, 1537 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance + build (`run --verify-build`) | **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; périmètre **195**, couverts **195**, vérifiés **120**, implicites **75**, échoués **0** ; `build_verified: true` |
+| Corpus | **453 → 456 cas**, `perimeter` **192 → 195** (trois cas `run/array-move-*`) |
+| Formes `check`-pass / `build`-fail ouvertes connues | **0** |
+| Couverture, reproductibilité, mutation | **non re-mesurées** : aucune n'est affectée par ce changement, aucune n'est revendiquée ici |
+
+### 24.6 Ce que cela ne prouve pas
+
+Zéro variante connue ouverte ne veut pas dire zéro divergence : le corpus ne
+teste que ce qu'il contient, et la §10 du contrat de conformance rappelle ce
+qu'un run vert signifie exactement. `P0-A` est vert **sur son périmètre mesuré**
+et l'invariant général reste une observation outillée. `T2` reste `PARTIAL` pour
+la raison indépendante du dénominateur MUST (807 énoncés, 463 atteignables) —
+décision **D10**.

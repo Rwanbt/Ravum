@@ -404,3 +404,45 @@ Traçabilité et registre inchangés (188/188 ; 108 codes, 126 émis ; MUST 463/
 **Non prouvé, inchangé.** Audit externe (D4), signature (D9), release,
 reproductibilité inter-machines, campagne de mutation non rejouée (workflow absent
 de la branche par défaut), fuzz complet non rejoué, macOS/ARM, hard-RT.
+
+## Passe 9 — les deux dernières divergences de move sont fermées (2026-11-11, `21cf7d4`)
+
+**Base** : `000708f` (passe 8 poussée, CI 14/14 verte). **Commit unique** :
+`21cf7d4` — planificateur de places de tableau, test `rustc`-vérifié, trois cas
+de corpus.
+
+**Défaut.** Les deux variantes encore ouvertes après la passe 8 — descentes de
+projection dans deux branches distinctes d'un `if`/`else`, et deux descentes dans
+un même bloc imbriqué — étaient acceptées par `check` et refusées par `build`
+(`E0508`, bruyant, jamais de valeur fausse). Cause : le planificateur ne formait
+un groupe de descentes que si chacune était une instruction *directe* du bloc du
+binder, donc aucun hiss n'était possible.
+
+**Correction.** Un groupe est formé par place et ancré sur la plus ancienne
+instruction du bloc du binder qui contient une descente ; le déstructurage est
+émis juste avant elle. Les liaisons sont donc visibles par tout ce qui est
+imbriqué dans cette instruction (les deux branches, le bloc imbriqué) et par les
+instructions suivantes du même bloc. Une utilisation antérieure du même bloc voit
+la place intacte (laissée si lecture, refuse le groupe si déplacement). Les corps
+de boucle restent exclus.
+
+**Mesures (Windows 11 x64, `rustc 1.95.0`).** `cargo test --workspace` :
+**113 suites, 1537 passés / 0 échec / 2 ignorés**. Conformance build-vérifiée :
+**456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN**, `perimeter=195 covered=195
+verified=120 implicit=75 failed=0`, `build_verified: true` — contre 453 cas /
+`perimeter 192` à la passe 8. **Aucune forme `check`-pass / `build`-fail ouverte
+connue.** Couverture, reproductibilité, SBOM, provenance et mutation :
+**non re-mesurés** dans cette passe (aucune n'est affectée par ce changement,
+aucune n'est revendiquée ici ; la CI les rejoue).
+
+**Une régression attrapée par la suite, pas par la CI.** La première version
+groupait par instruction d'ancrage et rouvrait `E0508` sur une forme déjà fermée
+(`array-move-shared-descent`) ; le test existant l'a rejetée, le regroupement par
+place la garde fermée. C'est pourquoi les tests compilent réellement le Rust
+généré.
+
+**Non prouvé, inchangé.** Zéro forme connue ouverte ne prouve pas l'absence de
+formes inconnues : `P0-A` est vert sur son périmètre mesuré, pas l'invariant
+général. Audit externe (D4, T4/T12 `BLOCKED`), signature (D9), release,
+reproductibilité inter-machines, mutation et fuzz complet non rejoués, `T2`
+reste `PARTIAL` (D10, 463/807 MUST).

@@ -82,12 +82,21 @@ ravum-conformance run --verify-build --json target/conformance-report.json
 → total=453 pass=452 fail=0 skip=1 not_run=0
 → build: perimeter=192 covered=192 verified=120 implicit=72 failed=0 environment=0 not_measured=0
 → build_verified: true
+
+# passe 9, SHA 21cf7d4 (local)
+ravum-conformance run --verify-build --json target/conformance-report.json
+→ total=456 pass=455 fail=0 skip=1 not_run=0
+→ build: perimeter=195 covered=195 verified=120 implicit=75 failed=0 environment=0 not_measured=0
+→ build_verified: true
 ```
 
 La conformance Windows n'est plus seulement locale : elle est **rejouée par la
 CI** depuis la passe 8 (§3.2, `qualification-evidence.yml`), qui produit le même
 verdict sur `abe7d88` (453 cas, `perimeter 192`). Les mesures locales ci-dessus
-restent datées par SHA — ne pas les fusionner en une seule phrase.
+restent datées par SHA — ne pas les fusionner en une seule phrase. Le run de la
+passe 9 (`456 cas`, `perimeter 195`) n'est **pas** encore couvert par un run CI
+observé : la ligne CI de la matrice reste celle de la passe 8 jusqu'au prochain
+run vert.
 
 ### 2.2 WASI — commande et sortie exactes
 

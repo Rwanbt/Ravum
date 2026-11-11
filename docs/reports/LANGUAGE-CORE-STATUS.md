@@ -1,14 +1,30 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour passe 9 — 2026-11-11, commit `21cf7d4`.** Les **deux dernières
+> variantes `check`-pass / `build`-fail connues** sont **fermées** : descentes de
+> projection dans deux branches distinctes d'un `if`/`else`, et deux descentes
+> dans un même bloc imbriqué. Le planificateur ancre désormais le déstructurage
+> sur la plus ancienne instruction du bloc du binder qui contient une descente,
+> au lieu d'exiger des instructions directes. **Aucune forme ouverte connue**
+> (contre 2 à la passe 8) — `P0-A` est vert **sur son périmètre mesuré**, pas
+> l'invariant général. Mesures : **113 suites, 1537 passés / 0 échec /
+> 2 ignorés** ; conformance **456 cas, 455 PASS / 0 FAIL / 1 SKIP**, build
+> vérifié **195/195** (120 vérifiés, 75 implicites, 0 échec),
+> `build_verified: true` ; couverture, reproductibilité, SBOM et mutation
+> **non re-mesurés** dans cette passe (aucune n'est affectée, aucune n'est
+> revendiquée). Registre **108 codes / 126 émis**, FeatureIds **188/188**,
+> **MUST 463/807** (T2 reste `PARTIAL`, D10). Gates : **4 PASS / 7 PARTIAL /
+> 2 BLOCKED** (T4/T12 exigent l'audit externe et le Go/No-Go humains).
+
 > **Mise à jour passe 8 — 2026-11-11, commit `7696e2a`.** Les **six dernières
 > formes `check`-pass / `build`-fail connues** sont fermées sauf deux variantes
 > bruyantes : index dynamique imbriqué, racine non-place (`make()[i]`,
 > `a[0].0[1]`, `self.items[0]`), plusieurs accès dans un bras de `match` en
 > expression, récepteur builtin *by value* (`a[0].unwrap()`), descentes multiples
-> sur des éléments différents, base relue après la descente. Il reste
+> sur des éléments différents, base relue après la descente. Il restait
 > **deux variantes** (`E0508` bruyant, jamais de valeur fausse) : descentes dans
 > deux branches distinctes, et deux descentes dans un même bloc imbriqué —
-> **`P0-A` reste donc `PARTIAL`**, jamais `PASS`. Mesures : **113 suites,
+> **fermées en passe 9**. Mesures : **113 suites,
 > 1536 passés / 0 échec / 2 ignorés** ; conformance **453 cas, 452 PASS / 0 FAIL
 > / 1 SKIP**, build vérifié **192/192** (120 vérifiés, 72 implicites, 0 échec),
 > `build_verified: true` ; couverture sema re-mesurée **88,94 % lignes / 88,46 %

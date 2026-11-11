@@ -6,10 +6,50 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 quinquies** ci-dessous porte la passe du
-> **2026-11-11 (passe 8, SHA `7696e2a`)** et **prévaut pour les chiffres courants** ;
-> la section 0 quater est la passe 7 (`c6b4537`), la section 0 ter la passe 6
+> (SHA `a277b86`). La **section 0 sexies** ci-dessous porte la passe du
+> **2026-11-11 (passe 9, SHA `21cf7d4`)** et **prévaut pour les chiffres
+> courants** ; la section 0 quinquies est la passe 8 (`7696e2a`), la section
+> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6
 > (`5d88ecb` → `9da9b12`).
+
+## 0 sexies. Addendum passe 9 — les deux dernières divergences de move sont fermées (2026-11-11, SHA `21cf7d4`)
+
+Cette section **prévaut sur 0 quinquies et sur toutes les suivantes** pour les
+chiffres courants. Elle porte sur une seule chose : les deux formes
+`check`-pass / `build`-fail qui restaient ouvertes après la passe 8 sont
+fermées.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace` | **113 suites, 1537 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance (`run --verify-build`) | **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **195/195** couverts, **120** vérifiés, **75** implicites, **0 échec**, `build_verified: true` |
+| Formes `check`-pass / `build`-fail ouvertes connues | **0** (contre 2 à la passe 8) |
+| Tests ajoutés | 1 test `rustc`-vérifié (compile + exécute + vérifie que le déstructurage est émis avant le `if`) et 3 cas de corpus (`run/array-move-branch-descents`, `-nested-descents`, `-read-order`) |
+| Couverture sema | **non re-mesurée** : la mesure de la passe 8 (88,94 % lignes / 88,46 % régions) porte sur `ravum-lang-sema`, que cette passe ne modifie pas ; aucun seuil modifié |
+| Reproductibilité, SBOM, provenance, installateur | **non re-mesurés** dans cette passe ; les chiffres de la passe 8 restent les derniers mesurés, et la CI les rejoue (`qualification-evidence.yml`) |
+| Traçabilité FeatureId | **188/188** (inchangée) |
+| Registre des codes | **108** codes enregistrés / **126** émis / 0 hors registre |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` est désormais vert **sur son périmètre mesuré** (aucune forme ouverte connue) et `T2` reste `PARTIAL` pour la raison indépendante du dénominateur MUST (D10) |
+
+Ce qui a changé, et ce que cela ne prouve pas :
+
+* **Le défaut était dans le planificateur, pas dans le langage** : il ne groupait
+  que les descentes qui étaient des instructions *directes* du bloc du binder,
+  donc ni deux branches d'un `if` ni un bloc imbriqué n'avaient d'ancre de
+  déstructurage. L'ancre est maintenant la plus ancienne instruction du bloc du
+  binder qui contient une descente, ce qui couvre les deux formes **et** garde le
+  hiss partagé des instructions sœurs.
+* **La suite complète a attrapé une régression que la CI n'aurait pas vue** : la
+  première version groupait par instruction d'ancrage et rouvrait `E0508` sur une
+  forme déjà fermée (`array-move-shared-descent`). Le test existant l'a rejetée
+  immédiatement ; c'est l'argument pour les tests `rustc`-vérifiés.
+* **Zéro forme connue ouverte n'est pas « aucune divergence »** : le corpus ne
+  teste que ce qu'il contient. `P0-A` est vert sur son périmètre (456 cas,
+  `perimeter 195` entièrement couvert) et l'invariant général reste une
+  observation outillée, pas une preuve formelle.
+* **Ce que cette passe ne prouve pas** : pas d'audit externe (D4, T4/T12 restent
+  `BLOCKED`), pas de re-mesure de couverture, de reproductibilité ou de mutation
+  — aucune n'est revendiquée —, et `T2` reste `PARTIAL` (D10).
 
 ## 0 quinquies. Addendum passe 8 — preuves continues et véracité documentaire (2026-11-11, SHA `7696e2a`)
 

@@ -1,9 +1,19 @@
 # Contrat `check ⇒ build` du corpus de conformance (P0-A)
 
-> **Statut : contrat outillé et bloquant, mesure honnête.** Ce document définit
+> **Statut : contrat outillé et bloquant, mesure honnête ; porte verte sur son
+> périmètre depuis la passe 9.** Ce document définit
 > ce que le drapeau `--verify-build` mesure, sur quel périmètre, et ce qu'il ne
 > prouve **pas**. Aucun chiffre n'est estimé : la section « État mesuré » cite
 > la commande exacte, le commit, la toolchain et le rapport JSON produits.
+>
+> **Mesure courante (passe 9, `21cf7d4`, Windows 11 x64, rustc 1.95.0)** :
+> **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN**,
+> `build: perimeter=195 covered=195 verified=120 implicit=75 failed=0
+> environment=0 not_measured=0`, `build_verified: true`. **Zéro forme
+> `check`-pass / `build`-fail ouverte connue** : les huit familles trouvées
+> pendant P0-A sont fermées, chacune avec un test `rustc`-vérifié et un cas de
+> corpus. Cela reste une observation sur ce corpus, ce commit et cette
+> toolchain — jamais une preuve sur *tous* les programmes (§10).
 
 ## 1. La règle
 
@@ -362,38 +372,36 @@ que la spec exige `E-OWN-REF-ESCAPE` — a été **corrigé pendant la session**
 P0-F et est désormais figé par le cas négatif
 `ownership/ref-field-escape-fail`.
 
-## 9. Divergences connues — état au commit `7696e2a`
+## 9. Divergences connues — état au commit `21cf7d4`
 
 Le corpus build-vérifié **ne prouve pas** l'absence de divergences en dehors de
-lui. Cette section liste les formes `check`-pass / `build`-fail connues.
+lui. Cette section liste les formes `check`-pass / `build`-fail connues : **il
+n'en reste aucune** à ce commit.
 
-**Les cinq formes (a)–(e) de cette section sont fermées** (commit `0f73738`).
-Les **quatre formes restantes de la passe 7** — index dynamique dans un tableau
-imbriqué, racine de chaîne qui n'est pas une place, plusieurs accès dans un bras
-de `match` en corps d'expression, récepteur *by value* d'une méthode builtin —
-sont fermées par `5268838`. Les **deux formes signalées à la revue de la passe
-8** — plusieurs descentes de projection sur des éléments différents du même
-tableau, base relue après la descente — sont fermées par `d693162`. Toutes
-passent `check` **et** `build`, ont un test `rustc`-vérifié dans
-`crates/ravum-lang-codegen/tests/backend_audit.rs` et un cas de corpus
-`conformance/cases/run/array-move-*`. Les reproducers restent ci-dessous comme
-archive de la mesure rouge et de la preuve de fermeture.
+**Les huit familles trouvées pendant P0-A sont fermées**, chacune par un commit,
+un test `rustc`-vérifié (compilation réelle + exécution + valeur) et un cas de
+corpus `conformance/cases/run/array-move-*` :
 
-**Deux formes restent ouvertes** au commit `7696e2a`, toutes deux `check` exit 0 /
-`build` exit 1 avec un `E0508` **bruyant** (jamais de miscompile silencieux,
-aucune sémantique modifiée). Elles ne sont pas dans le corpus : les ajouter en
-`compile-fail` serait faux (la spec les accepte) et en `compile-pass` rendrait la
-porte rouge pour un élément ouvert déjà identifié. Aucun test ne verrouille le
-défaut.
+| Famille | Fermée par |
+|---|---|
+| cinq formes de la passe 6 (références stockées/retournées, moves après `unwrap`, tableaux annotés, exhaustivité imbriquée, moves d'éléments de tableau) | passe 6 |
+| `a[0][1]`, `h.items[0]`/`t.0[0]`, liaison masquée par un shadowing imbriqué, récepteur de méthode `self` par valeur sur élément, payload de tableau dans un bras de `match` | passe 7 (`0f73738`) |
+| index dynamique dans un tableau imbriqué, racine de chaîne qui n'est pas une place, plusieurs accès dans un bras de `match` en corps d'expression, récepteur *by value* d'une méthode builtin | passe 8 (`5268838`) |
+| plusieurs descentes de projection sur des éléments différents, base relue après la descente | passe 8 (`d693162`) |
+| descentes dans **deux branches distinctes** d'un `if`/`else`, **deux descentes dans un même bloc imbriqué** | passe 9 (`21cf7d4`) |
 
-| Forme restante | Repro | Raison |
-|---|---|---|
-| descentes de projection dans **deux branches distinctes** (`if`/`else`) | §9 ter (a) | le hiss partagé exige une instruction du bloc du binder qui précède *tous* les usages ; deux branches n'ont pas d'ancêtre commun qui les domine |
-| deux descentes dans un **même bloc imbriqué** | §9 ter (b) | le plan ne suit pas l'identité de bloc : il ne peut pas prouver qu'un ancêtre domine un usage d'une autre branche, donc il n'ouvre pas de groupe pour un bloc imbriqué |
+Les reproducers des deux dernières formes restent en §9 ter comme archive de la
+mesure rouge et de sa fermeture, et leurs cas de corpus
+(`run/array-move-branch-descents`, `run/array-move-nested-descents`) les
+verrouillent.
 
-C'est la raison pour laquelle `P0-A` reste `PARTIAL` : la porte est mesurée et
-bloquante sur son périmètre (**453 cas, `perimeter 192`, `build_verified: true`**
-au commit `7696e2a`), mais elle ne couvre pas ces deux formes.
+**Ce que « zéro forme ouverte connue » ne dit pas.** Une forme *inconnue* reste
+possible : le corpus ne teste que ce qu'il contient, et la section 10 rappelle ce
+qu'un run vert signifie exactement. La porte `P0-A` est donc verte **sur son
+périmètre mesuré** — aucun cas accepté du périmètre n'échoue au `build`, tout le
+périmètre est réellement mesuré, et aucune forme connue ne reste ouverte — et
+l'invariant général (tout programme accepté par `check` est accepté par `build`)
+reste une propriété mesurée, pas une preuve formelle.
 
 ### (a) chaîne de tableaux imbriqués
 
@@ -508,11 +516,14 @@ de codegen-pipeline (13:49:40). C'est une **régression collatérale** du travai
 D12, routée ; elle reste hors corpus jusqu'au correctif. Le cas
 `ownership/enum-array-payload-move-pass` a été retiré pour cette raison.
 
-## 9 ter. Les deux formes encore ouvertes (mesurées le 2026-11-11)
+## 9 ter. Les deux dernières formes : mesurées rouges, puis fermées
 
 Reproduites sur `7696e2a` (Windows 11 x64, rustc 1.95.0) : `check` exit 0,
 `build` exit 1, `error[E0508]: cannot move out of type
-[([String; 2], i32); 2], a non-copy array`.
+[([String; 2], i32); 2], a non-copy array`. **Fermées par `21cf7d4`** : à ce
+commit les deux programmes construisent, s'exécutent et impriment la valeur
+attendue, et les cas `run/array-move-branch-descents` /
+`run/array-move-nested-descents` les verrouillent.
 
 ### (a) descentes de projection dans deux branches distinctes
 
@@ -525,10 +536,11 @@ fn main() {
 }
 ```
 
-Le code généré conserve `let x: String = a[0usize].0[1usize];` (et
-symétriquement `a[1usize].0[0usize]`) : le hiss partagé n'est ouvert que pour des
-descentes en instructions **directes** du bloc du binder, parce qu'il doit être
-émis avant le premier usage. Aucune instruction ne précède les deux branches.
+Le code généré conservait `let x: String = a[0usize].0[1usize];` (et
+symétriquement `a[1usize].0[0usize]`) : le hiss partagé n'était ouvert que pour
+des descentes en instructions **directes** du bloc du binder, parce qu'il doit
+être émis avant le premier usage. Aucune instruction ne précède les deux
+branches.
 
 ### (b) deux descentes dans un même bloc imbriqué
 
@@ -542,15 +554,31 @@ fn main() {
 }
 ```
 
-Un ancêtre valide existerait (première instruction du bloc `if`), mais le plan ne
-suit pas l'identité de bloc et ne peut donc pas prouver qu'il domine les usages ;
-le formulaire indexé reste et rustc le rejette.
+Un ancêtre valide existait (première instruction du bloc `if`), mais le plan ne
+suivait pas l'identité de bloc et ne pouvait donc pas prouver qu'il domine les
+usages ; le formulaire indexé restait et rustc le rejetait.
 
-Fermer ces deux formes demande de suivre une identité de bloc dans le *walker*
-puis de valider la dominance (estimation : une quinzaine de lignes plus les
-tests) ; ce n'était pas dans le budget de la passe 8. Les deux formes sont
-bruyantes : jamais de valeur fausse, seulement un refus de `build` après un
-`check` accepté.
+### La correction (`21cf7d4`)
+
+Un groupe de descentes est désormais formé par **place** et ancré sur la *plus
+ancienne* instruction du bloc du binder qui contient une descente. Le
+déstructurage est émis juste avant elle, donc les liaisons sont visibles par tout
+ce qui est imbriqué dans cette instruction (les deux branches de (a), le bloc
+imbriqué de (b)) et par les instructions suivantes du même bloc. Une utilisation
+dans une instruction **antérieure** du même bloc voit encore la place intacte :
+elle est laissée telle quelle si elle lit, et elle refuse le groupe si elle
+déplace. Les corps de boucle restent exclus (un hiss y déstructurerait la même
+place à chaque itération).
+
+Trois cas de corpus couvrent la règle : `run/array-move-branch-descents`,
+`run/array-move-nested-descents` et `run/array-move-read-order` (lecture avant
+l'ancre laissée en place, lecture après l'ancre réécrite vers le slot, y compris
+quand le binder est déclaré dans un bloc imbriqué). Un test
+`backend_audit.rs` compile réellement les deux formes avec `rustc` et vérifie que
+le déstructurage est émis **avant** le `if`.
+
+Aucun changement de sémantique : les deux formes étaient refusées par `build`
+après un `check` accepté, jamais mal compilées.
 
 ## 10. Interprétation
 
@@ -571,3 +599,13 @@ F1 (récepteur de méthode) et F2 (payload de `match`, régression) restent
 ouvertes et hors corpus. Cette observation est liée au binaire `923D413D…` ;
 tout rebuild de la toolchain invalide la re-mesure tant que la commande n'est
 pas rejouée.
+
+Mesure de la passe 9 (`21cf7d4`, Windows 11 x64, `rustc 1.95.0`) :
+`build_verified=true` sur **456 cas** — `total=456 pass=455 fail=0 skip=1
+not_run=0`, `perimeter=195 covered=195 verified=120 implicit=75 failed=0
+environment=0 not_measured=0`, `scripts` de la porte CI inchangés. Les deux
+formes de la §9 ter construisent désormais, ont leur cas de corpus et leur test
+`rustc`-vérifié. Le corpus est passé de 453 à 456 cas et de `perimeter 192` à
+`195` ; le cas `SKIP` est hors périmètre (ignoré sur cet OS par construction).
+**Aucune forme `check`-pass / `build`-fail n'est ouverte connue à ce commit** —
+ce qui reste une observation sur ce corpus, pas une preuve universelle.
