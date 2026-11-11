@@ -258,6 +258,168 @@ la campagne 2 sont soit tués (L3939), soit ramenés à des équivalents prouvé
 - La CI rejoue ces trois campagnes chaque semaine (`.github/workflows/mutation.yml`,
   job d'évidence non bloquant : les survivants sont triés ici, pas masqués).
 
+## 9. Passe 7 (2026-11-11, `1376449`) — tri des 24 survivants
+
+Campagne relancée **localement** (le workflow `mutation.yml` est en
+`schedule`/`dispatch` et n'existe pas sur la branche par défaut). Arbre propre,
+HEAD `1376449`, `cargo-mutants 27.1.0`, `rustc 1.95.0`, Windows 11 x86-64,
+`--no-shuffle -j 4`, mêmes `--file`/`-F` que `mutation.yml` :
+
+```
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/own.rs \
+  -F 'borrow_place|check_availability|place_mutability'
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/resolve.rs \
+  -F 'resolve_type_path|resolve_imports|resolve_use_target|type_is_copy|nominal_is_copy'
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/typeck.rs \
+  -F 'check_struct_lit|check_variant_call|check_for|check_lit_pattern|cover_pattern|negative_value_fits|pattern_contains_float|check_const_expr'
+```
+
+| Fichier | Mutants | Tués | Survivants | Non viables | Durée |
+|---|---|---|---|---|---|
+| `own.rs` | 32 | 31 | 1 | 0 | 3 min |
+| `resolve.rs` | 57 | 40 | 15 | 2 | 5 min |
+| `typeck.rs` | 94 | 79 | 8 | 7 | 7 min |
+| **Total** | **183** | **150** | **24** | **9** | **15 min** |
+
+`typeck.rs` compte 94 mutants au lieu des 106 de §8 : la réécriture de
+l'exhaustivité (matrice de constructeurs récursive) a supprimé `Coverage` et
+`cover_pattern`, donc douze sites de mutation. Preuves : `target/mutants-p7/`
+(`missed.txt`, `diff/`, `caught.txt`, `unviable.txt` pour chaque campagne).
+
+### 9.1 Tri — 24/24 équivalents, 0 lacune de test
+
+Aucun test n'est ajouté : un test qui ne peut pas échouer sur le code muté
+serait un faux PASS (règle de §1 et de `tests/mutation_gaps.rs`). Chaque ligne
+renvoie à la preuve détaillée de sa classe, en §9.2.
+
+| # | Mutant (`fichier:ligne:col`) | Classe | Argument court |
+|---|---|---|---|
+| 1 | `own.rs:1525:35` `&&`→`\|\|` dans `check_availability` | E1 | garde de balayage sans effet sur le verdict (voir E1) |
+| 2 | `resolve.rs:1321:17` delete `"crate"` (`resolve_use_target`) | E2 | bras `PathRoot::Plain` inatteignable (parseur) |
+| 3 | `resolve.rs:1322:17` delete `"self"` | E2 | idem |
+| 4 | `resolve.rs:1323:17` delete `"super"` | E2 | idem |
+| 5 | `resolve.rs:1325:78` `==`→`!=` (boucle `super`) | E2 | idem (et `super::super` est une erreur de parse) |
+| 6 | `resolve.rs:1326:32` `+=`→`-=` | E2 | idem |
+| 7 | `resolve.rs:1326:32` `+=`→`*=` | E2 | idem |
+| 8 | `resolve.rs:2426:18` `==`→`!=` (bras `Self`) | E2 | `Self` n'est jamais un chemin (`Kw::SelfType`) |
+| 9 | `resolve.rs:2427:27` `!=`→`==` (bras `Self`) | E2 | idem |
+| 10 | `resolve.rs:2546:17` delete `"crate"` (`resolve_type_path`) | E2 | bras `PathRoot::Plain` inatteignable |
+| 11 | `resolve.rs:2550:17` delete `"self"` | E2 | idem |
+| 12 | `resolve.rs:2554:17` delete `"super"` | E2 | idem |
+| 13 | `resolve.rs:2556:78` `==`→`!=` (boucle `super`) | E2 | idem |
+| 14 | `resolve.rs:2557:32` `+=`→`-=` | E2 | idem |
+| 15 | `resolve.rs:2557:32` `+=`→`*=` | E2 | idem |
+| 16 | `resolve.rs:2953:52` `\|\|`→`&&` dans `type_is_copy` | E3 | `Error` est le seul nominal sans genre : les deux opérandes y sont vrais |
+| 17 | `typeck.rs:4027:20` delete `!` (`check_struct_lit`) | E4 | `args` est toujours vide (arguments génériques refusés en expression) |
+| 18 | `typeck.rs:4027:37` `&&`→`\|\|` | E4 | idem : la boucle sur `args` est un no-op |
+| 19 | `typeck.rs:4027:51` `==`→`!=` | E4 | idem |
+| 20 | `typeck.rs:4857:44` `&&`→`\|\|` (`check_const_expr`) | E5 | la valeur mutante n'existe que dans un `check` déjà en échec (`E-TYP-LITERAL-RANGE`) |
+| 21 | `typeck.rs:6009:5` `pattern_contains_float` → `false` | E6 | filtre redondant depuis la matrice de couverture récursive |
+| 22 | `typeck.rs:6010:9` delete bras `PatKind::Lit(Float)` | E6 | idem |
+| 23 | `typeck.rs:6011:9` delete bras `PatKind::Tuple` | E6 | idem |
+| 24 | `typeck.rs:6012:9` delete bras `PatKind::Variant` | E6 | idem |
+
+### 9.2 Preuves par classe
+
+**E1 — `own.rs` `check_availability` L1525 (`&&`→`||`).** Le bloc ne s'exécute
+que si `!st.partial.is_empty() && !whole_reinit`. Mutant : il s'exécute aussi
+quand l'un des deux seulement est vrai. (a) `partial` vide, pas de
+réinitialisation totale : la boucle ne parcourt rien, `relation` reste
+`Disjoint`, et `allowed` est vrai pour tous les accès (branche `Write` :
+`Disjoint` est admis ; autres accès : `relation == Disjoint`). (b)
+réinitialisation totale (`access == Write && steps.is_empty()`) avec des
+déplacements partiels : `classify_partial(&[], moved)` rend toujours `Ancestor`
+(préfixe vide), et la branche `Write` admet `Ancestor` ; aucun diagnostic n'est
+émis, aucun état n'est modifié. Le bloc n'a donc aucun effet observable dans les
+deux cas ; même conclusion que §7.3 et §8.1, revérifiée sur le code courant
+(`classify_partial`, `allowed`).
+
+**E2 — `resolve.rs`, bras `PathRoot::Plain` et bras `Self` (14 mutants).**
+`parser::parse_path` consomme `crate`/`self`/`super` comme `PathRoot` **avant**
+toute segmentation (`parser.rs:2204-2222`) ; `Self` est `Kw::SelfType` et devient
+`TypeKind::SelfType` (`parser.rs:2051-2069`), résolu directement
+(`resolve.rs:2259`), jamais un segment `Ident`. Les bras `Plain` comparant le
+premier segment à ces chaînes, et le bras `Self` de `resolve_type_path`, ne
+s'exécutent donc jamais. Mesures : `use crate::…`, `use self::…`,
+`use super::…`, `crate::…`/`super::…` en type et `Self` en annotation sont
+acceptés par les bras `PathRoot::*` ; `use super::super::S` est refusé par le
+parseur (`E-PARSE-EXPECTED`, « expected path segment, found keyword `super` »),
+donc la boucle `levels` est morte elle aussi. Même preuve que §7.1/§8.1.
+
+**E3 — `resolve.rs` `type_is_copy` L2953 (`||`→`&&`).** `PRELUDE_ERROR_DEF`
+vaut `NodeId::MAX` (`builtins.rs:31`) et n'a ni `struct` ni `enum` dans le
+`World` : pour `Error`, `def == PRELUDE_ERROR_DEF` **et**
+`nominal_kind(def).is_none()` sont tous deux vrais, donc `||` et `&&` renvoient
+`false` de la même façon. Pour tout autre nominal atteignable, les deux
+opérandes sont faux. La branche mutante n'est donc jamais prise seule ; même si
+elle l'était, `nominal_is_copy(Error)` rend `false` (champ `String`). Le chemin
+est exercé par `result_with_a_mobile_error_is_not_copy`.
+
+**E4 — `typeck.rs` `check_struct_lit` L4027 (3 mutants).** `args` provient de
+`ValuePath::Type(Type::Nominal { args, .. })`, c'est-à-dire des arguments
+génériques explicites d'un littéral de struct. Le parseur les refuse en
+expression : `Boite::<i32> { contenu: 1 }` rend
+`E-PARSE-UNEXPECTED` (« explicit generic arguments are not supported in
+expressions », mesuré). `args` est donc toujours vide : `delete !` et
+`&&`→`||` ne changent qu'une condition dont le corps est une boucle sur un
+vecteur vide, et `==`→`!=` ne fait que sauter cette boucle vide. Preuve
+indépendante (déjà §8.1) : tous les `ValuePath::Type` sont construits avec
+`args: Vec::new()`.
+
+**E5 — `typeck.rs` `check_const_expr` L4857 (`&&`→`||`).** `check_int_literal`
+émet `E-TYP-LITERAL-RANGE` dès que `int_value_fits` est faux
+(`typeck.rs:1385-1391`), c'est-à-dire exactement le cas où les deux formes
+diffèrent. La valeur `ConstValue::Int` supplémentaire n'existe donc que dans un
+`check` déjà en échec (`checked == None`, faits jetés, codegen non lancé) :
+aucun programme accepté ni diagnostic ne change. Mesure : `const X: u8 = 300;`
+→ `E-TYP-LITERAL-RANGE` dans les deux formes.
+
+**E6 — `typeck.rs` `pattern_contains_float` (4 mutants).** Depuis la matrice de
+couverture récursive, `patterns_exhaustive` décide par constructeur ; un
+sous-motif flottant ne peut être typé que contre `f32`/`f64`, et
+`coverage_ctors` ne fournit **aucun** constructeur fini pour ces types. Une
+ligne de motifs contenant un flottant ne peut donc jamais être la ligne
+irréfutable qui couvre cette colonne : la retirer (filtre) ou la garder (mutant)
+ne change aucun verdict d'exhaustivité. Le prédicat reste un garde de
+cohérence codegen (G-6.36 : un bras à garde ne couvre rien). Preuve dynamique :
+copie mutée de la crate (`pattern_contains_float → false`) construite sous
+`target/probes/equiv-float/` et comparée au driver normal sur 18 programmes
+(f64/f32 de premier niveau, `Option<f64>`, `Option<Option<f64>>`, tuple
+`(f64, bool)`, variantes d'enum tuple et struct, variantes avec `_`) :
+**18/18 verdicts identiques**. Les tests existants
+`float_literal_pattern_requires_a_wildcard`,
+`coverage_engine_tracks_pattern_shapes` et
+`float_literal_pattern_on_int_is_mismatch` pinent la règle ; le mutant
+`pattern_contains_float → true` est, lui, **tué** (il rend tout `match`
+non exhaustif). Rappel : G-6.36 (MUST) **accepte** un motif flottant ; il exige
+seulement qu'un `_`/liaison couvre la colonne, faute de quoi
+`E-TYP-NONEXHAUSTIVE`.
+
+### 9.3 Conditions de réexamen
+
+Les équivalences E1–E6 dépendent de propriétés qui peuvent changer :
+
+- E1 : toute évolution de `State`, `partial` ou `classify_partial` dans `own.rs` ;
+- E2 : un parseur qui accepterait `crate`/`self`/`super`/`Self` comme segments,
+  ou `super::super::…` comme chemin (les bras deviendraient atteignables) ;
+- E3 : un `Type::Nominal` atteignable sans genre nominal autre que `Error` ;
+- E4 : des arguments génériques explicites acceptés en expression ;
+- E5 : une évaluation de constante qui enregistre une valeur avant/pendant le
+  contrôle de plage ;
+- E6 : un changement de `patterns_exhaustive`/`coverage_ctors` tel qu'une
+  colonne `f32`/`f64` puisse être considérée couverte.
+
+### 9.4 Ce que cette passe ne prouve pas
+
+- Les arguments E1–E6 sont des **revues statiques**, pas des preuves vérifiées
+  par un outil ; la batterie E6 est une évidence sur 18 programmes, pas une
+  preuve sur toutes les entrées.
+- Rien sur les fichiers hors des trois ensembles de fonctions ciblés, ni sur les
+  autres crates : 150/183 est un chiffre **ciblé** (§1), pas un score de crate.
+- La campagne n'a pas été exécutée par la CI sur ce commit (workflow non
+  déclenchable sur la branche par défaut) : les artefacts sont locaux
+  (`target/mutants-p7/`, non versionnés).
+
 
 
 
