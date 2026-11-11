@@ -937,13 +937,13 @@ fn main() {
     }
 
     #[test]
-    fn string_by_value_is_coerced_to_str() {
-        // KNOWN DIVERGENCE (D-COERCE-1, T2-FINDINGS.md 19.2): TYP-13.1 admits
-        // only `&String -> &str`, yet an owned `String` is also accepted here.
-        // This test documents the current behaviour so a future change is
-        // deliberate; it is NOT a claim that the spec allows it, and
-        // `examples/stats` + `conformance/cases/run/stats` depend on it
-        // (`line.trim()` renders a `String` per STD-9.1).
+    fn owned_string_is_not_implicitly_coerced_to_str() {
+        // TYP-8.5 (MUST): `String -> &str` is explicit (`.as_str()`).
+        // TYP-13.1 (MUST): the only implicit text adjustment is
+        // `&String -> &str`, never an owned `String`. This was accepted and the
+        // generated Rust failed with E0308 (`examples/stats`,
+        // `conformance/cases/run/stats` used to depend on it; both are being
+        // migrated).
         let (result, _) = run(
             "src/main.rv",
             r#"
@@ -955,12 +955,21 @@ fn main() {
 "#,
         );
         assert!(
-            result.checked.is_some(),
-            "accepted today (divergence D-COERCE-1): {:?}",
+            result.checked.is_none(),
+            "an owned `String` must not be coerced to `&str`: {:?}",
             result
                 .diags
                 .iter()
                 .map(|d| (d.code.clone(), d.message.clone()))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            result.diags.iter().any(|d| d.code == "E-TYP-MISMATCH"),
+            "expected E-TYP-MISMATCH, got {:?}",
+            result
+                .diags
+                .iter()
+                .map(|d| d.code.clone())
                 .collect::<Vec<_>>()
         );
     }

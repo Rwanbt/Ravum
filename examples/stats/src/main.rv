@@ -19,7 +19,7 @@ fn main() -> Result<(), Error> {
         if trimmed.is_empty() {
             continue;
         }
-        let value = string::parse_f64(trimmed)?;
+        let value = string::parse_f64(trimmed.as_str())?;
         sum += value;
         count += 1;
     }

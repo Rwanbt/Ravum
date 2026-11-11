@@ -1981,8 +1981,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     /// Les deux seules coercitions implicites admises, en argument et en
-    /// récepteur : `&String → &str` (y compris `String → &str`) et
-    /// `&[T; N] → &[T]`.
+    /// récepteur : `&String → &str` et `&[T; N] → &[T]` (TYP-13.1). Un
+    /// `String` **possédé** n'est pas un `&String` : `String → &str` est
+    /// explicite (`.as_str()`, TYP-8.5) et n'est pas admis ici.
     fn coerce(&self, found: Type, expected: &Type) -> Type {
         if matches!(found, Type::Never) || found == *expected {
             return expected.clone();
@@ -1995,14 +1996,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 },
                 found_ty,
             ) => match (&**exp_inner, found_ty) {
-                // KNOWN DIVERGENCE (D-COERCE-1, `T2-FINDINGS.md` §19.2): TYP-13.1
-                // admits only `&String -> &str`, but this arm also accepts an
-                // owned `String` by value, which keeps `line.trim()` directly
-                // usable as a text argument (`examples/stats`,
-                // `conformance/cases/run/stats`). Removing it is a language
-                // decision, not a bug fix: it breaks a documented reference app
-                // and the corpus case that `features.md` F-STD-017 cites.
-                (Type::Str, Type::String) => expected.clone(),
+                // TYP-13.1: the only text adjustment is `&String -> &str`.
+                // TYP-8.5: `String -> &str` is explicit (`.as_str()`); an
+                // owned `String` argument used to be coerced here and the
+                // generated Rust failed with E0308.
                 (
                     Type::Str,
                     Type::Ref {
@@ -2111,6 +2108,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             _ => false,
         }
+    }
+
+    /// A `&mut self` receiver must be a mutable place (TYP-3.2, OWN-7.4): a
+    /// `let mut` binding, `self` in a `&mut self` method, or a reborrowable
+    /// `&mut T` value. A temporary (struct literal, call result) is not a place
+    /// and is rejected by `place_mutability` returning `None`.
+    fn receiver_is_mutable(&self, receiver: &Expr) -> bool {
+        self.is_mutable_place(receiver) || matches!(self.place_mutability(receiver), Some(true))
     }
 
     fn check_assert_eq(&mut self, args: &[Expr], _path: &'static str) -> Type {
@@ -2489,7 +2494,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let entry = self.world.method(*def, name, false).cloned();
                 match entry {
                     Some(entry) => {
-                        let target = self.check_user_method_call(&entry, &base, args, name_span);
+                        let target =
+                            self.check_user_method_call(&entry, &base, receiver, args, name_span);
                         let ty = target.1;
                         self.facts
                             .methods
@@ -2635,6 +2641,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         &mut self,
         entry: &resolve::MethodEntry,
         recv: &Type,
+        receiver: &Expr,
         args: &[Expr],
         name_span: &Span,
     ) -> (NodeId, Type) {
@@ -2651,6 +2658,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             return (entry.item, Type::Error);
         };
+        // TYP-3.2/OWN-7.4 (MUST): a `&mut self` method requires a mutable
+        // receiver place; a temporary receiver is `E-OWN-IMMUTABLE`. The
+        // builtin path already enforces this, the user-method path did not:
+        // `P { x: 0 }.set()` and `p.set()` on an immutable binding were
+        // accepted and rustc rejected the generated code (E0596/E0594).
+        if matches!(sig.receiver, Some(Receiver::Exclusive)) && !self.receiver_is_mutable(receiver)
+        {
+            self.error(
+                "E-OWN-IMMUTABLE",
+                *name_span,
+                format!(
+                    "`{}` takes `&mut self`; the receiver must be a mutable place \
+                     (`let mut …` or a `&mut` borrow)",
+                    entry.name
+                ),
+            );
+        }
         let mut subst: BTreeMap<usize, Type> = BTreeMap::new();
         if let Type::Nominal { args: actual, .. } = recv {
             self.bind_impl_generics(entry, actual, &mut subst);
@@ -3554,7 +3578,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     ) -> Type {
         let scrutinee_ty = self.check_value_expr(scrutinee, None);
         let mut result: Option<Type> = None;
-        let mut coverage = Coverage::new(&scrutinee_ty, self.facts);
+        let mut patterns: Vec<Option<&Pat>> = Vec::with_capacity(arms.len());
         for arm in arms {
             self.push_scope();
             self.check_pattern(&arm.pat, &scrutinee_ty);
@@ -3567,7 +3591,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             // `W-OWN-UNUSED-VARIABLE`. An earlier `W-TYP-UNREACHABLE` emission
             // violated both rules and was removed; `registry_audit.py` now keeps
             // it from coming back.
-            self.cover_pattern(&mut coverage, &arm.pat);
+            patterns.push(Some(&arm.pat));
             result = Some(match result {
                 None => body_ty,
                 Some(acc) => {
@@ -3586,13 +3610,17 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             });
         }
-        if !coverage.is_exhaustive() {
-            let missing = coverage.describe_missing();
+        // G-6.22 / TYP-10.4 (MUST): the coverage check descends into variant
+        // payloads and tuple components, so `Some(Some(n))` no longer counts as
+        // covering `Some` and a complete `(bool, bool)` enumeration is accepted.
+        if !self.patterns_exhaustive(&scrutinee_ty, &patterns, 0) {
             self.error_note(
                 "E-TYP-NONEXHAUSTIVE",
                 expr_span_match(scrutinee, arms),
-                missing,
-                "cover every variant or add a `_` arm",
+                format!(
+                    "non-exhaustive match: the arms do not cover every value of `{scrutinee_ty}`"
+                ),
+                "cover every constructor and tuple element, or add a `_` arm",
                 None,
             );
         }
@@ -3747,10 +3775,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let mut types = Vec::with_capacity(items.len());
         for item in items {
             let found = self.check_expr(item, expected_elem.as_ref());
-            types.push(match &expected_elem {
-                Some(elem) => self.coerce(found, elem),
-                None => found,
-            });
+            match &expected_elem {
+                Some(elem) => {
+                    // TYP-5.1/TYP-5.7: under an annotation every element is
+                    // verified against the annotated element type. `coerce`
+                    // only returns the expected type — it never reports a
+                    // mismatch — so `let a: [i32; 2] = [1, true];` was accepted
+                    // and the generated Rust failed with E0308. `unify` reports
+                    // `E-TYP-MISMATCH` on the offending element.
+                    self.unify(&found, elem, item.span, "array element");
+                    types.push(elem.clone());
+                }
+                None => types.push(found),
+            }
         }
         // EXPR-5.11/6.7: control expressions are not values, so they cannot be
         // array elements either.
@@ -5514,43 +5551,453 @@ fn truncate_int(value: i128, target: &Type) -> i128 {
 // Exhaustivité
 // ---------------------------------------------------------------------------
 
-#[derive(Debug)]
-enum Coverage {
-    Wild,
-    Bool {
-        true_seen: bool,
-        false_seen: bool,
-    },
-    Enum {
-        def: NodeId,
-        variants: Vec<String>,
-        seen: BTreeSet<usize>,
-    },
-    Option {
-        some: bool,
-        none: bool,
-    },
-    Result {
-        ok: bool,
-        err: bool,
-    },
-    /// A tuple is a product type: one irrefutable tuple pattern covers every
-    /// value. Refutable component patterns (literals, variants) do not.
-    Tuple {
-        covered: bool,
-    },
-    /// Type sans énumération possible : exige `_`.
-    RequiresWild,
+// ---------------------------------------------------------------------------
+// Exhaustivité
+// ---------------------------------------------------------------------------
+//
+// G-6.22 / TYP-10.4 (MUST): a `match` must be exhaustive for `bool`, `Option`,
+// `Result` and every enum; integers (and floats, G-6.36) require a `_` arm.
+// Coverage is computed recursively over the constructor space: a sum type needs
+// every constructor (descending into its payload), a product type (tuple) needs
+// every combination. The previous engine only looked at the *outer* constructor
+// of each arm, so `Some(Some(n))` was taken as covering `Some` (accepting a
+// match that rustc rejects with E0004) while a fully enumerated `(bool, bool)`
+// tuple was rejected (E-TYP-NONEXHAUSTIVE on a program rustc accepts).
+
+/// Bound on the recursion depth of the coverage check (P0-H).
+const MAX_COVERAGE_DEPTH: u32 = 64;
+
+/// One constructor of a sum type, with the payload types it introduces.
+struct CoverageCtor {
+    kind: CoverageCtorKind,
+    /// Payload types, in declaration order (empty for a unit constructor).
+    payload: Vec<Type>,
+    /// Field names, in declaration order, for a struct variant.
+    fields: Option<Vec<String>>,
+    /// Enum definition this constructor belongs to (`None` for `bool`,
+    /// `Option` and `Result`).
+    def: Option<NodeId>,
 }
 
-/// A pattern matches every value of its type (and therefore must be the last
-/// arm of a `match`). Used for tuple coverage: `(a, b)` is irrefutable, while
-/// `(1, b)` is not.
-fn pattern_is_irrefutable(pat: &Pat) -> bool {
-    match &pat.kind {
-        PatKind::Wild | PatKind::Binding { .. } => true,
-        PatKind::Tuple(items) => items.iter().all(pattern_is_irrefutable),
-        _ => false,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoverageCtorKind {
+    Bool(bool),
+    Some,
+    None,
+    Ok,
+    Err,
+    Variant(usize),
+    /// A tuple is a product with a single constructor and N payloads.
+    Tuple,
+}
+
+impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
+    /// `true` when the given patterns cover every value of `ty`.
+    ///
+    /// `None` in `pats` stands for a wildcard: it appears when a payload is
+    /// absent (a unit variant) or when a struct pattern omits a field.
+    fn patterns_exhaustive(&self, ty: &Type, pats: &[Option<&Pat>], depth: u32) -> bool {
+        if depth > MAX_COVERAGE_DEPTH {
+            return false;
+        }
+        // G-6.36: codegen lowers a float sub-pattern to a guard, and a guarded
+        // arm covers nothing. Such an arm must not count as coverage.
+        let pats: Vec<Option<&Pat>> = pats
+            .iter()
+            .copied()
+            .filter(|pat| pat.map_or(true, |pat| !pattern_contains_float(pat)))
+            .collect();
+        if pats.is_empty() {
+            return false;
+        }
+        if pats
+            .iter()
+            .any(|pat| pat.map_or(true, |pat| self.pattern_irrefutable_for(pat, ty)))
+        {
+            return true;
+        }
+        match ty {
+            Type::Bool => {
+                let mut seen_true = false;
+                let mut seen_false = false;
+                for pat in pats.iter().flatten() {
+                    if let PatKind::Lit(LitPat::Bool(value)) = &pat.kind {
+                        if *value {
+                            seen_true = true;
+                        } else {
+                            seen_false = true;
+                        }
+                    }
+                }
+                seen_true && seen_false
+            }
+            Type::Option(inner) => {
+                let mut some_rows: Vec<Option<&Pat>> = Vec::new();
+                let mut none_seen = false;
+                for pat in pats.iter().flatten() {
+                    match pattern_kind(pat) {
+                        PatternKind::Some => some_rows.push(payload_1(pat)),
+                        PatternKind::None => none_seen = true,
+                        _ => {}
+                    }
+                }
+                none_seen && self.patterns_exhaustive(inner, &some_rows, depth + 1)
+            }
+            Type::Result(ok, err) => {
+                let mut ok_rows: Vec<Option<&Pat>> = Vec::new();
+                let mut err_rows: Vec<Option<&Pat>> = Vec::new();
+                for pat in pats.iter().flatten() {
+                    match pattern_kind(pat) {
+                        PatternKind::Ok => ok_rows.push(payload_1(pat)),
+                        PatternKind::Err => err_rows.push(payload_1(pat)),
+                        _ => {}
+                    }
+                }
+                self.patterns_exhaustive(ok, &ok_rows, depth + 1)
+                    && self.patterns_exhaustive(err, &err_rows, depth + 1)
+            }
+            Type::Nominal { def, args, .. } => {
+                let Some(info) = self.facts.enums.get(def) else {
+                    return false;
+                };
+                let subst = nominal_subst(self.world, def, args);
+                for (index, variant) in info.variants.iter().enumerate() {
+                    let payload: Vec<Type> = match variant.kind {
+                        crate::facts::VariantKind::Unit => Vec::new(),
+                        crate::facts::VariantKind::Tuple => variant
+                            .tuple_types
+                            .iter()
+                            .map(|t| substitute(t, &subst))
+                            .collect(),
+                        crate::facts::VariantKind::Struct => variant
+                            .fields
+                            .iter()
+                            .map(|f| substitute(&f.ty, &subst))
+                            .collect(),
+                    };
+                    let mut rows: Vec<Vec<Option<&Pat>>> = Vec::new();
+                    let mut seen_ctor = false;
+                    for pat in pats.iter().flatten() {
+                        if matches!(
+                            self.variant_pats.get(&pat.id),
+                            Some((ctor_def, ctor_index)) if ctor_def == def && *ctor_index == index
+                        ) {
+                            seen_ctor = true;
+                            rows.push(self.variant_payload_row(pat, variant));
+                        }
+                    }
+                    if !seen_ctor {
+                        return false;
+                    }
+                    if !self.product_rows_exhaustive(&payload, &rows, depth + 1) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Type::Tuple(items) => {
+                let mut rows: Vec<Vec<Option<&Pat>>> = Vec::new();
+                for pat in pats.iter().flatten() {
+                    if let PatKind::Tuple(subs) = &pat.kind {
+                        if subs.len() == items.len() {
+                            rows.push(subs.iter().map(Some).collect());
+                        }
+                    }
+                }
+                self.product_rows_exhaustive(items, &rows, depth + 1)
+            }
+            _ => false,
+        }
+    }
+
+    /// A pattern that matches every value of its type: a wildcard, a binding,
+    /// or a tuple whose elements are all irrefutable (G-6.38, TYP-4).
+    fn pattern_irrefutable_for(&self, pat: &Pat, ty: &Type) -> bool {
+        match &pat.kind {
+            PatKind::Wild | PatKind::Binding { .. } => true,
+            PatKind::Tuple(items) => match ty {
+                Type::Tuple(types) if types.len() == items.len() => items
+                    .iter()
+                    .zip(types.iter())
+                    .all(|(item, ty)| self.pattern_irrefutable_for(item, ty)),
+                Type::Unit => items.is_empty(),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Coverage of a product type: every combination of the columns must be
+    /// covered. The rows are specialized column by column; the first column
+    /// with a finite constructor set is decomposed completely, which is the
+    /// standard (sound and complete) decision procedure for products.
+    fn product_rows_exhaustive(
+        &self,
+        tys: &[Type],
+        rows: &[Vec<Option<&Pat>>],
+        depth: u32,
+    ) -> bool {
+        if depth > MAX_COVERAGE_DEPTH {
+            return false;
+        }
+        if tys.is_empty() {
+            // The empty product (unit): any row covers it.
+            return !rows.is_empty();
+        }
+        if rows.iter().any(|row| {
+            row.iter()
+                .zip(tys.iter())
+                .all(|(pat, ty)| pat.map_or(true, |pat| self.pattern_irrefutable_for(pat, ty)))
+        }) {
+            return true;
+        }
+        if rows.is_empty() {
+            return false;
+        }
+        for (column, ty) in tys.iter().enumerate() {
+            let Some(ctors) = self.coverage_ctors(ty) else {
+                continue;
+            };
+            for ctor in &ctors {
+                let mut sub_rows: Vec<Vec<Option<&Pat>>> = Vec::new();
+                for row in rows {
+                    if let Some(specialized) = self.specialize_row(row, column, ty, ctor) {
+                        sub_rows.push(specialized);
+                    }
+                }
+                let mut new_tys = ctor.payload.clone();
+                new_tys.extend(tys[..column].iter().cloned());
+                new_tys.extend(tys[column + 1..].iter().cloned());
+                if !self.product_rows_exhaustive(&new_tys, &sub_rows, depth + 1) {
+                    // This constructor leaves part of the product uncovered,
+                    // and the decomposition is complete: the product is not
+                    // exhaustive.
+                    return false;
+                }
+            }
+            return true;
+        }
+        false
+    }
+
+    /// The finite constructor set of a sum type, if it has one. `None` means
+    /// the type has no enumerable constructors and therefore requires `_`
+    /// (integers, floats, text, references, ...).
+    fn coverage_ctors(&self, ty: &Type) -> Option<Vec<CoverageCtor>> {
+        match ty {
+            Type::Bool => Some(vec![
+                CoverageCtor {
+                    kind: CoverageCtorKind::Bool(true),
+                    payload: Vec::new(),
+                    fields: None,
+                    def: None,
+                },
+                CoverageCtor {
+                    kind: CoverageCtorKind::Bool(false),
+                    payload: Vec::new(),
+                    fields: None,
+                    def: None,
+                },
+            ]),
+            Type::Option(inner) => Some(vec![
+                CoverageCtor {
+                    kind: CoverageCtorKind::Some,
+                    payload: vec![(**inner).clone()],
+                    fields: None,
+                    def: None,
+                },
+                CoverageCtor {
+                    kind: CoverageCtorKind::None,
+                    payload: Vec::new(),
+                    fields: None,
+                    def: None,
+                },
+            ]),
+            Type::Result(ok, err) => Some(vec![
+                CoverageCtor {
+                    kind: CoverageCtorKind::Ok,
+                    payload: vec![(**ok).clone()],
+                    fields: None,
+                    def: None,
+                },
+                CoverageCtor {
+                    kind: CoverageCtorKind::Err,
+                    payload: vec![(**err).clone()],
+                    fields: None,
+                    def: None,
+                },
+            ]),
+            Type::Nominal { def, args, .. } => {
+                let info = self.facts.enums.get(def)?;
+                let subst = nominal_subst(self.world, def, args);
+                let mut ctors = Vec::with_capacity(info.variants.len());
+                for (index, variant) in info.variants.iter().enumerate() {
+                    let (payload, fields) = match variant.kind {
+                        crate::facts::VariantKind::Unit => (Vec::new(), None),
+                        crate::facts::VariantKind::Tuple => (
+                            variant
+                                .tuple_types
+                                .iter()
+                                .map(|t| substitute(t, &subst))
+                                .collect(),
+                            None,
+                        ),
+                        crate::facts::VariantKind::Struct => (
+                            variant
+                                .fields
+                                .iter()
+                                .map(|f| substitute(&f.ty, &subst))
+                                .collect(),
+                            Some(variant.fields.iter().map(|f| f.name.clone()).collect()),
+                        ),
+                    };
+                    ctors.push(CoverageCtor {
+                        kind: CoverageCtorKind::Variant(index),
+                        payload,
+                        fields,
+                        def: Some(*def),
+                    });
+                }
+                Some(ctors)
+            }
+            // A tuple is a product with one constructor: it must be decomposed
+            // as a column so nested tuples (`((bool, bool), bool)`) are covered.
+            Type::Tuple(items) => Some(vec![CoverageCtor {
+                kind: CoverageCtorKind::Tuple,
+                payload: items.clone(),
+                fields: None,
+                def: None,
+            }]),
+            _ => None,
+        }
+    }
+
+    /// Specialize one row on `column` for `ctor`: `None` when the pattern does
+    /// not match this constructor (the row is dropped), otherwise the row with
+    /// the column replaced by the constructor payload patterns.
+    fn specialize_row<'a>(
+        &self,
+        row: &[Option<&'a Pat>],
+        column: usize,
+        ty: &Type,
+        ctor: &CoverageCtor,
+    ) -> Option<Vec<Option<&'a Pat>>> {
+        let payload: Vec<Option<&Pat>> = match row.get(column).copied().flatten() {
+            None => vec![None; ctor.payload.len()],
+            Some(pat) => {
+                if self.pattern_irrefutable_for(pat, ty) {
+                    vec![None; ctor.payload.len()]
+                } else {
+                    self.pattern_payloads_for_ctor(pat, ctor)?
+                }
+            }
+        };
+        let mut out = payload;
+        for (index, pat) in row.iter().enumerate() {
+            if index != column {
+                out.push(*pat);
+            }
+        }
+        Some(out)
+    }
+
+    /// Payload patterns of `pat` when it matches `ctor`; `None` when it does
+    /// not match. The returned vector is aligned with `ctor.payload`.
+    fn pattern_payloads_for_ctor<'a>(
+        &self,
+        pat: &'a Pat,
+        ctor: &CoverageCtor,
+    ) -> Option<Vec<Option<&'a Pat>>> {
+        match ctor.kind {
+            CoverageCtorKind::Bool(value) => match &pat.kind {
+                PatKind::Lit(LitPat::Bool(found)) if *found == value => Some(Vec::new()),
+                _ => None,
+            },
+            CoverageCtorKind::Some => match pattern_kind(pat) {
+                PatternKind::Some => Some(vec![payload_1(pat)]),
+                _ => None,
+            },
+            CoverageCtorKind::None => match pattern_kind(pat) {
+                PatternKind::None => Some(Vec::new()),
+                _ => None,
+            },
+            CoverageCtorKind::Ok => match pattern_kind(pat) {
+                PatternKind::Ok => Some(vec![payload_1(pat)]),
+                _ => None,
+            },
+            CoverageCtorKind::Err => match pattern_kind(pat) {
+                PatternKind::Err => Some(vec![payload_1(pat)]),
+                _ => None,
+            },
+            CoverageCtorKind::Tuple => match &pat.kind {
+                PatKind::Tuple(items) if items.len() == ctor.payload.len() => {
+                    Some(items.iter().map(Some).collect())
+                }
+                _ => None,
+            },
+            CoverageCtorKind::Variant(index) => {
+                if !matches!(
+                    self.variant_pats.get(&pat.id),
+                    Some((def, ctor_index))
+                        if Some(*def) == ctor.def && *ctor_index == index
+                ) {
+                    return None;
+                }
+                match &pat.kind {
+                    PatKind::Path(_) => Some(Vec::new()),
+                    PatKind::Variant { fields, .. } => Some(match fields {
+                        VariantPatFields::Tuple(items) => (0..ctor.payload.len())
+                            .map(|i| items.get(i).map(Some).unwrap_or(None))
+                            .collect(),
+                        VariantPatFields::Struct(field_pats) => ctor
+                            .fields
+                            .as_ref()
+                            .map(|names| {
+                                names
+                                    .iter()
+                                    .map(|name| {
+                                        field_pats
+                                            .iter()
+                                            .find(|field| field.name.name == *name)
+                                            .map(|field| Some(&field.pat))
+                                            .unwrap_or(None)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| vec![None; ctor.payload.len()]),
+                    }),
+                    _ => Some(vec![None; ctor.payload.len()]),
+                }
+            }
+        }
+    }
+
+    /// Payload row of a variant pattern, in declaration order.
+    fn variant_payload_row<'a>(
+        &self,
+        pat: &'a Pat,
+        variant: &crate::facts::VariantInfo,
+    ) -> Vec<Option<&'a Pat>> {
+        match &pat.kind {
+            PatKind::Path(_) => Vec::new(),
+            PatKind::Variant { fields, .. } => match fields {
+                VariantPatFields::Tuple(items) => (0..variant.tuple_types.len())
+                    .map(|i| items.get(i).map(Some).unwrap_or(None))
+                    .collect(),
+                VariantPatFields::Struct(field_pats) => variant
+                    .fields
+                    .iter()
+                    .map(|decl| {
+                        field_pats
+                            .iter()
+                            .find(|field| field.name.name == decl.name)
+                            .map(|field| Some(&field.pat))
+                            .unwrap_or(None)
+                    })
+                    .collect(),
+            },
+            _ => Vec::new(),
+        }
     }
 }
 
@@ -5572,180 +6019,16 @@ fn pattern_contains_float(pat: &Pat) -> bool {
     }
 }
 
-impl Coverage {
-    fn new(scrutinee: &Type, facts: &Facts) -> Coverage {
-        match scrutinee {
-            Type::Bool => Coverage::Bool {
-                true_seen: false,
-                false_seen: false,
-            },
-            Type::Nominal { def, .. } => match facts.enums.get(def) {
-                Some(info) => Coverage::Enum {
-                    def: *def,
-                    variants: info.variants.iter().map(|v| v.name.clone()).collect(),
-                    seen: BTreeSet::new(),
-                },
-                None => Coverage::RequiresWild,
-            },
-            Type::Option(_) => Coverage::Option {
-                some: false,
-                none: false,
-            },
-            Type::Result(_, _) => Coverage::Result {
-                ok: false,
-                err: false,
-            },
-            Type::Tuple(_) => Coverage::Tuple { covered: false },
-            Type::Error | Type::Never => Coverage::Wild,
-            _ => Coverage::RequiresWild,
-        }
-    }
-
-    fn is_exhaustive(&self) -> bool {
-        match self {
-            Coverage::Wild => true,
-            Coverage::Bool {
-                true_seen,
-                false_seen,
-            } => *true_seen && *false_seen,
-            Coverage::Enum {
-                def: _,
-                variants,
-                seen,
-            } => seen.len() >= variants.len(),
-            Coverage::Option { some, none } => *some && *none,
-            Coverage::Result { ok, err } => *ok && *err,
-            Coverage::Tuple { covered } => *covered,
-            Coverage::RequiresWild => false,
-        }
-    }
-
-    fn describe_missing(&self) -> String {
-        match self {
-            Coverage::Bool {
-                true_seen,
-                false_seen,
-            } => {
-                let mut missing = Vec::new();
-                if !true_seen {
-                    missing.push("true");
-                }
-                if !false_seen {
-                    missing.push("false");
-                }
-                format!("non-exhaustive match: missing {}", missing.join(", "))
-            }
-            Coverage::Enum {
-                def: _,
-                variants,
-                seen,
-            } => {
-                let missing: Vec<&str> = variants
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| !seen.contains(i))
-                    .map(|(_, n)| n.as_str())
-                    .collect();
-                format!(
-                    "non-exhaustive match: missing variant(s) {}",
-                    missing.join(", ")
-                )
-            }
-            Coverage::Option { some, none } => {
-                let mut missing = Vec::new();
-                if !some {
-                    missing.push("Some");
-                }
-                if !none {
-                    missing.push("None");
-                }
-                format!("non-exhaustive match: missing {}", missing.join(", "))
-            }
-            Coverage::Result { ok, err } => {
-                let mut missing = Vec::new();
-                if !ok {
-                    missing.push("Ok");
-                }
-                if !err {
-                    missing.push("Err");
-                }
-                format!("non-exhaustive match: missing {}", missing.join(", "))
-            }
-            _ => "non-exhaustive match: add a `_` arm".to_string(),
-        }
-    }
-}
-
-impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
-    fn cover_pattern(&mut self, coverage: &mut Coverage, pat: &Pat) {
-        // G-6.36: codegen lowers a float literal sub-pattern to a guard, and a
-        // guarded arm covers nothing. Treating it as coverage here would accept
-        // `match o { Some(1.5) => …, None => … }` and emit a Rust match that
-        // `rustc` rejects as non-exhaustive.
-        if pattern_contains_float(pat) {
-            return;
-        }
-        match coverage {
-            Coverage::Wild => {}
-            Coverage::Tuple { covered } => {
-                if pattern_is_irrefutable(pat) {
-                    *covered = true;
-                }
-            }
-            Coverage::Bool {
-                true_seen,
-                false_seen,
-            } => match &pat.kind {
-                PatKind::Lit(LitPat::Bool(true)) => *true_seen = true,
-                PatKind::Lit(LitPat::Bool(false)) => *false_seen = true,
-                PatKind::Wild | PatKind::Binding { .. } => {
-                    *true_seen = true;
-                    *false_seen = true;
-                }
-                _ => {}
-            },
-            Coverage::Enum {
-                def,
-                variants,
-                seen,
-            } => match &pat.kind {
-                PatKind::Wild | PatKind::Binding { .. } => {
-                    for index in 0..variants.len() {
-                        seen.insert(index);
-                    }
-                }
-                _ => {
-                    if let Some((enum_item, index)) = self.variant_pats.get(&pat.id) {
-                        if enum_item == def {
-                            seen.insert(*index);
-                        }
-                    }
-                }
-            },
-            Coverage::Option { some, none } => match pattern_kind(pat) {
-                PatternKind::Some => *some = true,
-                PatternKind::None => *none = true,
-                PatternKind::Wild => {
-                    *some = true;
-                    *none = true;
-                }
-                _ => {}
-            },
-            Coverage::Result { ok, err } => match pattern_kind(pat) {
-                PatternKind::Ok => *ok = true,
-                PatternKind::Err => *err = true,
-                PatternKind::Wild => {
-                    *ok = true;
-                    *err = true;
-                }
-                _ => {}
-            },
-            Coverage::RequiresWild => {
-                if matches!(pat.kind, PatKind::Wild | PatKind::Binding { .. }) {
-                    *coverage = Coverage::Wild;
-                }
-            }
-        }
+/// Payload pattern of a one-field prelude constructor (`Some(p)`, `Ok(p)`,
+/// `Err(p)`). A malformed arity is already reported by `check_pattern`; a
+/// missing payload is treated as a wildcard.
+fn payload_1(pat: &Pat) -> Option<&Pat> {
+    match &pat.kind {
+        PatKind::Variant {
+            fields: VariantPatFields::Tuple(items),
+            ..
+        } => items.first(),
+        _ => None,
     }
 }
 

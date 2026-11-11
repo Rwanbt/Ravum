@@ -11,8 +11,8 @@
 
 use ravum_lang_codegen::{generate, CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, Facts, FieldInfo, FileInfo, MethodTarget, Profile, Resolution,
-    StructInfo,
+    CallTarget, CheckOptions, CheckedProgram, Facts, FieldInfo, FileInfo, MethodTarget, Profile,
+    Resolution, StructInfo,
 };
 use ravum_lang_sema::types::Type as STy;
 use ravum_lang_syntax::ast::{
@@ -580,6 +580,70 @@ fn skip(label: &str) -> bool {
     }
     eprintln!("SKIP {label}: rustc not available");
     true
+}
+
+// ---------------------------------------------------------------------------
+// Real-source harness: write a package, load it, check it, generate the Rust.
+//
+// The structural tests below build hand-made `CheckedProgram`s; the divergence
+// regressions (P0-A) need the *real* frontend so the case under test is the one
+// the CLI accepts, not a hand-written approximation of it.
+// ---------------------------------------------------------------------------
+
+fn generate_source(label: &str, source: &str) -> String {
+    checked_from_source(label, source, &GenOptions::default())
+}
+
+fn generate_source_with(label: &str, source: &str, options: &GenOptions) -> String {
+    checked_from_source(label, source, options)
+}
+
+fn checked_from_source(
+    label: &str,
+    source: &str,
+    options: &GenOptions,
+) -> String {
+    let dir = TempDir::new(label);
+    let manifest =
+        format!("[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n");
+    std::fs::write(dir.path.join("ravum.toml"), manifest).expect("cannot write the manifest");
+    let src = dir.path.join("src");
+    std::fs::create_dir_all(&src).expect("cannot create the package source directory");
+    std::fs::write(src.join("main.rv"), source).expect("cannot write the Ravum source");
+    let loaded = ravum_lang_sema::loader::load_package_with_options(
+        &dir.path,
+        &ravum_lang_sema::loader::LoadOptions {
+            locked: false,
+            overrides: std::collections::BTreeMap::new(),
+        },
+    );
+    assert!(
+        loaded.diags.is_empty(),
+        "loader diagnostics for `{label}`:\n{}",
+        loaded.diags.render(&loaded.sources)
+    );
+    let program = loaded
+        .program
+        .expect("the loader produced no program for a valid package");
+    let checked = ravum_lang_sema::check(
+        &program,
+        &loaded.sources,
+        &CheckOptions {
+            profile: Profile::Core,
+            edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+        },
+    );
+    assert!(
+        checked.diags.is_empty(),
+        "checker diagnostics for `{label}`:\n{}",
+        checked.diags.render(&loaded.sources)
+    );
+    let checked = checked
+        .checked
+        .expect("the checker produced no CheckedProgram");
+    let code = generate(&checked, options).expect("code generation must succeed");
+    let _ = std::fs::remove_dir_all(&dir.path);
+    code
 }
 
 // ---------------------------------------------------------------------------
@@ -2213,6 +2277,7 @@ fn audit_test_runner_format_summary_and_exit_codes() {
     let built = must_compile(&code, "runner");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     let expected = concat!(
+        "running 3 tests\n",
         "ran ok_one\n",
         "test ok_one ... ok\n",
         "test assert_fails ... FAILED\n",
@@ -2220,7 +2285,7 @@ fn audit_test_runner_format_summary_and_exit_codes() {
         "test result_fails ... FAILED\n",
         "    error: nope\n",
         "\n",
-        "1 passed; 2 failed\n",
+        "test result: FAILED; 1 passed; 2 failed; 0 ignored; 0 filtered out\n",
     );
     assert_eq!(stdout, expected, "runner output (stderr: {stderr})");
     assert_eq!(status, 1, "one failed test must exit with code 1");
@@ -2272,7 +2337,9 @@ fn audit_test_runner_all_pass_exits_zero() {
     let built = must_compile(&code, "runner-pass");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(
-        stdout, "first\ntest first ... ok\nsecond\ntest second ... ok\n\n2 passed; 0 failed\n",
+        stdout,
+        "running 2 tests\nfirst\ntest first ... ok\nsecond\ntest second ... ok\n\n\
+         test result: ok; 2 passed; 0 failed; 0 ignored; 0 filtered out\n",
         "runner output (stderr: {stderr})"
     );
     assert_eq!(status, 0, "all tests passing must exit with code 0");
@@ -2327,11 +2394,13 @@ fn audit_exit_inside_a_test_bypasses_the_runner() {
     let code = gen_with(&checked, &options);
     let built = must_compile(&code, "runner-exit");
     let (stdout, stderr, status) = run(&built.binary, &[]);
-    // Observed: the process exits from inside the test, before the runner can
-    // print a result line or the summary; the following test never runs.
-    assert_eq!(stdout, "", "runner output: {stdout}");
+    // Observed: the `running N tests` header is printed before the first test, then
+    // the process exits from inside the test, before any result line or summary;
+    // the following test never runs.
+    assert_eq!(stdout, "running 2 tests\n", "runner output: {stdout}");
     assert_eq!(status, 0, "the test's exit code wins (stderr: {stderr})");
     assert!(!stdout.contains("passed;"), "no summary is printed");
+    assert!(!stdout.contains("test result:"), "no summary line is printed");
 }
 
 // ---------------------------------------------------------------------------
@@ -2750,4 +2819,348 @@ fn audit_ffi_rejects_non_ffi_safe_types() {
         "the backend must reject ABI-unsafe extern signatures, got: {}",
         error.message
     );
+}
+
+// ---------------------------------------------------------------------------
+// 16. P0-A divergences: `&str` positions, `mut` parameters, array-element moves.
+//     Each test drives the *real* frontend (loader + checker) so the input is a
+//     program `ravum-lang check` accepts, then compiles the emitted Rust and runs
+//     it. Contract references: OWN-6.1/6.2 (static text is the only storable
+//     reference), TYP-13.1/STD-9.3 (`as_str` views are instruction-scoped),
+//     OWN-5.4 (tuple/array element moves), EXP-… (`mut` bindings).
+// ---------------------------------------------------------------------------
+
+/// OWN-6.2: a stored/returned `&str` must be `&'static str`; TYP-13.1/STD-9.3: a
+/// parameter keeps the elided lifetime so `String::as_str()` views are accepted.
+/// A blanket `'static` fix would build the first three positions and break
+/// `length(owned.as_str())`; a blanket elision would leave E0106.
+#[test]
+fn audit_static_str_positions_are_emitted_per_position() {
+    if skip("audit_static_str_positions_are_emitted_per_position") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-static-str",
+        r#"struct S {
+    text: &str,
+}
+
+fn lit() -> &str {
+    return "a";
+}
+
+fn stored() -> &str {
+    let text = "ravum";
+    return text;
+}
+
+fn length(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let l = "littéral";
+    let s = S { text: l };
+    let owned = String::from("abc");
+    let n = length(owned.as_str());
+    io::println(s.text);
+    io::println(n.to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("text: &'static str"),
+        "a stored `&str` field is `&'static str` (OWN-6.2):\n{code}"
+    );
+    assert!(
+        code.contains("fn lit() -> &'static str"),
+        "a returned `&str` is `&'static str` (OWN-6.2):\n{code}"
+    );
+    assert!(
+        code.contains("fn stored() -> &'static str"),
+        "a returned `&str` is `&'static str` (OWN-6.2):\n{code}"
+    );
+    assert!(
+        code.contains("fn length(s: &str) -> usize"),
+        "a `&str` parameter keeps the elided lifetime (STD-9.3):\n{code}"
+    );
+    assert!(
+        !code.contains("s: &'static str"),
+        "a parameter must not be frozen to `'static`:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-static-str");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "littéral\n3\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// A `mut` parameter binding is part of the checked program; the emitted Rust
+/// parameter must carry `mut` or an accepted assignment is E0384 at build time.
+#[test]
+fn audit_mut_parameter_binding_is_emitted() {
+    if skip("audit_mut_parameter_binding_is_emitted") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-mut-param",
+        r#"fn bump(mut x: i32) -> i32 {
+    x = x + 1;
+    return x;
+}
+
+fn main() {
+    let n = bump(1);
+    io::println(n.to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("fn bump(mut x: i32) -> i32"),
+        "a mutable parameter binding is emitted with `mut`:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-mut-param");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "2\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// OWN-5.4: moving an array element is legal when the aggregate is not reused.
+/// Rust cannot express `a[1]` as a move (E0508), so the backend destructures.
+#[test]
+fn audit_array_element_move_builds_and_runs() {
+    if skip("audit_array_element_move_builds_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-array-move",
+        r#"fn second(a: [String; 2]) -> String {
+    return a[1];
+}
+
+fn main() {
+    let a = [String::from("left"), String::from("right")];
+    io::println(second(a).as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("let [mut __rv_el_"),
+        "the array element move is lowered to a hoisted destructuring:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-array-move");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "right\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// The full-rewrite lowering (destructure at the first move, element bindings for
+/// every later constant access) must cover the shapes that used to be E0508:
+/// several moves of one array, moves with projections, a move followed by a read
+/// of another element, and a move into a builtin method argument.
+#[test]
+fn audit_multiple_array_element_moves_build_and_run() {
+    if skip("audit_multiple_array_element_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-array-multiple",
+        r#"fn pair(a: [String; 2]) -> (String, String) {
+    let x = a[0];
+    let y = a[1];
+    return (x, y);
+}
+
+fn projections(a: [(String, i32); 2]) -> (String, String) {
+    let x = a[0].0;
+    let y = a[1].0;
+    return (x, y);
+}
+
+fn read_after(a: [String; 2]) -> usize {
+    let x = a[0];
+    return a[1].len() + x.len();
+}
+
+fn push_two(a: [String; 2]) -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    v.push(a[0]);
+    v.push(a[1]);
+    return v;
+}
+
+fn copied(a: [(String, i32); 2]) -> i32 {
+    return a[0].1;
+}
+
+fn main() {
+    let a = [String::from("left"), String::from("right")];
+    let t = pair(a);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+
+    let b = [(String::from("L"), 1), (String::from("R"), 2)];
+    let u = projections(b);
+    io::println(u.0.as_str());
+    io::println(u.1.as_str());
+
+    let c = [String::from("aa"), String::from("bbb")];
+    io::println(read_after(c).to_string().as_str());
+
+    let d = [String::from("zero"), String::from("one")];
+    let v = push_two(d);
+    io::println(v.len().to_string().as_str());
+
+    let e = [(String::from("x"), 41), (String::from("y"), 2)];
+    io::println(copied(e).to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("return a[0usize].1;"),
+        "the Copy projection stays a plain read:\n{code}"
+    );
+    assert!(
+        code.matches("let [mut __rv_el_").count() >= 4,
+        "every partially-moved array is destructured once:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-array-multiple");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "left\nright\nL\nR\n5\n2\n41\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// A projection after the index: `a[1].0` moves the element's mobile field
+/// (OWN-5.3), `a[0].1` only copies a `Copy` field and must stay a plain read.
+#[test]
+fn audit_array_element_projection_moves_only_mobile_fields() {
+    if skip("audit_array_element_projection_moves_only_mobile_fields") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-array-projection",
+        r#"fn moved(a: [(String, i32); 2]) -> String {
+    return a[1].0;
+}
+
+fn copied(a: [(String, i32); 2]) -> i32 {
+    return a[0].1;
+}
+
+fn main() {
+    let a = [(String::from("l"), 41), (String::from("r"), 2)];
+    let b = [(String::from("l"), 41), (String::from("r"), 2)];
+    io::println(moved(a).as_str());
+    io::println(copied(b).to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("return a[0usize].1;"),
+        "a Copy projection stays a plain indexed read:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-array-projection");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "r\n41\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// A dynamic index move consumes the array through `into_iter`; an out-of-range
+/// index must panic with rustc's own array-index text (measured on rustc 1.95).
+#[test]
+fn audit_dynamic_array_element_move_keeps_bounds_panic() {
+    if skip("audit_dynamic_array_element_move_keeps_bounds_panic") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-array-dynamic",
+        r#"fn pick(a: [String; 2], i: usize) -> String {
+    return a[i];
+}
+
+fn main() {
+    let a = [String::from("zero"), String::from("one")];
+    io::println(pick(a, 1).as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains(".into_iter().nth("),
+        "a dynamic element move consumes the array:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-array-dynamic");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "one\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+
+    let out_of_bounds = generate_source(
+        "p0a-array-dynamic-oob",
+        r#"fn pick(a: [String; 2], i: usize) -> String {
+    return a[i];
+}
+
+fn main() {
+    let a = [String::from("zero"), String::from("one")];
+    let s = pick(a, 2);
+    io::println(s.as_str());
+}
+"#,
+    );
+    let built = must_compile(&out_of_bounds, "p0a-array-dynamic-oob");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "", "the panic stops the program: {stdout}");
+    assert_eq!(status, 1, "a bounds panic exits non-zero (stderr: {stderr})");
+    assert!(
+        stderr.contains("index out of bounds: the len is 2 but the index is 2"),
+        "the bounds panic keeps rustc's message: {stderr}"
+    );
+}
+
+/// `ravum-lang test --filter X` forwards `--filter X`; the emitted runner must
+/// honour it and print the rustc-compatible summary line.
+#[test]
+fn audit_test_runner_filter_and_summary_line() {
+    if skip("audit_test_runner_filter_and_summary_line") {
+        return;
+    }
+    let mut options = GenOptions::default();
+    options.test_mode = true;
+    let code = generate_source_with(
+        "p0a-runner-filter",
+        r#"test fn alpha_works() {
+    assert(true);
+}
+
+test fn beta_works() {
+    assert(true);
+}
+
+fn main() {
+}
+"#,
+        &options,
+    );
+    let built = must_compile(&code, "p0a-runner-filter");
+    let (all, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        all, "running 2 tests\ntest alpha_works ... ok\ntest beta_works ... ok\n\n\
+              test result: ok; 2 passed; 0 failed; 0 ignored; 0 filtered out\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0);
+    let (filtered, stderr, status) = run(&built.binary, &["--filter", "beta"]);
+    assert_eq!(
+        filtered, "running 1 tests\ntest beta_works ... ok\n\n\
+                   test result: ok; 1 passed; 0 failed; 0 ignored; 1 filtered out\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0);
+    let (none, stderr, status) = run(&built.binary, &["--filter", "zzz"]);
+    assert_eq!(
+        none, "running 0 tests\n\ntest result: ok; 0 passed; 0 failed; 0 ignored; 2 filtered out\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0);
 }

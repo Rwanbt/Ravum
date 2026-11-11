@@ -37,7 +37,7 @@ use ravum_lang_sema::facts::{
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
     Block, EnumItem, Expr, ExprKind, ExternBlock, FloatTy, FnItem, GenericParam, Ident, ImplItem,
-    IntTy, Item, ItemKind, LitPat, MatchArm, Module, NodeId, ParamKind, Pat, PatKind, Path,
+    IntTy, Item, ItemKind, LitPat, MatchArm, Module, NodeId, Param, ParamKind, Pat, PatKind, Path,
     PathRoot, Receiver, Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp,
     VariantDefFields, VariantPatFields,
 };
@@ -52,6 +52,31 @@ fn err(message: impl Into<String>) -> CodegenError {
     CodegenError {
         message: message.into(),
     }
+}
+
+/// Position in which a Rust type is written. Only text types depend on it.
+///
+/// Ravum Core 1.0 keeps two views of the borrowed text type:
+/// * a stored, field-held, returned or otherwise owned place may only hold the
+///   `&'static str` view (OWN-6.2, and OWN-6.1 forbids storing any other
+///   reference), so the Rust spelling needs the explicit `'static` lifetime —
+///   without it `struct S { text: &str }` / `fn f() -> &str` is E0106;
+/// * a function parameter may receive the *non-static* view produced inside one
+///   instruction by `String::as_str` / `str::as_str` (STD-9.3, TYP-13.1,
+///   OWN-6.7), e.g. `io::println(s.as_str())`. Rust elides that lifetime at the
+///   parameter, so the spelling must stay `&str`: writing `&'static str` would
+///   reject a program the checker accepts (`fn g(s: &str)` called with
+///   `text.as_str()` — the exact check-pass/build-fail class being fixed).
+///
+/// `TypePos` carries that distinction through the whole type tree: a nested
+/// `&str` in `Option<&str>` follows the outer position, which matches Rust's
+/// elision rules for parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TypePos {
+    /// Owned/stored/returned/annotated position: `&str` is `&'static str`.
+    Value,
+    /// Function parameter or foreign-function declaration: lifetime elided.
+    Param,
 }
 
 /// G-6.36: a float literal anywhere inside a pattern forces the guard lowering
@@ -119,6 +144,7 @@ impl<'a> Generator<'a> {
             checked: self.checked,
             options: self.options,
             index,
+            array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
         };
         emitter.run()
     }
@@ -921,6 +947,9 @@ struct Emitter<'a> {
     checked: &'a CheckedProgram,
     options: &'a GenOptions,
     index: Index,
+    /// Array-element moves planned for the function body being emitted (see
+    /// [`Emitter::plan_array_moves`]).
+    array_moves: std::cell::RefCell<ArrayMovePlan>,
 }
 
 impl<'a> Emitter<'a> {
@@ -1027,8 +1056,45 @@ impl<'a> Emitter<'a> {
         buf.line("fn main() -> std::process::ExitCode {");
         buf.indent += 1;
         buf.line("crate::rv_install_test_panic_hook();");
+        // `ravum-lang test --filter X` forwards `--filter X` to this runner
+        // (`args.rs` documents that contract). The runner honours it itself:
+        // a test is selected when its name contains the filter text, like
+        // rustc's libtest `--filter`.
+        buf.line("let rv_filter: Option<String> = {");
+        buf.indent += 1;
+        buf.line("let mut rv_arguments = std::env::args().skip(1);");
+        buf.line("let mut rv_filter: Option<String> = None;");
+        buf.line("while let Some(rv_argument) = rv_arguments.next() {");
+        buf.indent += 1;
+        buf.line("if let Some(rv_text) = rv_argument.strip_prefix(\"--filter=\") {");
+        buf.indent += 1;
+        buf.line("rv_filter = Some(rv_text.to_string());");
+        buf.indent -= 1;
+        buf.line("} else if rv_argument == \"--filter\" {");
+        buf.indent += 1;
+        buf.line("rv_filter = rv_arguments.next();");
+        buf.indent -= 1;
+        buf.line("}");
+        buf.indent -= 1;
+        buf.line("}");
+        buf.line("rv_filter");
+        buf.indent -= 1;
+        buf.line("};");
+        buf.line(
+            "let rv_matches = |rv_name: &str| match &rv_filter { \
+             Some(rv_text) => rv_name.contains(rv_text.as_str()), None => true };",
+        );
+        buf.line("let mut rv_selected: usize = 0;");
+        for (name, _id) in &self.index.tests {
+            buf.line(&format!(
+                "if rv_matches({}) {{ rv_selected += 1; }}",
+                string_literal(name)
+            ));
+        }
+        buf.line("println!(\"running {} tests\", rv_selected);");
         buf.line("let mut rv_passed: usize = 0;");
         buf.line("let mut rv_failed: usize = 0;");
+        buf.line("let mut rv_filtered: usize = 0;");
         for (name, id) in &self.index.tests {
             let path = self.item_path(*id)?;
             let ret = match self.index.fns.get(id) {
@@ -1044,15 +1110,21 @@ impl<'a> Emitter<'a> {
                     )));
                 }
             };
+            let name = string_literal(name);
             buf.line(&format!(
-                "if {}({}, {}) {{ rv_passed += 1; }} else {{ rv_failed += 1; }}",
-                runner,
-                string_literal(name),
-                path
+                "if rv_matches({name}) {{ if {runner}({name}, {path}) {{ rv_passed += 1; }} \
+                 else {{ rv_failed += 1; }} }} else {{ rv_filtered += 1; }}"
             ));
         }
+        // Core 1.0 has no `#[ignore]` attribute, so the ignored count is always 0;
+        // the field stays in the line so a consumer can parse it unconditionally.
+        buf.line("let rv_ignored: usize = 0;");
         buf.line("println!();");
-        buf.line("println!(\"{} passed; {} failed\", rv_passed, rv_failed);");
+        buf.line(
+            "println!(\"test result: {}; {} passed; {} failed; {} ignored; {} filtered out\", \
+             if rv_failed == 0 { \"ok\" } else { \"FAILED\" }, rv_passed, rv_failed, rv_ignored, \
+             rv_filtered);",
+        );
         buf.line(
             "if rv_failed == 0 { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) }",
         );
@@ -1125,7 +1197,10 @@ impl<'a> Emitter<'a> {
                             )));
                         }
                         let name = mangle_ident(&name.name);
-                        decls.push(format!("{name}: {}", self.type_node(ty)?));
+                        // Foreign declarations take a plain pattern (Rust forbids
+                        // `mut` there) and keep the elided text lifetime: a `&str`
+                        // argument is a view valid for the call (STD-9.3).
+                        decls.push(format!("{name}: {}", self.type_node_pos(ty, TypePos::Param)?));
                         args.push(name);
                     }
                     ParamKind::Receiver(_) => {
@@ -1224,11 +1299,20 @@ impl<'a> Emitter<'a> {
                     Receiver::Exclusive => "&mut self".to_string(),
                     Receiver::ByValue => "self".to_string(),
                 }),
-                ParamKind::Binding { name, ty, .. } => {
+                ParamKind::Binding { mutable, name, ty } => {
+                    // A `mut` parameter binding is part of the checked program
+                    // (the checker only accepts an assignment when the binding
+                    // is mutable), so the emitted Rust parameter must carry
+                    // `mut` too — otherwise `fn bump(mut x: i32) { x = x + 1; }`
+                    // is a check-pass/build-fail (`E0384`).
                     params.push(format!(
                         "{}: {}",
-                        mangle_ident(&name.name),
-                        self.type_node(ty)?
+                        if *mutable {
+                            format!("mut {}", mangle_ident(&name.name))
+                        } else {
+                            mangle_ident(&name.name)
+                        },
+                        self.type_node_pos(ty, TypePos::Param)?
                     ));
                 }
             }
@@ -1241,6 +1325,9 @@ impl<'a> Emitter<'a> {
         }
         signature.push(' ');
 
+        // Plan the array-element moves of this body (OWN-5.4) before emitting it:
+        // `expr` consults the plan when it reaches an index expression.
+        *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body, &fun.params);
         let body = self.block_text(buf.indent, &fun.body)?;
         buf.line(&format!("{signature}{body}"));
         Ok(())
@@ -1398,9 +1485,11 @@ impl<'a> Emitter<'a> {
         buf.out.push_str("{\n");
         buf.indent += 1;
         for statement in &block.stmts {
+            self.emit_hoists(&mut buf, statement.id);
             self.emit_stmt(&mut buf, statement)?;
         }
         if let Some(tail) = &block.tail {
+            self.emit_hoists(&mut buf, tail.id);
             let text = self.expr(tail, buf.indent)?;
             buf.line(text.trim_end_matches('\n'));
         }
@@ -1409,6 +1498,27 @@ impl<'a> Emitter<'a> {
         // The caller embeds the block inline (`fn f() {`, `if c {`, `=> {`), so
         // the closing brace must not carry a trailing newline.
         Ok(buf.finish().trim_end_matches('\n').to_string())
+    }
+
+    /// Emit the array destructuring(s) hoisted before one statement or block tail
+    /// (see [`ArrayMovePlan`]). The bindings are `mut` so a rewritten `&mut a[k]`
+    /// borrow stays writable; the generated file already allows `unused_mut`.
+    fn emit_hoists(&self, buf: &mut Buf, key: NodeId) {
+        let plan = self.array_moves.borrow();
+        let Some(hoists) = plan.hoists.get(&key) else {
+            return;
+        };
+        for hoist in hoists {
+            let mut slots = Vec::new();
+            for binding in &hoist.bindings {
+                slots.push(format!("mut {binding}"));
+            }
+            buf.line(&format!(
+                "let [{}] = {};",
+                slots.join(", "),
+                hoist.base
+            ));
+        }
     }
 
     fn emit_stmt(&self, buf: &mut Buf, statement: &Stmt) -> Result<(), CodegenError> {
@@ -1460,6 +1570,154 @@ impl<'a> Emitter<'a> {
                 Ok(())
             }
         }
+    }
+
+    // -- array-element moves (OWN-5.4 / P0-A.2) ----------------------------
+
+    /// `true` when values of `ty` are copied instead of moved.
+    ///
+    /// This mirrors `sema::own::is_copy_type` (OWN-2.1) so the emitter can tell
+    /// a *copy read* from a *move* when it lowers `a[i]`. A mismatch is harmless
+    /// in both directions: calling a Copy type mobile only moves a value with no
+    /// observable drop, and calling a mobile type Copy leaves the plain `a[i]`
+    /// that rustc rejects loudly — never a silent semantic change.
+    fn is_copy_type(&self, ty: &Type) -> bool {
+        match ty {
+            Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::Isize
+            | Type::Usize
+            | Type::F32
+            | Type::F64
+            | Type::Bool
+            | Type::Char
+            | Type::Unit
+            | Type::Never
+            | Type::Str
+            | Type::Ref { .. } => true,
+            Type::Array { elem, .. } => self.is_copy_type(elem),
+            Type::Tuple(items) => items.iter().all(|item| self.is_copy_type(item)),
+            Type::Option(inner) => self.is_copy_type(inner),
+            Type::Result(ok, error) => self.is_copy_type(ok) && self.is_copy_type(error),
+            Type::Nominal { def, .. } => self
+                .facts()
+                .structs
+                .get(def)
+                .map(|info| info.is_copy)
+                .or_else(|| self.facts().enums.get(def).map(|info| info.is_copy))
+                .unwrap_or(false),
+            Type::String | Type::Vec(_) | Type::Slice(_) | Type::Param { .. } | Type::Error => false,
+        }
+    }
+
+    /// A `Cell`/`RefCell`-style place: a single-segment local path, as opposed to
+    /// a field or another index expression.
+    fn plain_local_place(&self, expr: &Expr) -> Option<(String, usize)> {
+        let ExprKind::Path(path) = &expr.kind else {
+            return None;
+        };
+        if path.root != PathRoot::Plain || path.segments.len() != 1 {
+            return None;
+        }
+        match self.facts().resolutions.get(&path.id) {
+            Some(Resolution::Local { name, .. }) => {
+                let ty = self.facts().expr_types.get(&expr.id)?;
+                match ty {
+                    Type::Array { len, .. } => Some((name.clone(), *len)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn is_owned_position(&self, expr: &Expr) -> bool {
+        self.facts()
+            .expr_types
+            .get(&expr.id)
+            .map(|ty| !self.is_copy_type(ty))
+            .unwrap_or(false)
+    }
+
+    /// Plan the array-element moves of one function body (see [`ArrayMovePlan`]).
+    fn plan_array_moves(&self, body: &Block, params: &[Param]) -> ArrayMovePlan {
+        let mut planner = MovePlanner {
+            emitter: self,
+            binders: BTreeMap::new(),
+            accesses: Vec::new(),
+            whole_uses: Vec::new(),
+            top_keys: Vec::new(),
+            order: 0,
+        };
+        planner.walk_params(params);
+        planner.walk_body(body);
+        planner.plan()
+    }
+
+    /// Lower one array-element move.
+    ///
+    /// Constant index: `{ let [_, __rv_el_7] = a; __rv_el_7 }` — an array pattern
+    /// is irrefutable and moves only the selected slot. Observable difference
+    /// with a native per-slot move: the unselected slots are dropped at the
+    /// destructuring statement instead of at the end of the enclosing scope.
+    /// That is unobservable in Core 1.0 because the language has no `Drop`/trait
+    /// implementations (`impl` is inherent only), so no user code can run at
+    /// either point; memory is simply released earlier.
+    ///
+    /// Dynamic index: `a.into_iter().nth(i)` consumes the array and drops the
+    /// same slots; an out-of-range index panics with the same text rustc uses
+    /// for `a[i]` ("index out of bounds: the len is N but the index is I").
+    /// Both forms were measured with the real toolchain (see
+    /// `tests/backend_audit.rs`).
+    fn array_index_move(
+        &self,
+        id: NodeId,
+        base: &Expr,
+        index: &Expr,
+        mv: ArrayMove,
+        indent: usize,
+    ) -> Result<String, CodegenError> {
+        let base_text = self.operand(base, indent)?;
+        if let ExprKind::Int { value, .. } = &index.kind {
+            let position = *value;
+            if position >= mv.len as u128 {
+                // The checker rejects a constant out-of-bounds index; fail closed
+                // rather than emit a pattern Rust cannot match.
+                return Err(err(format!(
+                    "constant array index {position} is out of bounds for the array of {} elements (index node {id})",
+                    mv.len
+                )));
+            }
+            let position = position as usize;
+            let mut slots = Vec::new();
+            for slot in 0..mv.len {
+                if slot == position {
+                    slots.push(format!("__rv_el_{id}"));
+                } else {
+                    slots.push("_".to_string());
+                }
+            }
+            return Ok(format!(
+                "{{ let [{}] = {base_text}; __rv_el_{id} }}",
+                slots.join(", ")
+            ));
+        }
+        let index_text = self.expr(index, indent)?;
+        Ok(format!(
+            "{{ let __rv_idx_{id}: usize = {index_text}; \
+             match {base_text}.into_iter().nth(__rv_idx_{id}) {{ \
+             Some(__rv_el_{id}) => __rv_el_{id}, \
+             None => panic!(\"index out of bounds: the len is {{}} but the index is {{}}\", {}usize, __rv_idx_{id}) }} }}",
+            mv.len
+        ))
     }
 
     // -- expressions -------------------------------------------------------
@@ -1526,11 +1784,23 @@ impl<'a> Emitter<'a> {
             ExprKind::TupleIndex { base, index } => {
                 Ok(format!("{}.{}", self.operand(base, indent)?, index))
             }
-            ExprKind::Index { base, index } => Ok(format!(
-                "{}[{}]",
-                self.operand(base, indent)?,
-                self.expr(index, indent)?
-            )),
+            ExprKind::Index { base, index } => {
+                // The plan is per function body, so the borrow ends before the
+                // recursive emission below.
+                let rewrite = self.array_moves.borrow().rewrites.get(&expr.id).cloned();
+                if let Some(binding) = rewrite {
+                    return Ok(binding);
+                }
+                let single = self.array_moves.borrow().consumes.get(&expr.id).copied();
+                if let Some(mv) = single {
+                    return self.array_index_move(expr.id, base, index, mv, indent);
+                }
+                Ok(format!(
+                    "{}[{}]",
+                    self.operand(base, indent)?,
+                    self.expr(index, indent)?
+                ))
+            }
             ExprKind::Unary { op, expr: inner } => {
                 let operand = self.operand(inner, indent)?;
                 Ok(match op {
@@ -2023,28 +2293,44 @@ impl<'a> Emitter<'a> {
     // -- types -------------------------------------------------------------
 
     fn type_node(&self, ty: &AstType) -> Result<String, CodegenError> {
-        if let Some(resolved) = self.facts().type_nodes.get(&ty.id) {
-            if !resolved.is_error() {
-                return self.fmt_type(resolved);
-            }
-        }
-        self.syntactic_type(ty)
+        self.type_node_pos(ty, TypePos::Value)
     }
 
-    fn syntactic_type(&self, ty: &AstType) -> Result<String, CodegenError> {
+    /// `type_node` for an explicit position (see [`TypePos`]).
+    fn type_node_pos(&self, ty: &AstType, pos: TypePos) -> Result<String, CodegenError> {
+        if let Some(resolved) = self.facts().type_nodes.get(&ty.id) {
+            if !resolved.is_error() {
+                return self.fmt_type_pos(resolved, pos);
+            }
+        }
+        self.syntactic_type_pos(ty, pos)
+    }
+
+    fn syntactic_type_pos(&self, ty: &AstType, pos: TypePos) -> Result<String, CodegenError> {
         match &ty.kind {
             TypeKind::Unit => Ok("()".to_string()),
             TypeKind::Never => Ok("!".to_string()),
             TypeKind::SelfType => Ok("Self".to_string()),
-            TypeKind::Ref { mutable, inner } => Ok(format!(
-                "&{}{}",
-                if *mutable { "mut " } else { "" },
-                self.syntactic_type(inner)?
-            )),
+            TypeKind::Ref { mutable, inner } => {
+                if !*mutable && self.is_str_syntax(inner) {
+                    // Unresolved `&str`: apply the same position rule as
+                    // `fmt_type_pos` so a hand-built program without type facts
+                    // still emits valid Rust.
+                    return Ok(match pos {
+                        TypePos::Value => "&'static str".to_string(),
+                        TypePos::Param => "&str".to_string(),
+                    });
+                }
+                Ok(format!(
+                    "&{}{}",
+                    if *mutable { "mut " } else { "" },
+                    self.syntactic_type_pos(inner, pos)?
+                ))
+            }
             TypeKind::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.syntactic_type(item)?);
+                    rendered.push(self.syntactic_type_pos(item, pos)?);
                 }
                 if rendered.len() == 1 {
                     Ok(format!("({},)", rendered[0]))
@@ -2054,11 +2340,11 @@ impl<'a> Emitter<'a> {
             }
             TypeKind::Array { elem, len } => Ok(format!(
                 "[{}; {}]",
-                self.syntactic_type(elem)?,
+                self.syntactic_type_pos(elem, pos)?,
                 self.array_length(len)?
             )),
-            TypeKind::Slice(inner) => Ok(format!("[{}]", self.syntactic_type(inner)?)),
-            TypeKind::Path(path) => self.syntactic_path_type(path),
+            TypeKind::Slice(inner) => Ok(format!("[{}]", self.syntactic_type_pos(inner, pos)?)),
+            TypeKind::Path(path) => self.syntactic_path_type(path, pos),
             TypeKind::Infer => Err(err(format!(
                 "missing resolved type for inferred type node {}",
                 ty.id
@@ -2066,7 +2352,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn syntactic_path_type(&self, path: &Path) -> Result<String, CodegenError> {
+    /// `true` when this type syntax is the bare `str` keyword (`&str` inner).
+    fn is_str_syntax(&self, ty: &AstType) -> bool {
+        match &ty.kind {
+            TypeKind::Path(path) => {
+                path.root == PathRoot::Plain
+                    && path.segments.len() == 1
+                    && path.segments[0].name.name == "str"
+            }
+            _ => false,
+        }
+    }
+
+    fn syntactic_path_type(&self, path: &Path, pos: TypePos) -> Result<String, CodegenError> {
         if path.root != PathRoot::Plain {
             return Err(err(format!(
                 "missing resolved type for rooted type path `{}`",
@@ -2088,7 +2386,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in &segment.args {
-                        rendered.push(self.syntactic_type(argument)?);
+                        rendered.push(self.syntactic_type_pos(argument, pos)?);
                     }
                     Ok(format!("{builtin}<{}>", rendered.join(", ")))
                 }
@@ -2112,6 +2410,13 @@ impl<'a> Emitter<'a> {
     }
 
     fn fmt_type(&self, ty: &Type) -> Result<String, CodegenError> {
+        self.fmt_type_pos(ty, TypePos::Value)
+    }
+
+    /// Emit a semantic type in an explicit position; see [`TypePos`] for why the
+    /// borrowed text type is spelled `&'static str` when owned and `&str` when
+    /// passed as a parameter.
+    fn fmt_type_pos(&self, ty: &Type, pos: TypePos) -> Result<String, CodegenError> {
         Ok(match ty {
             Type::I8 => "i8".to_string(),
             Type::I16 => "i16".to_string(),
@@ -2131,19 +2436,42 @@ impl<'a> Emitter<'a> {
             Type::Char => "char".to_string(),
             Type::Unit => "()".to_string(),
             Type::Never => "!".to_string(),
+            // `str` is unsized: it is legal in Core 1.0 media only behind the
+            // `&str` view, which `Type::Ref` handles below.
             Type::Str => "str".to_string(),
             Type::String => "String".to_string(),
-            Type::Ref { mutable, inner } => format!(
-                "&{}{}",
-                if *mutable { "mut " } else { "" },
-                self.fmt_type(inner)?
-            ),
-            Type::Array { elem, len } => format!("[{}; {len}]", self.fmt_type(elem)?),
-            Type::Slice(inner) => format!("[{}]", self.fmt_type(inner)?),
+            Type::Ref { mutable, inner } => {
+                if matches!(**inner, Type::Str) {
+                    if *mutable {
+                        // resolve.rs rejects `&mut str` with E-RES-UNKNOWN, so a
+                        // checked program can never contain it; fail closed
+                        // instead of guessing a Rust spelling.
+                        return Err(err(
+                            "internal error: `&mut str` has no Core 1.0 representation",
+                        ));
+                    }
+                    return Ok(match pos {
+                        // OWN-6.2: the only storable/returnable reference.
+                        TypePos::Value => "&'static str".to_string(),
+                        // STD-9.3 / TYP-13.1: a parameter accepts the
+                        // instruction-scoped view from `String::as_str`.
+                        TypePos::Param => "&str".to_string(),
+                    });
+                }
+                format!(
+                    "&{}{}",
+                    if *mutable { "mut " } else { "" },
+                    self.fmt_type_pos(inner, pos)?
+                )
+            }
+            Type::Array { elem, len } => {
+                format!("[{}; {len}]", self.fmt_type_pos(elem, pos)?)
+            }
+            Type::Slice(inner) => format!("[{}]", self.fmt_type_pos(inner, pos)?),
             Type::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.fmt_type(item)?);
+                    rendered.push(self.fmt_type_pos(item, pos)?);
                 }
                 if rendered.len() == 1 {
                     format!("({},)", rendered[0])
@@ -2151,10 +2479,14 @@ impl<'a> Emitter<'a> {
                     format!("({})", rendered.join(", "))
                 }
             }
-            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type(inner)?),
-            Type::Option(inner) => format!("Option<{}>", self.fmt_type(inner)?),
+            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type_pos(inner, pos)?),
+            Type::Option(inner) => format!("Option<{}>", self.fmt_type_pos(inner, pos)?),
             Type::Result(ok, error) => {
-                format!("Result<{}, {}>", self.fmt_type(ok)?, self.fmt_type(error)?)
+                format!(
+                    "Result<{}, {}>",
+                    self.fmt_type_pos(ok, pos)?,
+                    self.fmt_type_pos(error, pos)?
+                )
             }
             Type::Nominal { def, name, args } => {
                 let base = self.nominal_path(*def, name)?;
@@ -2163,7 +2495,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in args {
-                        rendered.push(self.fmt_type(argument)?);
+                        rendered.push(self.fmt_type_pos(argument, pos)?);
                     }
                     format!("{base}<{}>", rendered.join(", "))
                 }
@@ -2733,6 +3065,530 @@ impl<'a> Emitter<'a> {
             Some(file) => (file.path.clone(), file.line_of(span.start)),
             None => ("<unknown>".to_string(), 0),
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Array-element move planner (OWN-5.4 / P0-A.2).
+// ---------------------------------------------------------------------------
+//
+// Ravum allows moving an element out of a tuple *or* an array when the aggregate
+// is never reused (OWN-5.4; OWN-5.5 forbids only `Vec` indices, which the checker
+// already rejects with `E-OWN-PARTIAL-MOVE`). Rust cannot move out of an array
+// `a[i]` at all (`E0508`), so the backend lowers such a move by destructuring the
+// array into one binding per element.
+//
+// The destructuring consumes the whole array, so the emitter must be sure that
+// every use of that array is one of the rewritten element accesses. It proves
+// that locally and syntactically:
+// * exactly one binder of the name exists in the signature + body (no shadowing);
+// * the binder is a parameter or a top-level `let` declared before the hoist;
+// * every access to the array is a constant index (`a[k]`);
+// * no whole-place use of the array (`a`, `a.len()`, `f(a)`, `&a`, assignment to
+//   `a`) occurs at or after the hoist statement — a whole use after a partial
+//   move is `E-OWN-PARTIAL-MOVE`, which the checker already rejects.
+//
+// The destructuring is hoisted before the enclosing *top-level statement* of the
+// first move (a block expression around the index could not keep the element
+// bindings alive for the later accesses), and every constant access at or after
+// that statement is rewritten to its element binding (by AST node id, so no name
+// ambiguity can creep in). Reads, copies, moves, `&`/`&mut` borrows and Copy
+// projections all keep working because each element is a plain local.
+//
+// Observable difference: all elements become locals, so they drop at the end of
+// the function scope instead of with the array, and in reverse declaration order.
+// That is unobservable in Core 1.0: the language has no `Drop`/trait
+// implementations (`impl` is inherent only), so no user code can run at either
+// point; only the instant memory is released can differ.
+//
+// When the proof fails the emitter keeps the plain `a[i]`, which rustc rejects
+// loudly (`E0508`) — never a silent semantic change. The shapes that stay in that
+// state are: a nested index chain (`a[0][1]`), an array reached through a field or
+// tuple projection (`h.items[0]`, `t.0[0]`), a binding whose name is shadowed
+// somewhere in the body, and a dynamic index in a body that also accesses the same
+// array (the checker rejects most of those with `E-OWN-PARTIAL-MOVE` /
+// `E-OWN-USE-AFTER-MOVE`). A *dynamic* index with a single use in the body keeps
+// the separate `into_iter().nth()` lowering, which consumes the array and
+// preserves rustc's bounds-panic message.
+
+/// What the emitter does with the array bindings of one function body.
+#[derive(Debug, Default)]
+struct ArrayMovePlan {
+    /// Index expression node -> element binding identifier (`__rv_el_<p>_<k>`).
+    rewrites: BTreeMap<NodeId, String>,
+    /// Statement node (or block-tail expression node) -> destructuring(s) to emit
+    /// immediately before it.
+    hoists: BTreeMap<NodeId, Vec<HoistPlan>>,
+    /// Single-use lowering for a dynamic index (`a[i]`).
+    consumes: BTreeMap<NodeId, ArrayMove>,
+}
+
+/// A destructuring hoisted before one statement or block tail.
+#[derive(Debug, Clone)]
+struct HoistPlan {
+    /// Emitted Rust text of the array place (a local identifier).
+    base: String,
+    /// Element binding identifiers, in array order.
+    bindings: Vec<String>,
+}
+
+/// One array-element move lowered on its own (dynamic index, single use).
+#[derive(Debug, Clone, Copy)]
+struct ArrayMove {
+    /// Number of elements in the array type.
+    len: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BinderKind {
+    Param,
+    Let,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Binder {
+    kind: BinderKind,
+    /// Block nesting depth inside the function body (0 = directly in the body).
+    depth: usize,
+    /// Index of the enclosing top-level statement.
+    top: usize,
+}
+
+/// One index expression whose base is a local array binding.
+struct Access {
+    /// Node id of the `Index` expression.
+    node: NodeId,
+    /// Ravum name of the array binding.
+    name: String,
+    /// Index of the enclosing top-level statement (== `top_keys.len()-1` for the
+    /// body tail).
+    top: usize,
+    /// Constant element index, when the index expression is an integer literal.
+    constant: Option<usize>,
+    /// `true` when this access consumes the element by value.
+    consumed: bool,
+    /// Node id of the base path (also the element-binding prefix).
+    base_node: NodeId,
+    /// Emitted Rust text of the array place.
+    base_text: String,
+    /// Element count of the array type.
+    len: usize,
+}
+
+/// A use of the whole array place (as opposed to one element access).
+struct WholeUse {
+    name: String,
+    top: usize,
+}
+
+/// True when a `let` pattern consumes its initializer by value.
+fn pattern_consumes_value(pat: &Pat) -> bool {
+    match &pat.kind {
+        // Binding by value moves (or drops, for `_`) the initializer.
+        PatKind::Binding { .. } | PatKind::Wild => true,
+        // A tuple/variant pattern destructures the initializer.
+        PatKind::Tuple(_) | PatKind::Variant { .. } => true,
+        // Literal and constant patterns only compare the value.
+        PatKind::Lit(_) | PatKind::Path(_) => false,
+    }
+}
+
+/// Syntactic walk that finds array-element moves and counts the uses of their
+/// bindings, so [`Emitter::plan_array_moves`] can decide what is provably safe.
+struct MovePlanner<'e, 'a> {
+    emitter: &'e Emitter<'a>,
+    binders: BTreeMap<String, Vec<Binder>>,
+    accesses: Vec<Access>,
+    whole_uses: Vec<WholeUse>,
+    /// Node id of every top-level statement, then of the body tail expression.
+    top_keys: Vec<NodeId>,
+    order: usize,
+}
+
+impl<'e, 'a> MovePlanner<'e, 'a> {
+    fn tick(&mut self) -> usize {
+        self.order += 1;
+        self.order
+    }
+
+    fn record_whole_use(&mut self, path: &Path, top: usize) {
+        if let Some(Resolution::Local { name, .. }) =
+            self.emitter.facts().resolutions.get(&path.id)
+        {
+            self.whole_uses.push(WholeUse {
+                name: name.clone(),
+                top,
+            });
+        }
+    }
+
+    fn record_binder(&mut self, name: &str, kind: BinderKind, depth: usize, top: usize) {
+        self.binders
+            .entry(name.to_string())
+            .or_default()
+            .push(Binder { kind, depth, top });
+    }
+
+    fn walk_params(&mut self, params: &[Param]) {
+        for param in params {
+            if let ParamKind::Binding { name, .. } = &param.kind {
+                let name = name.name.clone();
+                self.record_binder(&name, BinderKind::Param, 0, 0);
+            }
+        }
+    }
+
+    fn walk_body(&mut self, body: &Block) {
+        for (index, statement) in body.stmts.iter().enumerate() {
+            self.top_keys.push(statement.id);
+            self.walk_statement(statement, index, 0);
+        }
+        if let Some(tail) = &body.tail {
+            self.top_keys.push(tail.id);
+            let top = body.stmts.len();
+            self.walk_expr(tail, true, top, 0);
+        }
+    }
+
+    fn walk_statement(&mut self, statement: &Stmt, top: usize, depth: usize) {
+        self.tick();
+        match &statement.kind {
+            StmtKind::Let(declaration) => {
+                self.walk_pattern(&declaration.pat, depth, top);
+                if let Some(init) = &declaration.init {
+                    let owned = pattern_consumes_value(&declaration.pat);
+                    self.walk_expr(init, owned, top, depth);
+                }
+            }
+            StmtKind::Expr { expr, .. } => self.walk_expr(expr, false, top, depth),
+        }
+    }
+
+    fn walk_nested_block(&mut self, block: &Block, owned_tail: bool, top: usize, depth: usize) {
+        for statement in &block.stmts {
+            self.walk_statement(statement, top, depth + 1);
+        }
+        if let Some(tail) = &block.tail {
+            self.walk_expr(tail, owned_tail, top, depth + 1);
+        }
+    }
+
+    /// Root path of an index chain (`a[0][1]` -> `a`).
+    fn index_chain_root(expr: &Expr) -> Option<&Path> {
+        match &expr.kind {
+            ExprKind::Path(path) => Some(path),
+            ExprKind::Index { base, .. } => Self::index_chain_root(base),
+            _ => None,
+        }
+    }
+
+    /// `owned` is true when the *value* of `expr` is consumed by its parent
+    /// (returned, bound by value, moved into an aggregate, ...).
+    fn walk_expr(&mut self, expr: &Expr, owned: bool, top: usize, depth: usize) {
+        self.tick();
+        match &expr.kind {
+            ExprKind::Path(path) => self.record_whole_use(path, top),
+            ExprKind::Index { base, index } => {
+                // A plain local array access is tracked; the base is a place
+                // borrowed by the indexing operation and the index is a `usize`
+                // read, so neither is a whole-place use.
+                if let ExprKind::Path(path) = &base.kind {
+                    if let Some(Resolution::Local { name, .. }) =
+                        self.emitter.facts().resolutions.get(&path.id)
+                    {
+                        if let Some((_, len)) = self.emitter.plain_local_place(base) {
+                            let constant = match &index.kind {
+                                ExprKind::Int { value, .. } => {
+                                    usize::try_from(*value).ok().filter(|k| *k < len)
+                                }
+                                _ => None,
+                            };
+                            self.accesses.push(Access {
+                                node: expr.id,
+                                name: name.clone(),
+                                top,
+                                constant,
+                                consumed: owned && self.emitter.is_owned_position(expr),
+                                base_node: path.id,
+                                base_text: mangle_ident(name),
+                                len,
+                            });
+                            self.walk_expr(index, false, top, depth);
+                            return;
+                        }
+                    }
+                }
+                // Nested index (`a[0][1]`) or a composite base: the array cannot
+                // be rewritten access-for-access, so record a whole use to make
+                // the full-rewrite lowering bail out (it stays a loud E0508).
+                if let Some(root) = Self::index_chain_root(base) {
+                    self.record_whole_use(root, top);
+                }
+                self.walk_expr(base, false, top, depth);
+                self.walk_expr(index, false, top, depth);
+            }
+            ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
+                // A Copy projection only reads the base place; a mobile
+                // projection moves out of it (OWN-5.3), so the base inherits the
+                // consumed position. This is what turns `return a[1].0;` into a
+                // move of `a[1]` while `return a[0].1;` stays a read.
+                let mobile = self.emitter.is_owned_position(expr);
+                self.walk_expr(base, owned && mobile, top, depth);
+            }
+            ExprKind::Tuple(items) | ExprKind::Array(items) => {
+                // Constructing an aggregate moves its elements.
+                for item in items {
+                    self.walk_expr(item, true, top, depth);
+                }
+            }
+            ExprKind::StructLit { fields, .. } => {
+                for field in fields {
+                    self.walk_expr(&field.value, true, top, depth);
+                }
+            }
+            ExprKind::Call { callee, args } => {
+                self.walk_expr(callee, false, top, depth);
+                let owned_args = self.call_argument_positions(expr.id, args.len());
+                for (arg, owned) in args.iter().zip(owned_args) {
+                    self.walk_expr(arg, owned, top, depth);
+                }
+            }
+            ExprKind::MethodCall { receiver, args, .. } => {
+                // Only an explicit `self` receiver moves; `&self`/`&mut self`
+                // (and every builtin method, whose signature the backend does not
+                // model) borrow, so the receiver stays a read here.
+                self.walk_expr(receiver, false, top, depth);
+                let owned_args = self.method_argument_positions(expr.id, args.len());
+                for (arg, owned) in args.iter().zip(owned_args) {
+                    self.walk_expr(arg, owned, top, depth);
+                }
+            }
+            ExprKind::Assign { target, value } => {
+                self.walk_expr(value, true, top, depth);
+                self.walk_expr(target, false, top, depth);
+            }
+            ExprKind::AssignOp { target, value, .. } => {
+                self.walk_expr(value, true, top, depth);
+                self.walk_expr(target, false, top, depth);
+            }
+            ExprKind::Return(Some(value)) => self.walk_expr(value, true, top, depth),
+            ExprKind::Return(None) | ExprKind::Break | ExprKind::Continue => {}
+            ExprKind::If {
+                cond,
+                then_block,
+                else_branch,
+            } => {
+                self.walk_expr(cond, false, top, depth);
+                self.walk_nested_block(then_block, owned, top, depth);
+                if let Some(else_branch) = else_branch {
+                    self.walk_expr(else_branch, owned, top, depth);
+                }
+            }
+            ExprKind::Block(block) | ExprKind::Unsafe(block) => {
+                self.walk_nested_block(block, owned, top, depth)
+            }
+            ExprKind::Match { scrutinee, arms } => {
+                // The scrutinee's move-ness depends on the arm patterns; stay
+                // conservative and let a plain `a[i]` be rejected loudly.
+                self.walk_expr(scrutinee, false, top, depth);
+                for arm in arms {
+                    self.walk_pattern(&arm.pat, depth + 1, top);
+                    self.walk_expr(&arm.body, owned, top, depth);
+                }
+            }
+            ExprKind::While { cond, body } => {
+                self.walk_expr(cond, false, top, depth);
+                self.walk_nested_block(body, false, top, depth);
+            }
+            ExprKind::Loop { body } => self.walk_nested_block(body, false, top, depth),
+            ExprKind::For { pat, iter, body } => {
+                self.walk_pattern(pat, depth + 1, top);
+                self.walk_expr(iter, false, top, depth);
+                self.walk_nested_block(body, false, top, depth);
+            }
+            ExprKind::ArrayRepeat { value, len } => {
+                // `[value; len]` copies `value`; it cannot move an array element
+                // out of a non-Copy array in the first place.
+                self.walk_expr(value, false, top, depth);
+                self.walk_expr(len, false, top, depth);
+            }
+            ExprKind::Range { start, end, .. } => {
+                if let Some(start) = start {
+                    self.walk_expr(start, false, top, depth);
+                }
+                if let Some(end) = end {
+                    self.walk_expr(end, false, top, depth);
+                }
+            }
+            // Borrows, dereferences, casts, `?`, comparisons and the remaining
+            // operand positions all read; a mobile array index there keeps the
+            // plain indexed form.
+            ExprKind::Unary { expr: inner, .. }
+            | ExprKind::Cast { expr: inner, .. }
+            | ExprKind::Try(inner) => self.walk_expr(inner, false, top, depth),
+            ExprKind::Binary { lhs, rhs, .. } => {
+                self.walk_expr(lhs, false, top, depth);
+                self.walk_expr(rhs, false, top, depth);
+            }
+            ExprKind::Unit
+            | ExprKind::Int { .. }
+            | ExprKind::Float { .. }
+            | ExprKind::Bool(_)
+            | ExprKind::Char(_)
+            | ExprKind::Str(_)
+            | ExprKind::SelfValue => {}
+        }
+    }
+
+    /// Record the bindings and the constant paths of a pattern.
+    fn walk_pattern(&mut self, pat: &Pat, depth: usize, top: usize) {
+        match &pat.kind {
+            PatKind::Binding { name, .. } => {
+                let name = name.name.clone();
+                self.record_binder(&name, BinderKind::Let, depth, top);
+            }
+            PatKind::Path(path) => self.record_whole_use(path, top),
+            PatKind::Tuple(items) => {
+                for item in items {
+                    self.walk_pattern(item, depth, top);
+                }
+            }
+            PatKind::Variant { fields, .. } => match fields {
+                VariantPatFields::Tuple(items) => {
+                    for item in items {
+                        self.walk_pattern(item, depth, top);
+                    }
+                }
+                VariantPatFields::Struct(fields) => {
+                    for field in fields {
+                        self.walk_pattern(&field.pat, depth, top);
+                    }
+                }
+            },
+            PatKind::Wild | PatKind::Lit(_) => {}
+        }
+    }
+
+    /// Argument positions of a call that consume their value: a user function
+    /// parameter whose type is not `Copy`. A builtin receives its arguments by
+    /// value when Ravum passes a bare value (there is no implicit referencing in
+    /// the language), so builtin arguments are treated as consumed too; a builtin
+    /// that borrows internally still works, because the moved element is then a
+    /// plain local to borrow from.
+    fn call_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
+        let mut out = vec![false; count];
+        match self.emitter.facts().calls.get(&call) {
+            Some(CallTarget::UserFn { item }) => {
+                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
+                    for (slot, param) in out.iter_mut().zip(signature.params.iter()) {
+                        *slot = !self.emitter.is_copy_type(&param.ty);
+                    }
+                }
+            }
+            Some(CallTarget::VariantCtor { .. }) | Some(CallTarget::BuiltinFn { .. }) => {
+                // Constructing a variant moves its payloads; a builtin receives a
+                // bare value by value.
+                out.fill(true);
+            }
+            _ => {}
+        }
+        out
+    }
+
+    fn method_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
+        let mut out = vec![false; count];
+        match self.emitter.facts().methods.get(&call) {
+            Some(MethodTarget::User { item }) => {
+                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
+                    // `params[0]` is the receiver; the remaining parameters map to
+                    // the explicit arguments in order.
+                    for (slot, param) in out.iter_mut().zip(signature.params.iter().skip(1)) {
+                        *slot = !self.emitter.is_copy_type(&param.ty);
+                    }
+                }
+            }
+            // Builtin method signatures are not modelled by the backend; a bare
+            // value argument is passed by value in Ravum (`v.push(a[0])`).
+            Some(MethodTarget::Builtin { .. }) => out.fill(true),
+            _ => {}
+        }
+        out
+    }
+
+    /// Can the full-rewrite lowering be used for `name`?
+    fn can_hoist(&self, name: &str, hoist_top: usize, accesses: &[&Access], whole: &[&WholeUse]) -> bool {
+        let binders = self.binders.get(name).map(Vec::as_slice).unwrap_or(&[]);
+        if binders.len() != 1 {
+            return false;
+        }
+        match binders[0].kind {
+            BinderKind::Param => {}
+            BinderKind::Let => {
+                // The destructuring is emitted before a top-level statement, so a
+                // nested `let` (or one declared after it) cannot be reused there.
+                if binders[0].depth != 0 || binders[0].top >= hoist_top {
+                    return false;
+                }
+            }
+        }
+        // Every element access must be rewritable to a fixed binding, on the same
+        // array type, with an in-range constant index.
+        let Some(first) = accesses.first() else {
+            return false;
+        };
+        if accesses.iter().any(|access| access.constant.is_none() || access.len != first.len) {
+            return false;
+        }
+        // A whole-place use at or after the hoist would observe the consumed
+        // array (the checker rejects it after a partial move, so this is belt and
+        // braces for hand-built programs).
+        !whole.iter().any(|use_site| use_site.top >= hoist_top)
+    }
+
+    fn plan(&self) -> ArrayMovePlan {
+        let mut plan = ArrayMovePlan::default();
+        let names: BTreeSet<String> = self.accesses.iter().map(|access| access.name.clone()).collect();
+        for name in names {
+            let accesses: Vec<&Access> = self
+                .accesses
+                .iter()
+                .filter(|access| access.name == name)
+                .collect();
+            let whole: Vec<&WholeUse> = self
+                .whole_uses
+                .iter()
+                .filter(|use_site| use_site.name == name)
+                .collect();
+            let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
+                continue;
+            };
+            if self.can_hoist(&name, first.top, &accesses, &whole) {
+                let bindings: Vec<String> = (0..first.len)
+                    .map(|slot| format!("__rv_el_{}_{slot}", first.base_node))
+                    .collect();
+                let Some(hoist_key) = self.top_keys.get(first.top).copied() else {
+                    continue;
+                };
+                plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
+                    base: first.base_text.clone(),
+                    bindings: bindings.clone(),
+                });
+                for access in accesses.iter().filter(|access| access.top >= first.top) {
+                    if let Some(constant) = access.constant {
+                        plan.rewrites
+                            .insert(access.node, bindings[constant].clone());
+                    }
+                }
+                continue;
+            }
+            // Fallback: a single use of the array in the whole body can be
+            // lowered on its own (works for dynamic indices too).
+            if accesses.len() == 1 && whole.is_empty() && accesses[0].consumed {
+                plan.consumes
+                    .insert(accesses[0].node, ArrayMove { len: accesses[0].len });
+            }
+        }
+        plan
     }
 }
 
@@ -3642,7 +4498,14 @@ mod tests {
         assert!(code.contains("crate::rv_install_test_panic_hook();"));
         assert!(code.contains("crate::rv_test(\"passes\""));
         assert!(code.contains("crate::rv_test(\"fails\""));
-        assert!(code.contains("println!(\"{} passed; {} failed\", rv_passed, rv_failed);"));
+        // `--filter` forwarding contract (`args.rs`) and the rustc-compatible
+        // summary line are emitted by the runner itself.
+        assert!(code.contains("strip_prefix(\"--filter=\")"));
+        assert!(code.contains("rv_argument == \"--filter\""));
+        assert!(code.contains("println!(\"running {} tests\", rv_selected);"));
+        assert!(code.contains(
+            "println!(\"test result: {}; {} passed; {} failed; {} ignored; {} filtered out\","
+        ));
         // The user `main` is not called in test mode.
         assert!(!code.contains("rv_user_main()"));
     }
@@ -5481,6 +6344,7 @@ fn main() {
             checked: &program.checked,
             options: &options,
             index,
+            array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
         };
         assert_eq!(
             emitter.rewrite_fact_path("crate::area"),

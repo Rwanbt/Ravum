@@ -2347,10 +2347,61 @@ fn takes_slice(s: &[i32]) { }
 fn f() {
     let s = String::from("a");
     takes_str(&s);
+    takes_str(s.as_str());
+    io::println("literal");
     let a = [1, 2];
     takes_slice(&a);
 }
 "#,
+    );
+    // TYP-8.5 + TYP-13.1 (MUST): an **owned** `String` is not a `&String`;
+    // `String -> &str` is explicit (`.as_str()`). This used to be accepted and
+    // the generated Rust failed with E0308.
+    expect_code(
+        r#"
+fn takes_str(s: &str) { }
+fn f(s: String) {
+    takes_str(s);
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    // STD-9.1: `trim()` returns an owned `String`, so the same rule applies.
+    expect_code(
+        r#"
+fn takes_str(s: &str) { }
+fn f(line: &str) {
+    takes_str(line.trim());
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    // ... and in the other value positions that expect `&str`: a struct field.
+    expect_code(
+        r#"
+struct S { t: &str }
+fn f(s: String) {
+    let x = S { t: s };
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    // ... a tuple element.
+    expect_code(
+        r#"
+fn takes(t: (&str, i32)) { }
+fn f(s: String) {
+    takes((s, 1));
+}
+"#,
+        "E-TYP-MISMATCH",
+    );
+    // ... and a return position.
+    expect_code(
+        r#"
+fn f(s: String) -> &str { return s; }
+"#,
+        "E-TYP-MISMATCH",
     );
     // TYP-13.1: there is no `&Vec<T> -> &[T]` coercion.
     expect_code(

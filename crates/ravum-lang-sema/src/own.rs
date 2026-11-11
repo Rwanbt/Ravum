@@ -98,11 +98,89 @@ const E_LIMIT: &str = "E-OWN-LIMIT";
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
 /// order by the caller; this function only pushes them.
 pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) {
+    // OWN-6.1/6.2: a reference cannot be *stored* — a struct field or an enum
+    // payload is such a storage. This is checked on the declaration because no
+    // value could ever inhabit it: constructing one from a non-static reference
+    // is already refused at the construction site.
+    check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
     let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
     collect_fns(&checked.program.root, &mut fns);
     for (item, f) in fns {
         let mut checker = OwnChecker::new(&checked.facts, diags);
         checker.check_fn(item, f);
+    }
+}
+
+/// Walk every stored field type: struct fields and enum variant payloads.
+fn check_stored_reference_fields(module: &Module, facts: &Facts, diags: &mut DiagnosticBag) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Struct(s) => {
+                for field in &s.fields {
+                    report_stored_reference(&field.ty, facts, diags);
+                }
+            }
+            ItemKind::Enum(e) => {
+                for variant in &e.variants {
+                    match &variant.fields {
+                        ravum_lang_syntax::ast::VariantDefFields::Unit => {}
+                        ravum_lang_syntax::ast::VariantDefFields::Tuple(types) => {
+                            for ty in types {
+                                report_stored_reference(ty, facts, diags);
+                            }
+                        }
+                        ravum_lang_syntax::ast::VariantDefFields::Struct(fields) => {
+                            for field in fields {
+                                report_stored_reference(&field.ty, facts, diags);
+                            }
+                        }
+                    }
+                }
+            }
+            ItemKind::Mod(inner) => check_stored_reference_fields(inner, facts, diags),
+            _ => {}
+        }
+    }
+}
+
+fn report_stored_reference(
+    ty: &ravum_lang_syntax::ast::Type,
+    facts: &Facts,
+    diags: &mut DiagnosticBag,
+) {
+    let Some(sema_ty) = facts.type_nodes.get(&ty.id) else {
+        return;
+    };
+    if !type_stores_nonstatic_reference(sema_ty) {
+        return;
+    }
+    // The diagnostic points at the field type (`&i32` in `struct W { r: &i32 }`),
+    // the escape site required by OWN-6.6.
+    diags.error(
+        E_REF_ESCAPE,
+        ty.span,
+        "une référence ne peut pas être stockée dans un champ ou une charge utile d'énumération"
+            .to_string(),
+    );
+}
+
+/// `true` when the type stores a reference that is not the `&str` of a string
+/// literal. OWN-6.1 forbids storing a reference in a field, a `Vec`, a tuple, an
+/// `Option`/`Result`; OWN-6.2 makes `&'static str` the single exception, which
+/// is why `&str` (the only nameable text reference, TYP-6.3) is allowed.
+fn type_stores_nonstatic_reference(ty: &Type) -> bool {
+    match ty {
+        Type::Ref { inner, .. } => !matches!(**inner, Type::Str),
+        Type::Array { elem, .. } => type_stores_nonstatic_reference(elem),
+        Type::Slice(inner) | Type::Vec(inner) | Type::Option(inner) => {
+            type_stores_nonstatic_reference(inner)
+        }
+        Type::Tuple(items) => items.iter().any(type_stores_nonstatic_reference),
+        Type::Result(ok, err) => {
+            type_stores_nonstatic_reference(ok) || type_stores_nonstatic_reference(err)
+        }
+        Type::Nominal { args, .. } => args.iter().any(type_stores_nonstatic_reference),
+        _ => false,
     }
 }
 
@@ -1196,6 +1274,18 @@ impl<'a> OwnChecker<'a> {
                     for arg in args {
                         self.eval_value(arg);
                     }
+                } else if builtin_ctor_stores_argument(&path) {
+                    // `Option::Some` / `Result::Ok` / `Result::Err` place their
+                    // argument inside an aggregate: a non-static reference
+                    // escapes into it (`ownership.md` OWN-6.1, OWN-3.3). A
+                    // `&'static str` literal is the documented exception
+                    // (OWN-6.2) and stays accepted.
+                    for arg in args {
+                        self.eval_value(arg);
+                        if self.is_nonstatic_ref(arg) {
+                            self.report_ref_escape(arg.span, "stocker");
+                        }
+                    }
                 } else {
                     for arg in args {
                         self.eval_call_arg(arg, None, true);
@@ -1254,7 +1344,19 @@ impl<'a> OwnChecker<'a> {
             }
             Some(MethodTarget::Builtin { path, .. }) => {
                 let mutating = builtin_method_is_mutating(&path);
-                self.borrow_receiver(receiver, mutating);
+                if builtin_method_consumes_receiver(&path) {
+                    // `spec/language/stdlib.md` STD-11.3: `unwrap`, `unwrap_or`,
+                    // `ok_or`, `ok` and `err` take `self` **by value** ("Tous
+                    // consomment le receveur"). A mobile receiver is therefore
+                    // moved (`spec/language/ownership.md` OWN-5.8), and any later
+                    // use is `E-OWN-USE-AFTER-MOVE` / `E-OWN-DOUBLE-MOVE`
+                    // (OWN-5.1/5.2). A `Copy` receiver (`Option<i32>`,
+                    // `Option<&'static str>`) is copied and stays `INIT`
+                    // (OWN-2.3).
+                    self.eval_value(receiver);
+                } else {
+                    self.borrow_receiver(receiver, mutating);
+                }
                 let stores_refs = builtin_method_stores_refs(&path);
                 for arg in args {
                     self.eval_call_arg(arg, None, !stores_refs);
@@ -2047,6 +2149,30 @@ fn places_overlap(a: &Place, b: &Place) -> bool {
 fn last_path_segment(path: &str) -> &str {
     let last = path.rsplit("::").next().unwrap_or(path);
     last.rsplit('.').next().unwrap_or(last)
+}
+
+/// Builtin methods whose receiver is `self` **by value**. `stdlib.md` STD-11.4
+/// closes the `Option`/`Result` method list, and STD-11.3 states that every one
+/// of these consumes the receiver. `expect` does not exist in Core 1.0
+/// (STD-11.4), so it is deliberately absent.
+fn builtin_method_consumes_receiver(path: &str) -> bool {
+    matches!(
+        path,
+        "Option::unwrap"
+            | "Option::unwrap_or"
+            | "Option::ok_or"
+            | "Result::unwrap"
+            | "Result::unwrap_or"
+            | "Result::ok"
+            | "Result::err"
+    )
+}
+
+/// Prelude constructors that store their argument inside an aggregate.
+/// `Option::None` is a constant (no argument). Any reference stored there must
+/// be a `&'static str` (`ownership.md` OWN-6.1/6.2).
+fn builtin_ctor_stores_argument(path: &str) -> bool {
+    matches!(path, "Option::Some" | "Result::Ok" | "Result::Err")
 }
 
 fn builtin_method_is_mutating(path: &str) -> bool {

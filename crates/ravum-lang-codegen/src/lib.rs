@@ -16,6 +16,10 @@ pub mod prelude;
 
 pub use emit::Generator;
 
+/// Version of the generator, part of the CLI's deterministic build identity: a
+/// new generator version must never reuse an artifact produced by an older one.
+pub const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Clone)]
 pub struct GenOptions {
     /// Emit `// rv: file:line` markers so generated code is auditable.

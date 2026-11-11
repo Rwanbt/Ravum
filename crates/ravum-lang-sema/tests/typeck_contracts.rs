@@ -1605,11 +1605,14 @@ fn options(o: Option<i32>) -> i32 {
     return u + d;
 }
 
-fn resultats(r: Result<i32, Error>) -> i32 {
+fn resultats(r: Result<i32, Error>, s: Result<i32, Error>) -> i32 {
+    // STD-11.3 (MUST): `ok()` and `err()` take `self` by value; a mobile
+    // `Result<i32, Error>` is moved by the first call (OWN-5.8/5.1), so the
+    // two projections use two distinct values.
     let a = r.is_ok();
     let b = r.is_err();
     let o = r.ok();
-    let e = r.err();
+    let e = s.err();
     return 0;
 }
 "#,
