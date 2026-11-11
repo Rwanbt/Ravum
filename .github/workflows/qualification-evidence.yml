@@ -144,6 +144,10 @@ jobs:
             exit 1
           }
           Write-Host ("OK: {0} checks hold (cases={1}, perimeter={2})." -f $script:checks, $s.total, $perimeter)
+          # Explicit success: pwsh under `-command` exits with the last native
+          # exit code, so a step that deliberately ran a failing command would
+          # otherwise report failure after passing every assertion.
+          exit 0
 
       - name: Upload conformance report
         if: always()
@@ -234,6 +238,7 @@ jobs:
           if ($env:GITHUB_STEP_SUMMARY) {
             @('### SBOM', '', ('- deterministic: yes (sha256={0})' -f $ha.ToLowerInvariant()), ('- packages: {0}' -f $doc.packages.Count), ('- spdxVersion: {0}' -f $doc.spdxVersion)) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
           }
+          exit 0
 
       # The Windows installer existed for several passes without ever being
       # executed outside a developer machine. This exercises the product path:
@@ -286,6 +291,7 @@ jobs:
             exit 1
           }
           Write-Host ("OK: {0} installer checks hold." -f $script:checks)
+          exit 0
 
       # The manifest is a claim unless it is checked against the tree it
       # describes. Both directions are exercised: a matching binary must PASS,
@@ -337,6 +343,10 @@ jobs:
             exit 1
           }
           Write-Host ("OK: {0} provenance checks hold." -f $script:checks)
+          # The tampered-binary refusal above deliberately leaves $LASTEXITCODE
+          # at 1; without this explicit success the step would report failure
+          # after passing every assertion (observed on CI run 43062345889).
+          exit 0
 
       # Two builds from different absolute roots into different target
       # directories: only their equality says anything about path independence.
@@ -366,6 +376,7 @@ jobs:
             exit 1
           }
           Write-Host "OK: the two builds from different roots are bit-for-bit identical ($($digests[0]))."
+          exit 0
 
       - name: Upload release evidence
         if: always()
