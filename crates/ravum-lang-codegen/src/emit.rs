@@ -3042,8 +3042,10 @@ impl<'a> Emitter<'a> {
 // The destructuring consumes the whole place, so the emitter must prove locally
 // that every use of that place at or after the destructuring is one of the
 // rewritten element accesses:
-// * the binder is a parameter, a `let`, or a `for` binding (a `match` arm binding
-//   has no statement inside the arm to hoist before and is refused);
+// * the binder is a parameter, a `let`, a `for` binding or a `match` arm binding
+//   (an arm binding is visible at the arm body's block depth, so a *block-bodied*
+//   arm destructures before its first statement, while an expression-bodied arm
+//   has no statement boundary and falls back to the inline single-use lowering);
 // * every rewritten access is a fully constant, in-range index chain;
 // * no whole-place use (`h.items`, `f(h.items)`, `&h.items`, `h.items.len()`,
 //   assignment) occurs at or after the hoist — a whole use after a partial move is
@@ -3065,11 +3067,23 @@ impl<'a> Emitter<'a> {
 //
 // When the proof fails the emitter keeps the plain `a[i]`, which rustc rejects
 // loudly (`E0508`) — never a silent semantic change. The shapes that stay in that
-// state are: a *dynamic* index into a nested array (`a[0][i]`, `a[i][j]`), an index
-// chain whose base is not a place (`f()[0]`, `a[0].0[1]`), and an array place bound
-// by a `match` arm pattern. A dynamic index into a *flat* array place with a single
-// use in the body keeps the separate `into_iter().nth()` lowering, which consumes
-// the array and preserves rustc's bounds-panic message.
+// state (all re-measured after the pass-7 rewrite, all `check` exit 0 / `build`
+// exit 1 with a loud E0508) are:
+// * a *dynamic* index into a nested array (`a[0][i]`, `a[i][j]`: the constant
+//   prefix could be destructured, but the dynamic step then needs the inline
+//   `into_iter().nth(i)` form on a slot rather than on a place);
+// * an index chain whose base is not a place (`make()[0]`, `a[0].0[1]`: an rvalue
+//   root has no storage to destructure, so it would need the inline form);
+// * several element accesses in an *expression-bodied* `match` arm
+//   (`E::Items(a) => (a[0], a[1])`): the inline form is single-use by
+//   construction, and a block-bodied arm works because it has a statement
+//   boundary;
+// * a builtin method that consumes its receiver by value (`a[0].unwrap()` on
+//   `[Option<String>; 2]`): builtin receiver kinds are not modelled by the
+//   backend, only user `self` methods are (`facts.methods` + `FnSig.receiver`).
+// A dynamic index into a *flat* array place with a single use in the body keeps
+// the separate `into_iter().nth()` lowering, which consumes the array and
+// preserves rustc's bounds-panic message.
 
 /// What the emitter does with the array places of one function body.
 #[derive(Debug, Default)]
