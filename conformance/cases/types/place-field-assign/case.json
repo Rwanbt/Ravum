@@ -1,0 +1,5 @@
+{
+  "id": "types/place-field-assign",
+  "mode": "compile-pass",
+  "notes": "F-TYP-005 (TYP-2.2-2.3): struct fields of a let mut binding are mutable places."
+}

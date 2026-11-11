@@ -1,0 +1,8 @@
+{
+  "id": "ownership/unwrap-consumes-receiver",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-DOUBLE-MOVE"
+  ],
+  "notes": "OWN-5.2 / STD-11.2 / STD-11.3: unwrap, unwrap_or and Result::unwrap consume the receiver; a second move with no use in between is E-OWN-DOUBLE-MOVE (not USE-AFTER-MOVE). The USE-AFTER-MOVE companion is ownership/unwrap-use-after-move."
+}

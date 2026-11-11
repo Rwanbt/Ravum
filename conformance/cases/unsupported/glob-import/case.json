@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/glob-import",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "unsupported": true,
+  "notes": "Glob imports, aliases, re-exports and grouped imports are E-UNSUPPORTED-TOKEN (UNS-6, F-UNS-012)."
+}

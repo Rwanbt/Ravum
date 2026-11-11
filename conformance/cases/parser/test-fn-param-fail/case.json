@@ -1,0 +1,8 @@
+{
+  "id": "parser/test-fn-param-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MAIN"
+  ],
+  "notes": "F-SYN-004 / MOD-4.10 / G-3.6: a `test fn` takes no parameter and returns `()` or `Result<(), Error>`; `diagnostics.md` states that an invalid `test fn` is `E-TYP-MAIN` (it used to be reported as E-PARSE-EXPECTED, which named the wrong phase and the wrong code)."
+}

@@ -1,0 +1,9 @@
+fn f(c: bool, a: [String; 2]) -> String {
+    if c {
+        return a[0];
+    }
+    return a[1];
+}
+
+fn main() {
+}

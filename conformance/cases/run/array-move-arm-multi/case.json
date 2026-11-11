@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-arm-multi",
+  "mode": "run-pass",
+  "stdout_contains": "left\n",
+  "notes": "OWN-5.4: several element moves in an expression-bodied `match` arm (`E::Items(a) => (a[0], a[1])`). The arm body is wrapped in a block so the destructuring has a statement boundary. Previously check-pass/build-fail with rustc E0508."
+}

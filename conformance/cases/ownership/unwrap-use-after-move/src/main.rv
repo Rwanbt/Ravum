@@ -1,0 +1,20 @@
+fn a() {
+    let o = Some(String::from("x"));
+    let s = o.unwrap();
+    let b = o.is_some();
+}
+
+fn b() {
+    let o = Some(String::from("x"));
+    let s = o.unwrap_or(String::from("y"));
+    let c = o.is_none();
+}
+
+fn c() {
+    let r: Result<i32, Error> = Ok(1);
+    let v = r.unwrap();
+    let d = r.is_ok();
+}
+
+fn main() {
+}

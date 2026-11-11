@@ -1,0 +1,4 @@
+[package]
+name = "lexer-ascii-ident-accepted"
+version = "0.1.0"
+edition = "core-1.0"

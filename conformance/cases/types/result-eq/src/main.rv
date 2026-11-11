@@ -1,0 +1,6 @@
+fn main() {
+    let a: Result<i32, Error> = Ok(1);
+    let b: Result<i32, Error> = Ok(2);
+    if a == b {
+    }
+}

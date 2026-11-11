@@ -1,0 +1,4 @@
+fn main() {
+    let s = String::from("abc");
+    let r = s.replace("a");
+}

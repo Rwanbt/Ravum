@@ -1,0 +1,7 @@
+fn at(a: [i32; 3], i: usize) -> i32 {
+    a[i]
+}
+
+fn main() {
+    let x = at([1, 2, 3], 5);
+}

@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-dynamic-index-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / TYP-9.3: a dynamic index `a[i]` produces one element by move; the array is never reused, so this is a legal per-component move (lowered via an iterator `nth`). Previously check-pass/build-fail."
+}

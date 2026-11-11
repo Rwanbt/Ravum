@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/raw-string",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "unsupported": true,
+  "notes": "Byte literals and raw strings are E-UNSUPPORTED-TOKEN (F-UNS-014)."
+}

@@ -1,0 +1,6 @@
+fn f<T>(x: T) -> T where T: Copy {
+    return x;
+}
+
+fn main() {
+}

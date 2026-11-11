@@ -1,0 +1,27 @@
+struct Counter { value: i32 }
+
+impl Counter {
+    fn new(value: i32) -> Counter {
+        return Counter { value: value };
+    }
+
+    fn get(&self) -> i32 {
+        return self.value;
+    }
+
+    fn bump(&mut self) {
+        self.value += 1;
+    }
+
+    fn into_value(self) -> i32 {
+        return self.value;
+    }
+}
+
+fn main() {
+    let mut c = Counter::new(1);
+    let v = c.get();
+    c.bump();
+    let u = c.into_value();
+}
+

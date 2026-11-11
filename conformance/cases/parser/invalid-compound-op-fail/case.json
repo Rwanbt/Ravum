@@ -1,0 +1,6 @@
+{
+  "id": "parser/invalid-compound-op-fail",
+  "mode": "compile-fail",
+  "expect_codes": ["E-PARSE-EXPECTED", "E-PARSE-UNEXPECTED"],
+  "notes": "`**=` is not a member of the compound-assignment family; the parser reports the unexpected `*=` token (E-PARSE-UNEXPECTED) and the recovery expects `;` (E-PARSE-EXPECTED)."
+}

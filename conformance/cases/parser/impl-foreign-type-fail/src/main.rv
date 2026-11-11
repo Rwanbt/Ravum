@@ -1,0 +1,9 @@
+impl i32 {
+    fn double(&self) -> i32 {
+        return *self;
+    }
+}
+
+fn main() {
+}
+

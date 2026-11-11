@@ -1,0 +1,5 @@
+use std::math;
+
+fn main() {
+    let x = math::log2(8.0);
+}

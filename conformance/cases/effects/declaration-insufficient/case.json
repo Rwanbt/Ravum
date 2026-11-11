@@ -1,0 +1,8 @@
+{
+  "id": "effects/declaration-insufficient",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "The declaration is a majorant: alloc is inferred by String::from and is not declared (EFF-3.2)."
+}

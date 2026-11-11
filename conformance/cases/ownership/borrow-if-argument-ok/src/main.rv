@@ -1,0 +1,10 @@
+fn take(s: &String) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let a = String::from("a");
+    let b = String::from("b");
+    let c = true;
+    let n = take(if c { &a } else { &b });
+}

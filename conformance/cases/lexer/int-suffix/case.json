@@ -1,0 +1,8 @@
+{
+  "id": "lexer/int-suffix",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-INT-SUFFIX"
+  ],
+  "notes": "An unknown integer type suffix is E-LEX-INT-SUFFIX (canonical registry). This case currently fails if the lexer does not validate suffixes yet."
+}

@@ -1,0 +1,15 @@
+   Compiling ravum-patch-host v0.1.0 (D:\App\Ravum\crates\ravum-patch-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running tests\rt_lifecycle.rs (target\debug\deps\rt_lifecycle-f2674d68bb71c08a.exe)
+
+running 5 tests
+test a_long_block_delays_publication_but_the_audio_path_never_waits_on_the_writer ... ok
+[l1a] publication storm: 40 publications in 141.5226ms without any reader
+test a_publication_storm_never_leaks_a_native_handle ... ok
+[l1a] e2e campaign: blocks=199517 swaps=12 allocations_on_audio_thread=0 deallocations_on_audio_thread=0 versions_seen={"dsp-gain-v1", "dsp-gain-v2"}
+test audio_thread_neither_allocates_nor_frees_during_repeated_swaps ... ok
+test retired_modules_are_freed_off_the_audio_thread_and_nothing_leaks ... ok
+test several_audio_threads_and_one_writer_share_one_version_per_block ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.62s
+

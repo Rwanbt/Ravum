@@ -1,0 +1,5 @@
+{
+  "id": "ownership/borrow-stmt-scope",
+  "mode": "compile-pass",
+  "notes": "F-OWN-009 / OWN-3.1-3.12: a borrow used inside one statement (`let n = (&q).x;`) expires at the end of that statement, so mutating `q.x` afterwards is legal and conflict-free."
+}

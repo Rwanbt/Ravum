@@ -1,0 +1,77 @@
+{
+  "config": {
+    "blocks": 400,
+    "crossfade_frames": 256,
+    "frames": 256,
+    "period_sleep_us": 0,
+    "period_us": 5333,
+    "sample_rate": 48000
+  },
+  "first_artifact": "f3be9cfbfc0afc27260b9a90655bd7a731cbad65e291394e5aad176167b54c9f",
+  "first_source": "fixtures/dsp/gain_v1.rs",
+  "limits": [
+    "simulated cadence: no audio device, no driver, no real-time priority",
+    "the allocations and deallocations counters instrument this whole process, per thread; a zero means the instrumented allocator saw no call on that thread, not a hard-RT proof",
+    "a level change without crossfade is expected to produce a discontinuity and it is measured"
+  ],
+  "schema_version": 1,
+  "session_after": {
+    "active_patch_id": "session-after",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 9,
+      "p50_us": 0,
+      "p95_us": 0,
+      "p99_us": 0
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.057609133422374725,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 1,
+    "unloaded_modules": 1
+  },
+  "session_before": {
+    "active_patch_id": "session-before",
+    "allocations_on_audio_thread": 0,
+    "baseline_sample_delta": 0.028793953359127045,
+    "block_timings": {
+      "count": 400,
+      "max_us": 29,
+      "p50_us": 0,
+      "p95_us": 0,
+      "p99_us": 1
+    },
+    "blocks": 400,
+    "deallocations_on_audio_thread": 0,
+    "frames": 102400,
+    "max_sample_delta": 0.014402270317077637,
+    "overruns": 0,
+    "period_us": 5333,
+    "schema_version": 1,
+    "swaps": 0,
+    "unloaded_modules": 1
+  },
+  "swap": {
+    "active_version": 2,
+    "artifact_id": "dbbb0d223a867ccbb563ed954da1c2c1d720b706bd61387729926c60eb105c94",
+    "patch_id": "dsp-gain-v2",
+    "previous_version": 1,
+    "schema_version": 1,
+    "status": "activated",
+    "timings": {
+      "activate_ms": 0,
+      "build_ms": 362,
+      "check_ms": 0,
+      "load_ms": 2,
+      "proof_ms": 0,
+      "total_ms": 364,
+      "verify_ms": 0
+    }
+  }
+}

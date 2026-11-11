@@ -1,0 +1,5 @@
+{
+  "id": "parser/fn-params-return-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-001 (G-3.1, G-3.4): fn with typed parameters and an explicit return type is accepted."
+}

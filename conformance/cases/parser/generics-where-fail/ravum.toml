@@ -1,0 +1,5 @@
+[package]
+name = "parser-generics-where-fail"
+version = "0.1.0"
+edition = "core-1.0"
+

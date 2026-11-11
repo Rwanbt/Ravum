@@ -1,0 +1,11 @@
+{
+  "id": "run/calculator-args",
+  "mode": "run-pass",
+  "args": [
+    "5",
+    "+",
+    "3"
+  ],
+  "stdout_contains": "8\n",
+  "notes": "env::args()[0] is the program name (STD-4.1); 5 + 3 formats as `8`, not `8.0` (STD-7.4)."
+}

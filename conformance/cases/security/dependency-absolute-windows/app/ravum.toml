@@ -1,0 +1,7 @@
+[package]
+name = "sec-app-win"
+version = "0.1.0"
+edition = "core-1.0"
+
+[dependencies]
+util = { path = "C:\\util" }

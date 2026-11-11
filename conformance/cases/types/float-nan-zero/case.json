@@ -1,0 +1,5 @@
+{
+  "id": "types/float-nan-zero",
+  "mode": "run-pass",
+  "notes": "F-EXPR-007 (EXPR-4.2-4.4): 0.0/0.0 does not trap, NaN != NaN, comparisons with NaN are false, and 0.0 == -0.0."
+}

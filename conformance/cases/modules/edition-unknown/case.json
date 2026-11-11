@@ -1,0 +1,8 @@
+{
+  "id": "modules/edition-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EDITION"
+  ],
+  "notes": "F-MOD-002 / MOD-5.2 + COMPAT-1.3: an unknown edition is fail-closed, E-UNSUPPORTED-EDITION."
+}

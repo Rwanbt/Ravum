@@ -1,0 +1,8 @@
+{
+  "id": "types/if-branch-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-EXPR-012 (EXPR-5.2): the branches of an if expression must have the same type."
+}

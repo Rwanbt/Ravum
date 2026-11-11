@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/extern-fn",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EXTERN"
+  ],
+  "unsupported": true,
+  "notes": "Grammar G-3.10 / UNS \u00a73 line 66: an `extern \"C\" fn` with a body is refused; only `extern \"C\" { fn f(...); }` is accepted."
+}

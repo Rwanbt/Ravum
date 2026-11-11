@@ -1,0 +1,5 @@
+{
+  "id": "parser/variant-pattern-shorthand-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-031 (G-6.40-6.41): a qualified variant record pattern with field shorthand (`Shape::Rect { w, h: _ }`) is accepted."
+}

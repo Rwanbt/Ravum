@@ -1,0 +1,6 @@
+{
+  "id": "parser/tuple-index-chain-fail",
+  "mode": "compile-fail",
+  "expect_codes": ["E-PARSE-UNEXPECTED"],
+  "notes": "A chained tuple index `t.0.1` is rejected by the parser (E-PARSE-UNEXPECTED); parentheses are required."
+}

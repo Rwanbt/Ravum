@@ -1,0 +1,6 @@
+{
+  "id": "run/result-methods",
+  "mode": "run-pass",
+  "stdout_contains": "true true 42 0 true true",
+  "notes": "F-STD-027 / STD-11: is_ok, is_err, unwrap, unwrap_or, ok, err."
+}

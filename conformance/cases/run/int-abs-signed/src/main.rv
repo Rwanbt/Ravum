@@ -1,0 +1,6 @@
+use std::io;
+
+fn main() {
+    let n: i32 = -7;
+    io::println(&n.abs().to_string());
+}

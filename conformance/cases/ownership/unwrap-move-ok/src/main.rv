@@ -1,0 +1,7 @@
+fn take(o: Option<String>) -> String {
+    let s = o.unwrap();
+    return s;
+}
+
+fn main() {
+}

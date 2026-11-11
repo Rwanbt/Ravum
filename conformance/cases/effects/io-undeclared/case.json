@@ -1,0 +1,8 @@
+{
+  "id": "effects/io-undeclared",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "effects() declares the empty set, so the io call is E-EFF-UNDECLARED (EFF-1.4)."
+}

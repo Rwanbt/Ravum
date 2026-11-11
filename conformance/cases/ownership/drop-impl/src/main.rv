@@ -1,0 +1,11 @@
+struct Doc {
+    titre: String,
+}
+
+impl Drop for Doc {
+    fn drop(&mut self) {
+    }
+}
+
+fn main() {
+}

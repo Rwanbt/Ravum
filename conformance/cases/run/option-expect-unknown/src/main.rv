@@ -1,0 +1,4 @@
+fn main() {
+    let o: Option<i32> = Some(1);
+    let x = o.expect("x");
+}

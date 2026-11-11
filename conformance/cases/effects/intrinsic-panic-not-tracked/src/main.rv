@@ -1,0 +1,7 @@
+fn div(a: i32, b: i32) -> i32 effects() {
+    return a / b;
+}
+
+fn main() {
+    let z = div(1, 2);
+}

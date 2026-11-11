@@ -1,0 +1,7 @@
+fn f(o: Option<Vec<String>>) -> usize {
+    let v = o.unwrap();
+    return v.len();
+}
+
+fn main() {
+}

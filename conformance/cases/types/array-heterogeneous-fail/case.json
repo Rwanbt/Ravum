@@ -1,0 +1,8 @@
+{
+  "id": "types/array-heterogeneous-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "TYP-4: arrays are homogeneous. A literal array whose elements have different types is E-TYP-MISMATCH; before the fix it was accepted and codegen emitted `[1, true]`, which Rust rejects."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/never-infer-option-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-AMBIGUOUS"
+  ],
+  "notes": "F-TYP-004 (TYP-1.6): `!` is not inhabitable, so `Some(panic(\"x\"))` cannot infer `Option<!>`; the type is ambiguous and must be annotated. Before this case the checker accepted it and codegen produced `Option<!>` (invalid Rust)."
+}

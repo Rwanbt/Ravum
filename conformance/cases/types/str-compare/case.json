@@ -1,0 +1,8 @@
+{
+  "id": "types/str-compare",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CMP"
+  ],
+  "notes": "F-TYP-022 (TYP-7.4): ordering operators are not defined on &str."
+}

@@ -1,0 +1,9 @@
+use std::env;
+use std::io;
+
+fn main() {
+    match env::var("RAVUM_CONFORMANCE_UNSET_007") {
+        Result::Ok(v) => io::println(v.as_str()),
+        Result::Err(e) => io::println("absent"),
+    }
+}

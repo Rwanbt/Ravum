@@ -1,0 +1,6 @@
+use std::string;
+
+fn main() {
+    let r = string::parse_i64("42");
+    let m = r.map(1);
+}

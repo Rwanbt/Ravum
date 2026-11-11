@@ -1,0 +1,6 @@
++++ b/src/lib.rs
+@@ -4,3 +4,3 @@
+-pub extern "C" fn abi_entry(value: u32) -> u32 {
++pub extern "C" fn abi_entry(value: u64) -> u32 {
+     value + 1
+ }

@@ -1,0 +1,23 @@
+fn two_descents(a: [([String; 2], i32); 2]) -> (String, String) {
+    let x = a[0].0[1];
+    let y = a[1].0[0];
+    return (x, y);
+}
+
+fn descent_then_read(a: [([String; 2], i32); 2]) -> (String, i32) {
+    let x = a[0].0[1];
+    let n = a[1].1;
+    return (x, n);
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    let t = two_descents(a);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+
+    let b = [([String::from("x0"), String::from("x1")], 7), ([String::from("y0"), String::from("y1")], 8)];
+    let v = descent_then_read(b);
+    io::println(v.0.as_str());
+    io::println(v.1.to_string().as_str());
+}

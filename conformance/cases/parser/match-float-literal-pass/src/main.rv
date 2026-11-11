@@ -1,0 +1,31 @@
+use std::io;
+use std::math;
+
+fn classer(x: f64) -> i32 {
+    match x {
+        1.5 => 1,
+        -2.0 => 2,
+        _ => 0,
+    }
+}
+
+fn est_zero(x: f64) -> bool {
+    match x {
+        0.0 => true,
+        _ => false,
+    }
+}
+
+fn main() {
+    io::println(&classer(1.5).to_string());
+    io::println(&classer(0.0 - 2.0).to_string());
+    io::println(&classer(0.0).to_string());
+    let nan = math::sqrt(0.0 - 1.0);
+    io::println(&classer(nan).to_string());
+    if est_zero(-0.0) {
+        io::println("zero-negatif");
+    }
+    if est_zero(nan) {
+        io::println("nan-correspond");
+    }
+}

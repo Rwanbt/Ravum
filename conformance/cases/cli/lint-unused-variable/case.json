@@ -1,0 +1,8 @@
+{
+  "id": "cli/lint-unused-variable",
+  "mode": "cli",
+  "args": ["lint", "{project}"],
+  "exit_code": 0,
+  "stderr_contains": "W-OWN-UNUSED-VARIABLE",
+  "notes": "DIAG-1.6 lists W-OWN-UNUSED-VARIABLE among the two warnings Core 1.0 documents. It was declared but never emitted until this case existed; `lint` now reports it for an unread `let` binding."
+}

@@ -1,0 +1,7 @@
+enum E<T> {
+    A(T),
+}
+
+fn main() {
+    let e = E::A(panic("x"));
+}

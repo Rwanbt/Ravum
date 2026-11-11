@@ -1,0 +1,32 @@
+use std::io;
+
+struct Point { x: i32, y: i32 }
+
+enum Op {
+    Add(i32),
+    Mul(i32, i32),
+    Empty,
+}
+
+impl Point {
+    fn sum(&self) -> i32 {
+        self.x + self.y
+    }
+}
+
+fn eval(op: Op) -> i32 {
+    match op {
+        Op::Add(v) => v,
+        Op::Mul(a, b) => a * b,
+        Op::Empty => 0,
+    }
+}
+
+fn main() {
+    let p = Point { x: 3, y: 4 };
+    let t = (10, 20);
+    let a = eval(Op::Add(5));
+    let b = eval(Op::Mul(2, 3));
+    let c = eval(Op::Empty);
+    io::println(&(p.sum() + t.0 + t.1 + a + b + c).to_string());
+}

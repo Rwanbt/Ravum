@@ -1,0 +1,16 @@
+fn g(s: &str) {
+}
+
+fn f() {
+    let r = &"a";
+    g(*r);
+}
+
+fn h() {
+    let text = "a";
+    let r = &text;
+    g(*r);
+}
+
+fn main() {
+}

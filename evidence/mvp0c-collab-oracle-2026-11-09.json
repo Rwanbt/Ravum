@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "lot": "MVP-0c L3.4 — adaptateur réel SemanticOracle adossé au graphe L1",
+  "task_id": "task-25",
+  "generated_at": "2026-11-09T01:33:17+01:00",
+  "branch": "feat/mvp0c-hardening",
+  "head": "58220f5",
+  "worktree_state": "non commité (le Lead est seul écrivain Git ; aucune commande git mutante exécutée)",
+  "architecture": {
+    "new_crate": "crates/ravum-collab-oracle",
+    "depends_on": [
+      "ravum-workspace-coordinator",
+      "ravum-unit-graph",
+      "ravum-snapshot"
+    ],
+    "cycle": "none (le coordinateur ne dépend pas de unit-graph, unit-graph ne dépend pas du coordinateur)",
+    "injected_via": "impl SemanticOracle pour UnitGraphOracle (trait object Arc<dyn SemanticOracle>)",
+    "coordinator_modified": false,
+    "unit_graph_modified": false,
+    "cli_modified": false
+  },
+  "toolchain": {
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "cargo": "1.95.0 (2f3dce0bd 2026-03-21)",
+    "os": "Windows",
+    "cargo_build_jobs": 2,
+    "test_threads": 1,
+    "machine_note": "machine partagée avec d'autres workers qui compilent (daemon/dsp) ; les mesures de coût varient sous charge"
+  },
+  "commands": [
+    {
+      "cmd": "cargo test -p ravum-collab-oracle -- --test-threads=1",
+      "exit_code": 0,
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "warnings": 0,
+      "detail": {
+        "src/lib.rs (unit)": 2,
+        "tests/l1_interface_breaks.rs": 7,
+        "tests/end_to_end_v2.rs": 3,
+        "tests/unavailable.rs": 1,
+        "tests/cost.rs": 1,
+        "doc-tests": 0
+      },
+      "durations_s": {
+        "unit": 0.0,
+        "l1_interface_breaks": 24.97,
+        "end_to_end_v2": 21.22,
+        "unavailable": 5.24,
+        "cost": 22.25
+      },
+      "existing_tests_modified": 0
+    },
+    {
+      "cmd": "cargo build --workspace",
+      "exit_code": 0,
+      "note": "nouveau crate inclus comme member ; build 16.02 s avec la charge des autres workers"
+    },
+    {
+      "cmd": "cargo fmt -p ravum-collab-oracle -- --check",
+      "exit_code": 0,
+      "note": "0 warning sur le crate"
+    }
+  ],
+  "root_manifest_change": {
+    "file": "Cargo.toml",
+    "lines_added": 1,
+    "diff": "+  \"crates/ravum-collab-oracle\",",
+    "cargo_lock": "13 lignes ajoutées (nouveau package + arêtes de dépendances internes), généré par cargo"
+  },
+  "real_l1_results_on_fixtures_multicrate": [
+    {
+      "scenario": "(a) changement compatible (corps de internal_factor), dépendants déclarés",
+      "observed": "CLEAR",
+      "details": "changed_units=[core]; affected_units=[]; changed_interface_units=[]; before_errors=0; after_errors=0; 6 rustc + 6 cargo fallback + 2 cargo metadata (cold)",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_compatible_body_only_change_is_clear_when_the_dependents_are_declared",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(a bis) changement compatible sans déclarer les dépendants",
+      "observed": "FINDINGS non bloquant: UNDECLARED_DEPENDENCY (warning) listant api, consumer, application",
+      "details": "aucun finding bloquant ; evidence_id de 64 hex",
+      "asserted_by": "tests/l1_interface_breaks.rs::an_undeclared_compatible_change_only_produces_a_non_blocking_warning",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(b) core::scale(f64)->f64 remplacé par scale(f32)->f32, core patché cohérent, api inchangé",
+      "observed": "INTERFACE_BREAK bloquant",
+      "details": "changed_units=[core]; changed_interface_units=[core]; affected_units contient api; message avec premier diagnostic rustc réel; after_errors>0; before_errors=0",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_public_signature_break_used_by_api_is_a_blocking_interface_break",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(c) suppression de core::add utilisé par api",
+      "observed": "INTERFACE_BREAK bloquant",
+      "details": "affected_units contient api",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_symbol_removal_used_by_api_is_a_blocking_interface_break",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(d) changement dans features (unité toujours en fallback Cargo)",
+      "observed": "UNAVAILABLE",
+      "details": "raison: changed unit ... conservative Cargo fallback ... interface identity is not observable (fail-closed)",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_changed_unit_compiled_through_a_cargo_fallback_is_unavailable_never_clear",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(e) lockfile changé",
+      "observed": "FINDINGS bloquant LOCKFILE_CHANGE",
+      "details": "aucune campagne lancée (cargo_metadata_invocations=0)",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_lockfile_change_is_a_blocking_finding_without_any_campaign_claim",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(f) cargo absent simulé (CARGO -> chemin inexistant)",
+      "observed": "UNAVAILABLE",
+      "details": "raison contient 'cargo is unavailable' ; jamais Clear",
+      "asserted_by": "tests/unavailable.rs::missing_tools_yield_unavailable_never_clear",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(g) rustc absent simulé (RAVUM_RUSTC -> chemin inexistant)",
+      "observed": "UNAVAILABLE",
+      "details": "raison contient 'toolchain context is unavailable' ; jamais Clear",
+      "asserted_by": "tests/unavailable.rs::missing_tools_yield_unavailable_never_clear",
+      "status": "PASS"
+    },
+    {
+      "scenario": "(h) toolchain attendue différente",
+      "observed": "UNAVAILABLE",
+      "details": "with_expected_toolchain('00..0') -> 'toolchain mismatch'",
+      "asserted_by": "tests/l1_interface_breaks.rs::a_toolchain_mismatch_is_unavailable_never_clear",
+      "status": "PASS"
+    }
+  ],
+  "end_to_end_v2": [
+    {
+      "scenario": "patch cassant core::scale utilisé par api, Coordinateur::v2 + oracle L1 injecté",
+      "decision": "REBASE_REVALIDATE",
+      "level": "TEXTUALLY_APPLICABLE",
+      "auto_safe": false,
+      "integrated": false,
+      "proof": "OracleReport journalisé avec INTERFACE_BREAK bloquant, api cité dans la raison, rustc_invocations>0, cargo_metadata_invocations=2",
+      "asserted_by": "tests/end_to_end_v2.rs::a_patch_that_breaks_a_used_interface_is_never_auto_safe",
+      "status": "PASS"
+    },
+    {
+      "scenario": "changement compatible + oracle L1, aucun vérificateur déclaré",
+      "decision": "MANUAL_REQUIRED",
+      "level": "TEXTUALLY_APPLICABLE",
+      "auto_safe": false,
+      "proof": "oracle non bloquant mais règle v2: applicabilité textuelle seule non auto-intégrée",
+      "asserted_by": "tests/end_to_end_v2.rs::a_compatible_change_is_auto_safe_only_with_a_declared_verification",
+      "status": "PASS"
+    },
+    {
+      "scenario": "même changement compatible + vérificateur déclaré (test double)",
+      "decision": "AUTO_SAFE",
+      "level": "SEMANTICALLY_CHECKED",
+      "auto_safe": true,
+      "proof": "vérification déclarée passed + oracle L1 non bloquant; jamais TESTED/PROVED sans test/proof",
+      "asserted_by": "tests/end_to_end_v2.rs::a_compatible_change_is_auto_safe_only_with_a_declared_verification",
+      "status": "PASS"
+    }
+  ],
+  "cost": {
+    "method": "5 évaluations de la même paire de snapshots (changement compatible déclaré) sur fixtures/multicrate; 1re froide, suivantes avec scratch content-addressed et cache de verdicts L1; cargo test -p ravum-collab-oracle --test cost -- --test-threads=1",
+    "final_run": {
+      "runs_ms": [6981, 4629, 5346, 5079, 4431],
+      "cold_start_ms": 6981,
+      "median_ms": 5079,
+      "min_ms": 4431,
+      "max_ms": 6981
+    },
+    "previous_run_same_method": {
+      "runs_ms": [6350, 3566, 3938, 4304, 4179],
+      "cold_start_ms": 6350,
+      "median_ms": 4179,
+      "max_ms": 6350
+    },
+    "invocations": {
+      "rustc_cold": 6,
+      "rustc_warm": 0,
+      "cargo_fallback_per_evaluation": 6,
+      "cargo_metadata_per_evaluation": 2,
+      "l1_cache_hits_warm": 6,
+      "fallback_units_per_evaluation": 6
+    },
+    "interpretation": "à chaud, le coût est dominé par les 6 fallbacks cargo check imposés par la fixture (application binaire, features, buildscript) et les 2 cargo metadata; rustc n'est plus invoqué grâce au cache de verdicts L1. Forte variabilité sous charge (3,6 s à 7,0 s). Non généralisable à un gros workspace."
+  },
+  "files": {
+    "added": [
+      "crates/ravum-collab-oracle/Cargo.toml",
+      "crates/ravum-collab-oracle/src/lib.rs",
+      "crates/ravum-collab-oracle/tests/support/mod.rs",
+      "crates/ravum-collab-oracle/tests/l1_interface_breaks.rs",
+      "crates/ravum-collab-oracle/tests/unavailable.rs",
+      "crates/ravum-collab-oracle/tests/end_to_end_v2.rs",
+      "crates/ravum-collab-oracle/tests/cost.rs",
+      "docs/mvp/MVP-0c-collab-oracle.md",
+      "evidence/mvp0c-collab-oracle-2026-11-09.json"
+    ],
+    "modified": [
+      "Cargo.toml (une seule ligne: member)",
+      "Cargo.lock (généré: nouveau package + arêtes internes)"
+    ],
+    "not_touched": [
+      "crates/ravum-workspace-coordinator/**",
+      "crates/ravum-unit-graph/**",
+      "crates/ravum-cli/**",
+      "crates/ravum-daemon/**",
+      ".github/**",
+      "fixtures/multicrate/**"
+    ]
+  },
+  "limits": [
+    "Une seule toolchain locale et un hôte; pas de cross-compilation.",
+    "Workspace local uniquement (cargo metadata --offline); deps registre/git non analysées -> fallback L1, et Unavailable si une unité changée est concernée.",
+    "La rupture d'interface est détectée par l'échec de compilation d'un dépendant inchangé, pas par un diff de signatures; un changement d'interface toléré par tous les dépendants n'est pas bloquant (voulu).",
+    "Attribution limitée: unité changée en erreur, changement structurel, sources modifiées pendant la vérification, échec inexpliqué -> Unavailable, jamais Clear.",
+    "Le réessai unique sur échec non attribuable est défensif; il n'est pas exercé par un test déterministe (incident transitoire observé une fois sous charge).",
+    "Aucun chemin PROVED; aucun prouveur externe.",
+    "Coût non borné et non généralisable: mesure sur 6 unités, sans dépendance externe.",
+    "state_root doit être exclusif à un processus; la purge/politique de rétention revient au daemon.",
+    "Aucun branchement CLI/daemon dans ce lot (périmètre); seul l'exemple d'injection est fourni.",
+    "Variabilité des mesures sous charge machine; les chiffres sont des observations, pas une garantie de performance."
+  ],
+  "next_steps": [
+    "Brancher UnitGraphOracle dans ravum-cli/ravum-collab (--oracle unit-graph, --oracle-state <dir>, --protocol v2).",
+    "Héberger le scratch dans le daemon (répertoire par session, purge, budget de temps, annulation).",
+    "Étendre l'analyse aux unités à dépendances externes et aux changements structurels.",
+    "Mesurer le coût sur un vrai workspace et publier la distribution.",
+    "Étudier un mode TESTED/PROVED borné (hors périmètre de cet adaptateur)."
+  ]
+}

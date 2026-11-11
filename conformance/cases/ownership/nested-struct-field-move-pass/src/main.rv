@@ -1,0 +1,16 @@
+struct Inner {
+    s: String,
+    n: i32,
+}
+
+struct Outer {
+    inner: Inner,
+    tag: i32,
+}
+
+fn f(o: Outer) -> String {
+    return o.inner.s;
+}
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/cast-int-char",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CAST"
+  ],
+  "notes": "F-TYP-023 (TYP-13.5): integer -> char is refused."
+}

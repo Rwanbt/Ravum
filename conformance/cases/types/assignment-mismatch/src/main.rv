@@ -1,0 +1,9 @@
+struct Point { x: f64, y: f64 }
+
+fn f() {
+    let mut p = Point { x: 1.0, y: 2.0 };
+    p.x = "a";
+}
+
+fn main() {
+}

@@ -1,0 +1,16 @@
+fn measure(s: &String) -> usize {
+    return s.len();
+}
+
+fn decorate(s: &mut String) {
+    s.push_str("!");
+}
+
+fn main() {
+    let a = String::from("ravum");
+    let n = measure(&{ let b = a; b });
+    let mut c = String::from("x");
+    decorate(&mut { let mut d = c; d });
+    let v = String::from("v");
+    let m = measure({ &v });
+}

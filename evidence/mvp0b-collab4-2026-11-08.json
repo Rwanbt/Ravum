@@ -1,0 +1,994 @@
+{
+  "accepted_changes": [
+    {
+      "pass": 1,
+      "record": {
+        "agent_id": "agent-a",
+        "decision": "AUTO_SAFE",
+        "declared_symbols": [
+          "double"
+        ],
+        "evidence_ids": [
+          "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea"
+        ],
+        "journal_seq": 1,
+        "modified_symbols": [
+          "double"
+        ],
+        "paths": [
+          "crate_a/src/lib.rs"
+        ],
+        "proposal_id": "agent-a/tune-double",
+        "recorded_at_unix": 1794150389,
+        "schema_version": 1,
+        "snapshot_after": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+        "snapshot_before": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+        "task_id": "tune-double",
+        "verification": {
+          "checks": [],
+          "evidence_id": "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea",
+          "required_checks": [],
+          "schema_version": 1,
+          "status": "skipped"
+        },
+        "verification_required": false
+      }
+    },
+    {
+      "pass": 1,
+      "record": {
+        "agent_id": "agent-b",
+        "decision": "AUTO_SAFE",
+        "declared_symbols": [
+          "shift"
+        ],
+        "evidence_ids": [
+          "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea"
+        ],
+        "journal_seq": 2,
+        "modified_symbols": [
+          "shift"
+        ],
+        "paths": [
+          "crate_a/src/lib.rs"
+        ],
+        "proposal_id": "agent-b/tune-shift",
+        "recorded_at_unix": 1794150390,
+        "schema_version": 1,
+        "snapshot_after": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+        "snapshot_before": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+        "task_id": "tune-shift",
+        "verification": {
+          "checks": [],
+          "evidence_id": "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea",
+          "required_checks": [],
+          "schema_version": 1,
+          "status": "skipped"
+        },
+        "verification_required": false
+      }
+    },
+    {
+      "pass": 2,
+      "record": {
+        "agent_id": "agent-a",
+        "decision": "AUTO_SAFE",
+        "declared_symbols": [
+          "double"
+        ],
+        "evidence_ids": [
+          "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea"
+        ],
+        "journal_seq": 1,
+        "modified_symbols": [
+          "double"
+        ],
+        "paths": [
+          "crate_a/src/lib.rs"
+        ],
+        "proposal_id": "agent-a/tune-double",
+        "recorded_at_unix": 1794150390,
+        "schema_version": 1,
+        "snapshot_after": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+        "snapshot_before": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+        "task_id": "tune-double",
+        "verification": {
+          "checks": [],
+          "evidence_id": "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea",
+          "required_checks": [],
+          "schema_version": 1,
+          "status": "skipped"
+        },
+        "verification_required": false
+      }
+    },
+    {
+      "pass": 2,
+      "record": {
+        "agent_id": "agent-b",
+        "decision": "AUTO_SAFE",
+        "declared_symbols": [
+          "shift"
+        ],
+        "evidence_ids": [
+          "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea"
+        ],
+        "journal_seq": 2,
+        "modified_symbols": [
+          "shift"
+        ],
+        "paths": [
+          "crate_a/src/lib.rs"
+        ],
+        "proposal_id": "agent-b/tune-shift",
+        "recorded_at_unix": 1794150390,
+        "schema_version": 1,
+        "snapshot_after": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+        "snapshot_before": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+        "task_id": "tune-shift",
+        "verification": {
+          "checks": [],
+          "evidence_id": "c642cd58c82c6e23b971eafc8f6af75fde82c45839dbc2ade8ab7c8dd6a3fcea",
+          "required_checks": [],
+          "schema_version": 1,
+          "status": "skipped"
+        },
+        "verification_required": false
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "cache_hit": false,
+      "cache_kind": "miss",
+      "change_journal_seq": 1,
+      "change_proposal_id": "agent-a/tune-double",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "coordinator_snapshot_before_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "daemon_context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 1,
+          "hit": false,
+          "kind": "miss"
+        },
+        "context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+        "current_revision": 1,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "message": null,
+        "revision": 1,
+        "root": "crate_a/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": {
+          "bytes": 969,
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+          "files": 2,
+          "removed_files": 0,
+          "verified_files": 2,
+          "written_files": 2
+        },
+        "snapshot_id": "e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 3,
+          "analysis_ms": 136,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 141
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p1-crate_a-1"
+      },
+      "daemon_snapshot_id": "e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "daemon_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "equal": true,
+          "path": "crate_a/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "48dba5daee140427eb1f05f17b8fd1d6a220c6f93759ab0f72f6c2418a9132ce",
+          "daemon_sha256": "48dba5daee140427eb1f05f17b8fd1d6a220c6f93759ab0f72f6c2418a9132ce",
+          "equal": true,
+          "path": "crate_a/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 1,
+      "revision": 1,
+      "role": "changed",
+      "timings": {
+        "accept_ms": 3,
+        "analysis_ms": 136,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 141
+      },
+      "unit": "crate_a",
+      "unit_dir": "crate_a"
+    },
+    {
+      "cache_hit": false,
+      "cache_kind": "miss",
+      "change_journal_seq": 1,
+      "change_proposal_id": "agent-a/tune-double",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "coordinator_snapshot_before_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "daemon_context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 2,
+          "hit": false,
+          "kind": "miss"
+        },
+        "context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+        "current_revision": 2,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "message": null,
+        "revision": 2,
+        "root": "crate_b/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": {
+          "bytes": 866,
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+          "files": 2,
+          "removed_files": 0,
+          "verified_files": 2,
+          "written_files": 2
+        },
+        "snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 3,
+          "analysis_ms": 126,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 131
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p1-crate_b-1"
+      },
+      "daemon_snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "daemon_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "equal": true,
+          "path": "crate_b/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "daemon_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "equal": true,
+          "path": "crate_b/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 1,
+      "revision": 2,
+      "role": "dependent",
+      "timings": {
+        "accept_ms": 3,
+        "analysis_ms": 126,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 131
+      },
+      "unit": "crate_b",
+      "unit_dir": "crate_b"
+    },
+    {
+      "cache_hit": false,
+      "cache_kind": "miss",
+      "change_journal_seq": 2,
+      "change_proposal_id": "agent-b/tune-shift",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+      "coordinator_snapshot_before_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "daemon_context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": false,
+          "kind": "miss"
+        },
+        "context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+        "current_revision": 3,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "message": null,
+        "revision": 3,
+        "root": "crate_a/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": {
+          "bytes": 970,
+          "dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\snapshots\\1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+          "files": 2,
+          "removed_files": 0,
+          "verified_files": 2,
+          "written_files": 1
+        },
+        "snapshot_id": "1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 4,
+          "analysis_ms": 149,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 155
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p1-crate_a-2"
+      },
+      "daemon_snapshot_id": "1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "daemon_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "equal": true,
+          "path": "crate_a/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "5e96af8d97869f63c20b57e2ac6ef911c099d0df4b300ab354e7dc69d469dc52",
+          "daemon_sha256": "5e96af8d97869f63c20b57e2ac6ef911c099d0df4b300ab354e7dc69d469dc52",
+          "equal": true,
+          "path": "crate_a/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 1,
+      "revision": 3,
+      "role": "changed",
+      "timings": {
+        "accept_ms": 4,
+        "analysis_ms": 149,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 155
+      },
+      "unit": "crate_a",
+      "unit_dir": "crate_a"
+    },
+    {
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "change_journal_seq": 2,
+      "change_proposal_id": "agent-b/tune-shift",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+      "coordinator_snapshot_before_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "daemon_context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": true,
+          "kind": "memory"
+        },
+        "context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+        "current_revision": 4,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "message": null,
+        "revision": 4,
+        "root": "crate_b/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": null,
+        "snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 0,
+          "analysis_ms": 0,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 0
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p1-crate_b-2"
+      },
+      "daemon_snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "daemon_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "equal": true,
+          "path": "crate_b/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "daemon_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "equal": true,
+          "path": "crate_b/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 1,
+      "revision": 4,
+      "role": "dependent",
+      "timings": {
+        "accept_ms": 0,
+        "analysis_ms": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 0
+      },
+      "unit": "crate_b",
+      "unit_dir": "crate_b"
+    },
+    {
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "change_journal_seq": 1,
+      "change_proposal_id": "agent-a/tune-double",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "coordinator_snapshot_before_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "daemon_context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": true,
+          "kind": "memory"
+        },
+        "context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+        "current_revision": 5,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "message": null,
+        "revision": 5,
+        "root": "crate_a/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": null,
+        "snapshot_id": "e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 0,
+          "analysis_ms": 0,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 0
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p2-crate_a-1"
+      },
+      "daemon_snapshot_id": "e84cebcf09a2471d00a0cdacb8e4dc957eea0b026099aeae848facfc41c4deec",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "daemon_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "equal": true,
+          "path": "crate_a/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "48dba5daee140427eb1f05f17b8fd1d6a220c6f93759ab0f72f6c2418a9132ce",
+          "daemon_sha256": "48dba5daee140427eb1f05f17b8fd1d6a220c6f93759ab0f72f6c2418a9132ce",
+          "equal": true,
+          "path": "crate_a/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 2,
+      "revision": 5,
+      "role": "changed",
+      "timings": {
+        "accept_ms": 0,
+        "analysis_ms": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 0
+      },
+      "unit": "crate_a",
+      "unit_dir": "crate_a"
+    },
+    {
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "change_journal_seq": 1,
+      "change_proposal_id": "agent-a/tune-double",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "coordinator_snapshot_before_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "daemon_context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": true,
+          "kind": "memory"
+        },
+        "context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+        "current_revision": 6,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "message": null,
+        "revision": 6,
+        "root": "crate_b/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": null,
+        "snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 0,
+          "analysis_ms": 0,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 0
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p2-crate_b-1"
+      },
+      "daemon_snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "daemon_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "equal": true,
+          "path": "crate_b/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "daemon_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "equal": true,
+          "path": "crate_b/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 2,
+      "revision": 6,
+      "role": "dependent",
+      "timings": {
+        "accept_ms": 0,
+        "analysis_ms": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 0
+      },
+      "unit": "crate_b",
+      "unit_dir": "crate_b"
+    },
+    {
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "change_journal_seq": 2,
+      "change_proposal_id": "agent-b/tune-shift",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+      "coordinator_snapshot_before_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "daemon_context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": true,
+          "kind": "memory"
+        },
+        "context_id": "7fcfc37bd6cc4c74f49aff90f8ff8e93ae79e8b95d14ad8d3c3970d4463356f5",
+        "current_revision": 7,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\7fcfc37bd6cc",
+        "message": null,
+        "revision": 7,
+        "root": "crate_a/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": null,
+        "snapshot_id": "1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 0,
+          "analysis_ms": 0,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 0
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p2-crate_a-2"
+      },
+      "daemon_snapshot_id": "1bba4b1d17316119d43a0fd92484e9e11348896c53b7d608ad95e166a7dba6e8",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "daemon_sha256": "3c7b1bda43217c17e7900cfc296b83f9e073eec9cba4697c3b145eab86558e8d",
+          "equal": true,
+          "path": "crate_a/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "5e96af8d97869f63c20b57e2ac6ef911c099d0df4b300ab354e7dc69d469dc52",
+          "daemon_sha256": "5e96af8d97869f63c20b57e2ac6ef911c099d0df4b300ab354e7dc69d469dc52",
+          "equal": true,
+          "path": "crate_a/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 2,
+      "revision": 7,
+      "role": "changed",
+      "timings": {
+        "accept_ms": 0,
+        "analysis_ms": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 0
+      },
+      "unit": "crate_a",
+      "unit_dir": "crate_a"
+    },
+    {
+      "cache_hit": true,
+      "cache_kind": "memory",
+      "change_journal_seq": 2,
+      "change_proposal_id": "agent-b/tune-shift",
+      "changed_paths": [
+        "crate_a/src/lib.rs"
+      ],
+      "content_identity_verified": true,
+      "coordinator_snapshot_after_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102",
+      "coordinator_snapshot_before_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d",
+      "daemon_context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+      "daemon_error_count": 0,
+      "daemon_message": null,
+      "daemon_report": {
+        "cache": {
+          "entries": 3,
+          "hit": true,
+          "kind": "memory"
+        },
+        "context_id": "24b45f83bfe2aba4774237de46cb2e7ca220df7f753e0c6b85e72340de1e109e",
+        "current_revision": 8,
+        "daemon_version": "0.1.0",
+        "diagnostics": [],
+        "exit_code": 0,
+        "incremental_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon\\incremental\\24b45f83bfe2",
+        "message": null,
+        "revision": 8,
+        "root": "crate_b/src/lib.rs",
+        "schema_version": 1,
+        "snapshot": null,
+        "snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+        "status": "fresh",
+        "success": true,
+        "timings": {
+          "accept_ms": 0,
+          "analysis_ms": 0,
+          "lookup_ms": 0,
+          "queue_ms": 0,
+          "total_ms": 0
+        },
+        "toolchain": {
+          "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+          "host": "x86_64-pc-windows-msvc",
+          "release": "1.95.0"
+        },
+        "unit": "collab4-p2-crate_b-2"
+      },
+      "daemon_snapshot_id": "49250b0337f6d28190720cf2e3367b015d66f1a31a0a046cc4a355f77ef0bf42",
+      "daemon_status": "fresh",
+      "daemon_success": true,
+      "file_content_mapping": [
+        {
+          "coordinator_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "daemon_sha256": "ff0b9788f6d357790ccf7bfeb773f491a24cffc3b9c4c1ae1a3014851cac277b",
+          "equal": true,
+          "path": "crate_b/Cargo.toml"
+        },
+        {
+          "coordinator_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "daemon_sha256": "06944ced0ffae9a6f5b1444d44fff50b0d369d90a4ae4d178ada57c7aa197321",
+          "equal": true,
+          "path": "crate_b/src/lib.rs"
+        }
+      ],
+      "identity_note": "les identifiants de snapshot coordinateur et daemon ne sont pas égaux par construction (le daemon hache racine + contexte + toolchain + fichiers de l'unité; le coordinateur hache tous les fichiers du workspace): la correspondance est vérifiée fichier par fichier par hash SHA-256, pas revendiquée.",
+      "pass": 2,
+      "revision": 8,
+      "role": "dependent",
+      "timings": {
+        "accept_ms": 0,
+        "analysis_ms": 0,
+        "lookup_ms": 0,
+        "queue_ms": 0,
+        "total_ms": 0
+      },
+      "unit": "crate_b",
+      "unit_dir": "crate_b"
+    }
+  ],
+  "command": "ravum collab-cycle",
+  "daemon": {
+    "cache_hit_rate": 0.625,
+    "stats": {
+      "cache_corrupt": 0,
+      "cache_hits_disk": 0,
+      "cache_hits_memory": 5,
+      "cache_misses": 3,
+      "cancelled": 0,
+      "fresh": 8,
+      "peak_active_jobs": 1,
+      "requests": 8,
+      "rustc_ms_total": 411,
+      "rustc_runs": 3,
+      "snapshots_created": 3,
+      "snapshots_verified": 0,
+      "superseded": 0,
+      "timed_out": 0,
+      "unit_files_written": 5
+    },
+    "work_dir": "<repo>\\target\\ravum\\collab4-demo\\daemon"
+  },
+  "decisions": [
+    {
+      "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "decision": "AUTO_SAFE",
+      "journal_seq": 1,
+      "pass": 1,
+      "proposal_id": "agent-a/tune-double",
+      "reasons": [
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work"
+      ],
+      "resulting_snapshot_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d"
+    },
+    {
+      "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "decision": "AUTO_SAFE",
+      "journal_seq": 2,
+      "pass": 1,
+      "proposal_id": "agent-b/tune-shift",
+      "reasons": [
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work"
+      ],
+      "resulting_snapshot_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102"
+    },
+    {
+      "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "decision": "AUTO_SAFE",
+      "journal_seq": 1,
+      "pass": 2,
+      "proposal_id": "agent-a/tune-double",
+      "reasons": [
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work"
+      ],
+      "resulting_snapshot_id": "c79059544d85cec17b5c40f384bda10b7030b472f41fcf5ea518a22e9f2f956d"
+    },
+    {
+      "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+      "decision": "AUTO_SAFE",
+      "journal_seq": 2,
+      "pass": 2,
+      "proposal_id": "agent-b/tune-shift",
+      "reasons": [
+        "preconditions satisfied, patch applies exactly, no overlap with integrated work"
+      ],
+      "resulting_snapshot_id": "bb0a7296bea9a31f15dbfcce32a080bb61a0989743dfee8d5780533a794bb102"
+    }
+  ],
+  "duration_ms": 549,
+  "environment": {
+    "arch": "x86_64",
+    "daemon_version": "0.1.0",
+    "machine_note": "poste de référence chargé pendant la campagne: campagnes de tests sérialisées (--test-threads=1), timings mono-exécution non représentatifs",
+    "os": "windows",
+    "toolchain": {
+      "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+      "host": "x86_64-pc-windows-msvc",
+      "release": "1.95.0"
+    }
+  },
+  "exit_code": 0,
+  "generated_at_unix": 1794150390,
+  "identity": {
+    "content_mapping_rule": "hash SHA-256 fichier par fichier: snapshot coordinateur vs identité daemon calculée depuis les octets soumis",
+    "coordinator_vs_daemon_snapshot_ids": "jamais égaux par construction; aucune égalité revendiquée sans vérification de contenu",
+    "replay_rule": "un second passage identique doit être servi par le cache daemon (hit) sans exécution rustc"
+  },
+  "journal_paths": [
+    "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
+    "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl"
+  ],
+  "mode": "builtin:two-agents-two-functions",
+  "passes": [
+    {
+      "accepted": 2,
+      "analyses": 4,
+      "cache_hits": 1,
+      "cache_misses": 3,
+      "decisions": 2,
+      "duration_ms": 432,
+      "journal_durable_lines": 2,
+      "journal_entries": 2,
+      "journal_path": "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.jsonl",
+      "pass": 1,
+      "rustc_runs": 3
+    },
+    {
+      "accepted": 2,
+      "analyses": 4,
+      "cache_hits": 4,
+      "cache_misses": 0,
+      "decisions": 2,
+      "duration_ms": 20,
+      "journal_durable_lines": 2,
+      "journal_entries": 2,
+      "journal_path": "<repo>\\target\\ravum\\collab4-demo\\journal\\run1.pass2.jsonl",
+      "pass": 2,
+      "rustc_runs": 0
+    }
+  ],
+  "passes_requested": 2,
+  "schema_version": 1,
+  "skipped_units": [
+    {
+      "changes_that_skipped_it": [
+        "agent-a/tune-double",
+        "agent-b/tune-shift"
+      ],
+      "dir": "crate_c",
+      "reason": "ni modifiée ni dépendante (transitive) d'une unité modifiée: jamais analysée",
+      "unit": "crate_c"
+    }
+  ],
+  "unit_graph": {
+    "topological_order": [
+      "crate_a",
+      "crate_b",
+      "crate_c"
+    ],
+    "units": [
+      {
+        "crate_name": "crate_a",
+        "dependencies": [],
+        "dependents": [
+          "crate_b"
+        ],
+        "dir": "crate_a",
+        "edition": "2021",
+        "files": [
+          "crate_a/Cargo.toml",
+          "crate_a/src/lib.rs"
+        ],
+        "root": "crate_a/src/lib.rs",
+        "unit": "crate_a"
+      },
+      {
+        "crate_name": "crate_b",
+        "dependencies": [
+          "crate_a"
+        ],
+        "dependents": [],
+        "dir": "crate_b",
+        "edition": "2021",
+        "files": [
+          "crate_b/Cargo.toml",
+          "crate_b/src/lib.rs"
+        ],
+        "root": "crate_b/src/lib.rs",
+        "unit": "crate_b"
+      },
+      {
+        "crate_name": "crate_c",
+        "dependencies": [],
+        "dependents": [],
+        "dir": "crate_c",
+        "edition": "2021",
+        "files": [
+          "crate_c/Cargo.toml",
+          "crate_c/src/lib.rs"
+        ],
+        "root": "crate_c/src/lib.rs",
+        "unit": "crate_c"
+      }
+    ]
+  },
+  "violations": [],
+  "workspace": "<repo>\\fixtures\\collab4\\workspace",
+  "workspace_snapshot": {
+    "base_snapshot_id": "aa7b74c18c79c8bd560c3defb256cb3bfc8a12c065515c838ffcc3dcb2742cd1",
+    "file_count": 6,
+    "files": [
+      "crate_a/Cargo.toml",
+      "crate_a/src/lib.rs",
+      "crate_b/Cargo.toml",
+      "crate_b/src/lib.rs",
+      "crate_c/Cargo.toml",
+      "crate_c/src/lib.rs"
+    ]
+  }
+}

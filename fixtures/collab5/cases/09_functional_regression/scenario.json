@@ -1,0 +1,13 @@
+{
+  "id": "09_functional_regression",
+  "description": "Le changement compile mais le harnais de test du snapshot fusionne echoue (le verifier doit l'executer).",
+  "lane": "scripted_verifier",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "double", "target": "src/lib.rs", "symbols": ["double"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["REJECT"],
+  "expected_levels": ["REJECTED"],
+  "verifier": {"mode": "fail", "kind": "test_run", "code": "", "message": "the test harness of the merged snapshot failed"},
+  "expect_reason_contains": [["test harness", "failed"]]
+}

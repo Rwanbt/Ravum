@@ -1,0 +1,14 @@
+struct Point { x: i32, y: i32 }
+
+fn f(p: Point) -> Point {
+    let q = p;
+    return p;
+}
+
+fn main() {
+    let a = 1;
+    let b = a;
+    let p = Point { x: 1, y: 2 };
+    let q = p;
+    let s = f(q);
+}

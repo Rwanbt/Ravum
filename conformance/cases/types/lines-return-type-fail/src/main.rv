@@ -1,0 +1,7 @@
+fn count(text: &str) -> usize {
+    let n: usize = text.lines();
+    return n;
+}
+
+fn main() {
+}

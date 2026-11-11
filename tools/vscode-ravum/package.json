@@ -1,0 +1,83 @@
+{
+  "name": "ravum-lang",
+  "displayName": "Ravum",
+  "description": "Ravum language support: diagnostics, hover, definition, references, rename, completion, symbols and formatting, powered by the real `ravum-lang lsp` server.",
+  "version": "0.1.0",
+  "publisher": "ravum",
+  "license": "MIT OR Apache-2.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:ravum"
+  ],
+  "main": "./client/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "ravum",
+        "aliases": [
+          "Ravum",
+          "ravum"
+        ],
+        "extensions": [
+          ".rv"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ravum",
+        "scopeName": "source.ravum",
+        "path": "./syntaxes/ravum.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Ravum",
+      "properties": {
+        "ravum.server.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `ravum-lang` binary. Empty means: use `RAVUM_LSP_BIN`, then the workspace `target/{debug,release}/ravum-lang[.exe]`, then `ravum-lang` on `PATH`."
+        },
+        "ravum.server.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "lsp"
+          ],
+          "description": "Arguments passed to the server binary."
+        },
+        "ravum.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace level of the LSP exchange (View > Output > Ravum Language Server)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node ./test/runTest.js"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.4.1",
+    "mocha": "^10.7.3"
+  }
+}

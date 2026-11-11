@@ -1,0 +1,6 @@
+{
+  "id": "types/float-assoc",
+  "mode": "run-pass",
+  "stdout_contains": "1\n",
+  "notes": "F-EXPR-008 (EXPR-4.5): a + b + c is (a + b) + c; with a=1e16, b=-1e16, c=1.0 the result is 1 (reassociation would give 0)."
+}

@@ -1,0 +1,4 @@
+[package]
+name = "run-array-move-self-receiver"
+version = "0.1.0"
+edition = "core-1.0"

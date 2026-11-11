@@ -1,0 +1,7 @@
+{
+  "id": "run/file-store-missing-key",
+  "mode": "run-fail",
+  "args": [".", "get", "ghost"],
+  "stderr_contains": "error: no such key: ghost",
+  "notes": "A missing key is a typed Err, not a panic: exit 1 with the runtime convention `error: <message>` on stderr (RAVUM-CORE-DESIGN 3.8)."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/result-eq",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-EQ"
+  ],
+  "notes": "F-TYP-015 (TYP-10.3): `Result` is not structurally comparable, so `==` on two `Result` values is E-TYP-EQ."
+}

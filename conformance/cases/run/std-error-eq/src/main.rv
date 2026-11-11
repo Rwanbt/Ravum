@@ -1,0 +1,6 @@
+fn main() {
+    let a = Error::new("x");
+    let b = Error::new("y");
+    if a == b {
+    }
+}

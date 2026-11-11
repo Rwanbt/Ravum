@@ -1,0 +1,10 @@
+fn g(s: &String) -> usize {
+    return s.len();
+}
+
+fn f(a: [String; 2]) -> usize {
+    return g(&a[0]);
+}
+
+fn main() {
+}

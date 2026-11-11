@@ -1,0 +1,3 @@
+static X: i32 = 1;
+fn main() {
+}

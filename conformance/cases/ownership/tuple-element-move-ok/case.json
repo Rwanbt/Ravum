@@ -1,0 +1,5 @@
+{
+  "id": "ownership/tuple-element-move-ok",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / TYP-4.4: moving t.0 out of a tuple is allowed when the aggregate is never reused; the tuple-only shape isolates this from the array-element move."
+}

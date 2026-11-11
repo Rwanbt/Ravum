@@ -1,0 +1,5 @@
+{
+  "id": "ownership/borrow-param-body",
+  "mode": "compile-pass",
+  "notes": "`&T` and `&mut T` parameters are usable in the whole body; a `&mut self`-style push and a shared-param pass-through are legal (OWN-3.13, OWN-3.14, OWN-3.17)."
+}

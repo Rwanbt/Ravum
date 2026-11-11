@@ -1,0 +1,16 @@
+fn pick(c: bool, a: [([String; 2], i32); 2]) -> String {
+    if c {
+        let x = a[0].0[1];
+        return x;
+    } else {
+        let y = a[1].0[0];
+        return y;
+    }
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(pick(true, a).as_str());
+    let b = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(pick(false, b).as_str());
+}

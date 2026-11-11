@@ -1,0 +1,6 @@
+{
+  "id": "packages/local-dependency",
+  "mode": "run-pass",
+  "project": "app",
+  "stdout_contains": "42\n"
+}

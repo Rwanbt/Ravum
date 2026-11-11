@@ -1,0 +1,7 @@
+{
+  "id": "run/panic",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic: boom",
+  "notes": "panic prints `panic: <message>` and exits 1 (STD-11.4)."
+}

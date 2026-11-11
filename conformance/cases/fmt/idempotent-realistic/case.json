@@ -1,0 +1,5 @@
+{
+  "id": "fmt/idempotent-realistic",
+  "mode": "fmt-idempotent",
+  "notes": "A realistic but badly formatted file must be normalized once, and a second fmt must be byte-identical."
+}

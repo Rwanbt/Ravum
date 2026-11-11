@@ -1,0 +1,6 @@
+{
+  "id": "run/math-min-max",
+  "mode": "run-pass",
+  "stdout_contains": "-0 1 1",
+  "notes": "F-STD-011 / STD-6.5: min(-0.0,+0.0) = -0.0 (Display \"-0\"), a NaN operand returns the other operand for both min and max."
+}

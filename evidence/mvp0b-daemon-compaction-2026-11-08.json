@@ -1,0 +1,193 @@
+{
+  "after": {
+    "disk_bytes": 191055,
+    "disk_freed_bytes": 1630686,
+    "session_paths": [
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaoclboa-07cldnc-26dzc9vnxtjj32u9jif4fyhj2"
+    ],
+    "sessions": 1
+  },
+  "before": {
+    "disk_bytes": 1821741,
+    "session_paths": [
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocbkpr-0lh4ce9-3wwix0swnklpdexhs0o10445l",
+      "<repo>\\target\\ravum-daemon-bench\\compaction-suite\\compaction-suite\\daemon\\incremental\\2a8f63d786e1\\acme_unit-0umxghomxb1sz\\s-hnzaocfwlr-049y54x-553ejhrhlt21ocyuvnfs8tyyi"
+    ],
+    "sessions": 2
+  },
+  "command": "cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite compaction",
+  "context_id": "2a8f63d786e1512ff1539f6a2f7193ea08a835997dba634100f0839e79517979",
+  "edit_analysis_ms": [
+    183,
+    191,
+    179,
+    169,
+    195,
+    199,
+    229,
+    177,
+    172,
+    172,
+    191,
+    176,
+    183,
+    178,
+    183,
+    199,
+    201,
+    173,
+    182,
+    233
+  ],
+  "edits": 20,
+  "gc": {
+    "compaction": {
+      "bytes_freed": 818507,
+      "contexts_scanned": 1,
+      "enabled": true,
+      "keep_incremental_sessions": 1,
+      "planned_bytes": 0,
+      "sessions_deleted": 1,
+      "sessions_kept": 1,
+      "sessions_planned": 0,
+      "tmp_files_deleted": 0,
+      "tmp_files_planned": 0,
+      "working_sessions_deleted": 0
+    },
+    "deleted": {
+      "cache_keys": 0,
+      "contexts": 0,
+      "snapshots": 0
+    },
+    "duration_ms": 20,
+    "errors": [],
+    "freed_bytes": 818507,
+    "notes": [
+      "policy has no byte cap: GC only protects live content and deletes nothing"
+    ]
+  },
+  "generated_unix": 1794170773,
+  "git": {
+    "branch": "feat/mvp0b-hardening",
+    "dirty_files": 10,
+    "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+    "head": "29045142712ee29131206d8dedf47c31b9109197"
+  },
+  "kind": "mvp0b-daemon-compaction-2026-11-08",
+  "last_edit_analysis_ms": 233,
+  "limits": [
+    "single build context, single daemon, sequential edits: this measures the compaction path, not concurrent behaviour",
+    "the post-compaction latency includes both the retained incremental session and any rustc re-computation: a single sample is not a distribution",
+    "rustc owns the internal session format; compaction only removes whole old `s-*` directories and orphan `*.tmp` files, never rewrites rustc state",
+    "the shared machine was loaded by other agents (see load_start/load_end): the baseline vs cold comparison was taken in the same run"
+  ],
+  "load_end": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        89,
+        79,
+        79
+      ],
+      "stats": {
+        "count": 3,
+        "max": 89,
+        "mean": 82.33333333333333,
+        "min": 79,
+        "p50": 79,
+        "p95": 89
+      }
+    },
+    "system": {
+      "captured_unix": 1794170777,
+      "cpu_busy_percent": 45.418326693227094,
+      "daemon_working_set_bytes": 7434240,
+      "memory_available_bytes": 2320248832,
+      "memory_total_bytes": 16868962304,
+      "process_count": 312
+    }
+  },
+  "load_start": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        76,
+        73,
+        76
+      ],
+      "stats": {
+        "count": 3,
+        "max": 76,
+        "mean": 75.0,
+        "min": 73,
+        "p50": 76,
+        "p95": 76
+      }
+    },
+    "system": {
+      "captured_unix": 1794170772,
+      "cpu_busy_percent": 46.0,
+      "daemon_working_set_bytes": 5910528,
+      "memory_available_bytes": 2337607680,
+      "memory_total_bytes": 16868962304,
+      "process_count": 310
+    }
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows",
+    "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+  },
+  "policy": {
+    "compact_incremental": true,
+    "keep_incremental_sessions": 1,
+    "keep_recent": 4
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "host": "x86_64-pc-windows-msvc",
+    "release": "1.95.0"
+  },
+  "toolchain_evidence": {
+    "repo_root": "<repo>",
+    "rustc_path": "rustc",
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  },
+  "valid": true,
+  "verification": {
+    "after_compaction": {
+      "analysis_ms": 140,
+      "cache_kind": "miss",
+      "success": true,
+      "wall_ms": 148
+    },
+    "baseline_before_compaction": {
+      "analysis_ms": 189,
+      "wall_ms": 197
+    },
+    "cache_intact_after_compaction": true,
+    "cold_reference_no_state": {
+      "analysis_ms": 119,
+      "cache_kind": "miss",
+      "wall_ms": 123
+    },
+    "note": "reuse_retained is true only when the post-compaction analysis is a real compiler run (analysis_ms > 0) and strictly faster than the cold reference; otherwise the retained session was not demonstrably reused",
+    "reuse_retained": false
+  }
+}

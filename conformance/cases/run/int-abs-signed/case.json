@@ -1,0 +1,6 @@
+{
+  "id": "run/int-abs-signed",
+  "mode": "run-pass",
+  "stdout_contains": "7",
+  "notes": "F-STD-029 / STD-12.4: abs() exists on signed integers. The checker accepts it but codegen fails with `unsupported builtin method int::abs`."
+}

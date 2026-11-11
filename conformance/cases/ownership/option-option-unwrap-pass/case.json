@@ -1,0 +1,5 @@
+{
+  "id": "ownership/option-option-unwrap-pass",
+  "mode": "compile-pass",
+  "notes": "STD-11.2: a nested `Option<Option<String>>` is unwrapped twice; each `unwrap` consumes its receiver (round-3 axis nested-unwrap)."
+}

@@ -1,0 +1,14 @@
+fn first(t: (String, i32)) -> String {
+    return t.0;
+}
+
+fn second(a: [String; 2]) -> String {
+    return a[1];
+}
+
+fn main() {
+    let t = (String::from("a"), 7);
+    let s = first(t);
+    let a = [String::from("b"), String::from("c")];
+    let u = second(a);
+}

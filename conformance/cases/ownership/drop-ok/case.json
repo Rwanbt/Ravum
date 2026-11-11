@@ -1,0 +1,5 @@
+{
+  "id": "ownership/drop-ok",
+  "mode": "compile-pass",
+  "notes": "F-OWN-013 / OWN-9: `drop(x)` destroys the value immediately; dropping a `String` and not using it afterwards is accepted."
+}

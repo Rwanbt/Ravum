@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/unicode-ident",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-IDENT"
+  ],
+  "unsupported": true,
+  "notes": "Unicode identifiers are refused: identifiers are ASCII only (UNS, F-UNS-011)."
+}

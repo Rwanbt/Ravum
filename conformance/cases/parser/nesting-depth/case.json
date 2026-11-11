@@ -1,0 +1,8 @@
+{
+  "id": "parser/nesting-depth",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-DEPTH"
+  ],
+  "notes": "diagnostics.md \u00a73.1: E-PARSE-DEPTH is a deterministic nesting limit (parser MAX_DEPTH = 256). 253 nested unary operators plus the item/statement frames reach the limit; the parser then emits exactly this code, so no other diagnostic is spurious."
+}

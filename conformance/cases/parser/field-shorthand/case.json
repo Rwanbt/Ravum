@@ -1,0 +1,5 @@
+{
+  "id": "parser/field-shorthand",
+  "mode": "compile-pass",
+  "notes": "Lead decision: field shorthand in a struct expression (Point { x, y: 0.0 }) is accepted in Core 1.0. grammar.md G-4.4/G-6.40 and the section 7 table still say it is refused and must be aligned with the decision."
+}

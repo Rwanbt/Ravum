@@ -1,0 +1,5 @@
+{
+  "id": "types/nested-option-exhaustive-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-5.8 / TYP-10.4: `Some(Some(_))`, `Some(None)` and `None` cover Option<Option<i32>> exhaustively; control against over-rejection of nested patterns."
+}

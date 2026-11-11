@@ -1,0 +1,8 @@
+{
+  "id": "run/env-set-var-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-007 / STD-4.5: no environment write exists; E-RES-UNKNOWN."
+}

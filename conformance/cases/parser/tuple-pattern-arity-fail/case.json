@@ -1,0 +1,8 @@
+{
+  "id": "parser/tuple-pattern-arity-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ],
+  "notes": "F-SYN-030 (G-6.38): a tuple pattern with the wrong arity is E-TYP-ARITY per features.md. (Implementation emits E-TYP-MISMATCH.)"
+}

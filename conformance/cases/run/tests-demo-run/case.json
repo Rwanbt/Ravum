@@ -1,0 +1,6 @@
+{
+  "id": "run/tests-demo-run",
+  "mode": "run-pass",
+  "stdout_contains": "run `ravum-lang test` to execute the tests\n",
+  "notes": "The example also carries `test fn` items; `run` only executes main."
+}

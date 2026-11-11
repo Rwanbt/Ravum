@@ -1,0 +1,5 @@
+{
+  "id": "ownership/drop-order-scope",
+  "mode": "compile-pass",
+  "notes": "Values are destroyed at the end of their block in reverse declaration order; nested blocks destroy their locals first; a moved value is not destroyed at its source (OWN-8.1, OWN-8.2, OWN-8.4). No source-level FAIL exists: the order is not observable without a user destructor (OWN-9.6)."
+}

@@ -1,0 +1,34 @@
+// EXPR-9.4 / G-6.8 : la famille complète des affectations composées.
+// `n` suit 10 -> 15 -> 12 -> 24 -> 6 -> 2 -> 10 -> 8 -> 11 -> 44 -> 22.
+use std::io;
+
+fn main() {
+    let mut n = 10;
+    n += 5;
+    n -= 3;
+    n *= 2;
+    n /= 4;
+    n %= 4;
+    n |= 8;
+    n &= 12;
+    n ^= 3;
+    n <<= 2;
+    n >>= 1;
+
+    let mut f = 1.5;
+    f *= 2.0;
+    f -= 1.0;
+
+    let mut b = true;
+    b &= false;
+    b |= true;
+    b ^= true;
+
+    let mut line = n.to_string();
+    line.push_str(" ");
+    line.push_str(&f.to_string());
+    line.push_str(" ");
+    let flag = if b { "true" } else { "false" };
+    line.push_str(flag);
+    io::println(&line);
+}

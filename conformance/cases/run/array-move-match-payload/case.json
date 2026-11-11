@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-match-payload",
+  "mode": "run-pass",
+  "stdout_contains": "right\n",
+  "notes": "OWN-5.4: an array bound by a `match` arm pattern is a place like any other; a block-bodied arm destructures before its first statement, an expression-bodied arm uses the inline single-use form. Previously rustc E0508."
+}

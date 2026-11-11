@@ -1,0 +1,10 @@
+enum E<T> {
+    A(T),
+}
+
+fn main() {
+    let a: [i32; 2] = [panic("x"), 1];
+    let t: (i32, i32) = (panic("x"), 1);
+    let r: [i32; 3] = [panic("x"); 3];
+    let e: E<i32> = E::A(panic("x"));
+}

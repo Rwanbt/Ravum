@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/ravum-protocol",
+  "crates/ravum-snapshot",
+  "crates/ravum-rust-adapter",
+  "crates/ravum-patch-host",
+  "crates/ravum-coordinator",
+  "crates/ravum-proof",
+  "crates/ravum-dsp-harness",
+  "crates/ravum-store",
+  "crates/ravum-todo-core",
+  "crates/ravum-workspace-coordinator",
+  "crates/ravum-daemon",
+  "crates/ravum-cli",
+  "crates/ravum-unit-graph",
+  "crates/ravum-collab-oracle",
+  "crates/ravum-batch",
+  "crates/ravum-lang-syntax",
+  "crates/ravum-lang-sema",
+  "crates/ravum-lang-codegen",
+  "crates/ravum-lang-cli",
+  "crates/ravum-lang-lsp",
+  "tools/conformance",
+  "apps/ravum-demo-host",
+  "apps/ravum-todo",
+]
+
+[workspace.package]
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+rust-version = "1.74"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+libloading = "0.8"
+
+ravum-protocol = { path = "crates/ravum-protocol" }
+ravum-snapshot = { path = "crates/ravum-snapshot" }
+ravum-rust-adapter = { path = "crates/ravum-rust-adapter" }
+ravum-patch-host = { path = "crates/ravum-patch-host" }
+ravum-coordinator = { path = "crates/ravum-coordinator" }
+ravum-proof = { path = "crates/ravum-proof" }
+ravum-dsp-harness = { path = "crates/ravum-dsp-harness" }
+ravum-store = { path = "crates/ravum-store" }
+ravum-todo-core = { path = "crates/ravum-todo-core" }
+ravum-workspace-coordinator = { path = "crates/ravum-workspace-coordinator" }
+ravum-daemon = { path = "crates/ravum-daemon" }
+ravum-lang-syntax = { path = "crates/ravum-lang-syntax" }
+ravum-lang-sema = { path = "crates/ravum-lang-sema" }
+ravum-lang-codegen = { path = "crates/ravum-lang-codegen" }
+ravum-lang-lsp = { path = "crates/ravum-lang-lsp" }
+
+# Keep debug info minimal: the reference machine has ~16 Go RAM and the
+# permanent-build pipeline measures wall time, so link time matters.
+[profile.dev]
+debug = 1
+incremental = false

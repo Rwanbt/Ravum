@@ -1,0 +1,8 @@
+{
+  "id": "resolve/module-duplicate",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-DUPLICATE"
+  ],
+  "notes": "A module may be declared only once: E-MOD-DUPLICATE (canonical), which also rules out module cycles by construction."
+}

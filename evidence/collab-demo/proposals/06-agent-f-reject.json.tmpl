@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "agent_id": "agent-f",
+  "task_id": "broken-proposal",
+  "base_snapshot_id": "{{BASE}}",
+  "target_paths": ["two_functions.rs"],
+  "target_symbols": ["helper"],
+  "expected_hashes": { "two_functions.rs": "{{HASH_TWO_FUNCTIONS}}" },
+  "declared_dependencies": [],
+  "impacted_contracts": [],
+  "unified_patch": "ceci n'est pas un diff unifié\n",
+  "note": "Agent F : proposition malformée -> REJECT, aucune écriture partielle."
+}

@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-two-elements-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / TYP-5.4: moving both elements out of an array (`let x = a[0]; let y = a[1];`) is legal per-component when the aggregate is never reused; previously check-pass/build-fail."
+}

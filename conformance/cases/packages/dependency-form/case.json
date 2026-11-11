@@ -1,0 +1,8 @@
+{
+  "id": "packages/dependency-form",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-DEPENDENCY"
+  ],
+  "notes": "Only `name = { path = \"...\" }` is accepted; a bare version is E-MOD-DEPENDENCY (MOD-5.4)."
+}

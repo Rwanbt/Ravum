@@ -1,0 +1,11 @@
+enum Shape {
+    Circle(f64),
+}
+
+fn f() -> Shape {
+    return Circle(1.0);
+}
+
+fn main() {
+}
+

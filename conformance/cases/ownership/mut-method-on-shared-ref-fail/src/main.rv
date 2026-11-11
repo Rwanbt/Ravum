@@ -1,0 +1,6 @@
+fn append(s: &String) {
+    s.push_str("x");
+}
+
+fn main() {
+}

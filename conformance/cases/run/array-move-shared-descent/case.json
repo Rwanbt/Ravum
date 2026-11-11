@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-shared-descent",
+  "mode": "run-pass",
+  "stdout_contains": "x1\n",
+  "notes": "OWN-5.4: several element-projection descents over the same array place (`a[0].0[1]` and `a[1].0[0]`, or a descent plus a read of another element) share one level-0 destructuring: the hoist binds every element once and each use continues from its slot. Previously check-pass/build-fail with rustc E0508."
+}

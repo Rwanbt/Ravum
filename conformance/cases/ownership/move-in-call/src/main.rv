@@ -1,0 +1,10 @@
+use std::io;
+
+fn take(s: String) {
+}
+
+fn main() {
+    let s = String::from("a");
+    take(s);
+    io::println(s.as_str());
+}

@@ -1,0 +1,5 @@
+{
+  "id": "parser/let-forms-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-013 (G-6.2-6.4): `let mut`, explicit type and deferred initialisation are accepted."
+}

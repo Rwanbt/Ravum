@@ -1,0 +1,5 @@
+{
+  "id": "types/never-annotated-aggregates-pass",
+  "mode": "compile-pass",
+  "notes": "TYP-1.6/EXPR-11.3: an annotation supplies the expected element type, so a diverging element coerces and no E-TYP-MISMATCH is emitted for `!`. Covers arrays, tuple, array repeat and an annotated enum variant; the annotation is what makes the aggregate inferable."
+}

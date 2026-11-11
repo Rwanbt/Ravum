@@ -1,0 +1,8 @@
+{
+  "id": "types/const-eval",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CONST"
+  ],
+  "notes": "constant evaluation is checked: division by zero in a const is E-TYP-CONST (canonical)."
+}

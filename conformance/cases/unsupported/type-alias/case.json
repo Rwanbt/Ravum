@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/type-alias",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TYPE-ALIAS"
+  ],
+  "unsupported": true,
+  "notes": "UNS \u00a72 line 33: a type alias is refused. diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-TYPE-ALIAS; unsupported.md still maps `type` to E-UNSUPPORTED-TOKEN."
+}

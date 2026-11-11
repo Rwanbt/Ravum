@@ -1,0 +1,464 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0b-ci-auto-gc",
+  "date": "2026-11-08",
+  "head": "29045142712ee29131206d8dedf47c31b9109197",
+  "branch": "feat/mvp0b-hardening",
+  "workflow": {
+    "file": ".github/workflows/mvp.yml",
+    "job": "auto-gc",
+    "steps": [
+      "Build the measurement harness",
+      "Run the bounded auto-GC soak",
+      "Assert stable auto-GC invariants (fail-closed)",
+      "Upload auto-GC evidence"
+    ]
+  },
+  "product_defaults_unchanged": true,
+  "product_defaults_evidence": {
+    "control_campaign_auto_gc_enabled": false,
+    "control_campaign_auto_gc_runs": 0,
+    "source_claim": "crates/ravum-daemon/src/auto_gc.rs: AutoGcPolicy::default().enabled == false",
+    "note": "The soak harness explicitly enables a small AutoGcPolicy for its \"auto\" campaign only; no product default and no crates/ file was changed by this task."
+  },
+  "flags_note": "HEAD 2904514 exposes NO --auto-gc* CLI flags (read from ravum-daemon-bench main.rs). The \"auto\" campaign enables AutoGcPolicy in soak.rs (enabled=true, check_every_requests=5, idle_only=true); the \"control\" campaign uses AutoGcPolicy::default() (disabled). The CI job therefore passes only the supported flags below.",
+  "command": "cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite soak --soak-requests 24 --soak-seconds 30 --soak-pace-ms 100 --soak-control-requests 8 --soak-control-seconds 30 --soak-control-pace-ms 50 --soak-min-total-bytes 32768 --soak-max-total-bytes 16384 --soak-sample-every 2 --work-dir target/ravum-daemon-bench-ci-auto-gc --out-soak evidence/local/mvp0b-ci-auto-gc.json",
+  "parameters": {
+    "soak_requests": 24,
+    "soak_seconds_deadline": 30,
+    "soak_pace_ms": 100,
+    "soak_control_requests": 8,
+    "soak_control_seconds_deadline": 30,
+    "soak_control_pace_ms": 50,
+    "soak_sample_every": 2,
+    "auto_gc_trigger_min_total_bytes": 32768,
+    "auto_gc_target_max_total_bytes": 16384,
+    "work_dir": "target/ravum-daemon-bench-ci-auto-gc",
+    "work_dir_marker": "the leaf contains \"ravum-daemon-bench\" so the harness fail-closed --clean guard allows a rerun"
+  },
+  "invariants": {
+    "asserted": 18,
+    "ceiling_bytes": 1048576,
+    "list": [
+      "valid == true",
+      "auto.failures == 0",
+      "control.failures == 0",
+      "auto.requests >= 8",
+      "auto.auto_gc.enabled == true",
+      "auto.auto_gc.runs >= 1",
+      "auto.auto_gc.failures == 0",
+      "auto.auto_gc.checks >= 1",
+      "auto.auto_gc.last.ok == true",
+      "auto.settled == true",
+      "auto.verification.recent.hit_without_compiler == true",
+      "auto.verification.old.success == true",
+      "auto.policy.enabled == true",
+      "auto.policy.max_total_bytes < auto.policy.min_total_bytes",
+      "control.auto_gc.enabled == false (product default untouched)",
+      "auto.disk_bytes.max <= 1048576",
+      "auto.disk_bytes.end <= 1048576",
+      "auto.journal_lines >= 1"
+    ]
+  },
+  "pristine_head_proof": {
+    "method": "git archive HEAD (2904514) vers un répertoire temporaire, puis cargo build + corps exact du step (CARGO_BUILD_JOBS=2). Aucun fichier du dépôt partagé modifié.",
+    "archive_timestamp": "2026-11-08T22:01:31+01:00",
+    "build_duration_s": 25.3,
+    "run_1": {
+      "timestamp": "2026-11-08T22:02:57+01:00",
+      "exit_code": 0,
+      "duration_s": 28.45,
+      "note": "workspace target vide : inclut la compilation du harnais"
+    },
+    "run_2": {
+      "timestamp": "2026-11-08T22:03:07+01:00",
+      "exit_code": 0,
+      "duration_s": 10.39,
+      "note": "même workspace : prouve que la garde --clean (marqueur du nom) permet un re-run"
+    },
+    "bench_result": {
+      "valid": true,
+      "auto": {
+        "name": "auto",
+        "auto_gc_enabled": true,
+        "requests": 24,
+        "duration_s": 6,
+        "failures": 0,
+        "latency_ms": {
+          "count": 24,
+          "max": 178,
+          "mean": 114.79166666666667,
+          "min": 2,
+          "p50": 140,
+          "p95": 169
+        },
+        "cache": {
+          "hits": 7,
+          "misses": 19,
+          "rustc_runs": 19
+        },
+        "auto_gc": {
+          "busy": false,
+          "checks": 6,
+          "enabled": true,
+          "failures": 0,
+          "journal_entries": 5,
+          "last": {
+            "at_unix": 1794171785,
+            "deleted_entries": 10,
+            "duration_ms": 56,
+            "error": null,
+            "freed_bytes": 62280,
+            "ok": true,
+            "total_after_bytes": 63249,
+            "total_before_bytes": 125529
+          },
+          "pending": false,
+          "requests_since_check": 0,
+          "runs": 5
+        },
+        "auto_gc_before_verification": {
+          "busy": false,
+          "checks": 4,
+          "enabled": true,
+          "failures": 0,
+          "journal_entries": 4,
+          "last": {
+            "at_unix": 1794171784,
+            "deleted_entries": 8,
+            "duration_ms": 54,
+            "error": null,
+            "freed_bytes": 88562,
+            "ok": true,
+            "total_after_bytes": 35416,
+            "total_before_bytes": 123978
+          },
+          "pending": false,
+          "requests_since_check": 4,
+          "runs": 4
+        },
+        "disk_bytes": {
+          "end": 66297,
+          "growth": 66297,
+          "max": 180351,
+          "start": 0
+        },
+        "rss_bytes": {
+          "drift": 888832,
+          "end": 7045120,
+          "max": 7028736,
+          "start": 6156288
+        },
+        "journal_lines": 5,
+        "settled": true,
+        "verification": {
+          "old": {
+            "analysis_ms": 154,
+            "cache_kind": "miss",
+            "seed": 1,
+            "success": true
+          },
+          "recent": {
+            "analysis_ms": 0,
+            "cache_kind": "memory",
+            "hit_without_compiler": true,
+            "seed": 23
+          }
+        },
+        "policy": {
+          "check_every_requests": 5,
+          "enabled": true,
+          "idle_only": true,
+          "keep_recent": 6,
+          "max_cache_bytes": 40000,
+          "max_incremental_bytes": 120000,
+          "max_snapshot_bytes": 40000,
+          "max_total_bytes": 16384,
+          "min_total_bytes": 32768
+        },
+        "samples_excluded": true
+      },
+      "control": {
+        "name": "control",
+        "auto_gc_enabled": false,
+        "requests": 8,
+        "duration_s": 1,
+        "failures": 0,
+        "latency_ms": {
+          "count": 8,
+          "max": 171,
+          "mean": 118.5,
+          "min": 2,
+          "p50": 156,
+          "p95": 171
+        },
+        "cache": {
+          "hits": 4,
+          "misses": 6,
+          "rustc_runs": 6
+        },
+        "auto_gc": {
+          "busy": false,
+          "checks": 0,
+          "enabled": false,
+          "failures": 0,
+          "journal_entries": 0,
+          "last": null,
+          "pending": false,
+          "requests_since_check": 0,
+          "runs": 0
+        },
+        "auto_gc_before_verification": {
+          "busy": false,
+          "checks": 0,
+          "enabled": false,
+          "failures": 0,
+          "journal_entries": 0,
+          "last": null,
+          "pending": false,
+          "requests_since_check": 0,
+          "runs": 0
+        },
+        "disk_bytes": {
+          "end": 177483,
+          "growth": 177483,
+          "max": 177481,
+          "start": 0
+        },
+        "rss_bytes": {
+          "drift": 61440,
+          "end": 7024640,
+          "max": 7045120,
+          "start": 6963200
+        },
+        "journal_lines": 0,
+        "settled": true,
+        "verification": {
+          "old": {
+            "analysis_ms": 0,
+            "cache_kind": "memory",
+            "seed": 1,
+            "success": true
+          },
+          "recent": {
+            "analysis_ms": 0,
+            "cache_kind": "memory",
+            "hit_without_compiler": true,
+            "seed": 7
+          }
+        },
+        "policy": {
+          "check_every_requests": 20,
+          "enabled": false,
+          "idle_only": false,
+          "keep_recent": 8,
+          "max_cache_bytes": null,
+          "max_incremental_bytes": null,
+          "max_snapshot_bytes": null,
+          "max_total_bytes": null,
+          "min_total_bytes": null
+        },
+        "samples_excluded": true
+      },
+      "comparison": {
+        "auto_disk_end_bytes": 66297,
+        "auto_disk_max_bytes": 180351,
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 5,
+        "auto_requests": 24,
+        "auto_rss_drift_bytes": 888832,
+        "control_disk_end_bytes": 177483,
+        "control_disk_max_bytes": 177481,
+        "control_requests": 8,
+        "control_rss_drift_bytes": 61440,
+        "note": "the auto campaign is longer by design; compare disk boundedness, failure counts and RSS drift, not absolute durations"
+      },
+      "toolchain": {
+        "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+        "host": "x86_64-pc-windows-msvc",
+        "release": "1.95.0"
+      },
+      "git": {
+        "branch": "",
+        "dirty_files": 0,
+        "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+        "head": ""
+      },
+      "machine": {
+        "arch": "x86_64",
+        "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+        "family": "windows",
+        "logical_parallelism": 16,
+        "os": "windows",
+        "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+      },
+      "load_start": {
+        "previous_calibration": {
+          "samples_ms": [],
+          "stats": {
+            "count": 0
+          }
+        },
+        "rustc_spawn_calibration": {
+          "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+          "samples_ms": [
+            68,
+            72,
+            76
+          ],
+          "stats": {
+            "count": 3,
+            "max": 76,
+            "mean": 72,
+            "min": 68,
+            "p50": 72,
+            "p95": 76
+          }
+        },
+        "system": {
+          "captured_unix": 1794171778,
+          "cpu_busy_percent": 45.344129554655865,
+          "daemon_working_set_bytes": 5742592,
+          "memory_available_bytes": 3799695360,
+          "memory_total_bytes": 16868962304,
+          "process_count": 301
+        }
+      },
+      "load_end": {
+        "previous_calibration": {
+          "samples_ms": [],
+          "stats": {
+            "count": 0
+          }
+        },
+        "rustc_spawn_calibration": {
+          "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+          "samples_ms": [
+            72,
+            79,
+            79
+          ],
+          "stats": {
+            "count": 3,
+            "max": 79,
+            "mean": 76.66666666666667,
+            "min": 72,
+            "p50": 79,
+            "p95": 79
+          }
+        },
+        "system": {
+          "captured_unix": 1794171787,
+          "cpu_busy_percent": 43.66812227074236,
+          "daemon_working_set_bytes": 7024640,
+          "memory_available_bytes": 3820326912,
+          "memory_total_bytes": 16868962304,
+          "process_count": 301
+        }
+      }
+    },
+    "json_sha256": "2a3e8e65074643391f69dd330ae454d69e59cfdbb702d42dfcf4ddb7069805c3",
+    "json_size_bytes": 14901,
+    "full_json_note": "le JSON complet (échantillons inclus) est produit en CI et uploadé comme artefact auto-gc-evidence"
+  },
+  "shared_workspace_run": {
+    "timestamp": "2026-11-08T21:54:49+01:00",
+    "exit_code": 0,
+    "duration_s": 14.16,
+    "json_sha256": "F2E3A3AB840E60A93226236C74EE1D41AED8759B4B66B8AD67FBA1BABE62C09C",
+    "note": "exécution sur l’arbre de travail partagé (WIP d’autres agents), cohérente avec HEAD pur : auto_gc_runs=5, disk_max=179622 B, valid=true"
+  },
+  "assertions_two_directions": {
+    "success": {
+      "env": "AUTO_GC_MAX_DISK_BYTES=1048576 (valeur CI)",
+      "exit_code": 0,
+      "passed_invariants": 18,
+      "observed": "auto_gc_runs=5, disk_max=180351 B, disk_end=66297 B, valid=true"
+    },
+    "expected_failure": {
+      "env": "AUTO_GC_MAX_DISK_BYTES=1024 (borne volontairement violée, même code d’assertion)",
+      "exit_code": 1,
+      "violations": [
+        "auto.disk_bytes.max <= ceiling (max=180351 B <= 1024)",
+        "auto.disk_bytes.end <= ceiling (end=66297 B <= 1024)"
+      ],
+      "message": "::error::bounded auto-GC invariants violated: auto.disk_bytes.max <= ceiling, auto.disk_bytes.end <= ceiling"
+    }
+  },
+  "machine": {
+    "os": "Microsoft Windows NT 10.0.26100.0",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "node": "v26.13.0",
+    "shared_machine": true,
+    "concurrency_note": "machine partagée avec 2 autres agents (compilation/mesure en parallèle) ; compteurs CIM indisponibles sous charge pendant la mesure, mais des processus claude/DeepSeek Harness actifs ont été observés. Les durées mesurées incluent cette concurrence."
+  },
+  "duration_and_margin": {
+    "measured_warm_step_duration_s": 10.39,
+    "measured_with_cold_build_s": 28.45,
+    "bench_internal_auto_duration_s": 6,
+    "bench_internal_control_duration_s": 1,
+    "step_timeout_min": 5,
+    "job_timeout_min": 15,
+    "disk_max_margin_vs_ceiling_x": 5.81,
+    "disk_end_margin_vs_ceiling_x": 15.82,
+    "worst_case_notes": "chaque campagne est bornée par --soak-seconds 30 ; vérifications finales wait_auto_gc_idle(30_000)/(20_000) ; timeout du step 5 min et du job 15 min bornent l’ensemble."
+  },
+  "limits": [
+    "soak borné (secondes) : il prouve le chemin auto-GC et la borne disque sur un petit scénario, pas une stabilité de production multi-heure",
+    "un seul processus daemon et un client séquentiel ; le chemin concurrent est couvert par les tests d’intégration, pas par ce soak",
+    "le daemon tourne in-process dans le harnais : le RSS mesuré est celui du processus de benchmark",
+    "le GC auto ne collecte que des contextes de build entiers : les internes incrémentaux de rustc ne sont jamais compactés (plancher de disque)",
+    "le plafond CI de 1 Mio est une borne grossière (marge ~5,8x sur le max mesuré) ; la borne réelle est portée par la politique (max < min) et par auto_gc_runs >= 1",
+    "preuve locale exécutée sur une machine partagée et chargée ; le job a ensuite été exécuté une fois sur GitHub Actions avec succès (run 42523426221) — une exécution ne prouve pas une stabilité dans le temps"
+  ],
+  "ci_execution": {
+    "first_real_execution": true,
+    "status": "success",
+    "repository": "Rwanbt/Ravum",
+    "workflow_file": ".github/workflows/mvp.yml",
+    "workflow_name": "MVP product checks (build, tests, demos)",
+    "run_id": 42523426221,
+    "run_url": "https://github.com/Rwanbt/Ravum/actions/runs/42523426221",
+    "run_overall_conclusion": "success",
+    "job_id": 128861666582,
+    "job_name": "Bounded automatic GC (opt-in path, bounded soak)",
+    "job_conclusion": "success",
+    "job_started_utc": "2026-11-08T21:05:37Z",
+    "job_completed_utc": "2026-11-08T21:06:29Z",
+    "job_duration_s": 52,
+    "step_durations_s": {
+      "checkout": 8,
+      "rust_toolchain": 7,
+      "cache_restore": 5,
+      "build_harness": 14,
+      "bounded_soak": 6,
+      "assert_invariants": 1,
+      "upload_artifact": 2
+    },
+    "invariants_passed": 18,
+    "invariants_failed": 0,
+    "ci_log_tail": [
+      "PASS  valid (valid=True)",
+      "PASS  auto.failures (auto.failures=0)",
+      "PASS  control.failures (control.failures=0)",
+      "PASS  auto.requests (auto.requests=24)",
+      "PASS  auto.auto_gc.enabled (enabled=True)",
+      "PASS  auto.auto_gc.runs (runs=5)",
+      "PASS  auto.auto_gc.failures (failures=0)",
+      "PASS  auto.auto_gc.checks (checks=6)",
+      "PASS  auto.auto_gc.last.ok (last.ok=True)",
+      "PASS  auto.settled (settled=True)",
+      "PASS  auto.recent.hit_without_compiler (recent.hit_without_compiler=True)",
+      "PASS  auto.old.success (old.success=True)",
+      "PASS  auto.policy.enabled (policy.enabled=True)",
+      "PASS  auto.policy.bounded (max=16384 < min=32768)",
+      "PASS  control.auto_gc.disabled (control.enabled=False)",
+      "PASS  auto.disk_bytes.max <= ceiling (max=183332 B <= 1048576)",
+      "PASS  auto.disk_bytes.end <= ceiling (end=67284 B <= 1048576)",
+      "PASS  auto.journal_lines (journal_lines=5)",
+      "OK: 18 bounded auto-GC invariants hold (auto_gc_runs=5, disk_max=183332 B <= 1048576 B)."
+    ],
+    "note": "Le run global (job mvp + job auto-gc) est vert ; le job auto-gc a produit et uploadé son artefact auto-gc-evidence."
+  }
+}

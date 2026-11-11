@@ -1,0 +1,6 @@
+{
+  "id": "types/shift-in-range",
+  "mode": "run-pass",
+  "stdout_contains": "128\n",
+  "notes": "F-EXPR-005 (EXPR-3.3): 1u8 << 7 is in range and yields 128."
+}

@@ -1,0 +1,21 @@
+use std::io;
+
+fn main() {
+    let mut sum = 0;
+    let mut i = 0;
+    while i < 5 {
+        sum += i;
+        i += 1;
+    }
+    for j in 0..4 {
+        sum += j;
+    }
+    let mut k = 0;
+    loop {
+        k += 1;
+        if k == 3 {
+            break;
+        }
+    }
+    io::println(&(sum + k).to_string());
+}

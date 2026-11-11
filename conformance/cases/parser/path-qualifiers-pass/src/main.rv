@@ -1,0 +1,23 @@
+mod geo {
+    pub const K: i32 = 2;
+
+    pub mod inner {
+        pub fn get() -> i32 {
+            return super::K;
+        }
+    }
+
+    pub fn local() -> i32 {
+        return self::helper();
+    }
+
+    fn helper() -> i32 {
+        return crate::geo::K;
+    }
+}
+
+fn main() {
+    let a = geo::inner::get();
+    let b = geo::local();
+}
+

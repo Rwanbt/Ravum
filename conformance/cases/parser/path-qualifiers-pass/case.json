@@ -1,0 +1,5 @@
+{
+  "id": "parser/path-qualifiers-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-027 (G-6.45-6.47): `crate::`, `super::` and `self::` paths are accepted and resolved."
+}

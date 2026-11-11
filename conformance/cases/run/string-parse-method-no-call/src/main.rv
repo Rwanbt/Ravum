@@ -1,0 +1,4 @@
+fn main() {
+    let s = String::from("42");
+    let n = s.parse_i64;
+}

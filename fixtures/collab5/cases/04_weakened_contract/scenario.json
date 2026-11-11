@@ -1,0 +1,12 @@
+{
+  "id": "04_weakened_contract",
+  "description": "Retrait d'une assertion de contrat : la semantique textuelle la signale comme affaiblissement de contrat.",
+  "lane": "textual_default_oracle",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "divide", "target": "src/lib.rs", "symbols": ["checked_divide"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["MANUAL_REQUIRED"],
+  "expected_levels": ["MANUAL_REQUIRED"],
+  "expect_reason_contains": [["WEAKENED_CONTRACT"]]
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/string-parse-methods",
+  "mode": "run-pass",
+  "stdout_contains": "42 3.5",
+  "notes": "F-STD-021 / STD-9.10: parse_i64/parse_f64 methods follow std::string rules."
+}

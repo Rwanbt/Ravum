@@ -1,0 +1,8 @@
+{
+  "id": "ownership/non-copy-struct-moved",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "F-OWN-001 / OWN-2: `Copy` is structural. `D` owns a `String`, so it is not `Copy`: `let a = d;` moves and the later `d.s` is E-OWN-USE-AFTER-MOVE (TYP-14)."
+}

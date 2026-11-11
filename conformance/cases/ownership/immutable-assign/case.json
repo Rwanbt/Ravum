@@ -1,0 +1,8 @@
+{
+  "id": "ownership/immutable-assign",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "Assignment to an immutable binding is E-OWN-IMMUTABLE (canonical ownership code)."
+}

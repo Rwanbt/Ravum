@@ -1,0 +1,15 @@
+fn sum(xs: &[f64]) -> f64 {
+    let mut total = 0.0;
+    let mut i: usize = 0;
+    while i < xs.len() {
+        total += xs[i];
+        i += 1;
+    }
+    total
+}
+
+fn main() {
+    let mut v: Vec<f64> = Vec::new();
+    v.push(1.0);
+    let s = sum(&v);
+}

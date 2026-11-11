@@ -1,0 +1,16 @@
+{
+  "id": "run/file-tool",
+  "mode": "run-pass",
+  "args": [
+    "input.txt",
+    "output.txt"
+  ],
+  "stdout_contains": "done\n",
+  "expect_file_contains": [
+    {
+      "path": "output.txt",
+      "contains": "HÉLLO RAVUM"
+    }
+  ],
+  "notes": "fs::write_string creates output.txt in the isolated copy; to_uppercase returns an owned String."
+}

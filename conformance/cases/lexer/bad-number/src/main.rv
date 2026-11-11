@@ -1,0 +1,5 @@
+fn main() {
+    let a = 0x_FF;
+    let b = 1.;
+    let c = 1e999;
+}

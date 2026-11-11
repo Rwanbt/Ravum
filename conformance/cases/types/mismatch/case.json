@@ -1,0 +1,7 @@
+{
+  "id": "types/mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ]
+}

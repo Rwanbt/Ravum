@@ -1,0 +1,5 @@
+{
+  "id": "types/never-return-diverges",
+  "mode": "compile-pass",
+  "notes": "F-TYP-004 (G-5.11/TYP-1.6): `!` is nameable as the return type of a divergent function. Per EXPR-5.11/6.7/G-6.19 `loop` has type `()`, so divergence must come from `panic`, `return` or a call to another divergent function; the call then coerces to the expected `i32`."
+}

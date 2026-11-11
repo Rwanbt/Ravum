@@ -1,0 +1,631 @@
+{
+  "auto": {
+    "auto_gc": {
+      "busy": false,
+      "checks": 12,
+      "enabled": true,
+      "failures": 0,
+      "journal_entries": 12,
+      "last": {
+        "at_unix": 1794168029,
+        "deleted_entries": 8,
+        "duration_ms": 18,
+        "error": null,
+        "freed_bytes": 88114,
+        "ok": true,
+        "total_after_bytes": 35234,
+        "total_before_bytes": 123348
+      },
+      "pending": false,
+      "requests_since_check": 2,
+      "runs": 12
+    },
+    "auto_gc_before_verification": {
+      "busy": false,
+      "checks": 12,
+      "enabled": true,
+      "failures": 0,
+      "journal_entries": 12,
+      "last": {
+        "at_unix": 1794168029,
+        "deleted_entries": 8,
+        "duration_ms": 18,
+        "error": null,
+        "freed_bytes": 88114,
+        "ok": true,
+        "total_after_bytes": 35234,
+        "total_before_bytes": 123348
+      },
+      "pending": false,
+      "requests_since_check": 0,
+      "runs": 12
+    },
+    "auto_gc_enabled": true,
+    "cache": {
+      "hits": 16,
+      "misses": 46,
+      "rustc_runs": 46
+    },
+    "disk_bytes": {
+      "end": 69921,
+      "growth": 69921,
+      "max": 184466,
+      "start": 0
+    },
+    "duration_s": 23,
+    "failure_details": [],
+    "failures": 0,
+    "journal_lines": 12,
+    "latency_ms": {
+      "count": 60,
+      "max": 150,
+      "mean": 82.68333333333334,
+      "min": 0,
+      "p50": 98,
+      "p95": 135
+    },
+    "name": "auto",
+    "policy": {
+      "check_every_requests": 5,
+      "enabled": true,
+      "idle_only": true,
+      "keep_recent": 6,
+      "max_cache_bytes": 40000,
+      "max_incremental_bytes": 120000,
+      "max_snapshot_bytes": 40000,
+      "max_total_bytes": 32768,
+      "min_total_bytes": 65536
+    },
+    "requests": 60,
+    "rss_bytes": {
+      "drift": 901120,
+      "end": 7049216,
+      "max": 7168000,
+      "start": 6148096
+    },
+    "samples": [
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 0,
+        "cache_misses": 1,
+        "disk_bytes": 30448,
+        "elapsed_s": 0,
+        "journal_lines": 0,
+        "last_latency_ms": 94,
+        "latency_p50_ms": 94,
+        "latency_p95_ms": 94,
+        "request": 1,
+        "rustc_runs": 1,
+        "working_set_bytes": 6455296
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 1,
+        "cache_hits": 1,
+        "cache_misses": 4,
+        "disk_bytes": 119390,
+        "elapsed_s": 1,
+        "journal_lines": 1,
+        "last_latency_ms": 102,
+        "latency_p50_ms": 96,
+        "latency_p95_ms": 118,
+        "request": 5,
+        "rustc_runs": 4,
+        "working_set_bytes": 6787072
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 2,
+        "cache_hits": 2,
+        "cache_misses": 8,
+        "disk_bytes": 179535,
+        "elapsed_s": 3,
+        "journal_lines": 2,
+        "last_latency_ms": 107,
+        "latency_p50_ms": 94,
+        "latency_p95_ms": 118,
+        "request": 10,
+        "rustc_runs": 8,
+        "working_set_bytes": 6828032
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 3,
+        "cache_hits": 3,
+        "cache_misses": 12,
+        "disk_bytes": 155709,
+        "elapsed_s": 5,
+        "journal_lines": 3,
+        "last_latency_ms": 118,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 119,
+        "request": 15,
+        "rustc_runs": 12,
+        "working_set_bytes": 6844416
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 4,
+        "cache_hits": 5,
+        "cache_misses": 15,
+        "disk_bytes": 126831,
+        "elapsed_s": 7,
+        "journal_lines": 4,
+        "last_latency_ms": 0,
+        "latency_p50_ms": 96,
+        "latency_p95_ms": 119,
+        "request": 20,
+        "rustc_runs": 15,
+        "working_set_bytes": 6864896
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 5,
+        "cache_hits": 6,
+        "cache_misses": 19,
+        "disk_bytes": 128889,
+        "elapsed_s": 9,
+        "journal_lines": 5,
+        "last_latency_ms": 112,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 122,
+        "request": 25,
+        "rustc_runs": 19,
+        "working_set_bytes": 7036928
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 6,
+        "cache_hits": 7,
+        "cache_misses": 23,
+        "disk_bytes": 183624,
+        "elapsed_s": 11,
+        "journal_lines": 6,
+        "last_latency_ms": 123,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 124,
+        "request": 30,
+        "rustc_runs": 23,
+        "working_set_bytes": 7094272
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 7,
+        "cache_hits": 8,
+        "cache_misses": 27,
+        "disk_bytes": 156570,
+        "elapsed_s": 13,
+        "journal_lines": 7,
+        "last_latency_ms": 92,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 125,
+        "request": 35,
+        "rustc_runs": 27,
+        "working_set_bytes": 7098368
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 8,
+        "cache_hits": 10,
+        "cache_misses": 30,
+        "disk_bytes": 127675,
+        "elapsed_s": 15,
+        "journal_lines": 8,
+        "last_latency_ms": 0,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 124,
+        "request": 40,
+        "rustc_runs": 30,
+        "working_set_bytes": 7069696
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 9,
+        "cache_hits": 11,
+        "cache_misses": 34,
+        "disk_bytes": 129728,
+        "elapsed_s": 17,
+        "journal_lines": 9,
+        "last_latency_ms": 140,
+        "latency_p50_ms": 97,
+        "latency_p95_ms": 125,
+        "request": 45,
+        "rustc_runs": 34,
+        "working_set_bytes": 7110656
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 10,
+        "cache_hits": 12,
+        "cache_misses": 38,
+        "disk_bytes": 184466,
+        "elapsed_s": 19,
+        "journal_lines": 10,
+        "last_latency_ms": 138,
+        "latency_p50_ms": 98,
+        "latency_p95_ms": 139,
+        "request": 50,
+        "rustc_runs": 38,
+        "working_set_bytes": 7069696
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 11,
+        "cache_hits": 13,
+        "cache_misses": 42,
+        "disk_bytes": 157414,
+        "elapsed_s": 21,
+        "journal_lines": 11,
+        "last_latency_ms": 91,
+        "latency_p50_ms": 100,
+        "latency_p95_ms": 139,
+        "request": 55,
+        "rustc_runs": 42,
+        "working_set_bytes": 7118848
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 12,
+        "cache_hits": 15,
+        "cache_misses": 45,
+        "disk_bytes": 128517,
+        "elapsed_s": 23,
+        "journal_lines": 12,
+        "last_latency_ms": 0,
+        "latency_p50_ms": 98,
+        "latency_p95_ms": 135,
+        "request": 60,
+        "rustc_runs": 45,
+        "working_set_bytes": 7168000
+      }
+    ],
+    "settled": true,
+    "verification": {
+      "old": {
+        "analysis_ms": 103,
+        "cache_kind": "miss",
+        "seed": 1,
+        "success": true
+      },
+      "recent": {
+        "analysis_ms": 0,
+        "cache_kind": "memory",
+        "hit_without_compiler": true,
+        "seed": 59
+      }
+    }
+  },
+  "command": "cargo run -q -p ravum-daemon --bin ravum-daemon-bench -- --suite soak --soak-requests 60 --soak-seconds 120 --soak-pace-ms 300",
+  "comparison": {
+    "auto_disk_end_bytes": 69921,
+    "auto_disk_max_bytes": 184466,
+    "auto_gc_failures": 0,
+    "auto_gc_runs": 12,
+    "auto_requests": 60,
+    "auto_rss_drift_bytes": 901120,
+    "control_disk_end_bytes": 210678,
+    "control_disk_max_bytes": 210677,
+    "control_requests": 40,
+    "control_rss_drift_bytes": 139264,
+    "note": "the auto campaign is longer by design; compare disk boundedness, failure counts and RSS drift, not absolute durations"
+  },
+  "control": {
+    "auto_gc": {
+      "busy": false,
+      "checks": 0,
+      "enabled": false,
+      "failures": 0,
+      "journal_entries": 0,
+      "last": null,
+      "pending": false,
+      "requests_since_check": 0,
+      "runs": 0
+    },
+    "auto_gc_before_verification": {
+      "busy": false,
+      "checks": 0,
+      "enabled": false,
+      "failures": 0,
+      "journal_entries": 0,
+      "last": null,
+      "pending": false,
+      "requests_since_check": 0,
+      "runs": 0
+    },
+    "auto_gc_enabled": false,
+    "cache": {
+      "hits": 12,
+      "misses": 30,
+      "rustc_runs": 30
+    },
+    "disk_bytes": {
+      "end": 210678,
+      "growth": 210678,
+      "max": 210677,
+      "start": 0
+    },
+    "duration_s": 15,
+    "failure_details": [],
+    "failures": 0,
+    "journal_lines": 0,
+    "latency_ms": {
+      "count": 40,
+      "max": 151,
+      "mean": 81.8,
+      "min": 0,
+      "p50": 103,
+      "p95": 122
+    },
+    "name": "control",
+    "policy": {
+      "check_every_requests": 20,
+      "enabled": false,
+      "idle_only": false,
+      "keep_recent": 8,
+      "max_cache_bytes": null,
+      "max_incremental_bytes": null,
+      "max_snapshot_bytes": null,
+      "max_total_bytes": null,
+      "min_total_bytes": null
+    },
+    "requests": 40,
+    "rss_bytes": {
+      "drift": 139264,
+      "end": 7233536,
+      "max": 7233536,
+      "start": 7094272
+    },
+    "samples": [
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 0,
+        "cache_misses": 1,
+        "disk_bytes": 30460,
+        "elapsed_s": 0,
+        "journal_lines": 0,
+        "last_latency_ms": 101,
+        "latency_p50_ms": 101,
+        "latency_p95_ms": 101,
+        "request": 1,
+        "rustc_runs": 1,
+        "working_set_bytes": 7016448
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 1,
+        "cache_misses": 4,
+        "disk_bytes": 119432,
+        "elapsed_s": 1,
+        "journal_lines": 0,
+        "last_latency_ms": 107,
+        "latency_p50_ms": 95,
+        "latency_p95_ms": 108,
+        "request": 5,
+        "rustc_runs": 4,
+        "working_set_bytes": 7122944
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 2,
+        "cache_misses": 8,
+        "disk_bytes": 180363,
+        "elapsed_s": 3,
+        "journal_lines": 0,
+        "last_latency_ms": 119,
+        "latency_p50_ms": 99,
+        "latency_p95_ms": 120,
+        "request": 10,
+        "rustc_runs": 8,
+        "working_set_bytes": 7131136
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 3,
+        "cache_misses": 12,
+        "disk_bytes": 186290,
+        "elapsed_s": 5,
+        "journal_lines": 0,
+        "last_latency_ms": 108,
+        "latency_p50_ms": 103,
+        "latency_p95_ms": 120,
+        "request": 15,
+        "rustc_runs": 12,
+        "working_set_bytes": 7196672
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 5,
+        "cache_misses": 15,
+        "disk_bytes": 190356,
+        "elapsed_s": 7,
+        "journal_lines": 0,
+        "last_latency_ms": 0,
+        "latency_p50_ms": 101,
+        "latency_p95_ms": 117,
+        "request": 20,
+        "rustc_runs": 15,
+        "working_set_bytes": 7049216
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 6,
+        "cache_misses": 19,
+        "disk_bytes": 195776,
+        "elapsed_s": 9,
+        "journal_lines": 0,
+        "last_latency_ms": 124,
+        "latency_p50_ms": 103,
+        "latency_p95_ms": 122,
+        "request": 25,
+        "rustc_runs": 19,
+        "working_set_bytes": 6930432
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 7,
+        "cache_misses": 23,
+        "disk_bytes": 201195,
+        "elapsed_s": 11,
+        "journal_lines": 0,
+        "last_latency_ms": 109,
+        "latency_p50_ms": 103,
+        "latency_p95_ms": 122,
+        "request": 30,
+        "rustc_runs": 23,
+        "working_set_bytes": 7024640
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 8,
+        "cache_misses": 27,
+        "disk_bytes": 206612,
+        "elapsed_s": 13,
+        "journal_lines": 0,
+        "last_latency_ms": 92,
+        "latency_p50_ms": 103,
+        "latency_p95_ms": 125,
+        "request": 35,
+        "rustc_runs": 27,
+        "working_set_bytes": 6930432
+      },
+      {
+        "auto_gc_failures": 0,
+        "auto_gc_runs": 0,
+        "cache_hits": 10,
+        "cache_misses": 30,
+        "disk_bytes": 210677,
+        "elapsed_s": 15,
+        "journal_lines": 0,
+        "last_latency_ms": 0,
+        "latency_p50_ms": 103,
+        "latency_p95_ms": 122,
+        "request": 40,
+        "rustc_runs": 30,
+        "working_set_bytes": 7233536
+      }
+    ],
+    "settled": true,
+    "verification": {
+      "old": {
+        "analysis_ms": 0,
+        "cache_kind": "memory",
+        "seed": 1,
+        "success": true
+      },
+      "recent": {
+        "analysis_ms": 0,
+        "cache_kind": "memory",
+        "hit_without_compiler": true,
+        "seed": 39
+      }
+    }
+  },
+  "generated_unix": 1794168005,
+  "git": {
+    "branch": "feat/mvp0b-hardening",
+    "dirty_files": 25,
+    "dirty_note": "the working tree is shared with other MVP-0b workers; a non-zero dirty count is expected and is not part of this campaign's identity",
+    "head": "dc295be2fdeeb1f8791d9eee3e9caebe2955dd1a"
+  },
+  "kind": "mvp0b-daemon-gc-auto-2026-11-08",
+  "limits": [
+    "bounded soak (minutes, not hours): it detects gross growth/leaks and proves automatic GC keeps the disk bounded; it is not a multi-hour production soak",
+    "single daemon process and one sequential client; the concurrent path is covered by integration tests, not by this soak",
+    "the daemon runs in-process for the soak, so RSS is the benchmark process working set (daemon + small harness overhead)",
+    "automatic GC can only collect whole build contexts: rustc incremental internals are never compacted, so an active context is a floor on disk usage",
+    "the control campaign is shorter by design and runs after the auto campaign; both share the machine (see load_start/load_end)"
+  ],
+  "load_end": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        49,
+        48,
+        47
+      ],
+      "stats": {
+        "count": 3,
+        "max": 49,
+        "mean": 48.0,
+        "min": 47,
+        "p50": 48,
+        "p95": 49
+      }
+    },
+    "system": {
+      "captured_unix": 1794168044,
+      "cpu_busy_percent": 17.647058823529417,
+      "daemon_working_set_bytes": 7233536,
+      "memory_available_bytes": 2814132224,
+      "memory_total_bytes": 16868962304,
+      "process_count": 301
+    }
+  },
+  "load_start": {
+    "previous_calibration": {
+      "samples_ms": [],
+      "stats": {
+        "count": 0
+      }
+    },
+    "rustc_spawn_calibration": {
+      "note": "bare `rustc -vV` spawn: the machine-load floor any analysis measurement sits on (MVP-0a used the same calibration)",
+      "samples_ms": [
+        52,
+        56,
+        58
+      ],
+      "stats": {
+        "count": 3,
+        "max": 58,
+        "mean": 55.333333333333336,
+        "min": 52,
+        "p50": 56,
+        "p95": 58
+      }
+    },
+    "system": {
+      "captured_unix": 1794168005,
+      "cpu_busy_percent": 14.963503649635035,
+      "daemon_working_set_bytes": 5746688,
+      "memory_available_bytes": 2841931776,
+      "memory_total_bytes": 16868962304,
+      "process_count": 301
+    }
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu_model": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "family": "windows",
+    "logical_parallelism": 16,
+    "os": "windows",
+    "windows_version": "Microsoft Windows [version 10.0.26100.7309]"
+  },
+  "schema_version": 1,
+  "toolchain": {
+    "commit_hash": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "host": "x86_64-pc-windows-msvc",
+    "release": "1.95.0"
+  },
+  "toolchain_evidence": {
+    "repo_root": "<repo>",
+    "rustc_path": "rustc",
+    "rustc_vv": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.95.0\nLLVM version: 22.1.2\n"
+  },
+  "valid": true
+}

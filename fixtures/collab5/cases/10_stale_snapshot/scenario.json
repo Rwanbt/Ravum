@@ -1,0 +1,13 @@
+{
+  "id": "10_stale_snapshot",
+  "description": "La proposition vise un snapshot de base perime sans couverture CAS complete : revalidation obligatoire.",
+  "lane": "textual_refusal",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "alpha-stale", "target": "src/lib.rs", "symbols": ["alpha"], "patch": "a.patch",
+     "base_snapshot_id": "an-older-base", "expected_hashes": false}
+  ],
+  "expected_decisions": ["REBASE_REVALIDATE"],
+  "expected_levels": ["TEXTUALLY_APPLICABLE"],
+  "expect_reason_contains": [["stale"]]
+}

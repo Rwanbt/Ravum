@@ -1,0 +1,14 @@
+fn unwrap_at(a: [Option<String>; 2]) -> String {
+    return a[0].unwrap();
+}
+
+fn first_or(a: [Option<String>; 2]) -> String {
+    return a[0].unwrap_or(String::from("fallback"));
+}
+
+fn main() {
+    let a: [Option<String>; 2] = [Option::Some(String::from("v")), Option::None];
+    io::println(unwrap_at(a).as_str());
+    let b: [Option<String>; 2] = [Option::None, Option::Some(String::from("w"))];
+    io::println(first_or(b).as_str());
+}

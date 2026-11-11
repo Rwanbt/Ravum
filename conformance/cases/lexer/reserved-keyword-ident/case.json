@@ -1,0 +1,8 @@
+{
+  "id": "lexer/reserved-keyword-ident",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "F-LEX-004 / LEX-5.1: the 33 reserved keywords cannot be identifiers; `let fn = 1;` is E-PARSE-EXPECTED."
+}

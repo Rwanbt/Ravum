@@ -1,0 +1,7 @@
+use std::io;
+
+fn main() {
+    let x: u8 = 255;
+    let y = x + 0;
+    io::println(&y.to_string());
+}

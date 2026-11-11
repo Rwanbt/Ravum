@@ -1,0 +1,7 @@
+{
+  "id": "run/division-by-zero",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic:",
+  "notes": "Division by zero panics; the divisor comes from a parameter to avoid any compile-time evaluation."
+}

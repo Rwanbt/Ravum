@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 5f77be8..e542771 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -2,7 +2,6 @@
+ 
+ /// Returns the quotient; refuses a zero divisor.
+ fn checked_divide(value: u32, divisor: u32) -> u32 {
+-    assert!(divisor != 0, "divisor must not be zero");
+     value / divisor
+ }
+ 

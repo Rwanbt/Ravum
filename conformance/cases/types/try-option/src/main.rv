@@ -1,0 +1,20 @@
+use std::io;
+
+fn premier(v: Vec<i32>) -> Option<i32> {
+    return Option::Some(v[0]);
+}
+
+fn incremente(v: Vec<i32>) -> Option<i32> {
+    let a = premier(v)?;
+    return Option::Some(a + 1);
+}
+
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(41);
+    let r = incremente(v);
+    match r {
+        Option::Some(x) => io::println(&x.to_string()),
+        Option::None => io::println("none"),
+    }
+}

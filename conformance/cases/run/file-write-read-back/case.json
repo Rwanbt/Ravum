@@ -1,0 +1,6 @@
+{
+  "id": "run/file-write-read-back",
+  "mode": "run-pass",
+  "stdout_contains": "RAVUM CORE\n",
+  "notes": "T9 write vertical: `fs::write_string` really creates a file and `fs::read_to_string` reads it back, through `Result` and `?`. The probe path lives under `.ravum/` (build output, git-ignored) so the corpus stays clean. Before this case the corpus never exercised a successful write; only `examples/file-tool` did, and it is not part of the corpus."
+}

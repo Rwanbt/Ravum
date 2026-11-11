@@ -1,0 +1,13 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let neg_zero: f64 = -0.0;
+    let pos_zero: f64 = 0.0;
+    let s = math::max(neg_zero, pos_zero).to_string();
+    if s == "0" {
+        io::println("positive");
+    } else {
+        io::println("negative");
+    }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "s08_import_change",
+  "description": "Changement d'import: Debug retire, B ajoute du code qui en depend (E0405).",
+  "path": "src/lib.rs",
+  "expect": "compile_failure",
+  "symbols_a": [],
+  "symbols_b": [
+    "other"
+  ],
+  "merged_contains": []
+}

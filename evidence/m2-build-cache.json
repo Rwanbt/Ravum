@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "commit": "e0a7114",
+  "rustc": "1.95.0",
+  "cold_build": {
+    "artifact_id": "dcdc4682d380c2bc927f2cfdacdd8ffca061b7ed02e638e622af9f035f16654e",
+    "build_ms": 2286,
+    "cached_build": false
+  },
+  "warm_build": {
+    "artifact_id": "dcdc4682d380c2bc927f2cfdacdd8ffca061b7ed02e638e622af9f035f16654e",
+    "build_ms": 3,
+    "cached_build": true
+  },
+  "invariant": "meme artifact_id, aucun relink; le DLL actif n est jamais reecrit"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/raw-pointer",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-UNSAFE"
+  ],
+  "unsupported": true,
+  "notes": "Raw pointers stay unsupported after the Core 1.0 FFI extension: only extern declarations with primitive signatures are allowed, never `*const`/`*mut`."
+}

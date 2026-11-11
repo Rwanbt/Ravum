@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "kind": "mvp0c-impact-e2e",
+  "date": "2026-11-09",
+  "branch": "feat/mvp0c-hardening",
+  "head": "486d4c8",
+  "objective": "Déclencher les 10 scénarios E2E navigateur depuis la CI par impact quand le diff touche une surface applicative/UI, sans jamais transformer un skip en vert.",
+  "rule": {
+    "field": "browser_e2e_required (bool) + browser_e2e_reason (string|null) + browser_e2e_reasons",
+    "triggers_true": [
+      "chemin sous apps/** (application/UI, y compris apps/ravum-demo-host)",
+      "chemin sous crates/ravum-todo-core/** (contrat applicatif)",
+      "chemin sous crates/ravum-store/** (stockage applicatif)",
+      "scripts/demo-m4-browser.ps1 (script E2E navigateur)",
+      "mapping incertain (statut U/X/B, diff vide, manifeste illisible, base introuvable)",
+      "FULL + manifeste Cargo.toml/Cargo.lock modifié",
+      "FULL + surface applicative/UI modifiée",
+      "chemin inconnu (FULL) : extension conservatrice documentée (jamais de faux négatif UI)"
+    ],
+    "stays_false": [
+      "docs-only (aucun chemin UI/manifeste/incertain)",
+      "crate sans lien applicatif (ex. ravum-unit-graph, ravum-proof)",
+      "FULL dû à scripts/** non-UI (compromis de coût documenté)"
+    ],
+    "decisions": {
+      "app_ui": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "application/UI modifiée: apps/ravum-todo/src/routes.rs",
+        "packages": [
+          "ravum-todo"
+        ],
+        "commands": [
+          "cargo test -p ravum-todo -- --test-threads=1"
+        ]
+      },
+      "app_static": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "application/UI modifiée: apps/ravum-todo/static/app.js",
+        "packages": [
+          "ravum-todo"
+        ],
+        "commands": [
+          "cargo test -p ravum-todo -- --test-threads=1"
+        ]
+      },
+      "todo_core": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "contrat applicatif modifié: crates/ravum-todo-core/src/lib.rs",
+        "packages": [
+          "ravum-todo-core",
+          "ravum-store",
+          "ravum-todo"
+        ],
+        "commands": [
+          "cargo test -p ravum-todo-core -- --test-threads=1",
+          "cargo test -p ravum-store -- --test-threads=1",
+          "cargo test -p ravum-todo -- --test-threads=1"
+        ]
+      },
+      "store": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "stockage applicatif modifié: crates/ravum-store/src/lib.rs",
+        "packages": [
+          "ravum-store",
+          "ravum-todo"
+        ],
+        "commands": [
+          "cargo test -p ravum-store -- --test-threads=1",
+          "cargo test -p ravum-todo -- --test-threads=1"
+        ]
+      },
+      "e2e_script": {
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "script E2E navigateur modifié",
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      },
+      "docs_only": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": true,
+        "browser_e2e_required": false,
+        "browser_e2e_reason": null,
+        "packages": [],
+        "commands": [
+          "python tools/validate_repo_docs.py"
+        ]
+      },
+      "unit_graph_only": {
+        "decision": "selective",
+        "full": false,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": false,
+        "browser_e2e_reason": null,
+        "packages": [
+          "ravum-unit-graph",
+          "ravum-collab-oracle",
+          "ravum-cli"
+        ],
+        "commands": [
+          "cargo test -p ravum-unit-graph -- --test-threads=1",
+          "cargo test -p ravum-collab-oracle -- --test-threads=1",
+          "cargo test -p ravum-cli -- --test-threads=1"
+        ]
+      },
+      "full_manifest": {
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "décision FULL + manifeste de construction modifié",
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      },
+      "full_scripts_non_ui": {
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": false,
+        "browser_e2e_reason": null,
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      },
+      "unknown_path": {
+        "decision": "full-conservative",
+        "full": true,
+        "uncertain": false,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "chemin inconnu (zorglub/x.bin) : E2E navigateur exigés par prudence",
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      },
+      "uncertain_status_u": {
+        "decision": "full-uncertain",
+        "full": true,
+        "uncertain": true,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "mapping incertain (fail-closed) : E2E navigateur exigés par prudence",
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      },
+      "empty_diff": {
+        "decision": "full-uncertain",
+        "full": true,
+        "uncertain": true,
+        "docs_required": false,
+        "browser_e2e_required": true,
+        "browser_e2e_reason": "mapping incertain (fail-closed) : E2E navigateur exigés par prudence",
+        "packages": [],
+        "commands": [
+          "cargo test --workspace -- --test-threads=1"
+        ]
+      }
+    }
+  },
+  "workflow": {
+    "file": ".github/workflows/mvp-impact.yml",
+    "step_count": 16,
+    "browser_steps": [
+      "Setup Node.js for the browser E2E (impact-selected)",
+      "Browser E2E - real Chromium/Edge via CDP (impact-selected)",
+      "Upload browser E2E evidence (impact-selected)"
+    ],
+    "conditions": "les 3 étapes navigateur sont conditionnées à steps.mapping_selftest.outcome == success && steps.impact.outputs.browser == true",
+    "command": "powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots",
+    "artifact": "browser-e2e-evidence (target/ravum/browser-e2e)",
+    "browser_output": "browser=$browserFlag ; fail-closed si le champ est absent (=> true)",
+    "yaml_valid": true,
+    "require_browser_semantics": "aucun navigateur => échec explicite (EXIT 1) et non skip vert ; le code 2 (skip) nest jamais utilisé par la CI"
+  },
+  "local_e2e": {
+    "environment": "Windows local, Node v26.13.0, navigateur découvert = Playwright chromium_headless_shell-1248 (headless shell)",
+    "command": "powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser",
+    "exit_code": 0,
+    "script_total_duration_s": 24.1,
+    "scenarios": "10/10 réussis, 0 échec",
+    "scenarios_duration_s": 10.1,
+    "log_tail": [
+      "Source: ms-playwright chromium_headless_shell-1248 (headless shell)",
+      "Résultat: 10/10 scénarios réussis, 0 échec(s), durée 10.1 s",
+      "Rapport JSON: <repo>\\target\\ravum\\browser-e2e\\report.json",
+      "SUCCÈS: le JavaScript de l’interface a été exercé dans un vrai navigateur.",
+      "SUCCÈS: le JavaScript de l'interface a été validé dans un vrai navigateur.",
+      "Rapport JSON : <repo>\\target\\ravum\\browser-e2e\\report.json"
+    ],
+    "note": "La machine locale fournit un navigateur (Playwright) ; le script compile dabord ravum-todo (cache chaud), puis exécute les 10 scénarios réels CDP."
+  },
+  "fail_closed_proofs": {
+    "require_browser_invalid_path": {
+      "command": "RAVUM_BROWSER=<inexistant> RAVUM_E2E_REQUIRE_BROWSER=1 node apps/ravum-todo/e2e/browser_e2e.mjs",
+      "exit_code": 1,
+      "message": "ÉCHEC: RAVUM_BROWSER=\"C:\\nonexistent\\chrome-qui-nexiste-pas.exe\" ne pointe pas vers un exécutable lisible; corrigez la variable ou retirez-la pour laisser la découverte automatique.",
+      "note": "un navigateur invalide/absent avec -RequireBrowser => échec explicite (jamais exit 0/2), donc la CI ne peut pas afficher un vert silencieux."
+    },
+    "no_skip_in_ci": "mvp-impact.yml utilise -RequireBrowser ; le code 2 (skip explicite) nest accepté nulle part dans le step.",
+    "missing_browser_field": "le compute step force browser=true si le champ est absent/indéterminé (fail-closed)."
+  },
+  "cost": {
+    "local": {
+      "script_total_s": 24.1,
+      "scenarios_s": 10.1,
+      "note": "compilation ravum-todo incluse (cache chaud) ; premier run 24,1 s, second run ~8,5 s de scénarios."
+    },
+    "ci_reference": {
+      "source": "run mvp.yml 42546044558 (succès, head 486d4c8), étapes réelles via API",
+      "setup_node_s": 4,
+      "browser_e2e_s": 22,
+      "upload_s": 1,
+      "added_per_impact_run_s": 27,
+      "note": "Chiffres du job mvp où le workspace est déjà construit ; dans le job impact, le script peut recompiler ravum-todo si le cache est froid (durée bornée par le timeout global 40 min, aucune mesure froide séparée)."
+    },
+    "duplication_compromise": "mvp.yml et mvp-impact.yml se déclenchent tous deux sur push feat/** : quand le navigateur est requis, les 10 E2E peuvent tourner deux fois. Compromis assumé : la CI par impact doit être autosuffisante (aucun job externe requis pour ne pas rater une régression UI) ; coût mesuré ~27 s par occurrence."
+  },
+  "real_diff_decision": {
+    "command": "node tools/impact/impact.mjs --base origin/dev --head HEAD --json",
+    "exit_code": 0,
+    "decision": "full-conservative",
+    "full": true,
+    "uncertain": false,
+    "browser_e2e_required": true,
+    "browser_e2e_reason": "application/UI modifiée: apps/ravum-demo-host/Cargo.toml",
+    "changed": 598,
+    "commands": [
+      "cargo test --workspace -- --test-threads=1",
+      "python tools/validate_repo_docs.py"
+    ],
+    "note": "Le diff réel origin/dev..HEAD contient des chemins apps/** (donc navigateur requis), des images/outils inconnus et de la documentation : décision FULL conservatrice + docs + navigateur."
+  },
+  "selftest": {
+    "before": {
+      "cases": 56,
+      "assertions": 583
+    },
+    "after": {
+      "cases": 59,
+      "assertions": 655,
+      "exit_code": 0,
+      "result": "SELFTEST PASS",
+      "note": "Le nombre d'assertions est dynamique : les cas d'inventaire/fermeture bouclent sur les paquets du workspace (des paquets WIP d'autres workers apparaissent). Dernière exécution locale : 59 cas, 655 assertions, 0 échec."
+    },
+    "new_cases": [
+      "E2E navigateur: règle conservatrice browser_e2e_required",
+      "CLI --files: application UI => browser_e2e_required true (JSON valide)",
+      "CLI --files: docs-only => browser_e2e_required false"
+    ],
+    "extended_case": "workflow mvp-impact.yml: assertions setup-node, -RequireBrowser, sortie browser, artefact, échec explicite"
+  },
+  "workflow_dispatch": {
+    "attempted": false,
+    "reason": "Aucune commande git mutante autorisée : les changements de cette mission ne sont pas commités, or workflow_dispatch exécute la version du ref distant (HEAD 486d4c8, sans les étapes navigateur). Un dispatch avant commit reproduirait lancien comportement et ne prouverait rien.",
+    "remote_head": "486d4c8",
+    "latest_impact_run": {
+      "run_id": 42546044539,
+      "event": "push",
+      "conclusion": "success",
+      "head": "486d4c8"
+    },
+    "next_step": "Après commit du Lead : gh workflow run mvp-impact.yml --ref feat/mvp0c-hardening -f base=origin/dev, puis vérifier le job navigateur et lartefact."
+  },
+  "files_modified": [
+    "tools/impact/impact.mjs (champ browser_e2e_required + raisons + explain + fallback)",
+    "tools/impact/selftest.mjs (3 cas + assertions workflow)",
+    ".github/workflows/mvp-impact.yml (sortie browser + 3 étapes navigateur conditionnelles)",
+    "scripts/impact.ps1 (affichage exigence navigateur)",
+    "docs/mvp/MVP-0c-qualification.md (section 11)",
+    "evidence/mvp0c-impact-e2e-2026-11-09.json (créé)"
+  ],
+  "not_modified": [
+    ".github/workflows/mvp.yml",
+    "apps/**",
+    "crates/**",
+    "Cargo.toml",
+    "benchmarks/**"
+  ],
+  "limits": [
+    "Aucun workflow_dispatch avec le nouveau code avant commit (pas de commande git mutante) : le déclenchement réel en CI reste à vérifier par le Lead.",
+    "Le navigateur local est un headless shell Playwright, pas Edge de windows-latest ; les 10 scénarios ont réussi localement mais la CI peut différer.",
+    "Le coût CI (27 s) vient du job mvp à cache chaud ; le coût à froid du job impact (recompilation ravum-todo) nest pas mesuré séparément.",
+    "La duplication mvp.yml/mvp-impact.yml sur push feat/** est assumée et documentée (autosuffisance de la CI impact).",
+    "Un FULL dû à un chemin inconnu exige le navigateur (conservateur) ; un FULL dû seulement à scripts/** non-UI ne lexige pas (compromis de coût).",
+    "Le sélecteur ne remplace pas la qualification produit : il déclenche les E2E existants, il ne prouve pas une absence générale de régression UI."
+  ]
+}

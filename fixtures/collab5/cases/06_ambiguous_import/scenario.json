@@ -1,0 +1,15 @@
+{
+  "id": "06_ambiguous_import",
+  "description": "Le patch ajoute un second import glob qui rend `f` ambigu ; l'oracle L1 signale AMBIGUOUS_IMPORT (le compilateur produirait E0659, couvert par le test e2e COLLAB-3).",
+  "lane": "scripted_oracle",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "glob-b", "target": "src/lib.rs", "symbols": ["b"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["MANUAL_REQUIRED"],
+  "expected_levels": ["MANUAL_REQUIRED"],
+  "oracle_findings": [
+    {"kind": "AMBIGUOUS_IMPORT", "severity": "blocking", "message": "glob imports of `a` and `b` both provide `f`"}
+  ],
+  "expect_reason_contains": [["AMBIGUOUS_IMPORT"]]
+}

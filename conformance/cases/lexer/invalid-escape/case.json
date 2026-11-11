@@ -1,0 +1,8 @@
+{
+  "id": "lexer/invalid-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "Unknown escape sequences are E-LEX-ESCAPE; the string token is still produced so the statement parses and no parser code is expected."
+}

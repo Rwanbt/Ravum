@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/macro",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-MACRO"
+  ],
+  "unsupported": true
+}

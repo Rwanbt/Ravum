@@ -1,0 +1,7 @@
+{
+  "id": "security/file-store-key-traversal",
+  "mode": "run-fail",
+  "args": [".", "get", "../etc/passwd"],
+  "stderr_contains": "invalid key",
+  "notes": "The key -> filename boundary rejects traversal (`../etc/passwd` contains '/') before any filesystem call: `invalid key` on stderr, exit 1. Core 1.0 has no delete/create_dir; this is the security boundary of the storage vertical."
+}

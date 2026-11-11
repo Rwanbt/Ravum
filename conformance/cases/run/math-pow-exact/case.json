@@ -1,0 +1,6 @@
+{
+  "id": "run/math-pow-exact",
+  "mode": "run-pass",
+  "stdout_contains": "1024",
+  "notes": "F-STD-010 / STD-6.6: only exactly representable values are asserted (pow(2,10) = 1024.0); bit-exact libm results are excluded."
+}

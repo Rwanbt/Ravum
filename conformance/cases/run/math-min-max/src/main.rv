@@ -1,0 +1,15 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let neg_zero: f64 = -0.0;
+    let pos_zero: f64 = 0.0;
+    let one: f64 = 1.0;
+    let nan: f64 = neg_zero / pos_zero;
+    let mut out = math::min(neg_zero, pos_zero).to_string();
+    out.push_str(" ");
+    out.push_str(&math::min(nan, one).to_string());
+    out.push_str(" ");
+    out.push_str(&math::max(one, nan).to_string());
+    io::println(out.as_str());
+}

@@ -1,0 +1,5 @@
+{
+  "id": "parser/generics-naked-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-002 (G-3.5): bare generic parameters `<T, U>` on an fn are accepted and monomorphised."
+}

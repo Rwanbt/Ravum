@@ -1,0 +1,8 @@
+fn f(c: bool) {
+    let x = while c {
+        1
+    };
+}
+
+fn main() {
+}

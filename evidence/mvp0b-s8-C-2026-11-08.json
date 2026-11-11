@@ -1,0 +1,5970 @@
+{
+  "schema_version": 1,
+  "scenario": "C",
+  "scenario_label": "C — agents séquentiels (contrôle)",
+  "generated_at": "2026-11-08T13:47:06.535Z",
+  "environment": {
+    "generated_at": "2026-11-08T13:44:37.045Z",
+    "host": {
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "physical_cores": 10,
+      "logical_cores": 16,
+      "total_ram_bytes": 16868962304,
+      "os_caption": "Microsoft Windows 11 Professionnel",
+      "os_version": "10.0.26100",
+      "os_build": "26100",
+      "hostname": "MSI",
+      "power_plan": "GUID du mode de gestion de l'alimentation�: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Haute performance)",
+      "logical_cpus_os": 16,
+      "versions": {
+        "node": "v26.13.0",
+        "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+        "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "git": "git version 2.51.1.windows.1"
+      },
+      "disk": {
+        "free_bytes": 212357992448,
+        "available_bytes": 212357992448,
+        "total_bytes": 2794898583552
+      },
+      "node_platform": "win32",
+      "node_arch": "x64"
+    },
+    "versions": {
+      "node": "v26.13.0",
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "git": "git version 2.51.1.windows.1"
+    },
+    "node": {
+      "version": "v26.13.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "toolchain": {
+      "node": "v26.13.0",
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "git": "git version 2.51.1.windows.1"
+    },
+    "root_repo": {
+      "head": "25d985663c7beb6211500815148f6151d7bbc410",
+      "branch": "feat/mvp0b-hardening",
+      "dirty_entries": 38,
+      "note": "état au démarrage du run ; d’autres agents travaillent en parallèle sur cette machine et ce dépôt"
+    },
+    "coordinator_source": {
+      "pinned_ref": "7026f21",
+      "commit": "7026f21554c1a5313c69514c90c2b00322dedb1e",
+      "binary_sha256": "2b845149cdac6896f6e72a9b68cc98e2543c04553bf014851a13e452fe1fd0d6",
+      "binary_size_bytes": 1721856,
+      "exe_display": "<coord-cache>\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+      "build": {
+        "ms": 370.463,
+        "exit_code": 0,
+        "stdout_tail": "",
+        "stderr_tail": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s\n",
+        "offline": true
+      },
+      "archive_command": "git archive --format=tar -o <tmp>/src.tar 7026f21",
+      "build_command_template": "cargo build -p ravum-workspace-coordinator --bins --target-dir <tmp>/target",
+      "reason": "référence épinglée : le crate est modifié/compilé en parallèle par d’autres agents sur la machine partagée"
+    },
+    "fixture": {
+      "path": "benchmarks/s8/fixture",
+      "files": [
+        ".gitignore",
+        "Cargo.toml",
+        "README.md",
+        "src/alpha.rs",
+        "src/beta.rs",
+        "src/delta.rs",
+        "src/gamma.rs",
+        "src/lib.rs",
+        "tests/behavior.rs"
+      ],
+      "manifest": {
+        ".gitignore": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247",
+        "Cargo.toml": "2dcc78c5c4e2eb073ad4a75c8fe41634e5523b9b0c9cbe7aafa190c0cd9011f9",
+        "README.md": "c3c67d1c075a0b2659adf0026e5b13769dcaa80f93e12b5efc824598fbf2740e",
+        "src/alpha.rs": "0b7d3af6ead1f578b2b1d1a24b9bc288e46610aa07cd316fa345e58b30d1234f",
+        "src/beta.rs": "9954dec633d7242803e83083103b6551b36cd3ca5983c2f3763c5afbf46c51da",
+        "src/delta.rs": "da331c9d9ff276b7433bacd89383410e4c27cad4ed896330a5e4553f9ffa5f9d",
+        "src/gamma.rs": "dd3765be9e44d1ca7027732fbfae8f193008c240d3beef4bf185abd14198d081",
+        "src/lib.rs": "6a4ed0b95f7230923cf0f0ac76dcd83128b36416a6566011e13b0ee31a681f7c",
+        "tests/behavior.rs": "d1c02c2b9265d3c6796e9372a4cea302c921c17b243ed65339d72f7b52930d9e"
+      }
+    },
+    "corpus": [
+      {
+        "id": "t1",
+        "agent": "agent-1",
+        "title": "alpha_add: addition saturante",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "alpha_add"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/alpha.rs",
+            "fn": "alpha_add",
+            "newLine": "    a.saturating_add(b)"
+          }
+        ]
+      },
+      {
+        "id": "t2",
+        "agent": "agent-1",
+        "title": "gamma_prefix: borne minimale explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "gamma_prefix"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/gamma.rs",
+            "fn": "gamma_prefix",
+            "newLine": "    s.chars().take(n.min(s.chars().count())).collect()"
+          }
+        ]
+      },
+      {
+        "id": "t3",
+        "agent": "agent-2",
+        "title": "beta_pad: changement de signature (+2 sites d’appel)",
+        "kind": "signature",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "beta_pad"
+        ],
+        "ops": [
+          {
+            "kind": "replace_line",
+            "path": "src/beta.rs",
+            "oldLine": "pub fn beta_pad(text: &str, width: usize) -> String {",
+            "newLine": "pub fn beta_pad(text: &str, width: usize, fill: char) -> String {"
+          },
+          {
+            "kind": "fn_body",
+            "path": "src/beta.rs",
+            "fn": "beta_pad",
+            "newLine": "    format!(\"{text:<width$}\").replace(' ', &fill.to_string())"
+          },
+          {
+            "kind": "replace_line",
+            "path": "tests/behavior.rs",
+            "oldLine": "    assert_eq!(beta::beta_pad(\"ab\", 5), \"ab   \");",
+            "newLine": "    assert_eq!(beta::beta_pad(\"ab\", 5, ' '), \"ab   \");"
+          },
+          {
+            "kind": "replace_line",
+            "path": "tests/behavior.rs",
+            "oldLine": "    assert_eq!(beta::beta_pad(\"abcdef\", 3), \"abcdef\");",
+            "newLine": "    assert_eq!(beta::beta_pad(\"abcdef\", 3, '-'), \"abcdef\");"
+          }
+        ]
+      },
+      {
+        "id": "t4",
+        "agent": "agent-2",
+        "title": "delta_count: itération explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": "t6",
+        "symbols": [
+          "delta_count"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/delta.rs",
+            "fn": "delta_count",
+            "newLine": "    items.iter().count()"
+          }
+        ]
+      },
+      {
+        "id": "t5",
+        "agent": "agent-3",
+        "title": "gamma_join: cas vide explicite",
+        "kind": "implementation",
+        "independent": true,
+        "competing_with": null,
+        "symbols": [
+          "gamma_join"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/gamma.rs",
+            "fn": "gamma_join",
+            "newLine": "    if items.is_empty() { String::new() } else { items.join(sep) }"
+          }
+        ]
+      },
+      {
+        "id": "t6",
+        "agent": "agent-3",
+        "title": "delta_count: variante concurrente (conflit contrôlé avec t4)",
+        "kind": "implementation",
+        "independent": false,
+        "competing_with": "t4",
+        "symbols": [
+          "delta_count"
+        ],
+        "ops": [
+          {
+            "kind": "fn_body",
+            "path": "src/delta.rs",
+            "fn": "delta_count",
+            "newLine": "    items.len().max(0)"
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      {
+        "scenario": "A",
+        "rep": 1
+      },
+      {
+        "scenario": "B",
+        "rep": 1
+      },
+      {
+        "scenario": "C",
+        "rep": 1
+      },
+      {
+        "scenario": "C",
+        "rep": 2
+      },
+      {
+        "scenario": "B",
+        "rep": 2
+      },
+      {
+        "scenario": "A",
+        "rep": 2
+      },
+      {
+        "scenario": "A",
+        "rep": 3
+      },
+      {
+        "scenario": "B",
+        "rep": 3
+      },
+      {
+        "scenario": "C",
+        "rep": 3
+      },
+      {
+        "scenario": "C",
+        "rep": 4
+      },
+      {
+        "scenario": "B",
+        "rep": 4
+      },
+      {
+        "scenario": "A",
+        "rep": 4
+      },
+      {
+        "scenario": "A",
+        "rep": 5
+      },
+      {
+        "scenario": "B",
+        "rep": 5
+      },
+      {
+        "scenario": "C",
+        "rep": 5
+      }
+    ],
+    "protocol": {
+      "scenarios": [
+        "A",
+        "B",
+        "C"
+      ],
+      "agents": 3,
+      "tasks": 6,
+      "reps": 5,
+      "order": "alterné : bloc A,B,C puis bloc C,B,A, etc.",
+      "success_criteria": [
+        "cargo test de la fixture vert après intégration (A, B, C)",
+        "0 édition indépendante perdue (A, B, C)",
+        "0 changement accepté perdu (A, B) ; C exposé au contraire comme mesure",
+        "conflit t4/t6 détecté et arbitré (A par git merge, B par décision CONFLICT)",
+        "publication B réellement effectuée par le GitWriter transactionnel en 1 commit",
+        "A utilise de vrais worktrees Git (3) et de vrais merges (3)"
+      ],
+      "synthetic_limits": [
+        "agents = éditeurs scriptés déterministes, PAS des LLM",
+        "tokens IA non mesurés (aucun LLM impliqué)",
+        "temps de supervision humaine non mesuré",
+        "échantillon restreint (répétitions demandées : 5)",
+        "fixture locale et petite ; pas de réseau, pas de dépendances externes",
+        "machine partagée avec d’autres agents : charge documentée, pas contrôlée"
+      ]
+    }
+  },
+  "coordinator_build": {
+    "pinned_ref": "7026f21",
+    "archive_command": "git archive --format=tar -o <tmp>/src.tar 7026f21",
+    "build_command_template": "cargo build -p ravum-workspace-coordinator --bins --target-dir <tmp>/target",
+    "reason": "référence épinglée : le crate est modifié/compilé en parallèle par d’autres agents sur la machine partagée",
+    "commit": "7026f21554c1a5313c69514c90c2b00322dedb1e",
+    "build": {
+      "ms": 370.463,
+      "exit_code": 0,
+      "stdout_tail": "",
+      "stderr_tail": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s\n",
+      "offline": true
+    },
+    "exe": "<temp>\\ravum-s8-coordinator-cache\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+    "exe_display": "<coord-cache>\\7026f21554c1\\target\\debug\\ravum-collab.exe",
+    "sha256": "2b845149cdac6896f6e72a9b68cc98e2543c04553bf014851a13e452fe1fd0d6",
+    "size_bytes": 1721856
+  },
+  "schedule": [
+    {
+      "scenario": "A",
+      "rep": 1
+    },
+    {
+      "scenario": "B",
+      "rep": 1
+    },
+    {
+      "scenario": "C",
+      "rep": 1
+    },
+    {
+      "scenario": "C",
+      "rep": 2
+    },
+    {
+      "scenario": "B",
+      "rep": 2
+    },
+    {
+      "scenario": "A",
+      "rep": 2
+    },
+    {
+      "scenario": "A",
+      "rep": 3
+    },
+    {
+      "scenario": "B",
+      "rep": 3
+    },
+    {
+      "scenario": "C",
+      "rep": 3
+    },
+    {
+      "scenario": "C",
+      "rep": 4
+    },
+    {
+      "scenario": "B",
+      "rep": 4
+    },
+    {
+      "scenario": "A",
+      "rep": 4
+    },
+    {
+      "scenario": "A",
+      "rep": 5
+    },
+    {
+      "scenario": "B",
+      "rep": 5
+    },
+    {
+      "scenario": "C",
+      "rep": 5
+    }
+  ],
+  "scenario_reps": [
+    {
+      "scenario": "C",
+      "rep": 1
+    },
+    {
+      "scenario": "C",
+      "rep": 2
+    },
+    {
+      "scenario": "C",
+      "rep": 3
+    },
+    {
+      "scenario": "C",
+      "rep": 4
+    },
+    {
+      "scenario": "C",
+      "rep": 5
+    }
+  ],
+  "load_probes": [
+    {
+      "label": "début de campagne",
+      "ok": true,
+      "ms": 3314.159,
+      "epoch_ms": 1794145484039,
+      "free_ram_bytes": 3436449792,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 49,
+      "process_count": 303,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10009.4,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6730.7,
+          "ws_mb": 628.3
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 5921.8,
+          "ws_mb": 899
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4421.4,
+          "ws_mb": 218.4
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3537.6,
+          "ws_mb": 86.1
+        }
+      ]
+    },
+    {
+      "label": "mi-campagne",
+      "ok": true,
+      "ms": 3668.014,
+      "epoch_ms": 1794145546493,
+      "free_ram_bytes": 3280384000,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 43,
+      "process_count": 305,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10069.2,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6742.2,
+          "ws_mb": 631.1
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 5994.5,
+          "ws_mb": 894.7
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4475.9,
+          "ws_mb": 215
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3565.3,
+          "ws_mb": 98.1
+        }
+      ]
+    },
+    {
+      "label": "fin de campagne",
+      "ok": true,
+      "ms": 3676.181,
+      "epoch_ms": 1794145626378,
+      "free_ram_bytes": 2959323136,
+      "total_ram_bytes": 16868962304,
+      "load_pct": 46,
+      "process_count": 318,
+      "cpu_name": "13th Gen Intel(R) Core(TM) i7-13620H",
+      "top_processes": [
+        {
+          "name": "python",
+          "pid": 10352,
+          "cpu_s": 10142.8,
+          "ws_mb": 5.1
+        },
+        {
+          "name": "claude",
+          "pid": 15304,
+          "cpu_s": 6758.4,
+          "ws_mb": 624
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 22184,
+          "cpu_s": 6081,
+          "ws_mb": 840.3
+        },
+        {
+          "name": "DeepSeek Harness",
+          "pid": 25020,
+          "cpu_s": 4535.6,
+          "ws_mb": 209.6
+        },
+        {
+          "name": "claude",
+          "pid": 16464,
+          "cpu_s": 3602.6,
+          "ws_mb": 86.7
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "reps": 5,
+    "metrics": {
+      "t_total_ms": {
+        "label": "Temps total jusqu’à tests verts (ms)",
+        "n": 5,
+        "median": 4785.636,
+        "min": 4256.087,
+        "max": 6221.689,
+        "p25": 4483.601,
+        "p75": 5801.905,
+        "iqr": 1318.304,
+        "mad": 529.549,
+        "samples": [
+          4786,
+          4483.6,
+          6221.69,
+          4256.087,
+          5801.905
+        ]
+      },
+      "edit_phase_ms": {
+        "label": "Phase d’édition des agents (ms)",
+        "n": 5,
+        "median": 2067.975,
+        "min": 1617.097,
+        "max": 2938.41,
+        "p25": 1843.9,
+        "p75": 2171.38,
+        "iqr": 327.48,
+        "mad": 224.075,
+        "samples": [
+          2068,
+          1617.1,
+          2938.41,
+          1843.9,
+          2171.38
+        ]
+      },
+      "integration_phase_ms": {
+        "label": "Phase d’intégration/publication (ms)",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "test_ms": {
+        "label": "cargo test final (ms)",
+        "n": 5,
+        "median": 2767.093,
+        "min": 2298.959,
+        "max": 3488.536,
+        "p25": 2556.713,
+        "p75": 3137.197,
+        "iqr": 580.484,
+        "mad": 370.104,
+        "samples": [
+          2557,
+          2767.1,
+          3137.2,
+          2298.959,
+          3488.536
+        ]
+      },
+      "agent_wait_total_ms": {
+        "label": "Attente cumulée des agents (ms)",
+        "n": 5,
+        "median": 0.141,
+        "min": 0.104,
+        "max": 0.187,
+        "p25": 0.139,
+        "p75": 0.144,
+        "iqr": 0.005,
+        "mad": 0.003,
+        "samples": [
+          0,
+          0.1,
+          0.14,
+          0.141,
+          0.139
+        ]
+      },
+      "conflicts": {
+        "label": "Conflits détectés",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "conflict_resolution_ms": {
+        "label": "Temps de résolution des conflits (ms)",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "writes": {
+        "label": "Merges / publications / commits",
+        "n": 5,
+        "median": 6,
+        "min": 6,
+        "max": 6,
+        "p25": 6,
+        "p75": 6,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          6,
+          6,
+          6,
+          6,
+          6
+        ]
+      },
+      "rebuilds": {
+        "label": "Rebuilds (invocations cargo)",
+        "n": 5,
+        "median": 1,
+        "min": 1,
+        "max": 1,
+        "p25": 1,
+        "p75": 1,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "tests_passed": {
+        "label": "Tests verts (sur 10)",
+        "n": 5,
+        "median": 10,
+        "min": 10,
+        "max": 10,
+        "p25": 10,
+        "p75": 10,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          10,
+          10,
+          10,
+          10,
+          10
+        ]
+      },
+      "lost_accepted": {
+        "label": "Changements acceptés perdus",
+        "n": 5,
+        "median": 1,
+        "min": 1,
+        "max": 1,
+        "p25": 1,
+        "p75": 1,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "lost_independent": {
+        "label": "Éditions indépendantes perdues",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "silent_overwrites": {
+        "label": "Écrasements silencieux",
+        "n": 5,
+        "median": 1,
+        "min": 1,
+        "max": 1,
+        "p25": 1,
+        "p75": 1,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "ram_peak_mb": {
+        "label": "RAM pic suivie totale (Mo WorkingSet)",
+        "n": 5,
+        "median": 149.3,
+        "min": 83.3,
+        "max": 162.8,
+        "p25": 85.1,
+        "p75": 161.8,
+        "iqr": 76.7,
+        "mad": 13.5,
+        "samples": [
+          149,
+          162.8,
+          85.1,
+          83.3,
+          161.8
+        ]
+      },
+      "ram_coordinator_mb": {
+        "label": "RAM pic coordinateur ravum-collab (Mo)",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "ram_testers_mb": {
+        "label": "RAM pic testeurs cargo/rustc/test (Mo)",
+        "n": 5,
+        "median": 142.3,
+        "min": 76.3,
+        "max": 155.9,
+        "p25": 78.1,
+        "p75": 154.8,
+        "iqr": 76.7,
+        "mad": 13.6,
+        "samples": [
+          142,
+          155.9,
+          78.1,
+          76.3,
+          154.8
+        ]
+      },
+      "cpu_seconds": {
+        "label": "CPU consommé par la campagne (s)",
+        "n": 5,
+        "median": 2.219,
+        "min": 1.266,
+        "max": 2.844,
+        "p25": 2,
+        "p75": 2.578,
+        "iqr": 0.578,
+        "mad": 0.359,
+        "samples": [
+          3,
+          2,
+          2.22,
+          1.266,
+          2.578
+        ]
+      },
+      "cpu_busy_pct": {
+        "label": "Charge CPU machine pendant la répétition (%)",
+        "n": 5,
+        "median": 60.6,
+        "min": 49.3,
+        "max": 80.5,
+        "p25": 57.6,
+        "p75": 78.3,
+        "iqr": 20.7,
+        "mad": 11.3,
+        "samples": [
+          61,
+          57.6,
+          78.3,
+          49.3,
+          80.5
+        ]
+      },
+      "cache_target_mb": {
+        "label": "Cache target/ de la réplique (Mo)",
+        "n": 5,
+        "median": 12.52,
+        "min": 12.52,
+        "max": 12.52,
+        "p25": 12.52,
+        "p75": 12.52,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          13,
+          12.5,
+          12.52,
+          12.52,
+          12.52
+        ]
+      },
+      "cache_git_mb": {
+        "label": "Objets .git/ de la réplique (Mo)",
+        "n": 5,
+        "median": 0.04,
+        "min": 0.04,
+        "max": 0.04,
+        "p25": 0.04,
+        "p75": 0.04,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0.04,
+          0.04,
+          0.04
+        ]
+      },
+      "disk_repo_mb": {
+        "label": "Espace disque de la réplique (Mo)",
+        "n": 5,
+        "median": 12.56,
+        "min": 12.56,
+        "max": 12.56,
+        "p25": 12.56,
+        "p75": 12.56,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          13,
+          12.6,
+          12.56,
+          12.56,
+          12.56
+        ]
+      },
+      "functional_success": {
+        "label": "Réussite fonctionnelle stricte (0/1)",
+        "n": 5,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "p25": 0,
+        "p75": 0,
+        "iqr": 0,
+        "mad": 0,
+        "samples": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "all_success": false,
+    "all_tests_green": true,
+    "all_content_ok": true
+  },
+  "reps": [
+    {
+      "scenario": "C",
+      "rep": 1,
+      "rep_id": "C1",
+      "ok": true,
+      "rebuilds": 1,
+      "timings": {
+        "setup_ms": 1332.175,
+        "edit_phase_ms": 2067.975,
+        "integration_phase_ms": 0,
+        "test_ms": 2556.713,
+        "t_total_ms": 4785.636
+      },
+      "agents": [
+        {
+          "agent": "agent-1",
+          "tasks": [
+            {
+              "id": "t1",
+              "agent": "agent-1",
+              "start_at_ms": 0.059,
+              "end_at_ms": 295.182,
+              "wait_ms": 0.059,
+              "ms": 295.111
+            },
+            {
+              "id": "t2",
+              "agent": "agent-1",
+              "start_at_ms": 295.218,
+              "end_at_ms": 577.263,
+              "wait_ms": 0.036,
+              "ms": 282.026
+            }
+          ],
+          "edit_ms": 577.137
+        },
+        {
+          "agent": "agent-2",
+          "tasks": [
+            {
+              "id": "t3",
+              "agent": "agent-2",
+              "start_at_ms": 577.297,
+              "end_at_ms": 933.461,
+              "wait_ms": 0.034,
+              "ms": 356.134
+            },
+            {
+              "id": "t4",
+              "agent": "agent-2",
+              "start_at_ms": 933.483,
+              "end_at_ms": 1362.605,
+              "wait_ms": 0.022,
+              "ms": 429.107
+            }
+          ],
+          "edit_ms": 785.241
+        },
+        {
+          "agent": "agent-3",
+          "tasks": [
+            {
+              "id": "t5",
+              "agent": "agent-3",
+              "start_at_ms": 1362.622,
+              "end_at_ms": 1708.444,
+              "wait_ms": 0.017,
+              "ms": 345.803
+            },
+            {
+              "id": "t6",
+              "agent": "agent-3",
+              "start_at_ms": 1708.463,
+              "end_at_ms": 2067.956,
+              "wait_ms": 0.019,
+              "ms": 359.479
+            }
+          ],
+          "edit_ms": 705.282
+        }
+      ],
+      "agent_waits_ms": {
+        "agent-1": 0.095,
+        "agent-2": 0.056,
+        "agent-3": 0.036
+      },
+      "agent_wait_total_ms": 0.187,
+      "conflicts": {
+        "count": 0,
+        "resolution_ms": 0,
+        "detection": "aucune (agents séquentiels, aucune détection de conflit)",
+        "details": []
+      },
+      "writes": {
+        "kind": "sequential-single-branch",
+        "commits": 6,
+        "commit_list": "9bbd22f t6: delta_count: variante concurrente (conflit contrôlé avec t4)\nbdd8714 t5: gamma_join: cas vide explicite\nc6d8862 t4: delta_count: itération explicite\n5597410 t3: beta_pad: changement de signature (+2 sites d’appel)\nf353aa0 t2: gamma_prefix: borne minimale explicite\n20ec382 t1: alpha_add: addition saturante\n"
+      },
+      "tests": {
+        "ms": 2556.713,
+        "green": true,
+        "passed": 10,
+        "failed": 0,
+        "test_targets": 3,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\n..........\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr_tail": ""
+      },
+      "lost": {
+        "independent_missing": [],
+        "accepted_missing": [
+          "t4"
+        ],
+        "silent_overwrites": 1,
+        "silent_overwrite_tasks": [
+          "t4"
+        ],
+        "conflict_winner_present": true,
+        "rejected_edit_absent": true
+      },
+      "verification": {
+        "content_ok": true,
+        "mismatches": [],
+        "markers": {
+          "t1": {
+            "present": true,
+            "missing": []
+          },
+          "t2": {
+            "present": true,
+            "missing": []
+          },
+          "t3": {
+            "present": true,
+            "missing": []
+          },
+          "t4": {
+            "present": false,
+            "missing": [
+              {
+                "path": "src/delta.rs",
+                "line": "    items.iter().count()"
+              }
+            ]
+          },
+          "t5": {
+            "present": true,
+            "missing": []
+          },
+          "t6": {
+            "present": true,
+            "missing": []
+          }
+        },
+        "status_clean_before_tests": true,
+        "status_clean_after_tests": true,
+        "git": {
+          "worktree_list": "worktree <tmp>/C1/repo\nHEAD 9bbd22fba254c4e66e9d8d80218853368eb327c9\nbranch refs/heads/integration",
+          "branch_list": "* integration",
+          "head": "9bbd22fba254c4e66e9d8d80218853368eb327c9",
+          "status_porcelain": "",
+          "log_graph": "* 9bbd22f t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n* bdd8714 t5: gamma_join: cas vide explicite\n* c6d8862 t4: delta_count: itération explicite\n* 5597410 t3: beta_pad: changement de signature (+2 sites d’appel)\n* f353aa0 t2: gamma_prefix: borne minimale explicite\n* 20ec382 t1: alpha_add: addition saturante\n* 2cf4006 chore: base fixture S8",
+          "integration_commits": 6,
+          "commit_list": "9bbd22f t6: delta_count: variante concurrente (conflit contrôlé avec t4)\nbdd8714 t5: gamma_join: cas vide explicite\nc6d8862 t4: delta_count: itération explicite\n5597410 t3: beta_pad: changement de signature (+2 sites d’appel)\nf353aa0 t2: gamma_prefix: borne minimale explicite\n20ec382 t1: alpha_add: addition saturante\n"
+        }
+      },
+      "resources": {
+        "sampler": {
+          "sample_count": 21,
+          "interval_ms": 250,
+          "peak_ws_bytes": 156536832,
+          "peak_ws_mb": 149.3,
+          "peak_proc_count": 6,
+          "cpu_seconds": 2.844,
+          "duration_ms": 6478,
+          "families": {
+            "coordinator": {
+              "label": "coordinateur ravum-collab",
+              "peak_ws_bytes": 0,
+              "peak_ws_mb": 0
+            },
+            "testers": {
+              "label": "cargo/rustc/binaires de test",
+              "peak_ws_bytes": 149212365,
+              "peak_ws_mb": 142.3
+            },
+            "git": {
+              "label": "git",
+              "peak_ws_bytes": 7130317,
+              "peak_ws_mb": 6.8
+            },
+            "other": {
+              "label": "autres processus suivis",
+              "peak_ws_bytes": 7340032,
+              "peak_ws_mb": 7
+            }
+          },
+          "samples": [
+            {
+              "t_ms": 255,
+              "epoch_ms": 1794145502226,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 667,
+              "epoch_ms": 1794145502638,
+              "ws_sum": 0,
+              "proc_count": 1,
+              "cpu_total_s": 0,
+              "procs": [
+                {
+                  "pid": 23520,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 0,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 961,
+              "epoch_ms": 1794145502932,
+              "ws_sum": 7036928,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 28644,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.7,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1242,
+              "epoch_ms": 1794145503214,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 23704,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 1521,
+              "epoch_ms": 1794145503492,
+              "ws_sum": 5443584,
+              "proc_count": 1,
+              "cpu_total_s": 0.031,
+              "procs": [
+                {
+                  "pid": 23960,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 5.2,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1827,
+              "epoch_ms": 1794145503799,
+              "ws_sum": 0,
+              "proc_count": 1,
+              "cpu_total_s": 0.094,
+              "procs": [
+                {
+                  "pid": 24096,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 0,
+                  "cpu_s": 0.062
+                }
+              ]
+            },
+            {
+              "t_ms": 2121,
+              "epoch_ms": 1794145504093,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.109,
+              "procs": [
+                {
+                  "pid": 26024,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 2400,
+              "epoch_ms": 1794145504371,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.109,
+              "procs": []
+            },
+            {
+              "t_ms": 2701,
+              "epoch_ms": 1794145504673,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.203,
+              "procs": [
+                {
+                  "pid": 18680,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.094
+                }
+              ]
+            },
+            {
+              "t_ms": 2960,
+              "epoch_ms": 1794145504931,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.203,
+              "procs": []
+            },
+            {
+              "t_ms": 3254,
+              "epoch_ms": 1794145505226,
+              "ws_sum": 10563584,
+              "proc_count": 1,
+              "cpu_total_s": 0.219,
+              "procs": [
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 3891,
+              "epoch_ms": 1794145505862,
+              "ws_sum": 156536832,
+              "proc_count": 6,
+              "cpu_total_s": 1.938,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 4180,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 47.6,
+                  "cpu_s": 0.266
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.3,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 1364,
+                  "name": "link",
+                  "label": "descendant",
+                  "ws_mb": 18,
+                  "cpu_s": 0.375
+                },
+                {
+                  "pid": 12036,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 0.922
+                }
+              ]
+            },
+            {
+              "t_ms": 4129,
+              "epoch_ms": 1794145506101,
+              "ws_sum": 88031232,
+              "proc_count": 4,
+              "cpu_total_s": 2,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.4,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 12036,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.5,
+                  "cpu_s": 0.984
+                }
+              ]
+            },
+            {
+              "t_ms": 4509,
+              "epoch_ms": 1794145506481,
+              "ws_sum": 88031232,
+              "proc_count": 4,
+              "cpu_total_s": 2,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.4,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 12036,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.5,
+                  "cpu_s": 0.984
+                }
+              ]
+            },
+            {
+              "t_ms": 4730,
+              "epoch_ms": 1794145506701,
+              "ws_sum": 34041856,
+              "proc_count": 3,
+              "cpu_total_s": 2,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.4,
+                  "cpu_s": 0.109
+                }
+              ]
+            },
+            {
+              "t_ms": 5173,
+              "epoch_ms": 1794145507144,
+              "ws_sum": 150159360,
+              "proc_count": 5,
+              "cpu_total_s": 2.797,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 20364,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 52.8,
+                  "cpu_s": 0.406
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.4,
+                  "cpu_s": 0.125
+                },
+                {
+                  "pid": 16888,
+                  "name": "link",
+                  "label": "descendant",
+                  "ws_mb": 57.9,
+                  "cpu_s": 0.375
+                }
+              ]
+            },
+            {
+              "t_ms": 5395,
+              "epoch_ms": 1794145507367,
+              "ws_sum": 34467840,
+              "proc_count": 3,
+              "cpu_total_s": 2.828,
+              "procs": [
+                {
+                  "pid": 18852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 5144,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.1,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 23196,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.8,
+                  "cpu_s": 0.156
+                }
+              ]
+            },
+            {
+              "t_ms": 5751,
+              "epoch_ms": 1794145507723,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.828,
+              "procs": []
+            },
+            {
+              "t_ms": 5954,
+              "epoch_ms": 1794145507926,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.828,
+              "procs": []
+            },
+            {
+              "t_ms": 6222,
+              "epoch_ms": 1794145508194,
+              "ws_sum": 7098368,
+              "proc_count": 1,
+              "cpu_total_s": 2.844,
+              "procs": [
+                {
+                  "pid": 25920,
+                  "name": "git",
+                  "label": "git-rev-list",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 6478,
+              "epoch_ms": 1794145508450,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.844,
+              "procs": []
+            }
+          ],
+          "stderr_tail": ""
+        },
+        "host_before": {
+          "epoch_ms": 1794145502855,
+          "free_ram_bytes": 3245539328,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1041679819,
+          "cpu_idle_ticks": 822705026
+        },
+        "host_after": {
+          "epoch_ms": 1794145508315,
+          "free_ram_bytes": 3443163136,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1041767802,
+          "cpu_idle_ticks": 822739729
+        },
+        "cpu_busy_pct_over_rep": 60.6,
+        "node_rss_mb_before": 59.5,
+        "node_rss_mb_after": 57.7
+      },
+      "sizes": {
+        "repo_bytes": 13169839,
+        "target_bytes": 13127548,
+        "git_bytes": 38118
+      },
+      "notes": [
+        "Contrôle : les 6 éditions sont appliquées l’une après l’autre sur la branche unique, sans aucun contrôle de concurrence.",
+        "t6 écrase silencieusement t4 : la perte est mesurée, pas niée."
+      ],
+      "commands": [
+        {
+          "label": "git-init",
+          "command": "git init -q -b integration",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 150.324,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145501526
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.name S8 Harness",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 111.55,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145501677
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.email s8@ravum.invalid",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 110.069,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145501788
+        },
+        {
+          "label": "git-config",
+          "command": "git config commit.gpgsign false",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 130.532,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145501898
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.autocrlf false",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 104.249,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502029
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.eol lf",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 100.571,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502133
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.safecrlf false",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 88.793,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502234
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.hooksPath .git/hooks",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 96.1,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502323
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 143.333,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502419
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m chore: base fixture S8",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 171.47,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502562
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 105.733,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502734
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 126.572,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502857
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t1: alpha_add: addition saturante",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 166.21,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145502984
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 105.212,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503152
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t2: gamma_prefix: borne minimale explicite",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 174.826,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503257
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 131.793,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503437
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t3: beta_pad: changement de signature (+2 sites d’appel)",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 219.794,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503569
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 168.413,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503791
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t4: delta_count: itération explicite",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 258.346,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145503959
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 131.499,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145504221
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t5: gamma_join: cas vide explicite",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 211.18,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145504352
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 138.884,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145504566
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t6: delta_count: variante concurrente (conflit contrôlé avec t4)",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 218.101,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145504705
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 160.812,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145504923
+        },
+        {
+          "label": "cargo-test",
+          "command": "cargo test --quiet",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 2556.648,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145505084
+        },
+        {
+          "label": "git-worktree",
+          "command": "git worktree list --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 99.012,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145507647
+        },
+        {
+          "label": "git-branch",
+          "command": "git branch --list",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 85.534,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145507746
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 83.528,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145507832
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 97.653,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145507915
+        },
+        {
+          "label": "git-log",
+          "command": "git log --graph --oneline --all -n 40",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 97.085,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145508013
+        },
+        {
+          "label": "git-rev-list",
+          "command": "git rev-list --count 2cf40062f850bfd876d0130151d1bb41863c640c..HEAD",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 100.176,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145508110
+        },
+        {
+          "label": "git-log-list",
+          "command": "git log --format=%h %s 2cf40062f850bfd876d0130151d1bb41863c640c..HEAD",
+          "cwd": "<tmp>\\C1\\repo",
+          "ms": 103.651,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145508211
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C1\\repo",
+          "ms": 80.276,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145508669
+        }
+      ],
+      "commands_dropped": 0,
+      "functional_success": false,
+      "schedule_index": 3,
+      "started_at_epoch_ms": 1794145501305,
+      "finished_at_epoch_ms": 1794145508831,
+      "work_dir": "<tmp>\\C1"
+    },
+    {
+      "scenario": "C",
+      "rep": 2,
+      "rep_id": "C2",
+      "ok": true,
+      "rebuilds": 1,
+      "timings": {
+        "setup_ms": 1135.938,
+        "edit_phase_ms": 1617.097,
+        "integration_phase_ms": 0,
+        "test_ms": 2767.093,
+        "t_total_ms": 4483.601
+      },
+      "agents": [
+        {
+          "agent": "agent-1",
+          "tasks": [
+            {
+              "id": "t1",
+              "agent": "agent-1",
+              "start_at_ms": 0.019,
+              "end_at_ms": 259.02,
+              "wait_ms": 0.019,
+              "ms": 258.988
+            },
+            {
+              "id": "t2",
+              "agent": "agent-1",
+              "start_at_ms": 259.037,
+              "end_at_ms": 534.543,
+              "wait_ms": 0.017,
+              "ms": 275.493
+            }
+          ],
+          "edit_ms": 534.481
+        },
+        {
+          "agent": "agent-2",
+          "tasks": [
+            {
+              "id": "t3",
+              "agent": "agent-2",
+              "start_at_ms": 534.556,
+              "end_at_ms": 820.883,
+              "wait_ms": 0.013,
+              "ms": 286.311
+            },
+            {
+              "id": "t4",
+              "agent": "agent-2",
+              "start_at_ms": 820.906,
+              "end_at_ms": 1098.91,
+              "wait_ms": 0.023,
+              "ms": 277.99
+            }
+          ],
+          "edit_ms": 564.301
+        },
+        {
+          "agent": "agent-3",
+          "tasks": [
+            {
+              "id": "t5",
+              "agent": "agent-3",
+              "start_at_ms": 1098.928,
+              "end_at_ms": 1362.014,
+              "wait_ms": 0.018,
+              "ms": 263.073
+            },
+            {
+              "id": "t6",
+              "agent": "agent-3",
+              "start_at_ms": 1362.028,
+              "end_at_ms": 1617.076,
+              "wait_ms": 0.014,
+              "ms": 254.985
+            }
+          ],
+          "edit_ms": 518.058
+        }
+      ],
+      "agent_waits_ms": {
+        "agent-1": 0.036,
+        "agent-2": 0.036,
+        "agent-3": 0.032
+      },
+      "agent_wait_total_ms": 0.104,
+      "conflicts": {
+        "count": 0,
+        "resolution_ms": 0,
+        "detection": "aucune (agents séquentiels, aucune détection de conflit)",
+        "details": []
+      },
+      "writes": {
+        "kind": "sequential-single-branch",
+        "commits": 6,
+        "commit_list": "3e43110 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n2c92344 t5: gamma_join: cas vide explicite\n280cdfc t4: delta_count: itération explicite\n73d8b3f t3: beta_pad: changement de signature (+2 sites d’appel)\nc00511c t2: gamma_prefix: borne minimale explicite\n05ba69a t1: alpha_add: addition saturante\n"
+      },
+      "tests": {
+        "ms": 2767.093,
+        "green": true,
+        "passed": 10,
+        "failed": 0,
+        "test_targets": 3,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\n..........\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr_tail": ""
+      },
+      "lost": {
+        "independent_missing": [],
+        "accepted_missing": [
+          "t4"
+        ],
+        "silent_overwrites": 1,
+        "silent_overwrite_tasks": [
+          "t4"
+        ],
+        "conflict_winner_present": true,
+        "rejected_edit_absent": true
+      },
+      "verification": {
+        "content_ok": true,
+        "mismatches": [],
+        "markers": {
+          "t1": {
+            "present": true,
+            "missing": []
+          },
+          "t2": {
+            "present": true,
+            "missing": []
+          },
+          "t3": {
+            "present": true,
+            "missing": []
+          },
+          "t4": {
+            "present": false,
+            "missing": [
+              {
+                "path": "src/delta.rs",
+                "line": "    items.iter().count()"
+              }
+            ]
+          },
+          "t5": {
+            "present": true,
+            "missing": []
+          },
+          "t6": {
+            "present": true,
+            "missing": []
+          }
+        },
+        "status_clean_before_tests": true,
+        "status_clean_after_tests": true,
+        "git": {
+          "worktree_list": "worktree <tmp>/C2/repo\nHEAD 3e431103e54aa8cb30719660e63d2e9e7d2b34a8\nbranch refs/heads/integration",
+          "branch_list": "* integration",
+          "head": "3e431103e54aa8cb30719660e63d2e9e7d2b34a8",
+          "status_porcelain": "",
+          "log_graph": "* 3e43110 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n* 2c92344 t5: gamma_join: cas vide explicite\n* 280cdfc t4: delta_count: itération explicite\n* 73d8b3f t3: beta_pad: changement de signature (+2 sites d’appel)\n* c00511c t2: gamma_prefix: borne minimale explicite\n* 05ba69a t1: alpha_add: addition saturante\n* 80690ab chore: base fixture S8",
+          "integration_commits": 6,
+          "commit_list": "3e43110 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n2c92344 t5: gamma_join: cas vide explicite\n280cdfc t4: delta_count: itération explicite\n73d8b3f t3: beta_pad: changement de signature (+2 sites d’appel)\nc00511c t2: gamma_prefix: borne minimale explicite\n05ba69a t1: alpha_add: addition saturante\n"
+        }
+      },
+      "resources": {
+        "sampler": {
+          "sample_count": 21,
+          "interval_ms": 250,
+          "peak_ws_bytes": 170700800,
+          "peak_ws_mb": 162.8,
+          "peak_proc_count": 5,
+          "cpu_seconds": 2,
+          "duration_ms": 6273,
+          "families": {
+            "coordinator": {
+              "label": "coordinateur ravum-collab",
+              "peak_ws_bytes": 0,
+              "peak_ws_mb": 0
+            },
+            "testers": {
+              "label": "cargo/rustc/binaires de test",
+              "peak_ws_bytes": 163472998,
+              "peak_ws_mb": 155.9
+            },
+            "git": {
+              "label": "git",
+              "peak_ws_bytes": 7864320,
+              "peak_ws_mb": 7.5
+            },
+            "other": {
+              "label": "autres processus suivis",
+              "peak_ws_bytes": 7340032,
+              "peak_ws_mb": 7
+            }
+          },
+          "samples": [
+            {
+              "t_ms": 212,
+              "epoch_ms": 1794145509627,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 531,
+              "epoch_ms": 1794145509947,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 868,
+              "epoch_ms": 1794145510284,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 23388,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1137,
+              "epoch_ms": 1794145510553,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.016,
+              "procs": []
+            },
+            {
+              "t_ms": 1407,
+              "epoch_ms": 1794145510823,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.016,
+              "procs": []
+            },
+            {
+              "t_ms": 1686,
+              "epoch_ms": 1794145511102,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.031,
+              "procs": [
+                {
+                  "pid": 19176,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1958,
+              "epoch_ms": 1794145511374,
+              "ws_sum": 7909376,
+              "proc_count": 1,
+              "cpu_total_s": 0.047,
+              "procs": [
+                {
+                  "pid": 6904,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 7.5,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 2228,
+              "epoch_ms": 1794145511643,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.047,
+              "procs": []
+            },
+            {
+              "t_ms": 2482,
+              "epoch_ms": 1794145511898,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.047,
+              "procs": []
+            },
+            {
+              "t_ms": 3081,
+              "epoch_ms": 1794145512496,
+              "ws_sum": 170700800,
+              "proc_count": 5,
+              "cpu_total_s": 0.984,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 22368,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 82.6,
+                  "cpu_s": 0.5
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.125
+                },
+                {
+                  "pid": 3172,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 47.5,
+                  "cpu_s": 0.234
+                }
+              ]
+            },
+            {
+              "t_ms": 3311,
+              "epoch_ms": 1794145512727,
+              "ws_sum": 86831104,
+              "proc_count": 4,
+              "cpu_total_s": 1.391,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 22368,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50,
+                  "cpu_s": 0.891
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.125
+                }
+              ]
+            },
+            {
+              "t_ms": 3702,
+              "epoch_ms": 1794145513118,
+              "ws_sum": 86831104,
+              "proc_count": 4,
+              "cpu_total_s": 1.391,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 22368,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50,
+                  "cpu_s": 0.891
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.125
+                }
+              ]
+            },
+            {
+              "t_ms": 3926,
+              "epoch_ms": 1794145513342,
+              "ws_sum": 86831104,
+              "proc_count": 4,
+              "cpu_total_s": 1.422,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 22368,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50,
+                  "cpu_s": 0.922
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.125
+                }
+              ]
+            },
+            {
+              "t_ms": 4383,
+              "epoch_ms": 1794145513798,
+              "ws_sum": 89939968,
+              "proc_count": 4,
+              "cpu_total_s": 1.969,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.141
+                },
+                {
+                  "pid": 17164,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 52.9,
+                  "cpu_s": 0.531
+                }
+              ]
+            },
+            {
+              "t_ms": 4621,
+              "epoch_ms": 1794145514037,
+              "ws_sum": 34430976,
+              "proc_count": 3,
+              "cpu_total_s": 1.969,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.141
+                }
+              ]
+            },
+            {
+              "t_ms": 5049,
+              "epoch_ms": 1794145514464,
+              "ws_sum": 34783232,
+              "proc_count": 3,
+              "cpu_total_s": 1.984,
+              "procs": [
+                {
+                  "pid": 16280,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 19008,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.047
+                },
+                {
+                  "pid": 12472,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 16,
+                  "cpu_s": 0.156
+                }
+              ]
+            },
+            {
+              "t_ms": 5251,
+              "epoch_ms": 1794145514667,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 1.984,
+              "procs": []
+            },
+            {
+              "t_ms": 5470,
+              "epoch_ms": 1794145514886,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 1.984,
+              "procs": []
+            },
+            {
+              "t_ms": 5746,
+              "epoch_ms": 1794145515162,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 2,
+              "procs": [
+                {
+                  "pid": 22220,
+                  "name": "git",
+                  "label": "git-log",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 6019,
+              "epoch_ms": 1794145515435,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2,
+              "procs": []
+            },
+            {
+              "t_ms": 6273,
+              "epoch_ms": 1794145515688,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2,
+              "procs": []
+            }
+          ],
+          "stderr_tail": ""
+        },
+        "host_before": {
+          "epoch_ms": 1794145510175,
+          "free_ram_bytes": 3479904256,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1041797705,
+          "cpu_idle_ticks": 822756367
+        },
+        "host_after": {
+          "epoch_ms": 1794145515433,
+          "free_ram_bytes": 3402133504,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1041883084,
+          "cpu_idle_ticks": 822792586
+        },
+        "cpu_busy_pct_over_rep": 57.6,
+        "node_rss_mb_before": 59.6,
+        "node_rss_mb_after": 59.7
+      },
+      "sizes": {
+        "repo_bytes": 13169837,
+        "target_bytes": 13127550,
+        "git_bytes": 38114
+      },
+      "notes": [
+        "Contrôle : les 6 éditions sont appliquées l’une après l’autre sur la branche unique, sans aucun contrôle de concurrence.",
+        "t6 écrase silencieusement t4 : la perte est mesurée, pas niée."
+      ],
+      "commands": [
+        {
+          "label": "git-init",
+          "command": "git init -q -b integration",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 165.335,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509044
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.name S8 Harness",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 95.212,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509210
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.email s8@ravum.invalid",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 93.053,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509305
+        },
+        {
+          "label": "git-config",
+          "command": "git config commit.gpgsign false",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 92.338,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509398
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.autocrlf false",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 87.34,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509490
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.eol lf",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 78.974,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509578
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.safecrlf false",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 78.027,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509657
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.hooksPath .git/hooks",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 75.486,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509735
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 125.288,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509810
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m chore: base fixture S8",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 154.314,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145509936
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 74.919,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510090
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 90.65,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510177
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t1: alpha_add: addition saturante",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 166.475,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510268
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 103.871,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510436
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t2: gamma_prefix: borne minimale explicite",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 169.62,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510540
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 97.91,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510713
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t3: beta_pad: changement de signature (+2 sites d’appel)",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 184.98,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510811
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 108.613,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145510999
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t4: delta_count: itération explicite",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 166.839,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511108
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 96.657,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511277
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t5: gamma_join: cas vide explicite",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 163.79,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511374
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 93.016,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511539
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t6: delta_count: variante concurrente (conflit contrôlé avec t4)",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 160.071,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511632
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 99.241,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511793
+        },
+        {
+          "label": "cargo-test",
+          "command": "cargo test --quiet",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 2766.964,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145511892
+        },
+        {
+          "label": "git-worktree",
+          "command": "git worktree list --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 114.571,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145514668
+        },
+        {
+          "label": "git-branch",
+          "command": "git branch --list",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 104.301,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145514782
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 96.119,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145514887
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 109.217,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145514983
+        },
+        {
+          "label": "git-log",
+          "command": "git log --graph --oneline --all -n 40",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 118.123,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145515092
+        },
+        {
+          "label": "git-rev-list",
+          "command": "git rev-list --count 80690abbfa7ad288bc79f426d629769ce29fab30..HEAD",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 111.338,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145515210
+        },
+        {
+          "label": "git-log-list",
+          "command": "git log --format=%h %s 80690abbfa7ad288bc79f426d629769ce29fab30..HEAD",
+          "cwd": "<tmp>\\C2\\repo",
+          "ms": 110.402,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145515322
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C2\\repo",
+          "ms": 92.457,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145515923
+        }
+      ],
+      "commands_dropped": 0,
+      "functional_success": false,
+      "schedule_index": 4,
+      "started_at_epoch_ms": 1794145508831,
+      "finished_at_epoch_ms": 1794145516103,
+      "work_dir": "<tmp>\\C2"
+    },
+    {
+      "scenario": "C",
+      "rep": 3,
+      "rep_id": "C3",
+      "ok": true,
+      "rebuilds": 1,
+      "timings": {
+        "setup_ms": 2391.327,
+        "edit_phase_ms": 2938.41,
+        "integration_phase_ms": 0,
+        "test_ms": 3137.197,
+        "t_total_ms": 6221.689
+      },
+      "agents": [
+        {
+          "agent": "agent-1",
+          "tasks": [
+            {
+              "id": "t1",
+              "agent": "agent-1",
+              "start_at_ms": 0.032,
+              "end_at_ms": 725.212,
+              "wait_ms": 0.032,
+              "ms": 725.162
+            },
+            {
+              "id": "t2",
+              "agent": "agent-1",
+              "start_at_ms": 725.241,
+              "end_at_ms": 1377.733,
+              "wait_ms": 0.029,
+              "ms": 652.472
+            }
+          ],
+          "edit_ms": 1377.634
+        },
+        {
+          "agent": "agent-2",
+          "tasks": [
+            {
+              "id": "t3",
+              "agent": "agent-2",
+              "start_at_ms": 1377.757,
+              "end_at_ms": 1849.899,
+              "wait_ms": 0.024,
+              "ms": 472.127
+            },
+            {
+              "id": "t4",
+              "agent": "agent-2",
+              "start_at_ms": 1849.916,
+              "end_at_ms": 2256.832,
+              "wait_ms": 0.017,
+              "ms": 406.901
+            }
+          ],
+          "edit_ms": 879.028
+        },
+        {
+          "agent": "agent-3",
+          "tasks": [
+            {
+              "id": "t5",
+              "agent": "agent-3",
+              "start_at_ms": 2256.855,
+              "end_at_ms": 2597.079,
+              "wait_ms": 0.023,
+              "ms": 340.207
+            },
+            {
+              "id": "t6",
+              "agent": "agent-3",
+              "start_at_ms": 2597.098,
+              "end_at_ms": 2938.393,
+              "wait_ms": 0.019,
+              "ms": 341.279
+            }
+          ],
+          "edit_ms": 681.486
+        }
+      ],
+      "agent_waits_ms": {
+        "agent-1": 0.061,
+        "agent-2": 0.041,
+        "agent-3": 0.042
+      },
+      "agent_wait_total_ms": 0.144,
+      "conflicts": {
+        "count": 0,
+        "resolution_ms": 0,
+        "detection": "aucune (agents séquentiels, aucune détection de conflit)",
+        "details": []
+      },
+      "writes": {
+        "kind": "sequential-single-branch",
+        "commits": 6,
+        "commit_list": "0c4ccb3 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\nc860547 t5: gamma_join: cas vide explicite\na5ddf48 t4: delta_count: itération explicite\n034401f t3: beta_pad: changement de signature (+2 sites d’appel)\ne606d85 t2: gamma_prefix: borne minimale explicite\n6898cea t1: alpha_add: addition saturante\n"
+      },
+      "tests": {
+        "ms": 3137.197,
+        "green": true,
+        "passed": 10,
+        "failed": 0,
+        "test_targets": 3,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\n..........\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr_tail": ""
+      },
+      "lost": {
+        "independent_missing": [],
+        "accepted_missing": [
+          "t4"
+        ],
+        "silent_overwrites": 1,
+        "silent_overwrite_tasks": [
+          "t4"
+        ],
+        "conflict_winner_present": true,
+        "rejected_edit_absent": true
+      },
+      "verification": {
+        "content_ok": true,
+        "mismatches": [],
+        "markers": {
+          "t1": {
+            "present": true,
+            "missing": []
+          },
+          "t2": {
+            "present": true,
+            "missing": []
+          },
+          "t3": {
+            "present": true,
+            "missing": []
+          },
+          "t4": {
+            "present": false,
+            "missing": [
+              {
+                "path": "src/delta.rs",
+                "line": "    items.iter().count()"
+              }
+            ]
+          },
+          "t5": {
+            "present": true,
+            "missing": []
+          },
+          "t6": {
+            "present": true,
+            "missing": []
+          }
+        },
+        "status_clean_before_tests": true,
+        "status_clean_after_tests": true,
+        "git": {
+          "worktree_list": "worktree <tmp>/C3/repo\nHEAD 0c4ccb38bdd7ee60f0b143d42927ebf898fa2b5b\nbranch refs/heads/integration",
+          "branch_list": "* integration",
+          "head": "0c4ccb38bdd7ee60f0b143d42927ebf898fa2b5b",
+          "status_porcelain": "",
+          "log_graph": "* 0c4ccb3 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n* c860547 t5: gamma_join: cas vide explicite\n* a5ddf48 t4: delta_count: itération explicite\n* 034401f t3: beta_pad: changement de signature (+2 sites d’appel)\n* e606d85 t2: gamma_prefix: borne minimale explicite\n* 6898cea t1: alpha_add: addition saturante\n* 5858276 chore: base fixture S8",
+          "integration_commits": 6,
+          "commit_list": "0c4ccb3 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\nc860547 t5: gamma_join: cas vide explicite\na5ddf48 t4: delta_count: itération explicite\n034401f t3: beta_pad: changement de signature (+2 sites d’appel)\ne606d85 t2: gamma_prefix: borne minimale explicite\n6898cea t1: alpha_add: addition saturante\n"
+        }
+      },
+      "resources": {
+        "sampler": {
+          "sample_count": 27,
+          "interval_ms": 250,
+          "peak_ws_bytes": 89243648,
+          "peak_ws_mb": 85.1,
+          "peak_proc_count": 4,
+          "cpu_seconds": 2.219,
+          "duration_ms": 8980,
+          "families": {
+            "coordinator": {
+              "label": "coordinateur ravum-collab",
+              "peak_ws_bytes": 0,
+              "peak_ws_mb": 0
+            },
+            "testers": {
+              "label": "cargo/rustc/binaires de test",
+              "peak_ws_bytes": 81893786,
+              "peak_ws_mb": 78.1
+            },
+            "git": {
+              "label": "git",
+              "peak_ws_bytes": 7864320,
+              "peak_ws_mb": 7.5
+            },
+            "other": {
+              "label": "autres processus suivis",
+              "peak_ws_bytes": 7340032,
+              "peak_ws_mb": 7
+            }
+          },
+          "samples": [
+            {
+              "t_ms": 365,
+              "epoch_ms": 1794145558320,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 1015,
+              "epoch_ms": 1794145558970,
+              "ws_sum": 7909376,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 21748,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 7.5,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1364,
+              "epoch_ms": 1794145559319,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 3388,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.062
+                }
+              ]
+            },
+            {
+              "t_ms": 1635,
+              "epoch_ms": 1794145559591,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.078,
+              "procs": []
+            },
+            {
+              "t_ms": 2001,
+              "epoch_ms": 1794145559956,
+              "ws_sum": 2641920,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 7532,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 2.5,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 2283,
+              "epoch_ms": 1794145560238,
+              "ws_sum": 7081984,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 7532,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 2596,
+              "epoch_ms": 1794145560552,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.078,
+              "procs": []
+            },
+            {
+              "t_ms": 2947,
+              "epoch_ms": 1794145560902,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.109,
+              "procs": [
+                {
+                  "pid": 23548,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 3234,
+              "epoch_ms": 1794145561189,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.109,
+              "procs": []
+            },
+            {
+              "t_ms": 3503,
+              "epoch_ms": 1794145561458,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.109,
+              "procs": []
+            },
+            {
+              "t_ms": 3797,
+              "epoch_ms": 1794145561752,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.141,
+              "procs": [
+                {
+                  "pid": 18976,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 4084,
+              "epoch_ms": 1794145562039,
+              "ws_sum": 6545408,
+              "proc_count": 1,
+              "cpu_total_s": 0.141,
+              "procs": [
+                {
+                  "pid": 13676,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.2,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 4365,
+              "epoch_ms": 1794145562321,
+              "ws_sum": 7397376,
+              "proc_count": 1,
+              "cpu_total_s": 0.188,
+              "procs": [
+                {
+                  "pid": 27900,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 7.1,
+                  "cpu_s": 0.047
+                }
+              ]
+            },
+            {
+              "t_ms": 4663,
+              "epoch_ms": 1794145562618,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.203,
+              "procs": [
+                {
+                  "pid": 11572,
+                  "name": "git",
+                  "label": "git-status",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 4948,
+              "epoch_ms": 1794145562903,
+              "ws_sum": 10743808,
+              "proc_count": 1,
+              "cpu_total_s": 0.234,
+              "procs": [
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 5681,
+              "epoch_ms": 1794145563637,
+              "ws_sum": 88297472,
+              "proc_count": 4,
+              "cpu_total_s": 1.547,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 16936,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.172
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 5914,
+              "epoch_ms": 1794145563869,
+              "ws_sum": 88297472,
+              "proc_count": 4,
+              "cpu_total_s": 1.547,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 16936,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.172
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 6344,
+              "epoch_ms": 1794145564300,
+              "ws_sum": 88297472,
+              "proc_count": 4,
+              "cpu_total_s": 1.547,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 16936,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.172
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 6585,
+              "epoch_ms": 1794145564541,
+              "ws_sum": 34447360,
+              "proc_count": 3,
+              "cpu_total_s": 1.547,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 7074,
+              "epoch_ms": 1794145565029,
+              "ws_sum": 89243648,
+              "proc_count": 4,
+              "cpu_total_s": 2.156,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20460,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 52.3,
+                  "cpu_s": 0.609
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.109
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 7322,
+              "epoch_ms": 1794145565278,
+              "ws_sum": 34619392,
+              "proc_count": 3,
+              "cpu_total_s": 2.172,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.8,
+                  "cpu_s": 0.125
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 7765,
+              "epoch_ms": 1794145565720,
+              "ws_sum": 34979840,
+              "proc_count": 3,
+              "cpu_total_s": 2.219,
+              "procs": [
+                {
+                  "pid": 1852,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 23172,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 16.1,
+                  "cpu_s": 0.172
+                },
+                {
+                  "pid": 22780,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 7987,
+              "epoch_ms": 1794145565942,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.219,
+              "procs": []
+            },
+            {
+              "t_ms": 8216,
+              "epoch_ms": 1794145566171,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.219,
+              "procs": []
+            },
+            {
+              "t_ms": 8470,
+              "epoch_ms": 1794145566425,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.219,
+              "procs": []
+            },
+            {
+              "t_ms": 8727,
+              "epoch_ms": 1794145566682,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.219,
+              "procs": []
+            },
+            {
+              "t_ms": 8980,
+              "epoch_ms": 1794145566936,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.219,
+              "procs": []
+            }
+          ],
+          "stderr_tail": ""
+        },
+        "host_before": {
+          "epoch_ms": 1794145559592,
+          "free_ram_bytes": 2799947776,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1042599054,
+          "cpu_idle_ticks": 823034885
+        },
+        "host_after": {
+          "epoch_ms": 1794145566677,
+          "free_ram_bytes": 3025797120,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1042714425,
+          "cpu_idle_ticks": 823059885
+        },
+        "cpu_busy_pct_over_rep": 78.3,
+        "node_rss_mb_before": 60.3,
+        "node_rss_mb_after": 60.1
+      },
+      "sizes": {
+        "repo_bytes": 13169832,
+        "target_bytes": 13127547,
+        "git_bytes": 38112
+      },
+      "notes": [
+        "Contrôle : les 6 éditions sont appliquées l’une après l’autre sur la branche unique, sans aucun contrôle de concurrence.",
+        "t6 écrase silencieusement t4 : la perte est mesurée, pas niée."
+      ],
+      "commands": [
+        {
+          "label": "git-init",
+          "command": "git init -q -b integration",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 299.53,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145557208
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.name S8 Harness",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 155.11,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145557508
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.email s8@ravum.invalid",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 144.231,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145557663
+        },
+        {
+          "label": "git-config",
+          "command": "git config commit.gpgsign false",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 133.283,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145557807
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.autocrlf false",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 120.476,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145557941
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.eol lf",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 139.029,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145558061
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.safecrlf false",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 155.391,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145558200
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.hooksPath .git/hooks",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 171.405,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145558356
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 294.426,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145558527
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m chore: base fixture S8",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 512.477,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145558822
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 239.903,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145559334
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 215.362,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145559595
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t1: alpha_add: addition saturante",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 506.673,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145559810
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 243.544,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145560320
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t2: gamma_prefix: borne minimale explicite",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 405.528,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145560564
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 218.264,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145560975
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t3: beta_pad: changement de signature (+2 sites d’appel)",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 247.808,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145561194
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 142.005,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145561445
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t4: delta_count: itération explicite",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 261.836,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145561587
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 128.363,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145561851
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t5: gamma_join: cas vide explicite",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 208.938,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145561980
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 133.704,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145562192
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t6: delta_count: variante concurrente (conflit contrôlé avec t4)",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 204.704,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145562325
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 145.958,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145562530
+        },
+        {
+          "label": "cargo-test",
+          "command": "cargo test --quiet",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 3137.126,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145562676
+        },
+        {
+          "label": "git-worktree",
+          "command": "git worktree list --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 117.154,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145565821
+        },
+        {
+          "label": "git-branch",
+          "command": "git branch --list",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 106.629,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145565938
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 119.146,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145566045
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 124.822,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145566164
+        },
+        {
+          "label": "git-log",
+          "command": "git log --graph --oneline --all -n 40",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 121.235,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145566289
+        },
+        {
+          "label": "git-rev-list",
+          "command": "git rev-list --count 5858276706b0aa2c6723e7fe393d9d82e673a028..HEAD",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 108.218,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145566410
+        },
+        {
+          "label": "git-log-list",
+          "command": "git log --format=%h %s 5858276706b0aa2c6723e7fe393d9d82e673a028..HEAD",
+          "cwd": "<tmp>\\C3\\repo",
+          "ms": 157.463,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145566519
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C3\\repo",
+          "ms": 92.765,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145567165
+        }
+      ],
+      "commands_dropped": 0,
+      "functional_success": false,
+      "schedule_index": 9,
+      "started_at_epoch_ms": 1794145556956,
+      "finished_at_epoch_ms": 1794145567362,
+      "work_dir": "<tmp>\\C3"
+    },
+    {
+      "scenario": "C",
+      "rep": 4,
+      "rep_id": "C4",
+      "ok": true,
+      "rebuilds": 1,
+      "timings": {
+        "setup_ms": 1346.464,
+        "edit_phase_ms": 1843.9,
+        "integration_phase_ms": 0,
+        "test_ms": 2298.959,
+        "t_total_ms": 4256.087
+      },
+      "agents": [
+        {
+          "agent": "agent-1",
+          "tasks": [
+            {
+              "id": "t1",
+              "agent": "agent-1",
+              "start_at_ms": 0.06,
+              "end_at_ms": 317.212,
+              "wait_ms": 0.06,
+              "ms": 317.14
+            },
+            {
+              "id": "t2",
+              "agent": "agent-1",
+              "start_at_ms": 317.228,
+              "end_at_ms": 603.29,
+              "wait_ms": 0.016,
+              "ms": 286.049
+            }
+          ],
+          "edit_ms": 603.189
+        },
+        {
+          "agent": "agent-2",
+          "tasks": [
+            {
+              "id": "t3",
+              "agent": "agent-2",
+              "start_at_ms": 603.305,
+              "end_at_ms": 900.415,
+              "wait_ms": 0.015,
+              "ms": 297.095
+            },
+            {
+              "id": "t4",
+              "agent": "agent-2",
+              "start_at_ms": 900.435,
+              "end_at_ms": 1221.239,
+              "wait_ms": 0.02,
+              "ms": 320.79
+            }
+          ],
+          "edit_ms": 617.885
+        },
+        {
+          "agent": "agent-3",
+          "tasks": [
+            {
+              "id": "t5",
+              "agent": "agent-3",
+              "start_at_ms": 1221.255,
+              "end_at_ms": 1537.739,
+              "wait_ms": 0.016,
+              "ms": 316.472
+            },
+            {
+              "id": "t6",
+              "agent": "agent-3",
+              "start_at_ms": 1537.753,
+              "end_at_ms": 1843.884,
+              "wait_ms": 0.014,
+              "ms": 306.12
+            }
+          ],
+          "edit_ms": 622.592
+        }
+      ],
+      "agent_waits_ms": {
+        "agent-1": 0.076,
+        "agent-2": 0.035,
+        "agent-3": 0.03
+      },
+      "agent_wait_total_ms": 0.141,
+      "conflicts": {
+        "count": 0,
+        "resolution_ms": 0,
+        "detection": "aucune (agents séquentiels, aucune détection de conflit)",
+        "details": []
+      },
+      "writes": {
+        "kind": "sequential-single-branch",
+        "commits": 6,
+        "commit_list": "b36fdf6 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n84095df t5: gamma_join: cas vide explicite\n214d96f t4: delta_count: itération explicite\n086bd8f t3: beta_pad: changement de signature (+2 sites d’appel)\n3627417 t2: gamma_prefix: borne minimale explicite\n70506ee t1: alpha_add: addition saturante\n"
+      },
+      "tests": {
+        "ms": 2298.959,
+        "green": true,
+        "passed": 10,
+        "failed": 0,
+        "test_targets": 3,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\n..........\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr_tail": ""
+      },
+      "lost": {
+        "independent_missing": [],
+        "accepted_missing": [
+          "t4"
+        ],
+        "silent_overwrites": 1,
+        "silent_overwrite_tasks": [
+          "t4"
+        ],
+        "conflict_winner_present": true,
+        "rejected_edit_absent": true
+      },
+      "verification": {
+        "content_ok": true,
+        "mismatches": [],
+        "markers": {
+          "t1": {
+            "present": true,
+            "missing": []
+          },
+          "t2": {
+            "present": true,
+            "missing": []
+          },
+          "t3": {
+            "present": true,
+            "missing": []
+          },
+          "t4": {
+            "present": false,
+            "missing": [
+              {
+                "path": "src/delta.rs",
+                "line": "    items.iter().count()"
+              }
+            ]
+          },
+          "t5": {
+            "present": true,
+            "missing": []
+          },
+          "t6": {
+            "present": true,
+            "missing": []
+          }
+        },
+        "status_clean_before_tests": true,
+        "status_clean_after_tests": true,
+        "git": {
+          "worktree_list": "worktree <tmp>/C4/repo\nHEAD b36fdf63e2c79e71282fba502baccc0022a711fe\nbranch refs/heads/integration",
+          "branch_list": "* integration",
+          "head": "b36fdf63e2c79e71282fba502baccc0022a711fe",
+          "status_porcelain": "",
+          "log_graph": "* b36fdf6 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n* 84095df t5: gamma_join: cas vide explicite\n* 214d96f t4: delta_count: itération explicite\n* 086bd8f t3: beta_pad: changement de signature (+2 sites d’appel)\n* 3627417 t2: gamma_prefix: borne minimale explicite\n* 70506ee t1: alpha_add: addition saturante\n* ec2ae39 chore: base fixture S8",
+          "integration_commits": 6,
+          "commit_list": "b36fdf6 t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n84095df t5: gamma_join: cas vide explicite\n214d96f t4: delta_count: itération explicite\n086bd8f t3: beta_pad: changement de signature (+2 sites d’appel)\n3627417 t2: gamma_prefix: borne minimale explicite\n70506ee t1: alpha_add: addition saturante\n"
+        }
+      },
+      "resources": {
+        "sampler": {
+          "sample_count": 21,
+          "interval_ms": 250,
+          "peak_ws_bytes": 87347200,
+          "peak_ws_mb": 83.3,
+          "peak_proc_count": 4,
+          "cpu_seconds": 1.266,
+          "duration_ms": 6130,
+          "families": {
+            "coordinator": {
+              "label": "coordinateur ravum-collab",
+              "peak_ws_bytes": 0,
+              "peak_ws_mb": 0
+            },
+            "testers": {
+              "label": "cargo/rustc/binaires de test",
+              "peak_ws_bytes": 80006349,
+              "peak_ws_mb": 76.3
+            },
+            "git": {
+              "label": "git",
+              "peak_ws_bytes": 7130317,
+              "peak_ws_mb": 6.8
+            },
+            "other": {
+              "label": "autres processus suivis",
+              "peak_ws_bytes": 7340032,
+              "peak_ws_mb": 7
+            }
+          },
+          "samples": [
+            {
+              "t_ms": 226,
+              "epoch_ms": 1794145568255,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 505,
+              "epoch_ms": 1794145568533,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 775,
+              "epoch_ms": 1794145568804,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 1167,
+              "epoch_ms": 1794145569196,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 12748,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1456,
+              "epoch_ms": 1794145569485,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 17168,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 1733,
+              "epoch_ms": 1794145569762,
+              "ws_sum": 7118848,
+              "proc_count": 1,
+              "cpu_total_s": 0.047,
+              "procs": [
+                {
+                  "pid": 20948,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 2022,
+              "epoch_ms": 1794145570050,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 11800,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 2300,
+              "epoch_ms": 1794145570329,
+              "ws_sum": 2641920,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 10892,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 2.5,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 2572,
+              "epoch_ms": 1794145570600,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.078,
+              "procs": []
+            },
+            {
+              "t_ms": 2848,
+              "epoch_ms": 1794145570877,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.094,
+              "procs": [
+                {
+                  "pid": 24076,
+                  "name": "git",
+                  "label": "git-status",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 3126,
+              "epoch_ms": 1794145571155,
+              "ws_sum": 10706944,
+              "proc_count": 1,
+              "cpu_total_s": 0.125,
+              "procs": [
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 3660,
+              "epoch_ms": 1794145571689,
+              "ws_sum": 87347200,
+              "proc_count": 4,
+              "cpu_total_s": 1.172,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.156
+                },
+                {
+                  "pid": 24364,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50.5,
+                  "cpu_s": 0.875
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 3883,
+              "epoch_ms": 1794145571912,
+              "ws_sum": 87347200,
+              "proc_count": 4,
+              "cpu_total_s": 1.203,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.156
+                },
+                {
+                  "pid": 24364,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50.5,
+                  "cpu_s": 0.906
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 4245,
+              "epoch_ms": 1794145572274,
+              "ws_sum": 87347200,
+              "proc_count": 4,
+              "cpu_total_s": 1.219,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.156
+                },
+                {
+                  "pid": 24364,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 50.5,
+                  "cpu_s": 0.922
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 4470,
+              "epoch_ms": 1794145572499,
+              "ws_sum": 34422784,
+              "proc_count": 3,
+              "cpu_total_s": 1.219,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.156
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 4825,
+              "epoch_ms": 1794145572854,
+              "ws_sum": 34516992,
+              "proc_count": 3,
+              "cpu_total_s": 1.234,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.172
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 5034,
+              "epoch_ms": 1794145573062,
+              "ws_sum": 34816000,
+              "proc_count": 3,
+              "cpu_total_s": 1.234,
+              "procs": [
+                {
+                  "pid": 27220,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0.016
+                },
+                {
+                  "pid": 13676,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 16,
+                  "cpu_s": 0.172
+                },
+                {
+                  "pid": 24548,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 5404,
+              "epoch_ms": 1794145573432,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 1.234,
+              "procs": []
+            },
+            {
+              "t_ms": 5623,
+              "epoch_ms": 1794145573652,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 1.266,
+              "procs": [
+                {
+                  "pid": 23916,
+                  "name": "git",
+                  "label": "git-log",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 5876,
+              "epoch_ms": 1794145573905,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 1.266,
+              "procs": []
+            },
+            {
+              "t_ms": 6130,
+              "epoch_ms": 1794145574159,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 1.266,
+              "procs": []
+            }
+          ],
+          "stderr_tail": ""
+        },
+        "host_before": {
+          "epoch_ms": 1794145568925,
+          "free_ram_bytes": 3208695808,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1042750941,
+          "cpu_idle_ticks": 823074992
+        },
+        "host_after": {
+          "epoch_ms": 1794145573886,
+          "free_ram_bytes": 3295399936,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1042831396,
+          "cpu_idle_ticks": 823115821
+        },
+        "cpu_busy_pct_over_rep": 49.3,
+        "node_rss_mb_before": 60.2,
+        "node_rss_mb_after": 59.2
+      },
+      "sizes": {
+        "repo_bytes": 13169839,
+        "target_bytes": 13127548,
+        "git_bytes": 38118
+      },
+      "notes": [
+        "Contrôle : les 6 éditions sont appliquées l’une après l’autre sur la branche unique, sans aucun contrôle de concurrence.",
+        "t6 écrase silencieusement t4 : la perte est mesurée, pas niée."
+      ],
+      "commands": [
+        {
+          "label": "git-init",
+          "command": "git init -q -b integration",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 155.606,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145567579
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.name S8 Harness",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 112.894,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145567735
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.email s8@ravum.invalid",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 106.084,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145567847
+        },
+        {
+          "label": "git-config",
+          "command": "git config commit.gpgsign false",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 91.762,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145567954
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.autocrlf false",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 90.948,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568045
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.eol lf",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 88.606,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568137
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.safecrlf false",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 80.675,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568225
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.hooksPath .git/hooks",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 86.621,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568306
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 133.908,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568393
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m chore: base fixture S8",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 264.084,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568527
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 120.675,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568791
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 119.286,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145568927
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t1: alpha_add: addition saturante",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 195.974,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569047
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 99.052,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569245
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t2: gamma_prefix: borne minimale explicite",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 184.607,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569344
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 114.093,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569532
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t3: beta_pad: changement de signature (+2 sites d’appel)",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 179.067,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569647
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 116.1,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569828
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t4: delta_count: itération explicite",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 202.032,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145569945
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 120.646,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570149
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t5: gamma_join: cas vide explicite",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 193.557,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570270
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 116.207,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570465
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t6: delta_count: variante concurrente (conflit contrôlé avec t4)",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 188.099,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570581
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 113.136,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570769
+        },
+        {
+          "label": "cargo-test",
+          "command": "cargo test --quiet",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 2298.904,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145570883
+        },
+        {
+          "label": "git-worktree",
+          "command": "git worktree list --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 90.282,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573187
+        },
+        {
+          "label": "git-branch",
+          "command": "git branch --list",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 110.089,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573277
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 87.893,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573387
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 102.488,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573475
+        },
+        {
+          "label": "git-log",
+          "command": "git log --graph --oneline --all -n 40",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 107.133,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573578
+        },
+        {
+          "label": "git-rev-list",
+          "command": "git rev-list --count ec2ae395944e3e80cf2275e7356afcb25d168c91..HEAD",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 92.738,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573685
+        },
+        {
+          "label": "git-log-list",
+          "command": "git log --format=%h %s ec2ae395944e3e80cf2275e7356afcb25d168c91..HEAD",
+          "cwd": "<tmp>\\C4\\repo",
+          "ms": 107.856,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145573778
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C4\\repo",
+          "ms": 99.474,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145574409
+        }
+      ],
+      "commands_dropped": 0,
+      "functional_success": false,
+      "schedule_index": 10,
+      "started_at_epoch_ms": 1794145567363,
+      "finished_at_epoch_ms": 1794145574584,
+      "work_dir": "<tmp>\\C4"
+    },
+    {
+      "scenario": "C",
+      "rep": 5,
+      "rep_id": "C5",
+      "ok": true,
+      "rebuilds": 1,
+      "timings": {
+        "setup_ms": 1180.433,
+        "edit_phase_ms": 2171.38,
+        "integration_phase_ms": 0,
+        "test_ms": 3488.536,
+        "t_total_ms": 5801.905
+      },
+      "agents": [
+        {
+          "agent": "agent-1",
+          "tasks": [
+            {
+              "id": "t1",
+              "agent": "agent-1",
+              "start_at_ms": 0.014,
+              "end_at_ms": 375.309,
+              "wait_ms": 0.014,
+              "ms": 375.281
+            },
+            {
+              "id": "t2",
+              "agent": "agent-1",
+              "start_at_ms": 375.338,
+              "end_at_ms": 691.049,
+              "wait_ms": 0.029,
+              "ms": 315.693
+            }
+          ],
+          "edit_ms": 690.974
+        },
+        {
+          "agent": "agent-2",
+          "tasks": [
+            {
+              "id": "t3",
+              "agent": "agent-2",
+              "start_at_ms": 691.101,
+              "end_at_ms": 1028.258,
+              "wait_ms": 0.052,
+              "ms": 337.143
+            },
+            {
+              "id": "t4",
+              "agent": "agent-2",
+              "start_at_ms": 1028.28,
+              "end_at_ms": 1380.627,
+              "wait_ms": 0.022,
+              "ms": 352.332
+            }
+          ],
+          "edit_ms": 689.475
+        },
+        {
+          "agent": "agent-3",
+          "tasks": [
+            {
+              "id": "t5",
+              "agent": "agent-3",
+              "start_at_ms": 1380.643,
+              "end_at_ms": 1724.164,
+              "wait_ms": 0.016,
+              "ms": 343.505
+            },
+            {
+              "id": "t6",
+              "agent": "agent-3",
+              "start_at_ms": 1724.17,
+              "end_at_ms": 2171.375,
+              "wait_ms": 0.006,
+              "ms": 447.189
+            }
+          ],
+          "edit_ms": 790.694
+        }
+      ],
+      "agent_waits_ms": {
+        "agent-1": 0.043,
+        "agent-2": 0.074,
+        "agent-3": 0.022
+      },
+      "agent_wait_total_ms": 0.139,
+      "conflicts": {
+        "count": 0,
+        "resolution_ms": 0,
+        "detection": "aucune (agents séquentiels, aucune détection de conflit)",
+        "details": []
+      },
+      "writes": {
+        "kind": "sequential-single-branch",
+        "commits": 6,
+        "commit_list": "d5e14ca t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n14630ad t5: gamma_join: cas vide explicite\n2fba65a t4: delta_count: itération explicite\nbbb9501 t3: beta_pad: changement de signature (+2 sites d’appel)\ne7d31e1 t2: gamma_prefix: borne minimale explicite\ne424200 t1: alpha_add: addition saturante\n"
+      },
+      "tests": {
+        "ms": 3488.536,
+        "green": true,
+        "passed": 10,
+        "failed": 0,
+        "test_targets": 3,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 10 tests\n..........\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr_tail": ""
+      },
+      "lost": {
+        "independent_missing": [],
+        "accepted_missing": [
+          "t4"
+        ],
+        "silent_overwrites": 1,
+        "silent_overwrite_tasks": [
+          "t4"
+        ],
+        "conflict_winner_present": true,
+        "rejected_edit_absent": true
+      },
+      "verification": {
+        "content_ok": true,
+        "mismatches": [],
+        "markers": {
+          "t1": {
+            "present": true,
+            "missing": []
+          },
+          "t2": {
+            "present": true,
+            "missing": []
+          },
+          "t3": {
+            "present": true,
+            "missing": []
+          },
+          "t4": {
+            "present": false,
+            "missing": [
+              {
+                "path": "src/delta.rs",
+                "line": "    items.iter().count()"
+              }
+            ]
+          },
+          "t5": {
+            "present": true,
+            "missing": []
+          },
+          "t6": {
+            "present": true,
+            "missing": []
+          }
+        },
+        "status_clean_before_tests": true,
+        "status_clean_after_tests": true,
+        "git": {
+          "worktree_list": "worktree <tmp>/C5/repo\nHEAD d5e14cabead9bc2b4e5988fe42fd1960924d2cb9\nbranch refs/heads/integration",
+          "branch_list": "* integration",
+          "head": "d5e14cabead9bc2b4e5988fe42fd1960924d2cb9",
+          "status_porcelain": "",
+          "log_graph": "* d5e14ca t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n* 14630ad t5: gamma_join: cas vide explicite\n* 2fba65a t4: delta_count: itération explicite\n* bbb9501 t3: beta_pad: changement de signature (+2 sites d’appel)\n* e7d31e1 t2: gamma_prefix: borne minimale explicite\n* e424200 t1: alpha_add: addition saturante\n* 66440a4 chore: base fixture S8",
+          "integration_commits": 6,
+          "commit_list": "d5e14ca t6: delta_count: variante concurrente (conflit contrôlé avec t4)\n14630ad t5: gamma_join: cas vide explicite\n2fba65a t4: delta_count: itération explicite\nbbb9501 t3: beta_pad: changement de signature (+2 sites d’appel)\ne7d31e1 t2: gamma_prefix: borne minimale explicite\ne424200 t1: alpha_add: addition saturante\n"
+        }
+      },
+      "resources": {
+        "sampler": {
+          "sample_count": 24,
+          "interval_ms": 250,
+          "peak_ws_bytes": 169619456,
+          "peak_ws_mb": 161.8,
+          "peak_proc_count": 5,
+          "cpu_seconds": 2.578,
+          "duration_ms": 7910,
+          "families": {
+            "coordinator": {
+              "label": "coordinateur ravum-collab",
+              "peak_ws_bytes": 0,
+              "peak_ws_mb": 0
+            },
+            "testers": {
+              "label": "cargo/rustc/binaires de test",
+              "peak_ws_bytes": 162319565,
+              "peak_ws_mb": 154.8
+            },
+            "git": {
+              "label": "git",
+              "peak_ws_bytes": 7864320,
+              "peak_ws_mb": 7.5
+            },
+            "other": {
+              "label": "autres processus suivis",
+              "peak_ws_bytes": 7340032,
+              "peak_ws_mb": 7
+            }
+          },
+          "samples": [
+            {
+              "t_ms": 166,
+              "epoch_ms": 1794145614520,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 488,
+              "epoch_ms": 1794145614841,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0,
+              "procs": []
+            },
+            {
+              "t_ms": 925,
+              "epoch_ms": 1794145615278,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.016,
+              "procs": [
+                {
+                  "pid": 9328,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1217,
+              "epoch_ms": 1794145615570,
+              "ws_sum": 7102464,
+              "proc_count": 1,
+              "cpu_total_s": 0.047,
+              "procs": [
+                {
+                  "pid": 19472,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 1499,
+              "epoch_ms": 1794145615852,
+              "ws_sum": 7114752,
+              "proc_count": 1,
+              "cpu_total_s": 0.062,
+              "procs": [
+                {
+                  "pid": 17984,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 1760,
+              "epoch_ms": 1794145616113,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.062,
+              "procs": []
+            },
+            {
+              "t_ms": 2055,
+              "epoch_ms": 1794145616408,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.062,
+              "procs": [
+                {
+                  "pid": 18228,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 2332,
+              "epoch_ms": 1794145616685,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 0.078,
+              "procs": [
+                {
+                  "pid": 24456,
+                  "name": "git",
+                  "label": "git-commit",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 2639,
+              "epoch_ms": 1794145616992,
+              "ws_sum": 7905280,
+              "proc_count": 1,
+              "cpu_total_s": 0.094,
+              "procs": [
+                {
+                  "pid": 19716,
+                  "name": "git",
+                  "label": "git-add",
+                  "ws_mb": 7.5,
+                  "cpu_s": 0.016
+                }
+              ]
+            },
+            {
+              "t_ms": 2919,
+              "epoch_ms": 1794145617272,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 0.094,
+              "procs": []
+            },
+            {
+              "t_ms": 3199,
+              "epoch_ms": 1794145617552,
+              "ws_sum": 10670080,
+              "proc_count": 1,
+              "cpu_total_s": 0.125,
+              "procs": [
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 3906,
+              "epoch_ms": 1794145618258,
+              "ws_sum": 169619456,
+              "proc_count": 5,
+              "cpu_total_s": 1.25,
+              "procs": [
+                {
+                  "pid": 27264,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 81.5,
+                  "cpu_s": 0.594
+                },
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.6,
+                  "cpu_s": 0.188
+                },
+                {
+                  "pid": 18016,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 47.5,
+                  "cpu_s": 0.344
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 4161,
+              "epoch_ms": 1794145618514,
+              "ws_sum": 88240128,
+              "proc_count": 4,
+              "cpu_total_s": 1.859,
+              "procs": [
+                {
+                  "pid": 27264,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.188
+                },
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.203
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 4618,
+              "epoch_ms": 1794145618970,
+              "ws_sum": 88240128,
+              "proc_count": 4,
+              "cpu_total_s": 1.859,
+              "procs": [
+                {
+                  "pid": 27264,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.188
+                },
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.203
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 4865,
+              "epoch_ms": 1794145619218,
+              "ws_sum": 88240128,
+              "proc_count": 4,
+              "cpu_total_s": 1.906,
+              "procs": [
+                {
+                  "pid": 27264,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 51.3,
+                  "cpu_s": 1.234
+                },
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.203
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 5340,
+              "epoch_ms": 1794145619692,
+              "ws_sum": 98189312,
+              "proc_count": 4,
+              "cpu_total_s": 2.141,
+              "procs": [
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.219
+                },
+                {
+                  "pid": 4212,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 60.8,
+                  "cpu_s": 0.219
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 5599,
+              "epoch_ms": 1794145619952,
+              "ws_sum": 89411584,
+              "proc_count": 4,
+              "cpu_total_s": 2.516,
+              "procs": [
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.7,
+                  "cpu_s": 0.219
+                },
+                {
+                  "pid": 4212,
+                  "name": "rustc",
+                  "label": "descendant",
+                  "ws_mb": 52.4,
+                  "cpu_s": 0.594
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 6112,
+              "epoch_ms": 1794145620464,
+              "ws_sum": 34660352,
+              "proc_count": 3,
+              "cpu_total_s": 2.531,
+              "procs": [
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 15.9,
+                  "cpu_s": 0.234
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 6361,
+              "epoch_ms": 1794145620714,
+              "ws_sum": 34795520,
+              "proc_count": 3,
+              "cpu_total_s": 2.547,
+              "procs": [
+                {
+                  "pid": 24708,
+                  "name": "rustup",
+                  "label": "cargo-test",
+                  "ws_mb": 10.2,
+                  "cpu_s": 0.031
+                },
+                {
+                  "pid": 20640,
+                  "name": "cargo",
+                  "label": "",
+                  "ws_mb": 16,
+                  "cpu_s": 0.25
+                },
+                {
+                  "pid": 18452,
+                  "name": "conhost",
+                  "label": "",
+                  "ws_mb": 7,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 6834,
+              "epoch_ms": 1794145621187,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.547,
+              "procs": []
+            },
+            {
+              "t_ms": 7075,
+              "epoch_ms": 1794145621428,
+              "ws_sum": 7110656,
+              "proc_count": 1,
+              "cpu_total_s": 2.578,
+              "procs": [
+                {
+                  "pid": 20604,
+                  "name": "git",
+                  "label": "git-status",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0.031
+                }
+              ]
+            },
+            {
+              "t_ms": 7350,
+              "epoch_ms": 1794145621703,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.578,
+              "procs": []
+            },
+            {
+              "t_ms": 7652,
+              "epoch_ms": 1794145622005,
+              "ws_sum": 7098368,
+              "proc_count": 1,
+              "cpu_total_s": 2.578,
+              "procs": [
+                {
+                  "pid": 21308,
+                  "name": "git",
+                  "label": "git-log-list",
+                  "ws_mb": 6.8,
+                  "cpu_s": 0
+                }
+              ]
+            },
+            {
+              "t_ms": 7910,
+              "epoch_ms": 1794145622262,
+              "ws_sum": 0,
+              "proc_count": 0,
+              "cpu_total_s": 2.578,
+              "procs": []
+            }
+          ],
+          "stderr_tail": ""
+        },
+        "host_before": {
+          "epoch_ms": 1794145615079,
+          "free_ram_bytes": 3402235904,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1043502441,
+          "cpu_idle_ticks": 823330524
+        },
+        "host_after": {
+          "epoch_ms": 1794145622080,
+          "free_ram_bytes": 2892353536,
+          "total_ram_bytes": 16868962304,
+          "cpu_total_ticks": 1043616391,
+          "cpu_idle_ticks": 823352789
+        },
+        "cpu_busy_pct_over_rep": 80.5,
+        "node_rss_mb_before": 61.3,
+        "node_rss_mb_after": 61.4
+      },
+      "sizes": {
+        "repo_bytes": 13169839,
+        "target_bytes": 13127549,
+        "git_bytes": 38117
+      },
+      "notes": [
+        "Contrôle : les 6 éditions sont appliquées l’une après l’autre sur la branche unique, sans aucun contrôle de concurrence.",
+        "t6 écrase silencieusement t4 : la perte est mesurée, pas niée."
+      ],
+      "commands": [
+        {
+          "label": "git-init",
+          "command": "git init -q -b integration",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 153.223,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145613906
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.name S8 Harness",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 106.599,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614060
+        },
+        {
+          "label": "git-config",
+          "command": "git config user.email s8@ravum.invalid",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 96.923,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614166
+        },
+        {
+          "label": "git-config",
+          "command": "git config commit.gpgsign false",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 89.101,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614263
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.autocrlf false",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 82.021,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614352
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.eol lf",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 88.869,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614435
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.safecrlf false",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 85.437,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614523
+        },
+        {
+          "label": "git-config",
+          "command": "git config core.hooksPath .git/hooks",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 80.678,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614609
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 124.28,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614690
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m chore: base fixture S8",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 166.025,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614814
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 87.973,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145614980
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 122.546,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615081
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t1: alpha_add: addition saturante",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 250.981,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615203
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 129.131,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615457
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t2: gamma_prefix: borne minimale explicite",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 183.601,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615586
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 122.963,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615776
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t3: beta_pad: changement de signature (+2 sites d’appel)",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 208.276,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145615899
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 133.291,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616109
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t4: delta_count: itération explicite",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 216.883,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616243
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 112.819,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616462
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t5: gamma_join: cas vide explicite",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 228.592,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616574
+        },
+        {
+          "label": "git-add",
+          "command": "git add -A",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 186.314,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616806
+        },
+        {
+          "label": "git-commit",
+          "command": "git commit -q -m t6: delta_count: variante concurrente (conflit contrôlé avec t4)",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 257.645,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145616993
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 141.852,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145617250
+        },
+        {
+          "label": "cargo-test",
+          "command": "cargo test --quiet",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 3488.463,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145617392
+        },
+        {
+          "label": "git-worktree",
+          "command": "git worktree list --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 155.753,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145620892
+        },
+        {
+          "label": "git-branch",
+          "command": "git branch --list",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 147.327,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621047
+        },
+        {
+          "label": "git-rev-parse",
+          "command": "git rev-parse HEAD",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 148.368,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621195
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 171.639,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621343
+        },
+        {
+          "label": "git-log",
+          "command": "git log --graph --oneline --all -n 40",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 190.234,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621515
+        },
+        {
+          "label": "git-rev-list",
+          "command": "git rev-list --count 66440a41f18e290b8ade218e8b8acb4dfd4e9ee3..HEAD",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 171.543,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621705
+        },
+        {
+          "label": "git-log-list",
+          "command": "git log --format=%h %s 66440a41f18e290b8ade218e8b8acb4dfd4e9ee3..HEAD",
+          "cwd": "<tmp>\\C5\\repo",
+          "ms": 202.117,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145621877
+        },
+        {
+          "label": "git-status",
+          "command": "git status --porcelain",
+          "cwd": "<temp>\\ravum-s8-20261108T134437\\C5\\repo",
+          "ms": 134.47,
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "started_epoch_ms": 1794145622578
+        }
+      ],
+      "commands_dropped": 0,
+      "functional_success": false,
+      "schedule_index": 15,
+      "started_at_epoch_ms": 1794145613685,
+      "finished_at_epoch_ms": 1794145622846,
+      "work_dir": "<tmp>\\C5"
+    }
+  ]
+}

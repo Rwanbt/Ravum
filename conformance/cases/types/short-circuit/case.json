@@ -1,0 +1,6 @@
+{
+  "id": "types/short-circuit",
+  "mode": "run-pass",
+  "stdout_contains": "ok\n",
+  "notes": "F-EXPR-002 (EXPR-2.1): the right operand of && is not evaluated when the left is false; v[5] would panic otherwise."
+}

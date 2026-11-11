@@ -1,0 +1,23 @@
+struct P {
+    s: String,
+    n: i32,
+}
+
+enum E {
+    V(P),
+    Empty,
+}
+
+fn f(e: E) -> String {
+    match e {
+        E::V(p) => {
+            return p.s;
+        }
+        E::Empty => {
+            return String::from("empty");
+        }
+    }
+}
+
+fn main() {
+}

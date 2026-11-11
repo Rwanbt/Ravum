@@ -1,0 +1,5 @@
+{
+  "id": "parser/array-literals-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-025 (G-6.27): array literals `[a, b, c]` and the repeat form `[e; n]` are accepted."
+}

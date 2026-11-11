@@ -1,0 +1,5 @@
+{
+  "id": "effects/multiple-groups-declared",
+  "mode": "compile-pass",
+  "notes": "`effects(io, fs)` names two of the nine groups and covers exactly the io/fs operations performed by the body (EFF-1.1, EFF-1.6)."
+}

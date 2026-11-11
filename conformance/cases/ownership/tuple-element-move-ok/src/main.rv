@@ -1,0 +1,6 @@
+fn first(t: (String, i32)) -> String {
+    return t.0;
+}
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/nonexhaustive",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-NONEXHAUSTIVE"
+  ],
+  "notes": "Exhaustiveness is checked by Ravum, not delegated to rustc; unqualified Some is accepted per the canonical constructor rule."
+}

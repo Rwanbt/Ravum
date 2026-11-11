@@ -1,0 +1,7 @@
+fn f(c: bool) {
+    let x = if c { 1 };
+}
+
+fn main() {
+}
+

@@ -1,0 +1,6 @@
+{
+  "id": "parser/match-negative-literal-pass",
+  "mode": "run-pass",
+  "stdout_contains": "1\n2\n1\n",
+  "notes": "G-6.37: `-N` is admitted for an integer pattern, including the minimum of a signed type (`-128` for `i8`, `-2147483648` for `i32`), where the magnitude does not fit the positive range."
+}

@@ -1,0 +1,8 @@
+use std::fs;
+
+fn load(p: &str) {
+    let s = fs::read_to_string(p)?;
+}
+
+fn main() {
+}

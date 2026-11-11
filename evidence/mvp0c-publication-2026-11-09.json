@@ -1,0 +1,381 @@
+{
+  "schema": "ravum-mvp0c-publication-robustness/1",
+  "task": "MVP-0c L3.2",
+  "generated_at_local": "2026-11-09T01:36:48.0344644+01:00",
+  "branch": "feat/mvp0c-hardening",
+  "head": "fdb20cd3b806c6c2d293ba29ea7efa3e27c3594d",
+  "source_modified": false,
+  "environment": {
+    "os": "Microsoft Windows 10.0.26100",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "cargo_build_jobs": "2",
+    "test_threads": "1"
+  },
+  "commands": {
+    "full_suite": "CARGO_BUILD_JOBS=2 cargo test -p ravum-workspace-coordinator -- --test-threads=1",
+    "crash_file": "CARGO_BUILD_JOBS=2 cargo test -p ravum-workspace-coordinator --test git_publication_crash -- --test-threads=1"
+  },
+  "baseline": {
+    "total_tests": 119,
+    "note": "mesure avant ajout: 76 lib + 43 integration"
+  },
+  "after": {
+    "total_tests": 134.0,
+    "failed": 0,
+    "all_green": true,
+    "per_binary": [
+      {
+        "target": "src\\lib.rs",
+        "passed": 76,
+        "failed": 0
+      },
+      {
+        "target": "src\\bin\\collab2-lab.rs",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "src\\bin\\ravum-collab.rs",
+        "passed": 0,
+        "failed": 0
+      },
+      {
+        "target": "collab1_non_regression.rs",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "target": "collab2_two_functions.rs",
+        "passed": 3,
+        "failed": 0
+      },
+      {
+        "target": "collab3_semantic.rs",
+        "passed": 10,
+        "failed": 0
+      },
+      {
+        "target": "collab5_semantic_statuses.rs",
+        "passed": 5,
+        "failed": 0
+      },
+      {
+        "target": "git_publication.rs",
+        "passed": 16,
+        "failed": 0
+      },
+      {
+        "target": "git_publication_crash.rs",
+        "passed": 15,
+        "failed": 0
+      },
+      {
+        "target": "git_writer.rs",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "target": "journal_durability.rs",
+        "passed": 3,
+        "failed": 0
+      },
+      {
+        "target": "merge_strategies.rs",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "target": null,
+        "passed": 0,
+        "failed": 0
+      }
+    ]
+  },
+  "new_tests": [
+    {
+      "name": "concurrent_reference_lock_is_refused_before_any_write",
+      "status": "ok"
+    },
+    {
+      "name": "crash_after_reference_swap_is_recovered_as_published_and_never_republished",
+      "status": "ok"
+    },
+    {
+      "name": "crash_before_reference_swap_is_recovered_as_unpublished_without_double_publication",
+      "status": "ok"
+    },
+    {
+      "name": "crash_harness_control_without_hooks_publishes_exactly_once",
+      "status": "ok"
+    },
+    {
+      "name": "crash_in_commit_msg_hook_publishes_nothing_and_restarts_cleanly",
+      "status": "ok"
+    },
+    {
+      "name": "crash_in_post_commit_hook_leaves_fully_published_state",
+      "status": "ok"
+    },
+    {
+      "name": "crash_in_pre_commit_hook_publishes_nothing_and_restarts_cleanly",
+      "status": "ok"
+    },
+    {
+      "name": "crash_injection_child_entry",
+      "status": "ok"
+    },
+    {
+      "name": "delete_denied_by_permissions_is_reported_and_canonical_state_stays_published",
+      "status": "ok"
+    },
+    {
+      "name": "journal_failure_after_swap_is_recovered_without_double_publication",
+      "status": "ok"
+    },
+    {
+      "name": "maintenance_index_lock_blocks_reconciliation_without_partial_publication",
+      "status": "ok"
+    },
+    {
+      "name": "modified_generated_and_auxiliary_files_are_preserved_by_publication",
+      "status": "ok"
+    },
+    {
+      "name": "protected_git_directory_refuses_publication_without_touching_the_reference",
+      "status": "ok"
+    },
+    {
+      "name": "read_only_worktree_file_is_reported_as_warning_not_silently_overwritten",
+      "status": "ok"
+    },
+    {
+      "name": "unwritable_journal_before_publication_publishes_nothing",
+      "status": "ok"
+    }
+  ],
+  "coverage": [
+    {
+      "mandate_case": "écrivain externe concurrent modifie HEAD entre prepare et publish",
+      "test": "external_head_move_between_prepare_and_publish_is_refused",
+      "kind": "existing",
+      "invariant": "CAS refuse, reference inchangee, aucun ecrasement",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "deux propositions simultanees",
+      "test": "concurrent_proposals_publish_at_most_one",
+      "kind": "existing",
+      "invariant": "au plus une publication, l autre ConcurrentWriter",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "crash entre commit-tree et update-ref (reference non publiee)",
+      "test": "crash_before_reference_swap_is_recovered_as_unpublished_without_double_publication",
+      "kind": "new",
+      "invariant": "HEAD inchange, INTENT pendant, recover => RECOVERED_UNPUBLISHED, reprise unique",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "crash avant commit-tree (pre-commit)",
+      "test": "crash_in_pre_commit_hook_publishes_nothing_and_restarts_cleanly",
+      "kind": "new",
+      "invariant": "aucune ref, aucun INTENT, redemarrage propre",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "crash avant commit-tree (commit-msg)",
+      "test": "crash_in_commit_msg_hook_publishes_nothing_and_restarts_cleanly",
+      "kind": "new",
+      "invariant": "aucune ref, aucun INTENT, redemarrage propre",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "crash apres update-ref, journal partiel",
+      "test": "crash_after_reference_swap_is_recovered_as_published_and_never_republished",
+      "kind": "new",
+      "invariant": "HEAD=commit candidat, arbre complet, INTENT sans OUTCOME, recover => RECOVERED_PUBLISHED, jamais republie",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "crash pendant post-commit (publication completee)",
+      "test": "crash_in_post_commit_hook_leaves_fully_published_state",
+      "kind": "new",
+      "invariant": "OUTCOME durable, index/worktree reconciles, retry refuse AlreadyPublished",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "harnais de crash: controle sans hook",
+      "test": "crash_harness_control_without_hooks_publishes_exactly_once",
+      "kind": "new",
+      "invariant": "le harnais distingue tue vs complete; publication unique",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "redemarrage puis recover() sur journal partiel",
+      "test": "journal_failure_after_swap_is_recovered_without_double_publication",
+      "kind": "new",
+      "invariant": "journal read-only apres swap => Journal error, recover => RECOVERED_PUBLISHED, pas de double publication",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "redemarrage/recover idempotent",
+      "test": "crash_before_reference_swap_is_recovered_as_unpublished_without_double_publication",
+      "kind": "new",
+      "invariant": "deuxieme recover = no-op, aucun outcome duplique",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "verrou de maintenance present (index Git verrouille)",
+      "test": "maintenance_index_lock_blocks_reconciliation_without_partial_publication",
+      "kind": "new",
+      "invariant": "commit publie mais IndexOutOfSync explicite, outil de reparation documente, pas d etat canonique partiel",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "verrou de reference concurrent (update-ref lock)",
+      "test": "concurrent_reference_lock_is_refused_before_any_write",
+      "kind": "new",
+      "invariant": "ref inchangee, aucune ecriture worktree avant commit point, refus explicite, reprise unique",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "permissions refusees sur .git",
+      "test": "protected_git_directory_refuses_publication_without_touching_the_reference",
+      "kind": "new",
+      "invariant": "ref inchangee, REFUSED journalise, etat sain, publication apres restauration",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "fichier en lecture seule (ecriture post-CAS)",
+      "test": "read_only_worktree_file_is_reported_as_warning_not_silently_overwritten",
+      "kind": "new",
+      "invariant": "commit/index complets, fichier non ecrase, warning explicite + git status visible",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "suppression refusee par permissions",
+      "test": "delete_denied_by_permissions_is_reported_and_canonical_state_stays_published",
+      "kind": "new",
+      "invariant": "arbre sans le fichier, index reconcile, unlink echoue => warning, fichier non supprime",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "hook local refuse",
+      "test": "refusing_pre_commit_hook_blocks_publication_and_really_runs",
+      "kind": "existing",
+      "invariant": "hook reellement execute, ref inchangee",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "hook local modifie le message",
+      "test": "commit_msg_hook_is_executed_and_its_rewrite_is_published",
+      "kind": "existing",
+      "invariant": "message reecrit publie, attribution conservee",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "hook reference-transaction refuse (abort CAS)",
+      "test": "reference_transaction_hook_can_abort_the_publication",
+      "kind": "existing",
+      "invariant": "ref inchangee",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "fichier genere (target/, BOARD.*, LOG.md) deja modifie",
+      "test": "modified_generated_and_auxiliary_files_are_preserved_by_publication",
+      "kind": "new",
+      "invariant": "contenus preserves octet pour octet, jamais supprimes; contenu genere protege refuse sans decision explicite",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "fichier non lie modifie (work in progress)",
+      "test": "unrelated_work_in_progress_is_preserved",
+      "kind": "existing",
+      "invariant": "fichier/index non concernes intacts",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "renommage/suppression/ajout",
+      "test": "additions_deletions_and_renames_produce_the_expected_tree",
+      "kind": "existing",
+      "invariant": "arbre correct, working tree/index coherents",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "fichier modifie entre validation et publication",
+      "test": "a_file_modified_between_validation_and_publication_is_refused",
+      "kind": "existing",
+      "invariant": "StaleWorkingTree, aucune publication, contenu externe preserve",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "agent ecrivant dans .git",
+      "test": "paths_inside_git_metadata_are_refused_by_the_writer",
+      "kind": "existing",
+      "invariant": "UnsafePath, .git intact",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "proposition ciblant .git (coordinateur)",
+      "test": "a_proposal_targeting_git_metadata_is_rejected_by_the_coordinator",
+      "kind": "existing",
+      "invariant": "REJECT, snapshot inchange",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "double publication de la meme proposition",
+      "test": "a_restart_does_not_publish_twice_and_recovers_an_interrupted_swap",
+      "kind": "existing",
+      "invariant": "AlreadyPublished, HEAD/compteur inchanges",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "contenu genere: opt-in explicite",
+      "test": "generated_content_requires_an_explicit_decision",
+      "kind": "existing",
+      "invariant": "ProtectedPath par defaut, publication uniquement avec decision explicite",
+      "result": "pass"
+    },
+    {
+      "mandate_case": "cold start: prepare ne publie jamais",
+      "test": "crash_injection_child_entry",
+      "kind": "new",
+      "invariant": "prepare laisse la ref intacte (test enfant en mode normal)",
+      "result": "pass"
+    }
+  ],
+  "crash_injection": {
+    "mechanism": "processus enfant = binaire de test relance; hooks (pre-commit, commit-msg, reference-transaction prepared/committed, post-commit) appellent un helper OS (PowerShell Stop-Process -Force sur Windows, kill -9 sur POSIX) qui tue reellement le processus de publication a letape choisie",
+    "stages": [
+      "pre_commit",
+      "commit_msg",
+      "cas_prepared",
+      "cas_committed",
+      "post_commit"
+    ],
+    "control": "crash_harness_control_without_hooks_publishes_exactly_once",
+    "proof_of_execution": "hook log + absence du marqueur child-completed; echec explicite si le kill n a pas eu lieu"
+  },
+  "safety_defects_found": [],
+  "observations": [
+    {
+      "id": "OBS-1",
+      "severity": "non-blocking",
+      "detail": "Quand la reference est verrouillee par un autre processus (main.ref.lock), update-ref echoue et le writer renvoie ConcurrentWriter avec found == expected_old (etiquette conservatrice: HEAD n a pas bouge). Refus sur, aucune ecriture; aucune correction du code source effectuee (hors perimetre L3.2)."
+    },
+    {
+      "id": "OBS-2",
+      "severity": "non-blocking",
+      "detail": "target/, BOARD.*, LOG.md ne sont pas dans GENERATED_PATTERNS (path_policy): ils ne sont pas refuses par la politique de fichiers generes. Les tests prouvent leur PRESERVATION (jamais supprimes/ecrases silencieusement) et le refus des chemins proteges existants (lockfiles). Ajouter ces motifs serait un changement de source, volontairement non fait ici."
+    }
+  ],
+  "limits": [
+    "Injection = terminaison reelle du processus utilisateur a des etapes choisies, pas une coupure d alimentation: pas de test de perte de donnees non flushees au niveau FS/OS.",
+    "Les hooks de kill sont des artefacts de test sous target/ravum-tests; aucun hook n est installe dans le depot Ravum.",
+    "Scenarios de permissions valides sur Windows (ACL/attributs/partage de fichier) et POSIX (chmod) mais executes ici sur Windows uniquement; le test ACL .git est cfg(windows), le chemin POSIX est fourni mais non execute sur cette machine.",
+    "Le verrou de maintenance n existe pas comme concept metier dans le crate: le cas est couvert par les verrous Git (index.lock, ref lock), documente comme proxy.",
+    "Pas de stress multi-processus repetitif au-dela des tests existants de concurrence; les durees de suite dependent de la machine.",
+    "Aucun defaut de surete decouvert; toute observation non bloquante est listee ci-dessus."
+  ]
+}

@@ -1,0 +1,7 @@
++++ b/src/lib.rs
+@@ -4,3 +4,4 @@
+ use a::*;
++use b::*;
+-mod b {}
++mod b { pub fn f() -> u32 { 2 } }
+ fn r() -> u32 { f() }

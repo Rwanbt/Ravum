@@ -1,0 +1,3 @@
+const X: f64 = 1.0;
+fn main() {
+}

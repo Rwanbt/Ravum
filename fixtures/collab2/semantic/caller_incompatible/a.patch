@@ -1,0 +1,14 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index ff60ade..a5a9245 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,7 +1,7 @@
+ #![allow(dead_code)]
+ 
+-fn scale(value: u32) -> u32 {
+-    value * 2
++fn scale(value: u32, factor: u32) -> u32 {
++    value * factor
+ }
+ 
+ fn entry() -> u32 {

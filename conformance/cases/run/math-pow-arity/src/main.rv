@@ -1,0 +1,5 @@
+use std::math;
+
+fn main() {
+    let p = math::pow(2.0);
+}

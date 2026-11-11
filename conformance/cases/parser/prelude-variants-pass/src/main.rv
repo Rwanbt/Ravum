@@ -1,0 +1,23 @@
+fn some(x: i32) -> Option<i32> {
+    return Some(x);
+}
+
+fn ok(x: i32) -> Result<i32, Error> {
+    return Ok(x);
+}
+
+fn none() -> Option<i32> {
+    return None;
+}
+
+fn err() -> Result<i32, Error> {
+    return Err(Error::new("e"));
+}
+
+fn main() {
+    let a = some(1);
+    let b = ok(2);
+    let c = none();
+    let d = err();
+}
+

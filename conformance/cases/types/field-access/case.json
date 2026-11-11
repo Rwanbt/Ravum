@@ -1,0 +1,5 @@
+{
+  "id": "types/field-access",
+  "mode": "compile-pass",
+  "notes": "F-TYP-018 (TYP-12.2-12.3): field access is behavioural, not a layout observation."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/literal-default-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-020 (TYP-13.4): an unconstrained integer literal defaults to i32; a later usize assignment does not retroactively unify it, so this is E-TYP-MISMATCH."
+}

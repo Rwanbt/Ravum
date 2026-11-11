@@ -1,0 +1,12 @@
+use std::io;
+
+fn add(a: f64, b: f64, c: f64) -> f64 {
+    return a + b + c;
+}
+
+fn main() {
+    let a = 10000000000000000.0;
+    let b = -10000000000000000.0;
+    let c = 1.0;
+    io::println(&add(a, b, c).to_string());
+}

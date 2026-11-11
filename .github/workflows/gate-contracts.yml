@@ -1,0 +1,40 @@
+name: Validation gate contracts (blocking)
+
+# These checks guard the *validity* of the gates themselves. They exist because
+# two contracts could be violated while the project still looked green:
+#   * `F-META-006` was declared non-testable in prose while T2 claimed PASS;
+#   * `W-TYP-UNREACHABLE` was emitted although DIAG-1.6 closes the warning list.
+# They are deliberately fast (no Rust build): they audit the specification,
+# the corpus references, the exemptions and the diagnostic registry.
+#
+# Scope notice: these checks do not prove compiler or runtime correctness.
+
+on:
+  push:
+    branches: [main, dev, 'feat/**']
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rule -> case traceability (strict, exemptions checked)
+        run: python3 tools/features_coverage.py --strict
+
+      - name: Diagnostics registry (emitted and promised directions)
+        run: python3 tools/registry_audit.py
+
+      - name: Contract self-tests (reproduce both historical false-PASS vectors)
+        run: python3 -m unittest discover -s tools/tests -v
+
+      - name: Scope notice
+        run: echo "Gate/tooling contracts only; no compiler or runtime correctness is proven here."

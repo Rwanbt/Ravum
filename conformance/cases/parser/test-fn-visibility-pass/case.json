@@ -1,0 +1,5 @@
+{
+  "id": "parser/test-fn-visibility-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-034 (G-3.6, MOD-4.10): a non-`pub` `test fn` without parameters is accepted."
+}

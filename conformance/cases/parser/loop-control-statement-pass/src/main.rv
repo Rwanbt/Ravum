@@ -1,0 +1,15 @@
+fn main() {
+    let mut acc = 0;
+    let mut i = 0;
+    while i < 3 {
+        acc += i;
+        i += 1;
+    }
+    for k in 0..2 {
+        acc += k;
+    }
+    loop {
+        break;
+    }
+}
+

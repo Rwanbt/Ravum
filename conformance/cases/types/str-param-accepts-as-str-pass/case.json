@@ -1,0 +1,5 @@
+{
+  "id": "types/str-param-accepts-as-str-pass",
+  "mode": "compile-pass",
+  "notes": "TYP-13.1 / OWN-6.7 / STD-9.1: a parameter is `&str` (not necessarily `&'static str`); `trim()` returns an owned `String` and its `.as_str()` view is accepted in the call. Guard against a blanket `&'static str` codegen fix that would break non-static `&str` arguments."
+}

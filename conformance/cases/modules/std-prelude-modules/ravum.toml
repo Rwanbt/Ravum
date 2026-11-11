@@ -1,0 +1,5 @@
+[package]
+name = "mod-std-modules"
+version = "0.1.0"
+edition = "core-1.0"
+

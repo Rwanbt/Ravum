@@ -1,0 +1,8 @@
+fn pick(a: [[String; 2]; 2]) -> String {
+    return a[0][1];
+}
+
+fn main() {
+    let a = [[String::from("a0"), String::from("a1")], [String::from("b0"), String::from("b1")]];
+    io::println(pick(a).as_str());
+}

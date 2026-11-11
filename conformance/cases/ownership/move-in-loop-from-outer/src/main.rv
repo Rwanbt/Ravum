@@ -1,0 +1,9 @@
+fn f(v: Vec<String>) {
+    let s = String::from("x");
+    for i in 0..v.len() {
+        drop(s);
+    }
+}
+
+fn main() {
+}

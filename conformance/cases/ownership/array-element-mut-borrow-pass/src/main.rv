@@ -1,0 +1,11 @@
+fn h(s: &mut String) {
+    s.push_str("!");
+}
+
+fn f(mut a: [String; 2]) -> usize {
+    h(&mut a[0]);
+    return a[0].len();
+}
+
+fn main() {
+}

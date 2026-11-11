@@ -1,0 +1,7 @@
+{
+  "id": "types/arity",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/main-duplicate",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MAIN-DUPLICATE"
+  ],
+  "notes": "diagnostics.md \u00a73.4: a binary crate must define exactly one `main`; a second one is E-TYP-MAIN-DUPLICATE (resolve deliberately defers duplicates of `main` to the type checker)."
+}

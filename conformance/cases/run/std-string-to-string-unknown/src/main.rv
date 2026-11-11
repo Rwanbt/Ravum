@@ -1,0 +1,6 @@
+fn f(s: String) {
+    let t = s.to_string();
+}
+
+fn main() {
+}

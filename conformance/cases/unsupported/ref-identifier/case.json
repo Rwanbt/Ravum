@@ -1,0 +1,5 @@
+{
+  "id": "unsupported/ref-identifier",
+  "mode": "compile-pass",
+  "notes": "`ref` is a valid identifier (Q-UNS-2); only `ref x` in a pattern position is a refused pattern (F-UNS-018 accepted behaviour)."
+}

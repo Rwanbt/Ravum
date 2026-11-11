@@ -1,0 +1,6 @@
+{
+  "id": "parser/match-float-pattern-nested-pass",
+  "mode": "run-pass",
+  "stdout_contains": "1\n2\n3\n",
+  "notes": "G-6.36 inside a variant pattern: `Mesure::Valeur(1.5)` is lowered to `Mesure::Valeur(__ravum_flt_0) if __ravum_flt_0 == 1.5f64`. The float arm must not count as covering `Valeur`, so `Mesure::Valeur(_)` is still required and the emitted Rust match stays exhaustive."
+}

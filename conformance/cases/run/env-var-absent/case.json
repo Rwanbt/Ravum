@@ -1,0 +1,6 @@
+{
+  "id": "run/env-var-absent",
+  "mode": "run-pass",
+  "stdout_contains": "absent",
+  "notes": "F-STD-007 / STD-4.3: env::var returns Err when the variable is absent."
+}

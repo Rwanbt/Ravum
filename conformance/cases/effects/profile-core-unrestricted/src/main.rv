@@ -1,0 +1,10 @@
+use std::io;
+
+fn allocates() -> String {
+    return String::from("x");
+}
+
+fn main() {
+    let s = allocates();
+    io::println(s.as_str());
+}

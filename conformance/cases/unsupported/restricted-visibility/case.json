@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/restricted-visibility",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-VIS"
+  ],
+  "unsupported": true,
+  "notes": "diagnostics.md \u00a73 (added): restricted visibility `pub(...)` is outside Core 1.0 (E-UNSUPPORTED-VIS); `pub`/private remain the only visibilities."
+}

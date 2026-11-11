@@ -1,0 +1,6 @@
+{
+  "id": "types/try-option",
+  "mode": "run-pass",
+  "stdout_contains": "42\n",
+  "notes": "F-EXPR-011 (EXPR-8.2): ? on Option propagates None and yields the success value."
+}

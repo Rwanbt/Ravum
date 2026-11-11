@@ -1,0 +1,5 @@
+{
+  "id": "ownership/generic-str-instr-ok",
+  "mode": "compile-pass",
+  "notes": "TYP-11.2 / OWN-6.4: a `&str` literal passed through a generic identity is usable inside the instruction; it is not stored."
+}

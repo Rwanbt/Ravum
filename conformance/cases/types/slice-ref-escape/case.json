@@ -1,0 +1,8 @@
+{
+  "id": "types/slice-ref-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "F-TYP-009 (TYP-5.5, OWN-3): a `&[f64]` borrow lasts one instruction and cannot be stored in a local binding."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/effects-position",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "effects(...) must follow the return type (G-3.2); the misplaced clause is E-PARSE-EXPECTED (a precise form was expected)."
+}

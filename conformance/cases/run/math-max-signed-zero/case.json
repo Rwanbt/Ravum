@@ -1,0 +1,6 @@
+{
+  "id": "run/math-max-signed-zero",
+  "mode": "run-pass",
+  "stdout_contains": "positive",
+  "notes": "F-STD-011 / STD-6.5: max(-0.0, +0.0) MUST be +0.0, whose Display is \"0\" (STD-12.2). -0.0 prints \"-0\", so the Display string distinguishes the signed zero."
+}

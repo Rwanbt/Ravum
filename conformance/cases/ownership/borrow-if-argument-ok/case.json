@@ -1,0 +1,5 @@
+{
+  "id": "ownership/borrow-if-argument-ok",
+  "mode": "compile-pass",
+  "notes": "EXPR-5.2 / EXPR-7.10: an `if` expression yielding `&T` is a temporary borrow usable as a call argument."
+}

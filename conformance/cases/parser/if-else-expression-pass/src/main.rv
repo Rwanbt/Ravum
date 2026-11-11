@@ -1,0 +1,9 @@
+fn max(a: i32, b: i32) -> i32 {
+    let m = if a > b { a } else { b };
+    return m;
+}
+
+fn main() {
+    let x = max(1, 2);
+}
+

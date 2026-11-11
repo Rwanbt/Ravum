@@ -1,0 +1,4 @@
+fn main() {
+    let str = 2;
+    let other = str + 1;
+}

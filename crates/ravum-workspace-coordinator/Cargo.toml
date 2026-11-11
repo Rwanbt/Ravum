@@ -1,0 +1,27 @@
+[package]
+name = "ravum-workspace-coordinator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "COLLAB-1/2/3 multi-agent proposal coordinator (single Git writer, injected semantic verification)."
+
+[dependencies]
+ravum-protocol = { workspace = true }
+ravum-snapshot = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Used only by the `ravum-collab` / `collab2-lab` binaries to inject the real
+# rustc-based `MergeVerifier`; the library itself only defines the trait and does
+# not import this adapter (see src/lib.rs and src/verifier.rs).
+ravum-rust-adapter = { workspace = true }
+
+[[bin]]
+name = "ravum-collab"
+path = "src/bin/ravum-collab.rs"
+
+[[bin]]
+name = "collab2-lab"
+path = "src/bin/collab2-lab.rs"

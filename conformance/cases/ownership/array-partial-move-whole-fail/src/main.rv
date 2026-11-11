@@ -1,0 +1,8 @@
+fn f(a: [String; 2]) -> String {
+    let x = a[1];
+    let y = a;
+    return x;
+}
+
+fn main() {
+}

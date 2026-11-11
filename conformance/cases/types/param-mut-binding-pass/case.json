@@ -1,0 +1,5 @@
+{
+  "id": "types/param-mut-binding-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-7.1: a `mut` parameter binding is a mutable place (spec positive in ownership.md section 7); codegen previously lowered it without the Rust `mut`, which made rustc reject the assignment (E0384)."
+}

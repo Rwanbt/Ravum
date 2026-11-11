@@ -1,0 +1,5 @@
+{
+  "id": "parser/prelude-variants-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-028 (G-6.29, G-6.41): unqualified prelude constructors `Some`, `None`, `Ok`, `Err` are accepted."
+}

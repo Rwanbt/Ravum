@@ -1,0 +1,32 @@
+// Traitement de données : lecture de fichier, lignes, parse f64, moyenne.
+use std::env;
+use std::fs;
+use std::io;
+use std::string;
+
+fn main() -> Result<(), Error> {
+    let args = env::args();
+    if args.len() != 2 {
+        io::println("usage: stats <file>");
+        return Ok(());
+    }
+    let text = fs::read_to_string(&args[1])?;
+    let lines = text.lines();
+    let mut sum = 0.0;
+    let mut count = 0;
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value = string::parse_f64(trimmed.as_str())?;
+        sum += value;
+        count += 1;
+    }
+    if count == 0 {
+        return Err(Error::new("no values in file"));
+    }
+    let mean = sum / (count as f64);
+    io::println(&mean.to_string());
+    Ok(())
+}

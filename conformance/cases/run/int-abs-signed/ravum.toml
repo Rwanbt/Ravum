@@ -1,0 +1,5 @@
+[package]
+name = "run-int-abs-signed"
+version = "0.1.0"
+edition = "core-1.0"
+

@@ -1,0 +1,7 @@
+{
+  "id": "types/main-invalid",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MAIN"
+  ]
+}

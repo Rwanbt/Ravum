@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-element-mut-borrow-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-7.1 / EXPR-7.3: `&mut a[0]` on a mutable array place is a legal exclusive borrow for the duration of the call (round-3 axis array-borrow)."
+}

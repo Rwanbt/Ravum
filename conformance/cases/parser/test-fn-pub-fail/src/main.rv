@@ -1,0 +1,6 @@
+pub test fn smoke() {
+}
+
+fn main() {
+}
+

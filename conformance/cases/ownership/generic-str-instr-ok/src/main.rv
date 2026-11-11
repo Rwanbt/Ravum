@@ -1,0 +1,11 @@
+fn identity<T>(x: T) -> T {
+    return x;
+}
+
+fn len_of(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let n = len_of(identity("ravum"));
+}

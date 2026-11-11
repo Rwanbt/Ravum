@@ -1,0 +1,7 @@
+use std::env;
+
+fn main() {
+    let a = env::args();
+    let i: i32 = 1;
+    let x = a[i];
+}

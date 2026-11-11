@@ -1,0 +1,9 @@
+fn total(o: Option<i32>) -> i32 {
+    let v = match o {
+        Option::Some(x) => x,
+    };
+    return v;
+}
+
+fn main() {
+}

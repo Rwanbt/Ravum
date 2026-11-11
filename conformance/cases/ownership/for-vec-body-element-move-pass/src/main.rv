@@ -1,0 +1,11 @@
+fn f(v: Vec<String>) -> usize {
+    let mut total: usize = 0;
+    for x in v {
+        let y = x;
+        total += y.len();
+    }
+    return total;
+}
+
+fn main() {
+}

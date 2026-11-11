@@ -1,0 +1,16 @@
+enum E {
+    Items([String; 2]),
+    Empty,
+}
+
+fn pick(e: E) -> String {
+    match e {
+        E::Items(a) => { return a[1]; }
+        E::Empty => { return String::from("empty"); }
+    }
+}
+
+fn main() {
+    let e = E::Items([String::from("left"), String::from("right")]);
+    io::println(pick(e).as_str());
+}

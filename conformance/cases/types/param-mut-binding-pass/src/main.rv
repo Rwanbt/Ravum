@@ -1,0 +1,8 @@
+fn bump(mut x: i32) -> i32 {
+    x = x + 1;
+    return x;
+}
+
+fn main() {
+    let a = bump(1);
+}

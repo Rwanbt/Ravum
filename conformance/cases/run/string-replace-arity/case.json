@@ -1,0 +1,8 @@
+{
+  "id": "run/string-replace-arity",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ],
+  "notes": "F-STD-019 / STD-9.8: replace(from, to) needs two arguments; one is E-TYP-ARITY."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/process-exit-code",
+  "mode": "run-pass",
+  "exit_code": 3,
+  "notes": "F-STD-008 / STD-5.1: process::exit(i32) -> ! stops the process with the given code."
+}

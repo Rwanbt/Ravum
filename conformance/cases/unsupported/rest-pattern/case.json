@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/rest-pattern",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-REST-PAT"
+  ],
+  "unsupported": true,
+  "notes": "diagnostics.md \u00a73 (added): a `..` rest pattern is refused with E-UNSUPPORTED-REST-PAT. unsupported.md line 106 still maps tuple rest to E-UNSUPPORTED-RANGE (contradiction reported)."
+}

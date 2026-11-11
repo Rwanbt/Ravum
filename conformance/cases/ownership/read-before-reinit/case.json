@@ -1,0 +1,8 @@
+{
+  "id": "ownership/read-before-reinit",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "Reading a moved place before it is re-initialised is E-OWN-USE-AFTER-MOVE (OWN-4.4)."
+}

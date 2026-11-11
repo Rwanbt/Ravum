@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-bad-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "String is not FFI-safe in Core 1.0: extern signatures accept integers, floats, bool and ()."
+}

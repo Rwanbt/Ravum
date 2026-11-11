@@ -1,0 +1,5 @@
+{
+  "id": "lexer/escapes-valid",
+  "mode": "compile-pass",
+  "notes": "Escapes from lexical.md section 8.5; \\\\xNN must be ASCII, \\\\u{...} a valid scalar."
+}

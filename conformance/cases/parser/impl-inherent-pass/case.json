@@ -1,0 +1,5 @@
+{
+  "id": "parser/impl-inherent-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-007 (G-4.5-4.7): an inherent impl with associated fn and `&self`/`&mut self`/`self` methods is accepted."
+}

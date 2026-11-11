@@ -1,0 +1,8 @@
+// hello example
+use std::io;
+
+/* header */
+fn main() {
+    // a line comment
+    io::println("hello, ravum"); // trailing comment
+}

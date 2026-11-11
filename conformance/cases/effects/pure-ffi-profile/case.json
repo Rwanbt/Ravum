@@ -1,0 +1,12 @@
+{
+  "id": "effects/pure-ffi-profile",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "Under `pure`, the unsafe/ffi effects reached by an extern call are forbidden: E-EFF-PROFILE (EFF-4.2, F-EFF-009 fail side)."
+}

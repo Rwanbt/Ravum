@@ -1,0 +1,8 @@
+fn main() {
+    let mut i = 0;
+    let mut total = 0;
+    while i < 3 {
+        total += i;
+        i += 1;
+    }
+}

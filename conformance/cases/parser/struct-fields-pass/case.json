@@ -1,0 +1,5 @@
+{
+  "id": "parser/struct-fields-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-005 (G-4.1-4.2): a struct with `pub` and private fields is accepted and constructible."
+}

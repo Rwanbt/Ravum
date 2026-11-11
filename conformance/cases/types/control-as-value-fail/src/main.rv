@@ -1,0 +1,22 @@
+fn takes_unit(value: ()) {
+}
+
+struct Holder {
+    value: (),
+}
+
+fn main() {
+    takes_unit(loop {
+    });
+    let mut unit: () = ();
+    unit = loop {
+    };
+    let holder = Holder { value: loop {
+    } };
+    let array = [loop {
+    }; 3];
+    match (loop {
+    }) {
+        _ => (),
+    }
+}

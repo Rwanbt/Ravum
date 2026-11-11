@@ -1,0 +1,5 @@
+{
+  "id": "ownership/mut-method-on-mut-param-ok",
+  "mode": "compile-pass",
+  "notes": "F-STD-016: a `&mut String` parameter can be reborrowed mutably, so `push_str` is accepted."
+}

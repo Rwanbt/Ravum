@@ -1,0 +1,8 @@
+{
+  "id": "parser/token-budget",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-TOO-LARGE"
+  ],
+  "notes": "diagnostics.md \u00a73.1 / DIAG-1.7: a source whose token stream exceeds the parser budget (MAX_TOKENS = 300 000) yields a single E-PARSE-TOO-LARGE and parsing stops. The file is 300 001 `;` tokens, just above the limit; generation is deterministic."
+}

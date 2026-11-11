@@ -1,0 +1,12 @@
+[package]
+name = "ravum-conformance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Ravum conformance harness: runs declarative .rv cases through the toolchain."
+
+[[bin]]
+name = "ravum-conformance"
+path = "src/main.rs"

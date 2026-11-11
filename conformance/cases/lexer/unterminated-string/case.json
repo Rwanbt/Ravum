@@ -1,0 +1,8 @@
+{
+  "id": "lexer/unterminated-string",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-STRING"
+  ],
+  "notes": "Unterminated string literal is E-LEX-STRING (canonical lexer code). The raw newline ends the literal; the next line keeps a valid let so only the lexer code is expected."
+}

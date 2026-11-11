@@ -1,0 +1,6 @@
+fn make() -> impl Clone {
+    return 1;
+}
+
+fn main() {
+}

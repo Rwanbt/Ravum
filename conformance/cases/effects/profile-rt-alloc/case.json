@@ -1,0 +1,12 @@
+{
+  "id": "effects/profile-rt-alloc",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "`rt` forbids alloc: a String construction reachable from the entry point is E-EFF-PROFILE (EFF-4.7)."
+}

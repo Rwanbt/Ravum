@@ -1,0 +1,16 @@
+struct Holder {
+    text: String,
+}
+
+impl Holder {
+    fn into_text(self) -> String {
+        return self.text;
+    }
+}
+
+fn f(h: Holder) -> String {
+    return h.into_text();
+}
+
+fn main() {
+}

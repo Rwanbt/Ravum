@@ -1,0 +1,8 @@
+{
+  "id": "types/try-option-in-result",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-TRY"
+  ],
+  "notes": "F-EXPR-011 (EXPR-8.3): ? on an Option is not valid in a function returning Result."
+}

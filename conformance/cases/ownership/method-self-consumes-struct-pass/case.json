@@ -1,0 +1,5 @@
+{
+  "id": "ownership/method-self-consumes-struct-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-7.4: a method with a `self` receiver moves the value (EXPR-7.4); calling it on a struct returns the owned field (round-3 axis method-receiver)."
+}

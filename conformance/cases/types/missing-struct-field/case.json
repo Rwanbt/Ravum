@@ -1,0 +1,8 @@
+{
+  "id": "types/missing-struct-field",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISSING-FIELD"
+  ],
+  "notes": "diagnostics.md \u00a73.3 (added): a struct literal that omits a declared field. The field `b` is declared but not provided, so the store is incomplete."
+}

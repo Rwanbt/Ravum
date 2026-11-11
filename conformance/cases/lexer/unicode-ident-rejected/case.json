@@ -1,0 +1,8 @@
+{
+  "id": "lexer/unicode-ident-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-IDENT"
+  ],
+  "notes": "Identifiers are ASCII in Core 1.0 (LEX-4.2); Unicode input is an explicit UNSUPPORTED, not a generic lexer error."
+}

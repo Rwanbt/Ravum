@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-shadowed",
+  "mode": "run-pass",
+  "stdout_contains": "first\n",
+  "notes": "Bindings are identified by declaration: a nested `let a` shadowing the parameter `a` must not block moving the parameter's own array element (OWN-5.4). The generated destructuring is hoisted in the outer scope."
+}

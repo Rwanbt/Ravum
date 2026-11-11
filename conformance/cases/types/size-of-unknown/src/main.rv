@@ -1,0 +1,6 @@
+fn g() -> usize {
+    return size_of(1);
+}
+
+fn main() {
+}

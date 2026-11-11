@@ -1,0 +1,5 @@
+// Premier programme Ravum : affiche une ligne et sort avec le code 0.
+use std::io;
+fn main() {
+    io::println("hello, ravum");
+}

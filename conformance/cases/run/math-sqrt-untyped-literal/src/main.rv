@@ -1,0 +1,11 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let x = math::sqrt(2.0);
+    if x > 1.4142 {
+        io::println("sqrt-ok");
+    } else {
+        io::println("sqrt-bad");
+    }
+}

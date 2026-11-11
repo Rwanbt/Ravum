@@ -1,0 +1,8 @@
+{
+  "id": "types/immutable-binding-assign",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "F-TYP-006 (TYP-3.1): assigning to a let binding is E-OWN-IMMUTABLE."
+}

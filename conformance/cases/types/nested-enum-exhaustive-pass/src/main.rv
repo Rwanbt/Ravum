@@ -1,0 +1,15 @@
+enum E {
+    A(Option<i32>),
+    B,
+}
+
+fn f(e: E) -> i32 {
+    match e {
+        E::A(Some(n)) => n,
+        E::A(None) => -1,
+        E::B => 0,
+    }
+}
+
+fn main() {
+}

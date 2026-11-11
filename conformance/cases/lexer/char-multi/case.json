@@ -1,0 +1,6 @@
+{
+  "id": "lexer/char-multi",
+  "mode": "compile-fail",
+  "expect_codes": ["E-LEX-CHAR"],
+  "notes": "A character literal containing two characters ('ab') is E-LEX-CHAR."
+}

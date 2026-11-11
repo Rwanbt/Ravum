@@ -1,0 +1,8 @@
+{
+  "id": "types/int-as-bool",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CAST"
+  ],
+  "notes": "F-TYP-003 (TYP-1.5, TYP-13.5): integer -> bool casts are refused."
+}

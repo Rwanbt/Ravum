@@ -1,0 +1,12 @@
+{
+  "id": "02_public_signature_used_elsewhere",
+  "description": "Signature publique modifiee ; l'analyse inter-crates L1 signalerait les dependants, le defaut textuel la traite comme rupture d'interface.",
+  "lane": "textual_default_oracle",
+  "base_files": ["src/lib.rs"],
+  "proposals": [
+    {"agent_id": "agent-a", "task_id": "area", "target": "src/lib.rs", "symbols": ["area"], "patch": "a.patch"}
+  ],
+  "expected_decisions": ["REBASE_REVALIDATE"],
+  "expected_levels": ["TEXTUALLY_APPLICABLE"],
+  "expect_reason_contains": [["revalidation"]]
+}

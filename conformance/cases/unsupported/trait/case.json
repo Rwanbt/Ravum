@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/trait",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TRAIT"
+  ],
+  "unsupported": true
+}

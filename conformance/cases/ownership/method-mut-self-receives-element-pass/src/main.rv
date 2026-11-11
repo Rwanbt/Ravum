@@ -1,0 +1,17 @@
+struct Holder {
+    text: String,
+}
+
+impl Holder {
+    fn push(&mut self, s: String) {
+        self.text.push_str(s.as_str());
+    }
+}
+
+fn f(mut h: Holder, a: [String; 2]) -> String {
+    h.push(a[0]);
+    return h.text;
+}
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/control-as-value-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-STATEMENT-VALUE"
+  ],
+  "notes": "EXPR-5.11 / EXPR-6.7 / G-6.19: `while`/`loop`/`for` are control expressions of type `()` and are not value expressions. This covers the value positions that the old checker missed even when the expected type was `()`: call argument, assignment, struct field, match arm, match scrutinee, repeated array value."
+}

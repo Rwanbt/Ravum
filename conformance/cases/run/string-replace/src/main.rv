@@ -1,0 +1,9 @@
+use std::io;
+
+fn main() {
+    let s = String::from("aaa");
+    let mut out = s.replace("aa", "b");
+    out.push_str(" ");
+    out.push_str(&s.replace("", "-"));
+    io::println(out.as_str());
+}
