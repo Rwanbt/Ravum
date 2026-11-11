@@ -197,3 +197,45 @@
 - **État actuel** : (c) est appliqué et documenté dans
   [`docs/qualification/CONFORMANCE-BUILD-CONTRACT.md`](docs/qualification/CONFORMANCE-BUILD-CONTRACT.md) ;
   le gate `--verify-build` ne prouve l'absence de divergence que sur son périmètre.
+- **Évolution (passe 7)** : l'abaissement général (a) est en cours ; les quatre
+  formes ont été abaissées expérimentalement et `check` ⇒ `build` est vérifié par
+  rustc pour chacune. Le statut de D12 sera mis à jour quand les tests de
+  régression seront dans le corpus (`run/array-move-*`).
+
+## D13 — Provenance de `&'static str` à travers les agrégats — **OUVERTE**
+
+- **Question** : `let s = a[1];` et `fn f(a: [&str; 2]) -> &str { return a[1]; }`
+  passent-ils en Core 1.0 ? Aujourd'hui non : `E-OWN-REF-ESCAPE` (règle visée
+  OWN-6.1), pour toutes les extractions d'un `&str` depuis un agrégat (tableau,
+  `Vec`, champ de struct, payload d'enum, `Option<&str>.unwrap()`, binding de
+  `match`). En revanche `a[1] == "x"` passe, `enum Label { Text(&str) }` et
+  `Label::Text("x")` passent, et une copie de locale littérale
+  (`let t = "x"; return t;`) passe.
+- **Les deux lectures** :
+  - **A — accepter** : TYP-6.3 (MUST) dit qu'un `&str` est `Copy`, stockable et
+    retournable ; OWN-2.1/2.3 (une copie préserve la valeur) ; OWN-6.1/6.2
+    interdisent tout stockage non statique, donc un `&str` présent dans un
+    agrégat est nécessairement statique. Refuser contredirait TYP-6.3.
+  - **B — refuser** : OWN-6.2 nomme l'exception « `&'static str` (littéral de
+    chaîne) » et OWN-6.3 ne nomme que `as_str` ; aucune règle ne définit la
+    provenance à travers un champ, un index ou un pattern. `ownership.md` §1
+    revendique un modèle « conservateur par construction ». Le refus est sûr ;
+    l'acceptation ferait de l'invariant « tout `&str` stocké est statique » une
+    hypothèse portante de la sûreté, qu'une extension future (FFI, lifetimes)
+    peut casser.
+- **Périmètre enum (non tranché séparément)** : OWN-6.2 ne promet l'exception que
+  pour un champ de **struct**, TYP-6.3 dit « champ ». L'implémentation accepte
+  aussi la déclaration et le littéral d'un payload d'enum, mais refuse un payload
+  non statique. Il faut trancher ce périmètre en même temps.
+- **Impact mesuré (passe 7)** : aucune régression actuelle — 0 programme refusé
+  dans les examples (9/9 exit 0) et conformance 0 FAIL. La question porte sur des
+  programmes qu'un utilisateur écrirait naturellement, pas sur du code existant.
+- **Recommandation de l'agent** : **B** pour Core 1.0 (garder le refus
+  conservateur) et reformuler TYP-6.3/OWN-6.2 pour dire que la staticité ne se
+  propage qu'aux littéraux et aux copies de locales, pas à travers les agrégats
+  (limitation documentée, `Q-OWN`). Si l'ergonomie prime, choisir **A** impose de
+  financer la provenance par constructeur (traçage de la staticité par agrégat)
+  plus les tests de l'invariant — c'est un choix de modèle, pas un correctif
+  d'implémentation.
+- **Ce qu'un agent ne peut pas faire** : trancher. Aucun changement n'a été fait.
+
