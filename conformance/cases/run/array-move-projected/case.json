@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-projected",
+  "mode": "run-pass",
+  "stdout_contains": "one\n",
+  "notes": "OWN-5.3/5.4: an array reached through a field (`h.items[1]`) or a tuple element (`t.0[0]`) can be destructured as a place; a partial move of the field/aggregate is allowed when the rest is not reused."
+}

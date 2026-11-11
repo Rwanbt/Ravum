@@ -3180,3 +3180,335 @@ fn main() {
     );
     assert_eq!(status, 0);
 }
+
+// ---------------------------------------------------------------------------
+// 17. P0-A follow-up: the three previously open array-move shapes.
+//     Until this change each of these was check-pass/build-fail with a loud
+//     `E0508`; the tests below fail on the old emitter and pass now.
+// ---------------------------------------------------------------------------
+
+/// OWN-5.4 through a nested array: `a[0][1]` is destructured recursively
+/// (`let [[e00, e01], [e10, e11]] = a;`), and chains of different depths are
+/// consistent (`let [row, [e10, e11]] = a;` for `a[0]` + `a[1][1]`).
+#[test]
+fn audit_nested_array_element_moves_build_and_run() {
+    if skip("audit_nested_array_element_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-nested-array",
+        r#"fn leaf(a: [[String; 2]; 2]) -> String {
+    return a[0][1];
+}
+
+fn pair(a: [[String; 2]; 2]) -> (String, String) {
+    let x = a[0][0];
+    let y = a[1][1];
+    return (x, y);
+}
+
+fn mixed(a: [[String; 2]; 2]) -> (String, [String; 2]) {
+    let row = a[0];
+    let leaf = a[1][1];
+    return (leaf, row);
+}
+
+fn main() {
+    let a = [[String::from("a0"), String::from("a1")], [String::from("b0"), String::from("b1")]];
+    io::println(leaf(a).as_str());
+
+    let b = [[String::from("a0"), String::from("a1")], [String::from("b0"), String::from("b1")]];
+    let t = pair(b);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+
+    let c = [[String::from("a0"), String::from("a1")], [String::from("b0"), String::from("b1")]];
+    let u = mixed(c);
+    io::println(u.0.as_str());
+    io::println(u.1[0].as_str());
+    io::println(u.1[1].as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("[[mut __rv_el_"),
+        "a nested index chain is destructured recursively:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-nested-array");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "a1\na0\nb1\nb1\na0\na1\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// An array place reached through a projection: a struct field (`h.items[i]`) and
+/// a tuple element (`t.0[i]`). Moving the array field partially moves the struct,
+/// which OWN-5.3 allows; sibling fields stay usable.
+#[test]
+fn audit_projected_array_element_moves_build_and_run() {
+    if skip("audit_projected_array_element_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-projected-array",
+        r#"struct Holder {
+    items: [String; 2],
+    label: String,
+}
+
+fn field_move(h: Holder) -> String {
+    return h.items[1];
+}
+
+fn field_pair(h: Holder) -> (String, String) {
+    let x = h.items[0];
+    let y = h.items[1];
+    return (x, y);
+}
+
+fn field_keeps_sibling(h: Holder) -> (String, String) {
+    let first = h.items[0];
+    return (first, h.label);
+}
+
+fn tuple_move(t: ([String; 2], i32)) -> String {
+    return t.0[0];
+}
+
+fn tuple_keeps_sibling(t: ([String; 2], i32)) -> (String, i32) {
+    let x = t.0[1];
+    let n = t.1;
+    return (x, n);
+}
+
+fn main() {
+    let a = Holder { items: [String::from("zero"), String::from("one")], label: String::from("!") };
+    io::println(field_move(a).as_str());
+
+    let b = Holder { items: [String::from("left"), String::from("right")], label: String::from("!") };
+    let pair = field_pair(b);
+    io::println(pair.0.as_str());
+    io::println(pair.1.as_str());
+
+    let c = Holder { items: [String::from("head"), String::from("tail")], label: String::from("!") };
+    let kept = field_keeps_sibling(c);
+    io::println(kept.0.as_str());
+    io::println(kept.1.as_str());
+
+    let t = ([String::from("x"), String::from("y")], 7);
+    io::println(tuple_move(t).as_str());
+
+    let u = ([String::from("x"), String::from("y")], 9);
+    let sibling = tuple_keeps_sibling(u);
+    io::println(sibling.0.as_str());
+    io::println(sibling.1.to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("= h.items;"),
+        "the struct field is destructured as a place:\n{code}"
+    );
+    assert!(
+        code.contains("= t.0;"),
+        "the tuple element is destructured as a place:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-projected-array");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "one\nleft\nright\nhead\n!\nx\ny\n9\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// Bindings are identified by declaration, not by name: a nested `let a` or a
+/// top-level rebinding no longer blocks moving an element of the outer array.
+/// A `for` binding is destructured inside the loop body, once per iteration.
+#[test]
+fn audit_shadowed_array_bindings_move_build_and_run() {
+    if skip("audit_shadowed_array_bindings_move_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-shadowed-array",
+        r#"fn shadowed(a: [String; 2]) -> String {
+    if true {
+        let a = String::from("inner");
+        io::println(a.as_str());
+    }
+    return a[0];
+}
+
+fn rebound() -> String {
+    let a = [String::from("old0"), String::from("old1")];
+    io::println(a[0].as_str());
+    let a = [String::from("new0"), String::from("new1")];
+    return a[1];
+}
+
+fn rows(input: Vec<[String; 2]>) -> usize {
+    let mut total: usize = 0;
+    for row in input {
+        let first = row[0];
+        total = total + first.len();
+    }
+    return total;
+}
+
+fn main() {
+    let a = [String::from("first"), String::from("second")];
+    io::println(shadowed(a).as_str());
+    io::println(rebound().as_str());
+    let mut input: Vec<[String; 2]> = Vec::new();
+    input.push([String::from("aa"), String::from("bb")]);
+    input.push([String::from("ccc"), String::from("dd")]);
+    io::println(rows(input).to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.matches("let [mut __rv_el_").count() >= 3,
+        "each binding of the shadowed name is planned on its own:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-shadowed-array");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "inner\nfirst\nold0\nnew1\n5\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+// ---------------------------------------------------------------------------
+// 18. P0-A follow-up round 3: `match` payload array bindings (F2) and a
+//     by-value `self` method receiver on an array element (F1).
+// ---------------------------------------------------------------------------
+
+/// F2: an array bound by a `match` arm pattern is a place like any other. A
+/// block-bodied arm destructures before its first statement; an expression-bodied
+/// arm uses the inline single-use form. Both were `E0508` before this change.
+#[test]
+fn audit_match_payload_array_moves_build_and_run() {
+    if skip("audit_match_payload_array_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-match-payload",
+        r#"enum E {
+    Items([String; 2]),
+    Empty,
+}
+
+fn block_arm(e: E) -> String {
+    match e {
+        E::Items(a) => { return a[1]; }
+        E::Empty => { return String::from("empty"); }
+    }
+}
+
+fn expression_arm(e: E) -> String {
+    match e {
+        E::Items(a) => a[1],
+        E::Empty => String::from("empty"),
+    }
+}
+
+fn take_from_payload(e: E) -> String {
+    match e {
+        E::Items(a) => { return grab(a[0]); }
+        E::Empty => { return String::from("empty"); }
+    }
+}
+
+fn grab(s: String) -> String {
+    return s;
+}
+
+fn main() {
+    let a = E::Items([String::from("left"), String::from("right")]);
+    io::println(block_arm(a).as_str());
+    let b = E::Items([String::from("left"), String::from("right")]);
+    io::println(expression_arm(b).as_str());
+    let c = E::Items([String::from("left"), String::from("right")]);
+    io::println(take_from_payload(c).as_str());
+    let d = E::Empty;
+    io::println(block_arm(d).as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-match-payload");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "right\nright\nleft\nempty\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// F1: a method that takes `self` by value moves its receiver, so calling it on an
+/// array element is an element move (OWN-5.4). `&self`/`&mut self` receivers stay
+/// reads. Both a constant and a dynamic index are covered.
+#[test]
+fn audit_by_value_self_receiver_on_array_element_build_and_run() {
+    if skip("audit_by_value_self_receiver_on_array_element_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-self-receiver",
+        r#"struct H {
+    s: String,
+}
+
+impl H {
+    fn take(self) -> String {
+        return self.s;
+    }
+
+    fn peek(&self) -> usize {
+        return self.s.len();
+    }
+}
+
+fn constant(a: [H; 2]) -> String {
+    return a[0].take();
+}
+
+fn dynamic(a: [H; 2], i: usize) -> String {
+    return a[i].take();
+}
+
+fn twice(a: [H; 2]) -> (String, String) {
+    let x = a[0].take();
+    let y = a[1].take();
+    return (x, y);
+}
+
+fn borrowed(a: [H; 2]) -> usize {
+    return a[0].peek();
+}
+
+fn main() {
+    let a = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    io::println(constant(a).as_str());
+    let b = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    io::println(dynamic(b, 1).as_str());
+    let c = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    let t = twice(c);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+    let d = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    io::println(borrowed(d).to_string().as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-self-receiver");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "zero\none\nzero\none\n4\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
