@@ -3,7 +3,7 @@
 //!
 //! Commands:
 //!   run  [--cases DIR] [--filter SUBSTR] [--json OUT] [--toolchain PATH]
-//!        [--timeout-ms N] [--keep-temp]
+//!        [--timeout-ms N] [--keep-temp] [--verify-build]
 //!   list [--cases DIR] [--filter SUBSTR]
 //!   --version | --help
 //!
@@ -45,6 +45,7 @@ struct Options {
     toolchain: Option<String>,
     timeout_ms: u64,
     keep_temp: bool,
+    verify_build: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +101,16 @@ fn print_help() {
     println!("                     <repo>/target/debug/ravum-lang[.exe])");
     println!("  --timeout-ms N     Per-case timeout, 1..={MAX_TIMEOUT_MS} (default {DEFAULT_TIMEOUT_MS})");
     println!("  --keep-temp        Keep the isolated temporary copies for inspection");
+    println!("  --verify-build     After every passing check, run `build` on the same");
+    println!("                     isolated copy and require exit 0 (check ⇒ build");
+    println!("                     contract). A build failure is a FAIL; a missing");
+    println!("                     rustc/timeout is NOT_RUN, never a PASS.");
+    println!();
+    println!("BUILD DIMENSION:");
+    println!("  Without --verify-build a report carries build_verified=false and must");
+    println!("  not be cited as evidence of build correctness. With the flag, the");
+    println!("  report records a per-case build status and a build_verified verdict");
+    println!("  for the cases it covers (accepted-mode corpus + fmt-idempotent).");
     println!();
     println!("LIST OPTIONS:");
     println!("  --cases DIR, --filter SUBSTR");
@@ -116,6 +127,7 @@ fn parse_options(command: Command, args: &[String]) -> Result<Option<Options>, S
         toolchain: None,
         timeout_ms: DEFAULT_TIMEOUT_MS,
         keep_temp: false,
+        verify_build: false,
     };
     let mut index = 0;
     while index < args.len() {
@@ -182,6 +194,15 @@ fn parse_options(command: Command, args: &[String]) -> Result<Option<Options>, S
                     return Err("--keep-temp does not take a value".to_string());
                 }
                 options.keep_temp = true;
+            }
+            "--verify-build" => {
+                if command != Command::Run {
+                    return Err("--verify-build is only valid for `run`".to_string());
+                }
+                if inline_value.is_some() {
+                    return Err("--verify-build does not take a value".to_string());
+                }
+                options.verify_build = true;
             }
             other => return Err(format!("unknown option `{other}`")),
         }
@@ -254,7 +275,9 @@ fn execute_run(options: Options) -> Result<u8, String> {
             temp_base.display()
         )
     })?;
-    let sanitizer = Sanitizer::new(&repo, &temp_base, Some(&temp_base.join("cases")));
+    // The per-case copies live directly under the temp base as `0000`, `0001`,
+    // ... (the I/O captures use `io/NNNN`); a short path matters on Windows.
+    let sanitizer = Sanitizer::new(&repo, &temp_base, None);
     let root_display = sanitizer.apply(&root.display().to_string());
 
     let (toolchain, toolchain_error) =
@@ -280,6 +303,7 @@ fn execute_run(options: Options) -> Result<u8, String> {
         toolchain.as_ref(),
         &toolchain_error,
         options.filter.as_deref(),
+        options.verify_build,
     );
 
     let started_at = format_utc(SystemTime::now());
@@ -289,6 +313,7 @@ fn execute_run(options: Options) -> Result<u8, String> {
         timeout_ms: options.timeout_ms,
         work_dir: temp_base.clone(),
         sanitizer: &sanitizer,
+        verify_build: options.verify_build,
     };
 
     let width = entries
@@ -306,10 +331,17 @@ fn execute_run(options: Options) -> Result<u8, String> {
 
     report::print_failures(&results);
     let summary = report::summarize(&results);
-    report::print_summary(summary);
+    let build_summary = report::summarize_build(&results, options.verify_build);
+    report::print_summary(summary, build_summary);
 
     if let Some(path) = &options.json {
-        let report = report::build_report(context.toolchain.as_ref(), &started_at, &results);
+        let report = report::build_report(
+            context.toolchain.as_ref(),
+            &started_at,
+            &results,
+            options.verify_build,
+            options.filter.as_deref(),
+        );
         report::write_report(Path::new(path), &report)?;
         println!("report written: {path}");
     }
@@ -340,7 +372,15 @@ fn temp_base() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
-    std::env::temp_dir().join(format!("ravum-conformance-{}-{nanos}", std::process::id()))
+    // Deliberately short. Windows' MSVC `link.exe` still fails with
+    // `LNK1181: cannot open input file '.obj'` when a generated object path
+    // crosses MAX_PATH, and codegen may use deep content-addressed build
+    // directories. The per-case copy adds only a 4-digit component.
+    std::env::temp_dir().join(format!(
+        "rvcf{:x}-{:06x}",
+        std::process::id(),
+        (nanos & 0xff_ffff) as u32
+    ))
 }
 
 #[cfg(test)]
@@ -370,6 +410,7 @@ mod tests {
                     "--timeout-ms",
                     "500",
                     "--keep-temp",
+                    "--verify-build",
                 ],
             )
             .unwrap(),
@@ -379,6 +420,16 @@ mod tests {
         assert_eq!(options.json.as_deref(), Some("out.json"));
         assert_eq!(options.timeout_ms, 500);
         assert!(options.keep_temp);
+        assert!(options.verify_build);
+    }
+
+    #[test]
+    fn verify_build_is_run_only_and_takes_no_value() {
+        assert!(options_for(Command::List, &["--verify-build"]).is_err());
+        assert!(options_for(Command::Run, &["--verify-build=true"]).is_err());
+        // Absent by default: a report without the flag cannot claim builds.
+        let options = unwrap_options(options_for(Command::Run, &[]).unwrap());
+        assert!(!options.verify_build);
     }
 
     #[test]

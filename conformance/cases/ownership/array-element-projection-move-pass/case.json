@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-element-projection-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / TYP-5.4: moving a tuple field out of an array element (`a[1].0`) is legal when the aggregate is never reused; codegen previously emitted an invalid `a[1].0` move (rustc E0508)."
+}

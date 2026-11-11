@@ -1,0 +1,6 @@
+fn f(a: [(String, i32); 2]) -> String {
+    return a[1].0;
+}
+
+fn main() {
+}

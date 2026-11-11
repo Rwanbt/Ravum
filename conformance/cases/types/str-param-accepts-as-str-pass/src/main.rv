@@ -1,0 +1,8 @@
+fn g(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let t = " a ".trim();
+    let n = g(t.as_str());
+}

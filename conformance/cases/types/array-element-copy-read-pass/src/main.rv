@@ -1,0 +1,7 @@
+fn f(a: [i32; 2]) -> i32 {
+    let x = a[0];
+    return a[1] + x;
+}
+
+fn main() {
+}

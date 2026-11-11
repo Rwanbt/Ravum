@@ -1,0 +1,5 @@
+{
+  "id": "ownership/unwrap-move-ok",
+  "mode": "compile-pass",
+  "notes": "STD-11.2 / OWN-5.1: unwrap consumes the receiver and yields the owned value; moving that value out is legal. Control for ownership/move-after-unwrap."
+}

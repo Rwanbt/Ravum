@@ -1,0 +1,5 @@
+{
+  "id": "types/array-element-copy-projection-pass",
+  "mode": "compile-pass",
+  "notes": "TYP-5.4 / TYP-12.3: projecting a Copy field out of an array element (`a[0].1`) must not be mistaken for a move; control for array-element-projection-move-pass."
+}

@@ -106,6 +106,8 @@ fn version_and_help_work() {
     let text = stdout(&output);
     assert!(text.contains("USAGE:"));
     assert!(text.contains("--toolchain"));
+    assert!(text.contains("--verify-build"));
+    assert!(text.contains("build_verified"));
 
     let output = run_in(&dir, &["bogus-command"]);
     assert_eq!(output.status.code(), Some(2));
@@ -159,11 +161,88 @@ fn missing_toolchain_is_not_run_and_report_has_no_user_paths() {
     assert!(report.contains("\"schema_version\": 1"));
     assert!(report.contains("\"not_run\": 1"));
     assert!(report.contains("\"status\": \"not_run\""));
+    // A report produced without the flag must never claim build correctness.
+    assert!(report.contains("\"verify_build\": false"));
+    assert!(report.contains("\"build_verified\": false"));
+    assert!(report.contains("\"build\": \"not_requested\""));
     let repo = repo_root().to_string_lossy().into_owned();
     assert!(
         !report.contains(&repo),
         "report contains an absolute repo path:\n{report}"
     );
+}
+
+#[test]
+fn verify_build_reports_not_run_and_never_claims_build_verified() {
+    let dir = scratch("verify-build-no-toolchain");
+    let json_path = dir.join("report.json");
+    let output = run_in(
+        &dir,
+        &[
+            "run",
+            "--cases",
+            repo_root().join("conformance/cases").to_str().unwrap(),
+            "--filter",
+            "cli/version-flag",
+            "--toolchain",
+            "definitely-not-a-toolchain",
+            "--verify-build",
+            "--json",
+            json_path.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(3), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("NOT_RUN"));
+    assert!(text.contains("build_verified: false"), "{text}");
+    let report = fs::read_to_string(&json_path).expect("report written");
+    assert!(report.contains("\"verify_build\": true"));
+    assert!(report.contains("\"build_verified\": false"));
+    assert!(report.contains("\"build\": \"not_attempted\""));
+    assert!(report.contains("\"build_summary\""));
+}
+
+#[test]
+fn verify_build_with_a_check_failure_records_not_attempted() {
+    let dir = scratch("verify-build-check-fails");
+    let cases = dir.join("cases");
+    // The harness used as a stand-in toolchain exits 2 for `check`, so the
+    // check fails before any build could be attempted.
+    write_case(
+        &cases,
+        "lexer",
+        "check-not-implemented",
+        r#"{
+  "id": "lexer/check-not-implemented",
+  "mode": "compile-pass"
+}"#,
+        &package_files(),
+    );
+    let json_path = dir.join("report.json");
+    let output = run_in(
+        &dir,
+        &[
+            "run",
+            "--cases",
+            cases.to_str().unwrap(),
+            "--toolchain",
+            harness(),
+            "--verify-build",
+            "--json",
+            json_path.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("FAIL"));
+    assert!(text.contains("build=not_attempted"), "{text}");
+    assert!(text.contains("build_verified: false"), "{text}");
+    let report = fs::read_to_string(&json_path).expect("report written");
+    assert!(report.contains("\"verify_build\": true"));
+    assert!(report.contains("\"build_verified\": false"));
+    assert!(report.contains("\"build\": \"not_attempted\""));
+    assert!(report.contains("\"failed\": 0"));
+    assert!(report.contains("\"not_measured\": 1"));
 }
 
 #[test]

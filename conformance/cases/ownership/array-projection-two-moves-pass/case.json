@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-projection-two-moves-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4: moving a tuple field out of two different array elements (`a[0].0`, `a[1].0`) is legal per-component when the aggregate is never reused; previously check-pass/build-fail."
+}

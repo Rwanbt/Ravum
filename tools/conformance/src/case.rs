@@ -67,6 +67,21 @@ impl Mode {
         }
     }
 
+    /// True when a *passing* case of this mode exercised a buildable program.
+    ///
+    /// This is the perimeter of the `check ⇒ build` contract: `compile-pass`
+    /// and `fmt-idempotent` gain an explicit `ravum-lang build`, while
+    /// `run-pass`/`run-fail` already compile and execute the program. A
+    /// `compile-fail` program is invalid by construction (it must not build)
+    /// and a `cli` case drives arbitrary commands, so neither is a build
+    /// witness.
+    pub fn builds_program(&self) -> bool {
+        match self {
+            Mode::CompilePass | Mode::RunPass | Mode::RunFail | Mode::FmtIdempotent => true,
+            Mode::CompileFail | Mode::Cli => false,
+        }
+    }
+
     /// Modelled exit code when `case.json` does not override it explicitly.
     pub fn default_exit_code(&self) -> Option<i32> {
         match self {
@@ -792,6 +807,24 @@ mod tests {
     fn parse(text: &str) -> Result<CaseSpec, String> {
         let json = Json::parse(text).unwrap();
         parse_spec(json.as_object().unwrap())
+    }
+
+    #[test]
+    fn build_perimeter_covers_every_building_mode() {
+        // The `check ⇒ build` contract applies to the modes that produce a
+        // buildable program; `compile-fail` and `cli` are check-only by
+        // construction and must never be counted as build witnesses.
+        for mode in [
+            Mode::CompilePass,
+            Mode::RunPass,
+            Mode::RunFail,
+            Mode::FmtIdempotent,
+        ] {
+            assert!(mode.builds_program(), "{}", mode.as_str());
+        }
+        for mode in [Mode::CompileFail, Mode::Cli] {
+            assert!(!mode.builds_program(), "{}", mode.as_str());
+        }
     }
 
     #[test]

@@ -14,4 +14,8 @@ fn f() -> &str {
 fn main() {
     let l = "littéral";
     let s = S { text: l };
+    let n = s.text.len();
+    let eq = s.text == "littéral";
+    let m = lit().len();
+    let p = f().len();
 }

@@ -1,0 +1,338 @@
+// file-store — magasin clé/valeur versionné, adossé à des fichiers, en Ravum Core 1.0.
+//
+// Ce n'est PAS une base de données : aucun SQL, aucune requête, aucun index.
+// C'est un répertoire contenant un fichier d'index et un fichier par version.
+//
+// Disposition d'un répertoire de magasin :
+//   <dir>/index        une ligne par clé : "<clé>|<version courante>"
+//   <dir>/<clé>.v<N>   la N-ième valeur écrite pour <clé> (v1, v2, ...)
+//
+// Limites assumées (aucune n'est un oubli : ce sont les capacités de Core 1.0) :
+//   * le répertoire du magasin doit déjà exister — Core 1.0 n'a pas de
+//     `create_dir` (seuls `read_to_string`, `write_string`, `exists` existent) ;
+//   * `delete` pose une pierre tombale dans l'index : les fichiers de version ne
+//     sont PAS effacés, Core 1.0 n'a pas de `remove_file` ;
+//   * un seul écrivain, aucun verrou, aucune concurrence (CONC-1.1 : mono-thread) ;
+//   * écriture via `fs::write_string` : non atomique, non durable (stdlib.md §15) ;
+//   * une valeur = une ligne (stdin), sans saut de ligne final.
+//
+// Effets utilisés : fs, io, alloc, panic (indirect). Aucune capacité nouvelle.
+use std::env;
+use std::fs;
+use std::io;
+
+fn usage() {
+    io::println("usage: file-store <dir> <commande> [clé]");
+    io::println("  put <clé>      enregistre stdin (une ligne) comme version suivante");
+    io::println("  get <clé>      affiche la valeur courante de <clé>");
+    io::println("  list           liste les clés et leur version courante");
+    io::println("  history <clé>  liste les fichiers de version de <clé>");
+    io::println("  delete <clé>   pierre tombale (les fichiers de version restent)");
+    io::println("<dir> doit exister : Core 1.0 n'a pas de create_dir.");
+}
+
+fn index_path(dir: &str) -> String {
+    let mut path = String::from(dir);
+    path.push_str("/index");
+    path
+}
+
+fn version_path(dir: &str, key: &str, version: i64) -> String {
+    let mut path = String::from(dir);
+    path.push('/');
+    path.push_str(key);
+    path.push_str(".v");
+    let text = version.to_string();
+    path.push_str(text.as_str());
+    path
+}
+
+// Une clé devient un nom de fichier : on refuse tout ce qui pourrait sortir du
+// répertoire ou casser le format de l'index. Liste blanche par rejet.
+fn valid_key(key: &str) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+    if key.len() > 64 {
+        return false;
+    }
+    if key.starts_with(".") {
+        return false;
+    }
+    if key.contains("/") {
+        return false;
+    }
+    if key.contains("\\") {
+        return false;
+    }
+    if key.contains("|") {
+        return false;
+    }
+    if key.contains(" ") {
+        return false;
+    }
+    true
+}
+
+fn key_error() -> Result<(), Error> {
+    Err(Error::new("invalid key: 1-64 chars, no '/', '\\\\', '|', ' ', no leading '.'",))
+}
+
+fn missing_key() -> Result<(), Error> {
+    Err(Error::new("missing <key>"))
+}
+
+fn no_such_key(key: &str) -> Result<(), Error> {
+    let mut message = String::from("no such key: ");
+    message.push_str(key);
+    Err(Error::new(message.as_str()))
+}
+
+// Champ d'un enregistrement "a|b" : 0 -> "a", 1 -> "b".
+fn field(record: &str, position: usize) -> String {
+    let split = record.replace("|", "\n");
+    let parts = split.lines();
+    if position >= parts.len() {
+        return String::new();
+    }
+    parts[position].clone()
+}
+
+fn load_index(dir: &str) -> Result<Vec<String>, Error> {
+    let path = index_path(dir);
+    if !fs::exists(path.as_str()) {
+        let empty: Vec<String> = Vec::new();
+        return Ok(empty);
+    }
+    let text = fs::read_to_string(path.as_str())?;
+    let mut lines: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            lines.push(trimmed);
+        }
+    }
+    Ok(lines)
+}
+
+fn save_index(dir: &str, lines: &[String]) -> Result<(), Error> {
+    let mut text = String::new();
+    let mut i: usize = 0;
+    while i < lines.len() {
+        text.push_str(lines[i].as_str());
+        text.push('\n');
+        i += 1;
+    }
+    let path = index_path(dir);
+    fs::write_string(path.as_str(), text.as_str())?;
+    Ok(())
+}
+
+fn current_version(lines: &[String], key: &str) -> Option<i64> {
+    let mut prefix = String::from(key);
+    prefix.push('|');
+    let mut i: usize = 0;
+    while i < lines.len() {
+        let line = lines[i].clone();
+        if line.as_str().starts_with(prefix.as_str()) {
+            let digits = line.as_str().replace(prefix.as_str(), "");
+            match digits.parse_i64() {
+                Ok(value) => {
+                    return Some(value);
+                }
+                Err(_) => {
+                    return None;
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+// Index sans l'enregistrement de `key` (pierre tombale).
+fn without_key(lines: &[String], key: &str) -> Vec<String> {
+    let mut prefix = String::from(key);
+    prefix.push('|');
+    let mut kept: Vec<String> = Vec::new();
+    let mut i: usize = 0;
+    while i < lines.len() {
+        if !lines[i].as_str().starts_with(prefix.as_str()) {
+            kept.push(lines[i].clone());
+        }
+        i += 1;
+    }
+    kept
+}
+
+fn cmd_put(dir: &str, key: &str) -> Result<(), Error> {
+    if key.is_empty() {
+        return missing_key();
+    }
+    if !valid_key(key) {
+        return key_error();
+    }
+    let value = io::read_line()?;
+    let lines = load_index(dir)?;
+    let next = match current_version(lines.as_slice(), key) {
+        Some(current) => current + 1,
+        None => 1,
+    };
+    let data = version_path(dir, key, next);
+    fs::write_string(data.as_str(), value.as_str())?;
+
+    let mut kept = without_key(lines.as_slice(), key);
+    let mut record = String::from(key);
+    record.push('|');
+    let text = next.to_string();
+    record.push_str(text.as_str());
+    kept.push(record);
+    save_index(dir, kept.as_slice())?;
+
+    let mut out = String::from("stored ");
+    out.push_str(key);
+    out.push_str(" v");
+    let vtext = next.to_string();
+    out.push_str(vtext.as_str());
+    out.push_str(" (");
+    out.push_str(data.as_str());
+    out.push(')');
+    io::println(out.as_str());
+    Ok(())
+}
+
+fn cmd_get(dir: &str, key: &str) -> Result<(), Error> {
+    if key.is_empty() {
+        return missing_key();
+    }
+    if !valid_key(key) {
+        return key_error();
+    }
+    let lines = load_index(dir)?;
+    match current_version(lines.as_slice(), key) {
+        Some(version) => {
+            let data = version_path(dir, key, version);
+            let value = fs::read_to_string(data.as_str())?;
+            io::println(value.as_str());
+            Ok(())
+        }
+        None => no_such_key(key),
+    }
+}
+
+fn cmd_list(dir: &str) -> Result<(), Error> {
+    let lines = load_index(dir)?;
+    if lines.is_empty() {
+        io::println("(empty store)");
+        return Ok(());
+    }
+    let mut i: usize = 0;
+    while i < lines.len() {
+        let record = lines[i].clone();
+        let name = field(record.as_str(), 0);
+        let version = field(record.as_str(), 1);
+        let mut out = String::from("  ");
+        out.push_str(name.as_str());
+        out.push_str("  v");
+        out.push_str(version.as_str());
+        io::println(out.as_str());
+        i += 1;
+    }
+    Ok(())
+}
+
+// La boucle vit dans sa propre fonction : en Core 1.0, une boucle est une
+// *instruction* et ne peut pas être la valeur d'un bras de `match`.
+fn print_versions(dir: &str, key: &str, current: i64) -> Result<(), Error> {
+    let mut version: i64 = 1;
+    while version <= current {
+        let data = version_path(dir, key, version);
+        let mut out = String::from("  v");
+        let text = version.to_string();
+        out.push_str(text.as_str());
+        out.push_str("  ");
+        out.push_str(data.as_str());
+        if fs::exists(data.as_str()) {
+            out.push_str("  present");
+        } else {
+            out.push_str("  MISSING");
+        }
+        io::println(out.as_str());
+        version += 1;
+    }
+    Ok(())
+}
+
+fn cmd_history(dir: &str, key: &str) -> Result<(), Error> {
+    if key.is_empty() {
+        return missing_key();
+    }
+    if !valid_key(key) {
+        return key_error();
+    }
+    let lines = load_index(dir)?;
+    match current_version(lines.as_slice(), key) {
+        Some(current) => print_versions(dir, key, current),
+        None => no_such_key(key),
+    }
+}
+
+fn cmd_delete(dir: &str, key: &str) -> Result<(), Error> {
+    if key.is_empty() {
+        return missing_key();
+    }
+    if !valid_key(key) {
+        return key_error();
+    }
+    let lines = load_index(dir)?;
+    if current_version(lines.as_slice(), key).is_none() {
+        return no_such_key(key);
+    }
+    let kept = without_key(lines.as_slice(), key);
+    save_index(dir, kept.as_slice())?;
+    io::println("deleted (tombstone: version files are retained)");
+    Ok(())
+}
+
+fn cmd_help() -> Result<(), Error> {
+    usage();
+    Ok(())
+}
+
+fn cmd_unknown(command: &str) -> Result<(), Error> {
+    usage();
+    let mut message = String::from("unknown command: ");
+    message.push_str(command);
+    Err(Error::new(message.as_str()))
+}
+
+fn main() -> Result<(), Error> {
+    let args = env::args();
+    if args.len() < 3 {
+        usage();
+        return Ok(());
+    }
+    let dir = args[1].clone();
+    let command = args[2].clone();
+    let mut key = String::new();
+    if args.len() >= 4 {
+        key = args[3].clone();
+    }
+
+    if !fs::exists(dir.as_str()) {
+        let mut message = String::from("store directory does not exist: ");
+        message.push_str(dir.as_str());
+        message.push_str(" (create it first: Core 1.0 has no create_dir)");
+        return Err(Error::new(message.as_str()));
+    }
+
+    match command.as_str() {
+        "put" => cmd_put(dir.as_str(), key.as_str()),
+        "get" => cmd_get(dir.as_str(), key.as_str()),
+        "list" => cmd_list(dir.as_str()),
+        "history" => cmd_history(dir.as_str(), key.as_str()),
+        "delete" => cmd_delete(dir.as_str(), key.as_str()),
+        "help" => cmd_help(),
+        _ => cmd_unknown(command.as_str()),
+    }
+}

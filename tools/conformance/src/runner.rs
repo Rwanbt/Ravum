@@ -18,6 +18,10 @@ const CAPTURE_CAP: u64 = 256 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
 /// Timeout used when probing `ravum-lang --version`.
 const VERSION_PROBE_TIMEOUT_MS: u64 = 2_000;
+/// Exit code of `ravum-lang` when an external tool is missing (`EXIT_TOOL` in
+/// `crates/ravum-lang-cli/src/util.rs`). `build` returns it when `rustc` is not
+/// installed: that is an environment failure, not a compiler diagnostic.
+const TOOL_MISSING_EXIT_CODE: i32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -47,6 +51,51 @@ impl Status {
     }
 }
 
+/// Status of the `check ⇒ build` dimension for one case.
+///
+/// A report produced without `--verify-build` must never be citable as evidence
+/// of build correctness: every case then carries [`BuildStatus::NotRequested`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildStatus {
+    /// `--verify-build` was not requested: build correctness is not claimed.
+    NotRequested,
+    /// The mode never builds by construction (`compile-fail`, `cli`).
+    NotApplicable,
+    /// The case did not reach a passing verification step (failed check, skip,
+    /// missing toolchain, invalid case): the build dimension is NOT measured.
+    NotAttempted,
+    /// An explicit `ravum-lang build` ran after a passing check and exited 0.
+    Verified,
+    /// The mode compiled and executed the program (`run-pass`/`run-fail`), and
+    /// the expected run outcome was observed: the build necessarily succeeded.
+    Implicit,
+    /// The check passed but the build failed: a `check ⇒ build` divergence.
+    Failed,
+    /// The build could not be evaluated in this environment (missing `rustc`,
+    /// spawn failure, timeout). Never a PASS.
+    Environment,
+}
+
+impl BuildStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BuildStatus::NotRequested => "not_requested",
+            BuildStatus::NotApplicable => "not_applicable",
+            BuildStatus::NotAttempted => "not_attempted",
+            BuildStatus::Verified => "verified",
+            BuildStatus::Implicit => "implicit",
+            BuildStatus::Failed => "failed",
+            BuildStatus::Environment => "environment",
+        }
+    }
+
+    /// True when this status is positive evidence that the program builds.
+    #[cfg(test)]
+    pub fn is_build_evidence(&self) -> bool {
+        matches!(self, BuildStatus::Verified | BuildStatus::Implicit)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CaseResult {
     pub id: String,
@@ -57,6 +106,11 @@ pub struct CaseResult {
     pub expected: String,
     pub actual: String,
     pub detail: String,
+    /// Status of the build dimension (see [`BuildStatus`]).
+    pub build: BuildStatus,
+    /// Evidence for the build dimension: both check and build outputs on a
+    /// divergence, or the environment reason when it could not be measured.
+    pub build_detail: String,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +126,8 @@ pub struct RunContext<'a> {
     pub timeout_ms: u64,
     pub work_dir: PathBuf,
     pub sanitizer: &'a Sanitizer,
+    /// When true, a passing check is followed by an explicit `build`.
+    pub verify_build: bool,
 }
 
 pub fn locate_toolchain(explicit: Option<&str>, repo: &Path) -> Result<PathBuf, String> {
@@ -171,9 +227,22 @@ impl Verdict {
     }
 }
 
+/// Build dimension for a case that was not measured, with the reason. When the
+/// flag is absent the report must stay silent about build correctness.
+fn not_measured(verify_build: bool, reason: impl Into<String>) -> (BuildStatus, String) {
+    if verify_build {
+        (BuildStatus::NotAttempted, reason.into())
+    } else {
+        (BuildStatus::NotRequested, String::new())
+    }
+}
+
 pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseResult {
     let started = Instant::now();
-    let finish = |verdict: Verdict, started: Instant| CaseResult {
+    let finish = |verdict: Verdict,
+                  build: BuildStatus,
+                  build_detail: String,
+                  started: Instant| CaseResult {
         id: entry.id.clone(),
         taxonomy: entry.taxonomy.clone(),
         mode: entry.mode(),
@@ -182,19 +251,27 @@ pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseRe
         expected: context.sanitizer.apply(&verdict.expected),
         actual: context.sanitizer.apply(&verdict.actual),
         detail: context.sanitizer.apply(&verdict.detail),
+        build,
+        build_detail: context.sanitizer.apply(&build_detail),
     };
 
     let spec = match &entry.spec {
         Ok(spec) => spec,
         Err(message) => {
+            let (build, build_detail) = not_measured(
+                context.verify_build,
+                "the case specification is invalid: build not measured",
+            );
             return finish(
                 Verdict::fail(
                     "a valid case.json",
                     "invalid case specification",
                     format!("{message}\ncase directory: {}", entry.rel_dir),
                 ),
+                build,
+                build_detail,
                 started,
-            )
+            );
         }
     };
 
@@ -208,10 +285,18 @@ pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseRe
                 spec.notes
             )
         };
-        return finish(Verdict::skip(reason), started);
+        let (build, build_detail) = not_measured(
+            context.verify_build,
+            format!("the case is skipped on `{}`: build not measured", host_os()),
+        );
+        return finish(Verdict::skip(reason), build, build_detail, started);
     }
 
     let Some(toolchain) = context.toolchain.as_ref() else {
+        let (build, build_detail) = not_measured(
+            context.verify_build,
+            "no executable toolchain: the build dimension was NOT measured",
+        );
         return finish(
             Verdict {
                 status: Status::NotRun,
@@ -219,23 +304,30 @@ pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseRe
                 actual: "toolchain unavailable".to_string(),
                 detail: context.toolchain_error.clone(),
             },
+            build,
+            build_detail,
             started,
         );
     };
 
     // 1. Isolated copy of the case (the toolchain may write or format files).
-    let copy_root =
-        context
-            .work_dir
-            .join("cases")
-            .join(format!("{:03}-{}", index, slug(&entry.id)));
+    // The directory name is deliberately short: it only needs to be unique per
+    // run, and a long case id would push the generated object paths towards
+    // Windows' MAX_PATH, where MSVC `link.exe` fails with an opaque LNK1181.
+    let copy_root = context.work_dir.join(format!("{:04}", index));
     if let Err(error) = copy_tree(&entry.dir, &copy_root) {
+        let (build, build_detail) = not_measured(
+            context.verify_build,
+            "the isolated copy could not be prepared: build not measured",
+        );
         return finish(
             Verdict::fail(
                 "an isolated copy of the case",
                 "could not prepare the isolated copy",
                 error,
             ),
+            build,
+            build_detail,
             started,
         );
     }
@@ -250,20 +342,36 @@ pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseRe
     // 2. Declarative fixtures (e.g. symlinks that git cannot always store).
     if let Err(failure) = apply_fixtures(&copy_root, &spec.fixtures) {
         return match failure {
-            FixtureFailure::Environment(message) => finish(
-                Verdict::skip(format!(
-                    "cannot create a case fixture in this environment: {message}"
-                )),
-                started,
-            ),
-            FixtureFailure::CaseDefinition(message) => finish(
-                Verdict::fail(
-                    "valid case fixtures",
-                    "case fixtures could not be materialized",
-                    message,
-                ),
-                started,
-            ),
+            FixtureFailure::Environment(message) => {
+                let (build, build_detail) = not_measured(
+                    context.verify_build,
+                    "a case fixture could not be created in this environment: build not measured",
+                );
+                finish(
+                    Verdict::skip(format!(
+                        "cannot create a case fixture in this environment: {message}"
+                    )),
+                    build,
+                    build_detail,
+                    started,
+                )
+            }
+            FixtureFailure::CaseDefinition(message) => {
+                let (build, build_detail) = not_measured(
+                    context.verify_build,
+                    "the case fixtures are invalid: build not measured",
+                );
+                finish(
+                    Verdict::fail(
+                        "valid case fixtures",
+                        "case fixtures could not be materialized",
+                        message,
+                    ),
+                    build,
+                    build_detail,
+                    started,
+                )
+            }
         };
     }
 
@@ -271,60 +379,107 @@ pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseRe
     let destination = match fs::canonicalize(&copy_root) {
         Ok(path) => path,
         Err(error) => {
+            let (build, build_detail) = not_measured(
+                context.verify_build,
+                "the isolated copy could not be canonicalized: build not measured",
+            );
             return finish(
                 Verdict::fail(
                     "an isolated copy of the case",
                     "could not canonicalize the isolated copy",
                     error.to_string(),
                 ),
+                build,
+                build_detail,
                 started,
-            )
+            );
         }
     };
     let project = match fs::canonicalize(copy_root.join(&spec.project)) {
         Ok(path) => path,
         Err(error) => {
+            let (build, build_detail) = not_measured(
+                context.verify_build,
+                "the case has no valid project root: build not measured",
+            );
             return finish(
                 Verdict::fail(
                     format!("project `{}` inside the case", spec.project),
                     "project path does not exist",
                     error.to_string(),
                 ),
+                build,
+                build_detail,
                 started,
-            )
+            );
         }
     };
     if !project.starts_with(&destination) {
+        let (build, build_detail) = not_measured(
+            context.verify_build,
+            "the case project escapes the isolated copy: build not measured",
+        );
         return finish(
             Verdict::fail(
                 "the project stays inside the isolated copy",
                 "project path escapes the isolated copy",
                 format!("project `{}`", spec.project),
             ),
+            build,
+            build_detail,
             started,
         );
     }
 
-    let verdict = evaluate(spec, &environment, &copy_root, &project, &entry.rel_dir);
-    finish(verdict, started)
+    let evaluation = evaluate(
+        spec,
+        &environment,
+        &copy_root,
+        &project,
+        &entry.rel_dir,
+        context.verify_build,
+    );
+    finish(
+        evaluation.verdict,
+        evaluation.build,
+        evaluation.build_detail,
+        started,
+    )
 }
 
-fn slug(id: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-    for ch in id.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            last_dash = false;
-        } else if !last_dash {
-            out.push('-');
-            last_dash = true;
-        }
-        if out.len() >= 60 {
-            break;
+/// Outcome of one case: the mode verdict plus the `check ⇒ build` dimension.
+struct Evaluation {
+    verdict: Verdict,
+    build: BuildStatus,
+    build_detail: String,
+}
+
+impl Evaluation {
+    fn new(verdict: Verdict, build: BuildStatus, build_detail: impl Into<String>) -> Evaluation {
+        Evaluation {
+            verdict,
+            build,
+            build_detail: build_detail.into(),
         }
     }
-    out.trim_matches('-').to_string()
+
+    /// A mode that never builds by construction (`compile-fail`, `cli`).
+    fn not_applicable(verdict: Verdict, verify_build: bool, reason: &str) -> Evaluation {
+        if verify_build {
+            Evaluation::new(verdict, BuildStatus::NotApplicable, reason)
+        } else {
+            Evaluation::new(verdict, BuildStatus::NotRequested, "")
+        }
+    }
+
+    /// A case whose own verification did not reach a passing state.
+    fn not_attempted(verdict: Verdict, verify_build: bool, reason: &str) -> Evaluation {
+        if verify_build {
+            Evaluation::new(verdict, BuildStatus::NotAttempted, reason)
+        } else {
+            Evaluation::new(verdict, BuildStatus::NotRequested, "")
+        }
+    }
 }
 
 fn evaluate(
@@ -333,20 +488,30 @@ fn evaluate(
     copy_root: &Path,
     project: &Path,
     rel_dir: &str,
-) -> Verdict {
+    verify_build: bool,
+) -> Evaluation {
     let project_arg = spec.project.clone();
     match spec.mode {
         Mode::CompilePass => {
             let mut args = vec!["check".to_string(), project_arg.clone()];
             args.extend(spec.args.iter().cloned());
             let outcome = env.exec(&args, copy_root, "");
-            evaluate_compile_pass(spec, &outcome, rel_dir)
+            let verdict = evaluate_compile_pass(spec, &outcome, rel_dir);
+            verify_build_after_check(env, copy_root, &project_arg, &outcome, verdict, verify_build)
         }
         Mode::CompileFail => {
             let mut args = vec!["check".to_string(), "--json".to_string(), project_arg];
             args.extend(spec.args.iter().cloned());
             let outcome = env.exec(&args, copy_root, "");
-            evaluate_compile_fail(spec, &outcome)
+            let verdict = evaluate_compile_fail(spec, &outcome);
+            // A compile-fail program is invalid by construction: a successful
+            // build would contradict the case, so build success is not the
+            // contract dimension for this mode.
+            Evaluation::not_applicable(
+                verdict,
+                verify_build,
+                "compile-fail programs are check-only by construction: build success is not the contract for this mode",
+            )
         }
         Mode::RunPass | Mode::RunFail => {
             let mut args = vec!["run".to_string(), project_arg];
@@ -355,9 +520,44 @@ fn evaluate(
                 args.extend(spec.args.iter().cloned());
             }
             let outcome = env.exec(&args, copy_root, &spec.stdin);
-            evaluate_run(spec, &outcome, project)
+            let verdict = evaluate_run(spec, &outcome, project);
+            if !verify_build {
+                return Evaluation::new(verdict, BuildStatus::NotRequested, "");
+            }
+            if verdict.status == Status::Pass {
+                // `run` compiles the program before executing it: an expected
+                // run outcome is proof that the build succeeded.
+                Evaluation::new(
+                    verdict,
+                    BuildStatus::Implicit,
+                    "`run` compiled and executed the program; the expected run outcome proves the build succeeded",
+                )
+            } else {
+                Evaluation::not_attempted(
+                    verdict,
+                    verify_build,
+                    "the run did not pass, so the build dimension was not measured",
+                )
+            }
         }
-        Mode::FmtIdempotent => evaluate_fmt(spec, env, copy_root, &project_arg),
+        Mode::FmtIdempotent => {
+            let (verdict, check) = evaluate_fmt(spec, env, copy_root, &project_arg);
+            match check {
+                Some(check) => verify_build_after_check(
+                    env,
+                    copy_root,
+                    &project_arg,
+                    &check,
+                    verdict,
+                    verify_build,
+                ),
+                None => Evaluation::not_attempted(
+                    verdict,
+                    verify_build,
+                    "the formatting contract did not pass, so the build dimension was not measured",
+                ),
+            }
+        }
         Mode::Cli => {
             let args: Vec<String> = spec
                 .args
@@ -365,10 +565,127 @@ fn evaluate(
                 .map(|arg| arg.replace("{project}", ".").replace("{case}", "."))
                 .collect();
             let outcome = env.exec(&args, project, &spec.stdin);
-            evaluate_cli(spec, &outcome, project)
+            let verdict = evaluate_cli(spec, &outcome, project);
+            Evaluation::not_applicable(
+                verdict,
+                verify_build,
+                "cli cases drive arbitrary commands: build success is not the contract for this mode",
+            )
         }
     }
 }
+
+/// Runs the explicit `build` step after a passing check and folds it into the
+/// verdict. This is the `check ⇒ build` contract:
+///
+/// * build exit 0 → PASS, build `verified`;
+/// * build compiler failure → FAIL with **both** check and build outputs;
+/// * missing `rustc` / spawn failure / timeout → NOT_RUN, never a PASS.
+fn verify_build_after_check(
+    env: &Env<'_>,
+    copy_root: &Path,
+    project: &str,
+    check: &ExecOutcome,
+    verdict: Verdict,
+    verify_build: bool,
+) -> Evaluation {
+    if !verify_build {
+        return Evaluation::new(verdict, BuildStatus::NotRequested, "");
+    }
+    if verdict.status != Status::Pass {
+        return Evaluation::not_attempted(
+            verdict,
+            verify_build,
+            "the check did not pass, so the build dimension was not measured",
+        );
+    }
+    // `--profile` is a check-only flag: `build` has no such option and always
+    // analyzes with the Core profile. Case `args` are therefore NOT forwarded.
+    let build_args = vec!["build".to_string(), project.to_string()];
+    let build = env.exec(&build_args, copy_root, "");
+    let (status, detail) = classify_build(check, &build);
+    let verdict = apply_build(verdict, status, &detail);
+    Evaluation::new(verdict, status, detail)
+}
+
+/// Classifies an explicit `build` invocation that followed a passing `check`.
+/// The detail always carries enough evidence to re-read the decision.
+fn classify_build(check: &ExecOutcome, build: &ExecOutcome) -> (BuildStatus, String) {
+    if let Some(error) = &build.spawn_error {
+        return (
+            BuildStatus::Environment,
+            format!(
+                "the build step could not be started: {error}\n\
+                 environment note: this is a harness/toolchain failure, not a Ravum compiler \
+                 diagnostic; the case is NOT_RUN and never a PASS\n{}",
+                render_outputs(build)
+            ),
+        );
+    }
+    if build.timed_out {
+        return (
+            BuildStatus::Environment,
+            format!(
+                "the build step exceeded the timeout and was killed: the build dimension is NOT \
+                 measured (not a compiler diagnostic, not a PASS)\n{}",
+                render_outputs(build)
+            ),
+        );
+    }
+    match build.exit {
+        Some(0) => (
+            BuildStatus::Verified,
+            "build exit 0 after check exit 0".to_string(),
+        ),
+        Some(code) if code == TOOL_MISSING_EXIT_CODE => (
+            BuildStatus::Environment,
+            format!(
+                "the build step exits {code}: the external Rust compiler (`rustc`) is unavailable in \
+                 this environment\nenvironment note: this is a toolchain/environment failure, not a \
+                 Ravum diagnostic and not a PASS; the case is NOT_RUN\n{}",
+                render_outputs(build)
+            ),
+        ),
+        Some(code) => (
+            BuildStatus::Failed,
+            format!(
+                "check passed (exit 0) but build failed (exit {code}): this is a check ⇒ build \
+                 divergence\ncheck output:\n{}\nbuild output:\n{}",
+                render_outputs(check),
+                render_outputs(build)
+            ),
+        ),
+        None => (
+            BuildStatus::Environment,
+            format!(
+                "the build process terminated without an exit code (killed by the OS or a signal): \
+                 the build dimension is NOT measured\n{}",
+                render_outputs(build)
+            ),
+        ),
+    }
+}
+
+/// Folds the build dimension into the verdict. A check-passing case whose build
+/// fails must FAIL; a case whose build could not be evaluated must be NOT_RUN.
+fn apply_build(verdict: Verdict, build: BuildStatus, detail: &str) -> Verdict {
+    match build {
+        BuildStatus::Failed if verdict.status == Status::Pass => Verdict {
+            status: Status::Fail,
+            expected: "check exit 0 and build exit 0".to_string(),
+            actual: "check exit 0; build failed".to_string(),
+            detail: detail.to_string(),
+        },
+        BuildStatus::Environment if verdict.status == Status::Pass => Verdict {
+            status: Status::NotRun,
+            expected: "check exit 0 and build exit 0".to_string(),
+            actual: "check exit 0; build not evaluable in this environment".to_string(),
+            detail: detail.to_string(),
+        },
+        _ => verdict,
+    }
+}
+
 
 fn evaluate_compile_pass(spec: &CaseSpec, outcome: &ExecOutcome, rel_dir: &str) -> Verdict {
     let expected = describe_expectations("check exit 0", spec);
@@ -536,69 +853,100 @@ fn evaluate_cli(spec: &CaseSpec, outcome: &ExecOutcome, project: &Path) -> Verdi
     Verdict::pass(expected, actual)
 }
 
-fn evaluate_fmt(spec: &CaseSpec, env: &Env<'_>, copy_root: &Path, project: &str) -> Verdict {
+/// Verifies the formatting contract. On success, also returns the passing
+/// `check` output so `--verify-build` can run its explicit `build` step.
+fn evaluate_fmt(
+    spec: &CaseSpec,
+    env: &Env<'_>,
+    copy_root: &Path,
+    project: &str,
+) -> (Verdict, Option<ExecOutcome>) {
     let expected = "fmt twice -> identical .rv sources, then check exit 0".to_string();
     let fmt_args = vec!["fmt".to_string(), project.to_string()];
 
     let first = env.exec(&fmt_args, copy_root, "");
     if let Some(failure) = execution_failure(&first, 0) {
-        return Verdict::fail(
-            expected,
-            describe_outcome("fmt (1st)", &first),
-            format!("first fmt failed\n{failure}\n{}", render_outputs(&first)),
+        return (
+            Verdict::fail(
+                expected,
+                describe_outcome("fmt (1st)", &first),
+                format!("first fmt failed\n{failure}\n{}", render_outputs(&first)),
+            ),
+            None,
         );
     }
     let snapshot_one = match snapshot_rv(&copy_root.join(project)) {
         Ok(snapshot) => snapshot,
         Err(error) => {
-            return Verdict::fail(expected, "could not snapshot .rv files".to_string(), error)
+            return (
+                Verdict::fail(expected, "could not snapshot .rv files".to_string(), error),
+                None,
+            )
         }
     };
     let second = env.exec(&fmt_args, copy_root, "");
     if let Some(failure) = execution_failure(&second, 0) {
-        return Verdict::fail(
-            expected,
-            describe_outcome("fmt (2nd)", &second),
-            format!("second fmt failed\n{failure}\n{}", render_outputs(&second)),
+        return (
+            Verdict::fail(
+                expected,
+                describe_outcome("fmt (2nd)", &second),
+                format!("second fmt failed\n{failure}\n{}", render_outputs(&second)),
+            ),
+            None,
         );
     }
     let snapshot_two = match snapshot_rv(&copy_root.join(project)) {
         Ok(snapshot) => snapshot,
         Err(error) => {
-            return Verdict::fail(expected, "could not snapshot .rv files".to_string(), error)
+            return (
+                Verdict::fail(expected, "could not snapshot .rv files".to_string(), error),
+                None,
+            )
         }
     };
     let differences = diff_snapshots(&snapshot_one, &snapshot_two);
     if !differences.is_empty() {
-        return Verdict::fail(
-            expected,
-            format!("second fmt changed {} .rv file(s)", differences.len()),
-            format!(
-                "fmt is not idempotent; files changed by the second run:\n  {}",
-                differences.join("\n  ")
+        return (
+            Verdict::fail(
+                expected,
+                format!("second fmt changed {} .rv file(s)", differences.len()),
+                format!(
+                    "fmt is not idempotent; files changed by the second run:\n  {}",
+                    differences.join("\n  ")
+                ),
             ),
+            None,
         );
     }
     let check = env.exec(&["check".to_string(), project.to_string()], copy_root, "");
     if let Some(failure) = execution_failure(&check, 0) {
-        return Verdict::fail(
-            expected,
-            describe_outcome("check", &check),
-            format!(
-                "fmt output does not pass check\n{failure}\n{}",
-                render_outputs(&check)
+        return (
+            Verdict::fail(
+                expected,
+                describe_outcome("check", &check),
+                format!(
+                    "fmt output does not pass check\n{failure}\n{}",
+                    render_outputs(&check)
+                ),
             ),
+            None,
         );
     }
     if let Some(message) = contains_failures(spec, &check) {
-        return Verdict::fail(expected, describe_outcome("check", &check), message);
+        return (
+            Verdict::fail(expected, describe_outcome("check", &check), message),
+            None,
+        );
     }
-    Verdict::pass(
-        expected,
-        format!(
-            "fmt x2 identical ({} .rv files), check exit 0",
-            snapshot_two.len()
+    (
+        Verdict::pass(
+            expected,
+            format!(
+                "fmt x2 identical ({} .rv files), check exit 0",
+                snapshot_two.len()
+            ),
         ),
+        Some(check),
     )
 }
 
@@ -1172,6 +1520,13 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), String> {
             let name = entry
                 .file_name()
                 .ok_or_else(|| format!("invalid entry in {}", source.display()))?;
+            // `.ravum/` is the generated build cache (gitignored). Copying it
+            // would make the run depend on a stale or partially written cache
+            // from an in-place build; the case is defined by its declared
+            // sources only, so the isolated copy excludes it.
+            if name == ".ravum" {
+                continue;
+            }
             copy_tree(&entry, &destination.join(name))?;
         }
         Ok(())
@@ -1440,5 +1795,191 @@ mod tests {
                 "c.rv (added)".to_string()
             ]
         );
+    }
+
+    // -- check ⇒ build contract -------------------------------------------
+
+    #[test]
+    fn isolated_copy_excludes_the_generated_ravum_cache() {
+        // A case directory can be polluted by an in-place build (`.ravum/` is
+        // gitignored). Copying a stale or half-written cache would make the
+        // run non-deterministic, so the isolated copy must contain the
+        // declared case only.
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!(
+            "ravum-conformance-copytest-{}-{nanos}",
+            std::process::id()
+        ));
+        let source = base.join("source");
+        let destination = base.join("destination");
+        fs::create_dir_all(source.join("src")).expect("create source");
+        fs::create_dir_all(source.join(".ravum").join("bin")).expect("create cache");
+        fs::write(source.join("case.json"), "{}").expect("write case.json");
+        fs::write(source.join("src").join("main.rv"), "fn main() {}").expect("write source");
+        fs::write(source.join(".ravum").join("bin").join("stale.exe"), "x")
+            .expect("write cache file");
+
+        copy_tree(&source, &destination).expect("copy tree");
+
+        assert!(destination.join("case.json").is_file());
+        assert!(destination.join("src").join("main.rv").is_file());
+        assert!(
+            !destination.join(".ravum").exists(),
+            "the generated `.ravum/` cache must not leak into the isolated copy"
+        );
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    fn passing_check() -> ExecOutcome {
+        ExecOutcome {
+            exit: Some(0),
+            stdout: "package demo: 0 error(s)".to_string(),
+            ..ExecOutcome::default()
+        }
+    }
+
+    fn passing_verdict() -> Verdict {
+        Verdict::pass("check exit 0", "check: exit 0")
+    }
+
+    #[test]
+    fn build_failure_after_check_pass_is_a_case_fail() {
+        let check = passing_check();
+        let build = ExecOutcome {
+            exit: Some(1),
+            stderr: "error: rustc failed:\nerror[E0508]: cannot move out of type `[String; 2]`"
+                .to_string(),
+            ..ExecOutcome::default()
+        };
+        let (status, detail) = classify_build(&check, &build);
+        assert_eq!(status, BuildStatus::Failed);
+        assert!(detail.contains("check ⇒ build divergence"), "{detail}");
+        // Both outputs are part of the evidence.
+        assert!(detail.contains("package demo: 0 error(s)"), "{detail}");
+        assert!(detail.contains("E0508"), "{detail}");
+
+        let verdict = apply_build(passing_verdict(), status, &detail);
+        assert_eq!(verdict.status, Status::Fail);
+        assert_eq!(verdict.expected, "check exit 0 and build exit 0");
+        assert_eq!(verdict.actual, "check exit 0; build failed");
+        assert!(
+            verdict.detail.contains("package demo: 0 error(s)")
+                && verdict.detail.contains("E0508"),
+            "{}",
+            verdict.detail
+        );
+    }
+
+    #[test]
+    fn missing_rustc_is_environment_and_not_run_never_pass() {
+        let build = ExecOutcome {
+            exit: Some(TOOL_MISSING_EXIT_CODE),
+            stderr: "`rustc` was not found; install a Rust toolchain".to_string(),
+            ..ExecOutcome::default()
+        };
+        let (status, detail) = classify_build(&passing_check(), &build);
+        assert_eq!(status, BuildStatus::Environment);
+        assert!(detail.contains("environment"), "{detail}");
+        assert!(detail.contains("not a Ravum diagnostic"), "{detail}");
+        // The detail must also name the missing tool so the operator can fix
+        // the environment rather than the corpus.
+        assert!(detail.contains("rustc"), "{detail}");
+
+        let verdict = apply_build(passing_verdict(), status, &detail);
+        assert_eq!(
+            verdict.status,
+            Status::NotRun,
+            "a missing toolchain must never be reported as PASS"
+        );
+    }
+
+    #[test]
+    fn build_spawn_error_and_timeout_are_environment_not_pass() {
+        let spawn = ExecOutcome {
+            spawn_error: Some("cannot execute".to_string()),
+            ..ExecOutcome::default()
+        };
+        let (status, detail) = classify_build(&passing_check(), &spawn);
+        assert_eq!(status, BuildStatus::Environment);
+        assert!(detail.contains("could not be started"), "{detail}");
+        assert_eq!(
+            apply_build(passing_verdict(), status, &detail).status,
+            Status::NotRun
+        );
+
+        let timeout = ExecOutcome {
+            timed_out: true,
+            ..ExecOutcome::default()
+        };
+        let (status, detail) = classify_build(&passing_check(), &timeout);
+        assert_eq!(status, BuildStatus::Environment);
+        assert!(detail.contains("timeout"), "{detail}");
+        assert_eq!(
+            apply_build(passing_verdict(), status, &detail).status,
+            Status::NotRun
+        );
+    }
+
+    #[test]
+    fn successful_build_is_verified_and_keeps_the_pass() {
+        let build = ExecOutcome {
+            exit: Some(0),
+            stdout: "generated: .ravum/gen/main.rs\nbuilt: .ravum/bin/demo".to_string(),
+            ..ExecOutcome::default()
+        };
+        let (status, detail) = classify_build(&passing_check(), &build);
+        assert_eq!(status, BuildStatus::Verified);
+        assert!(detail.contains("build exit 0"), "{detail}");
+        assert_eq!(
+            apply_build(passing_verdict(), status, &detail).status,
+            Status::Pass
+        );
+        assert!(status.is_build_evidence());
+    }
+
+    #[test]
+    fn build_status_strings_are_stable_and_positive_evidence_is_explicit() {
+        for (status, text) in [
+            (BuildStatus::NotRequested, "not_requested"),
+            (BuildStatus::NotApplicable, "not_applicable"),
+            (BuildStatus::NotAttempted, "not_attempted"),
+            (BuildStatus::Verified, "verified"),
+            (BuildStatus::Implicit, "implicit"),
+            (BuildStatus::Failed, "failed"),
+            (BuildStatus::Environment, "environment"),
+        ] {
+            assert_eq!(status.as_str(), text);
+            let evidence = matches!(status, BuildStatus::Verified | BuildStatus::Implicit);
+            assert_eq!(status.is_build_evidence(), evidence, "{text}");
+        }
+    }
+
+    #[test]
+    fn build_is_not_attempted_when_the_check_failed() {
+        let failed = Verdict::fail("check exit 0", "check: exit 1", "diagnostic");
+        // The helper is exercised directly: without a passing check there is
+        // no Env to run a build, so the classification below is what the
+        // harness records for the case.
+        let evaluation = Evaluation::not_attempted(
+            failed,
+            true,
+            "the check did not pass, so the build dimension was not measured",
+        );
+        assert_eq!(evaluation.build, BuildStatus::NotAttempted);
+        assert!(evaluation.build_detail.contains("did not pass"));
+        assert!(!evaluation.build.is_build_evidence());
+        assert_eq!(evaluation.verdict.status, Status::Fail);
+        // And without the flag the report stays silent about builds.
+        let evaluation = Evaluation::not_attempted(
+            Verdict::fail("check exit 0", "check: exit 1", "diagnostic"),
+            false,
+            "should not be recorded",
+        );
+        assert_eq!(evaluation.build, BuildStatus::NotRequested);
+        assert!(evaluation.build_detail.is_empty());
     }
 }

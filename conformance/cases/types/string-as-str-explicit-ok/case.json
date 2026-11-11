@@ -1,0 +1,5 @@
+{
+  "id": "types/string-as-str-explicit-ok",
+  "mode": "compile-pass",
+  "notes": "TYP-13.1 / OWN-6.7 / STD-9.1: the explicit forms remain accepted and buildable: `&owned`, `owned.as_str()`, and `line.trim().as_str()` (trim returns an owned String). Controls the owned-String tightening."
+}

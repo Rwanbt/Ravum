@@ -1,0 +1,5 @@
+fn main() {
+    let o = Some(String::from("x"));
+    let s = o.unwrap();
+    let t = o;
+}

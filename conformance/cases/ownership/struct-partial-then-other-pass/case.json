@@ -1,0 +1,5 @@
+{
+  "id": "ownership/struct-partial-then-other-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.3: a struct field move is tracked per field; reading another field afterwards is legal (only reusing the whole struct is E-OWN-PARTIAL-MOVE)."
+}

@@ -1,0 +1,12 @@
+struct Pair {
+    a: String,
+    b: i32,
+}
+
+fn f(d: Pair) -> i32 {
+    let s = d.a;
+    return d.b;
+}
+
+fn main() {
+}

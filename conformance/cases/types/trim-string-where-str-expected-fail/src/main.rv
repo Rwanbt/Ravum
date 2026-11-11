@@ -1,0 +1,8 @@
+fn takes(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let line = " a ";
+    let n = takes(line.trim());
+}

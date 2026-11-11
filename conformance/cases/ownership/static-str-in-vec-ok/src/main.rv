@@ -1,0 +1,6 @@
+fn main() {
+    let mut v: Vec<&str> = Vec::new();
+    v.push("a");
+    v.push("b");
+    let n = v.len();
+}

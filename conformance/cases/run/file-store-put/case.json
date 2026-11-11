@@ -1,0 +1,12 @@
+{
+  "id": "run/file-store-put",
+  "mode": "run-pass",
+  "args": [".", "put", "greeting"],
+  "stdin": "hello world\n",
+  "stdout_contains": "stored greeting v1",
+  "expect_file_contains": [
+    { "path": "index", "contains": "greeting|1" },
+    { "path": "greeting.v1", "contains": "hello world" }
+  ],
+  "notes": "P2-E storage vertical (file-backed, NOT SQL, no service). The store directory must already exist (Core 1.0 has no create_dir), so the package root '.' is the store. One UTF-8 value per line."
+}

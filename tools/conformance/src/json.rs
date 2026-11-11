@@ -55,6 +55,10 @@ impl Json {
         Json::String(value.into())
     }
 
+    pub fn bool(value: bool) -> Json {
+        Json::Bool(value)
+    }
+
     /// Builds an object from ordered `(key, value)` pairs.
     pub fn object(entries: Vec<(&str, Json)>) -> Json {
         Json::Object(

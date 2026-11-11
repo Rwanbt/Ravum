@@ -109,8 +109,42 @@ jobs:
       # Exit codes are part of the contract: 1 = at least one FAIL, 3 = at least
       # one NOT_RUN (environment), 2 = usage/config error. Any non-zero fails the
       # job; the report is uploaded even on failure.
-      - name: Run conformance corpus
-        run: cargo run -p ravum-conformance -- run --json target/conformance-report.json
+      #
+      # `--verify-build` makes `check ⇒ build` blocking: after a passing check,
+      # every accepted-mode case (compile-pass, the check step of fmt-idempotent;
+      # run-pass/run-fail already build) must also survive an explicit `build` on
+      # the same isolated copy. A check-passing case whose build fails is a FAIL
+      # with both outputs in the report. A missing `rustc` or a build timeout is
+      # NOT_RUN — never a PASS — so an incomplete environment cannot turn the
+      # gate green. The report carries `build_verified` (false without the flag);
+      # see docs/qualification/CONFORMANCE-BUILD-CONTRACT.md for the exact
+      # perimeter and what is NOT proven.
+      - name: Run conformance corpus (check ⇒ build contract)
+        run: cargo run -p ravum-conformance -- run --verify-build --json target/conformance-report.json
+
+      # The harness exit codes catch FAIL (1) and NOT_RUN (3), but a SKIPped
+      # perimeter case exits 0 while proving nothing about its build. This
+      # assertion closes that honesty hole: the report itself must state
+      # `build_verified: true`, i.e. every accepted-mode case in the supported
+      # perimeter was actually measured and built. It never replaces the step
+      # above; it only refuses a green job without positive build evidence.
+      - name: Assert build_verified in the report
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+
+          with open("target/conformance-report.json", encoding="utf-8") as handle:
+              report = json.load(handle)
+          summary = report.get("build_summary")
+          if report.get("build_verified") is not True:
+              print(
+                  f"build_verified is not true: build_summary={summary}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"build_verified: true, build_summary={summary}")
+          PY
 
       - name: Upload conformance report
         if: always()
@@ -125,6 +159,7 @@ jobs:
         if: always()
         run: |
           echo "Declarative conformance corpus only: PASS is a run observation, not a proof of arbitrary programs."
+          echo "The check => build contract covers the accepted-mode corpus measured by this run; compile-fail/cli cases are check-only by construction (see docs/qualification/CONFORMANCE-BUILD-CONTRACT.md)."
 
   smoke:
     name: Example smoke suite (Linux)

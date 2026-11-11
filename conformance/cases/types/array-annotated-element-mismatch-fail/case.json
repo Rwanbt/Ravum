@@ -1,0 +1,8 @@
+{
+  "id": "types/array-annotated-element-mismatch-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "TYP-4: arrays are homogeneous. An explicit `[i32; 2]` annotation must not hide a heterogeneous literal `[1, true]` from the element-type check (E-TYP-MISMATCH)."
+}

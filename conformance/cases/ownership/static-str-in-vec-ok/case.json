@@ -1,0 +1,5 @@
+{
+  "id": "ownership/static-str-in-vec-ok",
+  "mode": "compile-pass",
+  "notes": "OWN-6.2: `&'static str` is Copy and storable, including as a `Vec<&str>` element; the codegen must emit a lifetime-bearing type."
+}

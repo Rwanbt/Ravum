@@ -1,0 +1,8 @@
+{
+  "id": "ownership/ref-escape-as-str-return-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "OWN-6.3 / OWN-6.7: `String::as_str()` yields a non-static `&str`; returning it escapes, so E-OWN-REF-ESCAPE (spec example in ownership.md section 6)."
+}

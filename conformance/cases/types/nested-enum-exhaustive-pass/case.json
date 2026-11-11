@@ -1,0 +1,5 @@
+{
+  "id": "types/nested-enum-exhaustive-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-5.8 / TYP-10.4: a nested Option payload inside an enum is covered by `E::A(Some(_))`, `E::A(None)` and `E::B`; control against over-rejection."
+}

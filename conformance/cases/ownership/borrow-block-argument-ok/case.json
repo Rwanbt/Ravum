@@ -1,0 +1,5 @@
+{
+  "id": "ownership/borrow-block-argument-ok",
+  "mode": "compile-pass",
+  "notes": "EXPR-5.1 / EXPR-7.10 / OWN-6.4: a borrow of a block-constructed value expires at the end of the call; `&{...}`, `&mut {...}` and `{ &v }` are valid arguments."
+}

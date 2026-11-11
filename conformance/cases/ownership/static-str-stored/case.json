@@ -1,5 +1,5 @@
 {
   "id": "ownership/static-str-stored",
   "mode": "compile-pass",
-  "notes": "`&'static str` is the only storable reference: a literal is Copy, storable, returnable and usable as a struct field (OWN-6.2)."
+  "notes": "`&'static str` is the only storable reference: a literal is Copy, storable, returnable, comparable and usable as a struct field (OWN-6.2, OWN-6.4). Extended (P0-A): the field is read, compared and the returned views are used inside instructions, so a codegen fix must emit lifetime-bearing types for every site."
 }

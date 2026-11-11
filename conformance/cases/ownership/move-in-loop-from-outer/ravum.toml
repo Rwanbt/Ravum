@@ -1,0 +1,4 @@
+[package]
+name = "ownership-move-in-loop-from-outer"
+version = "0.1.0"
+edition = "core-1.0"
