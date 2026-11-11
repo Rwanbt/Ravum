@@ -117,7 +117,7 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 | LEX-5.1 | Les **35** mots-clés ci-dessus sont réservés dans **toutes** les positions ; ils ne peuvent pas servir d'identifiant. `static` et `type` sont réservés (Q-LEX-1) mais **non supportés** à l'usage : `E-UNSUPPORTED-STATIC` / `E-UNSUPPORTED-TYPE-ALIAS`. | MUST |
 | LEX-5.2 | `Self`, `self`, `crate`, `super` ont un sens de chemin (§ [`modules.md`](modules.md)) ; `Self` n'est valide que dans un `impl`. | MUST |
 | LEX-5.3 | `true`/`false` sont des littéraux booléens, pas des identifiants ni des constantes du prélude. | MUST |
-| LEX-5.4 | Les mots-clés réservés mais sans construction Core 1.0 (`extern`, `move`, `trait`, `where`, `unsafe`, `async`) sont **reconnus par le lexer** puis rejetés par le parser avec le code `E-UNSUPPORTED-*` correspondant (§ [`unsupported.md`](unsupported.md)). Ils ne doivent jamais être acceptés silencieusement. | MUST |
+| LEX-5.4 | Les mots-clés réservés sont **reconnus par le lexer**. Ceux qui n'ont pas de construction Core 1.0 (`move`, `trait`, `where`, `async`) sont rejetés par le parser avec le code `E-UNSUPPORTED-*` correspondant (§ [`unsupported.md`](unsupported.md)). `extern` et `unsafe` ont une construction supportée (bloc `extern "C" { ... }`, bloc `unsafe { ... }`) ; seules leurs autres formes (`unsafe fn`, `extern "C" fn` avec corps) sont refusées (`E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`). Aucune forme n'est acceptée silencieusement. | MUST |
 
 ### 5.2 Mots-clés contextuels
 
@@ -139,7 +139,9 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 - `x.await` est une méthode inconnue (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-ASYNC`.
 - `ref x` en pattern est un motif de liaison `ref` suivi d'un token inattendu (`E-PARSE-EXPECTED`).
 
-> `static` et `type` **sont réservés** (35 mots-clés, §5.1) mais non supportés à l'usage : `E-UNSUPPORTED-TOKEN`.
+> `static` et `type` **sont réservés** (35 mots-clés, §5.1) mais non supportés à l'usage :
+> un item `static` est `E-UNSUPPORTED-STATIC`, un alias de type `E-UNSUPPORTED-TYPE-ALIAS`
+> (codes dédiés, Q-LEX-1), pas `E-UNSUPPORTED-TOKEN`.
 
 ### 5.4 Mots-clés d'items et de visibilité
 

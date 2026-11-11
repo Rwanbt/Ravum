@@ -90,7 +90,7 @@
 | COMPAT-7.3 | Un rollback ne **MUST NOT** prétendre annuler des effets externes irréversibles (fichiers écrits, sorties consommées) : il restaure du code, pas le monde (design, INV-05 de `docs/specs/03`). | MUST |
 | COMPAT-7.4 | Le cache de compilation peut être vidé (`ravum-lang cache clean`) ; aucun résultat de cache n'est une preuve et un cache périmé ne doit jamais être réutilisé. | MUST |
 | COMPAT-7.5 | Un rollback **MUST** être enregistré avec : version quittée, version restaurée, raison, SHA des sources, commandes exécutées, résultat de `check`/`test`. | MUST |
-| COMPAT-7.6 | Aucun rollback ne peut réintroduire un `unsafe`, une FFI, ou une fonctionnalité `UNSUPPORTED` : le refus reste. | MUST |
+| COMPAT-7.6 | Aucun rollback ne peut réintroduire une construction refusée par l'édition cible (`UNSUPPORTED`) : le refus reste. Les formes supportées dans l'édition restaurée (`unsafe { }`, FFI scalaire) restent régies par ses règles, jamais par celles d'une édition plus permissive. | MUST |
 
 ```text
 // POSITIF — rollback traçable

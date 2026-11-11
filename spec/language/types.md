@@ -24,7 +24,7 @@
 |---|---|---|
 | TYP-1.1 | Les tailles ci-dessus sont **garanties** par la spécification, y compris `i128`/`u128` = 16 et `f32`/`f64` = IEEE-754. | MUST |
 | TYP-1.2 | `isize`/`usize` valent 4 octets sur une cible 32 bits et 8 sur une cible 64 bits. Aucune autre largeur n'existe. Un programme qui dépend de cette largeur doit être testé sur les deux (voir [`compatibility.md`](compatibility.md)). | MUST |
-| TYP-1.3 | Ces tailles ne sont **pas observables** depuis un programme Core 1.0 : il n'y a ni `size_of`, ni `align_of`, ni pointeur, ni FFI, ni `transmute` (voir TYP-14). Elles servent à la portabilité et au raisonnement, pas à l'introspection. | MUST |
+| TYP-1.3 | Ces tailles ne sont **pas observables** depuis un programme Core 1.0 : il n'y a ni `size_of`, ni `align_of`, ni pointeur, ni FFI de type composé, ni `transmute` (voir TYP-14). Elles servent à la portabilité et au raisonnement, pas à l'introspection. | MUST |
 | TYP-1.4 | `char` contient un **scalaire Unicode**, jamais un octet UTF-8, jamais un surrogat. `'é'` est un `char` valide ; un `u8` ne se convertit pas implicitement en `char`. | MUST |
 | TYP-1.5 | `bool` n'a que deux valeurs ; il n'existe **aucune** conversion implicite entier↔bool. | MUST |
 | TYP-1.6 | `!` est le **type Never** : aucune valeur, aucune taille. C'est le type des expressions divergentes (`return`, `break`, `continue`, `panic`, `process::exit`) et il **coerce implicitement vers tout type attendu** (aucun `E-TYP-MISMATCH` n'est émis pour `!`). Il n'est ni constructible, ni paramètre, ni champ, ni élément de `Vec`, ni retour d'une fonction non divergente. | MUST |
@@ -343,7 +343,7 @@ fn g() { let y = f::<i32>(1); }   // aussi E-PARSE-UNEXPECTED
 | ID | Règle | Niveau |
 |---|---|---|
 | TYP-12.1 | Core 1.0 **ne garantit aucun layout d'octets** pour les types composés (struct, enum, tuple, `Vec`, `String`, `Option`, `Result`). L'ordre des champs, le remplissage, le discriminant d'enum et la disposition en mémoire ne sont **pas** observables. | MUST |
-| TYP-12.2 | Ce non-engagement est **sans conséquence** : aucun programme Core 1.0 ne peut observer un layout (pas de pointeur, pas de FFI, pas de `size_of`/`offset_of`, pas de `transmute`, pas d'`unsafe`, pas d'`as` entre un type composé et un entier). | MUST |
+| TYP-12.2 | Ce non-engagement est **sans conséquence** : aucun programme Core 1.0 ne peut observer un layout (pas de pointeur, pas de FFI de type composé, pas de `size_of`/`offset_of`, pas de `transmute`, pas d'`unsafe fn`, pas d'`as` entre un type composé et un entier). | MUST |
 | TYP-12.3 | Garanties **comportementales** (et non d'octets) : les éléments d'un tableau et d'un `Vec` sont ordonnés et indexables par `0..len` ; les champs d'un tuple sont accessibles par indice ; `match` sur enum distingue exactement les variantes déclarées. | MUST |
 | TYP-12.4 | Les attributs de représentation (`#[repr(C)]`, `#[repr(u8)]`) sont des attributs : `E-UNSUPPORTED-ATTR`. | MUST |
 | TYP-12.5 | Il n'existe **aucune** ABI stable ni interopérable en Core 1.0 (voir [`abi.md`](abi.md)). | MUST |

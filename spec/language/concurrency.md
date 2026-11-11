@@ -81,7 +81,7 @@ Une extension concurrence ne peut être envisagée que si **toutes** les conditi
 | ID | Règle | Niveau |
 |---|---|---|
 | CONC-4.1 | Aucune extension concurrence ne peut être introduite comme « expérimentale » sans les conditions 1–3 : elle changerait le modèle de sûreté. | MUST |
-| CONC-4.2 | Une extension **MUST NOT** affaiblir les garanties existantes (non-échappement des références, absence d'`unsafe`). | MUST |
+| CONC-4.2 | Une extension **MUST NOT** affaiblir les garanties existantes (non-échappement des références, absence d'`unsafe fn` et de pointeurs bruts ; les blocs `unsafe` et la FFI scalaire restent des frontières explicites, pas des capacités de concurrence). | MUST |
 | CONC-4.3 | Les groupes d'effets `async`/`rt` existent pour **réserver** la syntaxe ; ils ne constituent pas une feuille de route implicite. | MUST |
 | CONC-4.4 | Toute API de concurrence future devra être **dans `std`**, versionnée, et refusée `fail-closed` sur une plateforme non supportée. | MUST |
 
