@@ -1,0 +1,8 @@
+{
+  "id": "resolve/module-ambiguous",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-AMBIGUOUS"
+  ],
+  "notes": "Both foo.rv and foo/mod.rv exist: E-MOD-AMBIGUOUS (canonical)."
+}

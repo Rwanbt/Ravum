@@ -1,0 +1,8 @@
+{
+  "id": "ownership/move-out-of-mut-borrow",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-MOVE-OUT-OF-BORROW"
+  ],
+  "notes": "Moving the pointed-to value through a `&mut T` parameter is E-OWN-MOVE-OUT-OF-BORROW (OWN-3.16)."
+}

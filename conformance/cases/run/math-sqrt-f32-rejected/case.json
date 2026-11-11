@@ -1,0 +1,8 @@
+{
+  "id": "run/math-sqrt-f32-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-STD-009 / STD-6.1: no f32 variant, so math::sqrt(2.0f32) is E-TYP-MISMATCH."
+}

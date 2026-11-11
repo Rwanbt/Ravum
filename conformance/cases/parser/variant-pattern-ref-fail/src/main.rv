@@ -1,0 +1,13 @@
+enum Shape {
+    Circle(f64),
+}
+
+fn f(s: Shape) -> f64 {
+    match s {
+        Shape::Circle(ref r) => r,
+    }
+}
+
+fn main() {
+}
+

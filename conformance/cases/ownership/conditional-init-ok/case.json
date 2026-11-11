@@ -1,0 +1,5 @@
+{
+  "id": "ownership/conditional-init-ok",
+  "mode": "compile-pass",
+  "notes": "F-OWN-007 / OWN-4: a place initialised on every path (`if` and `else` both assign `x`) is definitely initialised, so reading `x` afterwards is accepted."
+}

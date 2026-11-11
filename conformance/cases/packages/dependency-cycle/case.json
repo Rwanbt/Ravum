@@ -1,0 +1,9 @@
+{
+  "id": "packages/dependency-cycle",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-CYCLE"
+  ],
+  "notes": "Local dependency graph must be acyclic (MOD-5.8)."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/vec-eq",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-EQ"
+  ],
+  "notes": "F-TYP-021 (TYP-7.3): `==` is defined for scalars and text only; comparing two `Vec<i32>` is E-TYP-EQ."
+}

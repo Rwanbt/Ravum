@@ -1,0 +1,6 @@
+use std::io;
+
+fn main() {
+    let unused: i32 = 1;
+    io::println("done");
+}

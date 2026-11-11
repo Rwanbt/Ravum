@@ -1,0 +1,5 @@
+[package]
+name = "mod-edition-unknown"
+version = "0.1.0"
+edition = "core-2.0"
+

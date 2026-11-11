@@ -1,0 +1,8 @@
+{
+  "id": "types/place-non-place-assign",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "F-TYP-005 (TYP-2.2, G-6.11): an assignment target must be a place; (a+b).0 is not."
+}

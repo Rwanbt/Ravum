@@ -1,0 +1,8 @@
+{
+  "id": "types/control-as-tuple-element-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-STATEMENT-VALUE"
+  ],
+  "notes": "EXPR-5.11 / EXPR-6.7 / G-6.19: `while`/`loop`/`for` are control expressions with type `()` and are not value expressions, so they cannot be tuple elements. Before the heterogeneous-tuple fix this was accidentally rejected by element unification; the rule is now checked explicitly."
+}

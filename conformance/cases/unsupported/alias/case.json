@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/alias",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ALIAS"
+  ],
+  "unsupported": true,
+  "notes": "UNS \u00a76 line 134: an import alias is refused. diagnostics.md \u00a73 (added 2026-11-10) registers the dedicated code E-UNSUPPORTED-ALIAS; unsupported.md still maps it to E-UNSUPPORTED-TOKEN (contradiction reported)."
+}

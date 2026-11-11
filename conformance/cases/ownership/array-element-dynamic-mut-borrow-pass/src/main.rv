@@ -1,0 +1,10 @@
+fn h(s: &mut String) {
+    s.push_str("!");
+}
+
+fn f(mut a: [String; 2], i: usize) {
+    h(&mut a[i]);
+}
+
+fn main() {
+}

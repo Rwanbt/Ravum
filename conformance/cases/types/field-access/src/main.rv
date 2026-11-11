@@ -1,0 +1,8 @@
+struct P { x: i32 }
+
+fn get(p: P) -> i32 {
+    return p.x;
+}
+
+fn main() {
+}

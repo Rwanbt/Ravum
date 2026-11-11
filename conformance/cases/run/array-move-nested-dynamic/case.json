@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-nested-dynamic",
+  "mode": "run-pass",
+  "stdout_contains": "bb\n",
+  "notes": "OWN-5.4: a dynamic index into a nested array (`a[0][i]`, `a[i][j]`) is lowered by destructuring the constant prefix once and continuing inline with `into_iter().nth(i)` from the slot, with rustc's bounds-panic text. Previously check-pass/build-fail with rustc E0508."
+}

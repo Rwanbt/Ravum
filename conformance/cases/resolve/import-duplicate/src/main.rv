@@ -1,0 +1,15 @@
+mod a {
+    pub fn thing() {
+    }
+}
+
+mod b {
+    pub fn thing() {
+    }
+}
+
+use crate::a::thing;
+use crate::b::thing;
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "ownership/partial-move-struct-whole",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-PARTIAL-MOVE"
+  ],
+  "notes": "After `d.titre` is moved, using the whole struct `d` is E-OWN-PARTIAL-MOVE (OWN-5.3)."
+}

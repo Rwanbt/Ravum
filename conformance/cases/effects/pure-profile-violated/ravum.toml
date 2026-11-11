@@ -1,0 +1,4 @@
+[package]
+name = "eff-pure-violated"
+version = "0.1.0"
+edition = "core-1.0"

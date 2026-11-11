@@ -1,0 +1,8 @@
+{
+  "id": "run/vec-clone-non-copy",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-024 / STD-10.4: clone on a Vec of a non-Copy type does not exist; E-RES-UNKNOWN."
+}

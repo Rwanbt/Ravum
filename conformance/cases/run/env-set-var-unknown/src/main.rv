@@ -1,0 +1,5 @@
+use std::env;
+
+fn main() {
+    env::set_var("RAVUM_X", "1");
+}

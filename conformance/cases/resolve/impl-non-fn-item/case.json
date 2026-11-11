@@ -1,0 +1,8 @@
+{
+  "id": "resolve/impl-non-fn-item",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-IMPL-UNKNOWN"
+  ],
+  "notes": "diagnostics.md \u00a73.2: an `impl` target that is not a known nominal item, or a member that is not a function. Core 1.0 `impl` blocks contain `fn` items only."
+}

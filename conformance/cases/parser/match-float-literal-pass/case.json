@@ -1,0 +1,6 @@
+{
+  "id": "parser/match-float-literal-pass",
+  "mode": "run-pass",
+  "stdout_contains": "1\n2\n0\n0\nzero-negatif\n",
+  "notes": "G-6.36: a float literal pattern is accepted and compared with `==`. `NaN` never matches (its arm falls through to `_`), and `-0.0` matches `0.0` because no bit comparison is made. Codegen lowers float patterns to guards because Rust has no float patterns."
+}

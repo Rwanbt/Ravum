@@ -1,0 +1,8 @@
+{
+  "id": "run/unsigned-abs-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-029 / STD-12.5: unsigned types have no abs(); E-RES-UNKNOWN."
+}

@@ -1,0 +1,6 @@
+fn f() {
+    let x: i32 = panic("x");
+}
+
+fn main() {
+}

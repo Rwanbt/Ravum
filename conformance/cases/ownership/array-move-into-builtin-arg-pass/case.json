@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-move-into-builtin-arg-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / STD-10.3: moving an array element into `Vec::push` is a legal per-component move; previously check-pass/build-fail."
+}

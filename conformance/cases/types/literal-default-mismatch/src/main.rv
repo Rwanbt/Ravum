@@ -1,0 +1,7 @@
+fn f(v: Vec<i32>) {
+    let mut i = 0;
+    i = v.len();
+}
+
+fn main() {
+}

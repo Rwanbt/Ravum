@@ -1,0 +1,8 @@
+{
+  "id": "ownership/ref-to-temporary",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "Audit F2 regression: `&\"a\"` has type `&&str` (a reference to a temporary), never `&'static str`; storing it in a local must be rejected. Same for `&text` where `text: &str` is a local slot."
+}

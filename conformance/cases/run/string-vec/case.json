@@ -1,0 +1,6 @@
+{
+  "id": "run/string-vec",
+  "mode": "run-pass",
+  "stdout_contains": "10\n",
+  "notes": "String::len counts UTF-8 bytes: héllo! is 7 bytes; Vec len is 3."
+}

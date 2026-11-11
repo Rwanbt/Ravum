@@ -1,0 +1,5 @@
+{
+  "id": "ownership/partial-move-struct",
+  "mode": "compile-pass",
+  "notes": "Moving a struct field is allowed and tracked per field: the other fields stay readable and `self.titre` is a valid move (OWN-5.3)."
+}

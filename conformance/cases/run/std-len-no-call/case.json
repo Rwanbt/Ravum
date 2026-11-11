@@ -1,0 +1,8 @@
+{
+  "id": "run/std-len-no-call",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "`String::len` is a method: `s.len` without `()` resolves to no item and is E-RES-UNKNOWN (STD-9, F-STD-015 fail side)."
+}

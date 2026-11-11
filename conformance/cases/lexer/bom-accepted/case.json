@@ -1,0 +1,5 @@
+{
+  "id": "lexer/bom-accepted",
+  "mode": "compile-pass",
+  "notes": "A UTF-8 BOM is accepted and ignored by the canonical lexer (Lead ruling, supersedes the earlier E-LEX-BOM proposal); the program must compile."
+}

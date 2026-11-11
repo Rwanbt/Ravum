@@ -1,0 +1,7 @@
+fn f(s: String) -> [String; 2] {
+    return [s; 2];
+}
+
+fn main() {
+}
+

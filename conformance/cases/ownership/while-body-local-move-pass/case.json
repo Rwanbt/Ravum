@@ -1,0 +1,5 @@
+{
+  "id": "ownership/while-body-local-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.6: moving a value declared *inside* the loop body is legal because a fresh value is created on each iteration (the refusal only targets values moved from outside the loop) (round-3 axis loop-move)."
+}

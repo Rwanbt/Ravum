@@ -1,0 +1,8 @@
+{
+  "id": "types/assert-eq-vec-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-EQ"
+  ],
+  "notes": "F-STD-013 / STD-8.2: `assert_eq` compares with `==`, and `Vec` has no `==` in Core 1.0, so the assertion is a type error rather than a silently accepted comparison."
+}

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "measured_on": "2026-11-11, Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
+  "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json",
+  "checked_by": "python tools/coverage_report.py --input target/cov-all.json --check",
+  "scope": "Two crates since 2026-11-11: `ravum-lang-sema` (frontend) and `ravum-lang-codegen` (the reference backend, which generates the safe Rust). Before that date only sema was measured, so the backend that actually emits code had no coverage gate at all. Including both crates in one instrumented build also means the sema figures now count the sema code exercised by the codegen integration tests.",
+  "policy": "Ratchet. A floor never goes down: lowering one requires changing this file in the same commit with a justification, and the reviewer must ask why the code that used to be covered no longer is. Floors sit one point below the measurement of the commit that introduced them so a compiler or llvm-cov upgrade cannot flip the gate on rounding noise; the real target is the gate target below, not the floor.",
+  "gate_targets": {
+    "files": [
+      "crates/ravum-lang-sema/src/typeck.rs",
+      "crates/ravum-lang-sema/src/resolve.rs"
+    ],
+    "lines": 90,
+    "regions": 85,
+    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Not met yet on these two files: the floors below are the current proven level, and they are raised whenever a pass raises the measurement. The codegen files are new floors (2026-11-11): their target is also 90/85, and `emit.rs` carries the most risk because it is the code that decides what the generated Rust looks like."
+  },
+  "files": {
+    "crates/ravum-lang-sema/src/types.rs": {
+      "lines": 100,
+      "regions": 97,
+      "measured_lines": 100.0,
+      "measured_regions": 98.1
+    },
+    "crates/ravum-lang-sema/src/effects.rs": {
+      "lines": 91,
+      "regions": 93,
+      "measured_lines": 92.41,
+      "measured_regions": 94.55
+    },
+    "crates/ravum-lang-sema/src/builtins.rs": {
+      "lines": 90,
+      "regions": 88,
+      "measured_lines": 91.81,
+      "measured_regions": 89.11
+    },
+    "crates/ravum-lang-sema/src/own.rs": {
+      "lines": 91,
+      "regions": 89,
+      "measured_lines": 92.11,
+      "measured_regions": 90.14,
+      "note": "2026-11-11: raised from 89/86 to 91/89 (measurement 92.11/90.14 with the codegen integration tests included)."
+    },
+    "crates/ravum-lang-sema/src/check.rs": {
+      "lines": 80,
+      "regions": 72,
+      "measured_lines": 80.26,
+      "measured_regions": 72.58,
+      "note": "Thinnest margin of the file set: 0.26 point above the line floor. It is the file to attack first when raising the sema floors."
+    },
+    "crates/ravum-lang-sema/src/facts.rs": {
+      "lines": 81,
+      "regions": 76,
+      "measured_lines": 82.86,
+      "measured_regions": 77.91,
+      "note": "2026-11-11: raised from 78/72 to 81/76 (measurement 82.86/77.91; the codegen integration tests exercise the facts types)."
+    },
+    "crates/ravum-lang-sema/src/loader.rs": {
+      "lines": 76,
+      "regions": 80,
+      "measured_lines": 77.24,
+      "measured_regions": 81.26
+    },
+    "crates/ravum-lang-sema/src/typeck.rs": {
+      "lines": 92,
+      "regions": 91,
+      "measured_lines": 92.98,
+      "measured_regions": 92.56,
+      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-11: 92.98/92.56 in the two-crate measurement (the denominator is the code written since). Gate target 90/85 met."
+    },
+    "crates/ravum-lang-sema/src/resolve.rs": {
+      "lines": 92,
+      "regions": 92,
+      "measured_lines": 93.13,
+      "measured_regions": 93.36,
+      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). Gate target 90/85 met."
+    },
+    "crates/ravum-lang-codegen/src/emit.rs": {
+      "lines": 86,
+      "regions": 85,
+      "measured_lines": 87.02,
+      "measured_regions": 86.02,
+      "note": "New floor 2026-11-11: the backend was never measured before, although it is the code that decides what the generated Rust looks like. Target 90/85."
+    },
+    "crates/ravum-lang-codegen/src/lib.rs": {
+      "lines": 75,
+      "regions": 65,
+      "measured_lines": 76.92,
+      "measured_regions": 66.67,
+      "note": "New floor 2026-11-11. Mostly module wiring and error plumbing; its region floor is low because the entry points are exercised through `generate` from the integration tests."
+    },
+    "crates/ravum-lang-codegen/src/prelude.rs": {
+      "lines": 100,
+      "regions": 97,
+      "measured_lines": 100.0,
+      "measured_regions": 100.0,
+      "note": "New floor 2026-11-11: the emitted runtime prelude is a string constant, fully covered by construction; the region floor leaves rounding room for a toolchain change."
+    }
+  }
+}

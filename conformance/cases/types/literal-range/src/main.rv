@@ -1,0 +1,6 @@
+fn h() -> u8 {
+    return 300;
+}
+
+fn main() {
+}

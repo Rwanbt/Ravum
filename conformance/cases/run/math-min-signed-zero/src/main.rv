@@ -1,0 +1,19 @@
+use std::io;
+use std::math;
+
+fn main() {
+    let neg_zero: f64 = -0.0;
+    let pos_zero: f64 = 0.0;
+    let lo = math::min(neg_zero, pos_zero).to_string();
+    let hi = math::max(neg_zero, pos_zero).to_string();
+    if lo == "-0" {
+        io::println("min-negative");
+    } else {
+        io::println("min-not-negative");
+    }
+    if hi == "0" {
+        io::println("max-positive");
+    } else {
+        io::println("max-not-positive");
+    }
+}

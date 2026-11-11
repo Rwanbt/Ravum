@@ -1,0 +1,6 @@
+{
+  "id": "parser/mod-missing-body-fail",
+  "mode": "compile-fail",
+  "expect_codes": ["E-PARSE-EXPECTED"],
+  "notes": "A `mod` declaration without a `;` or an inline body is rejected where the parser expects the module body/semicolon (E-PARSE-EXPECTED)."
+}

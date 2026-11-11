@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-self-receiver",
+  "mode": "run-pass",
+  "stdout_contains": "zero\n",
+  "notes": "OWN-5.4: a method taking `self` by value moves its receiver, so `a[0].take()` / `a[i].take()` are array-element moves; `&self` receivers stay reads. Previously rustc E0508 for both the constant and the dynamic index."
+}

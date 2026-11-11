@@ -1,0 +1,6 @@
+{
+  "id": "types/never-return-run",
+  "mode": "run-fail",
+  "stderr_contains": "panic: stop",
+  "notes": "F-TYP-004 (G-5.11/TYP-1.6): `fn stop() -> ! { panic(\"stop\") }` must compile and run, and the call must coerce to `i32`. This is the build+run half that compile-pass cases cannot cover."
+}

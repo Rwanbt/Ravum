@@ -1,0 +1,5 @@
+{
+  "id": "parser/loop-break-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-020 (EXPR-6.2): `loop { ... break; }` is accepted."
+}

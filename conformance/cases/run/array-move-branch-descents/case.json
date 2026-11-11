@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-branch-descents",
+  "mode": "run-pass",
+  "stdout_contains": "x1\ny0\n",
+  "notes": "OWN-5.4 / P0-A: two element-projection descents on the same array place in two distinct branches of one `if` share one level-0 destructuring, hoisted before the `if`. Both branches see the bindings. Measured check-pass/build-fail with rustc E0508 before the anchor fix (commit recorded in docs/qualification/CONFORMANCE-BUILD-CONTRACT.md section 9)."
+}

@@ -39,4 +39,8 @@ Un composant `@client` ne peut importer une capacité `Secret`/`DbWrite` serveur
 3. Service concurrent streaming avec simulation de pannes, métriques mémoire et latence.
 4. Exemple no_std bare-metal dès que la sémantique noyau se stabilise.
 
-Aucun de ces exemples n'existe dans le pack documentaire, et aucune plateforme n'est annoncée supportée.
+Aucun de ces quatre déploiements de référence n'existe dans le pack documentaire. Les
+plateformes réellement qualifiées aujourd'hui sont limitées à **Windows x86-64**, **Linux
+x86-64** (une image CI `ubuntu-latest`) et **WASI preview 1** (`wasm32-wasip1`) — voir
+[`docs/qualification/PLATFORMS-MATRIX.md`](../qualification/PLATFORMS-MATRIX.md) ; les autres
+cibles de ce document restent des exigences, pas des supports annoncés.

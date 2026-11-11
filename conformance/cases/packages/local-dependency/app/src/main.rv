@@ -1,0 +1,6 @@
+use std::io;
+use util::double;
+
+fn main() {
+    io::println(&double(21).to_string());
+}

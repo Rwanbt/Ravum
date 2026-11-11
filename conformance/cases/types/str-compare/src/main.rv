@@ -1,0 +1,6 @@
+fn g(a: &str, b: &str) -> bool {
+    return a < b;
+}
+
+fn main() {
+}

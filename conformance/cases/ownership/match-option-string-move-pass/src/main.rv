@@ -1,0 +1,14 @@
+fn f(o: Option<String>) -> String {
+    match o {
+        Some(s) => {
+            let t = s;
+            return t;
+        }
+        None => {
+            return String::from("none");
+        }
+    }
+}
+
+fn main() {
+}

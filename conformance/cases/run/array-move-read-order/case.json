@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-read-order",
+  "mode": "run-pass",
+  "stdout_contains": "x1\n2\n2\n",
+  "notes": "P0-A ordering lock: a read of another element *before* the destructuring anchor is left in place (it sees the intact array), and a read *after* it is rewritten to the destructured slot. The group is anchored at the statement of the binder's own block, so both orderings are decided by statement walk order, not by the outermost statement index."
+}

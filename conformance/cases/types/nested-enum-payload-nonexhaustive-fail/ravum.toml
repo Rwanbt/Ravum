@@ -1,0 +1,4 @@
+[package]
+name = "types-nested-enum-payload-nonexhaustive-fail"
+version = "0.1.0"
+edition = "core-1.0"

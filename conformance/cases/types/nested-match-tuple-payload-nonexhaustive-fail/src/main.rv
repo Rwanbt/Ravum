@@ -1,0 +1,9 @@
+fn f(x: Option<(i32, bool)>) -> i32 {
+    match x {
+        Some((n, true)) => n,
+        None => 0,
+    }
+}
+
+fn main() {
+}

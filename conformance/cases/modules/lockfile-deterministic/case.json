@@ -1,0 +1,23 @@
+{
+  "id": "modules/lockfile-deterministic",
+  "mode": "cli",
+  "project": "app",
+  "args": [
+    "check",
+    "."
+  ],
+  "expect_files": [
+    "ravum.lock"
+  ],
+  "expect_file_contains": [
+    {
+      "path": "ravum.lock",
+      "contains": "lockfile_version = 1"
+    },
+    {
+      "path": "ravum.lock",
+      "contains": "name = \"util\""
+    }
+  ],
+  "notes": "F-MOD-005 / MOD-7.1 + MOD-7.5: an absent ravum.lock is created by check, with lockfile_version 1 and one sorted entry per resolved package. Byte-identical output across two builds is not expressible in a single harness case (no multi-command mode)."
+}

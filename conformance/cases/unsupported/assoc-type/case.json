@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/assoc-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ASSOC-TYPE"
+  ],
+  "unsupported": true,
+  "notes": "UNS \u00a72 line 30: a type associated with `Self` is refused. diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-ASSOC-TYPE; unsupported.md still maps GAT to E-UNSUPPORTED-TRAIT."
+}

@@ -1,0 +1,14 @@
+fn take(a: [([String; 2], i32); 2]) -> String {
+    if true {
+        let x = a[0].0[1];
+        let y = a[1].0[0];
+        io::println(y.as_str());
+        return x;
+    }
+    return String::from("none");
+}
+
+fn main() {
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(take(a).as_str());
+}

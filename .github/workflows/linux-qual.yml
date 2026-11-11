@@ -1,0 +1,460 @@
+name: Linux qualification (real ubuntu-latest runner)
+
+# Qualification Linux réelle de la chaîne Ravum Core 1.0.
+#
+# Contexte : le poste de développement a WSL hors service (WslService bloqué,
+# `wsl --shutdown` se bloque, pas d'accès administrateur). On qualifie donc
+# Linux sur une machine indépendante fournie par GitHub Actions.
+#
+# Portée honnête : ce workflow prouve que le dépôt se construit, que les tests
+# workspace passent sur Linux, que le corpus de conformance et le smoke des
+# exemples s'exécutent réellement, et que Miri/fuzz/wasm sont soit exécutés
+# soit explicitement NOT_RUN. Il ne prouve PAS : le comportement Windows, le
+# temps réel, les performances, une ABI stable, une release, ni la correction
+# sémantique de programmes arbitraires. Un job vert est une observation liée à
+# ce run et à ce commit, jamais un `PROVED`.
+#
+# TSan : NOT_APPLICABLE (job désactivé ci-dessous). Ravum Core 1.0 n'expose ni
+# threads, ni async ; la FFI minimale (`extern "C"` + `unsafe { }`) est
+# mono-thread et n'ajoute aucun chemin concurrent. Aucun test ne partage d'état
+# mutable entre threads. L'ajouter produirait un faux signal de couverture. Il
+# faudra le réactiver le jour où un chemin concurrent réel (daemon multi-session)
+# sera qualifié.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  workspace-tests:
+    name: Workspace tests (Linux, stable 1.95.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0, as rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Show toolchain
+        run: |
+          rustc -vV
+          cargo --version
+          uname -srm
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-
+
+      # `--all-targets` is deliberate: libs, bins, tests, benches and examples
+      # are all compiled on the qualification host. Two test threads bound the
+      # RAM of the runner while still exercising parallel execution paths.
+      - name: Test workspace (all targets, 2 test threads)
+        env:
+          # Shared runners are much slower than the reference workstation; the
+          # DSP stress scenarios keep their correctness assertions but get an
+          # explicit, documented timing envelope (default 60 s locally).
+          RAVUM_STRESS_MAX_SECONDS: '1200'
+        run: cargo test --workspace --all-targets -- --test-threads=2
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Workspace tests on Ubuntu only: no Windows, real-time, performance or release claim."
+
+  conformance:
+    name: Conformance corpus (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-conformance-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-conformance-
+            ${{ runner.os }}-linux-qual-
+
+      # The harness defaults to <repo>/target/debug/ravum-lang; build it first so
+      # a missing toolchain is a real failure, not a false NOT_RUN.
+      - name: Build ravum-lang (harness toolchain)
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      # Exit codes are part of the contract: 1 = at least one FAIL, 3 = at least
+      # one NOT_RUN (environment), 2 = usage/config error. Any non-zero fails the
+      # job; the report is uploaded even on failure.
+      #
+      # `--verify-build` makes `check ⇒ build` blocking: after a passing check,
+      # every accepted-mode case (compile-pass, the check step of fmt-idempotent;
+      # run-pass/run-fail already build) must also survive an explicit `build` on
+      # the same isolated copy. A check-passing case whose build fails is a FAIL
+      # with both outputs in the report. A missing `rustc` or a build timeout is
+      # NOT_RUN — never a PASS — so an incomplete environment cannot turn the
+      # gate green. The report carries `build_verified` (false without the flag);
+      # see docs/qualification/CONFORMANCE-BUILD-CONTRACT.md for the exact
+      # perimeter and what is NOT proven.
+      - name: Run conformance corpus (check ⇒ build contract)
+        run: cargo run -p ravum-conformance -- run --verify-build --json target/conformance-report.json
+
+      # The harness exit codes catch FAIL (1) and NOT_RUN (3), but a SKIPped
+      # perimeter case exits 0 while proving nothing about its build. This
+      # assertion closes that honesty hole: the report itself must state
+      # `build_verified: true`, i.e. every accepted-mode case in the supported
+      # perimeter was actually measured and built. It never replaces the step
+      # above; it only refuses a green job without positive build evidence.
+      - name: Assert build_verified in the report
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+
+          with open("target/conformance-report.json", encoding="utf-8") as handle:
+              report = json.load(handle)
+          summary = report.get("build_summary")
+          if report.get("build_verified") is not True:
+              print(
+                  f"build_verified is not true: build_summary={summary}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"build_verified: true, build_summary={summary}")
+          PY
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-linux
+          path: target/conformance-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Declarative conformance corpus only: PASS is a run observation, not a proof of arbitrary programs."
+          echo "The check => build contract covers the accepted-mode corpus measured by this run; compile-fail/cli cases are check-only by construction (see docs/qualification/CONFORMANCE-BUILD-CONTRACT.md)."
+
+  smoke:
+    name: Example smoke suite (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-smoke-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-smoke-
+            ${{ runner.os }}-linux-qual-
+
+      - name: Build ravum-lang
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      # Same expectations as scripts/lang-smoke.ps1 on Windows. The script is
+      # portable and exits 3 when the binary is missing (NOT_RUN), 1 on a real
+      # mismatch.
+      - name: Run example smoke suite (bash)
+        run: bash scripts/lang-smoke.sh --skip-build
+
+      # Build one small program per stdlib surface and require it to survive
+      # `build` (not just `check`). This is the guard for the
+      # "accepted by the checker, rejected by rustc" class: `math::sqrt(2.0)`
+      # was accepted and failed with E0689 because the emitted float literal had
+      # no suffix.
+      - name: Stdlib codegen sweep
+        run: pwsh -File scripts/stdlib-codegen-sweep.ps1
+
+      # lint / doc / cache / doctor / watch have no end-to-end coverage in the
+      # example smoke; this sweep exercises them on a throwaway package.
+      - name: CLI surface sweep
+        run: pwsh -File scripts/cli-sweep.ps1
+
+      # Every flag declared in a command's USAGE line must be accepted by its
+      # parser. Extracting flags from the description text rather than the USAGE
+      # line produces false positives: the prose quotes `rustc --edition` and
+      # `lint --deny`.
+      - name: CLI documented-flag audit
+        run: pwsh -File scripts/cli-flag-audit.ps1
+
+      # diagnostics.md §7-§8 is a contract (schema_version 1, exit codes, DIAG-7.x
+      # MUST rules). This validates the real `--json` output against it.
+      - name: JSON contract (diagnostics.md §7-§8)
+        run: python tools/json_contract.py
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Example smoke only: it exercises the CLI surface (init/check/build/run/test/fmt), not the language's semantic completeness."
+
+  install:
+    name: Installer contract (temporary prefix, then --version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-install-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-install-
+            ${{ runner.os }}-linux-qual-
+
+      # The installer does not exist in every commit. The step is skipped (never
+      # faked as a pass) and the next step records NOT_RUN explicitly. When it is
+      # present, the contract exercised is the real one: `--prefix DIR` (or
+      # RAVUM_PREFIX), a release build with --locked, and an executable at
+      # <prefix>/bin/ravum-lang.
+      - name: Install to a temporary prefix
+        if: ${{ hashFiles('scripts/install.sh') != '' }}
+        run: |
+          set -euo pipefail
+          prefix="${RUNNER_TEMP}/ravum-install"
+          bash scripts/install.sh --prefix "$prefix"
+          test -x "$prefix/bin/ravum-lang"
+          test -f "$prefix/ravum-install.json"
+          "$prefix/bin/ravum-lang" --version
+          "$prefix/bin/ravum-lang" --version | grep -q "ravum"
+
+      - name: Record installer absence honestly
+        if: ${{ hashFiles('scripts/install.sh') == '' }}
+        run: |
+          echo "::notice::NOT_RUN: scripts/install.sh is absent from this commit; the install gate has nothing to prove and is not reported as a pass."
+
+  miri:
+    name: Miri (nightly, syntax + sema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly Rust with Miri and rust-src
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri, rust-src
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-nightly-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-nightly-
+
+      # Miri is ~100-1000x slower than native execution. Scope: the two library
+      # crates (65 + 87 tests, proven locally in ~5.5 min) plus the short
+      # deterministic fuzz test. Integration tests that walk the filesystem
+      # (`loader::`, parse_examples, own_audit fixtures) are exercised natively
+      # by the workspace job; running them under Miri adds tens of minutes
+      # without new coverage. This exclusion is explicit, not a silent skip.
+      - name: Run Miri on the language libraries
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+        run: |
+          cargo +nightly miri --version
+          # Exclusions are the same as the locally measured 5.5-minute run:
+          # two <2 s timing assertions, the 300k-token hostile input (hours under
+          # Miri), and the example-tree formatter walk (read_dir). They are
+          # covered natively by the workspace job.
+          cargo +nightly miri test -p ravum-lang-syntax --lib -- \
+            --skip hostile_100k_tokens \
+            --skip hostile_deep_nesting \
+            --skip too_large_token_stream \
+            --skip examples_are_idempotent_and_meaning_preserving
+          cargo +nightly miri test -p ravum-lang-sema --lib -- --skip loader::
+
+      - name: Run Miri on the short sema fuzz test
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+          RAVUM_FUZZ_ITERS: '3'
+        run: cargo +nightly miri test -p ravum-lang-sema --test fuzz_check
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Miri is a bounded dynamic check on the current tests: it is neither a proof nor a substitute for soundness review."
+
+  fuzz:
+    name: Fuzz smoke (ignored fuzz_* tests, soft guard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-fuzz-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-fuzz-
+
+      # fuzz_lex_parse.rs exists in `ravum-lang-syntax`; its long deterministic
+      # test is #[ignore]d and is run here. The guard keeps the job green with an
+      # explicit NOT_RUN notice if the corpus is removed or renamed, instead of
+      # pretending that fuzzing happened.
+      - name: Run ignored fuzz_* tests when present
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ran=0
+          for spec in "ravum-lang-syntax:crates/ravum-lang-syntax/tests" "ravum-lang-sema:crates/ravum-lang-sema/tests"; do
+            package="${spec%%:*}"
+            directory="${spec#*:}"
+            files=("$directory"/fuzz_*.rs)
+            if [ ${#files[@]} -eq 0 ]; then
+              continue
+            fi
+            for file in "${files[@]}"; do
+              target="$(basename "$file" .rs)"
+              echo "== fuzz target: $package --test $target =="
+              cargo +nightly test -p "$package" --test "$target" -- --ignored --test-threads=1
+              ran=$((ran + 1))
+            done
+          done
+          if [ "$ran" -eq 0 ]; then
+            echo "::notice::NOT_RUN: no crates/ravum-lang-{syntax,sema}/tests/fuzz_*.rs found; fuzz qualification skipped (nothing is claimed)."
+          fi
+
+  wasm:
+    name: wasm32-wasip1 (build + run via Node WASI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust with the wasm32-wasip1 target
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: wasm32-wasip1
+
+      # The CLI runs wasm32-wasip1 artifacts through `node --experimental-wasi-
+      # unstable-preview1` (`RAVUM_NODE` overrides the executable). The runner
+      # image already ships Node, but setup-node makes the version explicit and
+      # fails early if the runtime is unavailable.
+      - name: Setup Node.js for the WASI runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-linux-qual-wasm-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-linux-qual-wasm-
+            ${{ runner.os }}-linux-qual-
+
+      - name: Build ravum-lang (host)
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      # The CLI currently supports `--target wasm32-wasip1` for build and run
+      # (README/args.rs). The support check keeps the job honest if that option
+      # ever disappears: NOT_RUN instead of a synthetic pass. When supported, the
+      # build artifact and the real WASI execution are asserted.
+      - name: Build and run hello for wasm32-wasip1
+        run: |
+          set -euo pipefail
+          bin="target/debug/ravum-lang"
+          node --version
+          if ! "$bin" help build 2>&1 | grep -q -- '--target'; then
+            echo "::notice::NOT_RUN: ravum-lang build has no --target option; wasm32-wasip1 is NOT_APPLICABLE at this commit."
+            exit 0
+          fi
+          "$bin" build --target wasm32-wasip1 examples/hello
+          test -f examples/hello/.ravum/bin/hello.wasm
+          if ! "$bin" help run 2>&1 | grep -q -- '--target'; then
+            echo "::notice::wasm32-wasip1 build succeeded but run --target is not supported; execution NOT_RUN."
+            exit 0
+          fi
+          out="$("$bin" run --target wasm32-wasip1 examples/hello)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q "hello, ravum"
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "wasm32-wasip1 is a WASI preview 1 execution path through Node.js: not a browser, GPU or component-model qualification."
+
+  tsan:
+    # NOT_APPLICABLE — deliberately disabled, with the reason kept in-tree so it
+    # cannot be mistaken for a missing qualification.
+    #
+    # ThreadSanitizer qualifies concurrent code. Ravum Core 1.0 (syntax, sema,
+    # codegen, CLI) exposes no threads and no async runtime; the minimal FFI
+    # surface is synchronous, single-threaded `extern "C"` calls and does not
+    # create shared mutable concurrency. No test spawns a concurrent data path
+    # over shared mutable state. Running TSan here would produce a green signal
+    # that says nothing about the product. Re-enable when the daemon's
+    # multi-session/overlay path is qualified as a concurrent surface, with its
+    # own tests and a documented TCB.
+    name: ThreadSanitizer — NOT_APPLICABLE (no threads/async in Core 1.0)
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Explain why TSan is not run
+        run: |
+          echo "NOT_APPLICABLE: no concurrent surface is qualified in Core 1.0."

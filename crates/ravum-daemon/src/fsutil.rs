@@ -11,7 +11,17 @@ static WRITE_SEQ: AtomicU64 = AtomicU64::new(0);
 /// design: two independent guards are cheap, a path escape is expensive.
 pub fn safe_join(base: &Path, logical_path: &str) -> Result<PathBuf> {
     let candidate = Path::new(logical_path);
-    if candidate.is_absolute() {
+    // Portable policy: reject absolute paths of *any* supported platform on
+    // every host. `Path::is_absolute` only understands the host syntax, so a
+    // Linux daemon would otherwise accept `C:/abs.rs` and Windows would accept
+    // `\\server\share`. Backslashes are refused for the same reason (they are
+    // separators on Windows and never needed in a portable logical path).
+    let bytes = logical_path.as_bytes();
+    let windows_absolute = bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\');
+    if candidate.is_absolute() || logical_path.contains('\\') || windows_absolute {
         return Err(DaemonError::invalid(format!(
             "logical path {logical_path:?} must be relative"
         )));

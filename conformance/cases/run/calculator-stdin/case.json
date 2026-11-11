@@ -1,0 +1,7 @@
+{
+  "id": "run/calculator-stdin",
+  "mode": "run-pass",
+  "stdin": "2\n3\n",
+  "stdout_contains": "5\n",
+  "notes": "read_line strips the line terminator (STD-2.8) and parse_i64 consumes the whole text (STD-7.7)."
+}

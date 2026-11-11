@@ -311,8 +311,25 @@ impl UnitGraphOracle {
             ));
         }
         if before_report.errors > 0 {
+            // Say *which* unit failed and why: a fail-closed message that only
+            // counts errors cannot be acted on (it cost a full investigation to
+            // find the failing unit from a fresh clone).
+            let first = before_report
+                .units
+                .iter()
+                .find(|unit| unit.status == UnitStatus::Error)
+                .map(|unit| {
+                    format!(
+                        "unit {:?}: {}",
+                        unit.unit,
+                        first_diagnostic(&before_report, &unit.unit)
+                            .or_else(|| unit.fallback_reason.clone())
+                            .unwrap_or_else(|| "<no diagnostic>".to_owned())
+                    )
+                })
+                .unwrap_or_else(|| "<no failing unit recorded>".to_owned());
             return Err(format!(
-                "the baseline snapshot does not compile ({} error(s)); interface attribution is impossible (fail-closed)",
+                "the baseline snapshot does not compile ({} error(s)); interface attribution is impossible (fail-closed). First failing {first}",
                 before_report.errors
             ));
         }

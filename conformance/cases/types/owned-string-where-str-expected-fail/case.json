@@ -1,0 +1,8 @@
+{
+  "id": "types/owned-string-where-str-expected-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "TYP-8.5 / TYP-13.1: an owned `String` passed where `&str` is expected needs an explicit conversion (`&owned` or `owned.as_str()`); the only implicit adjustments are `&[T;N] -> &[T]` and `&String -> &str`. Previously accepted by the checker and rejected by rustc (E0308)."
+}

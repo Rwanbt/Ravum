@@ -1,0 +1,8 @@
+{
+  "id": "lexer/int-overflow",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-INT-OVERFLOW"
+  ],
+  "notes": "An integer literal above u128::MAX is E-LEX-INT-OVERFLOW (canonical); the lexer still produces a token, so only the lexer code is expected."
+}

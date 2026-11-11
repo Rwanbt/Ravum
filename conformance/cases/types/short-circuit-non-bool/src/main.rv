@@ -1,0 +1,6 @@
+fn g(n: i32) -> bool {
+    return n && true;
+}
+
+fn main() {
+}

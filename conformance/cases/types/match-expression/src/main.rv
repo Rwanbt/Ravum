@@ -1,0 +1,15 @@
+use std::io;
+
+fn total(o: Option<i32>) -> i32 {
+    let x = match o {
+        Option::Some(v) => v,
+        Option::None => 0,
+    };
+    return x;
+}
+
+fn main() {
+    let a = total(Option::Some(7));
+    let b = if a > 0 { 1 } else { 0 };
+    io::println(&(a + b).to_string());
+}

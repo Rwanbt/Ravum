@@ -1,0 +1,8 @@
+{
+  "id": "run/math-pow-arity",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ],
+  "notes": "F-STD-010 / STD-6.6 + STD-1.4: the normative signature is pow(a: f64, b: f64); one argument is E-TYP-ARITY."
+}

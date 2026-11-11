@@ -1,0 +1,5 @@
+{
+  "id": "modules/inline-module",
+  "mode": "run-pass",
+  "stdout_contains": "50\n"
+}

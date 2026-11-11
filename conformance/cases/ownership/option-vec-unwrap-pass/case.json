@@ -1,0 +1,5 @@
+{
+  "id": "ownership/option-vec-unwrap-pass",
+  "mode": "compile-pass",
+  "notes": "STD-11.2 / OWN-5.1: `Option<Vec<T>>::unwrap` consumes the option and yields the owned `Vec<T>`, which is then used (round-3 axis nested-unwrap)."
+}

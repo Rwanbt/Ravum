@@ -1,0 +1,8 @@
+{
+  "id": "run/result-map-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-027 / STD-11.4: Result::map does not exist; E-RES-UNKNOWN."
+}

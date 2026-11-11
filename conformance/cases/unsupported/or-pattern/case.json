@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/or-pattern",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "unsupported": true,
+  "notes": "Or-patterns are E-UNSUPPORTED-TOKEN (UNS-4, F-UNS-018)."
+}

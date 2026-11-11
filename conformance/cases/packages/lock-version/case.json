@@ -1,0 +1,9 @@
+{
+  "id": "packages/lock-version",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-LOCK"
+  ],
+  "notes": "An unknown lockfile_version is fail-closed: E-MOD-LOCK (canonical)."
+}

@@ -1,0 +1,18 @@
+enum E {
+    Items([String; 2]),
+    Empty,
+}
+
+fn pair(e: E) -> (String, String) {
+    match e {
+        E::Items(a) => (a[0], a[1]),
+        E::Empty => (String::from("x"), String::from("y")),
+    }
+}
+
+fn main() {
+    let e = E::Items([String::from("left"), String::from("right")]);
+    let t = pair(e);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+}

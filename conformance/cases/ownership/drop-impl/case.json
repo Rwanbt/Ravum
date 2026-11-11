@@ -1,0 +1,9 @@
+{
+  "id": "ownership/drop-impl",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-DROP-IMPL"
+  ],
+  "unsupported": true,
+  "notes": "No user destructor exists: `impl Drop for T` is E-UNSUPPORTED-DROP-IMPL (OWN-9.5)."
+}

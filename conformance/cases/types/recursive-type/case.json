@@ -1,0 +1,8 @@
+{
+  "id": "types/recursive-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-RECURSIVE"
+  ],
+  "notes": "A type containing itself without indirection is E-TYP-RECURSIVE (canonical; no Box in Core 1.0)."
+}

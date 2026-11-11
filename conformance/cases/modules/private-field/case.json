@@ -1,0 +1,8 @@
+{
+  "id": "modules/private-field",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-PRIVATE"
+  ],
+  "notes": "A private field is only visible in the defining module and its descendants (MOD-4.4)."
+}

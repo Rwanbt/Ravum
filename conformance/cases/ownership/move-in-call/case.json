@@ -1,0 +1,7 @@
+{
+  "id": "ownership/move-in-call",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ]
+}

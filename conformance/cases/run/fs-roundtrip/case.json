@@ -1,0 +1,8 @@
+{
+  "id": "run/fs-roundtrip",
+  "mode": "run-pass",
+  "stdout_contains": "écrit\n",
+  "expect_files": [
+    "out.txt"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/module-dot-call",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "A module call with a dot (`io.println`) is E-RES-UNKNOWN: the module is not a value (UNS-3, F-UNS-020)."
+}

@@ -1,0 +1,26 @@
+use std::io;
+
+fn make(flag: bool) -> Option<i32> {
+    if flag {
+        return Some(7);
+    }
+    None
+}
+
+fn main() {
+    let a = make(true);
+    let b = make(false);
+    let c = make(false);
+    let mut out = String::new();
+    out.push_str(&a.is_some().to_string());
+    out.push_str(" ");
+    out.push_str(&b.is_none().to_string());
+    out.push_str(" ");
+    out.push_str(&a.unwrap().to_string());
+    out.push_str(" ");
+    out.push_str(&b.unwrap_or(0).to_string());
+    let r = c.ok_or(Error::new("none"));
+    out.push_str(" ");
+    out.push_str(&r.is_err().to_string());
+    io::println(out.as_str());
+}

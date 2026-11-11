@@ -1,0 +1,8 @@
+{
+  "id": "parser/variant-pattern-ref-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "notes": "F-SYN-031 (G-6.38): a `ref` pattern is E-UNSUPPORTED-TOKEN per features.md. (Implementation emits E-UNSUPPORTED-REF-PAT, absent from the registry.)"
+}

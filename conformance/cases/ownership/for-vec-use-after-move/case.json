@@ -1,0 +1,8 @@
+{
+  "id": "ownership/for-vec-use-after-move",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "F-EXPR-018 (OWN-5.10): `for x in v` consumes the Vec; using `v` afterwards is E-OWN-USE-AFTER-MOVE."
+}

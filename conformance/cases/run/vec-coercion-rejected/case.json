@@ -1,0 +1,8 @@
+{
+  "id": "run/vec-coercion-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-STD-032 / STD-10.7: there is no &Vec<T> -> &[T] coercion; E-TYP-MISMATCH."
+}

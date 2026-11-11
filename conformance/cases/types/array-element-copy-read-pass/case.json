@@ -1,0 +1,5 @@
+{
+  "id": "types/array-element-copy-read-pass",
+  "mode": "compile-pass",
+  "notes": "TYP-5.4 / OWN-5.4: with Copy elements, reading a[0] copies and a[1] stays readable; control that the array-element move fix must not reject legal Copy reads."
+}

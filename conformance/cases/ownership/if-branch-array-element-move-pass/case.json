@@ -1,0 +1,5 @@
+{
+  "id": "ownership/if-branch-array-element-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4 / OWN-5.7: each branch returns after moving a different array element; no path uses a moved place after the merge (round-3 axis if-move)."
+}

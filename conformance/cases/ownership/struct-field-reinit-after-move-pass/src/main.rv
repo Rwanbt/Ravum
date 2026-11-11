@@ -1,0 +1,14 @@
+struct D {
+    a: String,
+    b: i32,
+}
+
+fn f(mut d: D) -> D {
+    let x = d.a;
+    d.a = String::from("new");
+    let y = d.b;
+    return d;
+}
+
+fn main() {
+}

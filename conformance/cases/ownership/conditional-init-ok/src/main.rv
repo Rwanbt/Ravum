@@ -1,0 +1,12 @@
+fn f(c: bool) -> i32 {
+    let x: i32;
+    if c {
+        x = 1;
+    } else {
+        x = 2;
+    }
+    return x;
+}
+
+fn main() {
+}

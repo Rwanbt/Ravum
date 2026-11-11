@@ -1,0 +1,4 @@
+[package]
+name = "types-ffi-bad-type"
+version = "0.1.0"
+edition = "core-1.0"

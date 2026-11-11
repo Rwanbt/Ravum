@@ -1,0 +1,6 @@
+fn consume(s: String) {
+    drop(s);
+}
+
+fn main() {
+}

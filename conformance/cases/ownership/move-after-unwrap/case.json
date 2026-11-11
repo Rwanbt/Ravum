@@ -1,0 +1,8 @@
+{
+  "id": "ownership/move-after-unwrap",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-DOUBLE-MOVE"
+  ],
+  "notes": "OWN-5.2: `unwrap` consumes `o`; `let t = o` then moves the same place with no use in between, so the mandated code is E-OWN-DOUBLE-MOVE (a second move is not a use; cf. ownership/double-move)."
+}

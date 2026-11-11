@@ -1,0 +1,7 @@
+{
+  "id": "ownership/drop-then-use",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ]
+}

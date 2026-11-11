@@ -1,0 +1,6 @@
+fn h(n: u32) -> char {
+    return n as char;
+}
+
+fn main() {
+}

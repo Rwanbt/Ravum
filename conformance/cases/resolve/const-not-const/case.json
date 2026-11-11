@@ -1,0 +1,8 @@
+{
+  "id": "resolve/const-not-const",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-CONST-NOT-CONST"
+  ],
+  "notes": "diagnostics.md \u00a73 (added): a constant value that the checker facts cannot represent. Floating-point constants have no ConstValue representation in Core 1.0."
+}

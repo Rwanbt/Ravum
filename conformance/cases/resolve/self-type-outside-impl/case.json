@@ -1,0 +1,8 @@
+{
+  "id": "resolve/self-type-outside-impl",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-SELF-OUTSIDE-IMPL"
+  ],
+  "notes": "diagnostics.md \u00a73 (added): `Self` used outside an `impl`. The dedicated code E-RES-SELF-OUTSIDE-IMPL distinguishes it from the `self` value case (E-RES-SELF)."
+}

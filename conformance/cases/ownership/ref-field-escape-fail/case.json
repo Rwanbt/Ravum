@@ -1,0 +1,8 @@
+{
+  "id": "ownership/ref-field-escape-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "OWN-6.1: a non-static reference cannot be stored, including as a struct field (`struct W { r: &i32 }` is the spec's negative example in ownership.md section 6)."
+}

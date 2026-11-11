@@ -1,0 +1,19 @@
+fn classify(n: i32) -> i32 {
+    match n {
+        1 => 10,
+        _ => 20,
+    }
+}
+
+fn bind(x: i32) -> i32 {
+    match x {
+        0 => 1,
+        other => other + 1,
+    }
+}
+
+fn main() {
+    let a = classify(1);
+    let b = bind(2);
+}
+

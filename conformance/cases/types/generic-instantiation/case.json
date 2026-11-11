@@ -1,0 +1,5 @@
+{
+  "id": "types/generic-instantiation",
+  "mode": "compile-pass",
+  "notes": "F-TYP-017 (TYP-11.3): concrete instantiations id<i32> and id<f64> check after substitution."
+}

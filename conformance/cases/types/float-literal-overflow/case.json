@@ -1,0 +1,8 @@
+{
+  "id": "types/float-literal-overflow",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-FLOAT-LITERAL"
+  ],
+  "notes": "diagnostics.md \u00a73.4: a float literal that does not fit the inferred type (`1e39` in `f32`). The lexer accepts the finite f64 text; the type checker rejects it for the f32 binding."
+}

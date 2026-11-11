@@ -1,0 +1,6 @@
+{
+  "id": "run/package-demo",
+  "mode": "run-pass",
+  "project": "app",
+  "stdout_contains": "42\n40\n"
+}

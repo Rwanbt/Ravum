@@ -1,0 +1,8 @@
+{
+  "id": "packages/manifest-unknown-key",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-MANIFEST"
+  ],
+  "notes": "Unknown keys are rejected (MOD-5.3); the canonical code is E-MOD-MANIFEST (no E-MOD-MANIFEST-KEY in the registry)."
+}

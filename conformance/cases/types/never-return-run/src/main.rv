@@ -1,0 +1,7 @@
+fn stop() -> ! {
+    panic("stop")
+}
+
+fn main() {
+    let x: i32 = stop();
+}

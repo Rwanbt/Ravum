@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-element-dynamic-mut-borrow-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-7.3 / EXPR-7.6: a dynamic `usize` index yields a mutable place (`&mut a[i]`) for the call; the borrow expires at the end of the call (round-3 axis array-borrow)."
+}

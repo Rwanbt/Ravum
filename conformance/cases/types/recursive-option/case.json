@@ -1,0 +1,8 @@
+{
+  "id": "types/recursive-option",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-RECURSIVE"
+  ],
+  "notes": "F-TYP-024 (TYP-10.7): Option<N> has no indirection, so the type is infinite."
+}

@@ -1,0 +1,5 @@
+{
+  "id": "lexer/contextual-effects-ident",
+  "mode": "compile-pass",
+  "notes": "F-LEX-004 / LEX-5.5: `effects` MUST NOT be reserved; it is a contextual keyword recognised only in a signature clause, so `let effects = 1;` must be accepted."
+}

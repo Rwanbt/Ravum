@@ -1,0 +1,7 @@
+fn f(s: String) {
+    let a = s;
+    let b = s;
+}
+
+fn main() {
+}

@@ -1,0 +1,5 @@
+{
+  "id": "ownership/generic-array-element-move-pass",
+  "mode": "compile-pass",
+  "notes": "TYP-11.2 / OWN-5.4: a generic function may move an element out of `[T; 2]` when `T` is opaque and non-`Copy`; the array is never reused (round-3 axis generic-array)."
+}

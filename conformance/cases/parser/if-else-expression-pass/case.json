@@ -1,0 +1,5 @@
+{
+  "id": "parser/if-else-expression-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-017 (G-6.20): `if`/`else` used as a value expression is accepted."
+}

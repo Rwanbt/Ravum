@@ -1,0 +1,13 @@
+fn f(c: bool) {
+    let a = while c {
+    };
+    let b = loop {
+        break;
+    };
+    let d = for i in 0..2 {
+    };
+}
+
+fn main() {
+}
+

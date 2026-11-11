@@ -1,0 +1,8 @@
+fn first(t: (i32, bool)) -> i32 {
+    match t {
+        (a, b) => a,
+    }
+}
+
+fn main() {
+}

@@ -1,0 +1,13 @@
+fn peek(n: &i32) -> i32 {
+    return *n;
+}
+
+fn f(s: String) -> usize {
+    let t = unsafe { s };
+    let x = 1;
+    let n = unsafe { peek(&x) };
+    return t.len() + (n as usize);
+}
+
+fn main() {
+}

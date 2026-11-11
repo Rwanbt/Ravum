@@ -1,0 +1,8 @@
+{
+  "id": "types/compound-assign-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "EXPR-4.8 / TYP-13.2 (MUST): no implicit numeric conversion. `x += y` follows `x = x + y`, so mixing i32 and i64 is E-TYP-MISMATCH. F-TYP-001."
+}

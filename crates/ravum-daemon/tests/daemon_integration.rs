@@ -475,8 +475,18 @@ fn supersession_during_compilation_never_returns_a_current_answer() {
     let mut slow_request = request(revision, &state);
     slow_request.label = "slow".to_owned();
     let handle = daemon.clone();
-    let worker = std::thread::spawn(move || handle.analyze(&slow_request));
-    std::thread::sleep(std::time::Duration::from_millis(40));
+    // Synchronise on the worker *entering* `analyze` instead of sleeping a
+    // fixed delay: on a fast Linux runner the previous 40 ms sleep let the
+    // compilation finish before the revision was advanced, so the outcome was
+    // legitimately current and the test flaked. The channel makes the
+    // "supersede while the request is in flight" scenario deterministic enough
+    // without weakening the assertion.
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let _ = entered_tx.send(());
+        handle.analyze(&slow_request)
+    });
+    entered_rx.recv().expect("worker entered analyze");
     daemon.advance_revision(revision + 10);
     let outcome = worker.join().expect("worker").expect("analysis");
     assert!(

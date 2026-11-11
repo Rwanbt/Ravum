@@ -1,0 +1,8 @@
+{
+  "id": "ownership/vec-index-move",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-PARTIAL-MOVE"
+  ],
+  "notes": "Moving an element out of a Vec by indexing is E-OWN-PARTIAL-MOVE (OWN-5.5)."
+}

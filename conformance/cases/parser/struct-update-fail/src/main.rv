@@ -1,0 +1,6 @@
+struct P { x: i32 }
+
+fn main() {
+    let a: P = P { x: 1 };
+    let b: P = P { ..a };
+}

@@ -1,0 +1,7 @@
+// ligne : commentaire avec accents éàü
+/* bloc sur une ligne */
+fn main() {
+    // commentaire indenté
+    /* unicode inside a comment: 😀 */
+    let x = 1;
+}

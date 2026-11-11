@@ -1,0 +1,5 @@
+{
+  "id": "types/array-static-str-element-compare-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-6.2 / TYP-5.4: a `&'static str` array element is comparable inside the instruction (`a[0] == \"zero\"`); the reference never escapes (round-3 axis static-str-array)."
+}

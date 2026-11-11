@@ -1,0 +1,5 @@
+{
+  "id": "types/char-literal",
+  "mode": "compile-pass",
+  "notes": "F-TYP-003 (TYP-1.4): 'é' is a valid char, a Unicode scalar rather than a UTF-8 byte."
+}

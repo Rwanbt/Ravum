@@ -38,6 +38,19 @@ use std::time::{Duration, Instant};
 /// Hard bound for one scenario: a scenario that runs longer fails its test.
 const MAX_SCENARIO_SECONDS: u64 = 60;
 
+/// Per-scenario time budget. The default (60 s) is the local performance guard.
+/// Shared CI runners are 3-10x slower under contention, so the Linux
+/// qualification workflow raises the bound explicitly instead of hiding the
+/// stress tests. This changes the timing envelope, never the correctness
+/// assertions.
+fn scenario_budget_seconds() -> u64 {
+    std::env::var("RAVUM_STRESS_MAX_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(MAX_SCENARIO_SECONDS)
+}
+
 /// Global lock: module counters and the reclamation queue are process-wide, and the
 /// scenarios assert exact transitions, so they are serialized. A poisoned lock is still
 /// usable (the failing scenario already reported its own panic).
@@ -391,9 +404,10 @@ struct Scenario {
 impl Scenario {
     fn record(name: &'static str, test: &'static str, started: Instant, facts: Value) -> Scenario {
         let duration_ms = started.elapsed().as_millis() as u64;
+        let budget = scenario_budget_seconds();
         assert!(
-            duration_ms < MAX_SCENARIO_SECONDS * 1000,
-            "{name} took {duration_ms} ms, above the {MAX_SCENARIO_SECONDS} s bound"
+            duration_ms < budget * 1000,
+            "{name} took {duration_ms} ms, above the {budget} s bound"
         );
         eprintln!("[dsp-stress] {test}: {duration_ms} ms");
         Scenario {
@@ -1385,6 +1399,34 @@ fn concurrent_publications_render_whole_versions_only() {
 // `RAVUM_STRESS_EVIDENCE` names a path. This keeps `cargo test` free of repository writes.
 // ---------------------------------------------------------------------------------------
 
+/// UTC calendar date (`YYYY-MM-DD`) of the moment the evidence is written.
+///
+/// The evidence file must carry the date of its own run: a hard-coded constant
+/// silently back-dates every file, which is exactly the kind of stale evidence
+/// INV-08 forbids. No dependency is added: days since the Unix epoch are converted
+/// with Howard Hinnant's `civil_from_days` algorithm (proleptic Gregorian).
+fn utc_date() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0);
+    let days = seconds.div_euclid(86_400);
+
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // day of era, [0, 146096]
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let day = doy - (153 * mp + 2) / 5 + 1; // [1, 31]
+    let month = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
+    let mut year = yoe + era * 400;
+    if month <= 2 {
+        year += 1;
+    }
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 #[test]
 fn stress_evidence_campaign() {
     let _serial = serial();
@@ -1452,7 +1494,7 @@ fn stress_evidence_campaign() {
     let evidence = json!({
         "schema_version": 1,
         "kind": "dsp-stress-campaign",
-        "date": "2026-11-09",
+        "date": utc_date(),
         "tool": "cargo test -p ravum-dsp-harness --test dsp_stress",
         "profile": "test (debug)",
         "platform": std::env::consts::OS,

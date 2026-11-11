@@ -1,0 +1,8 @@
+{
+  "id": "effects/recursive-effects",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "Effect inference is transitive through recursion: io reaches rec even though it appears only in the base case."
+}

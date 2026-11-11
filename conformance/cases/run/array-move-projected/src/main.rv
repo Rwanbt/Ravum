@@ -1,0 +1,18 @@
+struct Holder {
+    items: [String; 2],
+}
+
+fn from_field(h: Holder) -> String {
+    return h.items[1];
+}
+
+fn from_tuple(t: ([String; 2], i32)) -> String {
+    return t.0[0];
+}
+
+fn main() {
+    let h = Holder { items: [String::from("zero"), String::from("one")] };
+    io::println(from_field(h).as_str());
+    let t = ([String::from("x"), String::from("y")], 7);
+    io::println(from_tuple(t).as_str());
+}

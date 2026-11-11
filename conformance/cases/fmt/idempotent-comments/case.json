@@ -1,0 +1,5 @@
+{
+  "id": "fmt/idempotent-comments",
+  "mode": "fmt-idempotent",
+  "notes": "Comments are trivia preserved by fmt; running fmt twice must not move or rewrite them (LEX-6.3)."
+}

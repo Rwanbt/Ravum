@@ -1,0 +1,9 @@
+fn grab(v: &mut Vec<String>) -> Option<String> {
+    return v.pop();
+}
+
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    v.push(String::from("a"));
+    let x = v.pop();
+}

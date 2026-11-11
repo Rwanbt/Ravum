@@ -1,0 +1,6 @@
+fn main() {
+    let a: i128 = 1;
+    let b: i64 = 2;
+    let c: u64 = 3;
+    let d: u8 = 255;
+}

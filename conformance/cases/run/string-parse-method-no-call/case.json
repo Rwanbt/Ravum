@@ -1,0 +1,8 @@
+{
+  "id": "run/string-parse-method-no-call",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-021 / STD-9.10: parse_i64 is a method, it must be called; a method value is E-RES-UNKNOWN."
+}

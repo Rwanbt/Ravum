@@ -1,0 +1,6 @@
+{
+  "id": "run/string-replace",
+  "mode": "run-pass",
+  "stdout_contains": "ba -a-a-a-",
+  "notes": "F-STD-019 / STD-9.8: replace substitutes all non-overlapping occurrences; empty from inserts to between characters."
+}

@@ -1,0 +1,20 @@
+struct Doc {
+    titre: String,
+    pages: i32,
+}
+
+impl Doc {
+    fn into_titre(self) -> String {
+        return self.titre;
+    }
+}
+
+fn both(d: Doc) -> i32 {
+    let t = d.titre;
+    let n = d.pages;
+    let m = t.len();
+    return n + (m as i32);
+}
+
+fn main() {
+}

@@ -1,0 +1,5 @@
+{
+  "id": "modules/std-prelude-modules",
+  "mode": "compile-pass",
+  "notes": "F-MOD-012 / MOD-8.3 + STD-1.2: the implicit std package provides 7 modules (io, fs, env, process, math, string, panic); all resolve without a [dependencies] entry."
+}

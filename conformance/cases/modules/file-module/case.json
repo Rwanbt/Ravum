@@ -1,0 +1,6 @@
+{
+  "id": "modules/file-module",
+  "mode": "run-pass",
+  "stdout_contains": "7\n",
+  "notes": "`mod util;` resolves src/util.rv (MOD-1.3) relative to the crate root."
+}

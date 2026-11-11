@@ -1,0 +1,8 @@
+{
+  "id": "run/math-log2-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-STD-031 / STD-6.7: log2 is not provided; E-RES-UNKNOWN per STD-1.3 (the stdlib list is closed)."
+}

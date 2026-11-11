@@ -1,0 +1,5 @@
+{
+  "id": "types/cast-numeric",
+  "mode": "compile-pass",
+  "notes": "F-TYP-023 (TYP-13.2): int->int and float->int as casts are total and accepted."
+}

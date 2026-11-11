@@ -1,0 +1,6 @@
+fn f(s: &String) -> &str {
+    return s.as_str();
+}
+
+fn main() {
+}

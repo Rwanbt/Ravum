@@ -1,0 +1,5 @@
+use std::math;
+
+fn main() {
+    let m = math::min(1, 2);
+}

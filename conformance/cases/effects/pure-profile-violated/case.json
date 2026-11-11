@@ -1,0 +1,11 @@
+{
+  "id": "effects/pure-profile-violated",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ]
+}

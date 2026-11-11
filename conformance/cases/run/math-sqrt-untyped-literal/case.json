@@ -1,0 +1,6 @@
+{
+  "id": "run/math-sqrt-untyped-literal",
+  "mode": "run-pass",
+  "stdout_contains": "sqrt-ok",
+  "notes": "STD-6.2 / F-STD-009: `math::sqrt(2.0)` with an *untyped* literal must compile end to end. Regression guard: the emitted Rust used to keep `2.0` unsuffixed, so rustc saw `{float}` and rejected the method call with E0689 while `check` reported success."
+}

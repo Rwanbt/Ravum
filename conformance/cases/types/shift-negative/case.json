@@ -1,0 +1,8 @@
+{
+  "id": "types/shift-negative",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-SHIFT"
+  ],
+  "notes": "F-EXPR-005 (EXPR-3.4): a negative shift amount is refused statically with E-TYP-SHIFT."
+}

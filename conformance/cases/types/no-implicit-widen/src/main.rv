@@ -1,0 +1,6 @@
+fn widen(a: i32) {
+    let b: i64 = a;
+}
+
+fn main() {
+}

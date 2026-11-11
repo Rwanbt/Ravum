@@ -1,0 +1,8 @@
+fn takes(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let owned = String::from("x");
+    let n = takes(owned);
+}

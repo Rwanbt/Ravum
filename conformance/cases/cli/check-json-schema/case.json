@@ -1,0 +1,12 @@
+{
+  "id": "cli/check-json-schema",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "expect_json_schema_version": 1,
+  "notes": "`check --json` emits structured output with schema_version 1 and no unstructured noise (design 2)."
+}

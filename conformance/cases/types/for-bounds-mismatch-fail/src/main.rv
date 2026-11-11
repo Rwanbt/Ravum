@@ -1,0 +1,7 @@
+fn main() {
+    let start: i32 = 0;
+    let end: u32 = 4;
+    for i in start..end {
+        let x: i32 = i;
+    }
+}

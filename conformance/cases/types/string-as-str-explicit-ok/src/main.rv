@@ -1,0 +1,11 @@
+fn takes(s: &str) -> usize {
+    return s.len();
+}
+
+fn main() {
+    let owned = String::from("x");
+    let a = takes(&owned);
+    let b = takes(owned.as_str());
+    let line = " a ";
+    let c = takes(line.trim().as_str());
+}

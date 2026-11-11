@@ -1,0 +1,7 @@
+{
+  "id": "ownership/borrow-conflict-two-mut",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-BORROW-CONFLICT"
+  ]
+}

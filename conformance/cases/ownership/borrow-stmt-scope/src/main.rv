@@ -1,0 +1,11 @@
+struct Point { x: f64, y: f64 }
+
+fn f(p: Point) -> f64 {
+    let mut q = p;
+    let n = (&q).x;
+    q.x = 2.0;
+    return n + q.x;
+}
+
+fn main() {
+}

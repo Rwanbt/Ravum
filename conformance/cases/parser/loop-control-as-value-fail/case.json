@@ -1,0 +1,8 @@
+{
+  "id": "parser/loop-control-as-value-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-STATEMENT-VALUE"
+  ],
+  "notes": "F-SYN-033 (G-6.19): `let x = while c { };` (and loop/for in value position) must be E-TYP-STATEMENT-VALUE per features.md."
+}

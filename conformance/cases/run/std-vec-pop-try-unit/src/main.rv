@@ -1,0 +1,4 @@
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    let x = v.pop()?;
+}

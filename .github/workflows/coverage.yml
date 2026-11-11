@@ -1,0 +1,89 @@
+name: Coverage ratchet (frontend, per-file floors)
+
+# Per-file line/region coverage of the Ravum Core 1.0 frontend, enforced against
+# `tools/coverage_thresholds.json`.
+#
+# Why this workflow exists: T10 was PARTIAL partly because coverage was measured
+# by hand (`docs/qualification/T2-FINDINGS.md`) and nothing stopped a change from
+# lowering it. The floors in the thresholds file are a ratchet: they never go
+# down without an explicit edit and a justification.
+#
+# Scope notice: this measures the `ravum-lang-sema` **and** `ravum-lang-codegen`
+# crates, instrumented with `cargo llvm-cov` on a Linux runner. The backend was
+# unmeasured until 2026-11-11, so the code that decides what the generated Rust
+# looks like had no floor at all; including both crates in one instrumented
+# build also counts the sema code exercised by the codegen integration tests.
+# It is a *line/region* measurement, not a mutation score, not a proof of
+# correctness, and not a performance claim.
+# The 90/85 gate target for `typeck.rs` and `resolve.rs` is recorded in the
+# thresholds file; the enforced floors are one point below today's measurement
+# so a toolchain upgrade cannot flip the gate on rounding noise.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  coverage:
+    name: Frontend coverage floors (llvm-cov, per file)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-coverage-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-coverage-
+
+      # `-p ravum-lang-sema -p ravum-lang-codegen` runs both crates' unit and
+      # integration tests in one instrumented build (typeck_contracts, own_audit,
+      # resolve_contracts, backend_audit, …), which is the scope the thresholds
+      # file was measured on.
+      - name: Measure frontend coverage
+        run: |
+          cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
+          cargo llvm-cov report --text --show-missing-lines > target/cov-all.txt
+
+      - name: Enforce per-file floors
+        run: python tools/coverage_report.py --input target/cov-all.json --check
+
+      - name: Report (never hides a violation)
+        if: always()
+        run: python tools/coverage_report.py --input target/cov-all.json || true
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend
+          path: |
+            target/cov-all.json
+            target/cov-all.txt
+          if-no-files-found: warn
+          retention-days: 30

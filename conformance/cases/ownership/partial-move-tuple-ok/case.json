@@ -1,0 +1,5 @@
+{
+  "id": "ownership/partial-move-tuple-ok",
+  "mode": "compile-pass",
+  "notes": "Moving a tuple element or an array element is allowed when the aggregate is never reused (OWN-5.4, TYP-4.4, TYP-5.4). Extended (P0-A): main performs both moves so codegen must emit a valid move for each; the array-element case previously failed with rustc E0508."
+}

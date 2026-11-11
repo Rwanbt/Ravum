@@ -1,0 +1,13 @@
+fn main() {
+    let a = 1_000_000;
+    let b = 0xFF_FFu16;
+    let c = 0b1010_0101u8;
+    let d = 0o755;
+    let e = 3.14f32;
+    let f = 1e9;
+    let g = 1.5e-3f64;
+    let h = 'é';
+    let i = '\u{1F600}';
+    let j = "bonjour\n";
+    let k = true;
+}

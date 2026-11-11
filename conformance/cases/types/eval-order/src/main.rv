@@ -1,0 +1,16 @@
+use std::io;
+
+fn g() -> i32 {
+    io::print("g");
+    return 1;
+}
+
+fn h() -> i32 {
+    io::print("h");
+    return 2;
+}
+
+fn main() {
+    let s = g() + h();
+    io::println(&s.to_string());
+}

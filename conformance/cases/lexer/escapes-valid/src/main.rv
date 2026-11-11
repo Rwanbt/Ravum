@@ -1,0 +1,7 @@
+fn main() {
+    let a = "line\nnext\ttab\rcr\0nul\\slash\"quote\'apos";
+    let b = "\x41\u{1F600}";
+    let c = '\n';
+    let d = '\'';
+    let e = '\u{1F600}';
+}

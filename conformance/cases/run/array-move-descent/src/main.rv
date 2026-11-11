@@ -1,0 +1,17 @@
+fn make() -> [String; 2] {
+    return [String::from("x"), String::from("y")];
+}
+
+fn from_call(i: usize) -> String {
+    return make()[i];
+}
+
+fn from_element_projection(a: [([String; 2], i32); 2]) -> String {
+    return a[0].0[1];
+}
+
+fn main() {
+    io::println(from_call(1).as_str());
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(from_element_projection(a).as_str());
+}

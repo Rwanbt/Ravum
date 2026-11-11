@@ -1,0 +1,8 @@
+{
+  "id": "lexer/invalid-utf8-file",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "notes": "F-LEX-001 / LEX-2.1: a source file that is not valid UTF-8 must be refused with a single stable code. The file contains the byte 0xFF on its own line."
+}

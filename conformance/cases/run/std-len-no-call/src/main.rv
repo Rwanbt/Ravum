@@ -1,0 +1,6 @@
+fn f(s: String) {
+    let n = s.len;
+}
+
+fn main() {
+}

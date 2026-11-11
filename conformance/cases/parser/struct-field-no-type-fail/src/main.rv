@@ -1,0 +1,5 @@
+struct Point { x, y: f64 }
+
+fn main() {
+}
+

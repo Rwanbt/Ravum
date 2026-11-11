@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/range-value",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-RANGE"
+  ],
+  "unsupported": true,
+  "notes": "Ranges outside `for` (values, inclusive ranges, slicing, `..base`) are E-UNSUPPORTED-RANGE (UNS-3, F-UNS-015)."
+}

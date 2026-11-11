@@ -1,0 +1,6 @@
+{
+  "id": "run/aggregates",
+  "mode": "run-pass",
+  "stdout_contains": "48\n",
+  "notes": "7 + 10 + 20 + 5 + 6 + 0 = 48; exercises tuples, structs, inherent methods, enums and exhaustive match."
+}

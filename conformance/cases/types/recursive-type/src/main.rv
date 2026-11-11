@@ -1,0 +1,4 @@
+struct Node { next: Option<Node> }
+
+fn main() {
+}

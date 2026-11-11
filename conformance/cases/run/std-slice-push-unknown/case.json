@@ -1,0 +1,8 @@
+{
+  "id": "run/std-slice-push-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "`&[T]` exposes only `len`, `is_empty` and `s[i]`: `push` on a slice is E-RES-UNKNOWN (STD-10.6, F-STD-025 fail side)."
+}

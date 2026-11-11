@@ -1,0 +1,8 @@
+{
+  "id": "parser/const-no-type-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "F-SYN-008 (G-4.8): `const N = 1;` without a type is E-PARSE-EXPECTED."
+}

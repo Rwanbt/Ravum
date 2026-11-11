@@ -1,0 +1,8 @@
+{
+  "id": "parser/meta-edition-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EDITION"
+  ],
+  "notes": "F-META-007 / COMPAT-1.3 + COMPAT-2.3: an unknown edition is refused fail-closed (E-UNSUPPORTED-EDITION), never interpreted partially. Changing semantics without a major edition is a process rule, not a program form."
+}

@@ -1,0 +1,15 @@
+use std::io;
+
+fn main() {
+    let x: f64 = -4.0;
+    let mut out = x.abs().to_string();
+    out.push_str(" ");
+    out.push_str(&x.abs().sqrt().to_string());
+    out.push_str(" ");
+    out.push_str(&x.abs().powf(0.5).to_string());
+    out.push_str(" ");
+    out.push_str(&x.abs().max(9.0).to_string());
+    out.push_str(" ");
+    out.push_str(&x.abs().min(9.0).to_string());
+    io::println(out.as_str());
+}

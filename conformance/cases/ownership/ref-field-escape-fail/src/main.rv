@@ -1,0 +1,6 @@
+struct W {
+    r: &i32,
+}
+
+fn main() {
+}

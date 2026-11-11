@@ -1,0 +1,8 @@
+{
+  "id": "types/never-field",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "F-TYP-026 (G-5.11): ! is not nameable as a field type."
+}

@@ -1,0 +1,7 @@
+fn pick(a: [String; 2], i: usize) -> String {
+    return a[i];
+}
+
+fn main() {
+    let a = [String::from("zero"), String::from("one")];
+}

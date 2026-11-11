@@ -1,0 +1,14 @@
+fn at(a: [[String; 2]; 2], i: usize) -> String {
+    return a[0][i];
+}
+
+fn both(a: [[String; 2]; 2], i: usize, j: usize) -> String {
+    return a[i][j];
+}
+
+fn main() {
+    let a = [[String::from("aa"), String::from("bb")], [String::from("ccc"), String::from("dd")]];
+    io::println(at(a, 1).as_str());
+    let b = [[String::from("aa"), String::from("bb")], [String::from("ccc"), String::from("dd")]];
+    io::println(both(b, 1, 0).as_str());
+}

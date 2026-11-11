@@ -1,0 +1,14 @@
+fn pick(c: bool) -> i32 {
+    let x = {
+        if c {
+            return 1;
+        }
+        2
+    };
+    return x;
+}
+
+fn main() {
+    let a = pick(true);
+}
+

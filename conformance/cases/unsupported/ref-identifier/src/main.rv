@@ -1,0 +1,4 @@
+fn main() {
+    let ref = 1;
+    let y = ref + 1;
+}

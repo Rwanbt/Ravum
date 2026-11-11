@@ -1,0 +1,9 @@
+fn code(s: &str) -> i32 {
+    match s {
+        "a" => 1,
+        _ => 0,
+    }
+}
+
+fn main() {
+}

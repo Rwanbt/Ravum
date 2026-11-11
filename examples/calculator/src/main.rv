@@ -1,0 +1,36 @@
+// Calculatrice CLI : arguments, Result, `?`, comparaison de texte, flottants.
+use std::env;
+use std::io;
+use std::string;
+
+fn apply(a: f64, op: &str, b: f64) -> Result<f64, Error> {
+    if op == "+" {
+        return Ok(a + b);
+    }
+    if op == "-" {
+        return Ok(a - b);
+    }
+    if op == "*" {
+        return Ok(a * b);
+    }
+    if op == "/" {
+        if b == 0.0 {
+            return Err(Error::new("division by zero"));
+        }
+        return Ok(a / b);
+    }
+    Err(Error::new("unknown operator"))
+}
+
+fn main() -> Result<(), Error> {
+    let args = env::args();
+    if args.len() != 4 {
+        io::println("usage: calculator <a> <op> <b>");
+        return Ok(());
+    }
+    let a = string::parse_f64(&args[1])?;
+    let b = string::parse_f64(&args[3])?;
+    let result = apply(a, &args[2], b)?;
+    io::println(&result.to_string());
+    Ok(())
+}

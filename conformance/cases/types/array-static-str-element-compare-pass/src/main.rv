@@ -1,0 +1,6 @@
+fn f(a: [&str; 2]) -> bool {
+    return a[0] == "zero";
+}
+
+fn main() {
+}

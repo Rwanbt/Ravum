@@ -1,0 +1,6 @@
+fn main() {
+    let v: Vec<i32> = Vec::new();
+    for x in v {
+    }
+    let n = v.len();
+}

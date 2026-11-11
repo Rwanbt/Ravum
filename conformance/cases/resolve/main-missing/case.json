@@ -1,0 +1,8 @@
+{
+  "id": "resolve/main-missing",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MAIN-MISSING"
+  ],
+  "notes": "A binary crate without fn main is E-TYP-MAIN-MISSING (canonical types-phase code)."
+}

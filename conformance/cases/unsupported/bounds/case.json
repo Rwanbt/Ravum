@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/bounds",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-BOUNDS"
+  ],
+  "unsupported": true,
+  "notes": "Grammar G-3.5 / UNS \u00a72: generic bounds are not in Core 1.0. diagnostics.md \u00a73 (added) registers E-UNSUPPORTED-BOUNDS; G-3.5 still says E-UNSUPPORTED-TRAIT."
+}

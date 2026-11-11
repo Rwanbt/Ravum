@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-nested",
+  "mode": "run-pass",
+  "stdout_contains": "a1\n",
+  "notes": "OWN-5.4: moving an element of a nested array (`a[0][1]`) is legal when the aggregate is never reused; the backend lowers it to a recursive destructuring instead of emitting rustc E0508."
+}

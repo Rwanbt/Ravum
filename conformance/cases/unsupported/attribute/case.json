@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/attribute",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ATTR"
+  ],
+  "unsupported": true,
+  "notes": "Attributes are recognized and refused with E-UNSUPPORTED-ATTR (canonical registry)."
+}

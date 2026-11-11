@@ -1,5 +1,14 @@
 # Statut architectural — Ravum (mise à jour intégration `dev`, 9 novembre 2026)
 
+> **Deux lignes de travail, deux statuts — ne pas mélanger leurs chiffres.**
+> Ce document décrit la **ligne plateforme Rust** (`dev`, MVP-0a/b/c/d) : boucle
+> analyse → build → vérification → hot patch. Le **noyau de langage
+> expérimental** vit sur `feat/lang-core-1.0-rc` : c'est un sous-ensemble Core
+> 1.0 **DRAFT**, mesuré par le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md)
+> et [l'état du langage](../reports/LANGUAGE-CORE-STATUS.md). Il n'est ni ratifié
+> par un ADR, ni un compilateur complet, ni une preuve générale — et il ne
+> contredit pas les limites de ce document, qui porte sur l'autre ligne.
+
 > **Document de situation, non un certificat de réalisation.** Ce qui est marqué
 > « mesuré » l'a été sur la machine de référence locale, avec les limites publiées dans
 > les rapports liés. Aucun ADR n'est accepté, aucune release n'existe, aucune garantie
@@ -15,7 +24,7 @@
 | MVP-0d / Lot B — overlays | **Prototype testé, partiel** : `BaseSnapshot` content-adressée, overlays privés, intégration tout ou rien, CAS de base, conflits de chemin refusés, 9 tests dont concurrence 8 threads ; stockage mesuré −92,0 % vs 8 copies complètes ; **publication Git non branchée**, campagne A/B/C/D non exécutée — [MVP-0d-overlays](../mvp/MVP-0d-overlays.md) |
 | MVP-0d / Lot C — groupement adaptatif | **Implémenté et mesuré** (trace synthétique) : fenêtre bornée 10–100 ms, croissance sur densité, rétrécissement sur rareté ; fixe 0/50/100 = 12/4/4 lots, attente 200/360/510 ms ; adaptative = 4 lots / 450 ms — [MVP-0d-batch-window](../mvp/MVP-0d-batch-window.md) |
 | MVP-0d / Lot D — projets représentatifs | **`NOT_RUN`** : aucun corpus externe exécuté pendant ce cycle — [rapport](../mvp/MVP-0d-REPORT.md) |
-| Compilateur Ravum / frontend / runtime | Non implémentés |
+| Compilateur Ravum / frontend / runtime | **Hors périmètre de ce document** (ligne plateforme `dev`) : le noyau de langage expérimental est sur `feat/lang-core-1.0-rc`, décrit par [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md) et le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md) — sous-ensemble DRAFT, pas d'ADR ratifié, pas de `PROVED` |
 | Outil Rust MVP-0a (M1) | **Implémenté, expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
 | MVP-0b / L0 — audit et baseline | **Fait** : 139/139 tests reproduits, démonstrations M1–M4 reproduites, risques R1–R10 publiés — [MVP-0b-audit.md](../mvp/MVP-0b-audit.md) |
@@ -37,11 +46,11 @@
 | MVP-0c / L4 — qualification | **Partiel** : **495 tests / 0 échec / 78 suites**, CI par impact (59 cas / 655 assertions, E2E navigateur déclenchés par impact et **vérifiés sur CI réelle** : runs + dispatch, +26–29 s), 10/10 E2E local+CI, 9 tests de stress DSP, reclassification des échecs transitoires, flake auto-GC corrigé, preuves de test opt-in et anonymisées, gate `fmt` ; CI produit+impact verte sur `8fc1345` ; CI par impact sur une vraie PR vers `dev` bloquée (`dev` sans crate) ; aucun prouveur externe (Kani bloqué, WSL indisponible) — [rapport](../mvp/MVP-0c-REPORT.md), [qualification](../mvp/MVP-0c-qualification.md) |
 | MVP-0c / L5 — intégration | **Avancé** : CLI `ravum unit-check` + `collab-cycle --protocol v2 --oracle unit-graph` (47 tests), **audit final `READY_FOR_HUMAN_REVIEW`** (0 bloquant, 0 secret, 0 conflit simulé), **gate `fmt` rustfmt 1.95 + toolchain épinglée**, **preuves anonymisées** (63 JSON, 0 chemin utilisateur), simulation de fusion rejouée (0 conflit, arbres documentés), rapport consolidé, sessions Obsidian, PR #82 draft ; **fusionné dans `dev`** le 9 novembre 2026 via une chaîne d'intégration propre (PR #83/#84/#85, `dev` = `6b0ac7b`), sans le commit d'outillage local `16b1ff2` ; aucun ADR accepté — [checklist](../mvp/MVP-0c-integration-checklist.md), [intégration](../mvp/INTEGRATION-0abc.md) |
 | Vérification bornée (M2) | `Proved` limité au domaine énuméré, ledger append-only, cache invalidé par mutation ; prouveur externe **absent** (`Unsupported`) |
-| DSP de bloc (M3) | Démonstrateur : ABI de bloc, état possédé par l'hôte, swap sans verrou, crossfade optionnel ; **pas d'hôte audio réel** |
+| DSP de bloc (M3) | Démonstrateur : ABI de bloc, état possédé par l'hôte, swap sans verrou, crossfade optionnel ; **pas d'hôte audio réel dans ce démonstrateur** (l'hôte L4-C, distinct, est décrit plus haut) |
 | Verticale full-stack (M4) | Application témoin : UI statique, API HTTP, SQLite, contrat v1, migrations additives, E2E API + **E2E navigateur** ; pas de TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | Protection de branches | **Appliquée** sur `main` et `dev` : PR requises (0 approbation), force push et suppression interdits, check `mvp` requis sur `main` (#77) |
-| Licence | **Analyse publiée, aucune licence choisie** ; audit automatique qui refuse une décision implicite — [MVP-0b-licence-analysis.md](../mvp/MVP-0b-licence-analysis.md) |
+| Licence | **`MIT OR Apache-2.0`** sur les 23 membres du workspace (D1 résolue ; PR de licence fusionnée) — [décision](../adr/README.md) |
 | Gate M5 pour un nouveau langage | Proposed, **pas accepté** |
 | Code de release | Aucun |
 
@@ -59,20 +68,25 @@
 
 ## Ce qui reste non démontré (extrait)
 
-- Aucune garantie hard-RT, aucun XRUN mesuré, aucun hôte audio réel.
+- Aucune garantie hard-RT, aucun XRUN mesuré ; l'hôte audio de démonstration L4-C existe
+  (`waveOut`/WASAPI, MMCSS mesurés) mais n'est pas qualifié temps réel
+  ([audio réel](../mvp/MVP-0b-audio-host.md)).
 - Cible P0-A « diagnostic p95 < 50 ms sur code modifié » **non atteinte** ; cible
   « petit patch p95 < 500 ms » non re-mesurée de bout en bout.
 - Aucune preuve que le workspace partagé est plus productif que les worktrees avec de
   vrais agents LLM (S8 utilise des éditeurs scriptés ; tokens non mesurés).
-- Le groupement de patches (L2) n'est **pas implémenté** ; sa rentabilité mesurée est
-  conditionnelle (seuil `p*` = 27–68 % selon N) et le régime de conflits réel en
-  production n'est pas mesuré.
+- Le regroupement adaptatif de patches est **implémenté et mesuré** (MVP-0d, Lot C) ; le
+  Lot D (projets représentatifs) reste `NOT_RUN`. Sa rentabilité mesurée est conditionnelle
+  (seuil `p*` = 27–68 % selon N) et le régime de conflits réel en production n'est pas mesuré.
 - La campagne S8 avec de vrais agents et statistiques d'usage reste à exécuter ; la
   procédure est prête mais aucun token réel n'a encore été mesuré.
-- Le CLI ne branche pas encore l'analyse inter-crates ni l'oracle sémantique, et la CI
-  par impact n'a pas été exercée sur une vraie PR vers `dev` (`dev` sans crate).
-- `cargo fmt --check` n'est pas un gate : ~305 fichiers ne sont pas au format
-  rustfmt 1.95 (dérive de version), sans impact fonctionnel démontré.
+- Le CLI expose `ravum unit-check` et `collab-cycle --oracle unit-graph`
+  (MVP-0c / L5) ; l'oracle sémantique de contrats n'est pas branché. La CI par impact a
+  été exercée sur une vraie PR vers `dev` (PR #101, check `impact` vert) ; il manque une
+  campagne sur plusieurs PR réelles.
+- `cargo fmt --check` est un **gate bloquant** dans `mvp.yml` ; la dérive de formatage a été
+  corrigée (`ab51b17`, rustfmt 1.95 épinglé). Le nombre de fichiers concernés avant
+  correction (~305, chiffre du 9 novembre) n'est pas re-mesuré ici.
 - Aucun prouveur externe, aucune propriété générale, aucun certificat indépendant.
 - Aucune mesure de productivité humaine/agent jusqu'au livraison vérifié (P0-I).
 

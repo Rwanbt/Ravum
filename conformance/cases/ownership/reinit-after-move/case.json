@@ -1,0 +1,5 @@
+{
+  "id": "ownership/reinit-after-move",
+  "mode": "compile-pass",
+  "notes": "Assigning a moved place re-initialises it and is not a use (OWN-4.4, EXPR-9.3)."
+}

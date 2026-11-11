@@ -1,0 +1,7 @@
+{
+  "id": "resolve/import-private",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-PRIVATE"
+  ]
+}

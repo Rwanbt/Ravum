@@ -1,0 +1,6 @@
+fn h(s: String) {
+    let t = s.as_str();
+}
+
+fn main() {
+}

@@ -1,0 +1,5 @@
+{
+  "id": "parser/tuple-pattern-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-030 (G-6.38): a tuple pattern `(a, b)` destructures a tuple of exact arity."
+}

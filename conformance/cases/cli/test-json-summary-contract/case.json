@@ -1,0 +1,8 @@
+{
+  "id": "cli/test-json-summary-contract",
+  "mode": "cli",
+  "args": ["test", "--json", "{project}"],
+  "exit_code": 0,
+  "stdout_contains": "\"errors\":0",
+  "notes": "diagnostics.md §7.2 requires `summary` to carry `errors` and `warnings`. `test` reported only test counts; both fields are now present. `tools/json_contract.py` checks the whole envelope, this case locks the two documented fields."
+}

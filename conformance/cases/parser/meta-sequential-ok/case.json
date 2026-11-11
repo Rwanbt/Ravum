@@ -1,0 +1,5 @@
+{
+  "id": "parser/meta-sequential-ok",
+  "mode": "compile-pass",
+  "notes": "F-META-005 / CONC-1.1: a sequential (single logical thread) program is the only execution model; it is accepted."
+}

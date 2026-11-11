@@ -1,0 +1,11 @@
+use std::io;
+
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    let i: usize = 5;
+    let b = i < v.len() && v[i] == 0;
+    if !b {
+        io::println("ok");
+    }
+}

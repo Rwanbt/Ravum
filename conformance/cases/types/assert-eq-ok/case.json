@@ -1,0 +1,5 @@
+{
+  "id": "types/assert-eq-ok",
+  "mode": "compile-pass",
+  "notes": "F-STD-013 / STD-8.2: `assert_eq` is accepted for types that have `==` in Core 1.0 (integers, floats, bool, char, text)."
+}

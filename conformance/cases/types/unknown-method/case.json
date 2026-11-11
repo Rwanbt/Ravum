@@ -1,0 +1,8 @@
+{
+  "id": "types/unknown-method",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "An unknown method name is a resolution failure: E-RES-UNKNOWN (canonical registry covers methods); E-TYP-METHOD is not canonical."
+}

@@ -1,0 +1,7 @@
+fn f(a: &mut i32, b: &mut i32) {
+}
+
+fn main() {
+    let mut x = 1;
+    f(&mut x, &mut x);
+}

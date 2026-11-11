@@ -1,0 +1,5 @@
+{
+  "id": "types/mut-binding-assign",
+  "mode": "compile-pass",
+  "notes": "F-TYP-006 (TYP-3.1): a let mut binding is a mutable place."
+}

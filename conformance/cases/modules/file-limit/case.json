@@ -1,0 +1,8 @@
+{
+  "id": "modules/file-limit",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LIMIT-FILES"
+  ],
+  "notes": "diagnostics.md \u00a73 (added): the number of source files of a package is bounded; the loader stops at MAX_SOURCE_FILES = 200 (the parser reserves the high byte of a FileId). The root plus 200 module files is 201 sources, one above the limit."
+}

@@ -1,0 +1,7 @@
+fn h(s: String) -> usize {
+    let t = s;
+    return s.len();
+}
+
+fn main() {
+}

@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/threads-atomics",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "Threads, atomics, locks and channels do not exist: any use is E-RES-UNKNOWN by absence of API (UNS-5, F-UNS-005)."
+}

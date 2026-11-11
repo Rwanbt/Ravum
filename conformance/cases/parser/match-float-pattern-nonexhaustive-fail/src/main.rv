@@ -1,0 +1,9 @@
+fn classer(x: f64) -> i32 {
+    match x {
+        1.5 => 1,
+    }
+}
+
+fn main() {
+    let a = classer(1.5);
+}

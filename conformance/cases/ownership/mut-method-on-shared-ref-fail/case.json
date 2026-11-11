@@ -1,0 +1,8 @@
+{
+  "id": "ownership/mut-method-on-shared-ref-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "F-STD-016 / OWN-7.2: `push_str` takes `&mut self`; calling it on a shared `&String` borrows the place mutably, which is refused with E-OWN-IMMUTABLE."
+}

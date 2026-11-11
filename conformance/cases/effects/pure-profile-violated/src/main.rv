@@ -1,0 +1,5 @@
+use std::io;
+
+fn main() effects(io) {
+    io::println("x");
+}

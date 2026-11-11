@@ -1,0 +1,17 @@
+// FFI minimal : déclaration `extern "C"` + appel dans un bloc `unsafe`.
+// Core 1.0 n'accepte que des signatures primitives (entiers, flottants, bool,
+// unité) et impose le contexte `unsafe` à chaque appel. `abs` vient du runtime
+// C de l'hôte (msvcrt sous Windows, libc sous Linux).
+use std::io;
+
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+
+fn main() {
+    let negative = -42;
+    let magnitude = unsafe {
+        abs(negative)
+    };
+    io::println(&magnitude.to_string());
+}

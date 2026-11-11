@@ -1,0 +1,8 @@
+{
+  "id": "types/try-invalid",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-TRY"
+  ],
+  "notes": "`?` on Result in a function returning () is E-TYP-TRY (EXPR-8.3)."
+}

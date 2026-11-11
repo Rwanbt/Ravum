@@ -1,0 +1,6 @@
+fn f() {
+    let a = [1, true];
+}
+
+fn main() {
+}

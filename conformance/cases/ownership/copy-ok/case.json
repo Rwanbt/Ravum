@@ -1,0 +1,5 @@
+{
+  "id": "ownership/copy-ok",
+  "mode": "compile-pass",
+  "notes": "Point has only Copy fields, so reads copy; shared references are Copy and may be stored."
+}

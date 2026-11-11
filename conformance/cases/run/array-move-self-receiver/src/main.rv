@@ -1,0 +1,24 @@
+struct H {
+    s: String,
+}
+
+impl H {
+    fn take(self) -> String {
+        return self.s;
+    }
+}
+
+fn constant(a: [H; 2]) -> String {
+    return a[0].take();
+}
+
+fn dynamic(a: [H; 2], i: usize) -> String {
+    return a[i].take();
+}
+
+fn main() {
+    let a = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    io::println(constant(a).as_str());
+    let b = [H { s: String::from("zero") }, H { s: String::from("one") }];
+    io::println(dynamic(b, 1).as_str());
+}

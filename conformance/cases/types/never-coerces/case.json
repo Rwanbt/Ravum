@@ -1,0 +1,5 @@
+{
+  "id": "types/never-coerces",
+  "mode": "compile-pass",
+  "notes": "F-TYP-004 (TYP-1.6): panic has type ! and coerces to the expected i32."
+}

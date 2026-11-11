@@ -1,0 +1,9 @@
+{
+  "id": "effects/profile-core-unrestricted",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "core"
+  ],
+  "notes": "The `core` profile forbids no effect: io and alloc are accepted (EFF-4.1)."
+}

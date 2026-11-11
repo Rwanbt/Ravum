@@ -1,0 +1,12 @@
+fn shadowed(a: [String; 2]) -> String {
+    if true {
+        let a = String::from("inner");
+        io::println(a.as_str());
+    }
+    return a[0];
+}
+
+fn main() {
+    let a = [String::from("first"), String::from("second")];
+    io::println(shadowed(a).as_str());
+}

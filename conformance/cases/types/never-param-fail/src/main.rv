@@ -1,0 +1,5 @@
+fn takes_never(value: !) {
+}
+
+fn main() {
+}

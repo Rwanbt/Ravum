@@ -1,0 +1,8 @@
+{
+  "id": "parser/unclosed-delimiter",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-UNCLOSED"
+  ],
+  "notes": "diagnostics.md \u00a73.1: E-PARSE-UNCLOSED is a `(`, `[` or `{` delimiter left unclosed. The minimal program opens the `main` body and never closes it."
+}

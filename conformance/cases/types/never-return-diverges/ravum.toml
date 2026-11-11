@@ -1,0 +1,4 @@
+[package]
+name = "types-never-return-diverges"
+version = "0.1.0"
+edition = "core-1.0"

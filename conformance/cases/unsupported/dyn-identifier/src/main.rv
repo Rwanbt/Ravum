@@ -1,0 +1,4 @@
+fn main() {
+    let dyn = 1;
+    let x = dyn + 1;
+}

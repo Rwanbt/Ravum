@@ -1,0 +1,6 @@
+{
+  "id": "types/eval-order",
+  "mode": "run-pass",
+  "stdout_contains": "gh3\n",
+  "notes": "F-EXPR-001 (EXPR-1.1-1.2): both operands are evaluated left-to-right; the trace is gh3."
+}

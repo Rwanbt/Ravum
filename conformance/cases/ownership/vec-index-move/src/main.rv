@@ -1,0 +1,7 @@
+fn n(v: Vec<String>) -> String {
+    let s = v[0];
+    return s;
+}
+
+fn main() {
+}

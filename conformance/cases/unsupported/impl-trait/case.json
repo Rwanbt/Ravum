@@ -1,0 +1,9 @@
+{
+  "id": "unsupported/impl-trait",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-IMPL-TRAIT"
+  ],
+  "unsupported": true,
+  "notes": "`impl Trait` in return position is E-UNSUPPORTED-IMPL-TRAIT (UNS-2, F-UNS-002)."
+}

@@ -1,0 +1,5 @@
+[package]
+name = "run-string-replace"
+version = "0.1.0"
+edition = "core-1.0"
+

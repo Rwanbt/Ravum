@@ -1,0 +1,6 @@
+struct Impossible {
+    never: !,
+}
+
+fn main() {
+}

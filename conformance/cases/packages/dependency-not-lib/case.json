@@ -1,0 +1,9 @@
+{
+  "id": "packages/dependency-not-lib",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-DEPENDENCY"
+  ],
+  "notes": "A dependency without src/lib.rv is malformed: E-MOD-DEPENDENCY (canonical), not E-MOD-DEP-NOT-LIB."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "ownership/unwrap-use-after-move",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "OWN-5.1 / STD-11.2 / STD-11.3: after unwrap, unwrap_or or Result::unwrap consumed the receiver, a later read (is_some/is_none/is_ok) is E-OWN-USE-AFTER-MOVE."
+}

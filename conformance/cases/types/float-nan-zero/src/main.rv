@@ -1,0 +1,9 @@
+fn main() {
+    let nan = 0.0 / 0.0;
+    let inf = 1.0 / 0.0;
+    assert(nan != nan);
+    assert(!(nan == nan));
+    assert(!(nan < 1.0));
+    assert(0.0 == -0.0);
+    assert(inf > 0.0);
+}

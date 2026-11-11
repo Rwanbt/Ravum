@@ -1,0 +1,20 @@
+[package]
+name = "ravum-lang-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "ravum-lang: Ravum language toolchain (init/check/build/run/test/fmt/...)"
+
+[[bin]]
+name = "ravum-lang"
+path = "src/main.rs"
+
+[dependencies]
+ravum-lang-syntax = { workspace = true }
+ravum-lang-sema = { workspace = true }
+ravum-lang-codegen = { workspace = true }
+ravum-lang-lsp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

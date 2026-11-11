@@ -1,0 +1,5 @@
+{
+  "id": "parser/enum-variants-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-006 (G-4.3): an enum with unit, tuple and record variants is accepted and matchable."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "run/index-out-of-bounds",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic:",
+  "notes": "Indexing past the array length is a controlled panic (TYP-5.2); the index is a parameter, not a literal."
+}

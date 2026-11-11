@@ -1,0 +1,6 @@
+fn first<T>(a: [T; 2]) -> T {
+    return a[0];
+}
+
+fn main() {
+}

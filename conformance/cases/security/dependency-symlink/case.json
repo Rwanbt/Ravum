@@ -1,0 +1,16 @@
+{
+  "id": "security/dependency-symlink",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-PATH"
+  ],
+  "fixtures": [
+    {
+      "kind": "symlink-dir",
+      "path": "util",
+      "target": "real_util"
+    }
+  ],
+  "notes": "A symlinked dependency is E-MOD-PATH in the canonical registry/implementation; E-MOD-PATH-ESCAPE is reserved for absolute paths, `..` escapes and depth violations (Lead ruling). If the host refuses symlink creation the case is SKIP, never PASS."
+}

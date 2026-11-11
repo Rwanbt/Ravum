@@ -1,0 +1,14 @@
+fn compte(v: &Vec<i32>) -> usize {
+    return v.len();
+}
+
+fn ajoute(v: &mut Vec<i32>, n: &i32) {
+    v.push(*n);
+}
+
+fn chaine(v: &Vec<i32>) -> usize {
+    return compte(v);
+}
+
+fn main() {
+}

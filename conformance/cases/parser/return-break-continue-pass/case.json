@@ -1,0 +1,5 @@
+{
+  "id": "parser/return-break-continue-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-015 (G-6.6-6.7): return, break and continue are accepted in their valid contexts."
+}

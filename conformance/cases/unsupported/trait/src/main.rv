@@ -1,0 +1,6 @@
+trait Affiche {
+    fn affiche(&self);
+}
+
+fn main() {
+}

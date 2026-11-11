@@ -1,0 +1,8 @@
+{
+  "id": "run/std-error-eq",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-EQ"
+  ],
+  "notes": "`Error` is a non-comparable aggregate: `a == b` on two `Error` values is E-TYP-EQ (STD-13, F-STD-030 fail side)."
+}

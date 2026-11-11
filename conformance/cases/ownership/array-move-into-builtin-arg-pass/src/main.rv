@@ -1,0 +1,8 @@
+fn f(a: [String; 2]) -> Vec<String> {
+    let mut v = Vec::new();
+    v.push(a[0]);
+    return v;
+}
+
+fn main() {
+}

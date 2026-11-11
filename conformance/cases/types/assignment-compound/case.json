@@ -1,0 +1,6 @@
+{
+  "id": "types/assignment-compound",
+  "mode": "run-pass",
+  "stdout_contains": "4\n",
+  "notes": "F-EXPR-015 (EXPR-9.1, EXPR-9.4): assignment replaces a place value and += is accepted."
+}

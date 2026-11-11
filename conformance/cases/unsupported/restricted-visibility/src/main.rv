@@ -1,0 +1,4 @@
+pub(crate) fn f() {
+}
+fn main() {
+}

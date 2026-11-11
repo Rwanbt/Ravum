@@ -1,0 +1,7 @@
+{
+  "id": "run/integer-overflow",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic:",
+  "notes": "Integer overflow is a controlled panic in all profiles (design 3.3); the addition is in a function so it cannot be constant-folded."
+}

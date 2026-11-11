@@ -1,0 +1,7 @@
+fn f(t: (String, i32)) -> (String, i32) {
+    let s = t.0;
+    return t;
+}
+
+fn main() {
+}

@@ -1,0 +1,6 @@
+{
+  "id": "parser/precedence",
+  "mode": "run-pass",
+  "stdout_contains": "73\nok\n",
+  "notes": "Expected 73: (14)+(20)+(8)+(24)+(5)+(2); `||`/`&&` short-circuit and comparison precedence follow design 3.3."
+}

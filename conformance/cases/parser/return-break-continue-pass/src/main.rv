@@ -1,0 +1,32 @@
+fn find(n: i32) -> i32 {
+    let mut i = 0;
+    while i < n {
+        if i == 3 {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+
+fn skip(n: i32) -> i32 {
+    let mut i = 0;
+    let mut s = 0;
+    loop {
+        i += 1;
+        if i > n {
+            break;
+        }
+        if i == 2 {
+            continue;
+        }
+        s += i;
+    }
+    return s;
+}
+
+fn main() {
+    let a = find(10);
+    let b = skip(5);
+}
+

@@ -1,0 +1,4 @@
+[package]
+name = "ownership-struct-field-reinit-after-move-pass"
+version = "0.1.0"
+edition = "core-1.0"

@@ -1,0 +1,6 @@
+{
+  "id": "types/pattern-text-literal-pass",
+  "mode": "compile-pass",
+  "expect_codes": [],
+  "notes": "G-6.36 / Q-GRAM-6: a text literal pattern matches a `&str` scrutinee by equality."
+}

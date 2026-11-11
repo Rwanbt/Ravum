@@ -1,0 +1,8 @@
+{
+  "id": "types/never-return-body",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-RETURN"
+  ],
+  "notes": "F-TYP-004 (TYP-1.6, G-5.11): a -> ! function whose body terminates is E-TYP-RETURN."
+}

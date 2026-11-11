@@ -1,0 +1,21 @@
+{
+  "id": "parser/meta-abi-emit-rust",
+  "mode": "cli",
+  "args": [
+    "build",
+    ".",
+    "--emit-rust",
+    "abi_audit.rs"
+  ],
+  "expect_files": [
+    "abi_audit.rs"
+  ],
+  "expect_file_contains": [
+    {
+      "path": "abi_audit.rs",
+      "contains": "// rv:"
+    }
+  ],
+  "timeout_ms": 120000,
+  "notes": "F-META-004 / ABI-2.1-2.4 + ABI-3.3: Core 1.0 defines no stable ABI; the only contract is source semantics, and --emit-rust is auditable (each emitted item carries a `// rv: file:line` mapping). Absence of extern/repr/unsafe in the generated file cannot be asserted by the harness (no negative substring assertion); it is reported as a limitation."
+}

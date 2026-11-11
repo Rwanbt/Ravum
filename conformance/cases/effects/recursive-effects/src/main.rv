@@ -1,0 +1,12 @@
+use std::io;
+
+fn rec(n: i32) effects() {
+    if n > 0 {
+        rec(n - 1);
+    } else {
+        io::println("fin");
+    }
+}
+
+fn main() {
+}

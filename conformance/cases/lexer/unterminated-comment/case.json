@@ -1,0 +1,8 @@
+{
+  "id": "lexer/unterminated-comment",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-COMMENT"
+  ],
+  "notes": "Unterminated block comment is E-LEX-COMMENT (canonical lexer code)."
+}

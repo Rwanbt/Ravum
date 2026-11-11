@@ -1,0 +1,7 @@
+struct S;
+
+impl S {
+    const X: i32 = 1;
+}
+fn main() {
+}

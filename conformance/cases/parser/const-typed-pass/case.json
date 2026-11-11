@@ -1,0 +1,5 @@
+{
+  "id": "parser/const-typed-pass",
+  "mode": "compile-pass",
+  "notes": "F-SYN-008 (G-4.8-4.9, G-5.11): typed `const` items with const_expr values are accepted."
+}

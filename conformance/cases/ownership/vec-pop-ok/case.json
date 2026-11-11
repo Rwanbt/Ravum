@@ -1,0 +1,5 @@
+{
+  "id": "ownership/vec-pop-ok",
+  "mode": "compile-pass",
+  "notes": "Moving out of a Vec by index is forbidden; the accepted way is `.pop()` (OWN-5.5)."
+}

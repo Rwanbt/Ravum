@@ -1,0 +1,8 @@
+{
+  "id": "types/panic-arity",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-ARITY"
+  ],
+  "notes": "F-EXPR-016 (EXPR-11): `panic` takes exactly one message argument; a zero-argument call is E-TYP-ARITY."
+}
