@@ -15,8 +15,8 @@
 > `resolve.rs` **93,1 %**, `own.rs` 91,1 %, `types.rs` 100 %) — objectifs
 > 90/85 **atteints et bloquants en CI** ; mutation ciblée **195 mutants, 166
 > tués (85,1 %)**, 20 survivants triés (14 inatteignables, 6 équivalents,
-> 0 lacune de test) ; build bit-à-bit identique (`86F575CF…`), SBOM
-> `dc7b4e0d…`, installateur `4da36485…` ; gates **5 PASS / 6 PARTIAL /
+> 0 lacune de test) ; build bit-à-bit identique (`83372F4F…`), SBOM
+> `dc7b4e0d…`, installateur `28ba4b1c…` ; gates **5 PASS / 6 PARTIAL /
 > 2 BLOCKED** (inchangés : T4/T12 exigent l'audit externe et le Go/No-Go
 > humains). CI sur `ea7df46` : **tous les workflows verts** (Linux qualification
 > 42933086911 : workspace 89 suites / 1402 passés / 0 échec / 4 ignorés,

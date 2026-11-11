@@ -344,10 +344,10 @@ historiques. Mesures de la passe 5, mêmes commandes :
 | Registre des diagnostics | **108 codes** ; 126 émis ; **0 hors registre** ; **0 jamais émis** |
 | Couverture sema (llvm-cov) | **89,2 % lignes / 88,6 % régions** ; `types.rs` 100 %, `own.rs` 91,1 %, `typeck.rs` **93,8 %**, `resolve.rs` **93,1 %** — seuils bloquants tenus |
 | Mutation ciblée (3 fichiers) | **195 mutants : 166 tués (85,1 %), 20 survivants triés (14 inatteignables, 6 équivalents), 9 invivables, 0 timeout, 0 lacune de test résiduelle** ; `MUTATION-EQUIVALENCE.md` §8 |
-| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 86F575CF…D49F3457` |
+| Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 83372F4F…D0546DD` |
 | SBOM | 64 paquets, 170 relations, `sha256 = dc7b4e0d…c2134f1` |
 | Smoke exemples | **31 PASS / 0 FAIL / 0 NOT_RUN** |
-| Installateur | `sha256 = 4da36485…73b834`, manifeste `locked = true` |
+| Installateur | `sha256 = 28ba4b1c…f427dce680`, manifeste `locked = true` |
 | Gates | **5 PASS / 6 PARTIAL / 2 BLOCKED** (inchangés : T4/T12 restent bloqués par l'audit externe et le Go/No-Go humains) |
 | CI sur `ea7df46` | **tous les workflows verts** : Linux qualification [42933086911](https://github.com/Rwanbt/Ravum/actions/runs/42933086911) (workspace **89 suites / 1402 passés / 0 échec / 4 ignorés**, conformance **386 cas / 384 PASS / 0 FAIL / 2 SKIP**, Miri, smoke 31/0/0, stdlib 64/64, CLI 13/13, installateur, WASI, fuzz smoke), coverage ratchet (push/PR), gate contracts (push/PR), documentation, VS Code e2e (push/PR), MVP product et MVP impact |
 
