@@ -259,7 +259,10 @@ fn same_sources_and_options_produce_the_same_identity_twice() {
         "same sources and options must produce the same identity"
     );
     assert!(artifact_stdout(&pkg, "iso-stable") == "one\n");
-    assert_eq!(manifest(&pkg, "iso-stable")["identity"], identity_first.as_str());
+    assert_eq!(
+        manifest(&pkg, "iso-stable")["identity"],
+        identity_first.as_str()
+    );
     assert!(
         manifest(&pkg, "iso-stable")["source_digest"]
             .as_str()
@@ -447,16 +450,19 @@ fn native_and_wasm_targets_do_not_collide() {
     let wasm_file = pkg
         .join(".ravum/bin")
         .join(format!("{}.wasm", crate_name("iso-targets")));
-    assert!(wasm_file.is_file(), "wasm artifact: {}", wasm_file.display());
+    assert!(
+        wasm_file.is_file(),
+        "wasm artifact: {}",
+        wasm_file.display()
+    );
     assert!(artifact_path(&pkg, "iso-targets").is_file());
     let wasm_manifest_path = wasm_file.with_file_name(format!(
         "{}.build.json",
         wasm_file.file_name().unwrap().to_string_lossy()
     ));
-    let wasm_json: Value = serde_json::from_str(
-        &fs::read_to_string(&wasm_manifest_path).expect("read wasm manifest"),
-    )
-    .expect("wasm manifest is JSON");
+    let wasm_json: Value =
+        serde_json::from_str(&fs::read_to_string(&wasm_manifest_path).expect("read wasm manifest"))
+            .expect("wasm manifest is JSON");
     assert_eq!(wasm_json["target"], "wasm32-wasip1");
     assert_eq!(wasm_json["identity"], wasm_identity.as_str());
     assert_ne!(

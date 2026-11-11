@@ -239,21 +239,19 @@ fn not_measured(verify_build: bool, reason: impl Into<String>) -> (BuildStatus, 
 
 pub fn run_case(entry: &CaseEntry, context: &RunContext, index: usize) -> CaseResult {
     let started = Instant::now();
-    let finish = |verdict: Verdict,
-                  build: BuildStatus,
-                  build_detail: String,
-                  started: Instant| CaseResult {
-        id: entry.id.clone(),
-        taxonomy: entry.taxonomy.clone(),
-        mode: entry.mode(),
-        status: verdict.status,
-        duration_ms: started.elapsed().as_millis(),
-        expected: context.sanitizer.apply(&verdict.expected),
-        actual: context.sanitizer.apply(&verdict.actual),
-        detail: context.sanitizer.apply(&verdict.detail),
-        build,
-        build_detail: context.sanitizer.apply(&build_detail),
-    };
+    let finish =
+        |verdict: Verdict, build: BuildStatus, build_detail: String, started: Instant| CaseResult {
+            id: entry.id.clone(),
+            taxonomy: entry.taxonomy.clone(),
+            mode: entry.mode(),
+            status: verdict.status,
+            duration_ms: started.elapsed().as_millis(),
+            expected: context.sanitizer.apply(&verdict.expected),
+            actual: context.sanitizer.apply(&verdict.actual),
+            detail: context.sanitizer.apply(&verdict.detail),
+            build,
+            build_detail: context.sanitizer.apply(&build_detail),
+        };
 
     let spec = match &entry.spec {
         Ok(spec) => spec,
@@ -497,7 +495,14 @@ fn evaluate(
             args.extend(spec.args.iter().cloned());
             let outcome = env.exec(&args, copy_root, "");
             let verdict = evaluate_compile_pass(spec, &outcome, rel_dir);
-            verify_build_after_check(env, copy_root, &project_arg, &outcome, verdict, verify_build)
+            verify_build_after_check(
+                env,
+                copy_root,
+                &project_arg,
+                &outcome,
+                verdict,
+                verify_build,
+            )
         }
         Mode::CompileFail => {
             let mut args = vec!["check".to_string(), "--json".to_string(), project_arg];
@@ -685,7 +690,6 @@ fn apply_build(verdict: Verdict, build: BuildStatus, detail: &str) -> Verdict {
         _ => verdict,
     }
 }
-
 
 fn evaluate_compile_pass(spec: &CaseSpec, outcome: &ExecOutcome, rel_dir: &str) -> Verdict {
     let expected = describe_expectations("check exit 0", spec);
@@ -1867,8 +1871,7 @@ mod tests {
         assert_eq!(verdict.expected, "check exit 0 and build exit 0");
         assert_eq!(verdict.actual, "check exit 0; build failed");
         assert!(
-            verdict.detail.contains("package demo: 0 error(s)")
-                && verdict.detail.contains("E0508"),
+            verdict.detail.contains("package demo: 0 error(s)") && verdict.detail.contains("E0508"),
             "{}",
             verdict.detail
         );

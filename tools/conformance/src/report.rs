@@ -437,12 +437,7 @@ mod tests {
         result_with_build(status, id, Mode::CompilePass, BuildStatus::NotRequested)
     }
 
-    fn result_with_build(
-        status: Status,
-        id: &str,
-        mode: Mode,
-        build: BuildStatus,
-    ) -> CaseResult {
+    fn result_with_build(status: Status, id: &str, mode: Mode, build: BuildStatus) -> CaseResult {
         CaseResult {
             id: id.to_string(),
             taxonomy: "lexer".to_string(),
@@ -523,7 +518,12 @@ mod tests {
                 Mode::CompilePass,
                 BuildStatus::Verified,
             ),
-            result_with_build(Status::Fail, "broken", Mode::CompilePass, BuildStatus::Failed),
+            result_with_build(
+                Status::Fail,
+                "broken",
+                Mode::CompilePass,
+                BuildStatus::Failed,
+            ),
         ];
         let build = summarize_build(&failed, true);
         assert_eq!(build.failed, 1);

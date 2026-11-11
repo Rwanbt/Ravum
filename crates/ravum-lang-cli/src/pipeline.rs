@@ -670,9 +670,10 @@ pub fn compile_program(
     // full path approaches `MAX_PATH`.
     let identity_dir = cache.join("build").join(identity.directory());
     let gen_dir = identity_dir.join("gen");
-    let out_dir = identity_dir
-        .join("out")
-        .join(format!("{}-{}", std::process::id(), next_invocation_id()));
+    let out_dir =
+        identity_dir
+            .join("out")
+            .join(format!("{}-{}", std::process::id(), next_invocation_id()));
     for dir in [&gen_dir, &out_dir] {
         std::fs::create_dir_all(dir).map_err(|error| {
             BuildError::Write(format!("cannot create `{}`: {error}", dir.display()))
@@ -763,8 +764,8 @@ pub fn compile_program(
     // Stale guard: the artifact is only valid for the snapshot it was generated
     // from. Re-load the package now and compare the snapshot digest; if it
     // changed while rustc ran, refuse to publish anything.
-    let current_digest = current_snapshot_digest(frontend)
-        .map_err(|message| BuildError::Stale(message))?;
+    let current_digest =
+        current_snapshot_digest(frontend).map_err(|message| BuildError::Stale(message))?;
     if current_digest != identity.source_digest {
         return Err(BuildError::Stale(format!(
             "the sources changed during the build (analysed {}, now {}); nothing was \
@@ -833,8 +834,8 @@ fn build_manifest(
         "library": is_library,
         "built_at_unix_ms": now_ms,
     });
-    let mut text = serde_json::to_string_pretty(&manifest)
-        .unwrap_or_else(|_| "{\"schema\":1}".to_string());
+    let mut text =
+        serde_json::to_string_pretty(&manifest).unwrap_or_else(|_| "{\"schema\":1}".to_string());
     text.push('\n');
     text
 }
@@ -1026,7 +1027,10 @@ mod tests {
     fn snapshot_digest_is_deterministic_and_order_independent() {
         let first = snapshot(&[("src/main.rv", "fn main() {}\n")]);
         let second = snapshot(&[("src/main.rv", "fn main() {}\n")]);
-        assert_eq!(source_snapshot_digest(&first), source_snapshot_digest(&second));
+        assert_eq!(
+            source_snapshot_digest(&first),
+            source_snapshot_digest(&second)
+        );
         assert!(source_snapshot_digest(&first).starts_with("sha256:"));
 
         // Adding a file, or changing a byte, changes the digest.
@@ -1034,7 +1038,10 @@ mod tests {
             ("src/main.rv", "fn main() {}\n"),
             ("src/lib.rv", "fn helper() {}\n"),
         ]);
-        assert_ne!(source_snapshot_digest(&first), source_snapshot_digest(&more));
+        assert_ne!(
+            source_snapshot_digest(&first),
+            source_snapshot_digest(&more)
+        );
         let changed = snapshot(&[("src/main.rv", "fn main() { }\n")]);
         assert_ne!(
             source_snapshot_digest(&first),
@@ -1098,8 +1105,14 @@ mod tests {
             .expect("rewrite source");
             analyze(&dir, Profile::Core, false)
         };
-        assert_ne!(first.digest, build_identity(&changed_frontend, &debug).digest);
-        assert_ne!(first.source_digest, changed_frontend.pkg.sources.files()[0].text);
+        assert_ne!(
+            first.digest,
+            build_identity(&changed_frontend, &debug).digest
+        );
+        assert_ne!(
+            first.source_digest,
+            changed_frontend.pkg.sources.files()[0].text
+        );
     }
 
     #[test]
@@ -1148,8 +1161,11 @@ mod tests {
             "[package]\nname = \"util\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
         )
         .expect("write util manifest");
-        std::fs::write(util.join("src/lib.rv"), "pub fn answer() -> i32 {\n    return 42;\n}\n")
-            .expect("write dependency");
+        std::fs::write(
+            util.join("src/lib.rv"),
+            "pub fn answer() -> i32 {\n    return 42;\n}\n",
+        )
+        .expect("write dependency");
         std::fs::write(
             app.join("src/main.rv"),
             "fn main() {\n    let n = util::answer();\n}\n",
@@ -1170,8 +1186,11 @@ mod tests {
         );
 
         // Changing the dependency must be detected as a stale snapshot.
-        std::fs::write(util.join("src/lib.rv"), "pub fn answer() -> i32 {\n    return 43;\n}\n")
-            .expect("rewrite dependency");
+        std::fs::write(
+            util.join("src/lib.rv"),
+            "pub fn answer() -> i32 {\n    return 43;\n}\n",
+        )
+        .expect("rewrite dependency");
         assert_ne!(
             digest,
             current_snapshot_digest(&frontend).expect("re-load the package")

@@ -1200,7 +1200,10 @@ impl<'a> Emitter<'a> {
                         // Foreign declarations take a plain pattern (Rust forbids
                         // `mut` there) and keep the elided text lifetime: a `&str`
                         // argument is a view valid for the call (STD-9.3).
-                        decls.push(format!("{name}: {}", self.type_node_pos(ty, TypePos::Param)?));
+                        decls.push(format!(
+                            "{name}: {}",
+                            self.type_node_pos(ty, TypePos::Param)?
+                        ));
                         args.push(name);
                     }
                     ParamKind::Receiver(_) => {
@@ -1513,11 +1516,7 @@ impl<'a> Emitter<'a> {
             for binding in &hoist.bindings {
                 slots.push(format!("mut {binding}"));
             }
-            buf.line(&format!(
-                "let [{}] = {};",
-                slots.join(", "),
-                hoist.base
-            ));
+            buf.line(&format!("let [{}] = {};", slots.join(", "), hoist.base));
         }
     }
 
@@ -1614,7 +1613,9 @@ impl<'a> Emitter<'a> {
                 .map(|info| info.is_copy)
                 .or_else(|| self.facts().enums.get(def).map(|info| info.is_copy))
                 .unwrap_or(false),
-            Type::String | Type::Vec(_) | Type::Slice(_) | Type::Param { .. } | Type::Error => false,
+            Type::String | Type::Vec(_) | Type::Slice(_) | Type::Param { .. } | Type::Error => {
+                false
+            }
         }
     }
 
@@ -3212,8 +3213,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
     }
 
     fn record_whole_use(&mut self, path: &Path, top: usize) {
-        if let Some(Resolution::Local { name, .. }) =
-            self.emitter.facts().resolutions.get(&path.id)
+        if let Some(Resolution::Local { name, .. }) = self.emitter.facts().resolutions.get(&path.id)
         {
             self.whole_uses.push(WholeUse {
                 name: name.clone(),
@@ -3516,7 +3516,13 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
     }
 
     /// Can the full-rewrite lowering be used for `name`?
-    fn can_hoist(&self, name: &str, hoist_top: usize, accesses: &[&Access], whole: &[&WholeUse]) -> bool {
+    fn can_hoist(
+        &self,
+        name: &str,
+        hoist_top: usize,
+        accesses: &[&Access],
+        whole: &[&WholeUse],
+    ) -> bool {
         let binders = self.binders.get(name).map(Vec::as_slice).unwrap_or(&[]);
         if binders.len() != 1 {
             return false;
@@ -3536,7 +3542,10 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         let Some(first) = accesses.first() else {
             return false;
         };
-        if accesses.iter().any(|access| access.constant.is_none() || access.len != first.len) {
+        if accesses
+            .iter()
+            .any(|access| access.constant.is_none() || access.len != first.len)
+        {
             return false;
         }
         // A whole-place use at or after the hoist would observe the consumed
@@ -3547,7 +3556,11 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
 
     fn plan(&self) -> ArrayMovePlan {
         let mut plan = ArrayMovePlan::default();
-        let names: BTreeSet<String> = self.accesses.iter().map(|access| access.name.clone()).collect();
+        let names: BTreeSet<String> = self
+            .accesses
+            .iter()
+            .map(|access| access.name.clone())
+            .collect();
         for name in names {
             let accesses: Vec<&Access> = self
                 .accesses
@@ -3584,8 +3597,12 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             // Fallback: a single use of the array in the whole body can be
             // lowered on its own (works for dynamic indices too).
             if accesses.len() == 1 && whole.is_empty() && accesses[0].consumed {
-                plan.consumes
-                    .insert(accesses[0].node, ArrayMove { len: accesses[0].len });
+                plan.consumes.insert(
+                    accesses[0].node,
+                    ArrayMove {
+                        len: accesses[0].len,
+                    },
+                );
             }
         }
         plan

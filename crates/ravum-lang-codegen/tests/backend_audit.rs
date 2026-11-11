@@ -598,11 +598,7 @@ fn generate_source_with(label: &str, source: &str, options: &GenOptions) -> Stri
     checked_from_source(label, source, options)
 }
 
-fn checked_from_source(
-    label: &str,
-    source: &str,
-    options: &GenOptions,
-) -> String {
+fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> String {
     let dir = TempDir::new(label);
     let manifest =
         format!("[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n");
@@ -2400,7 +2396,10 @@ fn audit_exit_inside_a_test_bypasses_the_runner() {
     assert_eq!(stdout, "running 2 tests\n", "runner output: {stdout}");
     assert_eq!(status, 0, "the test's exit code wins (stderr: {stderr})");
     assert!(!stdout.contains("passed;"), "no summary is printed");
-    assert!(!stdout.contains("test result:"), "no summary line is printed");
+    assert!(
+        !stdout.contains("test result:"),
+        "no summary line is printed"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2890,7 +2889,10 @@ fn main() {
     );
     let built = must_compile(&code, "p0a-static-str");
     let (stdout, stderr, status) = run(&built.binary, &[]);
-    assert_eq!(stdout, "littéral\n3\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(
+        stdout, "littéral\n3\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
 
@@ -2949,7 +2951,10 @@ fn main() {
     );
     let built = must_compile(&code, "p0a-array-move");
     let (stdout, stderr, status) = run(&built.binary, &[]);
-    assert_eq!(stdout, "right\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(
+        stdout, "right\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
 
@@ -3063,7 +3068,10 @@ fn main() {
     );
     let built = must_compile(&code, "p0a-array-projection");
     let (stdout, stderr, status) = run(&built.binary, &[]);
-    assert_eq!(stdout, "r\n41\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(
+        stdout, "r\n41\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
 
@@ -3092,7 +3100,10 @@ fn main() {
     );
     let built = must_compile(&code, "p0a-array-dynamic");
     let (stdout, stderr, status) = run(&built.binary, &[]);
-    assert_eq!(stdout, "one\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(
+        stdout, "one\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
     assert_eq!(status, 0, "stderr: {stderr}");
 
     let out_of_bounds = generate_source(
@@ -3111,7 +3122,10 @@ fn main() {
     let built = must_compile(&out_of_bounds, "p0a-array-dynamic-oob");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(stdout, "", "the panic stops the program: {stdout}");
-    assert_eq!(status, 1, "a bounds panic exits non-zero (stderr: {stderr})");
+    assert_eq!(
+        status, 1,
+        "a bounds panic exits non-zero (stderr: {stderr})"
+    );
     assert!(
         stderr.contains("index out of bounds: the len is 2 but the index is 2"),
         "the bounds panic keeps rustc's message: {stderr}"
@@ -3145,14 +3159,16 @@ fn main() {
     let built = must_compile(&code, "p0a-runner-filter");
     let (all, stderr, status) = run(&built.binary, &[]);
     assert_eq!(
-        all, "running 2 tests\ntest alpha_works ... ok\ntest beta_works ... ok\n\n\
+        all,
+        "running 2 tests\ntest alpha_works ... ok\ntest beta_works ... ok\n\n\
               test result: ok; 2 passed; 0 failed; 0 ignored; 0 filtered out\n",
         "stderr: {stderr}\n--- generated ---\n{code}"
     );
     assert_eq!(status, 0);
     let (filtered, stderr, status) = run(&built.binary, &["--filter", "beta"]);
     assert_eq!(
-        filtered, "running 1 tests\ntest beta_works ... ok\n\n\
+        filtered,
+        "running 1 tests\ntest beta_works ... ok\n\n\
                    test result: ok; 1 passed; 0 failed; 0 ignored; 1 filtered out\n",
         "stderr: {stderr}\n--- generated ---\n{code}"
     );
