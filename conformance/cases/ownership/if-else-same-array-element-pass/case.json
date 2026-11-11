@@ -1,0 +1,5 @@
+{
+  "id": "ownership/if-else-same-array-element-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.4: both `if`/`else` branches return, so each path moves `a[0]` exactly once; a divergent branch does not create a use-after-move (round-3 axis if-move)."
+}

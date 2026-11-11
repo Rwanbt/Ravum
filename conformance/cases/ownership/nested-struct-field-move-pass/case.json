@@ -1,0 +1,5 @@
+{
+  "id": "ownership/nested-struct-field-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.3: moving a field of a struct nested in another struct (`o.inner.s`) is a per-field move; the codegen must emit the nested place, not a whole-value copy (round-3 axis nested-aggregate)."
+}

@@ -254,35 +254,76 @@ pas de service), avec le paquet de `examples/file-store` copié **verbatim**
 Ce sont des modes à build implicite (`run` compile puis exécute) : ils comptent
 dans le périmètre `check ⇒ build` comme `implicit`.
 
+### 6.6 Round 3 — axes nouvellement sondés
+
+Le script `scripts/p0a-probe-round3.ps1` sonde systématiquement l'invariant
+`check` ⇒ `build` sur **47 programmes × 11 axes** qui n'étaient pas couverts par
+les rounds 1–2. Il écrit `target/p0a-probe-round3.json` (statut, codes Ravum et
+rustc, sorties, extrait du programme), échoue (exit 1) sur toute divergence,
+et refuse (exit 2) une matrice contenant un programme que le `check` rejette.
+
+| Axe | Programmes | Cas ajoutés au corpus (verts check+build) |
+|---|---|---|
+| `match-move` (payload d'enum/`Option`, patterns imbriqués) | 4 | `ownership/match-option-string-move-pass`, `ownership/match-enum-struct-payload-move-pass` |
+| `nested-aggregate` (struct dans struct/tuple, struct dans array) | 6 | `ownership/nested-struct-field-move-pass`, `ownership/nested-tuple-in-struct-move-pass` |
+| `array-borrow` (`&`/`&mut` sur élément, index constant/dynamique) | 5 | `ownership/array-element-shared-borrow-pass`, `ownership/array-element-mut-borrow-pass`, `ownership/array-element-dynamic-mut-borrow-pass` |
+| `reinit-after-move` (réaffectation de champ/élément) | 4 | `ownership/struct-field-reinit-after-move-pass`, `ownership/array-element-reinit-after-move-pass` |
+| `loop-move` (`while`/`loop`/`for`, valeur locale du corps) | 4 | `ownership/while-body-local-move-pass`, `ownership/for-vec-body-element-move-pass` |
+| `if-move` (retours multiples déplaçant un élément) | 3 | `ownership/if-branch-array-element-move-pass`, `ownership/if-else-same-array-element-pass` |
+| `method-receiver` (`self`/`&self`/`&mut self`) | 7 | `ownership/method-self-consumes-struct-pass`, `ownership/method-mut-self-receives-element-pass` |
+| `generic-array` (`T` non-`Copy` avec tableaux) | 4 | `ownership/generic-array-element-move-pass` |
+| `enum-array-payload` | 3 | `0` — la forme « déplacer un élément hors d'une liaison de payload de `match` » est rouge (F2, section 9) |
+| `nested-unwrap` (`Option<Vec<T>>`, `Option<Option<T>>`) | 5 | `ownership/option-vec-unwrap-pass`, `ownership/option-option-unwrap-pass` |
+| `static-str-array` (`&'static str` élément de tableau) | 2 | `types/array-static-str-element-compare-pass` (comparaison en instruction) |
+
+Limites tracées du sondage :
+
+* **`for x in [T; N]` n'est pas exprimable en Core 1.0** : `for` itère une range
+  ou un `Vec<T>` possédé (EXPR-6.4) ; le `check` rejette la forme tableau. L'axe
+  « `for` sur tableau » du brief est donc remplacé par `for x in Vec<T>`.
+* Les formes `[&str; 2]` de **stockage** et de **retour** d'élément sont
+  rejetées par le `check` (`E-OWN-REF-ESCAPE`) : hors matrice, signalées en
+  section 8 (sema, routé).
+* Les 4 contrôles D12 (section 9) ne sont pas dans la matrice ; au binaire
+  mesuré ils construisent désormais.
+
+Les 19 cas ajoutés sont `compile-pass` et sont donc des `build` explicites dans
+le périmètre du contrat. Le script se relance avec :
+
+```
+pwsh -File scripts/p0a-probe-round3.ps1
+```
+
 ## 7. État mesuré
 
 | Élément | Valeur |
 |---|---|
-| Date (Europe/Paris) | 2026-11-11, ≈12:49–12:57 |
-| Commit | `5d88ecb` **plus l'arbre de travail** (correctifs codegen/sema d'autres agents, non commités au moment de la mesure) |
+| Date (Europe/Paris) | 2026-11-11, ≈13:55–14:03 |
+| Commit | `ab51b17` **plus l'arbre de travail** (correctif codegen D12 en cours, non commité ; 3 cas `run/array-move-*` non suivis appartenant à codegen-pipeline) |
 | Hôte | Windows 11 x86-64, `rustc 1.95.0`, `cargo 1.95.0` |
-| Toolchain mesurée | `target\debug\ravum-lang.exe`, `ravum-lang 0.1.0 (edition core-1.0-draft.1)` — SHA-256 `5816ACDDCE0A81A768F9CE5620CCE0C786B342058BA8D7398D77725C157F661D` (hash identique avant et après le run : un seul binaire pour tout le run) |
-| Harnais mesuré | `target\debug\ravum-conformance.exe`, `ravum-conformance 0.1.0` (schema 1) — SHA-256 `7DF6345C68284731E3D72BFF44B31639BE88EC4325C4548535ED88AA4BE4CCCF` |
-| Commande | `target\debug\ravum-conformance.exe run --verify-build --json target\final-conformance.json` |
+| Toolchain mesurée | `target\debug\ravum-lang.exe`, `ravum-lang 0.1.0 (edition core-1.0-draft.1)` — SHA-256 `923D413D954799D0E3F8568E5B448371B8BE85069FD984F6F67695A1582DB555` (copie figée `target\p0a-round3-bin\`) |
+| Harnais mesuré | `ravum-conformance 0.1.0` (schema 1) — SHA-256 `9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58` |
+| Commande | `target\p0a-round3-bin\ravum-conformance.exe run --toolchain target\p0a-round3-bin\ravum-lang.exe --verify-build --json target\final-conformance-round3.json` |
 | Code de sortie | **0** |
-| Cas | `total=424 pass=423 fail=0 skip=1 not_run=0` |
-| Dimension build | `perimeter=163 covered=163 verified=101 implicit=62 failed=0 environment=0 not_measured=0` |
+| Cas (arbre de travail) | `total=446 pass=445 fail=0 skip=1 not_run=0` |
+| Dimension build (arbre de travail) | `perimeter=185 covered=185 verified=120 implicit=65 failed=0 environment=0 not_measured=0` |
 | `build_verified` | **`true`** |
-| Rapport | `target\final-conformance.json` (artefact local non versionné) |
+| Corpus du commit seul (hors 3 `run/array-move-*` non suivis) | `total=443 pass=442 fail=0 skip=1 not_run=0` ; `perimeter=182 covered=182 verified=120 implicit=62 failed=0` |
+| Rapport | `target\final-conformance-round3.json` (artefact local non versionné) |
 
-C'est la commande de la porte finale demandée par le Lead. Les hashes des deux
-binaires ont été relevés **avant et après** le run et sont identiques : aucun
-rebuild n'a eu lieu pendant la mesure. Les runs intermédiaires de la session ont
-dû, eux, utiliser des copies figées (`target\p0a-conformance-bin\`) parce que
-l'arbre était édité et rebuildé en parallèle par les autres agents ; la porte
-finale ci-dessus est celle d'un arbre stabilisé.
+La mesure a été faite sur une **copie figée** des deux binaires
+(`target\p0a-round3-bin\`), car le correctif D12 de codegen-pipeline était en
+cours d'édition : sans figeage, un rebuild au milieu du run rendrait les
+compteurs incohérents. Le corpus du commit seul (443 cas) est obtenu en
+excluant, cas par cas, les 3 `run/array-move-*` non suivis de codegen-pipeline
+du rapport : 442 `pass`, 1 `SKIP`, 182 cas de périmètre dont 120 builds
+explicites et 62 implicites. Les 19 cas ajoutés par le round 3 expliquent le
+passage de 101 à 120 builds explicites.
 
 Le seul `SKIP` est `security/dependency-absolute-unix`
 (`skip_on: ["windows"]`) : c'est un `compile-fail`, **hors** du périmètre
 build. Il est rapporté `SKIP` (jamais `PASS`) et n'affecte pas
-`build_verified`, qui porte sur les 163 cas du périmètre : 101 `build`
-explicites (`compile-pass` + `fmt-idempotent`) et 62 builds implicites
-(`run-pass`/`run-fail` exécutés).
+`build_verified`, qui porte sur les 182 cas du périmètre (corpus du commit).
 
 Historique honnête des runs intermédiaires de cette session :
 `ownership/array-element-projection-move-pass` a d'abord échoué au lien
@@ -311,6 +352,13 @@ checker ; ils sont signalés au propriétaire du checker (P0-F) :
    `E-OWN-REF-ESCAPE`. Par conséquent l'extension du cas
    `ownership/static-str-stored` n'ajoute **pas** ce stockage : elle garde les
    usages dans l'instruction, et le cas reste un contrôle honnête du périmètre.
+3. Élément de tableau `&'static str` (round 3) : `let s = a[1];` sur
+   `let a = ["zero", "one"];` et `fn f(a: [&str; 2]) -> &str { return a[1]; }`
+   sont rejetés par le `check` avec `E-OWN-REF-ESCAPE`, alors qu'OWN-6.2 (MUST)
+   fait de `&'static str` une valeur Copy, stockable et retournable ; la
+   comparaison en position d'instruction (`a[0] == "zero"`) est, elle, acceptée.
+   Signalé à `sema-owner` ; si l'ambiguïté est normative, elle doit finir en
+   dossier de décision, pas en changement silencieux. Non ajouté au corpus.
 
 Un troisième point initialement observé — `struct W { r: &i32 }` accepté alors
 que la spec exige `E-OWN-REF-ESCAPE` — a été **corrigé pendant la session** par
@@ -319,15 +367,19 @@ P0-F et est désormais figé par le cas négatif
 
 ## 9. Divergences connues — statut OPEN (hors corpus, non attendues comme échecs)
 
-Trois formes sont `check`-pass / `build`-fail à la toolchain mesurée. Elles sont
-**licites** selon OWN-5.3/OWN-5.4 (MUST) : l'échec est un `E0508` **bruyant** de
-rustc (jamais un miscompile silencieux, aucune sémantique modifiée). Elles ne
-sont **pas** dans le corpus : les ajouter en `compile-fail` serait faux (la spec
-les accepte) et en `compile-pass` rendrait la porte rouge pour un élément ouvert
-déjà identifié. Disposition : **« ouvert, nécessite un abaissement général des
-déplacements par place ; non couvert par cette porte »**. C'est le complément
-honnête du dénominateur : le corpus build-vérifié **ne prouve pas** l'absence de
-divergences en dehors de lui.
+Le corpus build-vérifié **ne prouve pas** l'absence de divergences en dehors de
+lui. Cette section liste les formes `check`-pass / `build`-fail connues. Aucune
+n'est dans le corpus : les ajouter en `compile-fail` serait faux (la spec les
+accepte) et en `compile-pass` rendrait la porte rouge pour un élément ouvert déjà
+identifié. L'échec est toujours un `E0508` **bruyant** de rustc (jamais un
+miscompile silencieux, aucune sémantique modifiée).
+
+Les formes (a)–(c) sont les **D12 historiques** : elles étaient rouges au
+binaire `5816ACDD…` (13:32) et **construisent désormais** avec le binaire
+mesuré `923D413D…` (13:49:46), grâce au correctif `codegen-pipeline` en cours
+d'intégration. Elles restent hors corpus tant que ce correctif n'est pas
+commité/re-mesuré, et les contrôles correspondants vivent dans
+`scripts/p0a-probe-round3.ps1` (bloc `known_open`).
 
 ### (a) chaîne de tableaux imbriqués
 
@@ -340,7 +392,8 @@ fn main() {
 }
 ```
 
-Mesuré : `check` exit 0 ; `build` échoue, rustc `E0508`.
+Mesuré au binaire `5816ACDD…` (13:32) : `check` exit 0 ; `build` échoue,
+rustc `E0508`. Construit désormais avec `923D413D…` (13:49:46).
 
 ### (b) tableau atteint par projection de champ ou de tuple
 
@@ -358,7 +411,8 @@ fn main() {
 ```
 
 Mesuré : `check` exit 0 ; `build` échoue, rustc `E0508`. La forme `t.0[0]` sur
-`([String; 2], i32)` a la même allure et le même statut (mesuré).
+`([String; 2], i32)` a la même allure et le même statut (mesuré). Les deux
+construisent désormais avec `923D413D…` (correctif D12).
 
 ### (c) liaison de tableau dont le nom est ombré dans le corps
 
@@ -378,7 +432,67 @@ fn main() {
 
 Mesuré : `check` exit 0 ; `build` échoue, rustc `E0508`. Le planificateur
 abandonne conservativement (pas d'abaissement par place) ; l'échec reste
-bruyant, jamais silencieux.
+bruyant, jamais silencieux. Construit désormais avec `923D413D…` (correctif D12).
+
+### (d) récepteur de méthode par valeur sur un élément de tableau — F1 (OPEN)
+
+```rv
+struct H {
+    s: String,
+}
+
+impl H {
+    fn take(self) -> String {
+        return self.s;
+    }
+}
+
+fn f(a: [H; 2]) -> String {
+    return a[0].take();
+}
+
+fn main() {
+}
+```
+
+Mesuré avec `923D413D…` : `check` exit 0 ; `build` échoue, rustc `E0508`
+(`cannot move out of type [H; 2]`) ; le Rust généré contient
+`return a[1usize].take();`. Même échec avec un index dynamique (`a[i].take()`).
+Contrôles qui construisent : la même méthode sur un élément de tuple
+(`t.0.take()`), sur un champ de struct (`o.h.take()`), et une méthode `&self`
+sur un élément de tableau. Cause : l'abaissement place-move des tableaux est
+appliqué aux positions `let`/`return` mais pas au **récepteur** d'un appel de
+méthode `self`. Statut OPEN, routé vers codegen-pipeline.
+
+### (e) déplacement d'élément depuis une liaison de payload de `match` — F2 (régression)
+
+```rv
+enum E {
+    Items([String; 2]),
+    Empty,
+}
+
+fn f(e: E) -> String {
+    match e {
+        E::Items(a) => {
+            return a[1];
+        }
+        E::Empty => {
+            return String::from("empty");
+        }
+    }
+}
+
+fn main() {
+}
+```
+
+Mesuré avec `923D413D…` : `check` exit 0 ; `build` échoue, rustc `E0508` sur le
+Rust généré `return a[1usize];`. La forme construisait avec le binaire du 13:32
+et lors du round-3 de 13:47 ; elle casse depuis l'arbre de travail non commité
+de codegen-pipeline (13:49:40). C'est une **régression collatérale** du travail
+D12, routée ; elle reste hors corpus jusqu'au correctif. Le cas
+`ownership/enum-array-payload-move-pass` a été retiré pour cette raison.
 
 ## 10. Interprétation
 
@@ -389,9 +503,13 @@ formelle, ni une garantie sur d'autres programmes, ni une promesse de
 non-régression future : c'est une observation reproductible, outillée et
 bloquante.
 
-Mesure du 2026-11-11 (section 7) : `build_verified=true`, 424 cas,
-163/163 cas du périmètre construits, 0 échec, 1 SKIP hors périmètre ; le corpus
-ne montre aucune divergence sur ce périmètre, et les trois divergences connues
-de la section 9 restent **ouvertes et hors corpus**. Cette observation est liée
-au binaire `5816ACDD…` ; tout rebuild de la toolchain invalide la re-mesure tant
-que la commande n'est pas rejouée.
+Mesure du 2026-11-11, round 3 (section 7) : `build_verified=true` sur l'arbre
+de travail (446 cas, 185/185 du périmètre) et sur le corpus du commit seul
+(443 cas, 182/182, 0 échec, 1 SKIP hors périmètre). Les 19 cas ajoutés sont
+verts en `check` **et** en `build`. Le corpus ne montre aucune divergence sur
+son périmètre ; les formes (a)–(c) de la section 9 construisent avec le binaire
+mesuré, mais restent hors corpus jusqu'à la re-mesure du correctif commité ;
+F1 (récepteur de méthode) et F2 (payload de `match`, régression) restent
+ouvertes et hors corpus. Cette observation est liée au binaire `923D413D…` ;
+tout rebuild de la toolchain invalide la re-mesure tant que la commande n'est
+pas rejouée.

@@ -1,0 +1,10 @@
+struct Holder {
+    pair: (String, i32),
+}
+
+fn f(h: Holder) -> String {
+    return h.pair.0;
+}
+
+fn main() {
+}

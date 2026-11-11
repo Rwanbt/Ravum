@@ -1,0 +1,5 @@
+{
+  "id": "ownership/method-mut-self-receives-element-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-7.4 / OWN-5.8: an element moved out of an array is passed by value to a `&mut self` method; the receiver borrow is exclusive for the call (round-3 axis method-receiver)."
+}

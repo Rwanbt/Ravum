@@ -1,0 +1,5 @@
+{
+  "id": "ownership/match-option-string-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.9 / EXPR-5.10: `match` on an owned `Option<String>` moves the scrutinee and each arm owns its payload; moving the bound `String` out of the arm is legal (round-3 axis match-move)."
+}

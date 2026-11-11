@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-element-shared-borrow-pass",
+  "mode": "compile-pass",
+  "notes": "EXPR-7.3 / OWN-6.4: a constant-index array element can be borrowed (`&a[0]`) as a call argument; the borrow expires at the end of the call (round-3 axis array-borrow)."
+}

@@ -1,0 +1,7 @@
+fn f(o: Option<Option<String>>) -> String {
+    let inner = o.unwrap();
+    return inner.unwrap();
+}
+
+fn main() {
+}

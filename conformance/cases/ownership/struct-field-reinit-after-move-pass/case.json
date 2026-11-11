@@ -1,0 +1,5 @@
+{
+  "id": "ownership/struct-field-reinit-after-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.1 / OWN-5.3: after moving `d.a`, assigning it again re-initialises the field; the whole struct becomes readable/returnable again (round-3 axis reinit-after-move)."
+}

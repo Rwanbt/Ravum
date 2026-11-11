@@ -1,0 +1,14 @@
+fn f(n: usize) -> usize {
+    let mut i: usize = 0;
+    let mut total: usize = 0;
+    while i < n {
+        let s = String::from("x");
+        let t = s;
+        total += t.len();
+        i += 1;
+    }
+    return total;
+}
+
+fn main() {
+}

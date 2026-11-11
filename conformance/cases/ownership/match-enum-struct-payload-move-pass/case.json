@@ -1,0 +1,5 @@
+{
+  "id": "ownership/match-enum-struct-payload-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.9: an enum variant payload binding moves the payload; moving a struct field out of that binding is legal in a `match` arm (round-3 axis match-move)."
+}

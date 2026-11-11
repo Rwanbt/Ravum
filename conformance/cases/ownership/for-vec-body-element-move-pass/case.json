@@ -1,0 +1,5 @@
+{
+  "id": "ownership/for-vec-body-element-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.10 / EXPR-6.4: `for x in v` over an owned `Vec<T>` moves each element into `x`; moving `x` again inside the body is legal. (`for` over an array is not expressible in Core 1.0.) (round-3 axis loop-move)."
+}

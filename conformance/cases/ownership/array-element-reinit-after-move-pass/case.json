@@ -1,0 +1,5 @@
+{
+  "id": "ownership/array-element-reinit-after-move-pass",
+  "mode": "compile-pass",
+  "notes": "OWN-5.1 / OWN-5.4: an array element moved out then assigned again is re-initialised, and other elements stay readable (round-3 axis reinit-after-move)."
+}
