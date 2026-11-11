@@ -211,8 +211,10 @@ util = { path = "../util" }   # only form accepted (local path, one `path` key)
 ### Crate roots, single files and modules
 
 * `src/main.rv` (bin) **or** `src/lib.rv` (lib): a package with both is refused
-  (`E-MOD-BOTH-ROOTS`) — no silent choice, and `main.rv` importing the package
-  library is UNSUPPORTED (`E-UNSUPPORTED-SELF-LIB`, checker-side).
+  (`E-MOD-BOTH-ROOTS`) — no silent choice. Because a package has exactly one
+  crate root, `main.rv` cannot import its own package library; a `use crate::x`
+  that resolves to no loaded module is `E-RES-UNKNOWN`. There is no
+  `E-UNSUPPORTED-SELF-LIB` code: the situation is already excluded earlier.
 * A single `.rv` file is a standalone program (`crate = "file"`, name = file
   stem, no manifest, no lockfile, dependencies empty). A directory without
   `ravum.toml` containing exactly one top-level `.rv` file is treated the same

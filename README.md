@@ -48,7 +48,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Revue multi-IA | Réalisée sur documents, résultats contradictoires conservés |
 | Architecture F → D | **Hypothèse candidate**, à comparer |
 | Compilateur Ravum / langage exécutable | **Implémenté sur un sous-ensemble Core 1.0 documenté** (`crates/ravum-lang-*`, binaire `ravum-lang`) : lexer/parser, typechecker, ownership, codegen Rust, conformance, exécution native Windows/Linux, WASI, FFI minimale. Voir [état du langage](docs/reports/LANGUAGE-CORE-STATUS.md) et [matrice des gates](docs/roadmap/CORE-1.0-GATE-MATRIX.md). |
-| LSP / serveur de langage | **Implémenté** (`crates/ravum-lang-lsp`, `ravum-lang lsp`) : JSON-RPC sur stdio, diagnostics, hover, définition, références, rename, completion, symboles, formatage. Interopérabilité vérifiée par un client de test intégré, **pas encore par VS Code en usage réel**. |
+| LSP / serveur de langage | **Implémenté** (`crates/ravum-lang-lsp`, `ravum-lang lsp`) : JSON-RPC sur stdio, diagnostics, hover, définition, références, rename, completion, symboles, formatage. Interopérabilité vérifiée par un client de test intégré (`tests/lsp_client.rs`) **et** par une session VS Code réelle avec l'extension `tools/vscode-ravum` (harnais `vscode-e2e`) — [VSCODE.md](docs/qualification/VSCODE.md). |
 | MVP-0d — incrémentalité et collaboration | **En cours, expérimental** : features Cargo dans l'identité de contexte, overlays privés avec intégration tout ou rien, fenêtre de groupement adaptative ; gates `PARTIAL` documentés — [rapport](docs/mvp/MVP-0d-REPORT.md) |
 | Intégration `dev` | **MVP-0a/0b/0c présents sur `dev`** (9 novembre 2026, `6b0ac7b`) via une chaîne propre : outillage d'agents local exclu, provenance auditée, 496 tests rejoués — [docs/mvp/INTEGRATION-0abc.md](docs/mvp/INTEGRATION-0abc.md) |
 | Outil Rust MVP-0a (M1) | **Implémenté et testé localement** : boucle `check → build → verify → hot patch`, voir [docs/mvp/architecture.md](docs/mvp/architecture.md) |
@@ -57,7 +57,7 @@ Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`, `STALE`, `TIMEOUT`, `UNSU
 | Mesures de la boucle M1 | **Mesurées** sur la machine de référence ; locales et non portables, voir [evidence/](evidence/README.md) |
 | Vérification bornée (M2) | **Implémentée** : obligations sur domaine fini explicite, ledger append-only, invalidation par mutation ; `PROVED` **uniquement** pour le domaine déclaré |
 | DSP à chaud (M3) | **Démonstrateur de bloc** : état possédé par l'hôte, publication sans verrou, garde temps réel, **0 allocation et 0 désallocation** mesurées sur le thread audio ; crossfade de remplacement optionnel ; aucun périphérique audio |
-| Verticale full-stack (M4) | **Application témoin** : UI statique + API HTTP + SQLite, contrat versionné, validation serveur, migrations additives, 10 tests E2E ; aucun navigateur piloté, aucun TLS |
+| Verticale full-stack (M4) | **Application témoin** : UI statique + API HTTP + SQLite, contrat versionné, validation serveur, migrations additives, 10 tests E2E et **E2E navigateur réel (CDP)** ; aucun TLS |
 | Prouveur externe (Kani…) | **Non installé** : l'adaptateur renvoie `Unsupported`, jamais un succès |
 | MVP-0b : daemon persistant (L2) | **Implémenté et mesuré** : cache de verdicts (contenu identique ≈ 0 ms), rejet des résultats périmés, annulation réelle ; gain incrémental seulement au-delà de ~1 000 lignes |
 | MVP-0b : Git transactionnel (L1) | **Implémenté** : index isolé, `commit-tree`, `update-ref` CAS, hooks honorés, journal durable ; 16 tests négatifs |
@@ -128,8 +128,9 @@ doublement de gain). Le chemin a aussi été exercé sur un **périphérique ré
 (ratio 1,001), avec **0 allocation/désallocation dans le thread de rendu** et 11 swaps à
 chaud sur 11 ; en 256 frames sur la voie par défaut, le pilote décroche (ratio 0,53) ; sous
 charge CPU 100 %, la lateness atteint ≈208 ms **sans allocation** — ce qui interdit toute
-revendication hard-RT. Il n'y a **aucun WASAPI/ASIO, aucune priorité temps réel, aucun
-XRUN mesurable** par cette API. Détail :
+revendication hard-RT. Il n'y a **ni ASIO, ni garantie temps réel, ni XRUN mesurable** ; en
+revanche WASAPI (partagé et exclusif) et MMCSS « Pro Audio » ont été mesurés en L4-C, sans
+qualification hard-RT. Détail :
 [docs/mvp/MVP-0b-rt-lifecycle.md](docs/mvp/MVP-0b-rt-lifecycle.md),
 [docs/mvp/MVP-0b-dsp-crossfade.md](docs/mvp/MVP-0b-dsp-crossfade.md),
 [docs/mvp/MVP-0b-audio-host.md](docs/mvp/MVP-0b-audio-host.md).
@@ -143,7 +144,8 @@ cargo run -p ravum-todo -- --db target/ravum/todo.db --port 8080 --token dev-tok
 UI statique (aucune étape de build), API HTTP, SQLite avec migrations versionnées,
 types partagés exposés à `/api/schema`, validation et autorisation côté serveur.
 Les tests E2E démarrent le serveur sur une vraie socket et une vraie base. Limites :
-aucun navigateur piloté, aucun TLS, une seule connexion SQLite. Détail :
+pas de TLS, une seule connexion SQLite ; l'E2E navigateur réel (CDP) existe pour
+cette verticale (L4-A) et tourne en CI (step « Browser E2E » de `mvp.yml`). Détail :
 [docs/mvp/M4-evidence.md](docs/mvp/M4-evidence.md).
 
 ## Stratégie d'implémentation : apprendre avant de figer
@@ -156,7 +158,7 @@ La décision de construire un frontend autonome est réservée au **gate M5**, s
 
 ## Feuille de route
 
-| Jalons | Résultats attendus (non réalisés à ce jour) |
+| Jalons | Résultats attendus (M0–M4 ont des preuves internes ; M5+ non réalisés) |
 |---|---|
 | **M0** Cadrage + baseline | Exigences traçables, corpus gelé, machine de référence, protocole S8, mesures Rust de référence |
 | **M1** Boucle continue MVP-0a | Snapshot → analyse → diagnostic structuré → build → patch compatible → activation / refus |
