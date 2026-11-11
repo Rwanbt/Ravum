@@ -31,7 +31,7 @@ The binary is `target/debug/ravum-lang` (`ravum-lang.exe` on Windows). It uses
 | `lint [PATH] [--deny CODE]...` | implemented; reports checker warnings (`W-*`) only |
 | `doc [PATH] [--out DIR]` | implemented from the AST |
 | `cache status\|clean [PATH]` | implemented |
-| `lsp` | **UNSUPPORTED** (exit 3); listed under UNSUPPORTED in `--help` |
+| `lsp` | implemented — real LSP 3.17 server on stdin/stdout (`crates/ravum-lang-lsp`); takes no arguments (exit 2 otherwise) |
 
 If a frontend stage were still a stub, it would report its own internal
 diagnostic (`E-INTERNAL-*`) and the command would exit 1: the CLI never
@@ -45,7 +45,7 @@ fabricates success. `doctor` makes the current stage status visible
 | `0` | success |
 | `1` | compilation/diagnostic/test failure, or a safe operational refusal (non-empty `init` target, lockfile drift under `--locked`, build failure) |
 | `2` | invalid command line (unknown command/option, missing argument, invalid `--profile`, invalid path) |
-| `3` | external tool missing (`rustc`) or explicitly UNSUPPORTED command (`lsp`) |
+| `3` | external tool missing (`rustc`) |
 
 `run` forwards a normal child exit code (`0..=255`). Where the parent observes
 the full 32-bit status (Windows), a value above `255` is truncated to the low 8
@@ -125,7 +125,7 @@ still go to stderr.
   fields `success` and the flat `file/line/column/end_line/end_column` on each
   diagnostic. Unknown fields must be ignored by consumers; removing a required
   field would bump `schema_version`.
-* `status` is `success`, `failure` or `unsupported` (the latter for `lsp`).
+* `status` is `success` or `failure`. `unsupported` is reserved by `spec/language/diagnostics.md` §7 and is produced by no command today: `lsp` is implemented and speaks LSP on stdio, so it never emits this envelope (and `lsp --json` is a usage error, exit 2).
 * `file` is `null` and positions are `0` when a diagnostic has no source span
   (manifest/lockfile/toolchain messages). Paths are package-relative where
   possible and always use `/`.
@@ -326,11 +326,11 @@ mode (check/build/run), local path dependency (check/build/run + lockfile
 determinism and change detection), `--locked` missing/current, hostile/absolute
 dependency paths, both crate roots, reserved Windows module names, `build`/`run`
 of hello, `test` runner pass/fail parsing, `fmt --check` idempotence, `doc`,
-`cache status|clean`, `doctor --json`, and `lsp` UNSUPPORTED (exit 3).
+`cache status|clean`, `doctor --json`, and `lsp` (arguments rejected with exit 2; the protocol itself is covered end to end by `tests/lsp_client.rs`).
 
 No test is ignored: every test exercises the real binary. `check_warnings_do_not_fail`
 uses the documented `W-RES-UNUSED-IMPORT` warning (exit 0) and
 `lint_deny_turns_warning_into_error` verifies `--deny CODE`/`--deny all` exit 1.
 Watch tests read stdout through bounded channels/timeouts (rebuild, failure
 recovery, child reaping); WASM tests skip explicitly when the `wasm32-wasip1`
-rustc target or Node.js is missing. Current total: 14 unit + 43 integration.
+rustc target or Node.js is missing. Current total: **53 unit + 76 integration** across six test binaries (`cli`, `build_isolation`, `exit_codes`, `test_runner_contract`, `watch_continuity`, `lsp_client`).

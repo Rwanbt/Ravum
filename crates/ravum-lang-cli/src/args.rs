@@ -509,7 +509,7 @@ EXIT CODES:
     0  success
     1  compilation/diagnostic/test failure or a safe operational refusal
     2  invalid command line
-    3  external tool missing (`rustc`) or UNSUPPORTED command
+    3  external tool missing (`rustc`)
 
 JSON (`check`, `test`, `doctor` with --json), schema_version 1, stdout only:
     {{schema_version, command, success, diagnostics, summary}}

@@ -4,7 +4,7 @@
 //! * `0` success;
 //! * `1` compilation/diagnostic/test failure or a safe operational refusal;
 //! * `2` invalid command line;
-//! * `3` external tool missing (`rustc`) or an explicitly UNSUPPORTED command.
+//! * `3` external tool missing (`rustc`).
 //!
 //! A command that is not implemented is never advertised as functional. Every
 //! documented command runs the real pipeline; `lsp` starts a real language
