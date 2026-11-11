@@ -1,6 +1,6 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour passe 5 — 2026-11-10, SHA `fb2a0f5`.** Cette passe traite les
+> **Mise à jour passe 5 — 2026-11-10, SHA `ea7df46`.** Cette passe traite les
 > **quatorze points ouverts** de `T2-FINDINGS.md` §19.2 : confidentialité du
 > résolveur (`use` d'un module privé, segments non finaux), repli `use` relatif
 > de MOD-3.2, `test fn` invalide → `E-TYP-MAIN`, comparaisons numériques mixtes →
@@ -18,8 +18,8 @@
 > 0 lacune de test) ; build bit-à-bit identique (`86F575CF…`), SBOM
 > `dc7b4e0d…`, installateur `4da36485…` ; gates **5 PASS / 6 PARTIAL /
 > 2 BLOCKED** (inchangés : T4/T12 exigent l'audit externe et le Go/No-Go
-> humains). CI sur `fb2a0f5` : **tous les workflows verts** (Linux qualification
-> 42925805059 : workspace 89 suites / 1402 passés / 0 échec / 4 ignorés,
+> humains). CI sur `ea7df46` : **tous les workflows verts** (Linux qualification
+> 42933086911 : workspace 89 suites / 1402 passés / 0 échec / 4 ignorés,
 > conformance 386 cas / 384 PASS / 0 FAIL / 2 SKIP, Miri, smoke, installateur,
 > WASI, fuzz smoke ; coverage, gate contracts, docs, VS Code, MVP : verts).
 > Le corps de ce document et son tableau de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer

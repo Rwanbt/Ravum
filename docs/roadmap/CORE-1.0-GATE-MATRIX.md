@@ -26,7 +26,7 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures (passe 5, SHA `fb2a0f5`, 2026-11-10)
+## 1. Mesures (passe 5, SHA `ea7df46`, 2026-11-10)
 
 ### Passe 5 — mesures courantes
 
@@ -92,6 +92,16 @@ Différence Windows/Linux assumée et documentée : Windows **89 suites / 1405 p
 conformance **385 PASS / 1 SKIP** ; Linux **89 suites / 1402 passés / 4 ignorés**,
 conformance **384 PASS / 2 SKIP** — aucun échec de chaque côté, écarts liés à l'OS
 (trois tests Windows-only deviennent ignorés sous Linux, dont deux cas FS).
+
+Clôture `ea7df46` (correctif `const_expr` → `E-TYP-CONST` et assertion de
+mutation) : mêmes workflows verts — Linux qualification
+[42933086911](https://github.com/Rwanbt/Ravum/actions/runs/42933086911)
+(workspace **89 suites / 1402 passés / 0 échec / 4 ignorés**, conformance
+**386 cas / 384 PASS / 0 FAIL / 2 SKIP**, Miri, smoke, installateur, WASI, fuzz
+smoke), coverage ratchet 42933086890 / 42933093863, gate contracts 42933086889 /
+42933093852, documentation integrity 42933093820, VS Code e2e 42933086917 /
+42933094041, MVP product 42933086896 / 42933093790, MVP impact 42933086891 /
+42933093985.
 
 ### Passe 4 — CI observée sur `29ef8be` (historique)
 
