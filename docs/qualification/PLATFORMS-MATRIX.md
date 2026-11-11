@@ -41,7 +41,7 @@
 
 | Plateforme | Compilation | Exécution | Conformance | Installation | FFI | CI | État |
 |---|---|---|---|---|---|---|---|
-| **Windows x86-64** | **PASS** — `run examples/hello` etc. (§2.1) + build/tests workspace en CI (§3.2) | **PASS** — 4 exemples exécutés, exit 0 ; démos M1/COLLAB-1/M2/DSP/M4 + browser E2E en CI | **PASS local** — 386 cas, 385 PASS / 0 FAIL / 1 SKIP (`security/dependency-absolute-unix`, `skip_on: windows`) ; **pas de job CI conformance Windows** | **NOT_RUN** cette passe (mesure antérieure : `scripts/install.ps1`, manifeste, hash) ; **pas de job CI installateur Windows** | **PASS** — `ffi-abs` → `42` | `mvp.yml` job `MVP product checks (build, tests, demos)` sur `windows-latest` : **vert** sur `c67f17e` (runs 43026622466 / 43026630105, §3.2) ; **pas de CI** pour repro/SBOM/installateur/conformance | **PASS (plateforme primaire ; CI produit, pas CI de distribution)** |
+| **Windows x86-64** | **PASS** — `run examples/hello` etc. (§2.1) + build/tests workspace en CI (§3.2) | **PASS** — 4 exemples exécutés, exit 0 ; démos M1/COLLAB-1/M2/DSP/M4 + browser E2E en CI | **PASS local** — **448 cas, 447 PASS / 0 FAIL / 1 SKIP** (`c6b4537`, `--verify-build`, `build_verified: true`) ; **pas de job CI conformance Windows** | **NOT_RUN** cette passe (mesure antérieure : `scripts/install.ps1`, manifeste, hash) ; **pas de job CI installateur Windows** | **PASS** — `ffi-abs` → `42` | `mvp.yml` job `MVP product checks (build, tests, demos)` sur `windows-latest` : **vert** sur `c67f17e` (runs 43026622466 / 43026630105, §3.2) ; **pas de CI** pour repro/SBOM/installateur/conformance | **PASS (plateforme primaire ; CI produit, pas CI de distribution)** |
 | **Linux x86-64** | **PASS (CI)** — `cargo test --workspace --all-targets` vert | **PASS (CI)** — smoke Linux + conformance + installateur | **PASS (CI)** — corpus exécuté sur `ubuntu-latest` | **PASS (CI)** — `scripts/install.sh` dans un préfixe temporaire + `--version` | **PARTIAL (CI)** — `run/ffi-abs` dans le corpus ; pas de test FFI dédié Linux | `linux-qual.yml`, 7 jobs verts + TSan `SKIPPED` (run 42936163958) | **PASS sur une seule image**, non mesuré localement |
 | **WASI (`wasm32-wasip1`)** | **PASS** — `run --target wasm32-wasip1 examples/hello` | **PASS** — stdout `hello, ravum` via Node WASI (§2.2) | **NOT_RUN** — le corpus n'est pas exécuté sous WASI | **NOT_RUN** | **NOT_RUN** — aucun `extern` sous WASI | **PASS (CI)** — job `wasm32-wasip1 (build + run via Node WASI)` vert | **PARTIAL** (qualifié séparément, périmètre étroit) |
 | **macOS x86-64** | **UNSUPPORTED** — `--target x86_64-apple-darwin` refusé (exit 2) | **NOT_RUN** | **NOT_RUN** | **NOT_RUN** — `install.sh` a des branches `darwin` mais n'a jamais tourné | **NOT_RUN** | **AUCUN** | **NOT_RUN** |
@@ -64,14 +64,21 @@ ravum-lang check <pkg> --json     → exit 0, JSON schema_version 1
 ravum-lang doctor --json          → exit 0, rustc ok, parser/checker/codegen ready, os=windows, arch=x86_64
 ```
 
-Conformance Windows, mesure de cette passe :
+Conformance Windows, mesures locales (deux passes, deux SHA — ne pas les fusionner) :
 
 ```
+# passe 6, SHA local 5d88ecb
 cargo run -p ravum-conformance -- run --json target/conformance-head.json
 → total=386 pass=385 fail=0 skip=1 not_run=0   (SKIP = security/dependency-absolute-unix)
+
+# passe 7, SHA local c6b4537, contrat check ⇒ build actif
+target\debug\ravum-conformance.exe run --verify-build --json target\final-pass2\conformance.json
+→ total=448 pass=447 fail=0 skip=1 not_run=0
+→ build: perimeter=187 covered=187 verified=120 implicit=67 failed=0
+→ build_verified: true
 ```
 
-Cette conformance Windows est **locale** (SHA local `5d88ecb`) ; le job CI
+La conformance Windows est **locale** (arbre commité, `c6b4537`) ; le job CI
 Windows (§3.2) ne l'exécute pas et porte sur un autre SHA (`c67f17e`). Ne pas
 fusionner les deux preuves en une seule phrase.
 
@@ -164,7 +171,7 @@ Ce job a trouvé un défaut réel — du formatage absent — corrigé par
 après quoi il est passé au vert.
 
 **Ce que ce job ne couvre pas, et qui reste donc local ou `NOT_RUN` :**
-la conformance Windows (386 cas, mesure locale §2.1), la reproductibilité
+la conformance Windows (448 cas, mesure locale §2.1), la reproductibilité
 bit-à-bit, le SBOM et l'installateur Windows. Il n'y a **aucun** job CI Windows
 pour ces quatre preuves.
 

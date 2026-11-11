@@ -185,22 +185,31 @@
   FEAT-12.5 est une liste MUST qui définit ce qui peut changer sans édition
   majeure. Un agent ne peut pas trancher.
 
-## D12 — Disposition des trois divergences `check → build` restantes — **OUVERTE**
+## D12 — Disposition des divergences `check → build` sur les moves de tableau — **RÉSOLUE (option (a), 2026-11-11)**
 
-- **Formes** : `a[0][1]` (chaîne d'index imbriquée) ; `h.items[0]` / `t.0[0]`
-  (tableau derrière un champ/tuple) ; liaison de tableau masquée par un
-  shadowing imbriqué. Chacune passe `check` et échoue à `build` avec E0508.
+- **Formes initiales** : `a[0][1]` (chaîne d'index imbriquée) ; `h.items[0]` /
+  `t.0[0]` (tableau derrière un champ/tuple) ; liaison de tableau masquée par un
+  shadowing imbriqué. Chacune passait `check` et échouait à `build` avec E0508.
 - **Contrat** : OWN-5.3/OWN-5.4 (MUST) autorisent le déplacement d'un élément.
 - **Options** : (a) abaissement général des moves par place (correctif de fond) ;
   (b) refus au `check` — contredirait deux MUST, donc exigerait un amendement ;
-  (c) statu quo documenté (E0508 bruyant, hors corpus, aucun miscompilation).
-- **État actuel** : (c) est appliqué et documenté dans
-  [`docs/qualification/CONFORMANCE-BUILD-CONTRACT.md`](docs/qualification/CONFORMANCE-BUILD-CONTRACT.md) ;
-  le gate `--verify-build` ne prouve l'absence de divergence que sur son périmètre.
-- **Évolution (passe 7)** : l'abaissement général (a) est en cours ; les quatre
-  formes ont été abaissées expérimentalement et `check` ⇒ `build` est vérifié par
-  rustc pour chacune. Le statut de D12 sera mis à jour quand les tests de
-  régression seront dans le corpus (`run/array-move-*`).
+  (c) statu quo documenté (E0508 bruyant, hors corpus, aucune miscompilation).
+- **Décision appliquée : (a)**, sans amendement de règle. Le commit `0f73738`
+  abaisse les trois formes **et** deux familles trouvées depuis par sondage
+  systématique : récepteur `self` **par valeur** sur un élément (`a[0].take()`,
+  F1) et payload de tableau dans un bras de `match` (F2, qui était une régression
+  du correctif lui-même, interceptée avant intégration). Chaque forme a un test
+  qui compile avec `rustc`, exécute le binaire et vérifie la valeur, plus un cas
+  de corpus (`conformance/cases/run/array-move-*`). Détail :
+  [`docs/qualification/T2-FINDINGS.md`](docs/qualification/T2-FINDINGS.md) §22.
+- **Ce que la résolution ne couvre pas** : quatre formes restent `check`-pass /
+  `build`-fail avec un E0508 bruyant (index dynamique dans un tableau imbriqué,
+  racine de chaîne qui n'est pas une place, plusieurs accès dans un bras de
+  `match` en corps d'expression, récepteur *by value* d'une méthode builtin).
+  Elles relèvent de la **même** option (a) et constituent du travail
+  d'ingénierie restant, pas une nouvelle décision humaine ; elles sont listées
+  dans `CONFORMANCE-BUILD-CONTRACT.md` et `T2-FINDINGS.md` §22.2, et **P0-A
+  reste `PARTIAL`** pour cette raison.
 
 ## D13 — Provenance de `&'static str` à travers les agrégats — **OUVERTE**
 

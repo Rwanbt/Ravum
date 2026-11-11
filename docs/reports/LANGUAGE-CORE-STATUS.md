@@ -1,21 +1,26 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour passe 6 — 2026-11-11, base `5d88ecb`.** Cette passe est une passe
-> d'**implémentation** de fiabilité, pas une revue : contrat `check → build`
-> mesuré et bloquant, **onze programmes acceptés par `check` mais refusés par
-> `rustc` corrigés** (références stockées/retournées, moves après `unwrap`,
-> tableaux annotés, exhaustivité imbriquée, moves d'éléments de tableau,
-> `String → &str` implicite), identité de build déterministe et publication
-> atomique, `watch` fail-closed, codes de sortie honnêtes, runner de tests
-> complet, seconde métrique de traçabilité. Mesures : **94 suites, 1525 passés /
-> 0 échec / 2 ignorés** ; conformance **424 cas, 423 PASS / 0 FAIL / 1 SKIP**,
-> build vérifié **163/163** (101 vérifiés, 62 implicites, 0 échec),
-> `build_verified: true` ; smoke **43/0/0** ; registre **108 codes / 126 émis /
-> 0 écart** ; FeatureIds **188/188** ; **MUST 463/807** (nouvelle métrique —
-> T2 repasse à `PARTIAL`). Gates : **4 PASS / 7 PARTIAL / 2 BLOCKED**
-> (T4/T12 exigent l'audit externe et le Go/No-Go humains). CI **NOT_RUN** sur
-> ces commits (aucun push). Le corps et le tableau de gates ci-dessous restent
-> l'instantané du **2026-11-09** (`1b7b4f1`) : le registre canonique est
+> **Mise à jour passe 7 — 2026-11-11, commit `c6b4537`.** La CI, qui n'avait
+> jamais tourné sur ces commits, est **verte 12/12** (Linux qualification, Windows
+> build/tests/démos, gate contracts, coverage, impact, VS Code). Elle a révélé
+> trois défauts d'honnêteté de **nos propres tests** — `cargo fmt` jamais exécuté,
+> contrat d'`exit code` écrit depuis l'observation Windows seule (POSIX tronque à
+> 8 bits avant le parent), course `try_wait`/`kill` dans le test de build
+> interrompu — tous corrigés. Côté langage, **cinq formes `check`-pass /
+> `build`-fail sont fermées** : chaîne d'index imbriquée `a[0][1]`, tableau derrière
+> un champ/tuple `h.items[0]`/`t.0[0]`, liaison masquée par shadowing, récepteur
+> `self` par valeur sur un élément (`a[0].take()`), payload de tableau dans un bras
+> de `match` — cette dernière étant une régression interceptée par sondage
+> systématique **avant** intégration. Mesures : **113 suites, 1530 passés / 0 échec
+> / 2 ignorés** ; conformance **448 cas, 447 PASS / 0 FAIL / 1 SKIP**, build vérifié
+> **187/187** (120 vérifiés, 67 implicites, 0 échec), `build_verified: true` ;
+> sondage round-3 **47 programmes × 11 axes, 0 divergence** ; smoke **43/0/0** ;
+> registre **108 codes / 126 émis / 0 écart** ; FeatureIds **188/188** ; **MUST
+> 463/807** (T2 `PARTIAL`) ; **P0-A reste `PARTIAL`** : quatre formes de move
+> restent ouvertes, bruyantes (E0508) et documentées. Gates : **4 PASS / 7 PARTIAL
+> / 2 BLOCKED** (T4/T12 exigent l'audit externe et le Go/No-Go humains). Le corps
+> et le tableau de gates ci-dessous restent l'instantané du **2026-11-09**
+> (`1b7b4f1`) : le registre canonique est
 > [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Document de situation, pas un certificat.** Chaque chiffre est lié à une

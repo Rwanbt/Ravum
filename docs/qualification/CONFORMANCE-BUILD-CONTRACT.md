@@ -296,45 +296,42 @@ pwsh -File scripts/p0a-probe-round3.ps1
 
 ## 7. État mesuré
 
+### 7.1 Mesure finale, arbre commité (passe 7)
+
 | Élément | Valeur |
 |---|---|
-| Date (Europe/Paris) | 2026-11-11, ≈13:55–14:03 |
-| Commit | `ab51b17` **plus l'arbre de travail** (correctif codegen D12 en cours, non commité ; 3 cas `run/array-move-*` non suivis appartenant à codegen-pipeline) |
+| Date (Europe/Paris) | 2026-11-11, ≈14:45–14:55 |
+| Commit | `c6b4537` (code `0f73738`), **arbre propre** — plus aucune mesure sur arbre de travail |
 | Hôte | Windows 11 x86-64, `rustc 1.95.0`, `cargo 1.95.0` |
-| Toolchain mesurée | `target\debug\ravum-lang.exe`, `ravum-lang 0.1.0 (edition core-1.0-draft.1)` — SHA-256 `923D413D954799D0E3F8568E5B448371B8BE85069FD984F6F67695A1582DB555` (copie figée `target\p0a-round3-bin\`) |
-| Harnais mesuré | `ravum-conformance 0.1.0` (schema 1) — SHA-256 `9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58` |
-| Commande | `target\p0a-round3-bin\ravum-conformance.exe run --toolchain target\p0a-round3-bin\ravum-lang.exe --verify-build --json target\final-conformance-round3.json` |
+| Toolchain mesurée | `target\debug\ravum-lang.exe`, `ravum-lang 0.1.0 (edition core-1.0-draft.1)` — SHA-256 `5DDF8E5F602D6B657C3644BBE22584B67A655799188E5511491B8202A705C499` |
+| Harnais mesuré | `target\debug\ravum-conformance.exe`, `ravum-conformance 0.1.0` (schema 1) — SHA-256 `9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58` |
+| Commande | `target\debug\ravum-conformance.exe run --verify-build --json target\final-pass2\conformance.json` |
 | Code de sortie | **0** |
-| Cas (arbre de travail) | `total=446 pass=445 fail=0 skip=1 not_run=0` |
-| Dimension build (arbre de travail) | `perimeter=185 covered=185 verified=120 implicit=65 failed=0 environment=0 not_measured=0` |
+| Cas | `total=448 pass=447 fail=0 skip=1 not_run=0` |
+| Dimension build | `perimeter=187 covered=187 verified=120 implicit=67 failed=0 environment=0 not_measured=0` |
 | `build_verified` | **`true`** |
-| Corpus du commit seul (hors 3 `run/array-move-*` non suivis) | `total=443 pass=442 fail=0 skip=1 not_run=0` ; `perimeter=182 covered=182 verified=120 implicit=62 failed=0` |
-| Rapport | `target\final-conformance-round3.json` (artefact local non versionné) |
+| Rapport | `target\final-pass2\conformance.json` (artefact local non versionné) |
 
-La mesure a été faite sur une **copie figée** des deux binaires
-(`target\p0a-round3-bin\`), car le correctif D12 de codegen-pipeline était en
-cours d'édition : sans figeage, un rebuild au milieu du run rendrait les
-compteurs incohérents. Le corpus du commit seul (443 cas) est obtenu en
-excluant, cas par cas, les 3 `run/array-move-*` non suivis de codegen-pipeline
-du rapport : 442 `pass`, 1 `SKIP`, 182 cas de périmètre dont 120 builds
-explicites et 62 implicites. Les 19 cas ajoutés par le round 3 expliquent le
-passage de 101 à 120 builds explicites.
+Le seul `SKIP` reste `security/dependency-absolute-unix`
+(`skip_on: ["windows"]`), un `compile-fail` **hors** périmètre build : il est
+rapporté `SKIP` (jamais `PASS`) et n'affecte pas `build_verified`, qui porte sur
+les 187 cas du périmètre.
 
-Le seul `SKIP` est `security/dependency-absolute-unix`
-(`skip_on: ["windows"]`) : c'est un `compile-fail`, **hors** du périmètre
-build. Il est rapporté `SKIP` (jamais `PASS`) et n'affecte pas
-`build_verified`, qui porte sur les 182 cas du périmètre (corpus du commit).
+### 7.2 Historique des runs de la passe (conservé pour ne pas relire le vert comme un hasard)
 
-Historique honnête des runs intermédiaires de cette session :
-`ownership/array-element-projection-move-pass` a d'abord échoué au lien
-(`LNK1181`) parce que le harnais copiait une arborescence dont le chemin
-dépassait `MAX_PATH` ; après correction du préfixe temporaire, une mesure
-complète a montré 28 échecs du même type dus à la **disposition de build
-content-addressed** du codegen (chemin `.ravum\build\<64 hex>\<pid>-0\out\…`),
-puis la version finale du harnais (préfixe court + copie sans `.ravum/`) a
-donné le run vert ci-dessus. Ces échecs étaient des artefacts de longueur de
-chemin Windows, pas des divergences sémantiques Ravum ; ils sont tracés ici
-pour que la mesure verte ne soit pas lue comme un hasard.
+| Run | Base | Cas | Divergences |
+|---|---|---|---|
+| pré-passe 7 | `5d88ecb` | 386 | — |
+| round 1–2 | `5d88ecb` | 424 | 0 FAIL (2 divergences trouvées hors corpus, corrigées) |
+| round 3, arbre en cours | `ab51b17` + arbre | 446 | 0 FAIL / 4 divergences hors corpus (F1, F2) |
+| round 3, commit seul | `aac9743` | 443 | 0 FAIL |
+| **final** | **`c6b4537`** | **448** | **0 FAIL** |
+
+Les échecs de lien (`LNK1181`) vus plus tôt dans la session étaient des artefacts
+de longueur de chemin Windows sur la disposition *content-addressed*
+(`.ravum\build\<id>\<pid>-0\out\…`), corrigés par un préfixe temporaire court et
+une copie sans `.ravum/` ; ils sont tracés ici pour que la mesure verte ne soit
+pas lue comme un hasard.
 
 
 ## 8. Divergences spec ↔ implémentation rencontrées pendant P0-A (hors build)
@@ -365,21 +362,32 @@ que la spec exige `E-OWN-REF-ESCAPE` — a été **corrigé pendant la session**
 P0-F et est désormais figé par le cas négatif
 `ownership/ref-field-escape-fail`.
 
-## 9. Divergences connues — statut OPEN (hors corpus, non attendues comme échecs)
+## 9. Divergences connues — état au commit `c6b4537`
 
 Le corpus build-vérifié **ne prouve pas** l'absence de divergences en dehors de
-lui. Cette section liste les formes `check`-pass / `build`-fail connues. Aucune
-n'est dans le corpus : les ajouter en `compile-fail` serait faux (la spec les
-accepte) et en `compile-pass` rendrait la porte rouge pour un élément ouvert déjà
-identifié. L'échec est toujours un `E0508` **bruyant** de rustc (jamais un
-miscompile silencieux, aucune sémantique modifiée).
+lui. Cette section liste les formes `check`-pass / `build`-fail connues.
 
-Les formes (a)–(c) sont les **D12 historiques** : elles étaient rouges au
-binaire `5816ACDD…` (13:32) et **construisent désormais** avec le binaire
-mesuré `923D413D…` (13:49:46), grâce au correctif `codegen-pipeline` en cours
-d'intégration. Elles restent hors corpus tant que ce correctif n'est pas
-commité/re-mesuré, et les contrôles correspondants vivent dans
-`scripts/p0a-probe-round3.ps1` (bloc `known_open`).
+**Les cinq formes (a)–(e) de cette section sont fermées** (commit `0f73738`) :
+elles passent `check` **et** `build`, ont un test `rustc`-vérifié dans
+`crates/ravum-lang-codegen/tests/backend_audit.rs` et un cas de corpus
+`conformance/cases/run/array-move-*`. Les reproducers restent ci-dessous comme
+archive de la mesure rouge et de la preuve de fermeture.
+
+**Quatre formes restent ouvertes** au même commit, toutes `check` exit 0 /
+`build` exit 1 avec un `E0508` **bruyant** (jamais de miscompile silencieux, aucune
+sémantique modifiée). Elles ne sont pas dans le corpus : les ajouter en
+`compile-fail` serait faux (la spec les accepte) et en `compile-pass` rendrait la
+porte rouge pour un élément ouvert déjà identifié.
+
+| Forme restante | Repro | Raison |
+|---|---|---|
+| index dynamique dans un tableau imbriqué | `a[0][i]`, `a[i][j]` | il faudrait déstructurer le préfixe constant puis appliquer la forme inline `into_iter().nth(i)` à un slot, pas à une place |
+| racine de chaîne qui n'est pas une place | `make()[0]`, `a[0].0[1]` | une racine rvalue n'a pas de stockage à déstructurer |
+| plusieurs accès dans un bras de `match` en corps d'expression | `E::Items(a) => (a[0], a[1])` | la forme inline est mono-usage par construction (le corps en bloc fonctionne) |
+| récepteur *by value* d'une méthode **builtin** | `a[0].unwrap()` sur `[Option<String>; 2]` | les récepteurs builtins ne sont pas modélisés par le backend (seules les méthodes `self` utilisateur le sont) |
+
+C'est la raison pour laquelle `P0-A` reste `PARTIAL` : la porte est mesurée et
+bloquante, mais son périmètre ne couvre pas ces quatre formes.
 
 ### (a) chaîne de tableaux imbriqués
 

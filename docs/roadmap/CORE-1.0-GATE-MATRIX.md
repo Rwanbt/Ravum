@@ -8,10 +8,20 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-11 (passe 6 « fiabilité P0/P1/P2 » : contrat
-> `check → build` bloquant, onze divergences fermées, identité de build et
-> publication atomique, `watch` fail-closed, codes de sortie honnêtes, seconde
-> métrique de traçabilité des MUST — T2 repasse à `PARTIAL`).
+> Dernière mise à jour : 2026-11-11 (passe 7 « CI réelle et places de tableau » :
+> la CI tourne sur la branche et est verte 12/12, les cinq formes de déplacement
+> d'élément précédemment refusées par `rustc` sont abaissées, deux défauts de nos
+> propres tests révélés par Linux sont corrigés — T2 reste `PARTIAL` sur la
+> métrique MUST, inchangée).
+>
+> **Chiffres courants (passe 7, commit `c6b4537`, mesurés le 2026-11-11)** :
+> **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
+> `--verify-build`, `build_verified: true`) ;
+> **113 suites, 1530 passés / 0 échec / 2 ignorés** (workspace) ;
+> **188/188** règles tracées, **188/188 satisfaites** (inchangé) ;
+> **108** codes enregistrés, **126** émis ; CI **12/12 verte** sur `c6b4537`.
+> Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
+> consolidé.
 
 ## 0. Base de référence
 
@@ -19,9 +29,9 @@
 |---|---|
 | Branche de travail | `feat/lang-core-1.0-rc` |
 | Baseline au début de la session | `16d4e5c475a613b4b0142d2cc08c635ee63ed42c` |
-| **SHA des preuves de cette passe** | **`a5744ea`** (sema `!`/tuples ; durcissement gates `3ddf481` ; P0 `16775b4`) — 83 suites, conformance, fuzz, reproductibilité ; **fiabilité/tests `03774d6`/`e981f2f` ; position de valeur et audit borrow `63619a5`** (mutex crash + validation `-Sizes`) |
+| **SHA des preuves de cette passe** | **`c6b4537`** (code abaissement des places de tableau `0f73738` ; sondage round-3 `aac9743` ; tests inter-OS `c67f17e`) |
 | SHA des preuves CI antérieures | `c43dafd` / `01fc148` — **4 workflows verts** (état antérieur, ne couvre pas cette passe) |
-| **CI sur ce code** | **succès** sur `e05f3ff` (code `63619a5`) : runs [42837268985](https://github.com/Rwanbt/Ravum/actions/runs/42837268985) (Linux) et [42837285517](https://github.com/Rwanbt/Ravum/actions/runs/42837285517) (gate contracts) |
+| **CI sur ce code** | **12 runs verts sur 12** sur `c6b4537` (commit final, 6 workflows × `push` + `pull_request`) : Linux qualification [43031394324](https://github.com/Rwanbt/Ravum/actions/runs/43031394324), MVP product checks Windows [43031394660](https://github.com/Rwanbt/Ravum/actions/runs/43031394660), gate contracts [43031394278](https://github.com/Rwanbt/Ravum/actions/runs/43031394278), coverage [43031394299](https://github.com/Rwanbt/Ravum/actions/runs/43031394299), impact [43031394377](https://github.com/Rwanbt/Ravum/actions/runs/43031394377), VS Code [43031394291](https://github.com/Rwanbt/Ravum/actions/runs/43031394291) ; même verdict sur `c67f17e` (runs `43026622427`/`43026622466`) |
 | `dev` fusionné dans la branche | `fbaa5068af39d5dfbcb27af4aaf378ff37ec2e7b` (PR #103, licence) |
 | `main` (intacte) | `ca675497d1f8d74cbb7a93d12715a845149a8785` |
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
@@ -55,6 +65,47 @@ bloquant** sur le corpus accepté. Trois formes restent ouvertes et déclarées
 un shadowing imbriqué) : elles échouent avec un E0508 bruyant, ne sont pas dans
 le corpus et sont documentées dans `CONFORMANCE-BUILD-CONTRACT.md`. Détail :
 `docs/qualification/T2-FINDINGS.md` §21.
+
+## 0 ter. Passe 7 — CI réelle, invariants inter-OS, places de tableau (2026-11-11)
+
+| Élément | Valeur |
+|---|---|
+| Base de cette passe | `9da9b12` (passe 6, 7 commits locaux non poussés) |
+| Commits | `ab51b17` (rustfmt), `10459b8`/`f10a12f`/`e84e070`/`c67f17e` (contrats de test inter-OS), `aac9743` (sondage round-3 + 19 cas), `0efe84d` (D13), `5f1cb12` (message sema), `0f73738` (abaissement des places de tableau), `c6b4537` (commentaire codegen) |
+| Binaires épinglés | `ravum-lang.exe` sha256 `5DDF8E5F602D6B657C3644BBE22584B67A655799188E5511491B8202A705C499` ; `ravum-conformance.exe` sha256 `9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58` (Windows 11 x64, `rustc 1.95.0`) |
+| Tests workspace | **113 suites, 1530 passés / 0 échec / 2 ignorés** (exit 0) — `cargo test --workspace -- --test-threads=2` |
+| Conformance + build | **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=187 covered=187 verified=120 implicit=67 failed=0 environment=0 not_measured=0` ; `build_verified: true` — `ravum-conformance run --verify-build` |
+| Sondage round-3 | **47 programmes × 11 axes : 47 check-pass, 47 build-pass, 0 divergence** — `scripts/p0a-probe-round3.ps1` (exit 0 ; il sortait 1 avec 4 divergences avant cette passe) |
+| Smoke exemples | **43 PASS / 0 FAIL / 0 NOT_RUN** — `scripts/lang-smoke.ps1 -SkipBuild` |
+| Watch fail-closed | **PASS** — `scripts/watch-fail-closed-check.ps1` |
+| Registre des codes | **126 émis / 0 hors registre / 0 jamais émis / 0 W hors DIAG-1.6** — `python tools/registry_audit.py` |
+| Traçabilité FeatureId | **188/188** — `python tools/features_coverage.py --strict` |
+| **Traçabilité MUST** | **807 énoncés ; 463 atteints (57,4 %) / 344 non atteints (42,6 %)** — `python tools/must_audit.py` (métrique inchangée, seuil inchangé) |
+| Contrats Python | **33 tests OK** — `python -m unittest discover -s tools/tests` |
+| **CI sur ces commits** | **12/12 verts sur `c6b4537`** (commit final de la passe) : Linux qualification [43031394324](https://github.com/Rwanbt/Ravum/actions/runs/43031394324) (7 jobs verts + TSan `NOT_APPLICABLE`), MVP product checks Windows [43031394660](https://github.com/Rwanbt/Ravum/actions/runs/43031394660), gate contracts [43031394278](https://github.com/Rwanbt/Ravum/actions/runs/43031394278), coverage [43031394299](https://github.com/Rwanbt/Ravum/actions/runs/43031394299), impact [43031394377](https://github.com/Rwanbt/Ravum/actions/runs/43031394377), VS Code [43031394291](https://github.com/Rwanbt/Ravum/actions/runs/43031394291) ; verdict identique sur `c67f17e` (`43026622427`, `43026622466`) |
+| Portée | Aucune ratification d'ADR, aucun merge, aucun tag, aucune release, aucun changement de protection de branche. `main` intacte. |
+
+Ce que cette passe a réellement changé, et ce qu'elle ne prouve pas :
+
+* **La CI n'avait jamais tourné sur ces commits.** Elle a trouvé trois défauts
+  d'honnêteté que le local Windows ne pouvait pas voir : absence de `cargo fmt`
+  (job bloquant), contrat d'`exit code` écrit depuis l'observation Windows seule
+  (POSIX tronque à 8 bits avant le parent), et une course dans le test de build
+  interrompu (`try_wait` puis `kill`). Les trois sont corrigés ; Linux est vert.
+* **Cinq formes `check`-pass / `build`-fail sont fermées** : `a[0][1]` (chaîne
+  d'index imbriquée), `h.items[0]` / `t.0[0]` (projection), shadowing de liaison,
+  récepteur de méthode `self` par valeur sur élément (`a[0].take()`, famille
+  trouvée par le sondage round-3), et payload de tableau dans un bras de `match`.
+  Chacune a un test qui compile réellement avec `rustc` et exécute le binaire.
+* **Quatre formes restent ouvertes, bruyantes (E0508) et documentées** : index
+  dynamique dans un tableau imbriqué (`a[0][i]`), racine de chaîne qui n'est pas
+  une place (`make()[0]`), plusieurs accès dans un bras de `match` en corps
+  d'expression, et récepteur `by value` d'une méthode **builtin**
+  (`a[0].unwrap()`). Elles ne sont pas dans le corpus et `P0-A` reste donc
+  `PARTIAL`, pas `PASS`.
+* **La traçabilité MUST n'a pas bougé** : 463/807. T2 reste `PARTIAL`. Aucun
+  seuil n'a été modifié pour obtenir du vert.
+
 
 ## 1. Mesures (passe 5, SHA `ea7df46`, 2026-11-10)
 
@@ -321,7 +372,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PARTIAL` | **FeatureIds : 386 → 424 cas, 423 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` désormais **mesuré et bloquant** (`--verify-build` : périmètre 163, couverts 163, vérifiés 101, implicites 62, échoués 0) ; 11 divergences `check`-pass/build-fail fermées (T2-FINDINGS §21) | **La seconde métrique change le verdict** : 807 énoncés MUST, **463/807 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; `F-META-006` reste sans oracle ; 3 formes de move restent des divergences ouvertes documentées, hors corpus | `F-META-006` sans oracle ; décision humaine sur le dénominateur (D10) |
+| T2 | `PARTIAL` | **FeatureIds : 386 → 448 cas, 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` désormais **mesuré et bloquant** (`--verify-build` : périmètre 163, couverts 163, vérifiés 101, implicites 62, échoués 0) ; 11 divergences `check`-pass/build-fail fermées (T2-FINDINGS §21) | **La seconde métrique change le verdict** : 807 énoncés MUST, **463/807 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; `F-META-006` reste sans oracle ; 3 formes de move restent des divergences ouvertes documentées, hors corpus | `F-META-006` sans oracle ; décision humaine sur le dénominateur (D10) |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 85 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke **43 PASS**) et Linux (CI antérieure `42809676443` sur `b7e5c5c`) ; WASI exécuté ; `build` publie une identité déterministe et un artefact atomique (`.ravum/build/<id16>/` → `.ravum/bin/<name>` + manifeste) | ABI stable non revendiquée ; sanitizers non exécutés ; CI **NOT_RUN** sur les commits de la passe 6 | — |
@@ -329,7 +380,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` **fail-closed** : compilation avant arrêt de la version active, rejet des résultats obsolètes (digest de publication + re-scan), copie privée par processus, repli sur la dernière version valide, aucun orphelin (preuve `scripts/watch-fail-closed-check.ps1`) ; overlays/snapshots ; oracle cold vs warm (36 éditions) | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint ; « continuité de service » n'est pas « hot reload » | Implémentation |
 | T9 | `PARTIAL` | **10 verticales `.rv` exécutées**, dont `examples/file-store` (magasin clé/valeur versionné en Ravum pur : put/get/list/history/delete, erreurs typées, refus de traversée de chemin), avec 13 assertions de smoke et 3 cas de conformance | HTTP + SQLite, DSP hôte, E2E navigateur absents ; `file-store` n'est **pas** une base de données ni un service | Implémentation + décision D6/D7 |
-| T10 | `PARTIAL` | **1525 tests** (94 suites), conformance **424 cas** avec **build vérifié bloquant**, smoke **43/0/0**, contrats Python **33**, **fuzz complet rejoué (2 campagnes, passe 5)**, **Miri Linux en CI sur `e05f3ff` (164 tests)** ; couverture sema 89,2 % (passe 5) ; mutation ciblée 195 mutants / 166 tués (passe 5) | **Audit externe absent** ; Miri/couverture/mutation **non rejoués** sur les commits de la passe 6 ; aucune mesure de performance au repos (machine chargée) | Audit externe |
+| T10 | `PARTIAL` | **1530 tests** (113 suites), conformance **448 cas** avec **build vérifié bloquant** (`perimeter 187`, `verified 120`, `implicit 67`, `failed 0`), smoke **43/0/0**, contrats Python **33**, **Miri Linux vert en CI sur `c67f17e`**, **fuzz smoke vert en CI** ; couverture sema 89,2 % (passe 5, ratchet CI vert) ; mutation ciblée 195 mutants / 166 tués (passe 5) | **Audit externe absent** ; campagne de mutation **non rejouée** sur la passe 7 (workflow `mutation.yml` en `schedule`/`dispatch`, absent de la branche par défaut donc non déclenchable par `gh workflow run`) ; fuzz **complet** non rejoué (seul le garde-fou `fuzz_*` tourne) ; couverture non re-mesurée après les changements de la passe 7 ; aucune mesure de performance au repos (machine chargée) | Audit externe |
 | T11 | `PARTIAL` | Installateur (`sha256 28ba4b1c…f427dce680`, manifeste `locked=true`, `--version`), SBOM **reproductible** (64 paquets / 170 relations, `dc7b4e0d…c2134f1`), provenance, checksums, licence, **build bit-à-bit identique entre deux racines et deux `target/`** (`83372F4F…D0546DD`), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 

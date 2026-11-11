@@ -6,8 +6,48 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0** ci-dessous porte la passe P0 du **2026-11-10**
-> (SHA `a5744ea`) et **prévaut pour les chiffres courants**.
+> (SHA `a277b86`). La **section 0 quater** ci-dessous porte la passe du
+> **2026-11-11 (passe 7, SHA `c6b4537`)** et **prévaut pour les chiffres courants** ;
+> la section 0 ter est la passe 6 (`5d88ecb` → `9da9b12`).
+
+## 0 quater. Addendum passe 7 — CI réelle et places de tableau (2026-11-11, SHA `c6b4537`)
+
+Cette section **prévaut sur 0 ter et sur toutes les suivantes** pour les chiffres
+courants. Elle a deux objets : la CI, qui n'avait jamais tourné sur ces commits, et
+la fermeture des formes `check`-pass / `build`-fail restantes.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace -- --test-threads=2` | **113 suites, 1530 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance (`run --verify-build`) | **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **187/187** couverts, **120** vérifiés, **67** implicites, **0 échec**, `build_verified: true` |
+| Sondage round-3 de l'invariant `check ⇒ build` | **47 programmes × 11 axes : 47 check-pass, 47 build-pass, 0 divergence** (le script sortait `1` avec 4 divergences avant le correctif) |
+| Smoke exemples | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Watch fail-closed | **PASS** |
+| Traçabilité FeatureId (inchangée) | **188/188** (187 cas + 1 exemption `F-META-006`) |
+| Traçabilité MUST (inchangée) | **807 MUST ; 463/807 atteints (57,4 %) ; 344 non atteints** |
+| Registre | **108 codes enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Contrats Python | **33 tests OK** |
+| **CI GitHub Actions** | **12 runs verts sur 12 sur `c6b4537`** (6 workflows × `push` + `pull_request`) : Linux qualification `43031394324` (7 jobs verts + TSan `NOT_APPLICABLE`), MVP product checks Windows `43031394660` (build, tests, démos M1/COLLAB-1/M2/DSP/M4, browser E2E), gate contracts `43031394278`, coverage `43031394299`, impact `43031394377`, VS Code `43031394291` |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` reste `PARTIAL` (4 formes de move encore ouvertes, listées) et T2 reste `PARTIAL` (463/807) |
+| Binaires épinglés | `ravum-lang.exe` sha256 `5DDF8E5F…A705C499` ; `ravum-conformance.exe` sha256 `9F21CFF0…0600DF8` |
+
+Deux défauts d'honnêteté de nos **propres tests** ont été révélés par Linux (jamais
+par le local Windows) et corrigés : le contrat d'`exit code` était écrit depuis
+l'observation Windows seule (POSIX tronque à 8 bits avant le parent), et le test de
+build interrompu faisait la course entre `try_wait` et `kill`. Un troisième défaut,
+visible celui-là, était l'absence de `cargo fmt` : le job bloquant de formatage
+échouait. Les trois corrections sont dans `ab51b17`, `10459b8`, `f10a12f`,
+`c67f17e`.
+
+Cinq formes `check`-pass / `build`-fail sont **fermées** (`0f73738`) : chaîne
+d'index imbriquée, tableau derrière un champ/tuple, liaison masquée par shadowing,
+récepteur `self` par valeur sur un élément, payload de tableau dans un bras de
+`match` — cette dernière étant une régression introduite par le correctif
+lui-même, interceptée par le sondage systématique **avant** intégration. Quatre
+formes restent ouvertes, bruyantes (E0508) et documentées : index dynamique dans un
+tableau imbriqué, racine de chaîne qui n'est pas une place, plusieurs accès dans un
+bras de `match` en corps d'expression, récepteur `by value` d'une méthode builtin.
+Détail : [`T2-FINDINGS.md`](../qualification/T2-FINDINGS.md) §22.
 
 ## 0 ter. Addendum P0/P1/P2 — passe du 2026-11-11 (base `5d88ecb`)
 

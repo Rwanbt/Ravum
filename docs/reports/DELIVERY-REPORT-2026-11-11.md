@@ -285,3 +285,72 @@ déclencher la CI. Aucun agent ne fusionne ni ne publie.
 P1 préparés sans ratification, une verticale P2 réelle livrée, le reste bloqué
 par des décisions humaines et par des preuves lourdes non rejouées sur ce SHA.
 Aucun `PROVED`, aucune release, aucun merge.
+
+---
+
+## Passe 7 — CI réelle et fermeture des places de tableau (2026-11-11, `c6b4537`)
+
+Ajout après le rapport A–J, à la demande du mainteneur (« push et continue sur les
+tâches restantes »). Cette section **prévaut** sur les chiffres A–J.
+
+### Ce qui a été poussé et ce que la CI a dit
+
+La branche `feat/lang-core-1.0-rc` comptait 7 commits locaux jamais poussés : la CI
+n'avait donc **jamais** tourné sur ce code (`NOT_RUN` dans la section F). Après
+push, **12 runs sur 12 sont verts** sur `c6b4537` — Linux qualification comprise,
+qui n'avait jamais été exercée sur ces commits.
+
+La CI a trouvé **trois défauts que le local Windows ne pouvait pas voir**, tous dans
+nos propres tests de la passe 6, tous corrigés :
+
+| Défaut | Preuve | Correctif |
+|---|---|---|
+| `cargo fmt` jamais exécuté — job bloquant rouge | job « Check formatting (rustfmt, pinned toolchain) » | `ab51b17` (formatage seul, 6 fichiers) |
+| contrat d'`exit code` écrit depuis l'observation Windows seule | Linux : `300` n'est jamais observable (POSIX tronque à 8 bits), `256` devient `0` | `10459b8` + `c67f17e` (paire `cfg(windows)`/`cfg(unix)`, limitation documentée) |
+| course `try_wait`/`kill` dans le test de build interrompu | Linux : le build finissait entre la sonde et le signal, le test traitait une publication **complète** comme une violation | `f10a12f` (attente du début de phase de compilation, deux états acceptés) |
+
+### Ce que le langage a gagné
+
+**Cinq formes `check`-pass / `build`-fail sont fermées** (`0f73738`) :
+
+| Forme | Repro | Preuve |
+|---|---|---|
+| chaîne d'index imbriquée | `return a[0][1];` sur `[[String; 2]; 2]` | test `rustc`-vérifié + cas `run/array-move-nested` |
+| tableau derrière champ/tuple | `h.items[0]`, `t.0[0]` | idem + `run/array-move-projected` |
+| liaison masquée par shadowing | paramètre `a` + `let a = …` | idem + `run/array-move-shadowed` |
+| récepteur `self` **par valeur** sur élément | `a[0].take()`, `a[i].take()` | idem + `run/array-move-self-receiver` |
+| payload de tableau dans un bras de `match` | `E::Items(a) => { return a[1]; }` | idem + `run/array-move-match-payload` |
+
+La dernière est une **régression introduite par le correctif lui-même**, détectée
+par le sondage systématique round-3 (47 programmes × 11 axes) **avant**
+intégration : c'est la démonstration que le sondage sert à quelque chose.
+
+**Quatre formes restent ouvertes**, bruyantes (E0508), documentées et hors corpus :
+index dynamique dans un tableau imbriqué (`a[0][i]`), racine de chaîne qui n'est pas
+une place (`make()[0]`), plusieurs accès dans un bras de `match` en corps
+d'expression, récepteur `by value` d'une méthode **builtin** (`a[0].unwrap()`).
+Elles relèvent de la même option que D12 (abaissement général) : c'est du travail
+d'ingénierie restant, pas une décision humaine. **P0-A reste donc `PARTIAL`.**
+
+### Mesures de la passe 7
+
+| Mesure | Résultat |
+|---|---|
+| Tests workspace | **113 suites, 1530 passés / 0 échec / 2 ignorés** |
+| Conformance `--verify-build` | **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **187/187** (120 vérifiés, 67 implicites, 0 échec) ; `build_verified: true` |
+| Sondage round-3 | **47 programmes × 11 axes, 0 divergence** (sortait `1` avec 4 divergences avant) |
+| Smoke / watch | **43 PASS / 0 FAIL / 0 NOT_RUN** ; **WATCH CHECK: PASS** |
+| Registre / FeatureIds / MUST | **126 émis, 0 écart** ; **188/188** ; **463/807** (inchangés) |
+| Contrats Python | **33 tests OK** |
+| CI | **12/12 verts** sur `c6b4537` (Linux `43031394324`, Windows `43031394660`) |
+
+### Ce qui reste non prouvé après cette passe
+
+macOS/ARM/Android/iOS (`NOT_RUN`/`UNSUPPORTED`, D6) ; campagne de **mutation**
+(non rejouée : `mutation.yml` est en `schedule`/`dispatch` et absent de la branche
+par défaut, donc non déclenchable par `gh workflow run`) ; **fuzz complet**
+(seul le garde-fou `fuzz_*` tourne en CI) ; **couverture** non re-mesurée après les
+changements de la passe 7 (le ratchet CI reste vert) ; **reproductibilité bit-à-bit,
+SBOM, provenance, installateur** non rejoués sur ce SHA ; **audit externe** (D4)
+toujours absent, donc T4/T10/T12 restent bloqués.
+

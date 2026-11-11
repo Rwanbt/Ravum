@@ -937,3 +937,96 @@ Binaires de mesure épinglés : `ravum-lang.exe` sha256
 `5816ACDD…C157F661D`, `ravum-conformance.exe` sha256 `7DF6345C…4BE4CCCF`.
 Toute re-mesure doit repartir de ces binaires ; l'arbre a été édité par six
 agents pendant la passe.
+
+## 22. Passe 7 — fermeture des formes ouvertes, deux familles nouvelles, quatre formes restantes
+
+### 22.1 Les cinq formes précédemment ouvertes sont abaissées
+
+Le §21.3 laissait trois formes ouvertes. Un sondage systématique (round-3,
+`scripts/p0a-probe-round3.ps1`, 47 programmes × 11 axes) en a trouvé **deux de
+plus**, dont une **régression** introduite par le correctif lui-même en cours
+d'édition. Les cinq sont maintenant `check` **et** `build` verts, prouvés par un
+test qui compile réellement avec `rustc`, exécute le binaire et vérifie la valeur
+(`crates/ravum-lang-codegen/tests/backend_audit.rs`) :
+
+| Forme | Repro | Preuve |
+|---|---|---|
+| chaîne d'index imbriquée | `fn f(a: [[String; 2]; 2]) -> String { return a[0][1]; }` | `audit_nested_array_element_moves_build_and_run` ; cas `run/array-move-nested` |
+| tableau derrière champ/tuple | `h.items[0]`, `t.0[0]`, `h.items[0][1]` | `audit_projected_array_element_moves_build_and_run` ; cas `run/array-move-projected` |
+| liaison masquée par shadowing | paramètre `a` + `let a = …` imbriqué | `audit_shadowed_array_bindings_move_build_and_run` ; cas `run/array-move-shadowed` |
+| **F1** — récepteur `self` **par valeur** sur élément | `a[0].take()`, `a[i].take()` | `audit_by_value_self_receiver_on_array_element_build_and_run` ; cas `run/array-move-self-receiver` |
+| **F2** — payload de tableau dans un bras de `match` | `E::Items(a) => { return a[1]; }` | `audit_match_payload_array_moves_build_and_run` ; cas `run/array-move-match-payload` |
+
+Moyen employé : une *place* est désormais un binding + une chaîne de projections ;
+le dédestructuration est récursive (`let [[e00, e01], [e10, e11]] = a;`), les
+bindings sont identifiés **par déclaration** (pile de portées dans le walker, sans
+changement de `sema`), et un abaissement inline `{ let [..] = place; el }` couvre
+les bras de `match` en corps d'expression.
+
+Effet observable déclaré : les emplacements déstructurés deviennent des locales,
+donc ils sont libérés à la fin de la portée englobante dans l'ordre inverse de
+déclaration, au lieu de partir avec le tableau. **Inobservable en Core 1.0** : le
+langage n'a ni `Drop` ni implémentations de traits (`impl` est inhérent), donc
+aucun code utilisateur ne s'exécute à l'un ou l'autre instant — seul le moment de
+libération de la mémoire diffère.
+
+### 22.2 Quatre formes restent ouvertes — déclarées, bruyantes, hors corpus
+
+Toutes re-mesurées après le correctif : `check` exit 0, `build` exit 1 avec un
+**E0508 bruyant** (jamais de miscompilation silencieuse).
+
+| Forme | Repro | Pourquoi elle reste ouverte |
+|---|---|---|
+| index dynamique dans un tableau imbriqué | `a[0][i]`, `a[i][j]` | il faudrait déstructurer le préfixe constant puis appliquer la forme inline `into_iter().nth(i)` à un **slot**, pas à une place |
+| racine de chaîne qui n'est pas une place | `make()[0]`, `a[0].0[1]` | une racine rvalue n'a pas de stockage à déstructurer |
+| plusieurs accès dans un bras de `match` en corps d'expression | `E::Items(a) => (a[0], a[1])` | la forme inline est mono-usage par construction ; le corps en bloc fonctionne |
+| récepteur *by value* d'une méthode **builtin** | `a[0].unwrap()` sur `[Option<String>; 2]` | les récepteurs des builtins ne sont pas modélisés par le backend, seules les méthodes `self` utilisateur le sont (`facts.methods` + `FnSig.receiver`) |
+
+Conséquence : **`P0-A` reste `PARTIAL`**. Le gate `--verify-build` prouve
+l'absence de divergence sur son périmètre (448 cas, 187 places de build), pas sur
+le langage entier ; ces quatre formes vivent hors corpus et sont listées ici pour
+qu'aucun rapport ne les présente comme fermées.
+
+### 22.3 La CI a trouvé trois défauts d'honnêteté de nos propres tests
+
+Aucun n'était visible en local sous Windows ; tous concernent la passe 6 :
+
+1. **`cargo fmt` jamais exécuté** → job bloquant « Check formatting » rouge sur
+   les sept commits. Corrigé (`ab51b17`, formatage seul, 6 fichiers).
+2. **Contrat d'`exit code` écrit depuis l'observation Windows seule** : les tests
+   exigeaient que `run` nomme `300` et transforme `256` en `1`. Faux sur POSIX :
+   `_exit`/`waitpid` tronquent à 8 bits avant que le parent regarde, donc le CLI
+   observe `44` et `0`. Les tests sont devenus une paire `cfg(windows)` /
+   `cfg(unix)` ; la limitation est documentée (un programme sortant `256` est
+   indistinguable d'un succès pour tout parent POSIX). `10459b8`, `c67f17e`.
+3. **Course dans le test de build interrompu** : `sleep(120 ms)` + `try_wait` +
+   `kill` pouvait laisser le build se terminer entre la sonde et le signal, et le
+   test traitait alors une publication **complète** comme une violation. Il attend
+   maintenant le début observable de la phase de compilation
+   (`.ravum/build/<id>/gen/main.rs`) et accepte deux états : ancien artefact
+   intact, ou nouveau programme publié en entier. `f10a12f`.
+
+La règle qui en sort : un test qui observe un comportement dépendant de l'OS doit
+être écrit **par plateforme**, avec la même exigence de preuve des deux côtés —
+pas une assertion commune assouplie.
+
+### 22.4 Mesures de la passe 7
+
+| Mesure | Commande | Résultat |
+|---|---|---|
+| Tests workspace | `cargo test --workspace -- --test-threads=2` | **113 suites, 1530 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance + build | `ravum-conformance run --verify-build` | **448 cas : 447 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build : périmètre **187**, couverts **187**, vérifiés **120**, implicites **67**, échoués **0** ; `build_verified: true` |
+| Sondage round-3 | `scripts/p0a-probe-round3.ps1` | **47 programmes × 11 axes : 47 check-pass, 47 build-pass, 0 divergence** (exit 0 ; il sortait 1 avec 4 divergences avant le correctif) |
+| Smoke exemples | `scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Watch fail-closed | `scripts/watch-fail-closed-check.ps1` | **PASS** |
+| Registre des codes | `python tools/registry_audit.py` | **126 émis / 0 hors registre / 0 jamais émis** |
+| Traçabilité MUST | `python tools/must_audit.py` | **807 MUST, 463 atteints, 344 non atteints** (inchangé) |
+| Contrats Python | `python -m unittest discover -s tools/tests` | **33 tests OK** |
+| CI | GitHub Actions | **12/12 verts** sur `c67f17e`, Linux qualification incluse (run `43026622427`) |
+
+Binaires de mesure épinglés de la passe 7 (Windows 11 x64, `rustc 1.95.0`) :
+`ravum-lang.exe` sha256
+`5DDF8E5F602D6B657C3644BBE22584B67A655799188E5511491B8202A705C499` ;
+`ravum-conformance.exe` sha256
+`9F21CFF01629458776E4F66ED0E0587E3A7166F184F197FC5F2014100600DF58`.
+
