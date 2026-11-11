@@ -4920,8 +4920,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     (ty, out)
                 }
                 _ => {
+                    // G-5.11 (MUST): `const_expr` has no variable, no call, no
+                    // field access, no index, no `?`, no block; those forms are
+                    // `E-TYP-CONST`. `E-RES-CONST-NOT-CONST` is reserved for a
+                    // value the checker's facts cannot represent (e.g. a float).
                     self.error(
-                        "E-RES-CONST-NOT-CONST",
+                        "E-TYP-CONST",
                         expr.span,
                         "references are not constant expressions".to_string(),
                     );
@@ -4949,16 +4953,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 (target, value)
             }
             ExprKind::Block(_) => {
+                // G-5.11 (MUST): a block is not a `const_expr`.
                 self.error(
-                    "E-RES-CONST-NOT-CONST",
+                    "E-TYP-CONST",
                     expr.span,
                     "blocks are not constant expressions".to_string(),
                 );
                 (Type::Error, None)
             }
             _ => {
+                // G-5.11 / G-5.13 (MUST): variable, call, field, index, `?` and
+                // a reference to another `const` are `E-TYP-CONST`.
                 self.error(
-                    "E-RES-CONST-NOT-CONST",
+                    "E-TYP-CONST",
                     expr.span,
                     "this expression is not allowed in a constant".to_string(),
                 );

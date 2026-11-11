@@ -611,14 +611,17 @@ const X: i8 = -100 - 100;
 }
 
 #[test]
-fn non_constant_const_is_e_res_const_not_const() {
+fn non_constant_const_is_e_typ_const() {
+    // G-5.11 (MUST): a call is not a `const_expr`, so it is `E-TYP-CONST`.
     expect_code(
         r#"
 fn g() -> i32 { return 1; }
 const X: i32 = g();
 "#,
-        "E-RES-CONST-NOT-CONST",
+        "E-TYP-CONST",
     );
+    // A float value cannot be represented in the checker's facts: that is the
+    // distinct `E-RES-CONST-NOT-CONST` (diagnostics.md §3.1).
     expect_code(
         r#"
 const X: f64 = 1.5;
@@ -2018,12 +2021,13 @@ fn f() {
 }
 
 #[test]
-fn constant_rejections_are_e_res_const_not_const() {
+fn constant_rejections_split_grammar_and_representability() {
+    // G-5.11 (MUST): a block is not a `const_expr` -> `E-TYP-CONST`.
     expect_code(
         r#"
 const X: i32 = { 1 };
 "#,
-        "E-RES-CONST-NOT-CONST",
+        "E-TYP-CONST",
     );
     expect_code(
         r#"
@@ -2031,11 +2035,12 @@ const X: i32 = -true;
 "#,
         "E-RES-CONST-NOT-CONST",
     );
+    // G-5.11 (MUST): a call is not a `const_expr` -> `E-TYP-CONST`.
     expect_code(
         r#"
 const X: String = String::from("a");
 "#,
-        "E-RES-CONST-NOT-CONST",
+        "E-TYP-CONST",
     );
 }
 

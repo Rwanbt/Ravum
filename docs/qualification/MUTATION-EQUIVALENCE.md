@@ -188,32 +188,37 @@ périmètre **ciblé** ne dit rien du reste de la crate (voir §1 pour la règle
 ## 8. Campagne après la passe 5 — 2026-11-10
 
 Les correctifs de `T2-FINDINGS.md` §20 ont changé le code des trois fichiers, et
-`crates/ravum-lang-sema/tests/mutation_gaps.rs` (26 contrats) a été ajouté pour
-tuer les survivants qui étaient de vraies lacunes. Deux campagnes ont été
-exécutées :
+`crates/ravum-lang-sema/tests/mutation_gaps.rs` (26 contrats, plus une
+assertion ajoutée en clôture) a été ajouté pour tuer les survivants qui étaient
+de vraies lacunes. Trois campagnes ont été exécutées :
 
 1. **avant** les nouveaux contrats (`target/mut5/`) : 195 mutants, 138 tués,
    47 non tués, 9 invivables, 1 timeout ;
-2. **après** (`target/mut6/`), mêmes filtres, même machine (Windows 11 x86-64,
-   rustc 1.95.0, `cargo-mutants 27.1.0`, `--no-shuffle -j 8`) :
+2. **après** (`target/mut6/` et `target/mut7/`), mêmes filtres, même machine
+   (Windows 11 x86-64, rustc 1.95.0, `cargo-mutants 27.1.0`, `--no-shuffle -j 8`) :
 
 | Fichier | Mutants | Tués | Survivants | Invivables | Timeout | Durée |
 |---|---|---|---|---|---|---|
 | `own.rs` | 32 | 31 | 1 | 0 | 0 | 2 min |
 | `resolve.rs` | 57 | 40 | 15 | 2 | 0 | 4 min |
-| `typeck.rs` | 106 | 94 | 5 | 7 | 0 | 6 min |
-| **Total** | **195** | **165** | **21** | **9** | **0** | **12 min** |
+| `typeck.rs` | 106 | **95** | 4 | 7 | 0 | 6 min |
+| **Total** | **195** | **166** | **20** | **9** | **0** | **13 min** |
 
 Le total de mutants est passé de 212 à 195 parce que `resolve.rs` a été corrigé
 (bras de code supprimés, chemins simplifiés). Le taux de tués sur ce périmètre
-ciblé passe de **153/212 (72,2 %)** à **165/195 (84,6 %)** — ce chiffre ne vaut
+ciblé passe de **153/212 (72,2 %)** à **166/195 (85,1 %)** — ce chiffre ne vaut
 que pour ces trois ensembles de fonctions (voir §1).
 
 Le `timeout` observé en campagne 1 (`typeck.rs::check_for` L3475, `-=` → `+=`)
 a disparu : le mutant est désormais tué, et le `-=`/`+=` de `check_for` est
-couvert par `continue_after_a_for_loop_is_outside_the_loop`.
+couvert par `continue_after_a_for_loop_is_outside_the_loop`. L'assertion
+supplémentaire de `struct_variant_literal_records_a_variant_resolution`
+(`Resolution::Error` interdit) tue le dernier mutant observable de
+`check_struct_lit` (L3939, preuve `target/mut7/typeck-structlit.out/`) : la
+fonction est **14/14 sur les mutants observables** (18 mutants : 14 tués,
+3 équivalents, 1 invivable).
 
-### 8.1 Survivants restants (21) — tri
+### 8.1 Survivants restants (20) — tri
 
 **Morts par construction, 14 mutants.** `parser::parse_path` transforme les
 mots-clés `crate`/`self`/`super` en `PathRoot::{Crate, SelfMod, Super}` **avant**
@@ -226,33 +231,30 @@ s'exécutent jamais. Même preuve que §7.1, revérifiée après les correctifs.
 | delete `crate`, `self`, `super` ; `==`→`!=` ; `+=`→`-=`/`*=` | `resolve.rs` `resolve_use_target` L1321-1326 (6) |
 | delete `crate`, `self`, `super` ; `==`→`!=` ; `+=`→`-=`/`*=` ; `==`/`!=` sur `Self` | `resolve.rs` `resolve_type_path` L2422-2553 (8) |
 
-**Équivalents, 2 mutants.**
+**Équivalents — 6 mutants au total.** Deux d'abord :
 
 | Mutant | Emplacement | Raison |
 |---|---|---|
 | `&&` → `\|\|` | `own.rs` `check_availability` L1423 | même raisonnement que §7.3 : le bloc ne s'exécute que si `partial` est vide et `whole_reinit` vrai ; `relation` reste `Disjoint` et `allowed` est vrai pour tout accès. |
 | `\|\|` → `&&` | `resolve.rs` `type_is_copy` L2949 | le test de gauche est `*def == PRELUDE_ERROR_DEF` ; le test de droite (`nominal_kind(def).is_none()`) est **toujours faux** pour `Error` (type prélude sans item, donc sans genre nominal). `true && false` = `false` ⇒ les deux formes renvoient `false` (mutant de gauche) ou passent à `nominal_is_copy(Error)`, qui rend `false` (pas de `struct` utilisateur). Résultat identique dans les deux cas ; `result_with_a_mobile_error_is_not_copy` exerce le chemin. |
 
-**Lacunes de test résiduelles, 5 mutants** (défaut de preuve assumé, pas une
-excuse) :
+Quatre autres, dont l'équivalence est prouvée par le code, pas supposée :
 
-| Mutant | Emplacement | Ce qu'il faudrait observer |
+| Mutant | Emplacement | Raison |
 |---|---|---|
-| delete `ValuePath::Variant` arm | `typeck.rs` `check_struct_lit` L3939 | un littéral de **variante** dont le fait `Resolution::Variant` est consommé par le codegen (le contrat actuel teste `Resolution::Variant` mais le mutant enregistre `Error` — le test ne distingue pas encore les deux insertions) |
-| `&&`→`\|\|`, `==`→`!=`, delete `!` | `typeck.rs` `check_struct_lit` L3990 (3) | substitution des arguments génériques quand le type attendu a le **même nom mais une arité différente**, et littéral sans arguments explicites dont le type attendu est absent : cas non couverts aujourd'hui |
-| `&&`→`\|\|` | `typeck.rs` `check_const_expr` L4820 (1) | constante entière dont la valeur ne tient pas dans le type inféré (`int_value_fits` faux) **et** suffixe présent : la conjonction n'est pas distinguée |
+| delete `!`, `&&`→`||`, `==`→`!=` (3) | `typeck.rs` `check_struct_lit` L3990 | `args` vient de `ValuePath::Type(Type::Nominal { args, .. })` et **tous** les `ValuePath::Type` sont construits avec `args: Vec::new()` (`type_of_symbol`, `prelude_type`, `error_type`) : la garde est morte, sa boucle est un no-op, et les trois formes gardent le même comportement. Réexamen si un chemin de valeur porte un jour des arguments génériques. |
+| `&&`→`||` | `typeck.rs` `check_const_expr` L4820 | `ty` sort toujours de `check_int_literal` (suffixe, type attendu entier, sinon `i32`), donc `ty.is_int()` est toujours vrai ; les deux formes ne diffèrent que si `int_value_fits` est faux, cas où `check_int_literal` a **déjà** émis `E-TYP-LITERAL-RANGE` avec le même prédicat et où `check()` rend `failed` (`facts` jeté). Aucun programme accepté ni diagnostic ne change. |
 
-Ces 5 mutants sont la dette de preuve restante ; ils ne changent pas la
-conclusion des gates (T10 reste `PARTIAL` pour l'absence d'audit externe).
+**Lacunes de test résiduelles : 0.** Les cinq mutants classés « lacunes » dans
+la campagne 2 sont soit tués (L3939), soit ramenés à des équivalents prouvés
+(L3990 ×3, L4820).
 
 ### 8.2 Ce que cette campagne ne prouve pas
 
 - Rien sur les 3 fichiers hors de ces ensembles de fonctions, ni sur les autres
-  crates : 165/195 est un chiffre **ciblé** (§1).
+  crates : 166/195 est un chiffre **ciblé** (§1).
 - Les mutants « morts par construction » sont prouvés par l'analyse du parseur,
   pas par un test qui échouerait ; c'est une preuve statique, pas dynamique.
-- Les 5 lacunes restantes sont un **échec de couverture de test**, pas une
-  preuve d'absence de bug.
 - La CI rejoue ces trois campagnes chaque semaine (`.github/workflows/mutation.yml`,
   job d'évidence non bloquant : les survivants sont triés ici, pas masqués).
 

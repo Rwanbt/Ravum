@@ -13,9 +13,9 @@
 > satisfaites (1 exemption) ; registre **108 codes, 0 hors registre, 0 jamais
 > émis** ; couverture sema **89,2 %** de lignes (`typeck.rs` **93,8 %**,
 > `resolve.rs` **93,1 %**, `own.rs` 91,1 %, `types.rs` 100 %) — objectifs
-> 90/85 **atteints et bloquants en CI** ; mutation ciblée **195 mutants, 165
-> tués (84,6 %)**, 21 survivants triés (14 inatteignables, 2 équivalents,
-> 5 lacunes de test) ; build bit-à-bit identique (`86F575CF…`), SBOM
+> 90/85 **atteints et bloquants en CI** ; mutation ciblée **195 mutants, 166
+> tués (85,1 %)**, 20 survivants triés (14 inatteignables, 6 équivalents,
+> 0 lacune de test) ; build bit-à-bit identique (`86F575CF…`), SBOM
 > `dc7b4e0d…`, installateur `4da36485…` ; gates **5 PASS / 6 PARTIAL /
 > 2 BLOCKED** (inchangés : T4/T12 exigent l'audit externe et le Go/No-Go
 > humains). CI sur `fb2a0f5` : **tous les workflows verts** (Linux qualification

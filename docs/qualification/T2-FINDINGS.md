@@ -764,6 +764,7 @@ sont signalés explicitement.
 | 9 | `E-LIMIT-FILE-SIZE` sans preuve bout-en-bout | test CLI qui **génère** 8 Mio + 1 octet à l'exécution et attend ce code | `crates/ravum-lang-cli/tests/cli.rs` |
 | 10 | le harnais rejetait tout code `W-*` comme invalide → les cas d'avertissement contournaient le schéma | `E-*` et `W-*` acceptés (DIAG-1.6) ; les 2 cas `W-*` font la validation complète | `tools/conformance/src/case.rs` + 2 `case.json` |
 | 11 | phase JSON `tool` pour `E-LIMIT-*`, `parse` pour `E-LEX-*`, `sema` dans le registre | `phase_for_code` suit **exactement** le registre ; un test lit `diagnostics.md` et échoue sur toute dérive | `json::tests::every_registered_code_reports_its_registry_phase` |
+| — | expression interdite dans un `const_expr` (bloc, appel, variable, champ, index, `?`, autre constante) → `E-RES-CONST-NOT-CONST` | `E-TYP-CONST` (G-5.11/G-5.13 MUST) ; `E-RES-CONST-NOT-CONST` reste réservé aux valeurs non représentables (constante flottante) | contrats `typeck_contracts` (bloc, appel, `String::from`), `mutation_gaps::const_block_is_refused_by_name` resserré |
 
 ### 20.2 Contradictions de spécification tranchées
 
@@ -775,6 +776,7 @@ sont signalés explicitement.
 | **Q-DIAG-9** | phase `sema` (2 lignes) absente de §4 | `E-UNSUPPORTED-EFFECT` → `resolve`, `E-UNSUPPORTED-DROP-IMPL` → `parse` | phase = phase qui émet (resolve.rs / parser.rs) |
 | **Q-DIAG-12** | `E-RES-SELF` décrivait aussi `Self` hors `impl`, et G-5.10 nommait `E-RES-SELF` | `E-RES-SELF` = `self` (paramètre/valeur) ; `E-RES-SELF-OUTSIDE-IMPL` = type `Self` ; G-5.10 aligné | le corpus `resolve/self-type-outside-impl` verrouillait déjà le code dédié |
 | **Q-DIAG-13** | codes de `static`, alias de type, bornes, `move`, motifs de plage/`..`, ré-export : `unsupported.md`/`lexical.md`/`grammar.md` citaient `E-UNSUPPORTED-TOKEN` ou `E-PARSE-EXPECTED`, l'implémentation et le registre §3.1 nommaient les codes dédiés | tables alignées sur les **codes dédiés déjà enregistrés** (`E-UNSUPPORTED-STATIC`, `-TYPE-ALIAS`, `-BOUNDS`, `-MOVE`, `-RANGE-PAT`, `-REST-PAT`, `-REEXPORT`) | le registre §3.1 fait foi (DIAG-1.1) et ces codes étaient déjà ceux du corpus |
+| **Q-DIAG-14** | `const_expr` interdit : G-5.11/G-5.13 (MUST, `E-TYP-CONST`) vs code émis `E-RES-CONST-NOT-CONST`, que `diagnostics.md` §3.1 réserve aux valeurs non représentables | le code suit la MUST : `E-TYP-CONST` pour les formes de grammaire interdites ; `E-RES-CONST-NOT-CONST` pour la constante flottante | une MUST explicite nomme le code ; le code générique était une erreur de classement, pas une règle |
 
 Conséquences sur le registre : **111 → 108 codes** (`E-PARSE-BAD-SUFFIX`,
 `E-UNSUPPORTED-COMPOUND-ASSIGN`, `E-UNSUPPORTED-UFCS` retirés, 0 code
@@ -795,8 +797,14 @@ déclaré-jamais-émis, 0 hors registre).
    lieu de laisser croire à une couverture.
 4. **D-COERCE-1, D2, D6, D9, D4** — décisions humaines (backend natif,
    périmètre universel, signature de release, audit externe).
-5. **Lacunes de mutation** — la campagne a été rejouée après ces correctifs ;
-   voir `MUTATION-EQUIVALENCE.md` §8 pour les survivants restants et leur tri.
+5. **Lacunes de mutation : 0** — la campagne rejouée donne 195 mutants,
+   **166 tués (85,1 %)**, 20 survivants : 14 inatteignables par construction
+   (prouvé par le parseur) et 6 équivalents (prouvés par le code), 0 lacune
+   de test. Voir `MUTATION-EQUIVALENCE.md` §8.
+6. **Identifiant de règle dupliqué** — `grammar.md` porte **deux** règles
+   `G-5.11` (type `!` et restrictions de `const_expr`). `rule_id` étant
+   contractuel et stable (Q-DIAG-4), la renumérotation est une décision,
+   pas un nettoyage : elle est signalée ici sans modification.
 
 ### 20.4 Mesures de la passe (Windows 11, rustc 1.95.0)
 
@@ -805,8 +813,26 @@ déclaré-jamais-émis, 0 hors registre).
 | Tests workspace | **89 suites, 1405 passés / 0 échec / 2 ignorés** |
 | Conformance | **386 cas : 385 PASS / 0 FAIL / 1 SKIP** |
 | Registre | **108 codes ; 126 émis ; 0 hors registre ; 0 jamais émis** |
+| Mutation ciblée | **195 mutants ; 166 tués (85,1 %) ; 20 survivants = 14 inatteignables + 6 équivalents ; 0 lacune** |
 | Nouveaux contrats | `resolve_contracts2` 31, `typeck_contracts3` 25, `own_audit` +1, CLI +1, `json` +1 |
 | Corpus | +3 cas (`run/compound-assign`, `types/compound-assign-mismatch`, `cli/check-json-lexer-phase`), −1 obsolète (`unsupported/compound-assign`) |
 
+### 20.5 Clôture de la passe (après §20.4)
 
+Deux éléments ont été ajoutés en clôture, tous deux motivés par la campagne de
+mutation et la relecture du registre :
 
+1. **Mutant `check_struct_lit` L3939 tué.** L'assertion ajoutée à
+   `struct_variant_literal_records_a_variant_resolution` interdit qu'un fait de
+   résolution soit `Resolution::Error` après un littéral de variante résolu ;
+   campagne ciblée : 18 mutants, **14 tués**, 3 équivalents (prouvés), 1
+   invivable — 14/14 sur les mutants observables.
+2. **Code de `const_expr` corrigé** (Q-DIAG-14) : bloc, appel, variable, champ,
+   index, `?` et référence à un autre `const` émettent `E-TYP-CONST` (G-5.11 et
+   G-5.13, MUST) au lieu de `E-RES-CONST-NOT-CONST`. Deux tests existants qui
+   figeaient l'ancien code ont été corrigés avec la règle citée (aucun test
+   supprimé) ; la constante flottante garde `E-RES-CONST-NOT-CONST`.
+
+Après ces deux ajouts, les mesures de §20.4 sont inchangées (89 suites / 1405
+tests, conformance 386/385/0/1, couverture 89,2 % / 88,6 %, registre 108/126/0/0)
+et la mutation passe de 165 à **166 tués sur 195**.

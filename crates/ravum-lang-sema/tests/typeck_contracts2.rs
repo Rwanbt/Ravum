@@ -1770,20 +1770,24 @@ const X: f64 = 1.5;
 
 #[test]
 fn constant_expression_restrictions() {
-    // DIAG: only the constant-expression grammar is allowed.
+    // G-5.11 (MUST): a `const_expr` has no call, no block, no variable, no
+    // field, no index and no `?`; those forms are `E-TYP-CONST`.
     expect_code(
         r#"
 fn g() -> i32 { return 1; }
 const X: i32 = g();
 "#,
-        "E-RES-CONST-NOT-CONST",
+        "E-TYP-CONST",
     );
     expect_code(
         r#"
 const X: i32 = { 1 };
 "#,
-        "E-RES-CONST-NOT-CONST",
+        "E-TYP-CONST",
     );
+    // `E-RES-CONST-NOT-CONST` is reserved for a value the checker's facts
+    // cannot represent (a float); a non-integer operand of unary `-` is that
+    // kind of "not a constant value", not a forbidden grammar form.
     expect_code(
         r#"
 const X: i32 = -true;

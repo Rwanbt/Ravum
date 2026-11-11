@@ -467,12 +467,11 @@ fn const_negated_literal_in_float_position_stays_an_integer() {
 /// check_const_expr`.
 ///
 /// Both versions refuse the block; the mutant loses the diagnostic that names
-/// it. The *code* is deliberately not pinned here: G-5.11 requires
-/// `E-TYP-CONST` for a block in a `const_expr`, while `diagnostics.md` registers
-/// `E-RES-CONST-NOT-CONST` for "not representable in the checker's facts" (the
-/// code the implementation emits for every unsupported const expression). That
-/// conflict is reported as a specification inconsistency, so this contract only
-/// pins the message.
+/// it. G-5.11 (MUST) assigns `E-TYP-CONST` to a block in a `const_expr`, and
+/// the implementation now emits exactly that code (the pass-5 review found it
+/// emitted `E-RES-CONST-NOT-CONST`, which `diagnostics.md` reserves for a value
+/// the facts cannot represent, e.g. a float; the contract pins both the code and
+/// the message so a swap cannot pass silently).
 #[test]
 fn const_block_is_refused_by_name() {
     let described = expect_message(
@@ -480,8 +479,12 @@ fn const_block_is_refused_by_name() {
         "blocks are not constant expressions",
     );
     assert!(
-        described.contains("E-RES-CONST-NOT-CONST") || described.contains("E-TYP-CONST"),
-        "a block in constant position is a checker error, got: {described}"
+        described.contains("E-TYP-CONST"),
+        "a block in constant position is E-TYP-CONST (G-5.11), got: {described}"
+    );
+    assert!(
+        !described.contains("E-RES-CONST-NOT-CONST"),
+        "E-RES-CONST-NOT-CONST is reserved for unrepresentable values, got: {described}"
     );
 }
 
@@ -690,6 +693,20 @@ fn f(x: Forme) -> i32 {
     }
 }
 "#,
+    );
+    // The `Resolution::Variant` value alone does not separate the two
+    // insertions: the *patterns* below also record variant resolutions. What
+    // the deleted arm changes is the fact recorded for the literal path, which
+    // becomes `Resolution::Error` — and the emitter cannot name a literal whose
+    // resolution is an error.
+    assert!(
+        !checked
+            .facts
+            .resolutions
+            .values()
+            .any(|r| *r == Resolution::Error),
+        "the variant literal path resolves, so no resolution may be an error: {:?}",
+        checked.facts.resolutions
     );
     assert!(
         checked

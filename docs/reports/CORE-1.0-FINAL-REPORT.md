@@ -343,7 +343,7 @@ historiques. Mesures de la passe 5, mêmes commandes :
 | Traçabilité stricte | **188/188** règles satisfaites (187 par cas + 1 exemption structurellement vérifiée (revue humaine non faite)) |
 | Registre des diagnostics | **108 codes** ; 126 émis ; **0 hors registre** ; **0 jamais émis** |
 | Couverture sema (llvm-cov) | **89,2 % lignes / 88,6 % régions** ; `types.rs` 100 %, `own.rs` 91,1 %, `typeck.rs` **93,8 %**, `resolve.rs` **93,1 %** — seuils bloquants tenus |
-| Mutation ciblée (3 fichiers) | **195 mutants : 165 tués (84,6 %), 21 survivants triés (14 inatteignables, 2 équivalents, 5 lacunes), 9 invivables, 0 timeout** ; `MUTATION-EQUIVALENCE.md` §8 |
+| Mutation ciblée (3 fichiers) | **195 mutants : 166 tués (85,1 %), 20 survivants triés (14 inatteignables, 6 équivalents), 9 invivables, 0 timeout, 0 lacune de test résiduelle** ; `MUTATION-EQUIVALENCE.md` §8 |
 | Reproductibilité | deux builds bit-à-bit identiques, `sha256 = 86F575CF…D49F3457` |
 | SBOM | 64 paquets, 170 relations, `sha256 = dc7b4e0d…c2134f1` |
 | Smoke exemples | **31 PASS / 0 FAIL / 0 NOT_RUN** |
