@@ -292,7 +292,7 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | FEAT-12.2 | Une fonctionnalité acceptée par le checker sans ligne ici est un **défaut de spécification** : elle doit être ajoutée (avec `FeatureId`) ou refusée. | MUST |
 | FEAT-12.3 | Une ligne `unsupported` doit avoir un test négatif dans la conformance (T4) : c'est la garantie qu'elle n'est pas acceptée « par accident ». | MUST |
 | FEAT-12.4 | Le mapping `FeatureId → code` doit rester cohérent avec [`diagnostics.md`](diagnostics.md) ; un code cité ici doit exister dans le registre. | MUST |
-| FEAT-12.5 | Les lignes `experimental` (F-SYN-004, F-SYN-022, F-EXPR-018, F-TYP-020, F-EFF-006, F-STD-010) sont les seules susceptibles de changer sans édition majeure ; elles doivent être signalées dans tout rapport d'usage. | MUST |
+| FEAT-12.5 | Les lignes `experimental` (F-SYN-004, F-SYN-022, F-EXPR-018, F-TYP-020, F-EFF-006, F-STD-010, F-STD-031, F-META-006) sont les seules susceptibles de changer sans édition majeure ; elles doivent être signalées dans tout rapport d'usage. | MUST |
 
 
 ### 12.2 Couverture réelle au 2026-11-09 (corpus de 95 cas, historique)

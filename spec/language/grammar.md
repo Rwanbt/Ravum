@@ -577,3 +577,7 @@ fn f(p: P) -> i32 {
 - **Q-GRAM-8** — `test fn` : le design écrit `test fn nom() { }`. La position de `test` avant `fn` est retenue. Faut-il aussi accepter `fn nom() test` ou un attribut `#[test]` (refusé, attributs UNSUPPORTED) ? Non tranché par le design.
 - **Q-GRAM-9** — G-5.5 interdit `[T; 0]`. Cela empêche les tableaux vides utiles au code DSP générique. À confirmer.
 - **Q-GRAM-10** — `!` est désormais nommable (G-5.11) et coercible vers tout type, mais reste interdit en paramètre, champ, élément de `Vec` et retour d'une fonction non divergente. Confirmer cette restriction : elle évite les signatures « qui ne rendent jamais » ambiguës.
+- **Q-GRAM-11 (D11, 2026-11-11)** — Deux `rule_id` sont partagés par deux règles distinctes, et c'est **documenté, pas renuméroté** : renommer un `rule_id` change un identifiant contractuel (Q-DIAG-4) que les cas de conformance, les tests et les rapports citent. Les collisions :
+  - **G-5.11** — « `!` est le **type Never** » (table des types) **et** « un `const_expr` n'a ni variable, ni appel, … » (table des constantes). Deux règles indépendantes, même identifiant.
+  - **G-6.40** — « `unsafe { ... }` est une expression de bloc » (table des expressions) **et** « le raccourci de champ `E::V { champ }` » (table des patterns). Deux règles indépendantes, même identifiant.
+  Toute citation de `G-5.11` ou `G-6.40` doit donc nommer le sujet visé. `tools/must_audit.py` compte 807 énoncés MUST pour 805 identifiants uniques, ce qui matérialise exactement ces deux collisions ; aucune autre n'existe dans le corpus actuel.

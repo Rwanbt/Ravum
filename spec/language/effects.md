@@ -7,7 +7,7 @@
 
 ## 1. Groupes d'effets
 
-Neuf groupes, exactement ceux du design §3.6 :
+Dix groupes, exactement ceux du design §3.6 :
 
 | Groupe | Sens | Inféré en Core 1.0 ? | Déclarable ? |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Neuf groupes, exactement ceux du design §3.6 :
 
 | ID | Règle | Niveau |
 |---|---|---|
-| EFF-1.1 | Un ensemble d'effets est un sous-ensemble des 9 groupes ; il n'existe aucun effet personnalisé, aucune capacité paramétrée, aucun niveau de granularité. | MUST |
+| EFF-1.1 | Un ensemble d'effets est un sous-ensemble des 10 groupes ; il n'existe aucun effet personnalisé, aucune capacité paramétrée, aucun niveau de granularité. | MUST |
 | EFF-1.2 | Un nom d'effet inconnu (`effects(network)`, `effects(io, memory)`) est `E-EFF-UNKNOWN` (span du nom). | MUST |
 | EFF-1.3 | Un effet répété dans la même liste est accepté **sans diagnostic** : l'ensemble est idempotent. | MUST |
 | EFF-1.4 | `effects()` (liste vide) déclare l'ensemble vide : la fonction ne peut atteindre **aucun** effet, y compris `alloc` et `panic`. | MUST |
