@@ -14,6 +14,15 @@
 //! depending on a particular crash. A genuine access violation is documented in
 //! `crates/ravum-lang-cli/README.md`'s manual reproduction note instead; it
 //! cannot be produced from safe Core Ravum source.
+//!
+//! Platform split: a status above `255` is observable only where the parent sees
+//! the full 32-bit value (Windows). POSIX truncates in `_exit`/`waitpid`, so the
+//! tests below come in pairs — the Windows half asserts the explanation, the
+//! Unix half asserts that the CLI forwards what the kernel reports and invents
+//! nothing. The first Linux CI run failed here because the original single test
+//! assumed the Windows observation everywhere; that was a wrong claim about the
+//! platform, not a CLI defect, and the pair fixes it without weakening either
+//! half.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -138,9 +147,24 @@ fn run_forwards_normal_exit_codes() {
     }
 }
 
+/// What `ravum-lang run` can say about a status above `255` depends on what the
+/// operating system hands to the parent, and that is measurably different:
+///
+/// * Windows keeps the full 32-bit value, so the CLI sees `300` and must both
+///   forward `44` and explain the truncation (or a `256` would silently become
+///   the `0` of success);
+/// * POSIX truncates in `_exit`/`waitpid`, so the CLI only ever sees `44` — or
+///   `0` for `256`. Naming `300` there would be an invention, not an
+///   observation, so the test below pins the opposite behaviour: forward what
+///   the OS reports and stay silent about a value that was never observed.
+///
+/// The POSIX case is a real limitation of the platform, not of the CLI: a
+/// program exiting `256` is indistinguishable from success for every parent
+/// process on Linux and macOS. It is documented in `crates/ravum-lang-cli/README.md`.
+#[cfg(windows)]
 #[test]
-fn run_explains_posix_truncation_of_large_codes() {
-    if skip_without_rustc("run_explains_posix_truncation_of_large_codes") {
+fn run_explains_windows_truncation_of_large_codes() {
+    if skip_without_rustc("run_explains_windows_truncation_of_large_codes") {
         return;
     }
     let temp = TempDir::new("truncate");
@@ -159,15 +183,46 @@ fn run_explains_posix_truncation_of_large_codes() {
     );
     let err = stderr(&output);
     assert!(
-        err.contains("300"),
+        err.contains("exited with status 300"),
         "the original status must be named: {err}"
     );
     assert!(
-        err.contains("44"),
+        err.contains("reporting 44"),
         "the forwarded status must be named: {err}"
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn run_forwards_the_status_posix_actually_reports() {
+    if skip_without_rustc("run_forwards_the_status_posix_actually_reports") {
+        return;
+    }
+    let temp = TempDir::new("truncate");
+    let root = package(
+        &temp,
+        "big",
+        "use std::process;\nfn main() { process::exit(300); }\n",
+    );
+
+    let output = cli(&["run", root.to_str().unwrap()]);
+    assert_eq!(
+        output.status.code(),
+        Some(44),
+        "300 & 0xFF == 44; stderr: {}",
+        stderr(&output)
+    );
+    // The parent never observes 300, so any note about it would be invented. The
+    // check is on the note's wording, not on a digit string: the temporary path
+    // in stderr could contain "300" by chance.
+    let err = stderr(&output);
+    assert!(
+        !err.contains("exited with status") && !err.contains("truncat"),
+        "the parent never observes 300 on POSIX, so naming it would be a guess: {err}"
+    );
+}
+
+#[cfg(windows)]
 #[test]
 fn run_never_reports_a_truncated_failure_as_success() {
     if skip_without_rustc("run_never_reports_a_truncated_failure_as_success") {
@@ -181,7 +236,8 @@ fn run_never_reports_a_truncated_failure_as_success() {
     );
 
     let output = cli(&["run", root.to_str().unwrap()]);
-    // 256 & 0xFF == 0. POSIX shells would see 0; this CLI must not claim success.
+    // 256 & 0xFF == 0. A POSIX shell would see 0; on Windows this CLI must not
+    // claim success for a status the kernel shows in full.
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -189,7 +245,44 @@ fn run_never_reports_a_truncated_failure_as_success() {
         stderr(&output)
     );
     let err = stderr(&output);
-    assert!(err.contains("256"), "stderr: {err}");
+    assert!(
+        err.contains("exited with status 256"),
+        "the original status must be named: {err}"
+    );
+    assert!(
+        err.contains("reporting exit code 1 instead"),
+        "the refusal to report success must be explained: {err}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn posix_cannot_distinguish_exit_256_from_success() {
+    if skip_without_rustc("posix_cannot_distinguish_exit_256_from_success") {
+        return;
+    }
+    let temp = TempDir::new("truncate-zero");
+    let root = package(
+        &temp,
+        "wraps",
+        "use std::process;\nfn main() { process::exit(256); }\n",
+    );
+
+    // `_exit(256)` is `_exit(0)`: the kernel discards the high bits before
+    // `waitpid` can see them, so every parent on POSIX observes success. The CLI
+    // forwards the observed status (0) and must not fabricate a truncation note.
+    let output = cli(&["run", root.to_str().unwrap()]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the kernel reports 0 for `_exit(256)`; stderr: {}",
+        stderr(&output)
+    );
+    let err = stderr(&output);
+    assert!(
+        !err.contains("exited with status") && !err.contains("truncat"),
+        "the CLI cannot know about 256 on POSIX, so it must say nothing: {err}"
+    );
 }
 
 #[cfg(windows)]

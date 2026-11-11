@@ -191,7 +191,13 @@ pub(crate) struct ChildExit {
 /// * `Some(code)` with `code > 255` — the low 8 bits, as POSIX shells truncate
 ///   (`code & 0xFF`), with a note. If the truncated value is `0`, the CLI
 ///   reports `1` instead: a non-zero program status is never turned into a
-///   success by truncation.
+///   success by truncation. This arm is only *reachable* where the parent
+///   observes the full 32-bit status (Windows): on POSIX `waitpid` already
+///   reports `code & 0xFF`, so `_exit(300)` arrives as `44` and `_exit(256)` as
+///   `0` — the CLI forwards what the kernel reports and prints no note, because
+///   it never saw the original value. That limitation is the platform's, and it
+///   is documented in `README.md`; see `tests/exit_codes.rs` for both halves of
+///   the contract.
 /// * `Some(code)` with `code < 0` — a Windows exception/NTSTATUS (for example
 ///   `-1073741819` is `0xC0000005`, access violation). Reported as `1` with the
 ///   exact 32-bit hex code; `clamp(0, 255)` must never turn it into `0`.

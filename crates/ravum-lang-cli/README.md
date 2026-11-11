@@ -47,10 +47,21 @@ fabricates success. `doctor` makes the current stage status visible
 | `2` | invalid command line (unknown command/option, missing argument, invalid `--profile`, invalid path) |
 | `3` | external tool missing (`rustc`) or explicitly UNSUPPORTED command (`lsp`) |
 
-`run` forwards a normal child exit code (`0..=255`). A value above `255` is
-truncated to the low 8 bits as POSIX shells do, except that a non-zero status
-which would truncate to `0` (e.g. `256`) is reported as `1` — a failure is never
-turned into a success. On Windows, `ExitStatus::code()` returns exception codes
+`run` forwards a normal child exit code (`0..=255`). Where the parent observes
+the full 32-bit status (Windows), a value above `255` is truncated to the low 8
+bits as POSIX shells do, except that a non-zero status which would truncate to
+`0` (e.g. `256`) is reported as `1` — a failure is never turned into a success by
+truncation, and stderr names the original status.
+
+On POSIX the kernel truncates *before* the parent looks: `waitpid` reports
+`_exit(300)` as `44` and `_exit(256)` as `0`. The CLI therefore forwards exactly
+what the OS reports and prints no truncation note — naming the original value
+would be a guess, not an observation. A program exiting `256` is consequently
+indistinguishable from success for every parent process on Linux and macOS; that
+is a platform limitation, not a Ravum one, and the two halves of the contract are
+pinned separately in `tests/exit_codes.rs` (`cfg(windows)` / `cfg(unix)`).
+
+On Windows, `ExitStatus::code()` returns exception codes
 as negative `i32` (an access violation is `-1073741819` = `0xC0000005`); such a
 child exits `1` and stderr names the exact exception code. A killed child is
 reported as 1. `--json` never changes the exit code.
