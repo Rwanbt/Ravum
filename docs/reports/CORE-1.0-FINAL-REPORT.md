@@ -331,7 +331,7 @@ build, suite workspace, conformance, traçabilité stricte, registre et smoke.
 
 
 
-## Addendum — passe 5 (2026-11-10, SHA `b032e7d`)
+## Addendum — passe 5 (2026-11-10, code `9a60035`, docs `fb2a0f5`)
 
 Les chiffres du corps ci-dessus décrivent `67a2a2e` (passe 4) et restent
 historiques. Mesures de la passe 5, mêmes commandes :
@@ -349,6 +349,7 @@ historiques. Mesures de la passe 5, mêmes commandes :
 | Smoke exemples | **31 PASS / 0 FAIL / 0 NOT_RUN** |
 | Installateur | `sha256 = 4da36485…73b834`, manifeste `locked = true` |
 | Gates | **5 PASS / 6 PARTIAL / 2 BLOCKED** (inchangés : T4/T12 restent bloqués par l'audit externe et le Go/No-Go humains) |
+| CI sur `fb2a0f5` | **tous les workflows verts** : Linux qualification [42925805059](https://github.com/Rwanbt/Ravum/actions/runs/42925805059) (workspace **89 suites / 1402 passés / 0 échec / 4 ignorés**, conformance **386 cas / 384 PASS / 0 FAIL / 2 SKIP**, Miri, smoke 31/0/0, stdlib 64/64, CLI 13/13, installateur, WASI, fuzz smoke), coverage ratchet (push/PR), gate contracts (push/PR), documentation, VS Code e2e (push/PR), MVP product et MVP impact |
 
 Cette passe traite les quatorze points de `T2-FINDINGS.md` §19.2 (privacy du
 résolveur, MOD-3.2, `test fn`, comparaisons mixtes, `Vec::new()+push`, famille

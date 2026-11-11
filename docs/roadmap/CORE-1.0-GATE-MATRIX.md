@@ -26,7 +26,7 @@
 | PR du langage | [#101](https://github.com/Rwanbt/Ravum/pull/101) (draft, base `dev`) |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 
-## 1. Mesures (passe 5, SHA `b032e7d`, 2026-11-10)
+## 1. Mesures (passe 5, SHA `fb2a0f5`, 2026-11-10)
 
 ### Passe 5 — mesures courantes
 
@@ -77,7 +77,23 @@ Cette passe corrige **sept défauts mesurés** (dont deux de soundness : `None` 
 en motif, `None(payload)`), applique la décision **D-PAT-1** (G-6.36/G-6.37
 implémentées, `E-UNSUPPORTED-NEG-PAT` retiré) et rend la couverture **bloquante
 en CI**. Détail : `T2-FINDINGS.md` §18-19.
-### Passe 4 — CI observée sur `29ef8be`
+### Passe 5 — CI observée sur `fb2a0f5`
+
+| Workflow | Run | Résultat exact |
+|---|---|---|
+| Linux qualification | [42925805059](https://github.com/Rwanbt/Ravum/actions/runs/42925805059) | **succès** : workspace **89 suites / 1402 passés / 0 échec / 4 ignorés** ; conformance **386 cas / 384 PASS / 0 FAIL / 2 SKIP** ; Miri, smoke **31/0/0**, stdlib **64/64**, CLI **13/13**, installateur et WASI verts ; fuzz smoke vert ; TSan `NOT_APPLICABLE` (aucun chemin concurrent) |
+| Coverage ratchet | 42925804947 (push), 42925813721 (PR) | succès — seuils tenus (`typeck.rs` 93,8 %, `resolve.rs` 93,1 %, sema 89,2 %) |
+| Gate contracts | 42925804881 (push), 42925813460 (PR) | succès |
+| Documentation integrity | 42925813445 | succès |
+| VS Code e2e | 42925805242 (push), 42925813541 (PR) | succès |
+| MVP product / impact | 42925804854 et 42925813455 / 42925804853 et 42925813468 | succès |
+
+Différence Windows/Linux assumée et documentée : Windows **89 suites / 1405 passés / 2 ignorés**,
+conformance **385 PASS / 1 SKIP** ; Linux **89 suites / 1402 passés / 4 ignorés**,
+conformance **384 PASS / 2 SKIP** — aucun échec de chaque côté, écarts liés à l'OS
+(trois tests Windows-only deviennent ignorés sous Linux, dont deux cas FS).
+
+### Passe 4 — CI observée sur `29ef8be` (historique)
 
 | Workflow | Run | Résultat exact |
 |---|---|---|
