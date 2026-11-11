@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -532,7 +532,38 @@ fn a_failing_build_never_replaces_the_published_artifact() {
 
 // ---------------------------------------------------------------------------
 // 6. A killed build publishes nothing; the old artifact still runs.
+//
+// Timing note (learned from the first Linux CI run): `try_wait` immediately
+// followed by `kill` is a race — the build can finish between the two, and then
+// a *complete* publication is the correct outcome. So the test waits for the
+// observable start of the compile phase (`gen/main.rs` inside the identity
+// directory, written before `rustc` runs) and then accepts exactly two states:
+// the previous artifact untouched, or the whole new program published. A
+// half-written artifact, a stale manifest or a leftover file in `.ravum/bin`
+// fails either way. What this protects is atomic publication, not "the kill
+// always wins".
 // ---------------------------------------------------------------------------
+
+/// Wait until some `.ravum/build/<id>/gen/main.rs` exists, i.e. the frontend
+/// finished and `rustc` is starting. Returns false on timeout (fast machine:
+/// the build already completed).
+fn wait_for_generated_source(package: &Path, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let root = package.join(".ravum/build");
+        if let Ok(entries) = fs::read_dir(&root) {
+            for entry in entries.filter_map(Result::ok) {
+                if entry.path().join("gen/main.rs").is_file() {
+                    return true;
+                }
+            }
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+}
 
 #[test]
 fn a_killed_build_leaves_the_previous_artifact_running() {
@@ -549,8 +580,8 @@ fn a_killed_build_leaves_the_previous_artifact_running() {
     let manifest_bytes = fs::read(&manifest_file).expect("read manifest");
     let entries_before = published_bin_entries(&pkg);
 
-    // A large replacement source so the build is comfortably longer than the
-    // kill delay: the child is interrupted while rustc is running.
+    // A large replacement source so the compile phase lasts long enough to be
+    // interrupted: the child is killed once `rustc` has started.
     let mut source = String::from("fn main() {\n");
     for index in 0..400 {
         source.push_str(&format!("    io::println(\"line {index}\");\n"));
@@ -559,22 +590,22 @@ fn a_killed_build_leaves_the_previous_artifact_running() {
     fs::write(pkg.join("src/main.rv"), source).expect("write large source");
 
     let mut child = spawn_in(&pkg, &["build", "."]);
-    thread::sleep(Duration::from_millis(120));
-    let killed = child.try_wait().expect("poll build").is_none();
-    if killed {
+    let compiled_started = wait_for_generated_source(&pkg, Duration::from_secs(30));
+    if child.try_wait().expect("poll build").is_none() {
         child.kill().expect("kill the running build");
     }
     let _output = child.wait_with_output().expect("wait for the killed build");
 
-    if killed {
-        assert_eq!(
-            fs::read(&artifact).expect("read artifact"),
-            artifact_bytes,
-            "a killed build must not publish an artifact"
+    let artifact_after = fs::read(&artifact).expect("read artifact after kill");
+    let manifest_after = fs::read(&manifest_file).expect("read manifest after kill");
+    if artifact_after == artifact_bytes {
+        // Interrupted before publication: nothing may have changed.
+        assert!(
+            compiled_started,
+            "the build was killed before it even generated its intermediate source"
         );
         assert_eq!(
-            fs::read(&manifest_file).expect("read manifest"),
-            manifest_bytes,
+            manifest_after, manifest_bytes,
             "a killed build must not publish a manifest"
         );
         assert_eq!(
@@ -588,8 +619,8 @@ fn a_killed_build_leaves_the_previous_artifact_running() {
             "the previous artifact still runs"
         );
     } else {
-        // Extremely fast machine: the build completed before the probe. It must
-        // then be a *complete* publication, never a partial state.
+        // The build completed before the kill landed. Publication must then be
+        // whole and coherent — never a truncated or half-updated artifact.
         let output = artifact_stdout(&pkg, "iso-killed");
         assert!(
             output.contains("line 0") && output.contains("line 399"),
@@ -600,7 +631,12 @@ fn a_killed_build_leaves_the_previous_artifact_running() {
                 .as_str()
                 .unwrap()
                 .starts_with("sha256:"),
-            "the manifest matches the published artifact"
+            "the manifest must describe the published artifact"
+        );
+        assert_eq!(
+            published_bin_entries(&pkg),
+            entries_before,
+            "publication must leave exactly the artifact and its manifest"
         );
     }
 }
