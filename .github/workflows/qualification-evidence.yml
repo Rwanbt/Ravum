@@ -1,0 +1,385 @@
+name: 'Qualification evidence (Windows: conformance, reproducibility, SBOM, provenance, installer)'
+
+# Why this workflow exists
+# -----------------------
+# Five pieces of evidence used to be produced by hand on a developer machine and
+# pasted into docs/qualification/: the Windows conformance measure, bit-for-bit
+# reproducibility, the SBOM, the build provenance manifest and the Windows
+# installer contract. A hand-made proof has no expiry date: the documents keep
+# saying "green" long after the code moved on. Everything here is therefore a
+# continuous check on the reference OS (Windows 11 x64 / MSVC, toolchain pinned
+# to 1.95.0 by rust-toolchain.toml).
+#
+# What this workflow does NOT prove, by construction
+# --------------------------------------------------
+# * No release, no signature: none of this produces a signed artifact (decision
+#   D9, no project key), and creating one is out of scope for an agent.
+# * No external audit: an independent audit is decision D4 and still open.
+# * No real-time, no ABI stability, no proof of arbitrary programs: a conformance
+#   PASS is a run observation on the cases in the corpus.
+# * Reproducibility is claimed for two builds in the *same* job (same MSVC, same
+#   linker, different absolute roots). It says nothing about a different machine,
+#   a different linker version or a different OS.
+
+on:
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The Linux job (linux-qual.yml) already runs this contract on ubuntu-latest.
+  # This twin exists because the class of defect it catches — a program that the
+  # checker accepts and that rustc then rejects on a real filesystem — has been
+  # observed mostly on Windows/MSVC (path quoting in the emitted source, escaped
+  # temp dirs). Running it on Linux only would have been a perimeter that
+  # excludes the platform where the product ships first.
+  # ---------------------------------------------------------------------------
+  conformance-windows:
+    name: Conformance corpus (Windows, check => build contract)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      # Floor on the corpus size. This is NOT a quality threshold and must never
+      # be lowered to turn a red run green: it exists so that a corpus which
+      # silently loses cases cannot stay green. Raise it when the corpus grows.
+      MIN_CORPUS_CASES: '440'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Show toolchain
+        run: |
+          rustc -vV
+          cargo --version
+          git --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-qual-evidence-conformance-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-qual-evidence-conformance-
+            ${{ runner.os }}-mvp-
+
+      # The harness resolves the toolchain it drives as <repo>/target/debug/
+      # ravum-lang. Build it first so a missing build is a real failure instead
+      # of a corpus full of NOT_RUN.
+      - name: Build ravum-lang (harness toolchain)
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      # `--verify-build` makes check => build blocking: every accepted-mode case
+      # must survive an explicit `build` on the same isolated copy, not only a
+      # `check`. A missing rustc or a build timeout is NOT_RUN, never a PASS.
+      - name: Run conformance corpus (check => build contract)
+        run: cargo run -p ravum-conformance -- run --verify-build --json target/conformance-report.json
+
+      # The harness exit codes cover FAIL (1) and NOT_RUN (3) only. This
+      # assertion refuses a green job without positive evidence inside the
+      # report itself: it never replaces the run above.
+      - name: Assert the report carries positive build evidence (fail-closed)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'target/conformance-report.json'
+          if (-not (Test-Path -LiteralPath $path)) {
+            Write-Host "::error::conformance report missing: $path"
+            exit 1
+          }
+          $report = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+          $bs = $report.build_summary
+          $s = $report.summary
+          $script:problems = New-Object System.Collections.Generic.List[string]
+          $script:checks = 0
+          function Check([string]$Name, [bool]$Ok, [string]$Detail) {
+            $script:checks += 1
+            if ($Ok) { Write-Host ("PASS  {0} ({1})" -f $Name, $Detail) }
+            else {
+              Write-Host ("::error::contract violated: {0} ({1})" -f $Name, $Detail)
+              $script:problems.Add($Name) | Out-Null
+            }
+          }
+          $min = [int]$env:MIN_CORPUS_CASES
+          $perimeter = if ($null -ne $bs.perimeter) { [int]$bs.perimeter } else { -1 }
+          $verified = if ($null -ne $bs.verified) { [int]$bs.verified } else { -1 }
+          $implicit = if ($null -ne $bs.implicit) { [int]$bs.implicit } else { -1 }
+          Check 'build_verified' ($report.build_verified -eq $true) ("build_verified=" + $report.build_verified)
+          Check 'verify_build' ($report.verify_build -eq $true) ("verify_build=" + $report.verify_build)
+          Check 'build_summary.failed' ($bs.failed -eq 0) ("failed=" + $bs.failed)
+          Check 'build_summary.environment' ($bs.environment -eq 0) ("environment=" + $bs.environment)
+          Check 'build_summary.not_measured' ($bs.not_measured -eq 0) ("not_measured=" + $bs.not_measured)
+          Check 'perimeter is fully accounted for' ((($verified + $implicit) -eq $perimeter) -and ($perimeter -gt 0)) ("verified=" + $verified + " implicit=" + $implicit + " perimeter=" + $perimeter)
+          Check 'summary.fail' ($s.fail -eq 0) ("fail=" + $s.fail)
+          Check 'summary.not_run' ($s.not_run -eq 0) ("not_run=" + $s.not_run)
+          Check 'corpus has not shrunk' ($s.total -ge $min) ("total=" + $s.total + " floor=" + $min)
+          $summaryLines = @(
+            '### Conformance (Windows, check => build)',
+            '',
+            ('- cases: total={0} pass={1} fail={2} skip={3} not_run={4}' -f $s.total, $s.pass, $s.fail, $s.skip, $s.not_run),
+            ('- build perimeter: perimeter={0} verified={1} implicit={2} failed={3} environment={4} not_measured={5}' -f $perimeter, $verified, $implicit, $bs.failed, $bs.environment, $bs.not_measured),
+            ('- build_verified: {0}' -f $report.build_verified),
+            ('- toolchain: {0}' -f $report.toolchain_version)
+          )
+          if ($env:GITHUB_STEP_SUMMARY) {
+            $summaryLines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+          }
+          if ($script:problems.Count -gt 0) {
+            Write-Host ("::error::conformance contract violated: " + ($script:problems -join ', '))
+            exit 1
+          }
+          Write-Host ("OK: {0} checks hold (cases={1}, perimeter={2})." -f $script:checks, $s.total, $perimeter)
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-windows
+          path: target/conformance-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Declarative conformance corpus on Windows only: PASS is a run observation, not a proof of arbitrary programs."
+          echo "compile-fail/cli cases are check-only by construction; see docs/qualification/CONFORMANCE-BUILD-CONTRACT.md for the exact perimeter."
+
+  # ---------------------------------------------------------------------------
+  # One job, not four, because the four steps share one release build: the
+  # binary that install.ps1 installs is the binary provenance.ps1 describes.
+  # ---------------------------------------------------------------------------
+  release-evidence:
+    name: Release evidence (repro, SBOM, provenance, installer)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      # The SBOM generator is plain Node (tools/sbom/sbom.mjs). Pin the runtime
+      # rather than relying on whatever the image happens to ship.
+      - name: Setup Node.js for the SBOM generator
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Show toolchain
+        run: |
+          rustc -vV
+          cargo --version
+          node --version
+          git --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-qual-evidence-release-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-qual-evidence-release-
+            ${{ runner.os }}-mvp-
+
+      # Determinism is the claim; two runs with one digest is the observation.
+      # Without a fixed -Timestamp the `created` field is the current time and
+      # two runs always differ, so this would prove nothing.
+      - name: SBOM is deterministic (two runs, one digest)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path evidence/local | Out-Null
+          $a = 'evidence/local/sbom-a.spdx.json'
+          $b = 'evidence/local/sbom-b.spdx.json'
+          pwsh -NoProfile -File scripts/sbom.ps1 -Output $a -Timestamp '1970-01-01T00:00:00Z'
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::sbom run A exited $LASTEXITCODE"; exit 1 }
+          pwsh -NoProfile -File scripts/sbom.ps1 -Output $b -Timestamp '1970-01-01T00:00:00Z'
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::sbom run B exited $LASTEXITCODE"; exit 1 }
+          $ha = (Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash
+          $hb = (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash
+          if ($ha -ne $hb) {
+            Write-Host "::error::SBOM is not deterministic: A=$ha B=$hb"
+            exit 1
+          }
+          $doc = Get-Content -LiteralPath $a -Raw | ConvertFrom-Json
+          if ($doc.spdxVersion -ne 'SPDX-2.3') {
+            Write-Host "::error::unexpected spdxVersion: $($doc.spdxVersion)"
+            exit 1
+          }
+          if (-not $doc.packages -or $doc.packages.Count -eq 0) {
+            Write-Host "::error::SBOM lists no package"
+            exit 1
+          }
+          Write-Host "OK: SBOM deterministic, sha256=$ha, packages=$($doc.packages.Count), spdxVersion=$($doc.spdxVersion)"
+          if ($env:GITHUB_STEP_SUMMARY) {
+            @('### SBOM', '', ('- deterministic: yes (sha256={0})' -f $ha.ToLowerInvariant()), ('- packages: {0}' -f $doc.packages.Count), ('- spdxVersion: {0}' -f $doc.spdxVersion)) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+          }
+
+      # The Windows installer existed for several passes without ever being
+      # executed outside a developer machine. This exercises the product path:
+      # release build with --locked, atomic publish, manifest, --version, then
+      # uninstall (idempotent, twice) and reinstall without rebuilding.
+      - name: Installer contract on Windows (install, run, uninstall, reinstall)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = Join-Path $env:RUNNER_TEMP 'ravum-install'
+          $exe = Join-Path $prefix 'bin\ravum-lang.exe'
+          $manifestPath = Join-Path $prefix 'ravum-install.json'
+          $problems = New-Object System.Collections.Generic.List[string]
+          $script:checks = 0
+          function Check([string]$Name, [bool]$Ok, [string]$Detail) {
+            $script:checks += 1
+            if ($Ok) { Write-Host ("PASS  {0} ({1})" -f $Name, $Detail) }
+            else {
+              Write-Host ("::error::installer contract violated: {0} ({1})" -f $Name, $Detail)
+              $script:problems.Add($Name) | Out-Null
+            }
+          }
+          pwsh -NoProfile -File scripts/install.ps1 -Prefix $prefix
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::install.ps1 exited $LASTEXITCODE"; exit 1 }
+          Check 'binary installed' (Test-Path -LiteralPath $exe) $exe
+          Check 'manifest installed' (Test-Path -LiteralPath $manifestPath) $manifestPath
+          $m = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $installedSha = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          Check 'manifest.sha256 matches the installed binary' ($m.sha256 -eq $installedSha) ("manifest=" + $m.sha256 + " actual=" + $installedSha)
+          Check 'manifest.version is a version line' (-not [string]::IsNullOrWhiteSpace($m.package_version)) ("package_version=" + $m.package_version)
+          Check 'manifest.git_commit is a commit' ($m.git_commit -match '^[0-9a-f]{40}$') ("git_commit=" + $m.git_commit)
+          Check 'manifest.git_dirty is false on a CI checkout' ($m.git_dirty -eq $false) ("git_dirty=" + $m.git_dirty)
+          Check 'manifest.locked' ($m.locked -eq $true) ("locked=" + $m.locked)
+          Check 'manifest.rustc is the pinned toolchain' ($m.rustc -match '^rustc 1\.95\.0') ("rustc=" + $m.rustc)
+          $version = (& $exe --version 2>&1 | Out-String).Trim()
+          Check 'installed binary runs' ($LASTEXITCODE -eq 0 -and $version -match '^ravum-lang\s+\S+') ("exit=" + $LASTEXITCODE + " out=" + $version)
+          pwsh -NoProfile -File scripts/install.ps1 -Prefix $prefix -Uninstall
+          Check 'uninstall exits 0' ($LASTEXITCODE -eq 0) ("exit=" + $LASTEXITCODE)
+          Check 'uninstall removed the binary' (-not (Test-Path -LiteralPath $exe)) $exe
+          Check 'uninstall removed the manifest' (-not (Test-Path -LiteralPath $manifestPath)) $manifestPath
+          pwsh -NoProfile -File scripts/install.ps1 -Prefix $prefix -Uninstall
+          Check 'uninstall is idempotent' ($LASTEXITCODE -eq 0) ("exit=" + $LASTEXITCODE)
+          pwsh -NoProfile -File scripts/install.ps1 -Prefix $prefix -SkipBuild
+          Check 'reinstall without rebuilding exits 0' ($LASTEXITCODE -eq 0) ("exit=" + $LASTEXITCODE)
+          Check 'reinstall restored the binary' (Test-Path -LiteralPath $exe) $exe
+          $again = (& $exe --version 2>&1 | Out-String).Trim()
+          Check 'reinstalled binary runs' ($LASTEXITCODE -eq 0 -and $again -eq $version) ("out=" + $again)
+          if ($script:problems.Count -gt 0) {
+            Write-Host ("::error::installer contract violated: " + ($script:problems -join ', '))
+            exit 1
+          }
+          Write-Host ("OK: {0} installer checks hold." -f $script:checks)
+
+      # The manifest is a claim unless it is checked against the tree it
+      # describes. Both directions are exercised: a matching binary must PASS,
+      # a different binary must be refused with exit 1 (fail-closed).
+      - name: Provenance describes the installed artifact (emit, verify, refuse a mismatch)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $binary = 'target\release\ravum-lang.exe'
+          $sbom = 'evidence/local/sbom-a.spdx.json'
+          $out = 'evidence/local/ravum-provenance.json'
+          $problems = New-Object System.Collections.Generic.List[string]
+          $script:checks = 0
+          function Check([string]$Name, [bool]$Ok, [string]$Detail) {
+            $script:checks += 1
+            if ($Ok) { Write-Host ("PASS  {0} ({1})" -f $Name, $Detail) }
+            else {
+              Write-Host ("::error::provenance contract violated: {0} ({1})" -f $Name, $Detail)
+              $script:problems.Add($Name) | Out-Null
+            }
+          }
+          pwsh -NoProfile -File scripts/provenance.ps1 -Binary $binary -Sbom $sbom -Out $out
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::provenance emit exited $LASTEXITCODE"; exit 1 }
+          $p = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
+          $actual = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          $actualSbom = (Get-FileHash -LiteralPath $sbom -Algorithm SHA256).Hash.ToLowerInvariant()
+          Check 'binary digest recorded' ($p.artifacts.binary_sha256 -eq $actual) ("recorded=" + $p.artifacts.binary_sha256 + " actual=" + $actual)
+          Check 'sbom digest recorded' ($p.artifacts.sbom_sha256 -eq $actualSbom) ("recorded=" + $p.artifacts.sbom_sha256 + " actual=" + $actualSbom)
+          Check 'commit is the checked-out commit' ($p.source.commit -eq $env:GITHUB_SHA) ("recorded=" + $p.source.commit + " GITHUB_SHA=" + $env:GITHUB_SHA)
+          Check 'tree was clean when the build happened' ($p.source.dirty -eq $false) ("dirty=" + $p.source.dirty)
+          Check 'toolchain recorded' ($p.toolchain.rustc -eq '1.95.0') ("rustc=" + $p.toolchain.rustc)
+          Check 'manifest is explicitly unsigned' ($p.signed -eq $false -and $null -eq $p.signed_by) ("signed=" + $p.signed)
+          pwsh -NoProfile -File scripts/provenance.ps1 -Verify -Out $out -Binary $binary -Sbom $sbom
+          Check 'verify accepts the matching binary' ($LASTEXITCODE -eq 0) ("exit=" + $LASTEXITCODE)
+          New-Item -ItemType Directory -Force -Path evidence/local | Out-Null
+          $tampered = 'evidence/local/tampered.exe'
+          Copy-Item -LiteralPath $binary -Destination $tampered -Force
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path $tampered).Path)
+          $bytes[0] = $bytes[0] -bxor 0xFF
+          [IO.File]::WriteAllBytes((Resolve-Path $tampered).Path, $bytes)
+          $refusal = (pwsh -NoProfile -File scripts/provenance.ps1 -Verify -Out $out -Binary $tampered -Sbom $sbom 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host $refusal
+          # Assert the reason, not only the exit code: an unrelated crash also
+          # exits non-zero and would pass a code-only assertion.
+          Check 'verify refuses a tampered binary' (($code -eq 1) -and ($refusal -match 'binary digest mismatch')) ("exit=" + $code)
+          if ($script:problems.Count -gt 0) {
+            Write-Host ("::error::provenance contract violated: " + ($script:problems -join ', '))
+            exit 1
+          }
+          Write-Host ("OK: {0} provenance checks hold." -f $script:checks)
+
+      # Two builds from different absolute roots into different target
+      # directories: only their equality says anything about path independence.
+      - name: Reproducible build (two roots, one digest)
+        shell: pwsh
+        timeout-minutes: 35
+        run: |
+          $raw = & pwsh -NoProfile -File scripts/repro-check.ps1 2>&1
+          $code = $LASTEXITCODE
+          $text = ($raw | Out-String)
+          Write-Host $text
+          $digests = @($raw | Select-String -Pattern '^repro-check: [AB] = ([0-9A-Fa-f]{64})' | ForEach-Object { $_.Matches[0].Groups[1].Value.ToUpperInvariant() })
+          $passLine = (($raw | Select-String -Pattern '^repro-check: PASS') | Select-Object -First 1)
+          # Exit 0 alone is not evidence: a script that measured nothing also
+          # exits 0. Both measurements must be present in the output.
+          $measured = ($digests.Count -eq 2) -and ($digests[0] -eq $digests[1])
+          $label = if ($measured) { "two builds, one digest: $($digests[0])" } elseif ($passLine) { $passLine.Line } else { 'no measurement line found' }
+          if ($env:GITHUB_STEP_SUMMARY) {
+            @('### Reproducible build', '', ('- exit code: {0}' -f $code), ('- {0}' -f $label)) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8NoBOM -Append
+          }
+          if ($code -ne 0) {
+            Write-Host "::error::repro-check exited $code: the two builds are not bit-for-bit identical"
+            exit 1
+          }
+          if (-not $measured) {
+            Write-Host "::error::repro-check exited 0 but the output does not contain two identical 64-hex digests (found $($digests.Count)); nothing was proven"
+            exit 1
+          }
+          Write-Host "OK: the two builds from different roots are bit-for-bit identical ($($digests[0]))."
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-windows
+          path: |
+            evidence/local/sbom-a.spdx.json
+            evidence/local/ravum-provenance.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Evidence only, on one Windows runner: no signature (D9), no external audit (D4), no release, no ABI or real-time claim."
+          echo "Reproducibility is claimed for two builds within this job on the same toolchain and linker, not across machines."

@@ -14,7 +14,14 @@
 #
 # Usage:
 #   pwsh -File scripts/provenance.ps1 -Binary target\release\ravum-lang.exe
-#   pwsh -File scripts/provenance.ps1 -Verify -Manifest target\provenance\ravum-provenance.json -Binary target\release\ravum-lang.exe
+#   pwsh -File scripts/provenance.ps1 -Verify -Out target\provenance\ravum-provenance.json -Binary target\release\ravum-lang.exe
+#
+# -Verify re-reads the manifest emitted by -Out (there is no separate -Manifest
+# parameter; that name was documented here but never existed). It exits 0 only
+# when the manifest's commit, binary digest and SBOM digest match the current
+# tree, the actual binary and the actual SBOM; any mismatch is a MISMATCH line
+# and exit 1. Measured on 7e0c77a: PASS against the matching binary, exit 1 with
+# "binary digest mismatch" against a different one.
 
 [CmdletBinding()]
 param(
@@ -28,9 +35,18 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Push-Location $root
 try {
+    # Returns $null when the file is absent. A missing artifact must never be
+    # recorded as a digest: a manifest that says "absent" looks like provenance
+    # and binds nothing (measured defect, pass 8 — see the guards below).
     function Get-Sha256([string]$Path) {
-        if (-not (Test-Path $Path)) { return 'absent' }
-        (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if (-not (Test-Path -LiteralPath $Path)) { return $null }
+        (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    function Short([string]$Value, [int]$Length = 16) {
+        if ([string]::IsNullOrEmpty($Value)) { return '<none>' }
+        if ($Value.Length -le $Length) { return $Value }
+        return $Value.Substring(0, $Length)
     }
 
     $binaryHash = Get-Sha256 $Binary
@@ -59,7 +75,19 @@ try {
         exit 0
     }
 
-    if ($binaryHash -eq 'absent') { throw "binary not found: $Binary (run cargo build --release first)" }
+    # Fail-closed: a manifest that cannot bind both artifacts it names is not
+    # provenance and must not be written. The binary was guarded from the start;
+    # the SBOM was not, so a missing SBOM produced a manifest carrying the
+    # literal string "absent" and an unhandled exception on the summary line.
+    if (-not $binaryHash) {
+        [Console]::Error.WriteLine("provenance: error: binary not found: $Binary (build it first: cargo build --release)")
+        exit 1
+    }
+    $sbomHash = Get-Sha256 $Sbom
+    if (-not $sbomHash) {
+        [Console]::Error.WriteLine("provenance: error: SBOM not found: $Sbom (generate it first: pwsh -File scripts/sbom.ps1 -Timestamp '1970-01-01T00:00:00Z')")
+        exit 1
+    }
 
     $rustc = (& rustc -vV) -split "`n"
     $cargoVersion = (& cargo --version)
@@ -83,7 +111,7 @@ try {
             binary        = $Binary
             binary_sha256 = $binaryHash
             sbom          = $Sbom
-            sbom_sha256   = Get-Sha256 $Sbom
+            sbom_sha256   = $sbomHash
         }
         repro_settings = [ordered]@{
             cargo_incremental = 0
@@ -101,7 +129,7 @@ try {
     $json = $manifest | ConvertTo-Json -Depth 6
     Set-Content -Path $Out -Value $json -Encoding utf8
     Write-Host "provenance: wrote $Out"
-    Write-Host "provenance: binary=$($manifest.artifacts.binary_sha256.Substring(0,16))… sbom=$($manifest.artifacts.sbom_sha256.Substring(0,16))… commit=$($manifest.source.commit.Substring(0,7)) dirty=$($manifest.source.dirty)"
+    Write-Host "provenance: binary=$(Short $manifest.artifacts.binary_sha256)… sbom=$(Short $manifest.artifacts.sbom_sha256)… commit=$(Short $manifest.source.commit 7) dirty=$($manifest.source.dirty)"
 }
 finally {
     Pop-Location
