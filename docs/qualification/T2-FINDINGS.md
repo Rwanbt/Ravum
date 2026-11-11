@@ -1183,7 +1183,8 @@ qui compilent réellement : le correctif « évident » cassait une forme fermé
 | Conformance + build (`run --verify-build`) | **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; périmètre **195**, couverts **195**, vérifiés **120**, implicites **75**, échoués **0** ; `build_verified: true` |
 | Corpus | **453 → 456 cas**, `perimeter` **192 → 195** (trois cas `run/array-move-*`) |
 | Formes `check`-pass / `build`-fail ouvertes connues | **0** |
-| Couverture, reproductibilité, mutation | **non re-mesurées** : aucune n'est affectée par ce changement, aucune n'est revendiquée ici |
+| Couverture | **re-mesurée avec une portée élargie** : `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen` → **88,54 % lignes / 87,86 % régions** (totaux), `codegen/emit.rs` **87,02/86,02**, `sema/check.rs` **80,26/72,58** ; trois seuils codegen ajoutés au ratchet, `coverage.yml` étendu aux deux crates ; **aucun seuil abaissé** |
+| Reproductibilité, mutation | **non re-mesurées** : aucune n'est affectée par ce changement, aucune n'est revendiquée ici |
 | CI | **14/14 verts sur `7665244`** (7 `push` + 7 `pull_request`) ; la CI Windows de qualification rejoue la conformance : `cases=456`, `perimeter=195`, `verified=120`, `implicit=75`, `build_verified=True`, « 9 checks hold » (run `43087652812`) |
 
 ### 24.6 Ce que cela ne prouve pas

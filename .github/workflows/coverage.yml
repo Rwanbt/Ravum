@@ -1,4 +1,4 @@
-name: Coverage ratchet (sema, per-file floors)
+name: Coverage ratchet (frontend, per-file floors)
 
 # Per-file line/region coverage of the Ravum Core 1.0 frontend, enforced against
 # `tools/coverage_thresholds.json`.
@@ -8,9 +8,13 @@ name: Coverage ratchet (sema, per-file floors)
 # lowering it. The floors in the thresholds file are a ratchet: they never go
 # down without an explicit edit and a justification.
 #
-# Scope notice: this measures the `ravum-lang-sema` crate only, instrumented
-# with `cargo llvm-cov` on a Linux runner. It is a *line/region* measurement,
-# not a mutation score, not a proof of correctness, and not a performance claim.
+# Scope notice: this measures the `ravum-lang-sema` **and** `ravum-lang-codegen`
+# crates, instrumented with `cargo llvm-cov` on a Linux runner. The backend was
+# unmeasured until 2026-11-11, so the code that decides what the generated Rust
+# looks like had no floor at all; including both crates in one instrumented
+# build also counts the sema code exercised by the codegen integration tests.
+# It is a *line/region* measurement, not a mutation score, not a proof of
+# correctness, and not a performance claim.
 # The 90/85 gate target for `typeck.rs` and `resolve.rs` is recorded in the
 # thresholds file; the enforced floors are one point below today's measurement
 # so a toolchain upgrade cannot flip the gate on rounding noise.
@@ -31,7 +35,7 @@ env:
 
 jobs:
   coverage:
-    name: Sema coverage floors (llvm-cov, per file)
+    name: Frontend coverage floors (llvm-cov, per file)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -57,28 +61,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-coverage-
 
-      # `-p ravum-lang-sema` runs the crate's unit tests and its integration
-      # tests (typeck_contracts, own_audit, resolve_contracts, …), which is the
-      # same scope the thresholds file was measured on.
-      - name: Measure sema coverage
+      # `-p ravum-lang-sema -p ravum-lang-codegen` runs both crates' unit and
+      # integration tests in one instrumented build (typeck_contracts, own_audit,
+      # resolve_contracts, backend_audit, …), which is the scope the thresholds
+      # file was measured on.
+      - name: Measure frontend coverage
         run: |
-          cargo llvm-cov -p ravum-lang-sema --json --output-path target/cov-sema.json
-          cargo llvm-cov report --text --show-missing-lines > target/cov-sema.txt
+          cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
+          cargo llvm-cov report --text --show-missing-lines > target/cov-all.txt
 
       - name: Enforce per-file floors
-        run: python tools/coverage_report.py --input target/cov-sema.json --check
+        run: python tools/coverage_report.py --input target/cov-all.json --check
 
       - name: Report (never hides a violation)
         if: always()
-        run: python tools/coverage_report.py --input target/cov-sema.json || true
+        run: python tools/coverage_report.py --input target/cov-all.json || true
 
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-sema
+          name: coverage-frontend
           path: |
-            target/cov-sema.json
-            target/cov-sema.txt
+            target/cov-all.json
+            target/cov-all.txt
           if-no-files-found: warn
           retention-days: 30

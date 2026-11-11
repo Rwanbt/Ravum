@@ -25,7 +25,7 @@ fermées.
 | Conformance (`run --verify-build`) | **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **195/195** couverts, **120** vérifiés, **75** implicites, **0 échec**, `build_verified: true` |
 | Formes `check`-pass / `build`-fail ouvertes connues | **0** (contre 2 à la passe 8) |
 | Tests ajoutés | 1 test `rustc`-vérifié (compile + exécute + vérifie que le déstructurage est émis avant le `if`) et 3 cas de corpus (`run/array-move-branch-descents`, `-nested-descents`, `-read-order`) |
-| Couverture sema | **non re-mesurée** : la mesure de la passe 8 (88,94 % lignes / 88,46 % régions) porte sur `ravum-lang-sema`, que cette passe ne modifie pas ; aucun seuil modifié |
+| Couverture | **portée élargie et re-mesurée** : **88,54 % lignes / 87,86 % régions** sur `ravum-lang-sema` **+** `ravum-lang-codegen` (`emit.rs` 87,02/86,02) ; trois seuils codegen ajoutés, `coverage.yml` mesure les deux crates ; aucun seuil abaissé |
 | Reproductibilité, SBOM, provenance, installateur | **non re-mesurés** dans cette passe ; les chiffres de la passe 8 restent les derniers mesurés, et la CI les rejoue (`qualification-evidence.yml`) |
 | Traçabilité FeatureId | **188/188** (inchangée) |
 | Registre des codes | **108** codes enregistrés / **126** émis / 0 hors registre |
