@@ -198,7 +198,7 @@ fn run_forwards_the_status_posix_actually_reports() {
     if skip_without_rustc("run_forwards_the_status_posix_actually_reports") {
         return;
     }
-    let temp = TempDir::new("truncate");
+    let temp = TempDir::new("big");
     let root = package(
         &temp,
         "big",
@@ -213,11 +213,13 @@ fn run_forwards_the_status_posix_actually_reports() {
         stderr(&output)
     );
     // The parent never observes 300, so any note about it would be invented. The
-    // check is on the note's wording, not on a digit string: the temporary path
-    // in stderr could contain "300" by chance.
+    // assertions target the note's wording: `run` always echoes `running: <path>`
+    // on stderr, and a temporary directory called `truncate*` would defeat a
+    // substring test on "truncat" (that is exactly why the first Linux run of
+    // this test failed).
     let err = stderr(&output);
     assert!(
-        !err.contains("exited with status") && !err.contains("truncat"),
+        !err.contains("exited with status") && !err.contains("POSIX truncates"),
         "the parent never observes 300 on POSIX, so naming it would be a guess: {err}"
     );
 }
@@ -261,7 +263,7 @@ fn posix_cannot_distinguish_exit_256_from_success() {
     if skip_without_rustc("posix_cannot_distinguish_exit_256_from_success") {
         return;
     }
-    let temp = TempDir::new("truncate-zero");
+    let temp = TempDir::new("wraps");
     let root = package(
         &temp,
         "wraps",
@@ -280,7 +282,7 @@ fn posix_cannot_distinguish_exit_256_from_success() {
     );
     let err = stderr(&output);
     assert!(
-        !err.contains("exited with status") && !err.contains("truncat"),
+        !err.contains("exited with status") && !err.contains("POSIX truncates"),
         "the CLI cannot know about 256 on POSIX, so it must say nothing: {err}"
     );
 }
