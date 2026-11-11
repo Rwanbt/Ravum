@@ -2,7 +2,8 @@
 
 > Ces décisions **n'appartiennent pas** aux agents. Ce dossier les rend explicites,
 > avec recommandation, preuves disponibles, alternatives et conséquence d'une
-> non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-09.
+> non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-11
+> (passe 9 : D12 close, `P0-A` vert sur son périmètre mesuré).
 
 ## D1 — Licence du code et gouvernance (#34) — **RÉSOLUE**
 
@@ -202,14 +203,18 @@
   qui compile avec `rustc`, exécute le binaire et vérifie la valeur, plus un cas
   de corpus (`conformance/cases/run/array-move-*`). Détail :
   [`docs/qualification/T2-FINDINGS.md`](docs/qualification/T2-FINDINGS.md) §22.
-- **Ce que la résolution ne couvre pas** : quatre formes restent `check`-pass /
-  `build`-fail avec un E0508 bruyant (index dynamique dans un tableau imbriqué,
-  racine de chaîne qui n'est pas une place, plusieurs accès dans un bras de
-  `match` en corps d'expression, récepteur *by value* d'une méthode builtin).
-  Elles relèvent de la **même** option (a) et constituent du travail
-  d'ingénierie restant, pas une nouvelle décision humaine ; elles sont listées
-  dans `CONFORMANCE-BUILD-CONTRACT.md` et `T2-FINDINGS.md` §22.2, et **P0-A
-  reste `PARTIAL`** pour cette raison.
+- **Ce que la résolution ne couvre plus (mis à jour le 2026-11-11, passe 9)** :
+  les quatre formes encore ouvertes au moment de la décision — index dynamique
+  dans un tableau imbriqué, racine de chaîne qui n'est pas une place, plusieurs
+  accès dans un bras de `match` en corps d'expression, récepteur *by value* d'une
+  méthode builtin — ont été fermées par la passe 8 (`5268838`, `d693162`), et les
+  **deux dernières** — descentes dans deux branches distinctes d'un `if`/`else`,
+  deux descentes dans un même bloc imbriqué — par la passe 9 (`21cf7d4`). Le
+  corpus est passé de 443 à **456 cas** et le périmètre build de 182 à **195**,
+  sans qu'aucune règle MUST ne soit amendée. **Aucune forme `check`-pass /
+  `build`-fail ouverte connue** ne reste : `P0-A` est vert **sur son périmètre
+  mesuré** (l'invariant général reste une observation outillée, pas une preuve).
+  Détail : `CONFORMANCE-BUILD-CONTRACT.md` §9-§9 ter, `T2-FINDINGS.md` §23-§24.
 
 ## D13 — Provenance de `&'static str` à travers les agrégats — **OUVERTE**
 
