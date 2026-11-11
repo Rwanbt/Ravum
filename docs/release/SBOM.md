@@ -119,8 +119,11 @@ namespace `https://spdx.ravum.invalid/ravum-workspace-8fd154726ae9`.
    `cargo` eux-mêmes, pas de Node.js, pas d'outils de build.
 6. **Aucune garantie de complétude** : une dépendance introduite hors Cargo (script, binaire
    téléchargé) n'apparaît pas.
-7. **Licence du workspace non décidée** : les 22 membres n'ont pas de licence déclarée, ce
-   qui est un **choix en attente** (voir `LICENSE-DECISION.md`), pas un oubli du SBOM.
+7. **Licence du workspace décidée** : `MIT OR Apache-2.0` (D1, `LICENSE-DECISION.md`). Les
+   valeurs du §5 sont l'instantané du 2026-11-09 (22 membres, `NOASSERTION`) ; depuis D1, les
+   23 membres héritent de `license = "MIT OR Apache-2.0"` et un SBOM régénéré ne porte plus
+   `NOASSERTION` pour les membres du workspace — l'instantané doit être re-généré avant
+   archivage.
 8. **Le SBOM ne prouve pas que le binaire a été construit à partir de ces sources** : il est
    calculé à partir de `Cargo.lock`, indépendamment de l'artefact installé.
 

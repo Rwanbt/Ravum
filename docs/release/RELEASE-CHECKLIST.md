@@ -40,7 +40,7 @@
 | [x] | Binaire exécutable et `--version` conforme | `ravum-lang 0.1.0 (edition core-1.0-draft.1)` |
 | [x] | SHA-256 du binaire enregistré (installation locale) | `0b324e1d5d048ee695f2fbf9a98065e10683cacdd9e2f76ef2d1fc77c6256589` (arbre modifié) |
 | [ ] | Checksums publiés et archivés avec l'artefact | fichier `SHA256SUMS` publié |
-| [ ] | Signature/attestation de l'artefact | `NOT_IMPLEMENTED` (aucune clé) |
+| [ ] | Signature/attestation de l'artefact | mécanisme `attest-release` **qualifié** (accepte/rejette), mais **aucune clé de projet** ni `allowed_signers` (D9) |
 
 ## 4. Installation
 
@@ -66,7 +66,7 @@
 | [x] | Déterminisme vérifié (deux exécutions, horodatage fixe) | hashes identiques, bytes identiques |
 | [x] | `SOURCE_DATE_EPOCH=0` neutralise `created` | `1970-01-01T00:00:00Z` |
 | [ ] | SBOM archivé avec l'artefact publié (horodatage fixe) | fichier publié + hash |
-| [ ] | SBOM signé / attesté | `NOT_IMPLEMENTED` |
+| [ ] | SBOM signé / attesté | SBOM généré (non signé) ; signature possible mais **clé absente** (D9) |
 
 ## 6. Provenance
 
@@ -75,8 +75,8 @@
 | [x] | Manifeste d'installation contient version, commit, date UTC, SHA-256, rustc | `ravum-install.json` observé |
 | [x] | `git_dirty` enregistré et signalé à l'utilisateur | `git_dirty: true` + avertissement stderr |
 | [x] | `PROVENANCE.md` distingue prouvé / non prouvé | document écrit |
-| [ ] | Provenance **signée** (SLSA/attestation) | `NOT_IMPLEMENTED` |
-| [ ] | Vérification indépendante du binaire publié | `NOT_IMPLEMENTED` |
+| [ ] | Provenance **signée** (SLSA/attestation) | aucune attestation SLSA ; le mécanisme de signature existe, la clé manque (D9) |
+| [ ] | Vérification indépendante du binaire publié | aucun binaire publié ; vérification locale possible par hash |
 
 ## 7. Licence
 
@@ -97,7 +97,7 @@
 | [x] | `SBOM.md` (génération, déterminisme, limites) | document écrit |
 | [x] | `PROVENANCE.md` (prouvé/non prouvé) | document écrit |
 | [x] | `RELEASE-CHECKLIST.md` (ce fichier) | document écrit |
-| [x] | `LICENSE-DECISION.md` (options, statut `PENDING_HUMAN`) | document écrit |
+| [x] | `LICENSE-DECISION.md` (statut `DECIDED`, `MIT OR Apache-2.0`) | document écrit |
 | [ ] | Docs relues par le responsable | `PENDING_HUMAN` |
 
 ## 9. Rollback
@@ -120,8 +120,9 @@
 
 - **Vérifié localement (Windows, Git Bash)** : installateurs, manifeste, hash, PATH,
   désinstallation, SBOM déterministe, fail-closed sur build cassé.
-- **Non vérifié** : arbre propre, Linux/macOS natif, reproductibilité, signatures, licence,
-  publication, rollback.
+- **Non vérifié** : arbre propre, macOS natif, reproductibilité inter-machines, signatures
+  de release (mécanisme qualifié, clé absente), publication, rollback. La licence est
+  **décidée** (`MIT OR Apache-2.0`, 23/23) et l'installation Linux est **vérifiée en CI**.
 - **Conclusion** : la chaîne d'installation et de SBOM est **utilisable en développement**,
   pas qualifiée pour une release publique. Aucune case non cochée ne doit être présentée
   comme faite.

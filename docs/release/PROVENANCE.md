@@ -1,9 +1,12 @@
 # Provenance des artefacts `ravum-lang`
 
 > **Statut : candidate, non ratifiée.** Ce document distingue ce qui est **effectivement
-> observé** de ce qui est **affirmé sans preuve**. Aucune signature, aucune attestation et
-> aucune reproductibilité bit-à-bit ne sont revendiquées. Les statuts suivent `AGENTS.md` :
-> `TESTED`, `ASSUMED`, `UNKNOWN`, `NOT_IMPLEMENTED`, `PENDING` ne sont pas `PROVED`.
+> observé** de ce qui est **affirmé sans preuve**. Aucune signature de release, aucune
+> attestation de build et aucune reproductibilité **inter-machines** ne sont revendiquées.
+> La reproductibilité locale mesurée (deux racines, même contenu) est décrite dans
+> [`../qualification/REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md) ; elle ne
+> couvre pas un artefact publié. Les statuts suivent `AGENTS.md` : `TESTED`, `ASSUMED`,
+> `UNKNOWN`, `NOT_IMPLEMENTED`, `PENDING` ne sont pas `PROVED`.
 
 ## 1. Ce qui est enregistré par l'installateur
 
@@ -30,15 +33,16 @@ Le manifeste décrit **l'installation locale**, pas un artefact publié.
 | `--version` s'exécute après installation | **TESTED** | `ravum-lang 0.1.0 (edition core-1.0-draft.1)`, exit 0 |
 | Désinstallation complète et idempotente | **TESTED** | binaire + manifeste + `bin` supprimés ; second passage exit 0 |
 | `PATH` utilisateur ajouté une seule fois puis retiré | **TESTED** | 1 occurrence après deux installations ; `PATH` restauré à l'identique |
-| Build `--locked` reproductible **sur la même machine** | **UNKNOWN** | le hash dépend de l'arbre : `5029051…`, `A25A43A…`, `0b324e1…` observés pour des états de travail différents |
+| Build `--locked` reproductible **à arbre identique** | **TESTED** (procédure locale) | `scripts/repro-check.ps1` : binaires identiques entre deux racines et deux `target/`, à contenu et drapeaux identiques — voir [`../qualification/REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md) ; des arbres différents produisent des hash différents (attendu, voir §3) |
 | Build reproductible entre machines | **UNKNOWN** | non testé ; aucun `SOURCE_DATE_EPOCH`, aucun flags de reproductibilité |
 | Binaire construit depuis un commit propre | **NON PROUVÉ** | `git_dirty: true` lors des tests (autres travaux en cours) |
 | Absence d'accès réseau du build | **ASSUMED** | par conception (`--locked`, cache local) ; aucune capture réseau réalisée |
 | Dépendances conformes à `Cargo.lock` | **ASSUMED** | Cargo vérifie les checksums des `.crate` ; pas d'audit indépendant |
-| Signature du binaire / SBOM | **NOT_IMPLEMENTED** | aucune clé, aucun certificat, aucun outil de signature |
+| Signature de release | **mécanisme TESTED, clé absente** | `scripts/attest-release.ps1` : signature/vérification `sshsig` (namespace `ravum-release`) ; un artefact altéré est **rejeté** ([`../qualification/SIGNATURES.md`](../qualification/SIGNATURES.md)). Aucune clé de projet, aucun `allowed_signers` publié (D9) |
+| SBOM généré | **TESTED** | `scripts/sbom.ps1` / `sbom.sh` : SPDX 2.3 déterministe ([`SBOM.md`](SBOM.md)) ; le fichier **n'est pas signé** |
 | Attestation de build (SLSA ou équivalent) | **NOT_IMPLEMENTED** | aucun builder identifiable, aucune provenance signée |
 | Lien cryptographique binaire ↔ SBOM | **NON PROUVÉ** | le SBOM décrit `Cargo.lock`, pas le fichier installé |
-| Licence du code Ravum | **PENDING_HUMAN** | `LICENSE-DECISION.md` |
+| Licence du code Ravum | **DECIDED** | `MIT OR Apache-2.0` ([`../../LICENSE-DECISION.md`](../../LICENSE-DECISION.md), 23/23 membres) |
 
 ## 3. Non-reproductibilité observée
 
@@ -93,18 +97,23 @@ défaut à instruire, pas une tolérance.
 
 ## 6. Conditions minimales avant de qualifier un artefact de « release »
 
-Ces conditions ne sont **pas** remplies aujourd'hui ; elles sont listées pour que l'absence
-soit explicite (voir [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md)) :
+Ces conditions ne sont **pas toutes** remplies aujourd'hui ; l'état de chacune est indiqué
+pour que l'absence soit explicite (voir [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md)) :
 
-1. arbre **propre** au commit taggé (`git_dirty: false`) ;
-2. build exécuté par un environnement identifié (CI ou machine dédiée) ;
-3. hash du binaire publié et archivé avec le commit et la toolchain ;
-4. SBOM généré avec horodatage fixe, archivé à côté du binaire ;
-5. décision de licence appliquée (`LICENSE`, champs `license` dans `Cargo.toml`, notices) ;
-6. procédure de rollback testée sur un poste propre ;
-7. au moins un test d'installation sur une **seconde** plateforme (Linux ou macOS natif) ;
+1. arbre **propre** au commit taggé (`git_dirty: false`) — **non rempli** (aucun tag) ;
+2. build exécuté par un environnement identifié (CI ou machine dédiée) — **rempli côté
+   Linux** (`linux-qual.yml`), **pas côté Windows** ;
+3. hash du binaire publié et archivé avec le commit et la toolchain — **non rempli**
+   (aucune release) ;
+4. SBOM généré avec horodatage fixe, archivé à côté du binaire — SBOM **généré**, mais
+   **non archivé** avec un artefact publié ;
+5. décision de licence appliquée (`LICENSE`, champs `license` dans `Cargo.toml`, notices) —
+   **remplie** (`MIT OR Apache-2.0`, 23/23) ;
+6. procédure de rollback testée sur un poste propre — **non remplie** (`NOT_RUN`) ;
+7. au moins un test d'installation sur une **seconde** plateforme (Linux ou macOS natif) —
+   **remplie** pour Linux (job `install` de `linux-qual.yml`) ; macOS `NOT_RUN` ;
 8. si une revendication de sécurité est faite : signature/attestation et vérification
-   documentée — actuellement `NOT_IMPLEMENTED`.
+   documentée — **mécanisme** disponible et qualifié, **clé de projet absente** (D9).
 
 ## 7. Ce que ce document n'est pas
 

@@ -60,6 +60,11 @@ vérifie pas la signature du binaire (il n'y en a pas ; voir [PROVENANCE.md](PRO
 
 ## 3. Installation sous Linux / macOS / Git Bash
 
+> **État de qualification :** Linux x86-64 est exercé en CI (`linux-qual.yml`, job
+> `install`) ; **macOS n'a jamais été exécuté** (`NOT_RUN`, voir
+> [`../qualification/PLATFORMS-MATRIX.md`](../qualification/PLATFORMS-MATRIX.md)). La
+> présence de branches `darwin` dans le script n'est pas une preuve de support.
+
 ```sh
 # Depuis la racine du dépôt
 bash scripts/install.sh
@@ -179,7 +184,7 @@ La désinstallation est **idempotente** : relancée sur un préfixe absent, elle
 |---|---|---|
 | `cargo build a echoue (code 101)` | arbre de travail cassé (édition concurrente), ou `--locked` incompatible avec `Cargo.lock` | `cargo build -p ravum-lang-cli --release --locked` à la main, lire l'erreur ; ne pas contourner `--locked` |
 | `binaire en cours d'utilisation` | un `ravum-lang` tourne (daemon/test) | fermer le processus puis relancer |
-| `node introuvable` | SBOM uniquement | installer Node ≥ 18 ou utiliser un autre poste pour le SBOM |
+| `node introuvable` | SBOM, et `run --target wasm32-wasip1` | installer Node ≥ 18 (SBOM) / ≥ 22 pour WASI, ou utiliser un autre poste |
 | `PATH` inchangé dans le terminal courant | le `PATH` utilisateur n'est lu qu'au démarrage | ouvrir un nouveau terminal |
 | Script `.ps1` bloqué par la stratégie d'exécution | PowerShell restreint | décision humaine : `pwsh -File` avec une stratégie adaptée, ou exécution manuelle |
 | `rustc` absent | toolchain non installée | installer Rust 1.95.0 (`rustup toolchain install 1.95.0`) |
@@ -187,12 +192,15 @@ La désinstallation est **idempotente** : relancée sur un préfixe absent, elle
 
 ## 8. Ce que l'installateur ne fait pas
 
-- aucune signature, aucun certificat, aucune attestation (il n'en existe pas) ;
+- aucune signature n'est produite : le **mécanisme** existe et est qualifié
+  ([`SIGNATURES.md`](../qualification/SIGNATURES.md)), mais aucune clé de projet ni
+  `allowed_signers` n'existe (D9) ;
 - aucune vérification d'intégrité du dépôt source (hors `--locked`) ;
 - aucune écriture dans le `PATH` **système**, aucune clé de registre, aucun service ;
-- aucun accès réseau (le build `--locked` utilise le cache local) ;
+- aucun accès réseau **volontaire** : le build `--locked` utilise le cache local ; l'absence
+  totale d'accès réseau n'est pas capturée (statut `ASSUMED`, [`PROVENANCE.md`](PROVENANCE.md) §2) ;
 - aucune mise à jour automatique, aucun rollback automatique après installation réussie ;
-- aucune décision de licence (voir `LICENSE-DECISION.md`).
+- aucune décision de licence à prendre : elle est **décidée** (`MIT OR Apache-2.0`, 23/23).
 
 ## 9. Valeurs observées (2026-11-09, Windows 11, PowerShell 7)
 

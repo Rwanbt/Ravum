@@ -10,11 +10,12 @@
 
 | Fait | Valeur observée | Comment |
 |---|---|---|
-| Branche de travail | `feat/lang-core-1.0-rc` @ `5d88ecb` | `git rev-parse`, `git log -1` |
-| PR | **#101 ouverte, draft, non fusionnée**, base `dev`, head `5d88ecb`, `mergeable_state: clean`, 126 commits, 1616 fichiers | API GitHub `GET /pulls/101`, 2026-11-11 |
+| Branche de travail | `feat/lang-core-1.0-rc` ; tête à la rédaction `5d88ecb`, puis `7e0c77a` (2026-11-11T15:49Z) — la tête avance, vérifier avant toute fusion | `git rev-parse`, API GitHub |
+| PR | **#101 ouverte, draft, non fusionnée**, base `dev`, `mergeable_state: clean` ; 126 commits / 1616 fichiers à `5d88ecb`, 147 commits / 1834 fichiers à `7e0c77a` | API GitHub `GET /pulls/101`, 2026-11-11 |
 | Releases publiées | **aucune** (`[]`) | API GitHub `GET /releases` |
 | Tags | **aucun** (`[]`) | API GitHub `GET /tags` |
 | CI sur `5d88ecb` | **12 runs** pour ce SHA ; celui de qualification Linux a été vérifié job par job : 7 `success` + TSan `skipped` | API GitHub `GET /runs?head_sha=…` et `/runs/42936163958/jobs` |
+| CI sur `c67f17e` (passe suivante) | **12 runs de workflow** ; le run Linux `43026622427` est vert (7 `success` + TSan `skipped`), les 12 sont rapportés verts | API GitHub ; détail `docs/qualification/LINUX-QUALIFICATION.md` §11 |
 | Licence | `MIT OR Apache-2.0`, 23/23 membres | `DECISIONS_REQUIRED.md` D1 (RÉSOLUE) |
 | Signature | mécanisme `ssh-keygen -Y sign` qualifié, **clé absente** | `docs/qualification/SIGNATURES.md` |
 | Audit externe | **aucun** | matrices de gates T4/T10/T12 |
