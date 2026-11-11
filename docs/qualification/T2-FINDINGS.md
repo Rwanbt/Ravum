@@ -836,3 +836,104 @@ mutation et la relecture du registre :
 Après ces deux ajouts, les mesures de §20.4 sont inchangées (89 suites / 1405
 tests, conformance 386/385/0/1, couverture 89,2 % / 88,6 %, registre 108/126/0/0)
 et la mutation passe de 165 à **166 tués sur 195**.
+
+## 21. Passe 6 — divergences `check → build` et seconde métrique de traçabilité (2026-11-11)
+
+> **Base : `5d88ecb`** (les correctifs de cette passe sont les commits `8c6434b`,
+> `5daeb40`, `e0af6b6`, `9314d2f`, `9c163de`, `a3a43b2`). Windows 11 x86-64,
+> rustc/cargo 1.95.0. Mesures : `cargo test --workspace --all-targets` et
+> `target\debug\ravum-conformance.exe run --verify-build`.
+
+### 21.1 Ce qui a été mesuré avant correction
+
+Le corpus de conformance ne vérifiait que `check` en mode accepté : un programme
+pouvait donc être « conforme » et échouer à la compilation. La passe a mesuré le
+contrat sur **deux jeux distincts** plutôt que de supposer le chiffre externe :
+
+- balayage du corpus accepté (132 cas `compile-pass` + `run-pass`) :
+  **132 check-pass / 130 build-pass / 2 divergences** ;
+- sondes indépendantes reconstruites par famille (38 programmes) :
+  **11 divergences** au total, dont 4 familles absentes du corpus.
+
+Les 37 cas signalés par la revue externe ne sont **pas dans le dépôt** : ils ne
+sont ni confirmés ni infirmés en tant que tels. Les familles ont donc été
+reconstruites à partir de la liste de la revue.
+
+### 21.2 Divergences reproduites puis corrigées
+
+| # | Programme (résumé) | check | build avant | Cause | Correctif | Code/effet après |
+|---|---|---|---|---|---|---|
+| 1 | `struct S { text: &str }` | 0 | E0106 | codegen émettait `&str` sans lifetime | `&'static str` en position valeur (OWN-6.2) ; `&str` élidé en paramètre (STD-9.3) | build 0 |
+| 2 | `fn lit() -> &str { "a" }` | 0 | E0106 | idem | idem | build 0 |
+| 3 | `return a[1];` sur `[String; 2]` | 0 | E0508 | move d'élément de tableau non abaissé | déstructuration hoistée + réécriture par node id (OWN-5.4) | build 0 |
+| 4 | `a[1].0` (projection après index) | 0 | E0508 | idem | idem, avec repli sur lecture simple si le champ est `Copy` | build 0 |
+| 5 | `let x = a[0]; let y = a[1];` | 0 | E0508 | planificateur limité à une occurrence | réécriture complète par node id | build 0 |
+| 6 | `let x = a[0]; return a[1].len();` | 0 | E0508 | idem | idem | build 0 |
+| 7 | `v.push(a[0]);` | 0 | E0508 | argument d'appel builtin non traité | positions consommées étendues | build 0 |
+| 8 | `fn bump(mut x: i32)` | 0 | E0384 | `mut` de liaison non émis | `mut x: T` | build 0 |
+| 9 | `o.unwrap(); let t = o;` | 0 | E0382 | `unwrap` n'était pas consommateur | STD-11.3/OWN-5.8, OWN-5.2 | `E-OWN-DOUBLE-MOVE` |
+| 10 | `o.unwrap(); o.is_some()` | 0 | E0382 | idem | idem | `E-OWN-USE-AFTER-MOVE` |
+| 11 | `let a: [i32; 2] = [1, true];` | 0 | E0308 | chemin annoté non vérifié élément par élément | TYP-5.1/5.7 | `E-TYP-MISMATCH` |
+| 12 | `match x { Some((n,true)) => …, None => … }` | 0 | E0004 | exhaustivité non récursive dans les payloads | G-6.22/TYP-10.4 | `E-TYP-NONEXHAUSTIVE` |
+| 13 | `match x { Some(Some(n)) => …, None => … }` | 0 | E0004 | idem | idem | `E-TYP-NONEXHAUSTIVE` |
+| 14 | `match e { E::A(Some(n)) => …, E::B => … }` | 0 | E0004 | idem | idem | `E-TYP-NONEXHAUSTIVE` |
+| 15 | `takes(owned)` (`String` vers `&str`) | 0 | E0308 | coercition implicite acceptée alors que TYP-8.5 la rend explicite | `String → &str` retiré de `coerce` ; `&String → &str` conservé | `E-TYP-MISMATCH` |
+| 16 | `takes(line.trim())` | 0 | E0308 | idem (STD-9.1 : `trim` rend `String`) | idem ; `examples/stats` et `run/stats` migrés vers `.as_str()` | `E-TYP-MISMATCH` |
+
+Défauts supplémentaires corrigés dans la même passe, trouvés par sondage :
+références stockées dans un champ/enum/payload de constructeur prélude
+(`E-OWN-REF-ESCAPE`, OWN-6.1/6.2), et `&mut self` sur une place immuable
+(`E-OWN-IMMUTABLE`, TYP-3.2/OWN-7.4).
+
+### 21.3 Divergences restantes — déclarées ouvertes, hors corpus
+
+Trois formes restent `check-pass`/`build-fail` avec un **E0508 bruyant** (jamais
+un miscompilation silencieuse) :
+
+| Forme | Repro | Contrat |
+|---|---|---|
+| chaîne d'index imbriquée | `fn f(a: [[String; 2]; 2]) -> String { return a[0][1]; }` | OWN-5.3/5.4 autorisent le move |
+| tableau derrière un champ/tuple | `struct H { items: [String; 2] }` puis `h.items[0]` ; `t.0[0]` | idem |
+| liaison de tableau masquée par un shadowing imbriqué | paramètre `a` + `let a = …` dans un bloc | idem |
+
+Elles exigent un abaissement général des moves par place ; elles sont
+documentées dans `CONFORMANCE-BUILD-CONTRACT.md` (§ « Known open divergences »)
+et **ne sont pas figées comme échecs attendus** dans les tests. Le gate
+`--verify-build` ne prouve donc l'absence de divergence que sur son périmètre.
+
+### 21.4 Seconde métrique : FeatureIds ≠ règles MUST
+
+`tools/must_audit.py` (11 tests unitaires) mesure deux choses distinctes :
+
+| Métrique | Dénominateur | Oracle | Résultat |
+|---|---|---|---|
+| Couverture FeatureId | **188** FeatureIds | `features_coverage.py --strict` (inchangé) | **188/188** (187 cas + 1 exemption) |
+| Traçabilité des énoncés MUST | **807** lignes `Niveau = MUST` (805 ids uniques) | `must_audit.py` | **463/807** atteignables par un FeatureId, **344/807** non |
+
+Détail : liens exacts 110, par plage 72, par groupe 328, par section 40
+(recouvrement) ; lien le plus fort : groupe 273, exact 110, plage 43, section 37,
+aucun 344. Les documents entièrement non atteints sont ABI (33), COMPAT (39),
+CONC (20), MACH (40), DIAG (43), FEAT (11), UNS (8) — soit 194 MUST.
+
+**Conséquence honnête** : T2 était déclaré `PASS` sur la métrique 1, qui ne
+couvre pas la métrique 2. Le registre des gates est corrigé en `PARTIAL` pour
+T2, sans modifier le seuil : le critère 188/188 reste vrai et vérifié, mais il
+ne mesure pas la traçabilité des règles MUST. Aucun test n'a été supprimé ni
+assoupli ; aucune règle de spécification n'a été modifiée.
+
+### 21.5 Mesures de la passe
+
+| Mesure | Commande | Résultat |
+|---|---|---|
+| Tests workspace | `cargo test --workspace --all-targets` | **94 suites, 1525 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance + build | `ravum-conformance run --verify-build` | **424 cas : 423 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build : périmètre **163**, couverts **163**, vérifiés **101**, implicites **62**, échoués **0** ; `build_verified: true` |
+| Smoke exemples | `scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** (dont 13 assertions `file-store`) |
+| Watch fail-closed | `scripts/watch-fail-closed-check.ps1` | **PASS** (ancienne version survit à une édition invalide, activation, 1 seul enfant, 0 orphelin) |
+| Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Traçabilité MUST | `python tools/must_audit.py` | **807 MUST, 463 atteints, 344 non atteints** |
+| Contrats Python | `python -m unittest discover -s tools/tests` | **33 tests OK** |
+
+Binaires de mesure épinglés : `ravum-lang.exe` sha256
+`5816ACDD…C157F661D`, `ravum-conformance.exe` sha256 `7DF6345C…4BE4CCCF`.
+Toute re-mesure doit repartir de ces binaires ; l'arbre a été édité par six
+agents pendant la passe.

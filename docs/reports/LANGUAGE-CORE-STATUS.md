@@ -1,29 +1,21 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
-> **Mise à jour passe 5 — 2026-11-10, SHA `ea7df46`.** Cette passe traite les
-> **quatorze points ouverts** de `T2-FINDINGS.md` §19.2 : confidentialité du
-> résolveur (`use` d'un module privé, segments non finaux), repli `use` relatif
-> de MOD-3.2, `test fn` invalide → `E-TYP-MAIN`, comparaisons numériques mixtes →
-> `E-TYP-MISMATCH`, inférence `Vec::new()` + `push`, **famille complète des
-> affectations composées** (D-CMP-1 résolue), codes de diagnostic inatteignables
-> retirés, harnais `W-*` et phases JSON alignés. Les décisions **D-CMP-1**,
-> **D-UFCS-1** et **D-MOD-3.2** sont résolues ; **D-COERCE-1** reste ouverte.
-> Mesures courantes : **89 suites, 1405 passés / 0 échec / 2 ignorés** ;
-> conformance **386 cas, 385 PASS / 0 FAIL / 1 SKIP** ; **188/188** règles
-> satisfaites (1 exemption) ; registre **108 codes, 0 hors registre, 0 jamais
-> émis** ; couverture sema **89,2 %** de lignes (`typeck.rs` **93,8 %**,
-> `resolve.rs` **93,1 %**, `own.rs` 91,1 %, `types.rs` 100 %) — objectifs
-> 90/85 **atteints et bloquants en CI** ; mutation ciblée **195 mutants, 166
-> tués (85,1 %)**, 20 survivants triés (14 inatteignables, 6 équivalents,
-> 0 lacune de test) ; build bit-à-bit identique (`83372F4F…`), SBOM
-> `dc7b4e0d…`, installateur `28ba4b1c…` ; gates **5 PASS / 6 PARTIAL /
-> 2 BLOCKED** (inchangés : T4/T12 exigent l'audit externe et le Go/No-Go
-> humains). CI sur `ea7df46` : **tous les workflows verts** (Linux qualification
-> 42933086911 : workspace 89 suites / 1402 passés / 0 échec / 4 ignorés,
-> conformance 386 cas / 384 PASS / 0 FAIL / 2 SKIP, Miri, smoke, installateur,
-> WASI, fuzz smoke ; coverage, gate contracts, docs, VS Code, MVP : verts).
-> Le corps de ce document et son tableau de gates sont l'instantané du **2026-11-09** (`1b7b4f1`) : ne pas les citer
-> comme l'état courant, le registre canonique est
+> **Mise à jour passe 6 — 2026-11-11, base `5d88ecb`.** Cette passe est une passe
+> d'**implémentation** de fiabilité, pas une revue : contrat `check → build`
+> mesuré et bloquant, **onze programmes acceptés par `check` mais refusés par
+> `rustc` corrigés** (références stockées/retournées, moves après `unwrap`,
+> tableaux annotés, exhaustivité imbriquée, moves d'éléments de tableau,
+> `String → &str` implicite), identité de build déterministe et publication
+> atomique, `watch` fail-closed, codes de sortie honnêtes, runner de tests
+> complet, seconde métrique de traçabilité. Mesures : **94 suites, 1525 passés /
+> 0 échec / 2 ignorés** ; conformance **424 cas, 423 PASS / 0 FAIL / 1 SKIP**,
+> build vérifié **163/163** (101 vérifiés, 62 implicites, 0 échec),
+> `build_verified: true` ; smoke **43/0/0** ; registre **108 codes / 126 émis /
+> 0 écart** ; FeatureIds **188/188** ; **MUST 463/807** (nouvelle métrique —
+> T2 repasse à `PARTIAL`). Gates : **4 PASS / 7 PARTIAL / 2 BLOCKED**
+> (T4/T12 exigent l'audit externe et le Go/No-Go humains). CI **NOT_RUN** sur
+> ces commits (aucun push). Le corps et le tableau de gates ci-dessous restent
+> l'instantané du **2026-11-09** (`1b7b4f1`) : le registre canonique est
 > [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Document de situation, pas un certificat.** Chaque chiffre est lié à une

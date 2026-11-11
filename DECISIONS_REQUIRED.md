@@ -135,3 +135,65 @@
   interdit.
 - **Conséquence d''une non-décision** : T11 reste `PARTIAL` ; aucune release ne
   peut être présentée comme signée, ni la provenance comme vérifiable.
+
+## D-COERCE-1 — Coercition implicite `String → &str` — **RÉSOLUE par conformité (2026-11-11)**
+
+- **Constat mesuré** : `check` acceptait un `String` **possédé** là où `&str` est
+  attendu (`takes(owned)`, `takes(line.trim())`), puis `rustc` échouait en E0308.
+  TYP-8.5 (MUST) déclare les conversions texte explicites (`.as_str()`) et
+  TYP-13.1 (MUST) n'admet que `&String → &str` : le `String` possédé n'est pas
+  `&String`. L'implémentation violait donc deux MUST déjà ratifiés ; ce n'était
+  pas une décision de langage ouverte.
+- **Correction appliquée** : l'arm `String` possédé est retiré de `coerce` ;
+  `&String → &str` et `&[T; N] → &[T]` restent. `examples/stats` et
+  `conformance/cases/run/stats` migrent vers `trimmed.as_str()`, exactement ce
+  que `stdlib.md` montre déjà. Un test qui documentait l'ancienne acceptation a
+  été remplacé par un test de refus (aucun test supprimé).
+- **Ce qui reste proposé** : le texte normatif et la matrice de 14 programmes
+  ([`docs/rfc/RFC-D-COERCE-1-MATRIX.md`](docs/rfc/RFC-D-COERCE-1-MATRIX.md)),
+  ainsi que la politique de migration pour du code utilisateur existant.
+- **Preuve** : `cargo test -p ravum-lang-sema` 649 passés ; conformance
+  `--verify-build` 424 cas, 0 FAIL ; seuls `examples/` et le corpus ont été
+  balayés (433 paquets) et un seul programme a changé de verdict.
+
+## D10 — Dénominateur de la traçabilité (FeatureIds vs MUST) — **OUVERTE**
+
+- **Constat mesuré (2026-11-11)** : `features_coverage.py --strict` donne
+  **188/188** FeatureIds ; `tools/must_audit.py` compte **807 énoncés MUST**
+  (805 ids uniques), dont **463/807** seulement sont atteignables par un
+  FeatureId — **344** ne le sont pas. Détail :
+  [`docs/qualification/MUST-TRACEABILITY.md`](docs/qualification/MUST-TRACEABILITY.md).
+- **Pourquoi ce n'est pas une décision d'agent** : le seuil de T2 est un contrat
+  de qualification. Le corriger revient à trancher ce que « traçabilité de la
+  spécification » signifie. L'agent a seulement **mesuré** les deux métriques et
+  reclassé T2 en `PARTIAL` sans changer le seuil.
+- **Options** : (a) deux métriques officielles, avec obligation de traiter les
+  344 ; (b) périmètre écrit qui exclut les 344 ; (c) traçabilité complète.
+- **Conséquence d'une non-décision** : T2 reste `PARTIAL` ; la phrase
+  « 188/188 règles tracées » doit être lue comme « 188/188 FeatureIds ».
+
+## D11 — Contradictions internes de spécification — **OUVERTE**
+
+| Point | Contradiction mesurée |
+|---|---|
+| `effects.md` EFF-1.1 | « les 9 groupes » alors que son propre tableau et `facts.rs` en comptent **10** |
+| `features.md` FEAT-12.5 | énumère **6** lignes `experimental`, alors que **8** lignes du tableau le sont (`F-STD-031`, `F-META-006`) |
+| `grammar.md` | deux règles distinctes portent le même `rule_id` : **G-5.11** et **G-6.40** |
+
+- **Pourquoi une décision** : corriger un compte est non normatif, mais
+  renuméroter un `rule_id` modifie un identifiant contractuel (Q-DIAG-4) et
+  FEAT-12.5 est une liste MUST qui définit ce qui peut changer sans édition
+  majeure. Un agent ne peut pas trancher.
+
+## D12 — Disposition des trois divergences `check → build` restantes — **OUVERTE**
+
+- **Formes** : `a[0][1]` (chaîne d'index imbriquée) ; `h.items[0]` / `t.0[0]`
+  (tableau derrière un champ/tuple) ; liaison de tableau masquée par un
+  shadowing imbriqué. Chacune passe `check` et échoue à `build` avec E0508.
+- **Contrat** : OWN-5.3/OWN-5.4 (MUST) autorisent le déplacement d'un élément.
+- **Options** : (a) abaissement général des moves par place (correctif de fond) ;
+  (b) refus au `check` — contredirait deux MUST, donc exigerait un amendement ;
+  (c) statu quo documenté (E0508 bruyant, hors corpus, aucun miscompilation).
+- **État actuel** : (c) est appliqué et documenté dans
+  [`docs/qualification/CONFORMANCE-BUILD-CONTRACT.md`](docs/qualification/CONFORMANCE-BUILD-CONTRACT.md) ;
+  le gate `--verify-build` ne prouve l'absence de divergence que sur son périmètre.

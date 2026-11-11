@@ -9,6 +9,34 @@
 > (SHA `a277b86`). La **section 0** ci-dessous porte la passe P0 du **2026-11-10**
 > (SHA `a5744ea`) et **prévaut pour les chiffres courants**.
 
+## 0 ter. Addendum P0/P1/P2 — passe du 2026-11-11 (base `5d88ecb`)
+
+Cette passe d'implémentation **prévaut sur toutes les sections ci-dessous** pour
+les chiffres courants. Rapport détaillé (sections A–J) :
+[`DELIVERY-REPORT-2026-11-11.md`](DELIVERY-REPORT-2026-11-11.md). Détail des
+divergences : [`T2-FINDINGS.md`](../qualification/T2-FINDINGS.md) §21.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace --all-targets` | **94 suites, 1525 passés / 0 échec / 2 ignorés** |
+| Conformance (`run --verify-build`) | **424 cas : 423 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build 163/163 couverts, 101 vérifiés, 62 implicites, **0 échec**, `build_verified: true` |
+| Smoke exemples | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Traçabilité FeatureId (inchangée) | **188/188** (187 cas + 1 exemption `F-META-006`) |
+| Traçabilité MUST (nouvelle métrique) | **807 MUST ; 463/807 atteints ; 344 non atteints** |
+| Registre | **108 codes enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Contrats Python | **33 tests OK** |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — T2 repasse à `PARTIAL` : `188/188` porte sur les FeatureIds, pas sur les 807 MUST |
+| CI | **NOT_RUN** sur ces commits (aucun push) |
+
+Onze programmes acceptés par `check` mais refusés par `rustc` ont été corrigés
+(références texte stockées/retournées, moves d'éléments de tableau, `mut` de
+paramètre, `unwrap` consommateur, tableaux annotés, exhaustivité imbriquée,
+`String → &str` implicite). Trois formes restent ouvertes et documentées
+(chaîne d'index imbriquée, tableau derrière un champ/tuple, shadowing imbriqué) :
+E0508 bruyant, hors corpus. Aucun test supprimé, aucune règle de spécification
+modifiée, aucune revendication de `PASS` non mesurée.
+
+
 ## 0. Addendum P0 — passe de fiabilité des gates (2026-11-10, SHA `a5744ea`)
 
 Deux vecteurs de faux `PASS` mesurés au début de la passe :
