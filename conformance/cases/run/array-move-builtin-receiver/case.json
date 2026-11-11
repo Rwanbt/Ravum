@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-builtin-receiver",
+  "mode": "run-pass",
+  "stdout_contains": "v\n",
+  "notes": "OWN-5.4 + STD-11.3: a builtin method that consumes its receiver by value (`Option::{unwrap, unwrap_or, ok_or}`, `Result::{unwrap, unwrap_or, ok, err}`) moves the array element; `is_*` receivers stay reads. Previously check-pass/build-fail with rustc E0508."
+}

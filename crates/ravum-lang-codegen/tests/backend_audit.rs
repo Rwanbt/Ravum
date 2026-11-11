@@ -3512,3 +3512,269 @@ fn main() {
     );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+// ---------------------------------------------------------------------------
+// 19. P0-A round 4: the last four `check`-pass / `build`-fail shapes.
+//     Each of these was a loud rustc `E0508` before this change.
+// ---------------------------------------------------------------------------
+
+/// Shape 1: a dynamic index into a nested array. The constant prefix is
+/// destructured once and each dynamic access continues inline from its slot
+/// (`into_iter().nth(i)`); `a[i][j]` walks the two dynamic levels in order.
+#[test]
+fn audit_nested_dynamic_index_moves_build_and_run() {
+    if skip("audit_nested_dynamic_index_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-nested-dynamic",
+        r#"fn at(a: [[String; 2]; 2], i: usize) -> String {
+    return a[0][i];
+}
+
+fn both(a: [[String; 2]; 2], i: usize, j: usize) -> String {
+    return a[i][j];
+}
+
+fn mixed(a: [[String; 2]; 2], i: usize) -> usize {
+    let x = a[0][i];
+    let y = a[1][0];
+    return x.len() + y.len();
+}
+
+fn main() {
+    let a = [[String::from("aa"), String::from("bb")], [String::from("ccc"), String::from("dd")]];
+    io::println(at(a, 1).as_str());
+
+    let b = [[String::from("aa"), String::from("bb")], [String::from("ccc"), String::from("dd")]];
+    io::println(both(b, 1, 0).as_str());
+
+    let c = [[String::from("aa"), String::from("bb")], [String::from("ccc"), String::from("dd")]];
+    io::println(mixed(c, 1).to_string().as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("__rv_idx_") && code.contains(".into_iter().nth("),
+        "a dynamic level uses the bounded `into_iter().nth` form:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-nested-dynamic");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "bb\nccc\n5\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// Shape 1, out-of-bounds: the lowered dynamic level panics with rustc's own
+/// array-index text and exit code 1.
+#[test]
+fn audit_nested_dynamic_index_panics_like_rustc() {
+    if skip("audit_nested_dynamic_index_panics_like_rustc") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-nested-dynamic-oob",
+        r#"fn at(a: [[String; 2]; 2], i: usize) -> String {
+    return a[0][i];
+}
+
+fn main() {
+    let a = [[String::from("x0"), String::from("x1")], [String::from("y0"), String::from("y1")]];
+    io::println(at(a, 5).as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-nested-dynamic-oob");
+    let (_stdout, stderr, status) = run(&built.binary, &[]);
+    assert!(
+        stderr.contains("index out of bounds: the len is 2 but the index is 5"),
+        "expected rustc's array-index panic text, got: {stderr}"
+    );
+    assert_eq!(status, 1, "an index panic must exit 1: {stderr}");
+}
+
+/// Shape 2: an index chain whose root is not a place. An rvalue root
+/// (`make()[i]`) is materialized once, then each step is applied; a path that
+/// moves an array element before the indexed array (`a[0].0[1]`) materializes the
+/// place once and descends through the projection.
+#[test]
+fn audit_non_place_array_roots_build_and_run() {
+    if skip("audit_non_place_array_roots_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-non-place-root",
+        r#"fn make() -> [String; 2] {
+    return [String::from("x"), String::from("y")];
+}
+
+fn from_call(i: usize) -> String {
+    return make()[i];
+}
+
+fn from_element_projection(a: [([String; 2], i32); 2]) -> String {
+    return a[0].0[1];
+}
+
+fn from_second_element(a: [([String; 2], i32); 2]) -> String {
+    return a[1].0[0];
+}
+
+struct Holder {
+    items: [([String; 2], i32); 2],
+}
+
+fn from_field_projection(h: Holder) -> String {
+    return h.items[0].0[1];
+}
+
+fn main() {
+    io::println(from_call(1).as_str());
+
+    let a = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(from_element_projection(a).as_str());
+
+    let b = [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)];
+    io::println(from_second_element(b).as_str());
+
+    let h = Holder { items: [([String::from("x0"), String::from("x1")], 1), ([String::from("y0"), String::from("y1")], 2)] };
+    io::println(from_field_projection(h).as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("__rv_root_"),
+        "a non-place root is materialized once:\n{code}"
+    );
+    let built = must_compile(&code, "p0a-non-place-root");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "y\nx1\ny0\nx1\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// Shape 3: several element moves in an expression-bodied `match` arm. The arm
+/// body gets a block so the destructuring has a statement boundary.
+#[test]
+fn audit_expression_arm_multiple_moves_build_and_run() {
+    if skip("audit_expression_arm_multiple_moves_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-arm-multi",
+        r#"enum E {
+    Items([String; 2]),
+    Empty,
+}
+
+fn pair(e: E) -> (String, String) {
+    match e {
+        E::Items(a) => (a[0], a[1]),
+        E::Empty => (String::from("x"), String::from("y")),
+    }
+}
+
+fn lengths(e: E) -> usize {
+    match e {
+        E::Items(a) => a[0].len() + a[1].len(),
+        E::Empty => 0,
+    }
+}
+
+fn main() {
+    let e = E::Items([String::from("left"), String::from("right")]);
+    let t = pair(e);
+    io::println(t.0.as_str());
+    io::println(t.1.as_str());
+
+    let f = E::Items([String::from("aa"), String::from("bbb")]);
+    io::println(lengths(f).to_string().as_str());
+
+    let empty = E::Empty;
+    let u = pair(empty);
+    io::println(u.0.as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-arm-multi");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "left\nright\n5\nx\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// Shape 4: a builtin method that consumes its receiver by value (STD-11.3:
+/// `Option::{unwrap, unwrap_or, ok_or}`, `Result::{unwrap, unwrap_or, ok, err}`)
+/// called on an array element is an element move; `is_*` receivers stay reads.
+#[test]
+fn audit_builtin_by_value_receiver_on_array_element_build_and_run() {
+    if skip("audit_builtin_by_value_receiver_on_array_element_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-builtin-receiver",
+        r#"fn unwrap_at(a: [Option<String>; 2]) -> String {
+    return a[0].unwrap();
+}
+
+fn ok_of(a: [Result<String, Error>; 2]) -> Option<String> {
+    return a[0].ok();
+}
+
+fn err_of(a: [Result<String, Error>; 2]) -> Option<Error> {
+    return a[1].err();
+}
+
+fn unwrap_or_result(a: [Result<String, Error>; 2]) -> String {
+    return a[0].unwrap_or(String::from("fallback"));
+}
+
+fn unwrap_or_result_err(a: [Result<String, Error>; 2]) -> String {
+    return a[1].unwrap_or(String::from("fallback"));
+}
+
+fn unwrap_or_default(a: [Option<String>; 2]) -> (String, usize) {
+    let first = a[0].unwrap_or(String::from("d"));
+    let second = a[1].is_some();
+    return (first, second.to_string().len());
+}
+
+fn main() {
+    let a: [Option<String>; 2] = [Option::Some(String::from("v")), Option::None];
+    io::println(unwrap_at(a).as_str());
+
+    let r: [Result<String, Error>; 2] = [Result::Ok(String::from("ok-value")), Result::Err(Error::new("bad"))];
+    let ok = ok_of(r);
+    io::println(ok.unwrap_or(String::from("none")).as_str());
+
+    let r2: [Result<String, Error>; 2] = [Result::Ok(String::from("ok-value")), Result::Err(Error::new("bad"))];
+    let err = err_of(r2);
+    io::println(err.is_some().to_string().as_str());
+
+    let r3: [Result<String, Error>; 2] = [Result::Ok(String::from("ok-value")), Result::Err(Error::new("bad"))];
+    io::println(unwrap_or_result(r3).as_str());
+
+    let r4: [Result<String, Error>; 2] = [Result::Ok(String::from("ok-value")), Result::Err(Error::new("bad"))];
+    io::println(unwrap_or_result_err(r4).as_str());
+
+    let o: [Option<String>; 2] = [Option::None, Option::Some(String::from("v"))];
+    let u = unwrap_or_default(o);
+    io::println(u.0.as_str());
+    io::println(u.1.to_string().as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-builtin-receiver");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "v\nok-value\ntrue\nok-value\nfallback\nd\n4\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}

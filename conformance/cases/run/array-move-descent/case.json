@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-descent",
+  "mode": "run-pass",
+  "stdout_contains": "y\n",
+  "notes": "OWN-5.4: an index chain whose root is not a place is lowered by an inline descent that materializes the root once and applies each projection/index step: an rvalue root (`make()[i]`) and a path that moves an element before the indexed array (`a[0].0[1]`). Previously check-pass/build-fail with rustc E0508."
+}
