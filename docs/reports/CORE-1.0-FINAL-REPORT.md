@@ -29,6 +29,7 @@ fermées.
 | Reproductibilité, SBOM, provenance, installateur | **non re-mesurés** dans cette passe ; les chiffres de la passe 8 restent les derniers mesurés, et la CI les rejoue (`qualification-evidence.yml`) |
 | Traçabilité FeatureId | **188/188** (inchangée) |
 | Registre des codes | **108** codes enregistrés / **126** émis / 0 hors registre |
+| CI | **14/14 verts sur `7665244`** (7 `push` + 7 `pull_request`), dont la CI Windows de qualification (`43087652812` : `cases=456`, `perimeter=195`, `verified=120`, `implicit=75`, `build_verified=True`) |
 | Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` est désormais vert **sur son périmètre mesuré** (aucune forme ouverte connue) et `T2` reste `PARTIAL` pour la raison indépendante du dénominateur MUST (D10) |
 
 Ce qui a changé, et ce que cela ne prouve pas :

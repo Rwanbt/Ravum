@@ -1184,6 +1184,7 @@ qui compilent réellement : le correctif « évident » cassait une forme fermé
 | Corpus | **453 → 456 cas**, `perimeter` **192 → 195** (trois cas `run/array-move-*`) |
 | Formes `check`-pass / `build`-fail ouvertes connues | **0** |
 | Couverture, reproductibilité, mutation | **non re-mesurées** : aucune n'est affectée par ce changement, aucune n'est revendiquée ici |
+| CI | **14/14 verts sur `7665244`** (7 `push` + 7 `pull_request`) ; la CI Windows de qualification rejoue la conformance : `cases=456`, `perimeter=195`, `verified=120`, `implicit=75`, `build_verified=True`, « 9 checks hold » (run `43087652812`) |
 
 ### 24.6 Ce que cela ne prouve pas
 

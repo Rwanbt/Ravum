@@ -9,7 +9,9 @@
 > **Mesure courante (passe 9, `21cf7d4`, Windows 11 x64, rustc 1.95.0)** :
 > **456 cas : 455 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN**,
 > `build: perimeter=195 covered=195 verified=120 implicit=75 failed=0
-> environment=0 not_measured=0`, `build_verified: true`. **Zéro forme
+> environment=0 not_measured=0`, `build_verified: true` — **rejoué en CI**
+> (`qualification-evidence.yml`, run `43087652812` : « 9 checks hold »,
+> `cases=456`, `perimeter=195`). **Zéro forme
 > `check`-pass / `build`-fail ouverte connue** : les huit familles trouvées
 > pendant P0-A sont fermées, chacune avec un test `rustc`-vérifié et un cas de
 > corpus. Cela reste une observation sur ce corpus, ce commit et cette

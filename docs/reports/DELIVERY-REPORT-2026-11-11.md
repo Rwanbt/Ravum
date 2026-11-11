@@ -446,3 +446,11 @@ formes inconnues : `P0-A` est vert sur son périmètre mesuré, pas l'invariant
 général. Audit externe (D4, T4/T12 `BLOCKED`), signature (D9), release,
 reproductibilité inter-machines, mutation et fuzz complet non rejoués, `T2`
 reste `PARTIAL` (D10, 463/807 MUST).
+
+**CI observée.** **14/14 verts sur `7665244`** (7 `push` + 7 `pull_request`) : Linux
+qualification `43087652725`, qualification evidence Windows `43087652812` (qui
+rejoue la conformance : `cases=456`, `perimeter=195`, `verified=120`,
+`implicit=75`, `build_verified=True`), MVP product checks `43087652789`, gate
+contracts `43087652704`, coverage `43087652635`, impact `43087652699`, VS Code
+`43087652655`, documentation integrity `43087660908`. Le code mesuré est
+`21cf7d4` ; `de6f0de` et `7665244` ne modifient que `docs/`.

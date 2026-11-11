@@ -15,6 +15,10 @@
 > revendiquée). Registre **108 codes / 126 émis**, FeatureIds **188/188**,
 > **MUST 463/807** (T2 reste `PARTIAL`, D10). Gates : **4 PASS / 7 PARTIAL /
 > 2 BLOCKED** (T4/T12 exigent l'audit externe et le Go/No-Go humains).
+> **CI passe 9** : **14/14 verts sur `7665244`** (7 `push` + 7 `pull_request`), dont
+> la CI Windows de qualification (`43087652812` : `cases=456`, `perimeter=195`,
+> `verified=120`, `implicit=75`, `build_verified=True`). Le code mesuré est
+> `21cf7d4` ; les commits de documentation ne changent rien aux chiffres.
 
 > **Mise à jour passe 8 — 2026-11-11, commit `7696e2a`.** Les **six dernières
 > formes `check`-pass / `build`-fail connues** sont fermées sauf deux variantes
