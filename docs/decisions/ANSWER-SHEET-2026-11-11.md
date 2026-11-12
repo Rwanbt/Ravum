@@ -16,14 +16,14 @@
 |---|---|---|---|
 | **D2** | Cible **production ready**, pas MVP | La barre d'acceptation monte (conformité + audit + reproductibilité + couverture/mutation + interfaces + distribution) | [`docs/roadmap/PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) : 14 critères de sortie, état mesuré de chacun, plan en 3 vagues. La **ratification** (backend + socle normatif) reste à signer : dossier prêt |
 | **D3** | **Fusion dans `main` autorisée**, aucune release | `main` devient la référence documentaire du travail ; `dev` d'intégration reste alignée | **Exécutée le 2026-11-12** : `dev` = `a2b8db5` (PR #101), `main` = `94f3ac4` (PR #104), commits de fusion sans squash ; **aucun tag, aucune release, aucune signature** (§3) |
-| **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | Rien dans D4 n'empêche de coder, tester, fusionner, durcir | **Rien n'est bloqué côté code.** Ce qui manque : les **trois textes** pour les trier (voir §4). Le label « production ready » attend un audit **humain** indépendant |
-| **D5** | Tests sur Windows et Linux, pas de macOS | Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; le reste `NOT_RUN` | D5 **close**, écrit dans le registre et `PLATFORMS-MATRIX.md` |
+| **D4** | Quatre revues LLM fournies ; ne doit pas bloquer le code | Rien dans D4 n'empêche de coder, tester, fusionner, durcir | **Triées** : docs/audit/2026-11-reviews/TRIAGE.md — 16 constats, verdicts CONFIRMÉ / FAUX (preuve) / HISTORIQUE. Aucun blocage de code ; le label attend un audit **humain** |
+| **D5** | Windows + Linux ; puis « mets les runners `macos-latest` » | Tier 1 = Windows + Linux ; macOS devient **Tier 2** avec son job | `.github/workflows/macos-qual.yml` ajouté (`macos-latest`, arm64 : tests workspace + conformance build-vérifiée) ; **non requis**, promotion après 30 jours verts |
 | **D6** | OK (geler le périmètre) | Le sous-ensemble documenté devient le périmètre Core 1.0 ; extensions = 1.x | Périmètre gelé (§6) |
-| **D7** | « Il faut faire en sorte de la rendre safe » | La FFI n'est plus « expérimentale » : elle devient un **programme de durcissement** avec contrats écrits et refus outillés | Programme détaillé : [`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) §5 |
+| **D7** | « Rust prouve bien la mémoire, la solution existe » | La FFI devient un **programme de durcissement en 4 étages** | Confinement `trusted` → effets déclarés sur l'`extern` → wrappers sûrs → isolation (processus/WASM) ; [`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) §5 |
 | **D9** | Pas d'intérêt tant que le langage n'est pas prêt pour la prod | Signature de release **différée** ; aucun mécanisme bloqué | Statut `DEFERRED`, **aucune clé générée**, T11 reste `PARTIAL` sur ce seul point |
-| **D10** | « Je ne vois pas ce qui est bloquant » — et la couverture est faible | D10 n'est **pas** un blocage de code : c'est une dette de *preuve*. La couverture devient un chantier | Deux métriques adoptées ; couverture **étendue au codegen** (première mesure : 87,04 % lignes / 86,05 % régions) ; plan §7 |
+| **D10** | « Je vise une couverture de 100 % » | Objectif **100 % lignes et régions** inscrit dans le ratchet | `coverage_report.py --gap` liste les lignes non couvertes : **11 fichiers, ~2 100 lignes** au départ ; les seuils montent à 100 fichier par fichier |
 | **D11** | OK | Comptes corrigés + collisions d'identifiants documentées | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, `Q-GRAM-11` (voir §8) |
-| **D13** | « Pas compris, sois plus explicite » | Rien tant que tu n'as pas choisi | Explication refaite avec deux programmes concrets : §5 |
+| **D13** | « Une preuve déterministe ? A et B me semblent bancales » | **Réponse : oui, ni A ni B** | `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine + règle de stockage ⇒ staticité **prouvée**, pas supposée. Implémentation à lancer |
 
 ## 2. Ce qui a été appliqué tout de suite (D11)
 
@@ -203,12 +203,22 @@ géant peut être « couvert » sans être testé.
 **Rien de tout cela ne bloque l'avancement** : ce sont des mesures à publier et
 des seuils à tenir, pas des portes fermées.
 
-## 8. Il ne reste que deux choses de ton côté
+## 8. Ce qui reste à faire, et ce qui attend encore ta main
+
+**Fait dans cette passe** : D11 corrigé ; couverture étendue au backend ;
+objectif 100 % inscrit ; job macOS ajouté ; revue multi-IA triée ; programme FFI
+en 4 étages ; conception D13 déterministe.
+
+**Attend ta main (2 points)** :
 
 | Quoi | Pourquoi | Format |
 |---|---|---|
-| Les **trois revues** (Claude, ChatGPT, DeepSeek) | Pour les trier, vérifier chaque constat et corriger ce qui est réel | fichiers, texte collé, ou liens |
-| **D13 : A ou B** | Pour clore la contradiction TYP-6.3 / OWN-6.2 | `D13: A` ou `D13: B` |
+| **Approbation de l'exemption `F-META-006`** | Elle était auto-approuvée par un agent (constat confirmé de la revue). Elle est maintenant `PENDING_HUMAN_APPROVAL` : il faut un humain, une date et une échéance de réexamen | « F-META-006 approuvée, réexamen le <date> » |
+| **D13 : lancer l'implémentation ?** | La preuve déterministe est écrite (`RFC-D13-STATICITY.md`) ; c'est un travail d'ingénierie dans `own.rs`, pas une nouvelle décision de modèle | « D13 : implémente » |
+
+**À surveiller** : le premier run de `macos-qual.yml` (Tier 2) et le premier run
+de `mutation.yml` depuis `main`.
 
 Tout le reste est appliqué ou planifié dans
-[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md).
+[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) et
+[`docs/audit/2026-11-reviews/TRIAGE.md`](../audit/2026-11-reviews/TRIAGE.md).
