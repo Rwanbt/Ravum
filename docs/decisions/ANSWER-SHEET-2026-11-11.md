@@ -15,7 +15,7 @@
 | ID | Ta décision | Ce qu'elle change | Suite donnée |
 |---|---|---|---|
 | **D2** | Cible **production ready**, pas MVP | La barre d'acceptation monte (conformité + audit + reproductibilité + couverture/mutation + interfaces + distribution) | [`docs/roadmap/PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) : 14 critères de sortie, état mesuré de chacun, plan en 3 vagues. La **ratification** (backend + socle normatif) reste à signer : dossier prêt |
-| **D3** | **Fusion dans `main` autorisée**, aucune release | `main` devient la référence documentaire du travail ; `dev` d'intégration reste alignée | Fusion exécutée (voir §3 pour la provenance et les impacts exacts) ; **aucun tag, aucune release, aucune signature** |
+| **D3** | **Fusion dans `main` autorisée**, aucune release | `main` devient la référence documentaire du travail ; `dev` d'intégration reste alignée | **Exécutée le 2026-11-12** : `dev` = `a2b8db5` (PR #101), `main` = `94f3ac4` (PR #104), commits de fusion sans squash ; **aucun tag, aucune release, aucune signature** (§3) |
 | **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | Rien dans D4 n'empêche de coder, tester, fusionner, durcir | **Rien n'est bloqué côté code.** Ce qui manque : les **trois textes** pour les trier (voir §4). Le label « production ready » attend un audit **humain** indépendant |
 | **D5** | Tests sur Windows et Linux, pas de macOS | Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; le reste `NOT_RUN` | D5 **close**, écrit dans le registre et `PLATFORMS-MATRIX.md` |
 | **D6** | OK (geler le périmètre) | Le sous-ensemble documenté devient le périmètre Core 1.0 ; extensions = 1.x | Périmètre gelé (§6) |
@@ -54,12 +54,14 @@ atteignables (inchangé) ; `features_coverage.py --strict` → 188/188.
 en draft vers `dev`.
 
 **Provenance — ce qui atterrit exactement.** Fusion de la PR #101 dans `dev`
-(commit de fusion, **aucun squash**, aucune réécriture : l'historique des neuf
-passes reste lisible), puis fusion de `dev` dans `main`. Les preuves sont liées
-aux SHA : code mesuré `21cf7d4`, documentation `de6f0de`/`7665244`/`0c2ceb8`,
-CI **14/14 verte** sur `0c2ceb8` (7 `push` + 7 `pull_request`). Rien n'est
-poussé sur `main` sans passer par une PR : la protection de branche exige le
-check `mvp`.
+(commit de fusion `a2b8db5`, **aucun squash**, aucune réécriture : l'historique
+des neuf passes reste lisible), puis fusion de `dev` dans `main` (PR #104,
+commit de fusion `94f3ac4`). Les preuves sont liées aux SHA : code mesuré
+`21cf7d4`, documentation `de6f0de`/`7665244`/`0c2ceb8`, spécification et
+couverture `12c4a38`/`d046f68`, cible production `599df1b` ; CI **14/14 verte**
+sur `599df1b` et **tous les checks verts** sur la PR #104 (`mvp` compris). Rien
+n'est poussé sur `main` sans passer par une PR : la protection de branche exige
+le check `mvp`.
 
 **Impacts.**
 - `main` contient désormais un compilateur **DRAFT ratifiable**, pas une release :

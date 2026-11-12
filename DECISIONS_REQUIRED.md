@@ -15,7 +15,7 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
 | ID | Réponse | Suite appliquée / attendue |
 |---|---|---|
 | **D2** | Cible **production ready**, pas MVP | `docs/roadmap/PRODUCTION-READINESS.md` (14 critères, état mesuré, plan) ; **ratification** du backend + socle normatif encore à signer |
-| **D3** | **Fusion dans `main` autorisée**, aucune release | Fusion exécutée (`dev` puis `main`, commit de fusion, aucun squash, aucun tag) ; rollback = un `revert` du commit de fusion |
+| **D3** | **Fusion dans `main` autorisée**, aucune release | **Exécutée le 2026-11-12** : `dev` = `a2b8db5` (fusion de la PR #101), `main` = `94f3ac4` (fusion de la PR #104). Commits de fusion, aucun squash, **aucun tag, aucune release, aucune signature** ; rollback = `git revert -m 1 94f3ac4` |
 | **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | **Aucun blocage de code** ; les trois textes doivent être versés dans `docs/audit/2026-11-reviews/` pour triage ; un audit **humain** reste requis pour le label production |
 | **D5** | Tests sur **Windows et Linux**, pas de macOS | D5 **close** : Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; macOS/ARM/Android/iOS `NOT_RUN` |
 | **D6** | OK — périmètre gelé | Périmètre écrit (`PRODUCTION-READINESS.md` §6) ; extension = 1.x |
