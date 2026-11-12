@@ -3,8 +3,10 @@ name: Mutation evidence (weekly, non-blocking gate)
 # Purpose: stop the mutation campaign from being a one-shot manual measurement.
 # `docs/qualification/MUTATION-EQUIVALENCE.md` §7 records 212 mutants / 153
 # killed on a TARGETED scope (three function sets of `own.rs`, `resolve.rs`,
-# `typeck.rs`). Nothing re-ran it after a code change, so a regression in the
-# test suite could silently stop killing mutants.
+# `typeck.rs`), and §9 the 2026-11-11 local campaign (183 / 150 / 24 / 9). The
+# first CI run (2026-11-12, run 43326219422) reproduced §9's totals exactly;
+# its summary step had a schema bug (it read the report as a list), fixed here,
+# and the survivors are now printed by name.
 #
 # Scope and honesty rules:
 #   * the same targeted `-F` filters are used, so the numbers stay comparable
@@ -121,12 +123,26 @@ jobs:
               if not path.is_file():
                   print(f"{name}: NO REPORT")
                   continue
-              outcomes = json.loads(path.read_text())
+              report = json.loads(path.read_text())
+              # cargo-mutants 27.x writes an object:
+              # {"outcomes": [...], "total_mutants": N, "missed": M, ...}.
+              # Iterating the object itself yields its string keys, which is the
+              # defect the first run hit (AttributeError: 'str' has no 'get').
+              items = report.get("outcomes", []) if isinstance(report, dict) else report
+              total = report.get("total_mutants", len(items)) if isinstance(report, dict) else len(items)
               counts = {}
-              for item in outcomes:
-                  key = item.get("summary") or item.get("outcome") or "unknown"
+              missed = []
+              for item in items:
+                  key = (item.get("summary") or item.get("outcome") or "unknown") if isinstance(item, dict) else str(item)
                   counts[key] = counts.get(key, 0) + 1
-              print(f"{name}: {counts}")
+                  if key == "MissedMutant" and isinstance(item, dict):
+                      scenario = item.get("scenario", {})
+                      mutant = scenario.get("Mutant", {}) if isinstance(scenario, dict) else {}
+                      missed.append(mutant.get("name", str(scenario)))
+              print(f"{name}: total={total} counts={counts}")
+              # Survivors are triaged, never hidden: name every one of them.
+              for scenario in missed:
+                  print(f"{name}: MISSED {scenario}")
           PY
 
       - name: Upload mutation reports
