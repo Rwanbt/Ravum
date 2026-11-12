@@ -1,0 +1,12 @@
+{
+  "id": "effects/ffi-rt-profile",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "EFF-4.7 (MUST): the rt profile also forbids the unsafe/ffi effects reached by an extern call, exactly like pure. Proposed by RFC-D7 section 5; not covered before this case."
+}

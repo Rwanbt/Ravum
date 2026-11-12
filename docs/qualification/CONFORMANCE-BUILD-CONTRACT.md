@@ -649,3 +649,14 @@ paramètre reste élidé (il reçoit `String::as_str`).
 
 **Aucune forme `check`-pass / `build`-fail n'est ouverte connue à ce commit** —
 observation sur ce corpus, pas une preuve universelle.
+
+**Passe 11 (2026-11-13)** : huit cas FFI ajoutés, sans changer le compilateur —
+`effects/ffi-rt-profile` et `effects/ffi-transitive-wrapper` (refus
+`E-EFF-PROFILE` sous `rt`/`pure`), `types/ffi-char-rejected` et
+`types/ffi-reference-rejected` (`E-FFI-TYPE`), `types/ffi-bool-boundary`
+(`compile-pass`), `run/ffi-width-boundary` (`llabs` en `i64`), 
+`types/ffi-extern-in-impl` (`E-UNSUPPORTED-EXTERN`), 
+`types/unsafe-does-not-unlock-pointers` (`E-UNSUPPORTED-UNSAFE`).
+Mesure : **471 cas : 470 PASS / 0 FAIL / 1 SKIP** ; `perimeter=202 covered=202
+verified=121 implicit=81 failed=0` ; `build_verified: true`. Aucun `SKIP` n'est
+converti en `PASS` : le cas Unix de sécurité reste sauté sur Windows.

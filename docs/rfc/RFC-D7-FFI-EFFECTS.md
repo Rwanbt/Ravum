@@ -148,22 +148,28 @@ correction n'est appliquée ici.
 | 9 | **`i128`/`u128`/`isize`/`usize`/`bool` non exercés**. | Aucun cas de corpus n'utilise ces types à la frontière ; la conversion de largeur C n'est vérifiée nulle part. | **NOT_RUN** |
 | 10 | **Sûreté du processus global non déclarée**. | La TCB inclut la bibliothèque C appelée ; aucun document ne dit que le binaire peut être corrompu par elle. | **Absent** (et c'est la phrase la plus importante de D7) |
 
-## 5. Tests négatifs proposés (PROPOSED — non écrits)
+## 5. Tests négatifs proposés → écrits en passe 11 (2026-11-13)
 
 Chacun est un cas de conformance `compile-fail`/`run-fail` ou un test sema, avec
-le code exact attendu. Aucun ne demande de changer le comportement.
+le code exact attendu. Aucun ne demande de changer le comportement. **État au
+2026-11-13** : huit cas sont écrits et verts (`effects/ffi-rt-profile`,
+`effects/ffi-transitive-wrapper`, `types/ffi-char-rejected`,
+`types/ffi-reference-rejected`, `types/ffi-bool-boundary`,
+`run/ffi-width-boundary`, `types/ffi-extern-in-impl`,
+`types/unsafe-does-not-unlock-pointers`) ; le tableau indique l'écart quand le
+comportement observé diffère de la proposition.
 
-| Test proposé | Mode | Attendu | Ce qu'il verrouille |
-|---|---|---|---|
-| `types/ffi-rt-profile` | `compile-fail` (`--profile rt`) | `E-EFF-PROFILE` | EFF-4.7, aujourd'hui NOT_TESTED |
-| `effects/ffi-transitive-wrapper` | `compile-fail` (`--profile pure`) | `E-EFF-PROFILE` | propagation à travers 2 niveaux de wrappers (EFF-2.9) |
-| `types/ffi-char-rejected` | `compile-fail` | `E-FFI-TYPE` | `char` non portable (commentaire `resolve.rs:1937`) |
-| `types/ffi-reference-rejected` | `compile-fail` | `E-FFI-TYPE` | `&i32`, `&str` refusés (pas de durée de vie traversante) |
-| `types/ffi-bool-boundary` | `run-pass` | valeur attendue | `bool` traverse réellement (0/1) |
-| `types/ffi-width-boundary` | `run-pass` | valeur attendue | `i64`/`u64`/`isize`/`usize` sur la cible hôte |
-| `types/ffi-extern-in-impl` | `compile-fail` | `E-PARSE-EXPECTED` | G-3.11 (module uniquement) |
-| `types/unsafe-does-not-unlock-pointers` | `compile-fail` | `E-UNSUPPORTED-UNSAFE` | un bloc `unsafe` ne crée **aucune** capacité (pas de pointeur, pas de `transmute`) |
-| `cli/doctor` (existant) | — | `ffi` visible dans l'inventaire | à étendre : `doctor` doit nommer la limite « pas de `#[link]`, pas de pointeurs » |
+| Test proposé | Mode | Attendu | Ce qu'il verrouille | État 2026-11-13 |
+|---|---|---|---|---|
+| `types/ffi-rt-profile` | `compile-fail` (`--profile rt`) | `E-EFF-PROFILE` | EFF-4.7 | **écrit** sous `effects/ffi-rt-profile` |
+| `effects/ffi-transitive-wrapper` | `compile-fail` (`--profile pure`) | `E-EFF-PROFILE` | propagation à travers 2 niveaux (EFF-2.9) | **écrit**, chaîne `main -> outer -> inner` vérifiée |
+| `types/ffi-char-rejected` | `compile-fail` | `E-FFI-TYPE` | `char` non portable | **écrit** |
+| `types/ffi-reference-rejected` | `compile-fail` | `E-FFI-TYPE` | `&i32` refusé | **écrit** (le cas `&str` dédié reste à ajouter) |
+| `types/ffi-bool-boundary` | `compile-pass` | build OK | `bool` admis et wrapper compilé | **écrit** en `compile-pass` : aucun symbole CRT `_Bool` ne permet une valeur traversante, le cas ne prouve donc pas l'ABI runtime |
+| `run/ffi-width-boundary` | `run-pass` | valeur attendue | un `i64` traverse réellement | **écrit** (`llabs(-9000000000) = 9000000000`) ; `u64`/`isize`/`usize` restent non exercés faute de symbole portable |
+| `types/ffi-extern-in-impl` | `compile-fail` | `E-PARSE-EXPECTED` | G-3.11 (module uniquement) | **écrit**, mais le code **observé** est `E-UNSUPPORTED-EXTERN` : le cas enregistre le comportement réel, il n'amende pas la spec |
+| `types/unsafe-does-not-unlock-pointers` | `compile-fail` | `E-UNSUPPORTED-UNSAFE` | un bloc `unsafe` ne crée aucune capacité | **écrit**, `unsupported: true` |
+| `cli/doctor` (existant) | — | `ffi` visible dans l'inventaire | à étendre : `doctor` doit nommer la limite « pas de `#[link]`, pas de pointeurs » | **non fait** (ce n'est pas un cas de conformance) |
 
 S'y ajoute un **test de contrat de lowering** (voir RFC-D2) : tout programme
 contenant un `extern` doit produire un binaire dont le wrapper est le seul

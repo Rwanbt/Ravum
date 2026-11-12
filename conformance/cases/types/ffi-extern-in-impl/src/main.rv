@@ -1,0 +1,12 @@
+struct S {
+    x: i32,
+}
+
+impl S {
+    extern "C" {
+        fn abs(x: i32) -> i32;
+    }
+}
+
+fn main() {
+}

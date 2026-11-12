@@ -1,5 +1,17 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour passe 11 — 2026-11-13.** Huit cas de conformance FFI ajoutés
+> (RFC-D7 §5) sans toucher au compilateur : `rt` + FFI et propagation
+> transitive des effets (**EFF-4.7**, **EFF-2.9**, jusqu'ici non testés),
+> `char` et `&i32` refusés à la frontière, `bool` admis (compile-pass), `i64`
+> traversant réellement via `llabs`, `extern` dans un `impl` refusé, pointeur
+> brut refusé **dans** un bloc `unsafe`. Mesures : **471 cas, 470 PASS / 0 FAIL
+> / 1 SKIP**, build **202/202** (121 vérifiés, 81 implicites, 0 échec),
+> `build_verified: true`. Couverture re-mesurée : **88,54 % lignes / 87,81 %
+> régions**, plan par fonction corrigé (`PRODUCTION-READINESS.md` §7 bis).
+> D7 reste `OPEN`, `T2` reste `PARTIAL` (D10), gates **4 PASS / 7 PARTIAL /
+> 2 BLOCKED**. Le bloc passe 10 ci-dessous est historique.
+
 > **Mise à jour passe 10 — 2026-11-12.** **D13 implémentée** : `return a[1]`,
 > `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str`
 > statique et les copies locales à travers un appel sont acceptés **par
