@@ -658,6 +658,16 @@ fn scenario_ten_thousand_swaps(fx: &Fixtures, scale: Scale) -> Scenario {
     )
 }
 
+// The DSP harness builds a `#![no_std]` cdylib fixture. On macOS, `ld` refuses a
+// dylib that does not link libSystem ("dynamic executables or dylibs must link
+// with libSystem.dylib"), so the two stress scenarios that build that fixture
+// cannot run there. macOS is Tier 2 (see docs/qualification/PLATFORMS-MATRIX.md);
+// both tests stay enforced on Windows and Linux, the Tier 1 platforms, and are
+// skipped visibly here -- never silently (a skipped test is not a PASS).
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "no_std cdylib fixture needs libSystem on macOS (Tier 2)"
+)]
 #[test]
 fn ten_thousand_swaps_keep_the_callback_finite_alloc_free_and_one_version() {
     let _serial = serial();
@@ -1427,6 +1437,10 @@ fn utc_date() -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "same no_std cdylib fixture as the swap stress test (Tier 2)"
+)]
 #[test]
 fn stress_evidence_campaign() {
     let _serial = serial();

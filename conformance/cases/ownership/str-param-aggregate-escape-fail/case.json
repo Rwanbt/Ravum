@@ -1,0 +1,8 @@
+{
+  "id": "ownership/str-param-aggregate-escape-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "D13 rule 2 (negative): a borrowed `&str` parameter cannot be stored in an aggregate — the tuple literal is a storage site and must stay refused. This is the rule that makes rule 1 sound."
+}

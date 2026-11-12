@@ -5,6 +5,12 @@
   "checked_by": "python tools/coverage_report.py --input target/cov-all.json --check",
   "scope": "Two crates since 2026-11-11: `ravum-lang-sema` (frontend) and `ravum-lang-codegen` (the reference backend, which generates the safe Rust). Before that date only sema was measured, so the backend that actually emits code had no coverage gate at all. Including both crates in one instrumented build also means the sema figures now count the sema code exercised by the codegen integration tests.",
   "policy": "Ratchet. A floor never goes down: lowering one requires changing this file in the same commit with a justification, and the reviewer must ask why the code that used to be covered no longer is. Floors sit one point below the measurement of the commit that introduced them so a compiler or llvm-cov upgrade cannot flip the gate on rounding noise; the real target is the gate target below, not the floor.",
+  "objective": {
+    "lines": 100,
+    "regions": 100,
+    "decided_on": "2026-11-11",
+    "note": "Objectif ratifié par le responsable : 100 % de couverture de lignes ET de régions sur chaque fichier mesuré. Les seuils `files` restent le cliquet qui garde la CI verte aujourd'hui ; ils sont relevés à chaque passe, et `python tools/coverage_report.py --input ... --gap` liste, fichier par fichier, les lignes non couvertes qui restent à traiter. Aucune exclusion permanente : le code mort est supprimé, pas exclu, et un fichier à 100 % doit l'être par des tests."
+  },
   "gate_targets": {
     "files": [
       "crates/ravum-lang-sema/src/typeck.rs",

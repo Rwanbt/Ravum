@@ -1,0 +1,6 @@
+fn bad(s: &str) -> (&str, i32) {
+    return (s, 1);
+}
+
+fn main() {
+}

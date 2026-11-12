@@ -3940,3 +3940,91 @@ fn main() {
     );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+// ---------------------------------------------------------------------------
+// D13 — staticité prouvée : la position du type `&str` dans le Rust généré
+//
+// La règle 1 (projection d'agrégat = `&'static str`) n'est utile que si le
+// backend écrit `&'static str` là où Rust l'exige : un `&str` *imbriqué* dans un
+// conteneur (`[&str; 2]`, `Option<&str>`, `Vec<&str>`) est toujours statique,
+// seul le `&str` propre au paramètre garde sa durée de vie élidée.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn audit_d13_array_projection_emits_static_parameter_and_runs() {
+    if skip("audit_d13_array_projection_emits_static_parameter_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "d13-array-projection",
+        r#"fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+
+fn main() {
+    io::println(pick(["x", "y"]));
+}
+"#,
+    );
+    assert!(
+        code.contains("[&'static str; 2]"),
+        "a `&str` nested in a parameter container must be emitted `&'static str`:\n{code}"
+    );
+    assert!(
+        !code.contains("[&str; 2]"),
+        "the elided form must never appear inside a container:\n{code}"
+    );
+    let built = must_compile(&code, "d13-array-projection");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "y\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_d13_top_level_str_parameter_stays_elided() {
+    if skip("audit_d13_top_level_str_parameter_stays_elided") {
+        return;
+    }
+    let code = generate_source(
+        "d13-param-elision",
+        r#"fn g(s: &str) {
+    io::println(s);
+}
+
+fn main() {
+    let t = String::from("x");
+    g(t.as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("fn g(s: &str)"),
+        "a parameter's own `&str` must keep the elided lifetime (it receives \
+`String::as_str`):\n{code}"
+    );
+    let built = must_compile(&code, "d13-param-elision");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "x\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_d13_str_as_str_identity_compiles_and_runs() {
+    if skip("audit_d13_str_as_str_identity_compiles_and_runs") {
+        return;
+    }
+    // Before D13 the generator had no lowering for `str::as_str` (a checker
+    // acceptance with no backend support). It is the identity on a `&str`.
+    let code = generate_source(
+        "d13-str-as-str",
+        r#"fn main() {
+    let t = "x";
+    io::println(t.as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "d13-str-as-str");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "x\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}

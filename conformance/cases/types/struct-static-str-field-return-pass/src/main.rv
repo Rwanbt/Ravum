@@ -1,0 +1,11 @@
+struct Card {
+    text: &str,
+}
+
+fn label(c: Card) -> &str {
+    return c.text;
+}
+
+fn main() {
+    io::println(label(Card { text: "ok" }));
+}

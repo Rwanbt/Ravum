@@ -611,3 +611,41 @@ formes de la §9 ter construisent désormais, ont leur cas de corpus et leur tes
 `195` ; le cas `SKIP` est hors périmètre (ignoré sur cet OS par construction).
 **Aucune forme `check`-pass / `build`-fail n'est ouverte connue à ce commit** —
 ce qui reste une observation sur ce corpus, pas une preuve universelle.
+
+## 11. Passe 10 — la position des `&str` imbriqués (2026-11-12)
+
+D13 rend `return a[1]` (et les projections d'agrégat) accepté par `check`. Le
+premier build du programme accepté a produit une **nouvelle** forme
+`check`-pass / `build`-fail, de la même famille que la §9 :
+
+```rv
+fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+```
+
+`check` exit 0 ; `build` exit 1 : `error: lifetime may not live long enough —
+returning this value requires that '1 must outlive 'static`, sur le Rust généré
+`fn pick(a: [&str; 2]) -> &'static str { return a[1usize]; }`. La position de
+type du paramètre appliquait l'élision à **tout** le type : un `&str` imbriqué
+dans `[&str; 2]` (ou `Option<&str>`, `Vec<&str>`) recevait une durée de vie
+anonyme, alors que la projection doit produire `&'static str`.
+
+**Fermé dans la même passe** : la position `Param` ne s'applique plus qu'au
+`&str` **propre** du paramètre ; tout `&str` imbriqué est émis `&'static str`.
+C'est cohérent avec la règle 2 de D13 : aucun `&str` emprunté ne peut entrer
+dans un agrégat, donc un `&str` reçu *dans* un conteneur est toujours statique.
+
+Mesure après correctif (2026-11-12, Windows 11 x64, `rustc 1.95.0`) :
+`build_verified=true` sur **463 cas** — `total=463 pass=462 fail=0 skip=1
+not_run=0`, `perimeter=200 covered=200 verified=120 implicit=80 failed=0
+environment=0 not_measured=0`. Les 7 cas ajoutés passent `check` **et** `build`
+(5 `run-pass` exécutés, 2 `compile-fail` portant le code refusé). La forme est
+verrouillée par `backend_audit.rs` :
+`audit_d13_array_projection_emits_static_parameter_and_runs` vérifie le texte
+`[&'static str; 2]` et exécute le binaire ;
+`audit_d13_top_level_str_parameter_stays_elided` vérifie que le `&str` du
+paramètre reste élidé (il reçoit `String::as_str`).
+
+**Aucune forme `check`-pass / `build`-fail n'est ouverte connue à ce commit** —
+observation sur ce corpus, pas une preuve universelle.

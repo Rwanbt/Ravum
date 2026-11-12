@@ -1,0 +1,5 @@
+fn main() {
+    let a = ["x", "y"];
+    let s = a[1];
+    io::println(s);
+}

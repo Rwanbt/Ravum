@@ -15,15 +15,15 @@
 | ID | Ta décision | Ce qu'elle change | Suite donnée |
 |---|---|---|---|
 | **D2** | Cible **production ready**, pas MVP | La barre d'acceptation monte (conformité + audit + reproductibilité + couverture/mutation + interfaces + distribution) | [`docs/roadmap/PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) : 14 critères de sortie, état mesuré de chacun, plan en 3 vagues. La **ratification** (backend + socle normatif) reste à signer : dossier prêt |
-| **D3** | **Fusion dans `main` autorisée**, aucune release | `main` devient la référence documentaire du travail ; `dev` d'intégration reste alignée | Fusion exécutée (voir §3 pour la provenance et les impacts exacts) ; **aucun tag, aucune release, aucune signature** |
-| **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | Rien dans D4 n'empêche de coder, tester, fusionner, durcir | **Rien n'est bloqué côté code.** Ce qui manque : les **trois textes** pour les trier (voir §4). Le label « production ready » attend un audit **humain** indépendant |
-| **D5** | Tests sur Windows et Linux, pas de macOS | Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; le reste `NOT_RUN` | D5 **close**, écrit dans le registre et `PLATFORMS-MATRIX.md` |
+| **D3** | **Fusion dans `main` autorisée**, aucune release | `main` devient la référence documentaire du travail ; `dev` d'intégration reste alignée | **Exécutée le 2026-11-12** : `dev` = `a2b8db5` (PR #101), `main` = `94f3ac4` (PR #104), commits de fusion sans squash ; **aucun tag, aucune release, aucune signature** (§3) |
+| **D4** | Quatre revues LLM fournies ; ne doit pas bloquer le code | Rien dans D4 n'empêche de coder, tester, fusionner, durcir | **Triées** : docs/audit/2026-11-reviews/TRIAGE.md — 16 constats, verdicts CONFIRMÉ / FAUX (preuve) / HISTORIQUE. Aucun blocage de code ; le label attend un audit **humain** |
+| **D5** | Windows + Linux ; puis « mets les runners `macos-latest` » | Tier 1 = Windows + Linux ; macOS devient **Tier 2** avec son job | `.github/workflows/macos-qual.yml` ajouté (`macos-latest`, arm64 : tests workspace + conformance build-vérifiée) ; **non requis**, promotion après 30 jours verts |
 | **D6** | OK (geler le périmètre) | Le sous-ensemble documenté devient le périmètre Core 1.0 ; extensions = 1.x | Périmètre gelé (§6) |
-| **D7** | « Il faut faire en sorte de la rendre safe » | La FFI n'est plus « expérimentale » : elle devient un **programme de durcissement** avec contrats écrits et refus outillés | Programme détaillé : [`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) §5 |
+| **D7** | « Rust prouve bien la mémoire, la solution existe » | La FFI devient un **programme de durcissement en 4 étages** | Confinement `trusted` → effets déclarés sur l'`extern` → wrappers sûrs → isolation (processus/WASM) ; [`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) §5 |
 | **D9** | Pas d'intérêt tant que le langage n'est pas prêt pour la prod | Signature de release **différée** ; aucun mécanisme bloqué | Statut `DEFERRED`, **aucune clé générée**, T11 reste `PARTIAL` sur ce seul point |
-| **D10** | « Je ne vois pas ce qui est bloquant » — et la couverture est faible | D10 n'est **pas** un blocage de code : c'est une dette de *preuve*. La couverture devient un chantier | Deux métriques adoptées ; couverture **étendue au codegen** (première mesure : 87,04 % lignes / 86,05 % régions) ; plan §7 |
+| **D10** | « Je vise une couverture de 100 % » | Objectif **100 % lignes et régions** inscrit dans le ratchet | `coverage_report.py --gap` liste les lignes non couvertes : **11 fichiers, ~2 100 lignes** au départ ; les seuils montent à 100 fichier par fichier |
 | **D11** | OK | Comptes corrigés + collisions d'identifiants documentées | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, `Q-GRAM-11` (voir §8) |
-| **D13** | « Pas compris, sois plus explicite » | Rien tant que tu n'as pas choisi | Explication refaite avec deux programmes concrets : §5 |
+| **D13** | « Une preuve déterministe ? A et B me semblent bancales » | **Réponse : oui, ni A ni B** | `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine + règle de stockage ⇒ staticité **prouvée**, pas supposée. **Décision 2026-11-12 : « 2- ok » → implémentée** (voir §5, issue) |
 
 ## 2. Ce qui a été appliqué tout de suite (D11)
 
@@ -54,12 +54,14 @@ atteignables (inchangé) ; `features_coverage.py --strict` → 188/188.
 en draft vers `dev`.
 
 **Provenance — ce qui atterrit exactement.** Fusion de la PR #101 dans `dev`
-(commit de fusion, **aucun squash**, aucune réécriture : l'historique des neuf
-passes reste lisible), puis fusion de `dev` dans `main`. Les preuves sont liées
-aux SHA : code mesuré `21cf7d4`, documentation `de6f0de`/`7665244`/`0c2ceb8`,
-CI **14/14 verte** sur `0c2ceb8` (7 `push` + 7 `pull_request`). Rien n'est
-poussé sur `main` sans passer par une PR : la protection de branche exige le
-check `mvp`.
+(commit de fusion `a2b8db5`, **aucun squash**, aucune réécriture : l'historique
+des neuf passes reste lisible), puis fusion de `dev` dans `main` (PR #104,
+commit de fusion `94f3ac4`). Les preuves sont liées aux SHA : code mesuré
+`21cf7d4`, documentation `de6f0de`/`7665244`/`0c2ceb8`, spécification et
+couverture `12c4a38`/`d046f68`, cible production `599df1b` ; CI **14/14 verte**
+sur `599df1b` et **tous les checks verts** sur la PR #104 (`mvp` compris). Rien
+n'est poussé sur `main` sans passer par une PR : la protection de branche exige
+le check `mvp`.
 
 **Impacts.**
 - `main` contient désormais un compilateur **DRAFT ratifiable**, pas une release :
@@ -103,6 +105,13 @@ passe 6, qui avaient trouvé 11 faux verts) :
 constats.
 
 ## 5. D13 — la question, expliquée avec des programmes
+
+> **Issue (2026-11-12)** : réponse du responsable « 2 - ok » → implémentation
+> faite. La solution retenue est **la preuve** (règle d'origine + règle de
+> stockage), pas l'hypothèse A ni le refus B. `return a[1]` et `let s = a[1];`
+> sont désormais **acceptés**, `String::as_str()` reste refusé. Mesures et
+> fichiers : [`RFC-D13-STATICITY.md`](../rfc/RFC-D13-STATICITY.md) §6. Les
+> paragraphes ci-dessous sont l'explication d'origine, conservée comme dossier.
 
 **Le sujet en une phrase** : aujourd'hui, un `&str` rangé dans un tableau (ou un
 champ) ne peut pas en ressortir dans une variable ou un `return`, alors que la
@@ -155,12 +164,12 @@ existant n'est refusé (9/9 examples, 0 FAIL de conformance).
   pour l'utilisateur : `a[1]` dans une variable reste refusé, avec un message qui
   renvoie à la limitation documentée.
 
-**Ma recommandation : B**, parce que c'est sûr, que rien n'est bloqué aujourd'hui,
-et que A engage la sûreté du modèle pour un gain d'ergonomie. Si tu préfères A,
-ce n'est pas un correctif mais un **choix de modèle** : il faut le financer comme
-tel (traçage de staticité + tests d'invariant).
-
-**Ce que je te demande** : `D13: A` ou `D13: B`.
+**Ma recommandation était : B**, parce que c'est sûr, que rien n'est bloqué
+aujourd'hui, et que A engageait la sûreté du modèle pour un gain d'ergonomie. La
+décision du 2026-11-12 est allée plus loin : **ni A ni B, mais la preuve** — la
+règle de stockage déjà outillée transforme l'hypothèse de A en invariant
+vérifié, donc le refus de B n'est plus nécessaire. Ce n'était pas un correctif
+mais bien un travail sémantique, financé comme tel (voir RFC §6).
 
 ## 6. D6 — périmètre gelé de Core 1.0
 
@@ -201,12 +210,26 @@ géant peut être « couvert » sans être testé.
 **Rien de tout cela ne bloque l'avancement** : ce sont des mesures à publier et
 des seuils à tenir, pas des portes fermées.
 
-## 8. Il ne reste que deux choses de ton côté
+## 8. Ce qui reste à faire, et ce qui attend encore ta main
 
-| Quoi | Pourquoi | Format |
+**Fait dans cette passe** : D11 corrigé ; couverture étendue au backend ;
+objectif 100 % inscrit ; job macOS ajouté ; revue multi-IA triée ; programme FFI
+en 4 étages ; conception D13 déterministe.
+
+**Réponses du 2026-11-12** (les deux points de la version précédente) :
+
+| Quoi | Réponse | Effet |
 |---|---|---|
-| Les **trois revues** (Claude, ChatGPT, DeepSeek) | Pour les trier, vérifier chaque constat et corriger ce qui est réel | fichiers, texte collé, ou liens |
-| **D13 : A ou B** | Pour clore la contradiction TYP-6.3 / OWN-6.2 | `D13: A` ou `D13: B` |
+| **Exemption `F-META-006`** | « 1 - ok » | `approved_by` = responsable, date `2026-11-12`, réexamen au plus tard le `2027-02-12` ; `features_coverage.py --strict` reste 188/188 |
+| **D13 : implémentation** | « 2 - ok » | Implémentée (règle d'origine dans `own.rs`/`typeck.rs`, positions de type dans le backend) ; 6 cas de conformance, 20 tests, corpus 462/461/0/1, `build_verified: true` |
+
+Il ne reste donc **aucun point en attente de ta main** sur ce document. Les
+suites (couverture 100 %, D7, mutation) sont suivies dans
+[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md).
+
+**À surveiller** : le premier run de `macos-qual.yml` (Tier 2) et le premier run
+de `mutation.yml` depuis `main`.
 
 Tout le reste est appliqué ou planifié dans
-[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md).
+[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md) et
+[`docs/audit/2026-11-reviews/TRIAGE.md`](../audit/2026-11-reviews/TRIAGE.md).

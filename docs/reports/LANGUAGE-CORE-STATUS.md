@@ -1,5 +1,22 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour passe 10 — 2026-11-12.** **D13 implémentée** : `return a[1]`,
+> `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str`
+> statique et les copies locales à travers un appel sont acceptés **par
+> preuve** (règle d'origine + règle de stockage,
+> [`RFC-D13-STATICITY.md`](../rfc/RFC-D13-STATICITY.md) §6) ; `String::as_str()`
+> reste refusé. Deux divergences backend fermées : un `&str` imbriqué dans un
+> paramètre est émis `&'static str` (sinon `rustc` `E0310` sur `return a[1]`),
+> et `str::as_str` est abaissé en identité. Mesures : **113 suites,
+> 1562 passés / 0 échec / 2 ignorés** ; conformance **463 cas, 462 PASS /
+> 0 FAIL / 1 SKIP**, build vérifié **200/200** (120 vérifiés, 80 implicites,
+> 0 échec), `build_verified: true`. Exemption `F-META-006` approuvée par le
+> responsable (2026-11-12, réexamen 2027-02-12) : **188/188** reste valide.
+> Couverture, reproductibilité, SBOM et mutation **non re-mesurés** dans cette
+> passe. Registre **108 codes / 126 émis**, **MUST 463/807** (T2 `PARTIAL`,
+> D10). Gates : **4 PASS / 7 PARTIAL / 2 BLOCKED**. **Aucune forme ouverte
+> connue.**
+
 > **Mise à jour passe 9 — 2026-11-11, commit `21cf7d4`.** Les **deux dernières
 > variantes `check`-pass / `build`-fail connues** sont **fermées** : descentes de
 > projection dans deux branches distinctes d'un `if`/`else`, et deux descentes
