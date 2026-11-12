@@ -84,6 +84,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-macos-qual-conformance-
 
+      # The conformance harness shells out to `target/debug/ravum-lang`; without
+      # this explicit build the first macOS run reported 454 NOT_RUN ("toolchain
+      # not found") and exited 3. A harness that cannot find its toolchain is not
+      # a green run.
+      - name: Build the CLI the harness drives
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
       - name: Run conformance corpus (check ⇒ build contract)
         run: cargo run -p ravum-conformance -- run --verify-build --json target/conformance-report.json
 
