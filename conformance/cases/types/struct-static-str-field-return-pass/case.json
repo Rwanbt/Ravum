@@ -1,0 +1,6 @@
+{
+  "id": "types/struct-static-str-field-return-pass",
+  "mode": "run-pass",
+  "stdout_contains": "ok\n",
+  "notes": "D13 rule 1, projection: a `&str` field of a value can be returned. Only `&'static str` can inhabit the field (OWN-6.1/6.2), so the projection preserves provenance."
+}

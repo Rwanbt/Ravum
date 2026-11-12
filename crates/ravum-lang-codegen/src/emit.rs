@@ -68,14 +68,20 @@ fn err(message: impl Into<String>) -> CodegenError {
 ///   reject a program the checker accepts (`fn g(s: &str)` called with
 ///   `text.as_str()` — the exact check-pass/build-fail class being fixed).
 ///
-/// `TypePos` carries that distinction through the whole type tree: a nested
-/// `&str` in `Option<&str>` follows the outer position, which matches Rust's
-/// elision rules for parameters.
+/// `TypePos` applies to the parameter's **own** `&str` only. A `&str` nested
+/// inside a container (`Option<&str>`, `[&str; 2]`, `Vec<&str>`, `(&str, i32)`)
+/// is always written `&'static str`, in `Value` position: the checker proves
+/// such texts static by construction (D13 rule 2 — no borrowed `&str` can be
+/// stored in an aggregate), and Rust needs the explicit lifetime for a
+/// projection out of the container to be usable as `&'static str`
+/// (`fn pick(a: [&str; 2]) -> &str` is emitted as `[&'static str; 2]`, otherwise
+/// `a[1]` is E0310).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TypePos {
     /// Owned/stored/returned/annotated position: `&str` is `&'static str`.
     Value,
-    /// Function parameter or foreign-function declaration: lifetime elided.
+    /// Function parameter or foreign-function declaration: the parameter's own
+    /// `&str` has its lifetime elided; nested text types stay [`TypePos::Value`].
     Param,
 }
 
@@ -840,6 +846,9 @@ fn builtin_const(path: &str) -> Option<String> {
 fn builtin_method_special(owner: &str, method: &str, receiver: &str, args: &str) -> Option<String> {
     let rendered = match (owner, method) {
         (_, "to_string") => format!("format!(\"{{}}\", {receiver})"),
+        // `str::as_str` (STD-11.4) is the identity on a text reference: the
+        // receiver is already a `&str`, and Rust's `str` has no such method.
+        ("str", "as_str") => format!("({receiver})"),
         ("String", "trim") | ("str", "trim") => format!("{receiver}.trim().to_string()"),
         ("String", "lines") | ("str", "lines") => {
             format!("{receiver}.lines().map(|rv_line| rv_line.to_string()).collect::<Vec<String>>()")
@@ -2410,13 +2419,14 @@ impl<'a> Emitter<'a> {
                 Ok(format!(
                     "&{}{}",
                     if *mutable { "mut " } else { "" },
-                    self.syntactic_type_pos(inner, pos)?
+                    // See `fmt_type_pos`: nested text types are static (D13).
+                    self.syntactic_type_pos(inner, TypePos::Value)?
                 ))
             }
             TypeKind::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.syntactic_type_pos(item, pos)?);
+                    rendered.push(self.syntactic_type_pos(item, TypePos::Value)?);
                 }
                 if rendered.len() == 1 {
                     Ok(format!("({},)", rendered[0]))
@@ -2426,11 +2436,14 @@ impl<'a> Emitter<'a> {
             }
             TypeKind::Array { elem, len } => Ok(format!(
                 "[{}; {}]",
-                self.syntactic_type_pos(elem, pos)?,
+                self.syntactic_type_pos(elem, TypePos::Value)?,
                 self.array_length(len)?
             )),
-            TypeKind::Slice(inner) => Ok(format!("[{}]", self.syntactic_type_pos(inner, pos)?)),
-            TypeKind::Path(path) => self.syntactic_path_type(path, pos),
+            TypeKind::Slice(inner) => Ok(format!(
+                "[{}]",
+                self.syntactic_type_pos(inner, TypePos::Value)?
+            )),
+            TypeKind::Path(path) => self.syntactic_path_type(path),
             TypeKind::Infer => Err(err(format!(
                 "missing resolved type for inferred type node {}",
                 ty.id
@@ -2450,7 +2463,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn syntactic_path_type(&self, path: &Path, pos: TypePos) -> Result<String, CodegenError> {
+    fn syntactic_path_type(&self, path: &Path) -> Result<String, CodegenError> {
         if path.root != PathRoot::Plain {
             return Err(err(format!(
                 "missing resolved type for rooted type path `{}`",
@@ -2472,7 +2485,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in &segment.args {
-                        rendered.push(self.syntactic_type_pos(argument, pos)?);
+                        rendered.push(self.syntactic_type_pos(argument, TypePos::Value)?);
                     }
                     Ok(format!("{builtin}<{}>", rendered.join(", ")))
                 }
@@ -2547,17 +2560,20 @@ impl<'a> Emitter<'a> {
                 format!(
                     "&{}{}",
                     if *mutable { "mut " } else { "" },
-                    self.fmt_type_pos(inner, pos)?
+                    // A text type nested under another type constructor is
+                    // always static (D13); only the parameter's own `&str` may
+                    // be the elided, instruction-scoped view.
+                    self.fmt_type_pos(inner, TypePos::Value)?
                 )
             }
             Type::Array { elem, len } => {
-                format!("[{}; {len}]", self.fmt_type_pos(elem, pos)?)
+                format!("[{}; {len}]", self.fmt_type_pos(elem, TypePos::Value)?)
             }
-            Type::Slice(inner) => format!("[{}]", self.fmt_type_pos(inner, pos)?),
+            Type::Slice(inner) => format!("[{}]", self.fmt_type_pos(inner, TypePos::Value)?),
             Type::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.fmt_type_pos(item, pos)?);
+                    rendered.push(self.fmt_type_pos(item, TypePos::Value)?);
                 }
                 if rendered.len() == 1 {
                     format!("({},)", rendered[0])
@@ -2565,13 +2581,13 @@ impl<'a> Emitter<'a> {
                     format!("({})", rendered.join(", "))
                 }
             }
-            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type_pos(inner, pos)?),
-            Type::Option(inner) => format!("Option<{}>", self.fmt_type_pos(inner, pos)?),
+            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type_pos(inner, TypePos::Value)?),
+            Type::Option(inner) => format!("Option<{}>", self.fmt_type_pos(inner, TypePos::Value)?),
             Type::Result(ok, error) => {
                 format!(
                     "Result<{}, {}>",
-                    self.fmt_type_pos(ok, pos)?,
-                    self.fmt_type_pos(error, pos)?
+                    self.fmt_type_pos(ok, TypePos::Value)?,
+                    self.fmt_type_pos(error, TypePos::Value)?
                 )
             }
             Type::Nominal { def, name, args } => {
@@ -2581,7 +2597,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in args {
-                        rendered.push(self.fmt_type_pos(argument, pos)?);
+                        rendered.push(self.fmt_type_pos(argument, TypePos::Value)?);
                     }
                     format!("{base}<{}>", rendered.join(", "))
                 }

@@ -1,0 +1,6 @@
+{
+  "id": "types/array-static-str-element-bind-pass",
+  "mode": "run-pass",
+  "stdout_contains": "y\n",
+  "notes": "D13 rule 1, copy: a `&str` projected out of a static aggregate can be stored in a local (`let s = a[1]`), because rule 2 (no borrowed `&str` in an aggregate) makes it `&'static str`."
+}

@@ -1,0 +1,5 @@
+fn main() {
+    let s = String::from("x");
+    let a = [s.as_str()];
+    io::println(a[0]);
+}

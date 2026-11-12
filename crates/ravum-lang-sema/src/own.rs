@@ -164,6 +164,19 @@ fn report_stored_reference(
     );
 }
 
+/// `true` for the borrowed-text type `&str` (`Type::Ref { mutable: false,
+/// inner: Str }`). D13's staticity analysis only speaks about this type: it is
+/// the single reference type Core 1.0 lets cross an instruction boundary.
+fn is_borrowed_text(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Ref {
+            mutable: false,
+            inner,
+        } if matches!(**inner, Type::Str)
+    )
+}
+
 /// `true` when the type stores a reference that is not the `&str` of a string
 /// literal. OWN-6.1 forbids storing a reference in a field, a `Vec`, a tuple, an
 /// `Option`/`Result`; OWN-6.2 makes `&'static str` the single exception, which
@@ -237,6 +250,22 @@ struct SlotInfo {
     /// or a copy of one), the only storable reference in Core 1.0.
     static_ref: bool,
     decl_span: Span,
+}
+
+/// One binding introduced by a pattern, with the information needed to decide
+/// whether a `&str` it receives is static (D13 rule 1).
+#[derive(Debug, Clone)]
+struct PatBinding {
+    name: String,
+    ty: Type,
+    span: Span,
+    /// `true` when the binding destructures a *component* of the matched value
+    /// (tuple element, enum payload, struct field) instead of copying the value
+    /// itself. A `&str` read out of an aggregate is static by construction:
+    /// OWN-6.1/3.3 forbid storing a borrowed `&str` in any aggregate, and every
+    /// storage site is checked (literals, struct literals, `Some`/`Ok`/`Err`,
+    /// `push`, assignment, `let`, `return`).
+    nested: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -581,15 +610,17 @@ impl<'a> OwnChecker<'a> {
         }
 
         // Destructuring pattern: the initialiser was consumed as a whole.
-        let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-        self.collect_pat_bindings(&l.pat, &mut bindings);
-        for (name, ty, span) in bindings {
-            if ty.is_reference() {
-                // Provenance of a reference extracted by a pattern cannot be
-                // proven static: refuse conservatively.
-                self.report_ref_escape(span, "stockée");
+        let mut bindings: Vec<PatBinding> = Vec::new();
+        self.collect_pat_bindings(&l.pat, false, &mut bindings);
+        for b in bindings {
+            // A `&str` extracted from a destructured aggregate is static by
+            // construction (D13 rule 1 + rule 2); every other reference keeps
+            // the Core 1.0 refusal.
+            let static_ref = b.nested && is_borrowed_text(&b.ty);
+            if b.ty.is_reference() && !static_ref {
+                self.report_ref_escape(b.span, "stockée");
             }
-            let slot = self.declare_slot(&name, ty, false, span);
+            let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
             let st = if has_init {
                 SlotState::initialised()
             } else {
@@ -599,7 +630,7 @@ impl<'a> OwnChecker<'a> {
         }
     }
 
-    fn collect_pat_bindings(&self, pat: &Pat, out: &mut Vec<(String, Type, Span)>) {
+    fn collect_pat_bindings(&self, pat: &Pat, nested: bool, out: &mut Vec<PatBinding>) {
         match &pat.kind {
             PatKind::Binding { name, .. } => {
                 let ty = self
@@ -608,22 +639,29 @@ impl<'a> OwnChecker<'a> {
                     .get(&pat.id)
                     .cloned()
                     .unwrap_or(Type::Error);
-                out.push((name.name.clone(), ty, pat.span));
+                out.push(PatBinding {
+                    name: name.name.clone(),
+                    ty,
+                    span: pat.span,
+                    nested,
+                });
             }
             PatKind::Tuple(items) => {
                 for item in items {
-                    self.collect_pat_bindings(item, out);
+                    // Every component of a destructured value is read *out* of
+                    // an aggregate (D13 rule 1, projection).
+                    self.collect_pat_bindings(item, true, out);
                 }
             }
             PatKind::Variant { fields, .. } => match fields {
                 ravum_lang_syntax::ast::VariantPatFields::Tuple(items) => {
                     for item in items {
-                        self.collect_pat_bindings(item, out);
+                        self.collect_pat_bindings(item, true, out);
                     }
                 }
                 ravum_lang_syntax::ast::VariantPatFields::Struct(fields) => {
                     for f in fields {
-                        self.collect_pat_bindings(&f.pat, out);
+                        self.collect_pat_bindings(&f.pat, true, out);
                     }
                 }
             },
@@ -979,14 +1017,19 @@ impl<'a> OwnChecker<'a> {
                 continue;
             }
             self.push_scope();
-            let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-            self.collect_pat_bindings(&arm.pat, &mut bindings);
+            let mut bindings: Vec<PatBinding> = Vec::new();
+            self.collect_pat_bindings(&arm.pat, false, &mut bindings);
             let mut arm_slots: Vec<SlotId> = Vec::new();
-            for (name, ty, span) in bindings {
-                if ty.is_reference() {
-                    self.report_ref_escape(span, "stockée");
+            for b in bindings {
+                // An arm binding of type `&str` either copies the scrutinee
+                // (top-level pattern: its own provenance decides) or reads a
+                // payload out of it (nested: static by rule 2).
+                let static_ref =
+                    is_borrowed_text(&b.ty) && (b.nested || self.is_static_ref(scrutinee));
+                if b.ty.is_reference() && !static_ref {
+                    self.report_ref_escape(b.span, "stockée");
                 }
-                let slot = self.declare_slot(&name, ty, false, span);
+                let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
                 arm_slots.push(slot);
                 self.state.slots.insert(slot, SlotState::initialised());
             }
@@ -1149,14 +1192,17 @@ impl<'a> OwnChecker<'a> {
         let iter_diverged = self.diverged;
 
         self.push_scope();
-        let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-        self.collect_pat_bindings(pat, &mut bindings);
+        let mut bindings: Vec<PatBinding> = Vec::new();
+        self.collect_pat_bindings(pat, false, &mut bindings);
         let mut loop_slots: Vec<SlotId> = Vec::new();
-        for (name, ty, span) in &bindings {
-            if ty.is_reference() {
-                self.report_ref_escape(*span, "stockée");
+        for b in &bindings {
+            // A `for` item of type `&str` comes out of the iterable (a range or
+            // a container of static texts): static by rule 2.
+            let static_ref = is_borrowed_text(&b.ty);
+            if b.ty.is_reference() && !static_ref {
+                self.report_ref_escape(b.span, "stockée");
             }
-            let slot = self.declare_slot(name, ty.clone(), false, *span);
+            let slot = self.declare_slot(&b.name, b.ty.clone(), static_ref, b.span);
             loop_slots.push(slot);
         }
 
@@ -1756,6 +1802,42 @@ impl<'a> OwnChecker<'a> {
                 self.facts.calls.get(&expr.id),
                 Some(CallTarget::UserFn { item }) if self.facts.static_str_fns.contains(item)
             ),
+            // D13 rule 1 — projection preserves provenance. A `&str` read out of
+            // an aggregate (`a[i]`, `s.champ`, `t.0`) is static *by
+            // construction*: OWN-6.1/3.3 forbid storing a borrowed `&str` inside
+            // an array, a tuple, a field, a `Vec` or an `Option`/`Result`, and
+            // every storage site is checked (array/tuple/struct literals,
+            // `Some`/`Ok`/`Err`, `push`/`insert`, assignment, `let`, `return`).
+            ExprKind::Field { .. } | ExprKind::TupleIndex { .. } | ExprKind::Index { .. } => {
+                is_borrowed_text(&self.expr_type(expr))
+            }
+            // D13 rule 1 — the payload of an `Option`/`Result` is read out of an
+            // aggregate (static by rule 2); `str::as_str` is the identity on a
+            // text reference. `String::as_str` stays refused: it borrows a local
+            // `String` (OWN-6.3).
+            ExprKind::MethodCall { receiver, args, .. } => {
+                match self.facts.methods.get(&expr.id) {
+                    Some(MethodTarget::Builtin { path, .. }) if path.as_str() == "str::as_str" => {
+                        self.is_static_ref(receiver)
+                    }
+                    Some(MethodTarget::Builtin { path, .. })
+                        if is_borrowed_text(&self.expr_type(expr)) =>
+                    {
+                        match path.as_str() {
+                            "Option::unwrap" | "Result::unwrap" => true,
+                            "Option::unwrap_or" | "Result::unwrap_or" => args
+                                .first()
+                                .map(|default| self.is_static_ref(default))
+                                .unwrap_or(false),
+                            _ => false,
+                        }
+                    }
+                    // A user method obeys the same verified contract as a user
+                    // function (its body proves every return static).
+                    Some(MethodTarget::User { item }) => self.facts.static_str_fns.contains(item),
+                    _ => false,
+                }
+            }
             _ => false,
         }
     }
@@ -2703,6 +2785,136 @@ fn rec() -> &str { rec() }
 fn f() -> &str {
     let text = rec();
     return text;
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    // -- D13: projected text is static by construction -----------------------
+
+    #[test]
+    fn static_text_array_element_can_be_returned() {
+        // RFC-D13-STATICITY rule 1: the element of a `[&str; 2]` is a
+        // `&'static str` because rule 2 forbids storing a borrowed `&str` there.
+        accepted(
+            r#"
+fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_array_element_can_be_bound_then_returned() {
+        accepted(
+            r#"
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    return s;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_struct_field_can_be_returned() {
+        accepted(
+            r#"
+struct Card { text: &str }
+fn label(c: Card) -> &str {
+    return c.text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_vec_element_can_be_returned() {
+        accepted(
+            r#"
+fn pick(v: Vec<&str>) -> &str {
+    return v[0];
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_option_payload_can_be_unwrapped() {
+        accepted(
+            r#"
+fn pick(o: Option<&str>) -> &str {
+    return o.unwrap();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_match_payload_can_be_returned() {
+        accepted(
+            r#"
+fn pick(o: Option<&str>) -> &str {
+    match o {
+        Some(t) => { return t; }
+        None => { return "none"; }
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn str_as_str_identity_of_static_text_is_storable() {
+        // `str::as_str` is the identity on a `&str`, so a static receiver stays
+        // static (unlike `String::as_str`, which borrows a local `String`).
+        accepted(
+            r#"
+fn f() -> &str {
+    let t = "x";
+    return t.as_str();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn string_as_str_in_an_array_stays_refused() {
+        // Rule 2 (negative): the storage site that makes rule 1 true.
+        rejected(
+            r#"
+fn f(s: String) {
+    let a = [s.as_str()];
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    #[test]
+    fn borrowed_text_parameter_in_an_aggregate_stays_refused() {
+        rejected(
+            r#"
+fn bad(s: &str) -> (&str, i32) {
+    return (s, 1);
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    #[test]
+    fn top_level_match_binding_of_a_parameter_stays_refused() {
+        // A top-level binding copies the value; it is not a projection out of an
+        // aggregate, so a borrowed `&str` parameter stays non-static.
+        rejected(
+            r#"
+fn bad(s: &str) -> &str {
+    match s {
+        x => { return x; }
+    }
 }
 "#,
             "E-OWN-REF-ESCAPE",

@@ -1,0 +1,8 @@
+fn pick(o: Option<&str>) -> &str {
+    return o.unwrap();
+}
+
+fn main() {
+    let s = pick(Some("x"));
+    io::println(s);
+}

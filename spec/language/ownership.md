@@ -257,6 +257,24 @@ fn o(v: Vec<String>) {
 | OWN-6.6 | Le diagnostic `E-OWN-REF-ESCAPE` porte sur le **site d'échappement** (la `let`, le `return`, le champ), avec une note sur la création du prêt. | MUST |
 | OWN-6.7 | La coercition `&String → &str` ([`types.md`](types.md) TYP-13.1) crée une **vue** qui expire avec l'instruction : elle ne permet pas de stocker le texte emprunté (`E-OWN-REF-ESCAPE`). `s.as_str()` suit exactement la même règle. | MUST |
 
+> **Provenance du texte statique (note de vérificateur, RFC-D13).** OWN-6.1
+> interdit de stocker une référence non statique dans un agrégat (tableau,
+> tuple, champ, `Vec`, `Option`/`Result`) et OWN-6.2 fait de `&'static str` la
+> seule référence stockable. Le vérificateur en tire une conséquence — et non
+> une règle nouvelle : tout `&str` **lu dans un agrégat** (`a[i]`, `c.text`,
+> `t.0`, payload d'`Option`/`Result`) est `&'static str` **par construction**,
+> donc stockable et retournable comme un littéral :
+>
+> ```rv
+> fn pick(a: [&str; 2]) -> &str { return a[1]; }  // accepté : élément statique
+> fn label(c: Card) -> &str { return c.text; }    // accepté : champ statique
+> ```
+>
+> La preuve en deux règles (origine + stockage) et la matrice de tests sont
+> dans [`docs/rfc/RFC-D13-STATICITY.md`](../../docs/rfc/RFC-D13-STATICITY.md).
+> En particulier, `let t = s.as_str();` reste refusé : `String::as_str` produit
+> une vue **empruntée** sur un local, pas un texte statique.
+
 ```rv
 // POSITIF
 fn f(mut s: String, p: &Point) -> f64 {
