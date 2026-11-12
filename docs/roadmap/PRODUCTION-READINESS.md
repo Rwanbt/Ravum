@@ -57,11 +57,15 @@ Chaque critère a une preuve attendue. Tant qu'elle manque, le critère est
 ## 3. État mesuré, critère par critère
 
 **Plateformes (D5, 2026-11-11)** : Tier 1 = **Windows x86-64 + Linux x86-64**
-(`ubuntu-latest`). **macOS a désormais son job** : `.github/workflows/macos-qual.yml`
-(`macos-latest`, Apple Silicon arm64 : tests workspace + conformance build-vérifiée)
-— niveau **Tier 2**, informatif, non requis pour fusionner. Promotion en Tier 1
-après 30 jours de CI verte rattachée aux SHA. macOS x86-64, ARM Linux, Android,
-iOS restent `NOT_RUN`.
+(`ubuntu-latest`). **macOS a désormais son job, et il est vert** : `.github/workflows/macos-qual.yml`
+(`macos-latest`, Apple Silicon arm64) — tests workspace + conformance
+build-vérifiée **456 cas : 454 PASS / 0 FAIL / 2 SKIP**, `build_verified: true`
+(run `43132064512`, 2026-11-12). Niveau **Tier 2**, informatif, non requis pour
+fusionner ; promotion en Tier 1 après 30 jours de CI verte rattachée aux SHA.
+Deux tests de stress DSP sont marqués `ignore` sur macOS uniquement (fixture
+cdylib `no_std` qui exige libSystem : `ld` refuse le dylib) et restent
+enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
+`NOT_RUN`.
 
 | Critère | État | Preuve / manque |
 |---|---|---|
