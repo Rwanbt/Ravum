@@ -56,16 +56,23 @@ Chaque critère a une preuve attendue. Tant qu'elle manque, le critère est
 
 ## 3. État mesuré, critère par critère
 
+**Plateformes (D5, 2026-11-11)** : Tier 1 = **Windows x86-64 + Linux x86-64**
+(`ubuntu-latest`). **macOS a désormais son job** : `.github/workflows/macos-qual.yml`
+(`macos-latest`, Apple Silicon arm64 : tests workspace + conformance build-vérifiée)
+— niveau **Tier 2**, informatif, non requis pour fusionner. Promotion en Tier 1
+après 30 jours de CI verte rattachée aux SHA. macOS x86-64, ARM Linux, Android,
+iOS restent `NOT_RUN`.
+
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | 43 ADR `PROPOSED` ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
 | R2 | **fait sur le périmètre** | 456 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
-| R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels |
+| R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels ; programme §5 étendu aux **wrappers sûrs**, modules `trusted`, effets déclarés sur l'`extern` et isolation |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
 | R7 | `PARTIAL` | local `847DF0D1…` ≠ runner `C281A035…` : digest lié à l'environnement, non revendiqué |
-| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (88,54/87,86 totaux ; `emit.rs` 87,02/86,02) avec seuils ratchet par fichier ; mutation ciblée (passe 5) non rejouée ; mutation.yml non déclenchable |
+| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (88,54/87,86 totaux ; `emit.rs` 87,02/86,02) avec seuils ratchet par fichier ; **objectif ratifié : 100 % lignes ET régions** — `coverage_report.py --gap` liste **11 fichiers sous l'objectif** (~2 100 lignes non couvertes : `emit.rs` 757, `loader.rs` 581, `typeck.rs` 274, `own.rs` 182, `resolve.rs` 138, `check.rs` 131) ; mutation ciblée (passe 5) non rejouée ; `mutation.yml` est désormais dans `main`, son premier run reste à observer |
 | R9 | `PARTIAL` | mesures de `RFC-D2` sous charge déclarée ; pas de campagne au repos |
 | R10 | `PARTIAL` | CLI et JSON documentés et testés ; politique de dépréciation absente |
 | R11 | `PARTIAL` | installateur Windows CI 16/16 ; Linux installé par la CI de qualification mais pas de contrat d'installateur public |
@@ -136,6 +143,34 @@ bibliothèques C appelées. Nous pouvons rendre la **frontière** explicite,
 minimale, auditée et refusante ; nous ne pouvons pas prouver la mémoire d'un code
 que nous ne compilons pas. Cette limite doit être écrite dans la doc utilisateur.
 
+**Comment Rust fait — et pourquoi la solution existe quand même.** Rust prouve la
+mémoire **à l'intérieur de Rust** : le borrow checker est une preuve locale sur du
+code qu'il voit. À la frontière FFI, Rust ne prouve rien du C : `unsafe` signifie
+exactement « le compilateur délègue l'obligation de preuve au programmeur ». La
+solution n'est donc pas de prouver le C, elle est de **rendre la frontière
+étroite, contractuelle et auditable**, ce que la bibliothèque standard fait avec
+des wrappers documentés (`// SAFETY:`) et ce que les projets sérieux complètent
+par de l'**isolation** quand le contrat ne peut pas être tenu. Le programme D7
+suit ce modèle en quatre étages :
+
+1. **Confinement** : `unsafe` et `extern "C"` seulement dans des modules marqués
+   `trusted`, listés dans un inventaire versionné ; la CI compare l'inventaire à
+   chaque PR. Aucun `unsafe` ailleurs (le code généré porte déjà
+   `#![forbid(unsafe_code)]`).
+2. **Contrat d'effets** : un `extern` déclare ses effets (`effects(net)`), et un
+   appel FFI produit `{unsafe, ffi}` **∪** les effets déclarés — sinon il est
+   refusé hors du profil `core`. C'est ce qui empêche une FFI de contourner le
+   système d'effets (constat des quatre revues).
+3. **Wrappers sûrs** : une fonction sûre encapsule l'`unsafe`, porte les effets
+   déclarés mais **plus** `unsafe` : l'`unsafe` est encapsulable et non
+   contagieux, ce qui rend l'audit tractable (une bibliothèque = un module
+   wrapper, aucun type Ravum brut à la frontière).
+4. **Isolation** : pour les bibliothèques dont le contrat ne peut pas être borné
+   ou revu (callbacks incontrôlables, effets inconnus), l'exécution dans un
+   composant isolé (processus séparé ou WASM) fait porter la sûreté mémoire à la
+   frontière d'isolation au lieu de l'analyse statique. C'est le seul moyen de
+   tenir une garantie quand la preuve locale est impossible.
+
 **Livrables** : `docs/ffi/SAFETY.md` (contrats + limites), refus outillés au
 `check`, tests négatifs (pointeur, buffer, callback, unwinding, ABI fausse),
 `// SAFETY:` obligatoire sur chaque `unsafe` du runtime, revue du module
@@ -183,12 +218,20 @@ Deux mesures différentes, souvent confondues :
 
 Fait le 2026-11-11 : le **codegen est mesuré et sous seuil** (première mesure :
 87,04 % lignes / 86,05 % régions ; totaux sema+codegen **88,54/87,86**), et
-`coverage.yml` couvre désormais les deux crates. Reste : étendre la mesure à
-`ravum-lang-syntax`, `ravum-lang-cli` et `tools/conformance`, remonter les
-seuils sema vers la cible 90/85 (la marge la plus mince est `check.rs` à
-80,26 % pour un seuil à 80), et compléter par la **mutation** (mesure plus
-honnête pour un compilateur, car un `match` géant peut être « couvert » sans
-être testé).
+`coverage.yml` couvre désormais les deux crates. **Objectif ratifié le
+2026-11-11 : 100 % de lignes ET de régions sur chaque fichier mesuré.** Le
+mécanisme est en place : `tools/coverage_thresholds.json` porte l'objectif, et
+`python tools/coverage_report.py --input target/cov-all.json --gap` liste, fichier
+par fichier, les lignes non couvertes. État de départ : **11 fichiers sous
+l'objectif, ~2 100 lignes** — `emit.rs` 757, `loader.rs` 581, `typeck.rs` 274,
+`own.rs` 182, `resolve.rs` 138, `check.rs` 131, `builtins.rs` 35, `facts.rs` 28,
+`effects.rs` 25, `types.rs` 9, `lib.rs` 3. La trajectoire : fermer les écarts
+module par module, et **relever le seuil du fichier à 100 dès qu'il l'atteint**,
+pour que la couverture ne puisse plus redescendre. Reste aussi à étendre la mesure
+à `ravum-lang-syntax`, `ravum-lang-cli` et `tools/conformance`. Et à compléter
+par la **mutation** (mesure plus honnête pour un compilateur, car un `match`
+géant peut être « couvert » sans être testé) : 100 % de couverture ne prouve pas
+100 % de correction.
 
 ## 8. Ce que ce document ne prétend pas
 

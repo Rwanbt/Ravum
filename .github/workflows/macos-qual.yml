@@ -1,0 +1,126 @@
+name: macOS qualification (Tier 2, macos-latest)
+
+# Qualification macOS réelle, demandée le 2026-11-11 après la décision D5 :
+# « mets les runners macos-latest ».
+#
+# Portée honnête : ce workflow prouve que le dépôt se construit, que les tests
+# workspace passent et que le corpus de conformance s'exécute réellement sur
+# macOS (runner GitHub `macos-latest`, Apple Silicon arm64). Il ne prouve PAS :
+# une équivalence de comportement avec Windows/Linux sur des programmes
+# arbitraires, une ABI stable, les performances, le temps réel, ni une release.
+#
+# Niveau de service : **Tier 2**. Le job tourne et son résultat est visible, mais
+# il n'est **pas** un check requis pour fusionner (D5 : seuls Windows x86-64 et
+# Linux x86-64 sont Tier 1). Une promotion macOS en Tier 1 exigerait 30 jours de
+# CI verte rattachée aux SHA, comme le prévoit PRODUCTION-READINESS.md.
+#
+# Un job vert est une observation liée à ce run et à ce commit, jamais un
+# `PROVED`, et jamais une revendication de support macOS sur d'autres versions.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  workspace-tests:
+    name: Workspace tests (macOS arm64, stable 1.95.0)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-macos-qual-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-macos-qual-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Workspace tests
+        run: cargo test --workspace -- --test-threads=2
+
+  conformance:
+    name: Conformance corpus (macOS, check ⇒ build contract)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-macos-qual-conformance-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-macos-qual-conformance-
+
+      - name: Run conformance corpus (check ⇒ build contract)
+        run: cargo run -p ravum-conformance -- run --verify-build --json target/conformance-report.json
+
+      # Same honesty hole as on Linux: a SKIPped perimeter case exits 0 while
+      # proving nothing about its build. The report itself must carry positive
+      # build evidence.
+      - name: Assert build_verified in the report
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+
+          with open("target/conformance-report.json", encoding="utf-8") as handle:
+              report = json.load(handle)
+          summary = report.get("build_summary")
+          if report.get("build_verified") is not True:
+              print(f"build_verified is not true: build_summary={summary}", file=sys.stderr)
+              sys.exit(1)
+          if report.get("summary", {}).get("fail", 0) != 0:
+              print(f"conformance has FAIL cases: {report.get('summary')}", file=sys.stderr)
+              sys.exit(1)
+          print(f"build_verified: true, build_summary={summary}")
+          PY
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-macos
+          path: target/conformance-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "macOS is Tier 2: this job is informative and is not a required check."
+          echo "It proves this commit builds and passes the corpus on this runner image,"
+          echo "with the skips listed in the report. It does not prove macOS support in"
+          echo "general, an ABI, performance, real-time behaviour or a release."

@@ -27,6 +27,12 @@
 > (passe 8, non re-mesurée ici).
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
+>
+> **Sections datées = archives.** Les sections `§0 bis` (passe 6), `§0 ter`
+> (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9) et `§1.x` portent les
+> chiffres **de leur passe**, pas les chiffres courants : deux relecteurs
+> externes ont pris ces tableaux pour l'état du HEAD. Les chiffres qui font foi
+> sont ceux du bloc ci-dessus, et le tableau de la §2.
 
 ## 0. Base de référence
 

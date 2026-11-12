@@ -78,6 +78,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--thresholds", type=Path, default=DEFAULT_THRESHOLDS)
     parser.add_argument("--check", action="store_true",
                         help="fail when a declared threshold is not met")
+    parser.add_argument("--gap", action="store_true",
+                        help="report every file below the configured objective (default 100%% lines/regions)")
+    parser.add_argument("--fail-on-gap", action="store_true",
+                        help="exit 1 when a file is below the objective (implies --gap)")
     parser.add_argument("--uncovered", metavar="FILE",
                         help="print the uncovered line ranges of one repo-relative file")
     parser.add_argument("--json-out", type=Path,
@@ -100,10 +104,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     thresholds = {}
+    objective = {"lines": 100.0, "regions": 100.0}
     if args.thresholds.exists():
         with args.thresholds.open(encoding="utf-8") as handle:
             raw = json.load(handle)
         thresholds = raw.get("files", {})
+        declared = raw.get("objective") or {}
+        objective["lines"] = float(declared.get("lines", objective["lines"]))
+        objective["regions"] = float(declared.get("regions", objective["regions"]))
 
     summary = {}
     violations = []
@@ -137,6 +145,31 @@ def main(argv: list[str] | None = None) -> int:
     for name in missing:
         violations.append(f"{name}: declared in thresholds but absent from the report")
 
+    # Objective gap: the ratified target is 100 % on every measured file (D10,
+    # 2026-11-11). Floors are the ratchet that keeps CI green today; this section
+    # lists what still stands between the current state and the target, file by
+    # file, with the uncovered line numbers. It is informative unless
+    # `--fail-on-gap` is passed.
+    gap_files: list[str] = []
+    if args.gap or args.fail_on_gap:
+        print(f"\nobjective: {objective['lines']:g}% lines / {objective['regions']:g}% regions")
+        for name in sorted(files):
+            row = summary[name]
+            if row["lines"] + 1e-9 >= objective["lines"] and row["regions"] + 1e-9 >= objective["regions"]:
+                continue
+            gap_files.append(name)
+            uncovered = uncovered_lines(files[name])
+            shown = ", ".join(str(line) for line in uncovered[:25])
+            more = f" (+{len(uncovered) - 25} more)" if len(uncovered) > 25 else ""
+            print(
+                f"  {name}: lines {row['lines']:.2f}% regions {row['regions']:.2f}%"
+                f" — {len(uncovered)} uncovered line(s): {shown}{more}"
+            )
+        if gap_files:
+            print(f"files below the objective: {len(gap_files)}")
+        else:
+            print("every measured file meets the objective")
+
     totals = data["data"][0]["totals"]
     print(f"\nworkspace totals: lines {totals['lines']['percent']:.2f}% "
           f"({totals['lines']['covered']}/{totals['lines']['count']}), "
@@ -157,6 +190,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if args.check else 0
     if args.check:
         print("\nall declared coverage thresholds are met")
+    if args.fail_on_gap and gap_files:
+        print("\nOBJECTIVE GAP", file=sys.stderr)
+        print(f"  - {len(gap_files)} file(s) below the {objective['lines']:g}% objective", file=sys.stderr)
+        return 1
     return 0
 
 

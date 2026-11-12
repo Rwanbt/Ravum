@@ -24,6 +24,7 @@ Ce répertoire contient les **propositions d'ingénierie** qui ne sont ni des AD
 | [RFC-P2-VERTICALS-BLOCKERS](RFC-P2-VERTICALS-BLOCKERS.md) | P2-B/C/D/E : blocages exacts TCP, HTTP, SQLite, verticale full-stack ; preuve de liaison native, tests hermétiques | `PROPOSED` | 2026-11-11 | `examples/file-store` (magasin fichier, PAS SQL) | 023, 025, 026 |
 | [RFC-P2-EXPERIMENTAL-SURFACE](RFC-P2-EXPERIMENTAL-SURFACE.md) | P2-GATE : contrat d'isolation d'une surface expérimentale non activée par défaut (15 MUST, fail-closed) | `PROPOSED` — rien n'est activé | 2026-11-11 | aucun | 023, 029 |
 | [RFC-P2-CONTINUOUS-COMPILATION](RFC-P2-CONTINUOUS-COMPILATION.md) | P2-F : compilation continue — snapshots, cache valide, invalidation, annulation, rejet des résultats obsolètes, activation/rollback | `PROPOSED` — conception seulement | 2026-11-11 | P0-B (identité/ publication atomique) et P0-C (watch fail-closed) en place | 012, 020, 021, 022 |
+| [RFC-D13-STATICITY](RFC-D13-STATICITY.md) | D13 : preuve déterministe de la staticité de `&str` (règle d'origine + règle de stockage) ; rend `a[1]` retournable sans hypothèse | `PROPOSED` — décision du responsable attendue | 2026-11-11 | conformance 456 cas, `E-OWN-REF-ESCAPE` outillé | — |
 
 ## Relation avec les autres documents
 
