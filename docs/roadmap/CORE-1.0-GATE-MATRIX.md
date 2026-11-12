@@ -374,7 +374,7 @@ Ce que cette passe change, et ce qu'elle ne prouve pas :
 | Élément | Valeur |
 |---|---|
 | Base de cette passe | `c6f2afc` (docs de la passe 9, code mesuré `21cf7d4`), branche `feat/lang-core-1.0-rc` |
-| Commit de code, de test et de corpus | `2b31d63` (ce document est le commit de documentation qui suit) |
+| Commit de code, de test et de corpus | `2b31d63` ; documentation `8d8bf32` |
 | Décisions du responsable | **D13** : « 2 - ok » → ni A (hypothèse) ni B (refus), **la preuve** (`docs/rfc/RFC-D13-STATICITY.md` §6). **`F-META-006`** : « 1 - ok » → exemption approuvée, date `2026-11-12`, réexamen au plus tard le `2027-02-12` |
 | Défaut sémantique fermé | `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str` sur un texte statique et les **copies locales à travers une frontière de fonction** sont désormais **prouvés statiques** (règle d'origine + règle de stockage) et acceptés ; `String::as_str()` reste refusé |
 | Divergence backend fermée (1) | `emit.rs` : un `&str` **imbriqué** dans un paramètre était émis `[&str; 2]` / `Option<&str>`. Dès que `return a[1]` est devenu accepté, `rustc` refusait la sortie (`E0310`, durée de vie) : forme `check`-pass / `build`-fail. Les types imbriqués sont maintenant `&'static str` ; seul le `&str` propre au paramètre reste élidé |
@@ -384,8 +384,9 @@ Ce que cette passe change, et ce qu'elle ne prouve pas :
 | Conformance + build | **463 cas : 462 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=200 covered=200 verified=120 implicit=80 failed=0 environment=0 not_measured=0` ; `build_verified: true` |
 | **Formes ouvertes connues** | **0** — aucune forme `check`-pass / `build`-fail connue, dans ou hors corpus ; la forme trouvée par cette passe est fermée et verrouillée par deux tests backend |
 | Couverture | non re-mesurée dans cette passe : elle est mesurée par `coverage.yml` sur `sema + codegen` avec l'objectif 100 % (`tools/coverage_thresholds.json`) ; les lignes ajoutées sont exercées par 25 tests et 7 cas |
-| CI | à mesurer après push (cette section est écrite avant le push) |
-| Livraison | aucun tag, aucune release, aucune signature ; cette passe reste sur la branche de travail, `main` inchangée |
+| **CI sur ce code** | **8/8 verts sur `8d8bf32` (`push`)** : Linux qualification [43309750021](https://github.com/Rwanbt/Ravum/actions/runs/43309750021) (workspace, conformance, Miri, smoke, installateur, WASI verts ; TSan `NOT_APPLICABLE`), MVP product checks [43309750384](https://github.com/Rwanbt/Ravum/actions/runs/43309750384) (build, tests, démos M1/COLLAB-1/M2/DSP/M4, **E2E navigateur réel en 19 s**), qualification evidence Windows [43309749722](https://github.com/Rwanbt/Ravum/actions/runs/43309749722) (conformance 463 cas, reproductibilité, SBOM, provenance, installateur), gate contracts [43309749969](https://github.com/Rwanbt/Ravum/actions/runs/43309749969), coverage [43309749806](https://github.com/Rwanbt/Ravum/actions/runs/43309749806) (ratchet tenu), impact [43309750069](https://github.com/Rwanbt/Ravum/actions/runs/43309750069), VS Code [43309750459](https://github.com/Rwanbt/Ravum/actions/runs/43309750459), macOS [43309750149](https://github.com/Rwanbt/Ravum/actions/runs/43309750149). Côté PR [#106](https://github.com/Rwanbt/Ravum/pull/106) : **7/8 verts** ; le doublon du job `mvp` (même SHA, même workflow) est resté **bloqué dans « Browser E2E » sur le runner** alors que le même pas a pris 19 s sur le push — flake E2E déjà documenté (T7), **pas un échec du code**. |
+| Re-vérification locale (2026-11-12) | `cargo test --workspace` : **113 suites, 1562 passés / 0 échec / 2 ignorés** (exit 0) ; `ravum-conformance run --verify-build` : **463 cas, 462 PASS / 0 FAIL / 1 SKIP**, `perimeter=200 covered=200 verified=120 implicit=80 failed=0`, `build_verified: true` — même machine, `rustc 1.95.0`, code `2b31d63` |
+| Livraison | **PR [#106](https://github.com/Rwanbt/Ravum/pull/106) ouverte en draft (base `dev`)** ; aucun tag, aucune release, aucune signature ; `main` inchangée |
 
 Ce que cette passe change, et ce qu'elle ne prouve pas :
 
