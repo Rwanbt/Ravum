@@ -6,11 +6,45 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 sexies** ci-dessous porte la passe du
-> **2026-11-11 (passe 9, SHA `21cf7d4`)** et **prévaut pour les chiffres
-> courants** ; la section 0 quinquies est la passe 8 (`7696e2a`), la section
-> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6
-> (`5d88ecb` → `9da9b12`).
+> (SHA `a277b86`). La **section 0 septies** ci-dessous porte la passe du
+> **2026-11-12 (passe 10, D13)** et **prévaut pour les chiffres courants** ; la
+> section 0 sexies est la passe 9 (`21cf7d4`), la section 0 quinquies la passe 8
+> (`7696e2a`), la section 0 quater la passe 7 (`c6b4537`), la section 0 ter la
+> passe 6 (`5d88ecb` → `9da9b12`).
+
+## 0 septies. Addendum passe 10 — D13 : la staticité est prouvée (2026-11-12)
+
+Cette section **prévaut sur 0 sexies et sur toutes les suivantes** pour les
+chiffres courants. Elle porte sur trois choses : D13 (provenance de
+`&'static str` à travers les agrégats), deux divergences backend fermées, et
+l'approbation humaine de l'exemption `F-META-006`.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace` | **113 suites, 1562 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance (`run --verify-build`) | **463 cas : 462 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **200/200** couverts, **120** vérifiés, **80** implicites, **0 échec**, `build_verified: true` |
+| Formes `check`-pass / `build`-fail ouvertes connues | **0** (la forme trouvée par cette passe — positions de type `&str` imbriquées — est fermée et verrouillée par deux tests backend) |
+| D13 | **implémentée** : `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str` statique et copies locales à travers un appel acceptés par preuve ; `String::as_str()` reste refusé |
+| Tests ajoutés | **12 tests d'audit**, **10 tests unitaires**, **3 tests backend** (compilation + exécution réelles), **7 cas de corpus** (5 `run-pass`, 2 `compile-fail`) |
+| Traçabilité FeatureId | **188/188** (inchangée) ; `F-META-006` **approuvée** par le responsable (2026-11-12, réexamen 2027-02-12) |
+| Registre des codes | **108** codes enregistrés / **126** émis / 0 hors registre |
+| Couverture | **non re-mesurée** dans cette passe ; dernière mesure **88,54 % lignes / 87,86 % régions** (`21cf7d4`, sema + codegen) ; la CI la rejoue |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` vert sur son périmètre mesuré (463 cas), `T2` reste `PARTIAL` pour la raison indépendante D10, `T4`/`T12` restent `BLOCKED` |
+
+Ce qui a changé, et ce que cela ne prouve pas :
+
+* **La preuve, pas l'hypothèse** : la règle de stockage (aucun `&str` emprunté
+  dans un agrégat) était déjà outillée à chaque site ; elle rend la règle
+  d'origine (littéral, copie, projection, agrégat de statiques, appel vérifié)
+  vraie par construction. C'est une analyse locale, sans lifetimes ni solveur.
+* **La divergence backend a été trouvée par le contrôle de build** : un `&str`
+  imbriqué dans un paramètre était émis `[&str; 2]` ; dès que `return a[1]` est
+  devenu accepté, `rustc` l'a refusé (`E0310`). La position `Param` ne s'applique
+  plus qu'au `&str` propre du paramètre. `str::as_str`, accepté par le
+  vérificateur mais sans abaissement, est désormais une identité.
+* **Ce que cette passe ne prouve pas** : la preuve est locale (I-STR), pas une
+  certification ; pas d'audit externe (D4); couverture, reproductibilité,
+  mutation et performance ne sont pas re-mesurées ici.
 
 ## 0 sexies. Addendum passe 9 — les deux dernières divergences de move sont fermées (2026-11-11, SHA `21cf7d4`)
 

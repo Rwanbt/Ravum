@@ -23,7 +23,7 @@
 | **D9** | Pas d'intérêt tant que le langage n'est pas prêt pour la prod | Signature de release **différée** ; aucun mécanisme bloqué | Statut `DEFERRED`, **aucune clé générée**, T11 reste `PARTIAL` sur ce seul point |
 | **D10** | « Je vise une couverture de 100 % » | Objectif **100 % lignes et régions** inscrit dans le ratchet | `coverage_report.py --gap` liste les lignes non couvertes : **11 fichiers, ~2 100 lignes** au départ ; les seuils montent à 100 fichier par fichier |
 | **D11** | OK | Comptes corrigés + collisions d'identifiants documentées | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, `Q-GRAM-11` (voir §8) |
-| **D13** | « Une preuve déterministe ? A et B me semblent bancales » | **Réponse : oui, ni A ni B** | `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine + règle de stockage ⇒ staticité **prouvée**, pas supposée. Implémentation à lancer |
+| **D13** | « Une preuve déterministe ? A et B me semblent bancales » | **Réponse : oui, ni A ni B** | `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine + règle de stockage ⇒ staticité **prouvée**, pas supposée. **Décision 2026-11-12 : « 2- ok » → implémentée** (voir §5, issue) |
 
 ## 2. Ce qui a été appliqué tout de suite (D11)
 
@@ -106,6 +106,13 @@ constats.
 
 ## 5. D13 — la question, expliquée avec des programmes
 
+> **Issue (2026-11-12)** : réponse du responsable « 2 - ok » → implémentation
+> faite. La solution retenue est **la preuve** (règle d'origine + règle de
+> stockage), pas l'hypothèse A ni le refus B. `return a[1]` et `let s = a[1];`
+> sont désormais **acceptés**, `String::as_str()` reste refusé. Mesures et
+> fichiers : [`RFC-D13-STATICITY.md`](../rfc/RFC-D13-STATICITY.md) §6. Les
+> paragraphes ci-dessous sont l'explication d'origine, conservée comme dossier.
+
 **Le sujet en une phrase** : aujourd'hui, un `&str` rangé dans un tableau (ou un
 champ) ne peut pas en ressortir dans une variable ou un `return`, alors que la
 spécification dit qu'un `&str` est une valeur `Copy` que l'on peut stocker et
@@ -157,12 +164,12 @@ existant n'est refusé (9/9 examples, 0 FAIL de conformance).
   pour l'utilisateur : `a[1]` dans une variable reste refusé, avec un message qui
   renvoie à la limitation documentée.
 
-**Ma recommandation : B**, parce que c'est sûr, que rien n'est bloqué aujourd'hui,
-et que A engage la sûreté du modèle pour un gain d'ergonomie. Si tu préfères A,
-ce n'est pas un correctif mais un **choix de modèle** : il faut le financer comme
-tel (traçage de staticité + tests d'invariant).
-
-**Ce que je te demande** : `D13: A` ou `D13: B`.
+**Ma recommandation était : B**, parce que c'est sûr, que rien n'est bloqué
+aujourd'hui, et que A engageait la sûreté du modèle pour un gain d'ergonomie. La
+décision du 2026-11-12 est allée plus loin : **ni A ni B, mais la preuve** — la
+règle de stockage déjà outillée transforme l'hypothèse de A en invariant
+vérifié, donc le refus de B n'est plus nécessaire. Ce n'était pas un correctif
+mais bien un travail sémantique, financé comme tel (voir RFC §6).
 
 ## 6. D6 — périmètre gelé de Core 1.0
 
@@ -209,12 +216,16 @@ des seuils à tenir, pas des portes fermées.
 objectif 100 % inscrit ; job macOS ajouté ; revue multi-IA triée ; programme FFI
 en 4 étages ; conception D13 déterministe.
 
-**Attend ta main (2 points)** :
+**Réponses du 2026-11-12** (les deux points de la version précédente) :
 
-| Quoi | Pourquoi | Format |
+| Quoi | Réponse | Effet |
 |---|---|---|
-| **Approbation de l'exemption `F-META-006`** | Elle était auto-approuvée par un agent (constat confirmé de la revue). Elle est maintenant `PENDING_HUMAN_APPROVAL` : il faut un humain, une date et une échéance de réexamen | « F-META-006 approuvée, réexamen le <date> » |
-| **D13 : lancer l'implémentation ?** | La preuve déterministe est écrite (`RFC-D13-STATICITY.md`) ; c'est un travail d'ingénierie dans `own.rs`, pas une nouvelle décision de modèle | « D13 : implémente » |
+| **Exemption `F-META-006`** | « 1 - ok » | `approved_by` = responsable, date `2026-11-12`, réexamen au plus tard le `2027-02-12` ; `features_coverage.py --strict` reste 188/188 |
+| **D13 : implémentation** | « 2 - ok » | Implémentée (règle d'origine dans `own.rs`/`typeck.rs`, positions de type dans le backend) ; 6 cas de conformance, 20 tests, corpus 462/461/0/1, `build_verified: true` |
+
+Il ne reste donc **aucun point en attente de ta main** sur ce document. Les
+suites (couverture 100 %, D7, mutation) sont suivies dans
+[`PRODUCTION-READINESS.md`](../roadmap/PRODUCTION-READINESS.md).
 
 **À surveiller** : le premier run de `macos-qual.yml` (Tier 2) et le premier run
 de `mutation.yml` depuis `main`.

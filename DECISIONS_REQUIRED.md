@@ -23,7 +23,7 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
 | **D9** | Sans intérêt avant la mise en production | **DIFFÉRÉE** : aucune clé générée, aucun mécanisme bloqué ; T11 reste `PARTIAL` sur ce seul point |
 | **D10** | « Je vise une couverture de 100 % » | **Objectif 100 % lignes ET régions** inscrit dans `tools/coverage_thresholds.json` ; `coverage_report.py --gap` liste les lignes non couvertes : **11 fichiers, ~2 100 lignes** au départ. Deux métriques de traçabilité adoptées ; couverture étendue au codegen (87,04/86,05, seuils ajoutés) |
 | **D11** | OK | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, collisions `G-5.11`/`G-6.40` documentées (`Q-GRAM-11`) |
-| **D13** | « Une preuve déterministe ? A/B me semblent bancales » | **Réponse : oui, et ce n'est ni A ni B.** `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine (treillis littéral/copie/projection/agrégat) + règle de stockage déjà outillée ⇒ tout `&str` lu dans un agrégat est statique **par construction**. Décision : lancer l'implémentation (fait de staticité dans `own.rs` + matrice de tests) |
+| **D13** | « Une preuve déterministe ? A/B me semblent bancales » | **Réponse : oui, et ce n'est ni A ni B.** `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine (treillis littéral/copie/projection/agrégat) + règle de stockage déjà outillée ⇒ tout `&str` lu dans un agrégat est statique **par construction**. **Implémentée le 2026-11-12** (« 2- ok ») : `return a[1]`, `let s = a[1]`, champ de struct, payload de `match`, `Option::unwrap` acceptés ; `String::as_str()` toujours refusé. Preuves : 6 cas de conformance, 10 tests unitaires, 10 tests d'audit, 3 tests backend ; conformance **462 cas, 461 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` |
 
 ## D1 — Licence du code et gouvernance (#34) — **RÉSOLUE**
 
@@ -236,7 +236,19 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   mesuré** (l'invariant général reste une observation outillée, pas une preuve).
   Détail : `CONFORMANCE-BUILD-CONTRACT.md` §9-§9 ter, `T2-FINDINGS.md` §23-§24.
 
-## D13 — Provenance de `&'static str` à travers les agrégats — **OUVERTE**
+## D13 — Provenance de `&'static str` à travers les agrégats — **RÉSOLUE et IMPLÉMENTÉE (2026-11-12)**
+
+> **Décision du responsable (2026-11-12) : « 2 - ok » → implémente.** La réponse
+> retenue n'est ni A (hypothèse) ni B (refus conservateur) : c'est **prouver**.
+> OWN-6.1/6.2 restent inchangées ; le vérificateur décide désormais la staticité
+> par la **règle d'origine** (littéral, copie, projection d'agrégat, agrégat de
+> statiques, appel dont tous les retours sont statiques), et la preuve tient
+> parce que la **règle de stockage** (aucun `&str` emprunté ne peut entrer dans
+> un agrégat) est déjà outillée à chaque site. Conséquences mesurées :
+> `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`
+> et `str::as_str` sur un texte statique sont acceptés ; `String::as_str()`
+> reste refusé. Détail : `docs/rfc/RFC-D13-STATICITY.md` §6. Dossier
+> d'instruction ci-dessous, conservé tel quel.
 
 - **Question** : `let s = a[1];` et `fn f(a: [&str; 2]) -> &str { return a[1]; }`
   passent-ils en Core 1.0 ? Aujourd'hui non : `E-OWN-REF-ESCAPE` (règle visée

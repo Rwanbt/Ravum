@@ -7,11 +7,13 @@
 > ligne ci-dessous n'est cochée sans la commande, le SHA et la sortie qui la
 > ferment.
 >
-> **État au commit `0c2ceb8`** (Windows 11 x64, `rustc 1.95.0`) : conformance
-> **456 cas : 455 PASS / 0 FAIL / 1 SKIP**, périmètre build **195/195**,
-> `build_verified: true` ; workspace **113 suites, 1537 passés / 0 échec** ;
-> **0 forme `check`-pass / `build`-fail connue** ; gates **4 PASS / 7 PARTIAL /
-> 2 BLOCKED**.
+> **État au 2026-11-12** (Windows 11 x64, `rustc 1.95.0`, passe 10) :
+> conformance **463 cas : 462 PASS / 0 FAIL / 1 SKIP**, périmètre build
+> **200/200**, `build_verified: true` ; workspace **113 suites, 1562 passés /
+> 0 échec** ; **0 forme `check`-pass / `build`-fail connue** ; gates
+> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Couverture : dernière mesure
+> **88,54 % lignes / 87,86 % régions** (`21cf7d4`, sema + codegen), objectif
+> **100 %** inscrit — écart et plan en §6.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -70,7 +72,7 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | 43 ADR `PROPOSED` ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | 456 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
+| R2 | **fait sur le périmètre** | 463 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
 | R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels ; programme §5 étendu aux **wrappers sûrs**, modules `trusted`, effets déclarés sur l'`extern` et isolation |
@@ -81,7 +83,7 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | R10 | `PARTIAL` | CLI et JSON documentés et testés ; politique de dépréciation absente |
 | R11 | `PARTIAL` | installateur Windows CI 16/16 ; Linux installé par la CI de qualification mais pas de contrat d'installateur public |
 | R12 | **différé** | mécanisme qualifié (refus d'un binaire altéré) ; **aucune clé** (D9 différée) |
-| R13 | `BLOCKED` | trois revues LLM reçues (Claude, ChatGPT, DeepSeek) mais non versées au dépôt ; un audit humain indépendant reste requis |
+| R13 | `BLOCKED` | quatre revues LLM (Claude, ChatGPT, DeepSeek, + la revue interne) reçues et triées dans `docs/audit/2026-11-reviews/TRIAGE.md` (16 constats vérifiés, verdicts CONFIRMÉ/FAUX/HISTORIQUE) ; un audit humain indépendant reste requis |
 | R14 | `PARTIAL` | quarante affirmations fausses corrigées en passe 8 ; guide utilisateur absent |
 
 ## 4. Plan de travail, par ordre de dépendance
