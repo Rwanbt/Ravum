@@ -441,17 +441,18 @@ dans ce lot.
 | R13 | `BLOCKED` | audit humain indépendant requis |
 | R14 | `PARTIAL` | gouvernance corrigée ; guide utilisateur absent |
 
-Mesures principales : workspace **100 groupes / 1 597 passés / 0 échec /
-5 ignorés** ; conformance **475 / 474 PASS / 0 FAIL / 1 SKIP**,
+Mesures principales : workspace **100 groupes / 1 600 passés / 0 échec /
+5 ignorés** ; conformance **476 / 475 PASS / 0 FAIL / 1 SKIP**,
 `build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
 **11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
 cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
 (transport inclus, 20 éditions d'une ligne). Fuzz long rejoué :
-249 054 entrées / 0 échec et 100 000 itérations / 0 échec. `OwnFacts` : étape A
-livrée (faits enregistrés, 2 tests), étape B partielle (garde de cohérence
-`Copy`/`Move`, 0 désaccord sur 600 programmes + 475 cas), étape C `NOT_RUN`.
-Phase 5 (`rt`) : gate de traps + méthodes entières explicites + **4 cas de
-conformance** (475 au total), `5.4` (`examples/dsp-gain-iir`) `NOT_RUN` faute
-d'API de slice sûre. La phase 8 reste `NOT_RUN` (RFC écrite, aucune
-implémentation partielle).
+249 054 entrées / 0 échec et 100 000 itérations / 0 échec. Couverture
+**89,29/88,67**, seuils tenus. `OwnFacts` : étape A livrée (faits enregistrés,
+2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
+600 programmes + 476 cas), étape C `NOT_RUN`.
+Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
+entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
+(`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste
+`NOT_RUN` (RFC écrite, aucune implémentation partielle).
 

@@ -516,6 +516,33 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   test et les documents.
 - **CI** : sur `36ae70b`, **8/8 workflows verts**, coverage ratchet incluse.
 
+## Entrée 2026-11-14 (round 6) — Affectation composée, couverture résorbée
+
+| Champ | Valeur |
+|---|---|
+| Tâches | phase 5 (complément : affectation composée), 9.2 (couverture) |
+| Statut | 5.2-5.3 renforcés ; couverture du round 5 **résorbée** |
+| Fichiers | `sema/src/traps.rs` (+3 tests, règle `AssignOp`), 1 cas `rt-trap-compound-assignment` |
+
+- **Trou trouvé en écrivant les tests** : `x += 1` n'était pas refusé en `rt`
+  alors que `x + 1` l'était. `traps.rs` partage désormais une règle
+  `check_binary` entre `Binary` et `AssignOp` ; le cas de conformance
+  `effects/rt-trap-compound-assignment` le prouve (compile-fail
+  `E-EFF-PROFILE`).
+- **Tests** : 7 → **10** tests unitaires (affectation composée, largeurs de
+  décalage u8/u16/u128, agrégats, `if`/`match`/`while`, littéral `&str`, cast).
+- **Preuves** : conformance **476 cas, 475 PASS / 0 FAIL / 1 SKIP**, build
+  **203/203** (`verified=122`, `implicit=81`), `build_verified: true` ;
+  workspace **100 groupes, 1 600 / 0 / 5** ; sema **698/0**.
+- **Couverture** (re-mesurée) : **89,29 / 88,67** (lignes/régions),
+  **tous seuils tenus**, 2 133 lignes non couvertes (19 917 − 17 784) ;
+  `traps.rs` passe de 78,15/71,33 à **93,37/89,39**. La baisse du round 5 est
+  donc résorbée et le total repasse au-dessus du round 3 (89,21/88,61).
+- Incident de mesure : un run de conformance a produit un timeout transitoire de
+  `types/match-expression` (571 s) ; rejoué seul puis en corpus complet, il est
+  **PASS** — c'était une contention d'environnement, pas une régression.
+
+
 
 
 
