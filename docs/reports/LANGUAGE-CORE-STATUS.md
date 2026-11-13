@@ -1,3 +1,94 @@
+# Ravum Core 1.0 — état du langage (état courant + annexe historique)
+
+> **Document de situation, pas un certificat.** Chaque chiffre est lié à une
+> commande exécutée sur une machine et un SHA. Le registre canonique des gates
+> est [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md) ;
+> les chiffres de référence et les seuils de non-régression sont dans
+> [`GOAL-BASELINE.md`](GOAL-BASELINE.md). Aucun `PROVED`, aucune maturité
+> « production » n'est revendiquée.
+>
+> **Dernière mesure : 2026-11-13**, branche `goal/production-ready` @
+> `c931fdfe346474b838ba1856f3a84bf6798bba87`, Windows 11 x64, `rustc 1.95.0`.
+> L'historique des passes (du 2026-11-09 au 2026-11-13) est déplacé **tel quel**
+> en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
+> passe, pas ceux du HEAD.
+
+## 1. État courant
+
+### 1.1 Ce que dit la mesure (phase 0 du GOAL, `c931fdf`)
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **94 groupes `test result` : 1574 passés / 0 échec / 2 ignorés**, exit 0 |
+| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **683 passés / 0 échec**, exit 0 |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=202 covered=202 verified=121 implicit=81 failed=0` ; `build_verified: true` ; exit 0 |
+| Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
+| Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
+| Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |
+| Contrats Python | `python -m unittest discover -s tools/tests` | **33 tests OK**, exit 0 |
+| Formatage | `cargo fmt --all -- --check` | exit 0 |
+
+**Note de comptage.** Les rapports antérieurs annoncent « 113 suites » pour le
+workspace. La commande ci-dessus produit **94** groupes `test result` (un par
+binaire de test), avec exactement le même nombre de tests passés (1574) et
+ignorés (2). La méthode qui donne 113 n'est pas reproduite ; l'écart est consigné
+dans `GOAL-BASELINE.md` §4.2 et aucun chiffre n'est recopié sans sa commande.
+
+### 1.2 Composants (état réel, sans chiffre non mesuré)
+
+- `crates/ravum-lang-syntax` : lexer, AST, parser récursif descendant avec
+  récupération, formateur. `NodeId` porte déjà le `FileId` dans ses 8 bits hauts
+  et un compteur 24 bits **par fichier** (`parser.rs`), ce qui rend ses
+  identifiants stables par fichier (vérifié en phase 6 du GOAL).
+- `crates/ravum-lang-sema` : résolution de modules/visibilité, table builtins,
+  typechecker, exhaustivité, effets transitifs et profils `core`/`pure`/`rt`,
+  borrow checker conservateur (init, moves, move partiel, prêts, non-échappement,
+  drop, provenance `&'static str`), faits typés (`CheckedProgram`).
+- `crates/ravum-lang-codegen` : un fichier Rust autonome et auditable par
+  programme, prélude sûr, `#![forbid(unsafe_code)]` **sans** `extern`, et
+  `#![deny(unsafe_code)]` + `#[allow(unsafe_code)]` local au wrapper généré
+  **avec** `extern` (FFI scalaire expérimentale).
+- `crates/ravum-lang-cli` : `ravum-lang` (`init`, `check`, `build`, `run`,
+  `watch`/`dev`, `test`, `fmt`, `lint`, `doc`, `cache`, `doctor`, `lsp`), loader
+  de packages, JSON versionné (`schema_version: 1`), codes de sortie stables.
+- `crates/ravum-lang-lsp` : serveur LSP réel sur stdio (diagnostics, hover,
+  definition, references, rename, completion, symboles, formatage), partiel.
+- `tools/conformance` + `conformance/` : harnais indépendant (std only) et
+  corpus déclaratif, dont la vérification `check ⇒ build`.
+- `spec/language/` : spécification **DRAFT**, non ratifiée ; les ADR restent
+  `PROPOSED`.
+- `examples/` : dix verticales `.rv` (dont FFI et DSP hors-ligne).
+
+### 1.3 Gates (selon le registre, non re-mesurés dans cette phase)
+
+Le registre du 2026-11-13 donne **4 PASS / 7 PARTIAL / 2 BLOCKED**. Les deux
+`BLOCKED` sont **humains** : T4 (audit externe du borrow checker) et T12
+(Go/No-Go). Aucun agent ne peut les lever. Les états et leurs preuves vivent
+dans [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md) §2.
+
+### 1.4 Limites structurelles à ne pas oublier
+
+- La sûreté mémoire du code émis repose sur **`rustc` sous `forbid(unsafe_code)`**
+  (voie B), pas sur une preuve formelle Ravum. Conséquence : Ravum ne peut pas
+  accepter un programme que `rustc` refuse sur cette voie (voir design §1 mis à
+  jour).
+- Le modèle d'emprunt est volontairement conservateur (pas de références
+  stockées/retournées en général, pas de lifetimes explicites).
+- La FFI est scalaire et **expérimentale** ; les bibliothèques C appelées ne sont
+  pas prouvées. Le profil `pure` la refuse.
+- Le profil `pure` ne suit pas les traps intrinsèques (overflow, division, index) ;
+  le profil `rt` ne les exclut pas encore (phase 5 du GOAL).
+- Pas de backend natif direct (Cranelift gelé), pas de traits/closures/async/
+  threads, hot reload du langage = redémarrage (pas encore de bloc DSP `.rv`).
+- Une seule machine locale (Windows) ; Linux dépend de la CI, les autres cibles
+  ne sont pas annoncées.
+
+---
+
+## 2. Annexe — historique des passes (déplacé tel quel, non mis à jour)
+
+> Les sections ci-dessous sont reproduites **telles quelles** ; leurs chiffres sont ceux de leur passe. Le corps original commence par la mention « snapshot de travail ».
+
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
 > **Mise à jour lot couverture 1 — 2026-11-13.** Aucune ligne du compilateur
