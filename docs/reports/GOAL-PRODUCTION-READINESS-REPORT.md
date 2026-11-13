@@ -126,6 +126,28 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T11 | `PARTIAL` | reproductibilité release rejouée (`19743DC2…` sur deux racines) ; SBOM déterministe (64/170) ; installateur rejoué ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 
+### 4.3 CI observée sur la PR brouillon
+
+La PR [#110](https://github.com/Rwanbt/Ravum/pull/110) (brouillon, base `dev`) a
+déclenché les workflows de la CI. Sur le SHA `303da6a` (code identique à
+`faf65cb`, seul le journal diffère), les **8 workflows exécutés sont verts** :
+
+| Workflow | Résultat |
+|---|---|
+| Documentation integrity | succès (8 s) |
+| Validation gate contracts (bloquant) | succès (12 s) |
+| VS Code integration (éditeur réel) | succès (1 m 02) |
+| Coverage ratchet (planchers par fichier) | succès (1 m 54) |
+| Qualification evidence (Windows : conformance, repro, SBOM, provenance, installateur) | succès (2 m 31) |
+| macOS qualification (Tier 2) | succès (3 m 57) |
+| MVP product checks (build, tests, démos) | succès (10 m 39) |
+| MVP impact-selected checks | succès (14 m 22) |
+
+Un run `impact` antérieur, déclenché sur le SHA précédent (`8abf258`), a été
+**annulé par le push** qui a suivi : c'est une supersession, pas un échec. Aucun
+workflow n'est rouge. Le commit qui ajoute cette section est **docs-only** ; son
+propre run CI n'est pas attendu dans ce rapport.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.

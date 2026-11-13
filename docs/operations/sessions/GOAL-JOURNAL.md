@@ -377,6 +377,16 @@ monolithes (9.7). Phases 4.3-4.5, 5 et 8 : `NOT_RUN` avec RFC écrites.
 - Mode long nominal de l'oracle, Miri, mutation, LSP bout en bout.
 - T4, T12, D9, D10, D7 : humains.
 
+### Clôture 2026-11-13 — CI de la PR (SHA `303da6a`)
+
+Les **8 workflows exécutés sont verts** sur le SHA de la PR : documentation
+integrity, validation gate contracts, VS Code integration, coverage ratchet,
+qualification evidence Windows (conformance, repro, SBOM, provenance,
+installateur), macOS Tier 2, MVP product checks, MVP impact-selected checks.
+Un run `impact` du SHA précédent a été **annulé par le push** (supersession, pas
+échec). Le présent commit de journal est **docs-only** et ne change pas le code
+mesuré. Aucun correctif CI n'a été nécessaire.
+
 
 
 
