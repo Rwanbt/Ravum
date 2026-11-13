@@ -194,6 +194,58 @@ pub(crate) fn ms(duration: Duration) -> f64 {
     (duration.as_secs_f64() * 1000.0 * 1000.0).round() / 1000.0
 }
 
+/// `-C incremental` directory for a debug build, or `None`.
+///
+/// **Opt-in, disabled by default.** The measured gain was null or negative on
+/// the reference machine (phase 3.4: an 800-function program took 868 ms of
+/// `rustc` with incremental against 785 ms without, cold and after a one-line
+/// edit), so the flag is enabled only with `RAVUM_INCREMENTAL=1`. Release and
+/// test builds never receive it.
+///
+/// The directory is keyed by a **session** identity (crate name/kind, target,
+/// opt level, rustc and generator versions) and deliberately **not** by the
+/// source digest: keying it by the source digest would create a fresh directory
+/// on every edit and make incremental compilation useless. The directory is
+/// derived data: it is not part of the build identity, the published artifact or
+/// its digest, and `ravum-lang cache clean` removes `<package>/.ravum/` entirely.
+fn incremental_dir(
+    cache: &Path,
+    identity: &BuildIdentity,
+    options: &BuildOptions,
+) -> Option<PathBuf> {
+    if options.release || options.test_mode {
+        return None;
+    }
+    let enabled = std::env::var("RAVUM_INCREMENTAL")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !enabled {
+        return None;
+    }
+    let session = format!(
+        "{}|{}|{}|{}|{}|{}",
+        identity.crate_name,
+        identity.crate_kind,
+        identity.opt_level,
+        identity.target,
+        identity.rustc,
+        identity.generator,
+    );
+    let key = fnv1a64(session.as_bytes());
+    Some(cache.join("incr").join(format!("{key:016x}")))
+}
+
+/// FNV-1a 64: short, dependency-free and deterministic cache key (not a
+/// cryptographic hash; the incremental directory is derived data).
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// Durations of the build stages that happen after the frontend.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BuildTimings {
@@ -821,6 +873,17 @@ pub fn compile_program_with_timings(
     }
     if is_library {
         command.arg("--crate-type").arg("lib");
+    }
+    // Incremental compilation, debug builds only (phase 3.3). The directory is
+    // derived data: it is not part of the build identity, the published
+    // artifact or its digest, and `ravum-lang cache clean` removes it with the
+    // rest of `<package>/.ravum/`. `RAVUM_NO_INCREMENTAL=1` disables it (used
+    // for the before/after measurement and as a kill switch).
+    if let Some(incremental) = incremental_dir(&cache, &identity, options) {
+        let _ = std::fs::create_dir_all(&incremental);
+        command
+            .arg("-C")
+            .arg(format!("incremental={}", incremental.display()));
     }
     // Never hand a Windows verbatim (`\\?\`) path to rustc: it forwards the
     // output/object paths to `link.exe`, which fails with
