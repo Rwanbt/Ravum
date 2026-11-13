@@ -14,7 +14,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -774,4 +774,75 @@ fn warm_incremental_edits_match_a_cold_analysis() {
         );
     }
     warm.shutdown_and_exit();
+}
+
+/// End-to-end latency of one diagnostic after a one-line edit, over the real
+/// LSP transport (JSON-RPC framing, server, analysis, publish).
+///
+/// Measurement only (`#[ignore]`): 20 edits insert one unused binding inside
+/// `examples/package-demo/app/src/main.rv`'s `main` (in memory only, never
+/// written), so every edit changes the diagnostic set and a `publishDiagnostics`
+/// notification is guaranteed. The package is a two-file package (`app` →
+/// `util`), which is the smallest realistic project.
+#[test]
+#[ignore = "measurement: end-to-end LSP latency after one-line edits"]
+fn end_to_end_diagnostic_latency_after_one_line_edit() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/package-demo/app");
+    let root = fs::canonicalize(&root)
+        .unwrap_or_else(|error| panic!("cannot canonicalize {}: {error}", root.display()));
+    // `canonicalize` returns a Windows verbatim (`\\?\`) path; a `file:///\\?\...`
+    // URI is not valid for the server's URI parser. Strip the prefix.
+    let root = {
+        let text = root.to_string_lossy().to_string();
+        PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
+    };
+    let main = root.join("src").join("main.rv");
+    let original = fs::read_to_string(&main).expect("cannot read package-demo main.rv");
+
+    let mut client = LspClient::start();
+    client.initialize(&root);
+    let uri = uri_for(&main);
+    client.open(&uri, &original);
+    let _ = client.wait_notification("textDocument/publishDiagnostics");
+
+    let mut text = original.clone();
+    let mut version = 2;
+    let mut times: Vec<f64> = Vec::with_capacity(20);
+    for index in 0..20 {
+        let insertion = format!("    let unused_probe_{index}: i32 = 0;\n");
+        // Insert before `Ok(())`, i.e. *inside* main and before its tail
+        // expression: appending after the tail would be unreachable code and the
+        // unused-binding warning would not appear (so no diagnostics change and
+        // the server would legitimately skip the publish, deduplicated).
+        let at = text
+            .find("    Ok(())")
+            .expect("package-demo main must contain an `Ok(())` tail");
+        text.insert_str(at, &insertion);
+        let started = Instant::now();
+        client.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{ "text": text }],
+            }),
+        );
+        version += 1;
+        let _ = client.wait_notification("textDocument/publishDiagnostics");
+        times.push(started.elapsed().as_secs_f64() * 1000.0);
+    }
+    client.shutdown_and_exit();
+
+    let mut sorted = times.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let percentile = |percent: f64| -> f64 {
+        let rank = ((percent / 100.0) * sorted.len() as f64).ceil() as usize;
+        sorted[rank.max(1).min(sorted.len()) - 1]
+    };
+    let p50 = percentile(50.0);
+    let p95 = percentile(95.0);
+    eprintln!(
+        "[lsp-e2e] package-demo (2 files), 20 one-line edits, transport included: \
+         p50={p50:.3} ms p95={p95:.3} ms"
+    );
+    assert!(p50 > 0.0 && p95 >= p50, "invalid measurement");
 }
