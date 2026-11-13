@@ -363,7 +363,20 @@ monolithes (9.7). Phases 4.3-4.5, 5 et 8 : `NOT_RUN` avec RFC écrites.
 
 ### Suite
 
-PR brouillon vers `dev` (9.6) : voir l'entrée de clôture ci-dessous.
+- **9.6** PR brouillon ouverte vers `dev` :
+  [PR #110](https://github.com/Rwanbt/Ravum/pull/110), sans auto-merge.
+  Base `dev`, tête `goal/production-ready` ;
+  la PR inclut les 3 commits du lot couverture absents de `dev` (expliqué dans
+  sa description).
+- CI déclenchée sur le SHA de la PR (11 checks). Résultats consignés dans
+  l'entrée de clôture ci-dessous ; tout rouge doit être corrigé ou rapporté.
+
+### Ce qui reste après cette session
+
+- Phases 4.3-4.5, 5, 8 : à reprendre après ratification des RFC.
+- Mode long nominal de l'oracle, Miri, mutation, LSP bout en bout.
+- T4, T12, D9, D10, D7 : humains.
+
 
 
 
