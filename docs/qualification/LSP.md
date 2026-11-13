@@ -150,3 +150,22 @@ affichage) : elle reste `NOT_RUN` et ne doit pas être confondue avec la cible.
 package mesurés ; le gain observé (≈ 25 % de p95) porte sur un package de deux
 fichiers et ne s'extrapole pas à un gros projet.
 
+**Mesure de bout en bout, transport inclus (2026-11-13, round 3).** Le même
+harnais client (`crates/ravum-lang-cli/tests/lsp_client.rs`) mesure 20 éditions
+d'une ligne de `examples/package-demo/app/src/main.rv` en attendant chaque
+`textDocument/publishDiagnostics` :
+
+```
+cargo test -p ravum-lang-cli --test lsp_client -- --ignored --nocapture \
+  end_to_end_diagnostic_latency
+[lsp-e2e] package-demo (2 files), 20 one-line edits, transport included:
+          p50=2.061 ms p95=2.826 ms
+```
+
+Cela inclut le cadrage JSON-RPC, le serveur, l'analyse (cache de parse actif) et
+la publication. La cible P0-A « p95 < 50 ms » est **atteinte sur cette mesure
+locale** (pipes locaux, une machine) ; ce n'est ni une mesure réseau, ni une
+mesure avec un éditeur réel qui rend les diagnostics. Le fichier est édité **en
+mémoire** : aucun fichier du dépôt n'est modifié.
+
+

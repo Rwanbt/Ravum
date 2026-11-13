@@ -424,6 +424,33 @@ supprimant le `ravum.lock` de l'autre. Ce n'est pas un défaut du compilateur.
 Correctif : compteur atomique par processus dans les trois helpers
 (`50a1154`), vérifié localement avec `--test-threads=4`. CI rejouée sur ce SHA.
 
+## Entrée 2026-11-13 (round 3) — LSP de bout en bout ; Miri non installé
+
+| Champ | Valeur |
+|---|---|
+| Tâche | 7.2 complétée (latence de bout en bout), 9.5 partielle (Miri) |
+| Commit | `a980717` |
+| Mesure | **p50 2,061 ms / p95 2,826 ms**, 20 éditions d'une ligne de `examples/package-demo/app`, transport JSON-RPC inclus |
+
+- Nouveau test `#[ignore]` dans `crates/ravum-lang-cli/tests/lsp_client.rs` :
+  le client LSP réel envoie 20 `didChange` (le buffer grandit d'une ligne
+  inutilisée à chaque fois, donc un diagnostic change et un `publishDiagnostics`
+  est garanti), et mesure l'aller-retour complet. Le fichier est édité en
+  mémoire, jamais écrit.
+- Piège corrigé pendant la mise au point : `fs::canonicalize` renvoie un chemin
+  Windows verbatim (`\\?\`) qui produisait une URI `file:///\\?\...` invalide et
+  empêchait le serveur de rattacher le document (timeout). Le préfixe est retiré
+  dans le test.
+- **P0-A** : cible p95 < 50 ms **atteinte** sur cette mesure locale (2,8 ms),
+  avec la réserve « pipes locaux, une machine, pas de rendu éditeur ».
+- **Miri** : `cargo +nightly miri` répond que `cargo-miri.exe` n'est pas
+  installé pour la toolchain nightly locale. L'installer serait un outil
+  supplémentaire (R5) ; reste `NOT_RUN` localement, la preuve Miri Linux de la CI
+  n'est pas rejouée ici.
+- **CI** : sur `a980717`, **8/8 workflows verts** (documentation, contrats,
+  VS Code, coverage ratchet, qualification Windows, macOS, MVP produit, impact).
+
+
 
 
 

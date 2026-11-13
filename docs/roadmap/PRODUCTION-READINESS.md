@@ -445,7 +445,8 @@ Mesures principales : workspace **100 groupes / 1 590 passés / 0 échec /
 4 ignorés** ; conformance **471 / 470 PASS / 0 FAIL / 1 SKIP**,
 `build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
 **11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
-cache de parse LSP p95 **1,362 ms** (analyse). Fuzz long rejoué :
+cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
+(transport inclus, 20 éditions d'une ligne). Fuzz long rejoué :
 249 054 entrées / 0 échec et 100 000 itérations / 0 échec. `OwnFacts` : étape A
 livrée (faits enregistrés, 2 tests), étape B partielle (garde de cohérence
 `Copy`/`Move`, 0 désaccord sur 600 programmes + 471 cas), étape C `NOT_RUN`.

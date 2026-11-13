@@ -26,7 +26,8 @@
 5. `-C incremental` a un gain **nul ou négatif** : implémenté en opt-in,
    **désactivé par défaut**, chiffres publiés.
 6. Le LSP **ne re-parse plus** un fichier inchangé : p95 d'analyse après édition
-   **1,362 ms** avec cache contre **1,836 ms** sans (hors transport).
+   **1,362 ms** avec cache contre **1,836 ms** sans ; **bout en bout, transport
+   inclus, p95 2,826 ms** (p50 2,061 ms) sur 20 éditions d'une ligne.
 7. Les `NodeId` sont **déjà stables par fichier** (2 tests) : la migration
    envisagée par l'audit est **sans objet** ; la règle « aucun cache indexé par
    `FileId` » est écrite.
@@ -51,7 +52,7 @@
 | **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B) | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 30/30 ; conformance 471 / 470 / 0 / 1 ; oracle rapide **600 programmes, 0 divergence**. L'étape B ne compare que la classification `Copy`/`Move`, pas les places |
 | **5** Traps `rt` | `NOT_RUN` | `43fbd68` (RFC) | — | RFC-RT-TRAPS-1 `PROPOSED`/`PENDING_HUMAN_APPROVAL` ; aucun code, aucun cas |
 | **6** `NodeId` | `TESTED` (sans objet) | `0595b9f`, `7916840`, `91d3621` | +2 tests (stabilité inter-fichiers, layout 8/24 bits) | `cargo test -p ravum-lang-sema --test node_id_stability` : 2/2 ; `util.rv` inchangé après édition de `main.rv` |
-| **7** Cache de parse LSP | `TESTED` (analyse) ; bout en bout `NOT_RUN` | `a0a7c26`, `2d432be`, `5860ef3`, `6257b84` | +2 tests (réutilisation exacte hits/misses ; INV-07) +1 mesure `#[ignore]` | `cargo test -p ravum-lang-lsp --test parse_cache` : 2/2 ; mesure p50/p95 §3 ; `docs/qualification/LSP.md` §7 |
+| **7** Cache de parse LSP | **`TESTED`** (analyse et bout en bout local) | `a0a7c26`, `2d432be`, `5860ef3`, `6257b84`, `a980717` | +2 tests (réutilisation exacte hits/misses ; INV-07) +2 mesures `#[ignore]` (analyse, bout en bout) | `cargo test -p ravum-lang-lsp --test parse_cache` 2/2 ; `cargo test -p ravum-lang-cli --test lsp_client` 11/0 ; bout en bout **p50 2,061 ms / p95 2,826 ms** ; `docs/qualification/LSP.md` §7 |
 | **8** Bloc DSP | `NOT_RUN` | `bb3edea` (RFC) | — | ABI lue (8.1) ; RFC-RV-DSP-BLOCK-1 (8.2) ; aucun wrapper, aucun test de swap |
 | **9** Qualification | `PARTIAL` | ce rapport et les sections datées des registres | — | Voir §4 ; couverture 89,21/88,61 (seuils tenus), fuzz long rejoué, mutation/Miri `NOT_RUN`, PR brouillon |
 
@@ -81,7 +82,8 @@ dégradations auraient été placées ici en tête.
 | Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s | nouvelle preuve |
-| LSP client | non rejoué en phase 0 | **11 / 0** | nouvelle preuve |
+| LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
+| LSP bout en bout (transport inclus) | non mesuré | **p50 2,061 ms / p95 2,826 ms** sur 20 éditions d'une ligne | cible P0-A p95 < 50 ms atteinte sur cette mesure locale |
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` | nouvelle preuve |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `3c52d353…`, commit `faf65cb`), désinstallation idempotente **0 / 0** | nouvelle preuve |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `5119e194…`, déterministe | nouvelle preuve |
@@ -122,7 +124,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T4 | `BLOCKED` | inchangé : audit humain absent. Aucun agent ne peut le lever |
 | T5 | `PASS` | inchangé (smoke 43/0/0, binaires natifs) |
 | T6 | `PARTIAL` | inchangé (FFI scalaire expérimentale) |
-| T7 | `PASS` | LSP : cache de parse et latence mesurée ; client LSP 11/11 |
+| T7 | `PASS` | LSP : cache de parse et latence mesurée (analyse p95 1,362 ms ; bout en bout p95 2,826 ms, transport inclus) ; client LSP 11/11 |
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
 | T10 | `PARTIAL` | couverture/fuzz/LSP mesurés ; Miri, mutation et 30 000 programmes : `NOT_RUN` ; audit externe absent |
@@ -165,6 +167,10 @@ compilateur. Correctif : compteur atomique par processus dans les trois helpers
 (`50a1154`), vérifié localement avec `--test-threads=4` ; sur ce SHA, les
 **8/8 workflows sont verts**, macOS inclus.
 
+Sur `a980717` (ajout de la mesure de latence LSP de bout en bout), les
+**8 workflows sont à nouveau verts**, coverage ratchet et qualification Windows
+incluses. Les seuls commits postérieurs sont documentaires.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
@@ -186,10 +192,9 @@ compilateur. Correctif : compteur atomique par processus dans les trois helpers
 | Phase 5 (traps `rt`) | `NOT_RUN` | règle de langage à ratifier avant implémentation | RFC écrite |
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | `NOT_RUN` | ≈ 3 h sur cette machine ; job CI hebdomadaire fourni | 3 000 exécutés |
-| Miri | `NOT_RUN` | toolchain nightly non garantie sur cette machine ; preuve CI Linux existante non rejouée | — |
+| Miri | `NOT_RUN` | composant `cargo-miri` absent de la toolchain nightly locale ; l'installer serait un outil supplémentaire (R5) ; la preuve CI Linux existante n'est pas rejouée ici | — |
 | Mutation | `NOT_RUN` | `cargo-mutants` absent ; l'installer serait une nouvelle dépendance (R5) | — |
 | Couverture à 100 % | `NOT_RUN` | 2 103 lignes non couvertes (vue instanciations) ; aucun test « pour la ligne » ajouté | mesure + gap |
-| Astreinte LSP de bout en bout | `NOT_RUN` | mesure en processus seulement (transport exclu) | latence d'analyse mesurée |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
 
 ## 7. Décisions humaines restantes
