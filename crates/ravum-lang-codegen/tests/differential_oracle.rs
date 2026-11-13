@@ -112,6 +112,19 @@ fn maybe(flag: bool) -> Option<i32> {
     if flag { return Option::Some(3); }
     return Option::None;
 }
+fn maybe_text(flag: bool) -> Option<String> {
+    if flag { return Option::Some(String::from("yes")); }
+    return Option::None;
+}
+struct Holder { p: Pair, n: i32 }
+fn make_holder(n: i32) -> Holder {
+    return Holder { p: make_pair(n, String::from("h")), n: n };
+}
+enum Text { Empty, Full(String) }
+fn make_text_enum(flag: bool) -> Text {
+    if flag { return Text::Full(String::from("t")); }
+    return Text::Empty;
+}
 fn checked(n: i32) -> Result<i32, Error> {
     if n < 0 { return Result::Err(Error::new("negative")); }
     return Result::Ok(n);
@@ -198,6 +211,22 @@ const TEMPLATES: &[&str] = &[
     "let f$id = $lit as f64 / 2.0;\n    acc = acc + f$id as i32;",
     // 33: array-to-slice coercion at an argument
     "let a$id = [4, 5, 6];\n    acc = acc + first_of(&a$id);",
+    // 34: two element moves from the same array (historical P0-A shape)
+    "let a$id = [String::from(\"m$id\"), String::from(\"n$id\")];\n    let x$id = a$id[0];\n    let y$id = a$id[1];\n    acc = acc + x$id.len() as i32 + y$id.len() as i32;",
+    // 35: match binding moves an Option<String> payload
+    "let o$id = maybe_text(acc > 0);\n    let v$id = match o$id { Option::Some(text) => text.len() as i32, Option::None => 0 };\n    acc = acc + v$id;",
+    // 36: nested struct field move, then another field of the outer struct
+    "let h$id = make_holder($lit);\n    let p$id = h$id.p;\n    acc = acc + p$id.a + h$id.n;",
+    // 37: element move from an array of non-Copy structs
+    "let a$id = [make_pair(1, String::from(\"i$id\")), make_pair(2, String::from(\"j$id\"))];\n    let p$id = a$id[0];\n    acc = acc + p$id.a;",
+    // 38: if/else expression producing an owned String, then moved
+    "let s$id = if acc > 0 { make_text(1) } else { make_text(2) };\n    let n$id = s$id.len();\n    acc = acc + n$id as i32;",
+    // 39: enum payload move through a match binding
+    "let e$id = make_text_enum(acc > 0);\n    let n$id = match e$id { Text::Empty => 0, Text::Full(s) => s.len() as i32 };\n    acc = acc + n$id;",
+    // 40: &self method on a struct temporary
+    "acc = acc + make_pair(1, String::from(\"k$id\")).a_value();",
+    // 41: shadowing a String inside a nested block, then dropping it
+    "{ let s$id = make_text(1); let n$id = s$id.len(); acc = acc + n$id as i32; }",
 ];
 
 struct Generated {
