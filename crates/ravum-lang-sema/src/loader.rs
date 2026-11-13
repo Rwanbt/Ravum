@@ -53,6 +53,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
 
 /// The only package edition accepted by this loader (fail-closed).
 pub const MANIFEST_EDITION: &str = "core-1.0";
@@ -205,6 +206,10 @@ pub struct LoadedPackage {
     /// there is no dependency).
     pub dependencies_digest: String,
     pub lockfile_state: LockfileState,
+    /// Wall-clock time spent in the parser while loading this package (all
+    /// files, dependencies included). Additive measurement for `--timings`;
+    /// zero when the package was not parsed.
+    pub parse_time: Duration,
     /// Source files registered in `sources`, in load order (display paths).
     pub loaded_files: Vec<String>,
 }
@@ -264,6 +269,7 @@ impl LoadedPackage {
             dependencies: Vec::new(),
             dependencies_digest: empty_dependencies_digest(),
             lockfile_state: LockfileState::NotApplicable,
+            parse_time: Duration::ZERO,
             loaded_files: Vec::new(),
         }
     }
@@ -314,6 +320,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
     let mut diags = DiagnosticBag::new();
     let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
     let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut parse_time = Duration::ZERO;
 
     let program = {
         let mut ctx = CrateCtx {
@@ -325,6 +332,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
             file_ids: &mut file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut synthetic,
+            parse_time: &mut parse_time,
             overrides: &options.overrides,
         };
         load_crate_root(&mut ctx, &canonical).map(|module| Program {
@@ -334,6 +342,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
     };
 
     out.loaded_files = display_files(&sources);
+    out.parse_time = parse_time;
     if !diags.has_errors() {
         out.program = program;
     }
@@ -470,9 +479,16 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
     }
 
     // 3. Crate roots. Errors above make the program unusable; skip parsing then.
+    let mut parse_time = Duration::ZERO;
     if !diags.has_errors() {
-        let (program, lib_program, kind) =
-            load_crates(&root, &graph, &mut sources, &mut diags, options);
+        let (program, lib_program, kind) = load_crates(
+            &root,
+            &graph,
+            &mut sources,
+            &mut diags,
+            &mut parse_time,
+            options,
+        );
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
         if !diags.has_errors() {
@@ -483,6 +499,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
     }
 
     out.loaded_files = display_files(&sources);
+    out.parse_time = parse_time;
     out.sources = sources;
     out.diags = diags;
     out
@@ -1964,9 +1981,11 @@ struct CrateCtx<'a> {
     sources: &'a mut SourceMap,
     diags: &'a mut DiagnosticBag,
     file_ids: &'a mut BTreeMap<PathBuf, FileId>,
-    /// Files already included once in *this* crate (duplicate detection).
+    // Files already included once in *this* crate (duplicate detection).
     loaded: BTreeSet<PathBuf>,
     synthetic: &'a mut u32,
+    /// Accumulated wall-clock time spent in the parser (see `parse_time`).
+    parse_time: &'a mut Duration,
     /// Canonical path -> in-memory text (editor buffers not yet saved).
     overrides: &'a BTreeMap<PathBuf, String>,
 }
@@ -1976,6 +1995,7 @@ fn load_crates(
     graph: &DepGraph,
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
+    parse_time: &mut Duration,
     options: &LoadOptions,
 ) -> (Option<Program>, Option<Program>, Option<CrateKind>) {
     let src = root.join("src");
@@ -2035,6 +2055,7 @@ fn load_crates(
         diags,
         &mut file_ids,
         &mut synthetic,
+        parse_time,
         options,
     );
     (program, None, Some(kind))
@@ -2050,6 +2071,7 @@ fn load_crate_program(
     diags: &mut DiagnosticBag,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
     synthetic: &mut u32,
+    parse_time: &mut Duration,
     options: &LoadOptions,
 ) -> Option<Program> {
     let mut ctx = CrateCtx {
@@ -2061,6 +2083,7 @@ fn load_crate_program(
         file_ids,
         loaded: BTreeSet::new(),
         synthetic,
+        parse_time,
         overrides: &options.overrides,
     };
     let module = load_crate_root(&mut ctx, root_file)?;
@@ -2146,7 +2169,9 @@ fn load_file_module(
 ) -> Option<Module> {
     let file_id = ensure_source(ctx, canonical)?;
     let text = ctx.sources.file(file_id)?.text.clone();
+    let parse_started = Instant::now();
     let parsed = parse_file(file_id, &text);
+    *ctx.parse_time += parse_started.elapsed();
     ctx.diags.extend(parsed.diags);
     let mut module = parsed.program.root;
     module.name = name;
@@ -2461,6 +2486,7 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
             file_ids: &mut *ctx.file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut *ctx.synthetic,
+            parse_time: &mut *ctx.parse_time,
             overrides: ctx.overrides,
         };
         let module = load_crate_root(&mut dep_ctx, &lib_root);

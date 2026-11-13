@@ -23,14 +23,16 @@ pub fn dispatch(command: Command) -> i32 {
             json,
             profile,
             locked,
-        } => check::run(&path, json, profile, locked),
+            timings,
+        } => check::run(&path, json, profile, locked, timings),
         Command::Build {
             path,
             release,
             emit_rust,
             emit_ir,
             target,
-        } => build::run(&path, release, emit_rust, emit_ir, target),
+            timings,
+        } => build::run(&path, release, emit_rust, emit_ir, target, timings),
         Command::Run { path, args, target } => run::run(&path, &args, target),
         Command::Watch {
             path,

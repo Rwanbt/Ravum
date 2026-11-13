@@ -15,7 +15,7 @@ pub mod resolve;
 pub mod typeck;
 pub mod types;
 
-pub use check::check;
+pub use check::{check, check_with_timings, PhaseTimings};
 pub use facts::{
     CallTarget, CheckOptions, CheckResult, CheckedProgram, ConstInfo, Effect, EffectSet, EnumInfo,
     FnSig, MethodTarget, Profile, Resolution, StructInfo, VariantInfo, VariantKind,

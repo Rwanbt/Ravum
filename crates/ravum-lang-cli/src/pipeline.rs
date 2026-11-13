@@ -48,14 +48,14 @@
 use ravum_lang_codegen::{generate, GenOptions, GENERATOR_VERSION};
 use ravum_lang_sema::facts::{CheckOptions, CheckedProgram};
 use ravum_lang_sema::loader::{load_package_with_options, CrateKind, LoadOptions};
-use ravum_lang_sema::{check, LoadedPackage, Profile};
+use ravum_lang_sema::{check_with_timings, LoadedPackage, PhaseTimings, Profile};
 use ravum_lang_syntax::ast::{ItemKind, Module, Program};
 use ravum_lang_syntax::diag::DiagnosticBag;
 use ravum_lang_syntax::source::SourceMap;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::util;
 
@@ -93,6 +93,52 @@ impl Frontend {
 
 /// Load a package and run the checker on every crate root it contains.
 pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
+    analyze_with_timings(path, profile, locked).0
+}
+
+/// Wall-clock durations of one analysis, for `ravum-lang --timings`.
+///
+/// `load` excludes `parse`: `parse` is the time spent inside the parser while
+/// loading (all files, dependencies included), so `load + parse + resolve +
+/// typeck + effects + own` is the analysis total without double counting.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AnalysisTimings {
+    pub load: Duration,
+    pub parse: Duration,
+    pub resolve: Duration,
+    pub typeck: Duration,
+    pub effects: Duration,
+    pub own: Duration,
+}
+
+impl AnalysisTimings {
+    pub fn total(&self) -> Duration {
+        self.load + self.parse + self.resolve + self.typeck + self.effects + self.own
+    }
+
+    /// JSON object, additive (`schema_version` unchanged). Milliseconds with
+    /// three decimals; deterministic field order.
+    pub fn json(&self) -> serde_json::Value {
+        json!({
+            "load_ms": ms(self.load),
+            "parse_ms": ms(self.parse),
+            "resolve_ms": ms(self.resolve),
+            "typeck_ms": ms(self.typeck),
+            "effects_ms": ms(self.effects),
+            "own_ms": ms(self.own),
+            "total_ms": ms(self.total()),
+        })
+    }
+}
+
+/// `check`, plus the analysis timings. Additive: `analyze` delegates here.
+pub fn analyze_with_timings(
+    path: &Path,
+    profile: Profile,
+    locked: bool,
+) -> (Frontend, AnalysisTimings) {
+    let mut timings = AnalysisTimings::default();
+    let load_started = Instant::now();
     let mut pkg = load_package_with_options(
         path,
         &LoadOptions {
@@ -100,6 +146,9 @@ pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
             overrides: std::collections::BTreeMap::new(),
         },
     );
+    let load_total = load_started.elapsed();
+    timings.parse = pkg.parse_time;
+    timings.load = load_total.saturating_sub(timings.parse);
     let mut diags = std::mem::take(&mut pkg.diags);
     let options = CheckOptions {
         profile,
@@ -110,24 +159,54 @@ pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
 
     if !diags.has_errors() {
         if let Some(program) = &pkg.program {
-            let result = check(program, &pkg.sources, &options);
+            let (result, phase) = check_with_timings(program, &pkg.sources, &options);
+            add_phases(&mut timings, phase);
             diags.extend(result.diags);
             checked = result.checked;
         }
         if let Some(program) = &pkg.lib_program {
-            let result = check(program, &pkg.sources, &options);
+            let (result, phase) = check_with_timings(program, &pkg.sources, &options);
+            add_phases(&mut timings, phase);
             diags.extend(result.diags);
             lib_checked = result.checked;
         }
     }
 
     diags.sort();
-    Frontend {
+    let frontend = Frontend {
         target: path.to_path_buf(),
         pkg,
         checked,
         lib_checked,
         diags,
+    };
+    (frontend, timings)
+}
+
+fn add_phases(total: &mut AnalysisTimings, phase: PhaseTimings) {
+    total.resolve += phase.resolve;
+    total.typeck += phase.typeck;
+    total.effects += phase.effects;
+    total.own += phase.own;
+}
+
+pub(crate) fn ms(duration: Duration) -> f64 {
+    (duration.as_secs_f64() * 1000.0 * 1000.0).round() / 1000.0
+}
+
+/// Durations of the build stages that happen after the frontend.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BuildTimings {
+    pub codegen: Duration,
+    pub rustc: Duration,
+}
+
+impl BuildTimings {
+    pub fn json(&self) -> serde_json::Value {
+        json!({
+            "codegen_ms": ms(self.codegen),
+            "rustc_ms": ms(self.rustc),
+        })
     }
 }
 
@@ -647,6 +726,16 @@ pub fn compile_program(
     frontend: &Frontend,
     options: &BuildOptions,
 ) -> Result<Artifacts, BuildError> {
+    let mut timings = BuildTimings::default();
+    compile_program_with_timings(frontend, options, &mut timings)
+}
+
+/// Build one program, collecting the codegen and `rustc` durations.
+pub fn compile_program_with_timings(
+    frontend: &Frontend,
+    options: &BuildOptions,
+    timings: &mut BuildTimings,
+) -> Result<Artifacts, BuildError> {
     let checked = frontend.checked.as_ref().ok_or(BuildError::NoProgram)?;
     let root = frontend.root();
     let cache = util::ensure_cache_dir(&root).map_err(BuildError::Cache)?;
@@ -685,8 +774,10 @@ pub fn compile_program(
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
     };
+    let codegen_started = Instant::now();
     let rust =
         generate(checked, &gen_options).map_err(|error| BuildError::Codegen(error.message))?;
+    timings.codegen = codegen_started.elapsed();
 
     // Intermediate generated Rust: inside the identity directory. Its bytes are
     // deterministic for the identity, so two concurrent writers agree and the
@@ -740,7 +831,10 @@ pub fn compile_program(
         .arg(util::strip_verbatim(&intermediate_artifact))
         .arg(util::strip_verbatim(&intermediate));
 
-    match command.output() {
+    let rustc_started = Instant::now();
+    let rustc_output = command.output();
+    timings.rustc = rustc_started.elapsed();
+    match rustc_output {
         Ok(output) if output.status.success() => {}
         Ok(output) => {
             let mut text = String::new();
