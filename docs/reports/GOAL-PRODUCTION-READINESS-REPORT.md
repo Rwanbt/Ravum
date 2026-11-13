@@ -17,7 +17,8 @@
    `build_verified: true`, périmètre build **203/203**, aucune régression.
 2. Le workspace est vert : **100 groupes, 1 597 passés / 0 échec / 5 ignorés**
    (les ignorés sont les campagnes longues explicitement lancées à part).
-3. Un **oracle différentiel** neuf a mesuré **3 600 programmes** bien typés :
+3. Un **oracle différentiel** neuf a mesuré **7 200 programmes** bien typés
+   (deux campagnes déterministes ; générateur étendu à 42 gabarits) :
    `check` accepte ⇒ `rustc` compile, **0 divergence** ; la configuration
    nominale (3 × 10 000) est `NOT_RUN` localement (≈ 3 h) mais outillée en CI.
 4. La boucle `.rv` est **mesurée** : `check` p95 à froid **1,3-8,1 ms**,
@@ -47,14 +48,14 @@
 |---|---|---|---|---|
 | **0** Baseline | `TESTED` | `c931fdf`, `e82ed14`, `ded0e60` | — | `cargo test --workspace --all-targets -- --test-threads=2` : 94 groupes, 1574 / 0 / 2 ; conformance 471 / 470 / 0 / 1 ; smoke 43/0/0 ; docs PASS ; registre 108/126 ; 188/188 ; fmt 0. Détail : `docs/reports/GOAL-BASELINE.md` |
 | **1** Gouvernance et base de confiance | `TESTED` (+1 `PENDING_HUMAN_APPROVAL`) | `41851db`, `fac8a8c`, `c04f33e`, `dddfd32`, `b129024`, `85e993e`, `0ea05b7` | +2 gardes codegen (positifs) avec preuve de rouge ; +1 garde HashMap (positif, rouge prouvé) ; +5 tests d'hygiène racine | docs PASS ; gardes prouvées rouges puis vertes ; `C`+U+F03A supprimé après preuve (0 fichier, 6 répertoires vides) |
-| **2** Oracle `check ⇒ build` | `PARTIAL` (mode long nominal `NOT_RUN`) | `2539d5c`, `272ece3`, `825aea1` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur 34 gabarits | `cargo test -p ravum-lang-codegen --test differential_oracle` : 600 programmes, **600 acceptés, 0 divergence** ; long local 3 × 1 000 = **3 000, 0 divergence** ; nominal 3 × 10 000 `NOT_RUN`. Détail : `T2-FINDINGS.md` §25 |
+| **2** Oracle `check ⇒ build` | `PARTIAL` (mode long nominal `NOT_RUN`) | `2539d5c`, `272ece3`, `825aea1` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur **34 → 42 gabarits** | `cargo test -p ravum-lang-codegen --test differential_oracle` : 600 programmes, **600 acceptés, 0 divergence** ; long local 3 × 1 000 = **3 000, 0 divergence** ; générateur v2 : 100 % acceptés, **0 divergence** ; deux campagnes = **7 200 programmes** ; nominal 3 × 10 000 `NOT_RUN`. Détail : `T2-FINDINGS.md` §25-§26 |
 | **3** Mesure et incrémental | `TESTED` | `4262569`, `84eaa08`, `3b6eb75`, `d186e3d`, `1265de2` | +3 contrats `--timings` (JSON additif, absence du champ sans flag, phases build) | `scripts/lang-timings.ps1 -Runs 20` : chiffres §3 ; `repro-check.ps1` PASS ; tests contrat 3/3 |
 | **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B) | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 30/30 ; conformance 475 / 474 / 0 / 1 ; oracle rapide **600 programmes, 0 divergence**. L'étape B ne compare que la classification `Copy`/`Move`, pas les places |
 | **5** Traps `rt` | **`PARTIAL`** : 5.1-5.3 `TESTED`, 5.4 `NOT_RUN` | `43fbd68` (RFC) + commit d'implémentation | +7 tests unitaires (négatifs/positifs) et **4 cas de conformance** (3 compile-fail `E-EFF-PROFILE`, 1 compile-pass) | `cargo test -p ravum-lang-sema --lib traps` **7/7** ; conformance **475 / 474 / 0 / 1**, build **203/203** ; `core`/`pure` inchangés (`intrinsic-panic-not-tracked` toujours accepté). 5.4 : aucun accesseur de slice sûr en stdlib, exemple inchangé |
 | **6** `NodeId` | `TESTED` (sans objet) | `0595b9f`, `7916840`, `91d3621` | +2 tests (stabilité inter-fichiers, layout 8/24 bits) | `cargo test -p ravum-lang-sema --test node_id_stability` : 2/2 ; `util.rv` inchangé après édition de `main.rv` |
 | **7** Cache de parse LSP | **`TESTED`** (analyse et bout en bout local) | `a0a7c26`, `2d432be`, `5860ef3`, `6257b84`, `a980717` | +2 tests (réutilisation exacte hits/misses ; INV-07) +2 mesures `#[ignore]` (analyse, bout en bout) | `cargo test -p ravum-lang-lsp --test parse_cache` 2/2 ; `cargo test -p ravum-lang-cli --test lsp_client` 11/0 ; bout en bout **p50 2,061 ms / p95 2,826 ms** ; `docs/qualification/LSP.md` §7 |
 | **8** Bloc DSP | `NOT_RUN` | `bb3edea` (RFC) | — | ABI lue (8.1) ; RFC-RV-DSP-BLOCK-1 (8.2) ; aucun wrapper, aucun test de swap |
-| **9** Qualification | `PARTIAL` | ce rapport et les sections datées des registres | — | Voir §4 ; couverture 89,21/88,61 (seuils tenus), fuzz long rejoué, mutation/Miri `NOT_RUN`, PR brouillon |
+| **9** Qualification | `PARTIAL` | ce rapport et les sections datées des registres | — | Voir §4 ; couverture **89,07/88,43** (seuils tenus, baisse totale assumée), fuzz long rejoué, mutation/Miri `NOT_RUN`, PR brouillon |
 
 ### 2.8 SHA final mesuré
 
@@ -66,8 +67,13 @@ celui de son entrée de journal.
 
 ## 3. Comparaison baseline (phase 0) → état final
 
-Aucune régression : chaque chiffre est identique ou meilleur. Les éventuelles
-dégradations auraient été placées ici en tête.
+**Une régression mesurée, en tête :** la couverture **totale** passe de
+89,21/88,61 à **89,07/88,43** (−0,14/−0,18 pt) après l'ajout d'`OwnFacts` et de
+`traps.rs` (354 lignes de code produit) ; **tous les seuils par fichier restent
+tenus** et `traps.rs`, non listé au ratchet, mesure 78,15/71,33. Ce n'est pas une
+baisse d'un seuil, c'est un code nouveau partiellement couvert.
+
+Les autres chiffres sont identiques ou meilleurs.
 
 | Mesure | Phase 0 (`c931fdf`) | Final (`faf65cb`+) | Écart |
 |---|---|---|---|
@@ -78,7 +84,7 @@ dégradations auraient été placées ici en tête.
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
 | MUST | 807, 463 atteignables | **identique** | 0 |
-| Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,21 / 88,61**, seuils tenus | +0,13 / +0,22 pt |
+| Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,07 / 88,43**, seuils tenus | −0,01 / +0,04 pt ; totaux en baisse vs round 3 (89,21/88,61) après ajout de code |
 | Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 103 lignes)** | +5 lignes (code de cache LSP, mesuré hors tests LSP) |
 | Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
@@ -88,7 +94,7 @@ dégradations auraient été placées ici en tête.
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` | nouvelle preuve |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `3c52d353…`, commit `faf65cb`), désinstallation idempotente **0 / 0** | nouvelle preuve |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `5119e194…`, déterministe | nouvelle preuve |
-| Oracle différentiel | inexistant | **3 600 programmes, 0 divergence** | nouvelle preuve |
+| Oracle différentiel | inexistant | **7 200 programmes (2 campagnes), 0 divergence** | nouvelle preuve |
 
 ## 4. Critères PRODUCTION-READINESS et gates T0–T12
 
@@ -100,13 +106,13 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | # | Critère | État | Preuve / manque |
 |---|---|---|---|
 | R1 | Sémantique ratifiée | `PARTIAL` | ADR `PROPOSED`, spec DRAFT ; aucune ratification par un agent |
-| R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 475 cas 0 FAIL + 3 600 programmes générés 0 divergence ; ne prouve pas l'absence de forme inconnue |
+| R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 475 cas 0 FAIL + 7 200 programmes générés 0 divergence ; ne prouve pas l'absence de forme inconnue |
 | R3 | Traçabilité complète | `PARTIAL` | 188/188 FeatureIds ; **463/807 MUST**, 344 non mappés (`must_audit.py`) — D10 |
 | R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri `NOT_RUN` (nightly non garanti hors CI) |
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
 | R6 | Code généré sûr | **fait** | `forbid(unsafe_code)` sans `extern` ; `deny` + `allow` local au wrapper ; 2 tests de garde, rouges prouvés |
 | R7 | Reproductibilité inter-machines | `PARTIAL` | deux racines identiques sur **cette** machine ; pas de deuxième machine |
-| R8 | Qualité mesurable | `PARTIAL` | couverture 89,21/88,61, seuils tenus ; objectif 100 % non atteint ; **mutation `NOT_RUN`** (cargo-mutants absent, aucun ajout de dépendance sans RFC) |
+| R8 | Qualité mesurable | `PARTIAL` | couverture **89,07/88,43**, seuils tenus ; objectif 100 % non atteint ; **mutation `NOT_RUN`** (cargo-mutants absent, aucun ajout de dépendance sans RFC) |
 | R9 | Performance sous budget | `PARTIAL` | p50/p95 publiés (`LANG-TIMINGS.md`) ; pas de campagne sous charge ni de seuil de non-régression CI |
 | R10 | Interfaces stables | `PARTIAL` | JSON/CLI/diagnostic testés ; politique de dépréciation toujours absente |
 | R11 | Distribution | `PARTIAL` | installateur Windows rejoué (install + 2 désinstallations idempotentes) ; installateur Linux hors contrat ; `wasm`/macOS non couverts |
@@ -120,7 +126,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 |---|---|---|
 | T0 | `PASS` | inchangé (aucune modification du socle) |
 | T1 | `PARTIAL` | inchangé (voie C toujours gelée, décision humaine) |
-| T2 | `PARTIAL` | **preuve renforcée** (oracle 3 600 programmes, 0 divergence) ; le verdict reste `PARTIAL` pour D10 (344 MUST non mappés) |
+| T2 | `PARTIAL` | **preuve renforcée** (oracle 7 200 programmes, 0 divergence) ; le verdict reste `PARTIAL` pour D10 (344 MUST non mappés) |
 | T3 | `PASS` | fuzz long rejoué (249 054 entrées, 0 échec) |
 | T4 | `BLOCKED` | inchangé : audit humain absent. Aucun agent ne peut le lever |
 | T5 | `PASS` | inchangé (smoke 43/0/0, binaires natifs) |
@@ -218,15 +224,15 @@ postérieurs sont documentaires.
 Voir le tableau §6. En plus : aucun test sous charge concurrente, aucune mesure
 mémoire/CPU, aucune deuxième machine, aucun macOS/ARM, aucun WASM, aucun
 `ravum-lang install` Linux, aucun dogfood indépendant. Les chiffres de
-couverture (89,21/88,61) datent du SHA précédent l'étape A ; le code ajouté
-(`OwnFacts`) n'a pas été re-mesuré localement — la CI de la PR rejoue les
-seuils.
+couverture (89,07/88,43) a été re-mesurée au round 5 après `OwnFacts` et
+`traps.rs` ; les totaux baissent de 0,14/0,18 pt parce que le code a augmenté,
+tandis que les seuils par fichier restent tenus.
 
 ## 9. Limites
 
 - **Une seule machine** (Windows 11 x64) : les chiffres de performance et de
   reproductibilité sont liés à cette machine et à `rustc 1.95.0`.
-- **Corpus fini** : 475 cas + 3 600 programmes générés sont une observation,
+- **Corpus fini** : 475 cas + 7 200 programmes générés sont une observation,
   pas une preuve sur tous les programmes. L'oracle lui-même ne couvre qu'un
   sous-ensemble documenté de Core 1.0.
 - **Aucune preuve formelle** : pas de Kani, pas de Miri cette session, pas

@@ -487,6 +487,35 @@ Correctif : compteur atomique par processus dans les trois helpers
 contrats, VS Code, coverage ratchet, qualification Windows, macOS, MVP produit,
 impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 
+## Entrée 2026-11-13 (round 5) — Oracle étendu (42 gabarits) et couverture re-mesurée
+
+| Champ | Valeur |
+|---|---|
+| Tâches | phase 2 (renforcement), 9.2 (mesure) |
+| Statut | **TESTED** pour la campagne ; couverture « baisse totale assumée » |
+| Fichiers | `crates/ravum-lang-codegen/tests/differential_oracle.rs`, `T2-FINDINGS.md` §26, rapport, registres |
+
+- **Générateur v2 (34 → 42 gabarits)** : ajout de deux moves d'éléments du même
+  tableau, move de payload `Option<String>` / enum `String` via `match`, move de
+  champ de struct imbriquée puis lecture d'un autre champ, move d'élément d'un
+  tableau de structs non-`Copy`, `if`/`else` produisant une `String`, méthode
+  `&self` sur un temporaire, shadowing de `String` en bloc imbriqué.
+- **Campagnes** : rapide **3 × 200 = 600** (600 acceptés, 0 divergence, 194 s) ;
+  longue locale **3 × 1 000 = 3 000** (3 000 acceptés, 0 divergence, 928 s) ;
+  **100 % des programmes acceptés par `check`**, donc l'oracle n'est pas devenu
+  vide en s'étendant. Cumul v1+v2 : **7 200 programmes, 0 divergence**.
+  Mode nominal 3 × 10 000 : toujours `NOT_RUN` localement (≈ 3 h), job CI fourni.
+- **Couverture re-mesurée** (9.2) : `cargo llvm-cov -p sema -p codegen` →
+  **89,07 % lignes / 88,43 % régions**, **tous les seuils par fichier tenus** ;
+  10 fichiers sous l'objectif 100 % ; **2 169** lignes non couvertes
+  (19 840 − 17 671). Les totaux **baissent** de 0,14/0,18 pt par rapport au
+  round 3 (89,21/88,61) parce que 354 lignes de code produit ont été ajoutées
+  (`traps.rs` 78,15/71,33, `OwnFacts`/`check.rs`) ; aucun seuil n'a été abaissé.
+  C'est consigné en tête de la comparaison du rapport, pas en bas.
+- Aucun changement du compilateur dans ce round : uniquement le générateur de
+  test et les documents.
+
+
 
 
 

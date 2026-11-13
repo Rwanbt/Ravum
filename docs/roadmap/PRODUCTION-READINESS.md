@@ -427,13 +427,13 @@ dans ce lot.
 | Critère | État au SHA final | Preuve ajoutée / manque |
 |---|---|---|
 | R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
-| R2 | fait sur le périmètre mesuré | 471 cas 0 FAIL **et** oracle génératif : 3 600 programmes, 0 divergence |
+| R2 | fait sur le périmètre mesuré | 475 cas 0 FAIL **et** oracle génératif : 7 200 programmes (2 campagnes), 0 divergence |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
 | R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
 | R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |
 | R6 | fait | gardes `forbid`/wrapper prouvées rouges puis vertes |
 | R7 | `PARTIAL` | deux racines identiques (`19743DC2…`) sur une seule machine |
-| R8 | `PARTIAL` | couverture **89,21/88,61**, seuils tenus ; 100 % non atteint ; mutation `NOT_RUN` |
+| R8 | `PARTIAL` | couverture **89,07/88,43**, seuils tenus ; 100 % non atteint ; mutation `NOT_RUN` |
 | R9 | `PARTIAL` | p50/p95 par phase publiés ; pas de campagne sous charge |
 | R10 | `PARTIAL` | politique de dépréciation toujours absente |
 | R11 | `PARTIAL` | installateur Windows non rejoué cette session |

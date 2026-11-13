@@ -1261,3 +1261,42 @@ non-vacuité le bordent :
 - Aucune divergence trouvée ne prouve pas l'absence de forme inconnue ; le
   corpus de conformance et cet oracle restent deux observations complémentaires.
 
+## 26. Passe 13 — générateur étendu à 42 gabarits, campagnes rejouées (2026-11-13)
+
+> Round 5 du GOAL. Le générateur de la §25 est **étendu** (pas restreint) pour
+> couvrir des formes supplémentaires, puis la campagne rapide et la campagne
+> longue locale sont rejouées avec ces formes.
+
+### 26.1 Huit gabarits ajoutés (34 → 42)
+
+1. deux moves d'éléments de **même tableau** (`a[0]` puis `a[1]`) — forme qui
+   avait produit des E0508 avant la passe 9 ;
+2. move du payload `Option<String>` via une liaison `match` ;
+3. move d'un champ de struct **imbriquée**, puis lecture d'un autre champ du
+   parent (`h.p` déplacé, `h.n` lu) ;
+4. move d'un élément d'un **tableau de structs non-`Copy`** ;
+5. `if`/`else` produisant une `String` possédée, puis déplacée ;
+6. move d'un payload d'enum (`Text::Full(String)`) via `match` ;
+7. méthode `&self` appelée sur un **temporaire struct** ;
+8. `String` shadowée dans un bloc imbriqué, puis relâchée.
+
+### 26.2 Résultats (générateur v2, 42 gabarits)
+
+| Campagne | Commande | Résultat exact |
+|---|---|---|
+| Rapide | `cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast -- --nocapture` | **3 × 200 = 600 programmes : 600 acceptés (100 %), 0 rejet, 0 divergence**, 194 s ; comparaison debug/release sur 60 |
+| Longue locale | `RAVUM_DIFF_PROGRAMS=1000 … differential_oracle_long -- --ignored` | **3 × 1 000 = 3 000 programmes : 3 000 acceptés, 0 divergence**, 928 s ; debug/release sur 300 |
+| Longue nominale | `RAVUM_DIFF_PROGRAMS=10000 …` | **`NOT_RUN` localement** (≈ 3 h) ; job CI `differential-oracle.yml` |
+
+Cumul des deux campagnes déterministes (v1 34 gabarits, v2 42 gabarits) :
+**7 200 programmes exécutés, 0 divergence**. Le générateur v2 a produit 100 %
+de programmes acceptés par `check`, donc l'oracle n'est pas devenu vide en
+s'étendant.
+
+### 26.3 Ce que cela ne prouve pas
+
+Les mêmes limites que §25.4, plus : l'extension ne couvre toujours pas les
+modules multiples, la FFI, les génériques utilisateurs ni les références
+stockées (interdites). Le mode nominal reste `NOT_RUN` localement.
+
+
