@@ -152,6 +152,7 @@ impl<'a> Generator<'a> {
             index,
             array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
         };
+        emitter.verify_ownership_facts()?;
         emitter.run()
     }
 }
@@ -973,6 +974,41 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
+    /// Step B of RFC-OWN-FACTS-1 (debug builds only): compare the backend's
+    /// copy/move classification with the checker's `OwnFacts`.
+    ///
+    /// The emitter mirrors `sema::own::is_copy_type` in [`Emitter::is_copy_type`]
+    /// — the duplication this RFC removes. In debug builds a disagreement is an
+    /// error instead of a silently different lowering. Release builds skip the
+    /// check (it is a test/audit guard, not a semantic rule).
+    fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
+        if !cfg!(debug_assertions) {
+            return Ok(());
+        }
+        for (id, kind) in &self.checked.facts.own.use_kind {
+            let Some(ty) = self.checked.facts.expr_types.get(id) else {
+                continue;
+            };
+            let copies = self.is_copy_type(ty);
+            match kind {
+                ravum_lang_sema::facts::UseKind::Copy if !copies => {
+                    return Err(err(format!(
+                        "ownership facts disagree with the backend for expression {id}: the \
+                         checker says Copy, the emitter classifies `{ty:?}` as mobile"
+                    )));
+                }
+                ravum_lang_sema::facts::UseKind::Move if copies => {
+                    return Err(err(format!(
+                        "ownership facts disagree with the backend for expression {id}: the \
+                         checker says Move, the emitter classifies `{ty:?}` as Copy"
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
         &self.checked.facts
     }
@@ -4987,6 +5023,28 @@ mod tests {
             }),
             span: span(),
         }
+    }
+
+    /// Step B non-vacuity: a disagreement between `OwnFacts` and the backend's
+    /// classification must be an error in debug builds, not a silent lowering.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn ownership_facts_disagreement_is_rejected_in_debug_builds() {
+        let mut checked = build_program_d();
+        let id = 999_999;
+        checked.facts.expr_types.insert(id, STy::String);
+        checked
+            .facts
+            .own
+            .use_kind
+            .insert(id, ravum_lang_sema::facts::UseKind::Copy);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a Copy decision on a String must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("ownership facts disagree"),
+            "unexpected error: {}",
+            error.message
+        );
     }
 
     fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
