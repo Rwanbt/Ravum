@@ -25,8 +25,10 @@ struct TempDir {
 
 impl TempDir {
     fn new(label: &str) -> TempDir {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "ravum-lsp-cache-{}-{}-{label}",
+            "ravum-lsp-cache-{}-{unique}-{}-{label}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
