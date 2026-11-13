@@ -176,4 +176,57 @@ de la phase reste donc `PARTIAL`, pas `TESTED`.
 - Si le job CI de l'oracle est lancé un jour : remplacer la ligne `NOT_RUN` par
   le résultat du run, avec le SHA.
 
+## Entrée 2026-11-13 — Phase 3 : mesure puis incrémental rustc
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 3.1 → 3.5 |
+| Statut | **TESTED** : `--timings` livré, campagne 20+20 publiée, incrémental mesuré puis laissé **désactivé**, reproductibilité release prouvée |
+| Commits | `4262569` (`--timings`), `84eaa08` (incrémental opt-in), `3b6eb75` (script de mesure) |
+| SHA de mesure | `3b6eb755e8dfe0255bcdb1b8ffa83e0716abb455` |
+| Rapport | [`docs/reports/LANG-TIMINGS.md`](../../reports/LANG-TIMINGS.md) |
+
+### Ce qui a été fait
+
+- **3.1** `--timings` sur `check` et `build` : `load`, `parse`, `resolve`,
+  `typeck`, `effects`, `own` (check) + `codegen`, `rustc`, `total` (build).
+  `check --json` ajoute un objet **additif** `timings` (schéma inchangé,
+  `schema_version: 1`) ; `build` imprime une ligne `timings:` (il n'a pas de
+  contrat JSON — aucun format JSON non enregistré n'a été inventé).
+  `parse` est accumulé par le loader (tous fichiers, dépendances incluses) ;
+  `load` l'exclut, donc `total` n'est pas doublé. Tests :
+  `crates/ravum-lang-cli/tests/timings_contract.rs`, **3/3**.
+- **3.2** `scripts/lang-timings.ps1` : 20 exécutions à froid + 20 après une
+  ligne modifiée, par exemple et par commande, p50/p95 par phase, JSON avec SHA,
+  rustc, OS, CPU, RAM. Campagne complète exécutée deux fois (avant puis après
+  les commits ; la seconde seule est publiée).
+- **3.3** `-C incremental=<cache>/incr/<clé de session>` pour les builds debug
+  seulement. Clé = nom/type de crate, cible, opt-level, rustc, générateur —
+  **pas** le digest des sources (sinon le répertoire serait froid à chaque
+  édition). Répertoire hors identité/digest d'artefact ; `cache clean` le
+  supprime.
+- **3.4** Mesure avant/après : le gain est **nul ou négatif** (tableau du
+  rapport ; jusqu'à +44 % sur `file-store`, +10 % sur 800 fonctions). Décision :
+  option **désactivée par défaut**, activable par `RAVUM_INCREMENTAL=1` ;
+  release/test jamais concernés.
+- **3.5** `scripts/repro-check.ps1` sur l'arbre : deux builds release
+  bit-à-bit identiques, sha256
+  `0C7B63C66C27B0874AF5679FB0576C63A3DFC7B4B76C0E32A7AD8337A6AB64A8`.
+
+### Mesures principales
+
+- `check` froid p95 : **1,3 → 8,1 ms** selon l'exemple ; édition p95 :
+  **11,0 → 49,8 ms** (le coût est la relecture du fichier fraîchement écrit,
+  pas une phase du compilateur).
+- `build` p50 : **179 → 331 ms** ; `rustc` représente **97,1-99,3 %** du total ;
+  deux p95 aberrants (613,9 et 646,0 ms) sont publiés sans être filtrés.
+- Repro release : **PASS**, digest identique sur deux racines.
+- P0-A (diagnostic LSP p95 < 50 ms) **non mesuré ici** : `NOT_RUN`, phase 7.
+
+### Ce qui reste
+
+- Phase 4 (source unique des faits d'ownership) : étape A puis B, étape C
+  seulement si ≤ 20 désaccords.
+
+
 
