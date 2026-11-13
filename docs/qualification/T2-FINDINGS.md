@@ -1195,3 +1195,69 @@ qu'un run vert signifie exactement. `P0-A` est vert **sur son périmètre mesur�
 et l'invariant général reste une observation outillée. `T2` reste `PARTIAL` pour
 la raison indépendante du dénominateur MUST (807 énoncés, 463 atteignables) —
 décision **D10**.
+
+## 25. Passe 12 — oracle différentiel génératif `check` ⇒ `build` (2026-11-13)
+
+> Mesure du chantier `goal/production-ready`, phase 2. Générateur
+> `crates/ravum-lang-codegen/tests/differential_oracle.rs`, exécuté sur la
+> machine de référence (Windows 11 x64, `rustc 1.95.0`).
+
+### 25.1 Ce qui est mesuré
+
+Le générateur est **déterministe** (graine → programme) et produit des programmes
+bien typés **par construction** : 34 gabarits d'instructions typés, couvrant
+structs, enums à payload (unitaire, tuple, champs), tuples, tableaux `[T; N]`
+imbriqués, `Vec<T>`, `String`, `Option<T>`, `Result<T, Error>` (dont `?`), moves
+par projection (champ, élément de tuple, élément de tableau), `match` avec
+liaisons, `if`/`else` en expression, `while`/`loop`/`for`, shadowing, appels de
+fonctions et méthodes (`&self`, `&mut self`, `self`), arguments `&`/`&mut`,
+coercition `&[T; N] → &[T]` et arithmétique flottante. Chaque valeur non-`Copy`
+est consommée au plus une fois : les programmes ne sont pas des programmes
+aléatoires « bien typés par chance ».
+
+Trois propriétés :
+
+1. si `check` accepte, le Rust généré **compile** avec les drapeaux du CLI
+   (`--edition 2021`, `overflow-checks=on`, `debuginfo=2`, `opt-level=0`) ;
+2. le programme compilé en debug et en release a **même sortie et même code de
+   sortie**, sur un sous-échantillon (`RAVUM_DIFF_RELEASE_EVERY=10`) ;
+3. même graine ⇒ **mêmes octets** ; deux passes `check`/codegen indépendantes
+   donnent le **même résultat**.
+
+### 25.2 Résultats
+
+| Campagne | Commande | Résultat exact |
+|---|---|---|
+| Rapide (dans `cargo test`) | `cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast -- --nocapture` | **3 graines × 200 = 600 programmes ; 600 acceptés par `check` (100 %), 0 rejet, 0 divergence**, 177 s ; comparaison debug/release sur 60 programmes |
+| Longue (exécutée localement) | `RAVUM_DIFF_PROGRAMS=1000 cargo test … differential_oracle_long -- --ignored --nocapture` | **3 graines × 1 000 = 3 000 programmes ; 3 000 acceptés (100 %), 0 rejet, 0 divergence**, 1 104 s ; comparaison debug/release sur 300 programmes |
+| Longue (configuration nominale) | idem avec `RAVUM_DIFF_PROGRAMS=10000` | **`NOT_RUN` localement** : coût estimé ≈ 3 h sur cette machine (mesure : 1 000 programmes ≈ 6-7 min). Le job CI `differential-oracle.yml` exécute 10 000 par graine (hebdomadaire + `workflow_dispatch`). |
+
+**Aucune divergence `check`-pass / `build`-fail** n'a été trouvée sur les 3 600
+programmes mesurés. Ce n'est **pas** une preuve d'absence : c'est un taux observé
+de 0 sur un échantillon déterministe et documenté.
+
+### 25.3 Réducteur et suite
+
+Le réducteur (suppression d'instructions une à une tant que la divergence
+persiste) est implémenté et écrit chaque divergence dans
+`target/diff-divergences/`. Il n'a **pas été exercé** par une vraie divergence
+pendant cette passe : son efficacité reste `UNKNOWN`. Deux tests de
+non-vacuité le bordent :
+
+- `oracle_detects_a_deliberately_invalid_generated_file` : le maillon `rustc`
+  rejette bien un fichier invalide (sinon l'oracle serait vert par accident) ;
+- `generator_produces_distinct_programs_for_distinct_seeds` : deux graines
+  produisent deux programmes distincts.
+
+### 25.4 Ce que cette passe ne prouve pas
+
+- Le générateur ne couvre **pas** tout Core 1.0 : pas de `match` imbriqué dans un
+  bras, pas de génériques utilisateurs, pas de modules multiples, pas de FFI,
+  pas de références stockées (elles sont interdites) ; 8 instructions par
+  programme par défaut (`RAVUM_DIFF_STATEMENTS`).
+- La propriété 2 est **échantillonnée** (1 programme sur 10), pas exhaustive.
+- Une seule machine et une seule toolchain ; le mode long nominal (30 000
+  programmes) n'a pas été exécuté localement.
+- Aucune divergence trouvée ne prouve pas l'absence de forme inconnue ; le
+  corpus de conformance et cet oracle restent deux observations complémentaires.
+
