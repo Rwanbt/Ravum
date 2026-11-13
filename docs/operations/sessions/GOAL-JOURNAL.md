@@ -414,6 +414,17 @@ plutôt que corrigé sans consommateur.
 contrats, VS Code, **coverage ratchet**, qualification Windows, macOS, MVP
 produit, impact). Aucun correctif nécessaire.
 
+**Défaut trouvé par la CI (round 2, docs-only `e2a8abc`)** : le job macOS a
+échoué sur `own_facts_are_deterministic` avec `E-MOD-LOCK`. Cause réelle : les
+helpers `TempDir` de trois tests d'intégration (`own_facts`,
+`node_id_stability`, `parse_cache`) construisaient leur chemin avec `pid` +
+horloge en nanosecondes ; la résolution d'horloge de macOS est assez grossière
+pour que deux tests parallèles choisissent le **même répertoire**, l'un
+supprimant le `ravum.lock` de l'autre. Ce n'est pas un défaut du compilateur.
+Correctif : compteur atomique par processus dans les trois helpers
+(`50a1154`), vérifié localement avec `--test-threads=4`. CI rejouée sur ce SHA.
+
+
 
 
 ### Clôture 2026-11-13 — CI de la PR (SHA `303da6a`)

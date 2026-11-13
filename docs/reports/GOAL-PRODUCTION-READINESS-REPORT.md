@@ -156,6 +156,15 @@ ratchet**, qualification Windows, macOS, MVP produit, impact), ce qui valide les
 planchers de couverture malgré le code ajouté. Aucun correctif CI n'a été
 nécessaire.
 
+Le run suivant (`e2a8abc`, docs-only) a révélé un **défaut de fixture de test**
+sur macOS : `own_facts_are_deterministic` échouait en `E-MOD-LOCK` parce que
+trois helpers `TempDir` de tests d'intégration construisaient leur chemin avec
+`pid` + horloge en nanosecondes, et la résolution d'horloge de macOS laissait
+deux tests parallèles choisir le même répertoire. Ce n'était pas un défaut du
+compilateur. Correctif : compteur atomique par processus dans les trois helpers
+(`50a1154`), vérifié localement avec `--test-threads=4` ; sur ce SHA, les
+**8/8 workflows sont verts**, macOS inclus.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
