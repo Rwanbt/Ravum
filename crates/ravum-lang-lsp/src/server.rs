@@ -69,6 +69,8 @@ pub struct Server {
     pub root: Option<PathBuf>,
     pub docs: BTreeMap<String, Document>,
     pub analyses: BTreeMap<PathBuf, Analysis>,
+    /// Parse results reused across analyses (unchanged file => no re-parse).
+    parse_cache: ravum_lang_sema::loader::ParseCache,
     /// Last diagnostics published per URI, so unchanged sets are not re-sent.
     published: BTreeMap<String, String>,
     initialized: bool,
@@ -89,6 +91,7 @@ impl Server {
             root: None,
             docs: BTreeMap::new(),
             analyses: BTreeMap::new(),
+            parse_cache: ravum_lang_sema::loader::ParseCache::new(),
             published: BTreeMap::new(),
             initialized: false,
             shutdown: false,
@@ -470,7 +473,8 @@ impl Server {
                 overrides.insert(override_key(&document.path), document.text.clone());
             }
         }
-        let analysis = Analysis::run(root, overrides, self.profile);
+        let analysis =
+            Analysis::run_with_cache(root, overrides, self.profile, &mut self.parse_cache);
         let outgoing = self.publish(&analysis);
         self.analyses.insert(root.to_path_buf(), analysis);
         outgoing
