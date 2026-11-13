@@ -228,5 +228,49 @@ de la phase reste donc `PARTIAL`, pas `TESTED`.
 - Phase 4 (source unique des faits d'ownership) : étape A puis B, étape C
   seulement si ≤ 20 désaccords.
 
+## Entrée 2026-11-13 — Phase 6 : identité des nœuds (sans objet, prouvé)
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 6.1 → 6.3 |
+| Statut | **TESTED** — la migration est **sans objet** : les `NodeId` sont déjà par fichier |
+| Commits | `0595b9f` + `7916840` (test de stabilité), `91d3621` (RFC-NODE-ID) |
+| Preuve | `cargo test -p ravum-lang-sema --test node_id_stability` → **2/2** |
+
+- Le parser alloue `NodeId = (FileId << 24) | compteur_local` ; ajouter une
+  instruction dans `main.rv` laisse l'instantané AST complet de `util.rv`
+  **identique** (ids et spans), mesuré via les overrides du loader.
+- La phase 6.3 (migration) n'est donc **pas exécutée** : elle serait un
+  refactoring sans consommateur (R11).
+- Ce qui reste vrai et est écrit dans `docs/rfc/RFC-NODE-ID.md` : `FileId` dépend
+  de l'ordre de chargement, donc **aucun cache ne doit être indexé par
+  `FileId`** ; les caches se indexent par hash de contenu, les références
+  inter-fichiers par chemin de définition.
+
+## Entrée 2026-11-13 — Phase 7 : cache de parse dans le LSP
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 7.1 → 7.3 |
+| Statut | **TESTED** (analyse en processus) / `NOT_RUN` pour la latence de bout en bout |
+| Fichiers | `sema/loader.rs` (`ParseCache`), `lsp/src/analysis.rs`, `lsp/src/server.rs`, `lsp/tests/parse_cache.rs` |
+| Mesure | p95 **1,362 ms** avec cache contre **1,836 ms** sans, sur 30 éditions d'une ligne de `package-demo` |
+
+- **7.1** Cache borné (512) indexé par `(hash FNV-1a 64, FileId)` ; le parser
+  seul est court-circuité, `resolve`/`typeck`/`own`/`effects` restent globaux.
+  `Analysis::run` garde son comportement (cache neuf) ; le `Server` en tient un.
+- **7.2** Mesure en processus, transport JSON-RPC exclu (écrit tel quel dans
+  `docs/qualification/LSP.md` §7) : cible P0-A p95 < 50 ms **atteinte au niveau
+  de l'analyse** (1,4 ms), **pas** revendiquée pour le bout en bout.
+- **7.3** `stale_diagnostics_are_never_reused_for_the_new_buffer` : un
+  diagnostic calculé pour l'ancien buffer n'est jamais republié (INV-07) ;
+  `unchanged_file_is_not_reparsed` vérifie hits/misses exacts.
+
+### Ce qui reste
+
+- Phase 5 (traps du profil `rt`) et phase 8 (bloc DSP), puis phase 9
+  (qualification, rapport, PR).
+
+
 
 
