@@ -72,40 +72,15 @@ fn report(diags: &mut DiagnosticBag, span: Span, operation: &str, advice: &str) 
 fn check_expr(expr: &Expr, checked: &CheckedProgram, diags: &mut DiagnosticBag) {
     match &expr.kind {
         ExprKind::Binary { op, lhs, rhs } => {
-            match op {
-                BinOp::Add | BinOp::Sub | BinOp::Mul => {
-                    if is_integer(expr_type(checked, expr)) {
-                        report(
-                            diags,
-                            expr.span,
-                            "integer arithmetic",
-                            "use `wrapping_add/sub/mul`, `saturating_add/sub/mul` or \
-                             `checked_add/sub/mul`",
-                        );
-                    }
-                }
-                BinOp::Div | BinOp::Rem => {
-                    if is_integer(expr_type(checked, expr)) && !positive_int_literal(rhs) {
-                        report(
-                            diags,
-                            expr.span,
-                            "integer division/remainder",
-                            "divide by a positive literal or use `checked_div`/`checked_rem`",
-                        );
-                    }
-                }
-                BinOp::Shl | BinOp::Shr => {
-                    if is_integer(expr_type(checked, lhs)) && !safe_shift(lhs, rhs, checked) {
-                        report(
-                            diags,
-                            expr.span,
-                            "integer shift",
-                            "shift by a literal smaller than the type width",
-                        );
-                    }
-                }
-                _ => {}
-            }
+            check_binary(
+                expr.span,
+                *op,
+                lhs,
+                rhs,
+                expr_type(checked, expr),
+                checked,
+                diags,
+            );
             check_expr(lhs, checked, diags);
             check_expr(rhs, checked, diags);
         }
@@ -151,7 +126,22 @@ fn check_expr(expr: &Expr, checked: &CheckedProgram, diags: &mut DiagnosticBag) 
         ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) => {
             check_expr(inner, checked, diags);
         }
-        ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+        ExprKind::Assign { target, value } => {
+            check_expr(target, checked, diags);
+            check_expr(value, checked, diags);
+        }
+        ExprKind::AssignOp { op, target, value } => {
+            // Compound assignment is the same trap as the corresponding binary
+            // operation: `x += 1` is `x + 1` (RFC-RT-TRAPS-1).
+            check_binary(
+                expr.span,
+                *op,
+                target,
+                value,
+                expr_type(checked, target),
+                checked,
+                diags,
+            );
             check_expr(target, checked, diags);
             check_expr(value, checked, diags);
         }
@@ -205,6 +195,55 @@ fn check_expr(expr: &Expr, checked: &CheckedProgram, diags: &mut DiagnosticBag) 
             }
         }
         ExprKind::Return(Some(value)) => check_expr(value, checked, diags),
+        _ => {}
+    }
+}
+
+/// Shared trap rule for `ExprKind::Binary` and compound assignment.
+///
+/// `result` is the expression's type for a binary operation, and the target's
+/// type for `x op= y` (which produces `()` but assigns to an integer).
+fn check_binary(
+    span: Span,
+    op: BinOp,
+    lhs: &Expr,
+    rhs: &Expr,
+    result: Option<&Type>,
+    checked: &CheckedProgram,
+    diags: &mut DiagnosticBag,
+) {
+    match op {
+        BinOp::Add | BinOp::Sub | BinOp::Mul => {
+            if is_integer(result) {
+                report(
+                    diags,
+                    span,
+                    "integer arithmetic",
+                    "use `wrapping_add/sub/mul`, `saturating_add/sub/mul` or \
+                     `checked_add/sub/mul`",
+                );
+            }
+        }
+        BinOp::Div | BinOp::Rem => {
+            if is_integer(result) && !positive_int_literal(rhs) {
+                report(
+                    diags,
+                    span,
+                    "integer division/remainder",
+                    "divide by a positive literal or use `checked_div`/`checked_rem`",
+                );
+            }
+        }
+        BinOp::Shl | BinOp::Shr => {
+            if is_integer(expr_type(checked, lhs)) && !safe_shift(lhs, rhs, checked) {
+                report(
+                    diags,
+                    span,
+                    "integer shift",
+                    "shift by a literal smaller than the type width",
+                );
+            }
+        }
         _ => {}
     }
 }
@@ -377,6 +416,54 @@ mod tests {
         )));
         assert!(!is_trap(&check_rt(
             "fn main() { let x: i32 = 5; let y = x << 2; }"
+        )));
+    }
+
+    #[test]
+    fn compound_assignment_is_a_trap_for_arithmetic() {
+        assert!(is_trap(&check_rt(
+            "fn main() { let mut x: i32 = 0; x += 1; }"
+        )));
+        assert!(is_trap(&check_rt(
+            "fn main() { let mut x: i32 = 10; let y: i32 = 3; x /= y; }"
+        )));
+        assert!(!is_trap(&check_rt(
+            "fn main() { let mut x: i32 = 10; x /= 2; }"
+        )));
+    }
+
+    #[test]
+    fn shift_widths_are_checked_per_integer_type() {
+        assert!(!is_trap(&check_rt(
+            "fn main() { let x: u8 = 1; let a = x << 7; \
+             let y: u16 = 1; let b = y << 15; let z: u128 = 1; let c = z << 127; }"
+        )));
+        assert!(is_trap(&check_rt(
+            "fn main() { let x: u8 = 1; let a = x << 8; }"
+        )));
+    }
+
+    #[test]
+    fn aggregates_and_control_flow_are_walked() {
+        assert!(!is_trap(&check_rt(
+            "struct P { x: i32 }\n\
+             fn main() { let p = P { x: 1 }; let y = p.x; \
+             let t = (1, 2); let a = [3, 4]; }"
+        )));
+        assert!(!is_trap(&check_rt(
+            "fn main() { let x: i32 = 1; \
+             let y = if true { 1 } else { 2 }; \
+             let z = match x { 1 => y, _ => 0 }; }"
+        )));
+        assert!(!is_trap(&check_rt(
+            "fn main() { let mut i: i32 = 0; \
+             while i < 2 { i = i.wrapping_add(1); } }"
+        )));
+        assert!(!is_trap(&check_rt(
+            "fn main() { let s = \"abc\"; let n = s.len(); }"
+        )));
+        assert!(!is_trap(&check_rt(
+            "fn main() { let x: i64 = 1; let y = x as i32; }"
         )));
     }
 }

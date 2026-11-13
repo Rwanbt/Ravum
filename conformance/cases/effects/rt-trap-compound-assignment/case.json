@@ -1,0 +1,12 @@
+{
+  "id": "effects/rt-trap-compound-assignment",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "RFC-RT-TRAPS-1: compound integer assignment is the same trap as the corresponding binary operation (`x += 1` is `x + 1`)."
+}
