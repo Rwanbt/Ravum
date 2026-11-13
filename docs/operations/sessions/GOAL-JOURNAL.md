@@ -377,6 +377,40 @@ monolithes (9.7). Phases 4.3-4.5, 5 et 8 : `NOT_RUN` avec RFC écrites.
 - Mode long nominal de l'oracle, Miri, mutation, LSP bout en bout.
 - T4, T12, D9, D10, D7 : humains.
 
+## Entrée 2026-11-13 (round 2) — Phase 4 : étapes A et B partielles
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` |
+| Commits | `afb5783` (étape A), `fbb0aeb` (étape B + test de non-vacuité) |
+| Preuve | `cargo test -p ravum-lang-sema --test own_facts` : **2/2** ; `cargo test -p ravum-lang-codegen --lib` : **30/30** ; conformance **471 / 470 PASS / 0 FAIL** ; oracle rapide **600 programmes, 0 divergence** |
+
+- **4.3 (A)** `own.rs` enregistre désormais, pour chaque expression à usage de
+  valeur, `UseKind::{Move,Copy,Borrow,BorrowMut}` et la place
+  (`binding` = span de déclaration + projections `Field/Tuple/Index/Deref`).
+  `Facts.own` est additif, `BTreeMap`, `Default`. Les tests vérifient un move
+  (`take(text)`), une copie (`x`, `s`), un emprunt (récepteur `&self`), un move
+  projeté (`p.b` avec `Projection::Field("b")`) et le déterminisme. Aucun
+  consommateur ne lit encore les faits.
+- **4.4 (B, partiel)** `emit.rs::verify_ownership_facts` compare, en build
+  debug, la classification `Copy`/`Move` de chaque usage à celle du backend
+  (`emit::is_copy_type`). Un désaccord est un `CodegenError`. Mesure : **600
+  programmes générés + 471 cas de conformance, 0 désaccord**. Le test
+  `ownership_facts_disagreement_is_rejected_in_debug_builds` prouve que le
+  garde peut échouer (décision `Copy` injectée sur un `String`). Limite : les
+  **places** ne sont pas comparées, car `MovePlanner` ne mappe pas ses décisions
+  sur les `NodeId`.
+- **4.5 (C)** `NOT_RUN` : suppression du `MovePlanner` non tentée ; conditionnée
+  au diff byte-à-byte et à la comparaison des places.
+
+Note : `emit::is_copy_type` classe `Slice` et `Error` comme mobiles alors que
+`own::is_copy_type` les classe `Copy` ; cet écart est **inatteignable** en Core
+1.0 (une valeur de type slice/`Error` ne peut pas être consommée : les
+références ne sont ni stockées ni retournées, et `CheckedProgram` n'existe pas
+avec des types `Error`). Aucun test du corpus ne l'exerce ; il est consigné ici
+plutôt que corrigé sans consommateur.
+
+
 ### Clôture 2026-11-13 — CI de la PR (SHA `303da6a`)
 
 Les **8 workflows exécutés sont verts** sur le SHA de la PR : documentation

@@ -833,7 +833,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **99 groupes : 1 587 passés / 0 échec / 4 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 590 passés / 0 échec / 4 ignorés**, exit 0 |
+| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 471 cas, 0 désaccord**, test négatif vert |
 | Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **471 cas : 470 PASS / 0 FAIL / 1 SKIP** ; `perimeter=202/202`, `verified=121`, `implicit=81`, `failed=0`, `build_verified: true` |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
 | Registre | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
@@ -852,7 +853,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 
 **Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
 T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,
-aucun tag, aucune release.
+aucun tag, aucune release. L'étape A d'`OwnFacts` est additive (aucun
+consommateur) ; l'étape B est un garde-fou de debug ; l'étape C n'est pas faite.
 
 
 

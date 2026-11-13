@@ -150,3 +150,16 @@ ne duplique ni les types, ni les effets, ni les résolutions.
    20 désaccords et si le Rust généré reste identique octet pour octet.
 3. En cas de désaccord sur une règle MUST pendant l'étape B, la RFC s'arrête :
    la règle se tranche dans une RFC de langage séparée, pas ici.
+
+## 8. État d'implémentation (2026-11-13, session GOAL)
+
+| Étape | État | Preuve / limite |
+|---|---|---|
+| **A** — production des faits | **`TESTED`** | `own.rs` remplit `Facts.own` (`use_kind`, `place` avec binding + projections) ; `crates/ravum-lang-sema/tests/own_facts.rs` : 2 tests (move, copy, borrow, move projeté `p.b`, déterminisme) |
+| **B** — comparaison en debug | **`PARTIAL`** | `emit.rs::verify_ownership_facts` compare la classification `Copy`/`Move` de chaque usage en build debug et échoue en cas de désaccord. Mesuré : **600 programmes générés + 471 cas de conformance, 0 désaccord** ; test de non-vacuité (décision `Copy` injectée sur un `String` ⇒ `CodegenError`). **Les places ne sont pas encore comparées** : le `MovePlanner` ne mappe pas ses décisions sur les `NodeId`. |
+| **C** — suppression de la logique locale | `NOT_RUN` | Le `MovePlanner` est toujours la source du dégradé de déstructurage ; la suppression exige l'étape B complète (places) et le diff byte-à-byte. |
+
+Statut de la RFC : **`PROPOSED`** — `PENDING_HUMAN_APPROVAL`. L'étape A est
+additive et sans effet sur le Rust émis ; l'étape B est un garde-fou de debug,
+désactivé en release.
+
