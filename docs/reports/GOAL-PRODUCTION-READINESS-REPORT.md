@@ -178,7 +178,9 @@ Sur `a980717` (ajout de la mesure de latence LSP de bout en bout), les
 **8 workflows sont à nouveau verts**, coverage ratchet et qualification Windows
 incluses. Sur `5403734` (implémentation des traps `rt` et des formes entières
 explicites), les **8/8 workflows sont verts**, coverage ratchet incluse malgré le
-nouveau module `traps.rs` et les 4 cas de conformance ajoutés. Les seuls commits
+nouveau module `traps.rs` et les 4 cas de conformance ajoutés. Sur `36ae70b`
+(générateur d'oracle étendu à 42 gabarits et couverture re-mesurée), les
+**8/8 workflows sont verts**, coverage ratchet incluse. Les seuls commits
 postérieurs sont documentaires.
 
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`

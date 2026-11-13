@@ -514,6 +514,8 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   C'est consigné en tête de la comparaison du rapport, pas en bas.
 - Aucun changement du compilateur dans ce round : uniquement le générateur de
   test et les documents.
+- **CI** : sur `36ae70b`, **8/8 workflows verts**, coverage ratchet incluse.
+
 
 
 
