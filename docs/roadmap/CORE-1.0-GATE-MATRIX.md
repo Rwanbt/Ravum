@@ -8,23 +8,25 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-13 (passe 11 « cas de conformance FFI » :
-> huit cas ajoutés pour EFF-4.7 (`rt` + FFI), EFF-2.9 (propagation transitive),
-> `char`/`&i32` refusés, `bool` admis, `i64` traversant réellement, `extern`
-> dans `impl` et pointeur brut dans `unsafe` ; **aucun changement du
-> compilateur** — T2 reste `PARTIAL` pour la raison indépendante D10, D7 reste
-> `OPEN`).
+> Dernière mise à jour : 2026-11-13 (passe 11 « cas de conformance FFI » + lot 1
+> couverture : huit cas ajoutés pour EFF-4.7 (`rt` + FFI), EFF-2.9 (propagation
+> transitive), `char`/`&i32` refusés, `bool` admis, `i64` traversant réellement,
+> `extern` dans `impl` et pointeur brut dans `unsafe` ; puis déblayage du code
+> mort et fermeture de `facts.rs`/`builtins.rs` en couverture ; **aucun
+> changement du compilateur** — T2 reste `PARTIAL` pour la raison indépendante
+> D10, D7 reste `OPEN`).
 >
-> **Chiffres courants (passe 11, branche `feat/ffi-conformance-cases`, mesurés le
-> 2026-11-13)** :
+> **Chiffres courants (passe 11 + lot 1, `dev`, mesurés le 2026-11-13)** :
 > **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
 > `--verify-build`, `build_verified: true`, `perimeter 202`) ;
-> **113 suites, 1562 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
+> **113 suites, 1574 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
 > **188/188** règles tracées, **188/188** satisfaites ;
-> **108** codes enregistrés, **126** émis ; couverture **88,54 %** lignes /
-> **87,86 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`**
-> (dernière mesure à `21cf7d4`, passe 9 ; re-mesurée le 2026-11-13, §0 septies),
-> seuils ratchet par fichier tenus.
+> **108** codes enregistrés, **126** émis ; couverture **89,08 %** lignes /
+> **88,39 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`**, et
+> **86,41 %** du seul code produit (1 715 lignes non couvertes hors modules
+> `#[cfg(test)]`), seuils ratchet par fichier tenus, cinq relevés
+> (`facts.rs` 100/100, `builtins.rs` 100/98, `typeck.rs` 93/92,
+> `effects.rs` 92/94, `resolve.rs` 93/93 ; **aucun abaissé**).
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 >
@@ -550,7 +552,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 | T7 | `PASS` | CLI complète ; **LSP réel** (11 tests client) ; **harnais VS Code stabilisé** (timeouts 300 s, attente 180 s, barrière de disponibilité LSP) ; **10/10 au repos, 10/10 sous `cargo test --workspace` concurrent**, et **job CI `vscode-e2e` vert** sur `9972391` (push `42858553296`, 49 s ; PR `42858866200`, 1 m 04 s) avec build CLI + `xvfb` + VS Code réel | Risque résiduel : flakiness E2E ordinaire d'une suite Electron, sans échec observé depuis le correctif ; les plateformes Windows/macOS ne sont pas couvertes par ce job | — |
 | T8 | `PARTIAL` | `watch` **fail-closed** : compilation avant arrêt de la version active, rejet des résultats obsolètes (digest de publication + re-scan), copie privée par processus, repli sur la dernière version valide, aucun orphelin (preuve `scripts/watch-fail-closed-check.ps1`) ; overlays/snapshots ; oracle cold vs warm (36 éditions) | **Pas de préservation d'état** ; pas d'ABI de patch ni de safepoint ; « continuité de service » n'est pas « hot reload » | Implémentation |
 | T9 | `PARTIAL` | **10 verticales `.rv` exécutées**, dont `examples/file-store` (magasin clé/valeur versionné en Ravum pur : put/get/list/history/delete, erreurs typées, refus de traversée de chemin), avec 13 assertions de smoke et 3 cas de conformance | HTTP + SQLite, DSP hôte, E2E navigateur absents ; `file-store` n'est **pas** une base de données ni un service | Implémentation + décision D6/D7 |
-| T10 | `PARTIAL` | **1562 tests** (113 suites), conformance **463 cas** avec **build vérifié bloquant** (`perimeter 200`, `verified 120`, `implicit 80`, `failed 0`), smoke **43/0/0**, contrats Python **33**, **Miri Linux vert en CI sur `c67f17e`**, **fuzz smoke vert en CI** ; couverture **sema + codegen** **88,54 % lignes / 87,86 % régions** (dernière mesure à `21cf7d4`, passe 9 ; objectif 100 % inscrit, non re-mesurée en passe 10 ; seuils ratchet par fichier tenus ; codegen/emit.rs 87,02/86,02 — le backend n'était mesuré par aucun seuil avant) ; mutation ciblée 195 mutants / 166 tués (passe 5) ; **conformance Windows, reproductibilité, SBOM, provenance et installateur désormais rejoués par la CI** (`qualification-evidence.yml`, run `43064500916`) | **Audit externe absent** ; campagne de mutation **non rejouée** depuis la passe 5 (workflow `mutation.yml` en `schedule`/`dispatch`, absent de la branche par défaut donc non déclenchable par `gh workflow run`) ; fuzz **complet** non rejoué (seul le garde-fou `fuzz_*` tourne) ; **aucune variante de move ouverte** (fermées en passe 8-9) ; aucune mesure de performance au repos (machine chargée) | Audit externe |
+| T10 | `PARTIAL` | **1574 tests** (113 suites, 2 ignorés), conformance **471 cas** avec **build vérifié bloquant** (`perimeter 202`, `verified 121`, `implicit 81`, `failed 0`), smoke **43/0/0**, contrats Python **33**, **Miri Linux vert en CI sur `c67f17e`**, **fuzz smoke vert en CI** ; couverture **sema + codegen** **89,08 % lignes / 88,39 % régions** (mesure du 2026-11-13, lot 1 ; objectif 100 % inscrit ; seuils ratchet par fichier tenus, cinq relevés, aucun abaissé ; codegen/emit.rs 87,00/86,02 ; `facts.rs` et `builtins.rs` à 100 % de lignes) ; **86,41 % du code produit mesuré** est couvert (1 715 lignes restantes sur 12 621, dont 1 145 dans `emit.rs` + `loader.rs`) ; mutation ciblée **rejouée en CI** (`mutation.yml`, run [43329512746](https://github.com/Rwanbt/Ravum/actions/runs/43329512746) : 183 mutants / 150 tués / 24 survivants triés équivalents / 9 non viables) ; **conformance Windows, reproductibilité, SBOM, provenance et installateur désormais rejoués par la CI** (`qualification-evidence.yml`) | **Audit externe absent** ; couverture **loin de 100 %** sur `emit.rs` (78,84 % du code produit) et `loader.rs` (69,71 %) ; fuzz **complet** non rejoué (seul le garde-fou `fuzz_*` tourne) ; **aucune variante de move ouverte** (fermées en passe 8-9) ; aucune mesure de performance au repos (machine chargée) | Audit externe |
 | T11 | `PARTIAL` | Installateur **rejoué en CI** (`qualification-evidence.yml` : installation, `--version`, manifeste `locked=true`/`git_commit`/`sha256`/`rustc`, désinstallation idempotente, réinstallation `-SkipBuild` — **16/16**, binaire CI `6437db9d…ab6adf66`), SBOM **déterministe** (64 paquets / 170 relations, deux runs un digest, CI `63060489…4fa0dc8c`), provenance émise/vérifiée en CI avec **refus d'un binaire altéré** et fail-closed, licence `MIT OR Apache-2.0`, **build bit-à-bit identique entre deux racines et deux `target/`** (local `847DF0D1…59335CB96` ; CI `C281A035…588C2F70` — le digest est propre à l'environnement, c'est pourquoi la revendication reste « même toolchain, même linker »), **mécanisme de signature OpenSSH qualifié (accepte l'intact, rejette l'altéré)** ; procédure de custody **proposée** (`docs/release/KEY-CUSTODY.md`) | **Aucune clé de projet ni ancre de confiance** ; reproductibilité **inter-machines** non testée | Décision humaine **D9** (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
 

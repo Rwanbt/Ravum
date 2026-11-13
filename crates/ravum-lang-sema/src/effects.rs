@@ -407,8 +407,3 @@ fn find_violation(
     }
     None
 }
-
-/// Effet produit par une expression isolée (utile aux tests unitaires).
-pub fn empty() -> EffectSet {
-    EffectSet::default()
-}

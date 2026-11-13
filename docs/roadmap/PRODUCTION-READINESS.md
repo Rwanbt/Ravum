@@ -7,13 +7,14 @@
 > ligne ci-dessous n'est cochée sans la commande, le SHA et la sortie qui la
 > ferment.
 >
-> **État au 2026-11-13** (Windows 11 x64, `rustc 1.95.0`, passe 11) :
-> conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**, périmètre build
-> **202/202**, `build_verified: true` ; workspace **113 suites, 1562 passés /
-> 0 échec** ; **0 forme `check`-pass / `build`-fail connue** ; gates
+> **État au 2026-11-13** (Windows 11 x64, `rustc 1.95.0`, passe 11 + lot 1
+> couverture) : conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**, périmètre
+> build **202/202**, `build_verified: true` ; workspace **113 suites, 1 574
+> passés / 0 échec** ; **0 forme `check`-pass / `build`-fail connue** ; gates
 > **4 PASS / 7 PARTIAL / 2 BLOCKED**. Couverture : mesure du 2026-11-13
-> **88,54 % lignes / 87,81 % régions** (sema + codegen), objectif
-> **100 %** inscrit — écart, causes et plan par fonction en §7 bis.
+> **89,08 % lignes / 88,39 % régions** (sema + codegen), **86,41 % du seul code
+> produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
+> — écart, causes et plan par fichier en §7 bis.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -78,7 +79,7 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels ; programme §5 étendu aux **wrappers sûrs**, modules `trusted`, effets déclarés sur l'`extern` et isolation |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
 | R7 | `PARTIAL` | local `847DF0D1…` ≠ runner `C281A035…` : digest lié à l'environnement, non revendiqué |
-| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (88,54/87,86 totaux ; `emit.rs` 87,02/86,02) avec seuils ratchet par fichier ; **objectif ratifié : 100 % lignes ET régions** — `coverage_report.py --gap` liste **11 fichiers sous l'objectif** (**2 163** lignes non couvertes, détail et plan par fonction en §7 bis : `emit.rs` 757, `loader.rs` 581, `typeck.rs` 274, `own.rs` 182, `resolve.rs` 138) ; mutation ciblée (passe 5) non rejouée ; `mutation.yml` est désormais dans `main`, son premier run reste à observer |
+| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (89,08/88,39 totaux au 2026-11-13, lot 1 ; `emit.rs` 87,00/86,02) avec seuils ratchet par fichier ; **objectif ratifié : 100 % lignes ET régions** — `coverage_report.py --gap` liste **10 fichiers sous l'objectif** (**2 098** lignes non couvertes, dont **201** dans du code de test ; **1 715** lignes de code produit, **86,41 %**), détail, causes et plan par fichier en §7 bis ; `facts.rs`, `builtins.rs`, `types.rs` et le code produit de `check.rs` sont à 100 % de lignes ; mutation ciblée rejouée en CI le 2026-11-13 (run `43329512746` : 183 mutants, 150 tués, 24 survivants triés équivalents, 9 non viables) |
 | R9 | `PARTIAL` | mesures de `RFC-D2` sous charge déclarée ; pas de campagne au repos |
 | R10 | `PARTIAL` | CLI et JSON documentés et testés ; politique de dépréciation absente |
 | R11 | `PARTIAL` | installateur Windows CI 16/16 ; Linux installé par la CI de qualification mais pas de contrat d'installateur public |
@@ -232,7 +233,9 @@ mécanisme est en place : `tools/coverage_thresholds.json` porte l'objectif, et
 par fichier, les lignes non couvertes. État de départ : **11 fichiers sous
 l'objectif, ~2 100 lignes** — `emit.rs` 757, `loader.rs` 581, `typeck.rs` 274,
 `own.rs` 182, `resolve.rs` 138, `check.rs` 131, `builtins.rs` 35, `facts.rs` 28,
-`effects.rs` 25, `types.rs` 9, `lib.rs` 3. La trajectoire : fermer les écarts
+`effects.rs` 25, `types.rs` 9, `lib.rs` 3. **État courant et plan à jour : §7
+bis** (2026-11-13 : 89,08/88,39, 10 fichiers, 1 715 lignes de code produit).
+La trajectoire : fermer les écarts
 module par module, et **relever le seuil du fichier à 100 dès qu'il l'atteint**,
 pour que la couverture ne puisse plus redescendre. Reste aussi à étendre la mesure
 à `ravum-lang-syntax`, `ravum-lang-cli` et `tools/conformance`. Et à compléter
@@ -240,42 +243,100 @@ par la **mutation** (mesure plus honnête pour un compilateur, car un `match`
 géant peut être « couvert » sans être testé) : 100 % de couverture ne prouve pas
 100 % de correction.
 
-## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-13)
+## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-13, lot 1)
 
-> Mesure de référence : `target/cov-now.json`, export `cargo llvm-cov -p
-> ravum-lang-sema -p ravum-lang-codegen --json` du 2026-11-13 sur `e6ca298`
-> (`rustc 1.95.0`, Windows 11 x64). Elle remplace celle du 2026-11-12
-> (`21cf7d4`) : **88,54 % lignes (17 091/19 303) / 87,81 % régions
-> (27 531/31 352)**, tous les planchers tenus, la marge la plus mince restant
-> `check.rs` (80,26 % pour un plancher à 80).
+> Mesure de référence : `target/cov-batch1.json`, export `cargo llvm-cov -p
+> ravum-lang-sema -p ravum-lang-codegen --json` du 2026-11-13 sur `432c663` +
+> lot 1 (`rustc 1.95.0`, `cargo-llvm-cov 0.9.1`, Windows 11 x64) :
+> **89,08 % lignes (17 264/19 380) / 88,39 % régions**, contre **88,54 %
+> (17 091/19 303) / 87,81 %** au lot 0. Cinq seuils relevés, **aucun abaissé**
+> (voir « Clôtures » plus bas).
 >
-> **Correction d'analyse (2026-11-13).** Le plan du 2026-11-12 attribuait les
-> écarts par *fonction* sans fusionner les instanciations : l'export contient
+> **Deux chiffres, deux supports, ils ne s'additionnent pas :**
+>
+> - `python tools/coverage_report.py --gap` — le gate CI lit l'export **par
+>   instanciation de compilation** : **2 098** lignes non couvertes, **10**
+>   fichiers sous l'objectif ;
+> - `python tools/coverage_product_split.py` — **fusionne** les instanciations
+>   et sépare le code produit du code de test : **1 715** lignes produit non
+>   couvertes sur 12 621 (**86,41 %**) et **201** lignes dans les modules
+>   `#[cfg(test)]`.
+>
+> **Correction d'analyse (2026-11-13, lot 0).** Le plan du 2026-11-12 attribuait
+> les écarts par *fonction* sans fusionner les instanciations : l'export contient
 > `sema` **deux fois** (seul, puis comme dépendance de `codegen`), donc une
 > fonction exercée par les tests de `sema` apparaissait « 100 % non couverte »
 > dans la copie liée aux tests de `codegen`. Exemple : `check_const_expr` était
 > annoncé 207/207, il est en réalité **16/207** ; `plan_slot_groups` 210/217,
 > il est en réalité **40/217**. Les chiffres **par fichier** n'étaient pas
 > affectés (les lignes ne sont pas dupliquées), mais les cibles par fonction
-> l'étaient. Les chiffres ci-dessous sont fusionnés (meilleure instanciation par
-> fonction).
+> l'étaient.
 
-- **2 189 lignes** non couvertes : `emit.rs` 758 · `loader.rs` 581 · `typeck.rs`
-  296 · `own.rs` 185 · `resolve.rs` 138 · `check.rs` 131 · `builtins.rs` 35 ·
-  `facts.rs` 28 · `effects.rs` 25 · `types.rs` 9 · `lib.rs` 3.
+### Le code de test n'est pas un trou de couverture
 
-### Où se concentrent les régions non couvertes (fusionné)
+Sur les 2 098 lignes que `--gap` liste, **201** sont dans un module
+`#[cfg(test)]` et ne peuvent pas être couvertes par une exécution verte : le
+message d'un `assert!` ne s'exécute que si le test échoue, un `panic!` de
+diagnostic de test ne s'exécute jamais, et les bras de `match` des *walkers* ne
+s'exécutent que si un programme de test utilise la construction correspondante.
 
-| Fichier | Fonctions principales (régions non couvertes / total, ligne) |
+| Fichier | Lignes non couvertes dans `#[cfg(test)]` | Nature |
+|---|---|---|
+| `check.rs` | 143 | `assert!`/`panic!` des helpers et bras AST inutilisés de `fact_coverage_tests` |
+| `emit.rs` | 37 | messages d'échec des tests du backend |
+| `own.rs` | 13 | idem |
+| `loader.rs` | 8 | idem |
+
+Conséquence pratique : **`check.rs` est à 100 % de son code produit** (46
+lignes) alors que `--gap` le classe à 80,26 %. Le chasser revient à écrire des
+tests qui testent des tests. Le script de séparation est versionné
+(`tools/coverage_product_split.py`) pour que le chiffre soit reproductible et
+discutable, pas asserté.
+
+### Le code mort n'est pas un trou de couverture non plus
+
+Le compilateur le signale (`dead_code`). Le lot 1 a supprimé **neuf éléments
+sans appelant**, vérifiés par recherche sur tout le dépôt :
+
+| Élément | Fichier | Note |
+|---|---|---|
+| `collect_generic_args` | `typeck.rs` | aucun appelant (annoncé comme cible de test dans le plan du lot 0 : c'était du code mort) |
+| `check_expr_list` | `typeck.rs` | remplacé par `check_tuple_items` depuis la refonte des tuples |
+| `check_tuple` | `typeck.rs` | idem ; les tuples sont typés par `check_tuple_items` |
+| `EffectSet::pure` | `facts.rs` | aucun appelant (`EffectSet::default()` utilisé) |
+| `EffectSet::is_subset_of` | `facts.rs` | aucun appelant |
+| `facts::expr_type` | `facts.rs` | aucun appelant ; `codegen` et `lsp` lisent `facts.expr_types` directement |
+| `builtin_assoc_fn_effects` | `builtins.rs` | aucun appelant ; `effects::add_builtin_path` lit `sig.effects` |
+| `effects::empty` | `effects.rs` | aucun appelant (sa doc disait « utile aux tests unitaires » : aucun test ne l'utilisait) |
+| `World::module` | `resolve.rs` | accesseur jamais appelé |
+
+**Cinq avertissements `dead_code` restent, volontairement**, parce que les
+supprimer effacerait un fait plutôt qu'un coût :
+
+| Reste | Nature du fait |
 |---|---|
-| `emit.rs` | `builtin_free_call` 121/236 (2810), `match_text` 95/104 (2050), `pattern_with_float_guards` 89/89 (2122), `expr` 75/366 (1854), `syntactic_type_pos` 62/69 (2404), `builtin_fn_value` 55/55 (2250), `fmt_type_pos` 53/155 (2518), `MovePlanner::walk_expr` 51/421 (3794), `pattern` 41/105 (2631), `plan_slot_groups` 40/217 (4334), `builtin_const` 39/59 (812), `literal_pattern` 30/30 (2695) |
-| `loader.rs` | `resolve_dependency_dir` 77/201 (1299), `collect_dependencies` 62/200 (1113), `package_digest` 56/144 (1562), `parse_toml_value` 54/133 (673), `read_text_limited` 54/82 (2496), `update_lockfile` 48/115 (1783), `parse_manifest` 47/192 (827), `resolve_module_file` 47/162 (2201), `parse_basic_string` 40/67 (775) |
-| `typeck.rs` | `check_expr_list` 34/34 (1526), `var_occurs` 32/52 (753), `has_unbound_param` 27/32 (5579), `is_static_text_expr` 20/83 (409), `coverage_ctors` 20/80 (5966), `collect_generic_args` 20/20 (5532 — **aucun appelant**), `pattern_payloads_for_ctor` 19/63 (6086), `check_struct_lit` 18/229 (4125), `check_return` 17/82 (3869), `check_const_expr` 16/207 (5029), `check_call` 15/236 (1852) |
-| `own.rs` | `eval_value` 36/349 (676), `check_let` 36/88 (582), `check_fn` 26/85 (387), `eval_for` 22/154 (1188), `eval_method_call` 15/85 (1359), `eval_while` 13/106 (1059), `eval_call` 12/83 (1288) |
-| `resolve.rs` | `resolve_type_path` 64/329 (2409), `resolve_value_path` 44/327 (569), `resolve_use_target` 15/69 (1291), `same_use_target` 11/20 (1532), `resolve_use_tail` 10/110 (1433) |
-| `check.rs` | `fact_coverage_tests::walk_expr` 130/265 (626), `walk_module` 54/76 (505), `walk_pat` 33/40 (590), `walk_match_arm` 14/14 (730) — **du code de test** |
-| `builtins.rs` | `type_from_str` 47/131 (828), `builtin_assoc_fn_effects` 5/5 (815), `prelude_type` 2/40 (377) |
-| `facts.rs` | `Profile::parse` 10/10 (124), `Effect::from_name` 6/24 (44), `Effect::name` 6/13 (29), `expr_type` 5/5 (389), `is_subset_of` 5/5 (94), `EffectSet::pure` 3/3 (78) |
+| `ModuleInfo::name` jamais lu | l'information existe en double (`World::modules[..].path`) |
+| `MethodEntry::impl_generics` jamais lu | copie redondante : les génériques d'`impl` sont bien utilisés via `impl_ctx` (`resolve.rs` 1687) |
+| `Resolved::Module(ModuleId)` — charge jamais lue | le `ModuleId` est ignoré par tous les `match` |
+| `Resolved::BuiltinModule(&'static str)` — charge jamais lue | idem |
+| `UseTarget::Variant` jamais construit | **défaut latent** : le message « variant import … is not supported in Core 1.0 » (`resolve.rs` 1189) ne peut pas s'exécuter ; `use E::V;` sort aujourd'hui en `E-RES-UNKNOWN` « unknown import path » |
+
+### Ce qui reste, en code produit
+
+| Fichier | Lignes produit non couvertes / totales | Produit % |
+|---|---|---|
+| `codegen/emit.rs` | 608 / 2 874 | 78,84 % |
+| `sema/loader.rs` | 537 / 1 773 | 69,71 % |
+| `sema/typeck.rs` | 243 / 3 831 | 93,66 % |
+| `sema/own.rs` | 165 / 1 487 | 88,90 % |
+| `sema/resolve.rs` | 137 / 1 855 | 92,61 % |
+| `sema/effects.rs` | 22 / 281 | 92,17 % |
+| `codegen/lib.rs` | 3 / 13 | 76,92 % |
+| `sema/builtins.rs` | **0** / 212 | **100 %** |
+| `sema/facts.rs` | **0** / 118 | **100 %** |
+| `sema/types.rs` | **0** / 131 | **100 %** |
+| `sema/check.rs` | **0** / 46 | **100 %** |
+| **Total** | **1 715 / 12 621** | **86,41 %** |
 
 ### Quatre causes distinctes, quatre traitements
 
@@ -290,33 +351,59 @@ géant peut être « couvert » sans être testé) : 100 % de couverture ne prou
 2. **Instanciations dupliquées** — `sema` est compilé deux fois dans la même
    mesure. Toute analyse par fonction doit fusionner (meilleure instanciation) ;
    sinon elle double les cibles et fabrique de faux « 0 % ».
-3. **Code de test compté comme code** — `check.rs` : 131 lignes, dont les
-   *walkers* de `fact_coverage_tests`. Atteindre 100 % exige de piloter ces
-   helpers sur tous les nœuds, ou de les supprimer s'ils sont du code mort.
+3. **Code de test et code mort comptés comme code** — traités ci-dessus : le
+   premier ne se ferme pas par des tests, le second se supprime. Les deux
+   sortent du dénominateur utile sans qu'aucun seuil ne bouge.
 4. **Vrais trous** — `loader.rs` (dépendances, manifeste, lockfile),
-   `typeck` (`check_expr_list`, `var_occurs`, `coverage_ctors`), `emit` hors
-   moves, `resolve_type_path`, `eval_value`.
+   `emit.rs` hors moves, `eval_value` (D13), `resolve_type_path`,
+   `check_struct_lit`, `check_return`, `check_const_expr`.
 
-### Ordre proposé (risque × taille)
+### Ordre proposé (mis à jour après le lot 1)
 
-1. **Déblayer le code mort d'abord** : `collect_generic_args` n'a **aucun
-   appelant** (vérifié par recherche dans tout `crates/`) — la politique dit
-   « le code mort est supprimé, pas exclu ». Petits ajouts ensuite : `facts`
-   (parse/round-trip), `builtins::type_from_str`.
-2. **Lots touchés par les passes 6–10** : `emit` (guards flottants, patterns,
-   positions de type), `typeck` (`check_struct_lit`, `check_return`,
-   `check_const_expr`), `eval_value` (D13). Ce sont les zones où des régressions
-   ont déjà été trouvées par la suite.
-3. **Chargeur de packages** (`loader.rs`, 581 lignes) : le plus gros bloc
-   cohérent et le moins testé.
-4. **Résolution et appels** : `resolve_type_path`, `resolve_value_path`,
-   `resolve_use_*`, `check_call`, `check_binary`, `check_lit_pattern`, puis
-   `check.rs` (helpers de test).
+1. **Lots `emit.rs` et `loader.rs`** : 1 145 des 1 715 lignes produit restantes
+   (67 %) sont dans deux fichiers, tous deux sous 80 %. `emit.rs` est le code
+   qui décide de la forme du Rust généré ; `loader.rs` est le chargeur de
+   packages, jamais exercé par `cargo test` sur ses chemins d'erreur
+   (manifeste invalide, dépendance manquante, cycle, lockfile divergent).
+   Ce sont les deux lots à ouvrir ensemble : le second produit des fixtures
+   réutilisées par le premier.
+2. **`typeck.rs` / `own.rs` / `resolve.rs`** (545 lignes) : zones où des
+   régressions ont déjà été trouvées par les passes 6–10
+   (`check_struct_lit`, `check_return`, `check_const_expr`, `eval_value`,
+   `resolve_type_path`).
+3. **`effects.rs`** (22 lignes) : dont 14 **structurellement inaccessibles**
+   aujourd'hui — la branche « entrées = `test_fns` » (`effects.rs` 128-141)
+   exige un programme sans `main` dont les `#[test]` sont acceptés, alors que
+   `#[test]` est refusé en `E-UNSUPPORTED-ATTR` et qu'un programme sans `main`
+   est une erreur. Elle sera couverte le jour où les attributs de test
+   entreront ; d'ici là c'est une dette assumée, pas une cible.
+4. **Helpers de test** (`check.rs`) : dernière priorité, et seulement pour les
+   bras qui correspondent à des constructions réellement supportées.
 
 **Règle de clôture** : un fichier qui atteint 100 % de lignes et de régions
 relève son plancher à 100 dans `tools/coverage_thresholds.json`, dans le même
 commit, avec le SHA de mesure. Aucun test n'est ajouté « pour la ligne » : il
 asserte un comportement, et les cas négatifs portent le code exact.
+
+### Clôtures du lot 1 (2026-11-13)
+
+| Fichier | Plancher avant | Plancher après | Mesure | Fermé par |
+|---|---|---|---|---|
+| `facts.rs` | 81 / 76 | **100 / 100** | 100 / 100 | 3 suppressions + 8 tests de contrat (round trip des noms d'effet, `display`/`extend`/`difference`, `Profile::parse`/`name`/`forbidden`, `FileInfo::line_of`, `file_infos`) |
+| `builtins.rs` | 90 / 88 | **100 / 98** | 100 / 98,42 | `type_from_str` : formes composées (`&`, `&mut`, `[T]`, `(A, B)`, `Vec`/`Option`/`Result`) et refus fermé du texte malformé (12 chaînes) |
+| `typeck.rs` | 92 / 91 | **93 / 92** | 93,47 / 93,01 | 3 suppressions de code mort |
+| `effects.rs` | 91 / 93 | **92 / 94** | 93,29 / 95,02 | 1 suppression de code mort |
+| `resolve.rs` | 92 / 92 | **93 / 93** | 93,26 / 93,45 | 1 suppression de code mort |
+
+### Constat hors couverture, à trancher
+
+`impl<T> Holder<T>` **fonctionne** mais **aucun cas de conformance ne le
+couvre** (recherche `impl\s*<` sur `conformance/cases` : zéro). Sonde locale du
+2026-11-13 (`ravum-lang run`, 7 lignes, hors corpus) : `check` passe, le binaire
+s'exécute, `value_of(self) -> T` rend bien `41` puis `42` (`OK42`). C'est une
+forme supportée non verrouillée par le corpus : à ajouter comme cas
+`run-pass` en même temps qu'un incrément du compte de cas (471 → 472), donc pas
+dans ce lot.
 
 ## 8. Ce que ce document ne prétend pas
 

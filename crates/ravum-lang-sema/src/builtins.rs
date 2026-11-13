@@ -811,14 +811,6 @@ pub fn builtin_method_effects(path: &str) -> Option<&'static [Effect]> {
         .map(|m| m.effects)
 }
 
-/// Effets d'une fonction associée builtin depuis son chemin canonique.
-pub fn builtin_assoc_fn_effects(path: &str) -> Option<&'static [Effect]> {
-    BUILTIN_ASSOC_FNS
-        .iter()
-        .find(|f| f.path == path)
-        .map(|f| f.effects)
-}
-
 // ---------------------------------------------------------------------------
 // Mini-analyseur de type (les signatures ci-dessus sont des chaînes statiques).
 // ---------------------------------------------------------------------------
@@ -1059,5 +1051,87 @@ mod tests {
         assert!(is_error_type(&error_type()));
         assert!(!is_error_type(&Type::String));
         assert_eq!(error_type().to_string(), "Error");
+    }
+
+    /// `type_from_str` is the only reader of the signature table; every
+    /// compound form it accepts here is a shape a builtin signature may take.
+    #[test]
+    fn type_from_str_parses_the_compound_forms() {
+        assert_eq!(type_from_str("()", &[]), Some(Type::Unit));
+        assert_eq!(type_from_str("!", &[]), Some(Type::Never));
+        assert_eq!(
+            type_from_str("&i32", &[]),
+            Some(Type::Ref {
+                mutable: false,
+                inner: Box::new(Type::I32)
+            })
+        );
+        assert_eq!(
+            type_from_str("&mut i32", &[]),
+            Some(Type::Ref {
+                mutable: true,
+                inner: Box::new(Type::I32)
+            })
+        );
+        assert_eq!(
+            type_from_str("[u8]", &[]),
+            Some(Type::Slice(Box::new(Type::U8)))
+        );
+        assert_eq!(
+            type_from_str("(i32, bool)", &[]),
+            Some(Type::Tuple(vec![Type::I32, Type::Bool]))
+        );
+        assert_eq!(
+            type_from_str("Vec<Option<i32>>", &[]),
+            Some(Type::Vec(Box::new(Type::Option(Box::new(Type::I32)))))
+        );
+        assert_eq!(
+            type_from_str("Result<i32, Error>", &[]),
+            Some(Type::Result(Box::new(Type::I32), Box::new(error_type())))
+        );
+        assert_eq!(
+            type_from_str(" ( i32 , bool ) ", &[]),
+            Some(Type::Tuple(vec![Type::I32, Type::Bool])),
+            "surrounding and inner spaces are accepted"
+        );
+        assert_eq!(
+            type_from_str("( )", &[]),
+            Some(Type::Unit),
+            "a whitespace-only unit is still the unit type"
+        );
+    }
+
+    #[test]
+    fn type_from_str_resolves_names_from_the_environment() {
+        let env = [("T", Type::I32), ("Self", Type::String)];
+        assert_eq!(type_from_str("T", &env), Some(Type::I32));
+        assert_eq!(type_from_str("Self", &env), Some(Type::String));
+        assert_eq!(type_from_str("str", &[]), Some(Type::Str));
+        assert_eq!(type_from_str("String", &[]), Some(Type::String));
+        assert_eq!(type_from_str("U", &env), None, "unbound name stays unknown");
+    }
+
+    /// Malformed or arity-inconsistent signature text must fail closed: the
+    /// caller turns `None` into `Type::Error`, which the generator never emits.
+    #[test]
+    fn type_from_str_refuses_malformed_text() {
+        for text in [
+            "",
+            "   ",
+            "&",
+            "&mut",
+            "[i32",
+            "(i32, (bool)",
+            "(i32,",
+            "Vec<i32, i32>",
+            "Result<i32>",
+            "Vec<>",
+            "Option<i32, i32>",
+            "Inconnu",
+            "[Inconnu]",
+            "(i32, Inconnu)",
+        ] {
+            assert_eq!(type_from_str(text, &[]), None, "accepted {text:?}");
+        }
     }
 }

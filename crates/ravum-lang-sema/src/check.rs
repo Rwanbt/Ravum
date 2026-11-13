@@ -483,7 +483,7 @@ fn main() { let s = m::make(); let x = s.secret; }
 #[cfg(test)]
 mod fact_coverage_tests {
     use super::check;
-    use crate::facts::{CheckOptions, Profile};
+    use crate::facts::CheckOptions;
     use ravum_lang_syntax::ast::{
         Expr, ExprKind, ItemKind, MatchArm, Module, PatKind, Program, StmtKind,
     };
