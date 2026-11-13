@@ -541,6 +541,8 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Incident de mesure : un run de conformance a produit un timeout transitoire de
   `types/match-expression` (571 s) ; rejoué seul puis en corpus complet, il est
   **PASS** — c'était une contention d'environnement, pas une régression.
+- **CI** : sur `28ad5da`, **8/8 workflows verts**, coverage ratchet incluse.
+
 
 
 

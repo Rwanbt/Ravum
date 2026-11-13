@@ -183,8 +183,10 @@ incluses. Sur `5403734` (implémentation des traps `rt` et des formes entières
 explicites), les **8/8 workflows sont verts**, coverage ratchet incluse malgré le
 nouveau module `traps.rs` et les 4 cas de conformance ajoutés. Sur `36ae70b`
 (générateur d'oracle étendu à 42 gabarits et couverture re-mesurée), les
-**8/8 workflows sont verts**, coverage ratchet incluse. Les seuls commits
-postérieurs sont documentaires.
+**8/8 workflows sont verts**, coverage ratchet incluse. Sur `28ad5da` (traps
+d'affectation composée, 5e cas, 10 tests unitaires), les **8/8 workflows sont
+verts**, coverage ratchet incluse. Les seuls commits postérieurs sont
+documentaires.
 
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
