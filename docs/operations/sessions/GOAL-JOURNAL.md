@@ -410,6 +410,11 @@ références ne sont ni stockées ni retournées, et `CheckedProgram` n'existe p
 avec des types `Error`). Aucun test du corpus ne l'exerce ; il est consigné ici
 plutôt que corrigé sans consommateur.
 
+**CI du round 2** : sur `3a35b49`, les **8/8 workflows sont verts** (documentation,
+contrats, VS Code, **coverage ratchet**, qualification Windows, macOS, MVP
+produit, impact). Aucun correctif nécessaire.
+
+
 
 ### Clôture 2026-11-13 — CI de la PR (SHA `303da6a`)
 

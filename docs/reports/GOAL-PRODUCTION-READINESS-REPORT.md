@@ -148,8 +148,13 @@ déclenché les workflows de la CI. Sur le SHA `303da6a` (code identique à
 
 Un run `impact` antérieur, déclenché sur le SHA précédent (`8abf258`), a été
 **annulé par le push** qui a suivi : c'est une supersession, pas un échec. Aucun
-workflow n'est rouge. Le commit qui ajoute cette section est **docs-only** ; son
-propre run CI n'est pas attendu dans ce rapport.
+workflow n'est rouge.
+
+Après l'ajout des étapes A/B d'`OwnFacts` (commit `3a35b49`), les **8 mêmes
+workflows sont à nouveau verts** (documentation, contrats, VS Code, **coverage
+ratchet**, qualification Windows, macOS, MVP produit, impact), ce qui valide les
+planchers de couverture malgré le code ajouté. Aucun correctif CI n'a été
+nécessaire.
 
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
