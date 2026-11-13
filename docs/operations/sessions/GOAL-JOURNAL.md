@@ -271,6 +271,64 @@ de la phase reste donc `PARTIAL`, pas `TESTED`.
 - Phase 5 (traps du profil `rt`) et phase 8 (bloc DSP), puis phase 9
   (qualification, rapport, PR).
 
+## Entrée 2026-11-13 — Phases 4, 5, 8 : état honnête (non implémentées)
+
+Ces trois phases demandent des changements de fond (moteur d'ownership partagé,
+règle de langage, ABI générée) qui n'ont **pas** été menés à bien dans la
+session. Elles sont consignées ici avec ce qui existe (RFC, lecture du code) et
+ce qui manque, plutôt que maquillées en `TESTED`.
+
+### Phase 4 — source unique des faits d'ownership : `PARTIAL`
+
+**4.1 (fait) — inventaire des décisions prises par `emit.rs`** (lecture de
+`crates/ravum-lang-codegen/src/emit.rs` à `6257b84`) :
+
+| Lieu (ligne) | Décision re-dérivée par le backend |
+|---|---|
+| `is_copy_type` (1594-1638) | copie vs move par type ; « miroir » explicite de `sema::own::is_copy_type` (commentaire 1596) |
+| `is_owned_position` (1640) | position possédée d'une expression |
+| `plan_array_moves` (1649) / `MovePlanner` (3574-3592) | quelles places de tableau sont déplacées, par un **walk syntaxique indépendant** (scopes, binders, `whole_uses`, `descents`) |
+| `single_move_expr`, `chain_move_expr`, `build_destructure`, `plan_prefix_slots` (1668, 1703, 4165, 4259) | forme du déstructurage et où le hoister |
+| `builtin_method_moves_receiver` (927) | un builtin consomme-t-il son récepteur |
+| `Access`/`WholeUse`/`Descent` dans `MovePlanner` | usages complets, descentes, accès par bras de `match` |
+
+Conclusion : la duplication de C2 est **confirmée** (deux modèles : `own.rs` et
+`MovePlanner`), et c'est bien la classe P0-A.
+
+**4.2 (fait)** `docs/rfc/RFC-OWN-FACTS.md` : structure `OwnFacts`, production par
+`own.rs`, consommation en trois étapes, critère d'arrêt (> 20 désaccords), diff
+byte-à-byte exigé pour C.
+
+**4.3–4.5 : `NOT_RUN`.** Raison : l'étape A exige de threader `NodeId` dans
+toutes les décisions d'accès d'`own.rs` (`consume_place`, `read_place`,
+`write_place`, `borrow_place` et leurs ~15 sites d'appel) et de remplacer le
+`MovePlanner` en C ; à l'échelle de la session, le risque de casser la classe
+P0-A (que l'oracle différentiel surveille) dépasse le bénéfice d'une étape A
+seule. Aucun demi-changement n'a été laissé. Statut : `PARTIAL` (4.1-4.2),
+`NOT_RUN` (4.3-4.5).
+
+### Phase 5 — traps du profil `rt` : `NOT_RUN` (RFC écrite)
+
+`docs/rfc/RFC-RT-TRAPS.md` (PROPOSED, `PENDING_HUMAN_APPROVAL`) définit la règle,
+les alternatives, les formes explicites (`wrapping_*`/`saturating_*`/`checked_*`)
+et les cas de conformance attendus. **Aucune ligne de compilateur, aucun cas de
+corpus, aucun changement d'`examples/dsp-gain-iir`** : non implémenté, donc
+`NOT_RUN`. Décision humaine requise avant toute implémentation (règle de
+langage, et la RFC inclut deux points non tranchés : décalages/négation, sort de
+`pure`).
+
+### Phase 8 — bloc DSP `.rv` : `NOT_RUN` (RFC écrite, ABI lue)
+
+**8.1 (fait)** ABI résumée : `ravum_process_block(*const f32, *mut f32, u32,
+*mut DspState)`, `DspState { z1: f32, z2: f32 }`, `cdylib` chargé par
+`ravum-patch-host`, crossfade sans allocation, state possédé par l'hôte.
+**8.2 (fait)** `docs/rfc/RFC-RV-DSP-BLOCK.md` : wrapper généré, `unsafe`
+local, digest FNV-1a du schéma, refus de swap sur schéma différent (INV-03),
+pas de migration.
+**8.3–8.4 : `NOT_RUN`** : implémentation (flag CLI, wrapper codegen, protocole,
+tests de swap) non commencée. `PENDING_HUMAN_APPROVAL` sur l'ABI et le digest.
+
+
 
 
 
