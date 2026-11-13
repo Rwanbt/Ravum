@@ -450,6 +450,40 @@ Correctif : compteur atomique par processus dans les trois helpers
 - **CI** : sur `a980717`, **8/8 workflows verts** (documentation, contrats,
   VS Code, coverage ratchet, qualification Windows, macOS, MVP produit, impact).
 
+## Entrée 2026-11-13 (round 4) — Phase 5 : traps `rt` implémentés
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 5.1-5.3 `TESTED`, 5.4 `NOT_RUN` |
+| Statut de phase | **`PARTIAL`** (`PENDING_HUMAN_APPROVAL` : règle de langage) |
+| Fichiers | `sema/src/traps.rs` (neuf), `check.rs`, `lib.rs`, `builtins.rs`, `codegen/emit.rs`, 4 cas `conformance/cases/effects/rt-trap-*` |
+| Vérification | sema **695/0** ; codegen lib **30/30** ; conformance **475 cas, 474 PASS / 0 FAIL / 1 SKIP**, build **203/203** ; workspace **100 groupes, 1 597 / 0 / 5** |
+
+- **5.2** Nouvelle passe `traps.rs`, appelée **seulement** pour `Profile::Rt` :
+  indexation (sauf littéral dans les bornes d'un `[T; N]`), division/reste
+  (sauf diviseur littéral positif), `+ - *` entiers nus, négation unaire,
+  décalages dynamiques ⇒ `E-EFF-PROFILE`. Flottants et `as` exemptés.
+  Méthodes `wrapping_*`, `saturating_*`, `checked_*` ajoutées à la table des
+  builtins et au passage direct du codegen (Rust std). **7 tests unitaires**
+  couvrant négatifs et positifs. `core`/`pure` inchangés : le cas
+  `effects/intrinsic-panic-not-tracked` reste accepté en core.
+- **5.3** 4 cas de conformance : 3 compile-fail (`E-EFF-PROFILE`) et 1
+  compile-pass avec formes explicites, indice littéral et flottants. Le corpus
+  passe de 471 à **475** cas ; le périmètre build passe de 202 à **203**
+  (1 vérifié de plus).
+- **5.4 `NOT_RUN`** : `examples/dsp-gain-iir` lit/écrit des slices avec des
+  indices dynamiques et alloue (`push`), deux choses interdites en `rt`. Aucun
+  accesseur sûr (`get`/`get_mut`/`set`) n'existe dans la stdlib Core 1.0 ;
+  l'adapter exigerait une nouvelle surface stdlib + codegen, hors RFC. L'exemple
+  est inchangé ; aucune revendication temps réel.
+
+### Ce qui reste
+
+- Phase 8 (bloc DSP) : RFC seulement.
+- Phase 4.5 (étape C), 30 000 programmes, Miri, mutation, couverture 100 %.
+- T4, T12, D9, D10, D7 et ratification de `RFC-RT-TRAPS-1`.
+
+
 
 
 

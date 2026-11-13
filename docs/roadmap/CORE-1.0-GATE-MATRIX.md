@@ -833,9 +833,10 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 590 passés / 0 échec / 4 ignorés**, exit 0 |
-| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 471 cas, 0 désaccord**, test négatif vert |
-| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **471 cas : 470 PASS / 0 FAIL / 1 SKIP** ; `perimeter=202/202`, `verified=121`, `implicit=81`, `failed=0`, `build_verified: true` |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 597 passés / 0 échec / 5 ignorés**, exit 0 |
+| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 475 cas, 0 désaccord**, test négatif vert |
+| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **475 cas : 474 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `failed=0`, `build_verified: true` |
+| Traps `rt` (RFC-RT-TRAPS-1) | `cargo test -p ravum-lang-sema --lib traps` + 4 cas `effects/rt-trap-*` | **7/7** tests unitaires (index, division, arithmétique, négation, décalages, flottants, formes explicites) ; 3 compile-fail `E-EFF-PROFILE`, 1 compile-pass ; `core`/`pure` inchangés |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
 | Registre | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
 | Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |

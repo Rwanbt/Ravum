@@ -13,10 +13,10 @@
 
 ## 1. Résumé en dix lignes
 
-1. Le corpus officiel est vert : **471 cas, 470 PASS / 0 FAIL / 1 SKIP**,
-   `build_verified: true`, périmètre build **202/202**, aucune régression.
-2. Le workspace est vert : **99 groupes, 1 587 passés / 0 échec / 4 ignorés**
-   (les 4 ignorés sont les campagnes longues explicitement lancées à part).
+1. Le corpus officiel est vert : **475 cas, 474 PASS / 0 FAIL / 1 SKIP**,
+   `build_verified: true`, périmètre build **203/203**, aucune régression.
+2. Le workspace est vert : **100 groupes, 1 597 passés / 0 échec / 5 ignorés**
+   (les ignorés sont les campagnes longues explicitement lancées à part).
 3. Un **oracle différentiel** neuf a mesuré **3 600 programmes** bien typés :
    `check` accepte ⇒ `rustc` compile, **0 divergence** ; la configuration
    nominale (3 × 10 000) est `NOT_RUN` localement (≈ 3 h) mais outillée en CI.
@@ -33,11 +33,11 @@
    `FileId` » est écrite.
 8. La gouvernance périmée est corrigée (`STATUS.md`, `START_HERE.md`,
    `AGENTS.md` en `PENDING_HUMAN_APPROVAL`, statut du langage en un seul état).
-9. **Non fait** : phase 4.5 (étape C, suppression du `MovePlanner`), phase 5
-   (traps `rt`), phase 8 (bloc DSP) ; Miri, mutation et campagnes longues
-   complètes : `NOT_RUN` avec raisons. **Fait depuis la première rédaction** :
-   étapes A et B partielles d'`OwnFacts` (faits enregistrés, garde de cohérence
-   en debug).
+9. **Non fait** : phase 4.5 (étape C, suppression du `MovePlanner`), phase 5.4
+   (adaptation de l'exemple DSP), phase 8 (bloc DSP) ; Miri, mutation et
+   campagnes longues complètes : `NOT_RUN` avec raisons. **Fait depuis la
+   première rédaction** : étapes A/B partielles d'`OwnFacts`, et phase 5
+   implémentée en `rt` (gate de traps + méthodes explicites + 4 cas).
 10. **Rien n'est prouvé** au sens formel. T4 (audit externe) et T12 (Go/No-Go)
     restent `BLOCKED` par construction ; D9 (clé) reste différée.
 
@@ -49,8 +49,8 @@
 | **1** Gouvernance et base de confiance | `TESTED` (+1 `PENDING_HUMAN_APPROVAL`) | `41851db`, `fac8a8c`, `c04f33e`, `dddfd32`, `b129024`, `85e993e`, `0ea05b7` | +2 gardes codegen (positifs) avec preuve de rouge ; +1 garde HashMap (positif, rouge prouvé) ; +5 tests d'hygiène racine | docs PASS ; gardes prouvées rouges puis vertes ; `C`+U+F03A supprimé après preuve (0 fichier, 6 répertoires vides) |
 | **2** Oracle `check ⇒ build` | `PARTIAL` (mode long nominal `NOT_RUN`) | `2539d5c`, `272ece3`, `825aea1` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur 34 gabarits | `cargo test -p ravum-lang-codegen --test differential_oracle` : 600 programmes, **600 acceptés, 0 divergence** ; long local 3 × 1 000 = **3 000, 0 divergence** ; nominal 3 × 10 000 `NOT_RUN`. Détail : `T2-FINDINGS.md` §25 |
 | **3** Mesure et incrémental | `TESTED` | `4262569`, `84eaa08`, `3b6eb75`, `d186e3d`, `1265de2` | +3 contrats `--timings` (JSON additif, absence du champ sans flag, phases build) | `scripts/lang-timings.ps1 -Runs 20` : chiffres §3 ; `repro-check.ps1` PASS ; tests contrat 3/3 |
-| **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B) | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 30/30 ; conformance 471 / 470 / 0 / 1 ; oracle rapide **600 programmes, 0 divergence**. L'étape B ne compare que la classification `Copy`/`Move`, pas les places |
-| **5** Traps `rt` | `NOT_RUN` | `43fbd68` (RFC) | — | RFC-RT-TRAPS-1 `PROPOSED`/`PENDING_HUMAN_APPROVAL` ; aucun code, aucun cas |
+| **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B) | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 30/30 ; conformance 475 / 474 / 0 / 1 ; oracle rapide **600 programmes, 0 divergence**. L'étape B ne compare que la classification `Copy`/`Move`, pas les places |
+| **5** Traps `rt` | **`PARTIAL`** : 5.1-5.3 `TESTED`, 5.4 `NOT_RUN` | `43fbd68` (RFC) + commit d'implémentation | +7 tests unitaires (négatifs/positifs) et **4 cas de conformance** (3 compile-fail `E-EFF-PROFILE`, 1 compile-pass) | `cargo test -p ravum-lang-sema --lib traps` **7/7** ; conformance **475 / 474 / 0 / 1**, build **203/203** ; `core`/`pure` inchangés (`intrinsic-panic-not-tracked` toujours accepté). 5.4 : aucun accesseur de slice sûr en stdlib, exemple inchangé |
 | **6** `NodeId` | `TESTED` (sans objet) | `0595b9f`, `7916840`, `91d3621` | +2 tests (stabilité inter-fichiers, layout 8/24 bits) | `cargo test -p ravum-lang-sema --test node_id_stability` : 2/2 ; `util.rv` inchangé après édition de `main.rv` |
 | **7** Cache de parse LSP | **`TESTED`** (analyse et bout en bout local) | `a0a7c26`, `2d432be`, `5860ef3`, `6257b84`, `a980717` | +2 tests (réutilisation exacte hits/misses ; INV-07) +2 mesures `#[ignore]` (analyse, bout en bout) | `cargo test -p ravum-lang-lsp --test parse_cache` 2/2 ; `cargo test -p ravum-lang-cli --test lsp_client` 11/0 ; bout en bout **p50 2,061 ms / p95 2,826 ms** ; `docs/qualification/LSP.md` §7 |
 | **8** Bloc DSP | `NOT_RUN` | `bb3edea` (RFC) | — | ABI lue (8.1) ; RFC-RV-DSP-BLOCK-1 (8.2) ; aucun wrapper, aucun test de swap |
@@ -58,10 +58,11 @@
 
 ### 2.8 SHA final mesuré
 
-Le SHA exact du rapport est celui du commit qui l'ajoute ; toutes les commandes
-de la section 4 ont été exécutées sur l'arbre `faf65cb` + ce rapport (aucun
-changement de code entre les deux). Les mesures de phase 3 citent leur propre
-SHA (`3b6eb75`) parce qu'elles ont été produites avant les phases 6-7.
+Le SHA exact du rapport est celui du commit qui l'ajoute ; les commandes des
+phases 0 à 3 ont été exécutées sur l'arbre `faf65cb`, puis les phases 4, 6, 7 et
+5 sur leurs commits respectifs (voir le journal). Les chiffres « courants » de la
+§3 incluent la phase 5 (`475` cas, `1 597` tests) ; le SHA de chaque mesure est
+celui de son entrée de journal.
 
 ## 3. Comparaison baseline (phase 0) → état final
 
@@ -70,10 +71,10 @@ dégradations auraient été placées ici en tête.
 
 | Mesure | Phase 0 (`c931fdf`) | Final (`faf65cb`+) | Écart |
 |---|---|---|---|
-| Conformance | 471 cas, 470 PASS / 0 FAIL / 1 SKIP | **identique** | 0 |
-| Périmètre build | 202/202, vérifiés 121, implicites 81, échecs 0 | **identique** | 0 |
-| Workspace | 94 groupes, 1 574 / 0 / 2 | **100 groupes, 1 590 / 0 / 4** | +6 groupes, +16 tests, +2 ignorés (campagnes longues) |
-| `ravum-lang-sema` | 683 / 0 | 688 / 0 (NodeId + OwnFacts) | +5 |
+| Conformance | 471 cas, 470 PASS / 0 FAIL / 1 SKIP | **475 cas, 474 PASS / 0 FAIL / 1 SKIP** | +4 cas (`rt-trap-*`), 0 échec |
+| Périmètre build | 202/202, vérifiés 121, implicites 81, échecs 0 | **203/203**, vérifiés 122, implicites 81, échecs 0 | +1 cas vérifié |
+| Workspace | 94 groupes, 1 574 / 0 / 2 | **100 groupes, 1 597 / 0 / 5** | +6 groupes, +23 tests, +3 ignorés (campagnes de mesure) |
+| `ravum-lang-sema` | 683 / 0 | 695 / 0 (NodeId, OwnFacts, traps `rt`) | +12 |
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
 | MUST | 807, 463 atteignables | **identique** | 0 |
@@ -99,7 +100,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | # | Critère | État | Preuve / manque |
 |---|---|---|---|
 | R1 | Sémantique ratifiée | `PARTIAL` | ADR `PROPOSED`, spec DRAFT ; aucune ratification par un agent |
-| R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 471 cas 0 FAIL + 3 600 programmes générés 0 divergence ; ne prouve pas l'absence de forme inconnue |
+| R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 475 cas 0 FAIL + 3 600 programmes générés 0 divergence ; ne prouve pas l'absence de forme inconnue |
 | R3 | Traçabilité complète | `PARTIAL` | 188/188 FeatureIds ; **463/807 MUST**, 344 non mappés (`must_audit.py`) — D10 |
 | R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri `NOT_RUN` (nightly non garanti hors CI) |
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
@@ -188,8 +189,8 @@ incluses. Les seuls commits postérieurs sont documentaires.
 |---|---|---|---|
 | Audit externe T4/T12 | `BLOCKED` | décision humaine | — (par construction) |
 | Clé de signature D9 | `PENDING_HUMAN_APPROVAL` | aucune clé hors ligne fournie | — |
-| Phase 4.3-4.5 (`OwnFacts` A/B/C) | `PARTIAL` : A `TESTED`, B partiel, C `NOT_RUN` | B ne compare que les `Copy`/`Move` ; C (suppression du `MovePlanner`) exige la comparaison des places et le diff byte-à-byte | 2 tests + garde de debug ; 600 programmes + 471 cas, 0 désaccord |
-| Phase 5 (traps `rt`) | `NOT_RUN` | règle de langage à ratifier avant implémentation | RFC écrite |
+| Phase 4.3-4.5 (`OwnFacts` A/B/C) | `PARTIAL` : A `TESTED`, B partiel, C `NOT_RUN` | B ne compare que les `Copy`/`Move` ; C (suppression du `MovePlanner`) exige la comparaison des places et le diff byte-à-byte | 2 tests + garde de debug ; 600 programmes + 475 cas, 0 désaccord |
+| Phase 5 (traps `rt`) | `PARTIAL` : 5.1-5.3 faits, 5.4 `NOT_RUN` | 5.4 exigerait une API de slice sûre (`get`/`set`) + son codegen, hors RFC | gate + 7 tests unitaires + 4 cas ; `examples/dsp-gain-iir` inchangé |
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | `NOT_RUN` | ≈ 3 h sur cette machine ; job CI hebdomadaire fourni | 3 000 exécutés |
 | Miri | `NOT_RUN` | composant `cargo-miri` absent de la toolchain nightly locale ; l'installer serait un outil supplémentaire (R5) ; la preuve CI Linux existante n'est pas rejouée ici | — |
@@ -222,7 +223,7 @@ seuils.
 
 - **Une seule machine** (Windows 11 x64) : les chiffres de performance et de
   reproductibilité sont liés à cette machine et à `rustc 1.95.0`.
-- **Corpus fini** : 471 cas + 3 600 programmes générés sont une observation,
+- **Corpus fini** : 475 cas + 3 600 programmes générés sont une observation,
   pas une preuve sur tous les programmes. L'oracle lui-même ne couvre qu'un
   sous-ensemble documenté de Core 1.0.
 - **Aucune preuve formelle** : pas de Kani, pas de Miri cette session, pas

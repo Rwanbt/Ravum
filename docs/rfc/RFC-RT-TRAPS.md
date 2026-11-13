@@ -113,3 +113,16 @@ divergence ; aucun changement de verdict pour `core`/`pure` sur le corpus
    `+ - *`, `/`, `%` et `[]`.
 3. Confirmer que `pure` **ne change pas** dans cette itération (asymétrie
    assumée) ou demander une RFC séparée pour l'aligner.
+
+## 6. État d'implémentation (2026-11-13, session GOAL)
+
+| Tâche | État | Preuve / limite |
+|---|---|---|
+| 5.1 — RFC | fait | ce document, statut `PROPOSED` / `PENDING_HUMAN_APPROVAL` |
+| 5.2 — gate `rt` + méthodes explicites | **fait** (profil `rt` uniquement) | `crates/ravum-lang-sema/src/traps.rs` : détection index, division/reste, `+ - *`, négation, décalages ; flottants et `as` exemptés ; `check.rs` ne l'appelle que si `Profile::Rt`. Méthodes `wrapping_*`, `saturating_*`, `checked_*` ajoutées aux builtins et au passage direct du codegen. **7 tests unitaires** dans `traps.rs`. `core`/`pure` inchangés (`effects/intrinsic-panic-not-tracked` reste accepté en core). |
+| 5.3 — cas de conformance | **fait** | 4 cas : `effects/rt-trap-bare-arithmetic`, `rt-trap-dynamic-index`, `rt-trap-dynamic-division` (compile-fail, `E-EFF-PROFILE`) et `rt-trap-safe-forms` (compile-pass). Conformance **475 cas / 474 PASS / 0 FAIL / 1 SKIP**, build **203/203**. |
+| 5.4 — adapter `examples/dsp-gain-iir` à `rt` | **`NOT_RUN`** | L'exemple lit/écrit des slices avec des indices dynamiques et `push` (`alloc` interdit en `rt`). Aucun accesseur sûr (`get`/`get_mut`/`set`) n'existe dans la stdlib Core 1.0 ; l'adapter exigerait une nouvelle surface stdlib + codegen, hors de cette RFC. Exemple inchangé ; profil `rt` toujours expérimental. |
+
+Statut final : **`PROPOSED` — `PENDING_HUMAN_APPROVAL`**. Implémentation
+volontairement limitée à `rt` ; aucune revendication temps réel.
+
