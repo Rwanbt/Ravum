@@ -823,6 +823,38 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
 
+## 0 octies. Passe 12 — GOAL « prêt pour la revue de production » (2026-11-13)
+
+> Section **datée** : elle ajoute des preuves mesurées dans la session du GOAL,
+> sur la branche `goal/production-ready`. **Aucun état de gate n'est changé par
+> cette section** : les preuves ci-dessous renforcent T2/T10/T11 mais ne ferment
+> ni l'audit externe (T4/T12), ni D10, ni D9. Le détail et les limites sont dans
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **99 groupes : 1 587 passés / 0 échec / 4 ignorés**, exit 0 |
+| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **471 cas : 470 PASS / 0 FAIL / 1 SKIP** ; `perimeter=202/202`, `verified=121`, `implicit=81`, `failed=0`, `build_verified: true` |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Registre | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |
+| MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 ouverte, inchangée |
+| Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-goal.json` puis `coverage_report.py --check` / `--gap` | **89,21 % lignes / 88,61 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 103** lignes non couvertes (vue instanciations) |
+| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | **600 programmes** (3 × 200) : 600 acceptés, **0 divergence** ; mode long local **3 000** : **0 divergence** ; test de non-vacuité vert |
+| Timings | `pwsh -File scripts/lang-timings.ps1 -Runs 20` | `check` p95 froid **1,3-8,1 ms**, édition **11,0-49,8 ms** ; `build` p50 **179-331 ms**, `rustc` **97,1-99,3 %** — [`LANG-TIMINGS.md`](../reports/LANG-TIMINGS.md) |
+| Incrémental | A/B `RAVUM_INCREMENTAL=1` | gain **nul ou négatif** (jusqu'à +44 %) ; opt-in, **désactivé par défaut** |
+| Cache de parse LSP | `cargo test -p ravum-lang-lsp --test parse_cache` | 2 tests INV-07/réutilisation verts ; analyse p95 **1,362 ms** avec cache vs **1,836 ms** sans (transport exclu) — [`LSP.md`](../qualification/LSP.md) §7 |
+| `NodeId` | `cargo test -p ravum-lang-sema --test node_id_stability` | **2/2** : ids de `util.rv` inchangés après édition de `main.rv` — migration **sans objet** |
+| Fuzz long | `RAVUM_FUZZ_ITERS=200000 … fuzz_lex_parse -- --ignored` et `RAVUM_FUZZ_ITERS=100000 … fuzz_check` | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` ; **100 000 itérations, 0 échec**, 4 660/s |
+| Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` |
+| LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |
+| Miri, mutation, 30 000 programmes, installateur | — | **`NOT_RUN`** : reasons in the GOAL report §6 (nightly not guaranteed, cargo-mutants absent, ≈ 3 h, not replayed) |
+
+**Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
+T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,
+aucun tag, aucune release.
+
+
 
 
 

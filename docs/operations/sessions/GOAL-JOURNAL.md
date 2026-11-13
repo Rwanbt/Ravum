@@ -328,6 +328,44 @@ pas de migration.
 **8.3–8.4 : `NOT_RUN`** : implémentation (flag CLI, wrapper codegen, protocole,
 tests de swap) non commencée. `PENDING_HUMAN_APPROVAL` sur l'ABI et le digest.
 
+## Entrée 2026-11-13 — Phase 9 : qualification et rapport final
+
+| Champ | Valeur |
+|---|---|
+| Tâches | 9.1 → 9.7 (9.7 `NOT_RUN`) |
+| Statut | **PARTIAL** : toutes les preuves rejouables l'ont été ; Miri, mutation, 30 000 programmes, LSP bout en bout, découpage : `NOT_RUN` |
+| Rapport | [`docs/reports/GOAL-PRODUCTION-READINESS-REPORT.md`](../../reports/GOAL-PRODUCTION-READINESS-REPORT.md) |
+| Registres mis à jour | `CORE-1.0-GATE-MATRIX.md` §0 octies, `PRODUCTION-READINESS.md` §9 (sections datées, **aucun gate changé**) |
+
+### Preuves rejouées (SHA final, arbre `faf65cb`)
+
+- Workspace **99 groupes / 1 587 passés / 0 échec / 4 ignorés** ;
+  conformance **471 / 470 PASS / 0 FAIL / 1 SKIP**, `perimeter 202/202`,
+  `verified 121`, `implicit 81`, `build_verified: true` ; smoke **43/0/0**.
+- Registre **108/126/0/0** ; FeatureIds **188/188** ; MUST **807 / 344 non
+  mappés** (D10) ; docs PASS ; fmt 0.
+- Couverture **89,21 % lignes / 88,61 % régions**, **tous les seuils tenus**,
+  10 fichiers sous l'objectif 100 % (2 103 lignes non couvertes, vue
+  instanciations) ; aucun test « pour la ligne ».
+- Fuzz long : syntaxe **249 054 entrées / 0 échec** (digest
+  `0x9b09fc61e761b87e`), sema **100 000 itérations / 0 échec** (4 660/s).
+- LSP client **11/0** ; cache de parse LSP p95 **1,362 ms** (analyse).
+- Reproductibilité release **PASS**, sha256
+  `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6`.
+- SBOM **64 paquets / 170 relations**, digest `5119e194…` ; installateur Windows
+  rejoué (installation, désinstallation deux fois idempotente).
+
+### Ce qui n'a pas été exécuté
+
+Miri (nightly non garantie), mutation (`cargo-mutants` absent), mode long
+nominal de l'oracle (30 000, ≈ 3 h), latence LSP de bout en bout, découpage des
+monolithes (9.7). Phases 4.3-4.5, 5 et 8 : `NOT_RUN` avec RFC écrites.
+
+### Suite
+
+PR brouillon vers `dev` (9.6) : voir l'entrée de clôture ci-dessous.
+
+
 
 
 

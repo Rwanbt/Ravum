@@ -416,3 +416,36 @@ dans ce lot.
   critères de sortie, pas des tâches d'agent.
 - Les estimations de durée sont volontairement absentes : elles n'ont pas été
   mesurées, et un chiffre inventé vaut moins que pas de chiffre.
+
+## 9. Passe 12 — mesures du GOAL (2026-11-13)
+
+> Section **datée**. Elle ne change aucun verdict de gate ; elle met à jour les
+> preuves disponibles pour chaque critère et renvoie au rapport complet
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md)
+> et au registre inchangé [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+
+| Critère | État au SHA final | Preuve ajoutée / manque |
+|---|---|---|
+| R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
+| R2 | fait sur le périmètre mesuré | 471 cas 0 FAIL **et** oracle génératif : 3 600 programmes, 0 divergence |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
+| R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
+| R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |
+| R6 | fait | gardes `forbid`/wrapper prouvées rouges puis vertes |
+| R7 | `PARTIAL` | deux racines identiques (`19743DC2…`) sur une seule machine |
+| R8 | `PARTIAL` | couverture **89,21/88,61**, seuils tenus ; 100 % non atteint ; mutation `NOT_RUN` |
+| R9 | `PARTIAL` | p50/p95 par phase publiés ; pas de campagne sous charge |
+| R10 | `PARTIAL` | politique de dépréciation toujours absente |
+| R11 | `PARTIAL` | installateur Windows non rejoué cette session |
+| R12 | différé | aucune clé (D9) |
+| R13 | `BLOCKED` | audit humain indépendant requis |
+| R14 | `PARTIAL` | gouvernance corrigée ; guide utilisateur absent |
+
+Mesures principales : workspace **99 groupes / 1 587 passés / 0 échec /
+4 ignorés** ; conformance **471 / 470 PASS / 0 FAIL / 1 SKIP**,
+`build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
+**11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
+cache de parse LSP p95 **1,362 ms** (analyse). Fuzz long rejoué :
+249 054 entrées / 0 échec et 100 000 itérations / 0 échec. Les phases 4.3-4.5,
+5 et 8 restent `NOT_RUN` (RFC écrites, aucune implémentation partielle).
+
