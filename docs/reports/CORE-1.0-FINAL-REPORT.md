@@ -24,7 +24,7 @@ compter** l'écart de couverture.
 |---|---|
 | Conformance (`run --verify-build`) | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **202/202**, **121** vérifiés, **81** implicites, `build_verified: true` — inchangé par ce lot |
 | Tests workspace | **113 suites, 1574 passés / 0 échec / 2 ignorés** (exit 0) — **+12** tests |
-| Couverture (`cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen`) | **89,08 % lignes (17 264/19 380) / 88,39 % régions**, contre **88,54 / 87,81** au lot 0 ; **aucun seuil abaissé** |
+| Couverture (`cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen`) | **89,08 % lignes (17 264/19 380) / 88,39 % régions** (Windows 11 x64 ; **89,12 / 88,44** sur le runner Linux, écart dû au `#[cfg(unix)]` de `loader.rs`), contre **88,54 / 87,81** au lot 0 ; **aucun seuil abaissé** |
 | Écart réel | **1 715** lignes de code **produit** non couvertes sur 12 621 (**86,41 %**), **201** lignes non couvertes dans des modules `#[cfg(test)]` (asserts, `panic!` de test, bras inutilisés des walkers), **2 098** lignes au total dans la lecture `--gap` par instanciation |
 | Fichiers fermés à 100 % lignes | `facts.rs` (**100/100** lignes et régions), `builtins.rs` (**100/98,42**), `types.rs` (100/98,10), et le code **produit** de `check.rs` (46 lignes) |
 | Seuils relevés | `facts.rs` 81/76 → **100/100** ; `builtins.rs` 90/88 → **100/98** ; `typeck.rs` 92/91 → **93/92** ; `effects.rs` 91/93 → **92/94** ; `resolve.rs` 92/92 → **93/93** |

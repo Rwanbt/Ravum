@@ -249,8 +249,10 @@ géant peut être « couvert » sans être testé) : 100 % de couverture ne prou
 > ravum-lang-sema -p ravum-lang-codegen --json` du 2026-11-13 sur `432c663` +
 > lot 1 (`rustc 1.95.0`, `cargo-llvm-cov 0.9.1`, Windows 11 x64) :
 > **89,08 % lignes (17 264/19 380) / 88,39 % régions**, contre **88,54 %
-> (17 091/19 303) / 87,81 %** au lot 0. Cinq seuils relevés, **aucun abaissé**
-> (voir « Clôtures » plus bas).
+> (17 091/19 303) / 87,81 %** au lot 0. Le même commit mesure **89,12 % /
+> 88,44 % (17 288/19 398)** sur le runner Linux de `coverage.yml` : l'écart est
+> le `#[cfg(unix)]` de `loader.rs`, et **les deux passent tous les seuils**.
+> Cinq seuils relevés, **aucun abaissé** (voir « Clôtures » plus bas).
 >
 > **Deux chiffres, deux supports, ils ne s'additionnent pas :**
 >

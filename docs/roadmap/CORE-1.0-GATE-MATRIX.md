@@ -22,7 +22,8 @@
 > **113 suites, 1574 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
 > **188/188** règles tracées, **188/188** satisfaites ;
 > **108** codes enregistrés, **126** émis ; couverture **89,08 %** lignes /
-> **88,39 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`**, et
+> **88,39 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`** (mesure
+> Windows 11 x64 ; **89,12 / 88,44** sur le runner Linux de `coverage.yml`), et
 > **86,41 %** du seul code produit (1 715 lignes non couvertes hors modules
 > `#[cfg(test)]`), seuils ratchet par fichier tenus, cinq relevés
 > (`facts.rs` 100/100, `builtins.rs` 100/98, `typeck.rs` 93/92,
