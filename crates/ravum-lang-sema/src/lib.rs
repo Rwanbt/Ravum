@@ -12,6 +12,7 @@ pub mod facts;
 pub mod loader;
 mod own;
 pub mod resolve;
+mod traps;
 pub mod typeck;
 pub mod types;
 

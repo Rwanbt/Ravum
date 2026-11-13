@@ -908,7 +908,25 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "abs", "sqrt", "floor", "ceil", "round", "powf", "min", "max", "sin", "cos", "tan", "exp",
         "ln", "log10",
     ];
-    const SIGNED: &[&str] = &["abs"];
+    const SIGNED: &[&str] = &[
+        "abs",
+        // RFC-RT-TRAPS-1 explicit forms (Rust methods exist on every integer
+        // type; `checked_*` returns `Option`, which the type checker enforced).
+        "wrapping_add",
+        "wrapping_sub",
+        "wrapping_mul",
+        "wrapping_neg",
+        "saturating_add",
+        "saturating_sub",
+        "saturating_mul",
+        "saturating_neg",
+        "checked_add",
+        "checked_sub",
+        "checked_mul",
+        "checked_div",
+        "checked_rem",
+        "checked_neg",
+    ];
     match owner {
         "String" => STRING.contains(&method),
         "str" => STR.contains(&method),

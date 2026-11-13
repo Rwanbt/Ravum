@@ -104,6 +104,12 @@ pub fn check_with_timings(
     checked.facts.own = own_facts;
     timings.own = started.elapsed();
 
+    // RFC-RT-TRAPS-1: intrinsic traps are checked for the `rt` profile only.
+    // `core` and `pure` are unchanged (deliberate asymmetry, see the RFC).
+    if options.profile == crate::facts::Profile::Rt {
+        crate::traps::check_rt_traps(&checked, &mut diags);
+    }
+
     diags.sort();
     if diags.has_errors() {
         (CheckResult::failed(diags), timings)

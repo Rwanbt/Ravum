@@ -1,0 +1,12 @@
+{
+  "id": "effects/rt-trap-bare-arithmetic",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "RFC-RT-TRAPS-1 (PENDING_HUMAN_APPROVAL): bare integer `+` is a trap in `rt`; the same program stays accepted in `core` (EFF-6.4)."
+}

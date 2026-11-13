@@ -1,0 +1,4 @@
+fn first(xs: &[i32]) -> i32 effects() { return xs[0]; }
+
+fn main() { let a = [1, 2, 3]; let v = first(&a); }
+

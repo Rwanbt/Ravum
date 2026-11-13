@@ -1,0 +1,12 @@
+{
+  "id": "effects/rt-trap-dynamic-division",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "RFC-RT-TRAPS-1: integer division by a non-literal is refused in `rt`; the core profile keeps accepting it (EFF-6.4)."
+}
