@@ -423,3 +423,38 @@ Les équivalences E1–E6 dépendent de propriétés qui peuvent changer :
 
 
 
+
+## 10. Première campagne CI (2026-11-13, run `43326219422`)
+
+Le workflow `mutation.yml` est désormais sur `main` ; il a été déclenché une
+première fois (`workflow_dispatch`, 2026-11-12 23:08 UTC) sur `e6ca298`
+(code `2b31d63`), `ubuntu-latest`, `rustc 1.95.0`, `cargo-mutants 27.1.0`,
+`--no-shuffle -j 8`, mêmes `--file`/`-F` que §9.
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---|---|---|---|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| **Total** | **183** | **150** | **24** | **9** |
+
+**Reproductibilité observée** : la campagne CI retrouve **exactement** les
+totaux de la campagne locale de §9 (`1376449`, 2026-11-11), alors que les passes
+8 à 10 ont déplacé les lignes et ajouté du code dans `typeck.rs`/`own.rs`. Les
+24 survivants appartiennent donc aux mêmes familles E1–E6 déjà triées en §9.1 ;
+aucun nouveau survivant n'est apparu, et aucun tri supplémentaire n'est requis.
+
+**Défaut trouvé par ce premier run** : l'étape « Summarize outcomes » lisait
+`outcomes.json` comme une **liste**, alors que `cargo-mutants` 27.x écrit un
+**objet** `{"outcomes": […], "total_mutants": N, "missed": M, …}`. Le script
+levait `AttributeError: 'str' object has no attribute 'get'` et le run
+apparaissait rouge **alors que les trois campagnes avaient réussi**. Corrigé
+dans la branche `fix/mutation-summary` : lecture du bon schéma, impression
+nominative de chaque survivant (`MISSED <mutant>`), comportement non bloquant
+conservé (les survivants sont triés, pas fatals).
+
+**Ce que cette campagne ne prouve pas** : 150/183 est un chiffre **ciblé** sur
+trois ensembles de fonctions, pas un score de crate ; le tri E1–E6 reste une
+revue statique ; la campagne n'ajoute aucun test. Preuves : artefact
+`mutants-targeted` (rétention 90 jours) du run
+[43326219422](https://github.com/Rwanbt/Ravum/actions/runs/43326219422).
