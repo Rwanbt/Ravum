@@ -1,0 +1,12 @@
+{
+  "id": "effects/ffi-transitive-wrapper",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "EFF-2.9 (MUST): an undeclared wrapper propagates unsafe/ffi transitively. The call chain reported is main -> outer -> inner; only the direct call had a test before."
+}

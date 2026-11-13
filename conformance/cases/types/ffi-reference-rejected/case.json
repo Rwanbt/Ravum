@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-reference-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "No reference crosses the C boundary (no lifetimes in Core 1.0): &i32 is refused."
+}

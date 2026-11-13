@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-extern-in-impl",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EXTERN"
+  ],
+  "notes": "G-3.11: an extern block is only accepted at module level. Observed code is E-UNSUPPORTED-EXTERN (RFC-D7 section 5 proposed E-PARSE-EXPECTED; the case records the real behaviour, it does not amend the spec)."
+}

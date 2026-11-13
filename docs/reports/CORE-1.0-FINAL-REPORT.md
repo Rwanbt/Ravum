@@ -6,11 +6,42 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 septies** ci-dessous porte la passe du
-> **2026-11-12 (passe 10, D13)** et **prévaut pour les chiffres courants** ; la
-> section 0 sexies est la passe 9 (`21cf7d4`), la section 0 quinquies la passe 8
-> (`7696e2a`), la section 0 quater la passe 7 (`c6b4537`), la section 0 ter la
-> passe 6 (`5d88ecb` → `9da9b12`).
+> (SHA `a277b86`). La **section 0 octies** ci-dessous porte la passe du
+> **2026-11-13 (passe 11, cas FFI)** et **prévaut pour les chiffres courants** ;
+> la section 0 septies est la passe 10 (D13, `2b31d63`), la section 0 sexies la
+> passe 9 (`21cf7d4`), la section 0 quinquies la passe 8 (`7696e2a`), la section
+> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6 (`5d88ecb` →
+> `9da9b12`).
+
+## 0 octies. Addendum passe 11 — huit cas de conformance FFI (2026-11-13)
+
+Cette section **prévaut sur 0 septies et sur toutes les suivantes** pour les
+chiffres courants. Elle ne change **aucune ligne du compilateur** : elle outille
+en corpus les contrats FFI de RFC-D7 §5 et re-mesure la couverture.
+
+| Mesure | Résultat |
+|---|---|
+| Conformance (`run --verify-build`) | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **202/202** couverts, **121** vérifiés, **81** implicites, **0 échec**, `build_verified: true` |
+| Tests workspace | **113 suites, 1562 passés / 0 échec / 2 ignorés** (exit 0) |
+| Cas ajoutés | `effects/ffi-rt-profile`, `effects/ffi-transitive-wrapper` (`E-EFF-PROFILE`) ; `types/ffi-char-rejected`, `types/ffi-reference-rejected` (`E-FFI-TYPE`) ; `types/ffi-bool-boundary` (`compile-pass`) ; `run/ffi-width-boundary` (`run-pass`, `llabs` en `i64`) ; `types/ffi-extern-in-impl` (`E-UNSUPPORTED-EXTERN`) ; `types/unsafe-does-not-unlock-pointers` (`E-UNSUPPORTED-UNSAFE`) |
+| Effets couverts pour la première fois | **EFF-4.7** (`rt` + FFI) et **EFF-2.9** (propagation `unsafe`/`ffi` à travers deux wrappers) n'avaient aucun test |
+| Couverture | **re-mesurée le 2026-11-13** : **88,54 % lignes / 87,81 % régions** (sema + codegen), **2 189** lignes non couvertes ; planchers tenus, aucun seuil abaissé. Le plan par fonction est **corrigé** dans `PRODUCTION-READINESS.md` §7 bis (les cibles de la veille comptaient deux fois les instanciations de `sema`) |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `T2` reste `PARTIAL` (dénominateur MUST, D10), `T4`/`T12` restent `BLOCKED`, **D7 reste `OPEN`** |
+
+Ce que cette passe change, et ce qu'elle ne prouve pas :
+
+* **Deux MUST d'effets passent de « spécifiés, non testés » à « testés »** :
+  `rt` + FFI et la propagation transitive. Les refus `char`/`&i32`, l'admission
+  de `bool`, le passage réel d'un `i64` (`llabs`), le refus d'`extern` dans un
+  `impl` et le refus d'un pointeur **dans** un `unsafe` sont verrouillés.
+* **Deux écarts avec la RFC sont assumés et écrits** : `extern` dans un `impl`
+  rend `E-UNSUPPORTED-EXTERN` (observé) et non `E-PARSE-EXPECTED` (proposé) ;
+  `bool` et `usize`/`u64`/`isize` n'ont pas de symbole CRT portable, donc `bool`
+  est seulement `compile-pass` et seul `i64` traverse à l'exécution.
+* **Ce que cela ne prouve pas** : la FFI reste scalaire et expérimentale ; les
+  callbacks, pointeurs, unwinding et l'ABI multi-plateforme restent hors
+  surface ; « 0 FAIL » vaut pour le corpus mesuré, pas comme absence de
+  divergence ; la couverture reste à 88,5 %, l'objectif 100 % n'est pas atteint.
 
 ## 0 septies. Addendum passe 10 — D13 : la staticité est prouvée (2026-11-12)
 

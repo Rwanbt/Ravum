@@ -8,31 +8,31 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-12 (passe 10 « D13 : la staticité est
-> prouvée » : `return a[1]`, `let s = a[1]`, champ de struct, payload de
-> `match` et `Option::unwrap` sont acceptés par preuve ; deux divergences
-> backend fermées — positions de type `&str` imbriquées et `str::as_str` ;
-> **plus aucune forme ouverte connue** — T2 reste `PARTIAL` pour la raison
-> indépendante D10).
+> Dernière mise à jour : 2026-11-13 (passe 11 « cas de conformance FFI » :
+> huit cas ajoutés pour EFF-4.7 (`rt` + FFI), EFF-2.9 (propagation transitive),
+> `char`/`&i32` refusés, `bool` admis, `i64` traversant réellement, `extern`
+> dans `impl` et pointeur brut dans `unsafe` ; **aucun changement du
+> compilateur** — T2 reste `PARTIAL` pour la raison indépendante D10, D7 reste
+> `OPEN`).
 >
-> **Chiffres courants (passe 10, branche `feat/lang-core-1.0-rc`, mesurés le
-> 2026-11-12)** :
-> **463 cas : 462 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
-> `--verify-build`, `build_verified: true`, `perimeter 200`) ;
+> **Chiffres courants (passe 11, branche `feat/ffi-conformance-cases`, mesurés le
+> 2026-11-13)** :
+> **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
+> `--verify-build`, `build_verified: true`, `perimeter 202`) ;
 > **113 suites, 1562 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
 > **188/188** règles tracées, **188/188** satisfaites ;
 > **108** codes enregistrés, **126** émis ; couverture **88,54 %** lignes /
 > **87,86 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`**
-> (dernière mesure à `21cf7d4`, passe 9 ; non re-mesurée en passe 10, la CI la
-> rejoue), seuils ratchet par fichier tenus.
+> (dernière mesure à `21cf7d4`, passe 9 ; re-mesurée le 2026-11-13, §0 septies),
+> seuils ratchet par fichier tenus.
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 >
 > **Sections datées = archives.** Les sections `§0 bis` (passe 6), `§0 ter`
-> (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9) et `§1.x` portent les
-> chiffres **de leur passe**, pas les chiffres courants : deux relecteurs
-> externes ont pris ces tableaux pour l'état du HEAD. Les chiffres qui font foi
-> sont ceux du bloc ci-dessus, et le tableau de la §2.
+> (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9), `§0 sexies`
+> (passe 10) et `§1.x` portent les chiffres **de leur passe**, pas les chiffres
+> courants : deux relecteurs externes ont pris ces tableaux pour l'état du HEAD.
+> Les chiffres qui font foi sont ceux du bloc ci-dessus, et le tableau de la §2.
 
 ## 0. Base de référence
 
@@ -404,6 +404,22 @@ Ce que cette passe change, et ce qu'elle ne prouve pas :
 * **Ce que cette passe ne prouve pas** : pas d'audit externe, pas de re-mesure
   de couverture, de mutation ni de performance ; la couverture sera mesurée par
   la CI sur le commit poussé.
+
+## 0 septies. Passe 11 — huit cas de conformance FFI (2026-11-13)
+
+| Élément | Valeur |
+|---|---|
+| Base de cette passe | `e6ca298` (fusion de la PR #106 dans `dev`), branche `feat/ffi-conformance-cases` |
+| Cas ajoutés (**8**) | `effects/ffi-rt-profile` et `effects/ffi-transitive-wrapper` (`compile-fail`, `--profile rt` / `pure`, `E-EFF-PROFILE`) ; `types/ffi-char-rejected` et `types/ffi-reference-rejected` (`E-FFI-TYPE`) ; `types/ffi-bool-boundary` (`compile-pass`) ; `run/ffi-width-boundary` (`run-pass`, `llabs` en `i64`) ; `types/ffi-extern-in-impl` (`E-UNSUPPORTED-EXTERN`) ; `types/unsafe-does-not-unlock-pointers` (`E-UNSUPPORTED-UNSAFE`, `unsupported: true`) |
+| Conformance + build | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=202 covered=202 verified=121 implicit=81 failed=0 environment=0 not_measured=0` ; `build_verified: true` |
+| Ce que ces cas ferment | **EFF-4.7** (`rt` + FFI) et **EFF-2.9** (propagation `unsafe`/`ffi` à travers deux niveaux de wrappers) n'avaient **aucun** test ; `char` et `&i32` refusés à la frontière ; `bool` admis et wrapper réellement compilé ; un `i64` traverse vraiment (`llabs(-9000000000) = 9000000000`) ; `extern` dans un `impl` refusé ; un pointeur brut reste refusé **à l'intérieur** d'un bloc `unsafe` |
+| Écarts assumés vs RFC-D7 §5 | `types/ffi-extern-in-impl` attend le code **observé** `E-UNSUPPORTED-EXTERN`, pas `E-PARSE-EXPECTED` (le cas enregistre le comportement réel, il n'amende pas la spec) ; `bool` n'est que `compile-pass` et `usize`/`u64`/`isize` ne sont pas exercés à l'exécution, faute de symbole CRT portable — c'est écrit dans les `notes` des cas ; l'extension `doctor` n'est pas un cas de conformance |
+| Portée | **aucun changement du compilateur, d'une règle ou d'un ADR** ; D7 reste `OPEN`, la FFI reste scalaire et expérimentale ; `T2` reste `PARTIAL` (dénominateur MUST, D10) |
+
+Ce que cette passe ne prouve pas : elle outille des refus et deux chemins d'effets,
+pas une sûreté FFI ; « 0 FAIL » vaut pour le corpus mesuré ; le cas `bool` ne prouve
+pas l'ABI à l'exécution ; les callbacks, pointeurs, unwinding et ABI multi-plateforme
+restent hors surface ([`docs/ffi/SAFETY.md`](../ffi/SAFETY.md) §6).
 
 ## 1 bis. CI sur le SHA `9ca29de` (Linux, `ubuntu-latest`) — **tous les jobs verts**
 

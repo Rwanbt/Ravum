@@ -1,0 +1,5 @@
+{
+  "id": "run/ffi-width-boundary",
+  "mode": "run-pass",
+  "notes": "A 64-bit value really crosses the boundary: llabs (CRT/libc) takes and returns C long long. Documents that i64 works today; u64/isize/usize declarations are only admitted statically, not exercised at runtime (no portable CRT symbol)."
+}

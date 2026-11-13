@@ -59,8 +59,8 @@ devra être refusé.
 | **C-FFI-4 — Déroulement et terminaison** | Une panique Ravum ne traverse pas la frontière (`panic=abort` dans les harnais concernés). Une fonction C qui `longjmp`, `abort()`, lève un signal ou termine le processus n'a **aucun** comportement spécifié vis-à-vis du hook de panic, du runner de tests ou du contrat de code de sortie de la CLI. À écrire et à tester. |
 | **C-FFI-5 — Callbacks** | Inexprimables (pas de type fonction, pas de pointeur de fonction) : **hors périmètre 1.0**, à dire explicitement. |
 | **C-FFI-6 — Threads** | Core 1.0 n'expose ni threads ni `Send`/`Sync`. Une fonction C qui crée des threads est hors du modèle de concurrence du langage ; aucune garantie ne doit être promise. |
-| **C-FFI-7 — Effets** | `extern` ⇒ `{unsafe, ffi}` ; une déclaration `effects(...)` doit dominer l'inféré ; la propagation à travers un wrapper non déclaré (EFF-2.9) est **spécifiée mais non testée**. |
-| **C-FFI-8 — Profils** | `pure` et `rt` refusent `unsafe`/`ffi`. `pure` est testé ; `rt` est spécifié (EFF-4.7) et **NOT_RUN**. |
+| **C-FFI-7 — Effets** | `extern` ⇒ `{unsafe, ffi}` ; une déclaration `effects(...)` doit dominer l'inféré. La propagation à travers un wrapper non déclaré (EFF-2.9) est **testée depuis le 2026-11-13** (`effects/ffi-transitive-wrapper`, chaîne `main -> outer -> inner`). |
+| **C-FFI-8 — Profils** | `pure` et `rt` refusent `unsafe`/`ffi`. Les deux sont **testés** : `effects/pure-ffi-profile` et, depuis le 2026-11-13, `effects/ffi-rt-profile` (EFF-4.7). |
 | **C-FFI-9 — Liaison** | Pas de `#[link]`, pas de `-l`, pas de chemin de bibliothèque : seuls les symboles déjà présents à l'édition de liens par défaut sont appelables. Le terme « FFI » doit être lu comme « appels scalaires à la CRT/libm ». |
 | **C-FFI-10 — TCB** | La bibliothèque C appelée appartient à la TCB du processus. Toute documentation de garantie doit le dire, et un profil `pure`/`rt` ne doit jamais l'admettre. |
 
@@ -71,27 +71,35 @@ devra être refusé.
 | `extern "system" { … }` | `E-UNSUPPORTED-ABI` | couvert (parser) |
 | `extern "C" fn f() { … }` | `E-UNSUPPORTED-EXTERN` | couvert |
 | `extern "C" { fn f() -> String; }` | `E-FFI-TYPE` | couvert (`types/ffi-bad-type`) |
-| `extern "C" { fn f() -> &str; }` | `E-FFI-TYPE` | à verrouiller par cas |
-| `extern "C" { fn f() -> char; }` | `E-FFI-TYPE` | à verrouiller par cas |
+| `extern "C" { fn f() -> &str; }` | `E-FFI-TYPE` | **à verrouiller par cas** (la famille `&i32` est couverte) |
+| `extern "C" { fn f() -> char; }` | `E-FFI-TYPE` | couvert (`types/ffi-char-rejected`, 2026-11-13) |
+| `extern "C" { fn f(x: &i32) -> i32; }` | `E-FFI-TYPE` | couvert (`types/ffi-reference-rejected`, 2026-11-13) |
 | appel `extern` hors `unsafe` | `E-UNSAFE-CONTEXT` | couvert |
-| `unsafe fn`, `*const`, `&raw` | `E-UNSUPPORTED-UNSAFE` | couvert (parser) |
+| `unsafe fn`, `*const`, `&raw` | `E-UNSUPPORTED-UNSAFE` | couvert (parser) ; pointeur **dans** `unsafe` couvert (`types/unsafe-does-not-unlock-pointers`) |
 | `#[link]`, `#[no_mangle]` | `E-UNSUPPORTED-ATTR` | couvert (refus global) |
 | `self` dans un `extern` | `E-RES-SELF` | couvert (contrat) |
 | paramètre dupliqué dans un `extern` | `E-RES-DUPLICATE` | couvert (contrat) |
+| `extern` dans un `impl` | `E-UNSUPPORTED-EXTERN` (observé) | couvert (`types/ffi-extern-in-impl`, 2026-11-13) |
 | FFI sous profil `pure` | `E-EFF-PROFILE` | couvert |
-| FFI sous profil `rt` | `E-EFF-PROFILE` | **NOT_RUN** |
+| FFI sous profil `rt` | `E-EFF-PROFILE` | couvert (`effects/ffi-rt-profile`, 2026-11-13) |
+| `bool` à la frontière | admission + build | couvert (`types/ffi-bool-boundary`, `compile-pass`) ; **aucune valeur ne traverse** (pas de symbole CRT `_Bool`) |
+| `i64` à l'exécution | valeur attendue | couvert (`run/ffi-width-boundary`, `llabs(-9000000000) = 9000000000`) |
 
 ## 5. Preuves existantes, et ce qui reste non mesuré
 
 **Vérifié par test ou par exécution réelle** : refus hors `unsafe`, acceptation
-dans `unsafe`, refus sous `pure`, refus d'un type non scalaire, `self` et
-paramètre dupliqué, `deny` + un seul `allow` local, compilation et exécution
-réelles de `abs` (`run/ffi-abs`), transparence de l'`unsafe` pour l'ownership.
+dans `unsafe`, refus sous `pure` **et** sous `rt`, propagation transitive à
+travers deux wrappers, refus d'un type non scalaire (`String`, `char`, `&i32`),
+`self` et paramètre dupliqué, `extern` dans un `impl`, pointeur brut refusé dans
+un `unsafe`, `deny` + un seul `allow` local, compilation et exécution réelles de
+`abs` (`run/ffi-abs`), passage réel d'un `i64` (`run/ffi-width-boundary`),
+admission + build d'un `bool` (`types/ffi-bool-boundary`), transparence de
+l'`unsafe` pour l'ownership.
 
-**Non mesuré, et donc jamais présenté comme un `PASS`** : FFI sous `rt`,
-propagation transitive à travers deux wrappers, `i128`/`u128`/`isize`/`usize`/
-`bool` à la frontière, unwinding/`longjmp`/signal, ABI multi-plateforme, toute
-fonction C qui touche la mémoire (impossible : aucun pointeur n'est admis).
+**Non mesuré, et donc jamais présenté comme un `PASS`** : `i128`/`u128`/`isize`/
+`usize` à l'exécution (déclarations seules), valeur `bool` traversante,
+unwinding/`longjmp`/signal, ABI multi-plateforme, toute fonction C qui touche la
+mémoire (impossible : aucun pointeur n'est admis).
 
 **Hypothèse assumée** : seuls les symboles déjà liés par défaut sont atteignables
 (conséquence de l'absence de `#[link]`).
@@ -106,8 +114,11 @@ hors TCB.
    `unsupported.md` §3 acceptent `extern "C"` et que l'audit backend **exige** le
    wrapper `unsafe`. ABI-3.1/3.2 refusent au parse ce que G-3.10 accepte. Un
    `MUST` doit céder : c'est une décision humaine, pas un correctif.
-2. **Tests manquants** : les neuf cas de RFC-D7 §5 (dont `rt`, propagation
-   transitive, `char`, `&i32`, `bool`, largeurs, `extern` dans un `impl`).
+2. **Tests** : huit des neuf cas de RFC-D7 §5 sont écrits (2026-11-13, corpus
+   `effects/ffi-*`, `types/ffi-*`, `run/ffi-width-boundary`,
+   `types/unsafe-does-not-unlock-pointers`) ; restent l'extension `doctor`,
+   un cas `&str` dédié, `i128`/`u128`/`isize`/`usize` à l'exécution et
+   unwinding/`longjmp`/signal.
 3. **Phrase de TCB** dans la documentation utilisateur (§1 et C-FFI-10).
 4. **Périmètre** : décider si « FFI scalaire seulement » justifie le mot « FFI »
    dans la communication de Core 1.0.

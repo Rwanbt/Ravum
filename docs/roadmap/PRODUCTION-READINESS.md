@@ -7,13 +7,13 @@
 > ligne ci-dessous n'est cochée sans la commande, le SHA et la sortie qui la
 > ferment.
 >
-> **État au 2026-11-12** (Windows 11 x64, `rustc 1.95.0`, passe 10) :
-> conformance **463 cas : 462 PASS / 0 FAIL / 1 SKIP**, périmètre build
-> **200/200**, `build_verified: true` ; workspace **113 suites, 1562 passés /
+> **État au 2026-11-13** (Windows 11 x64, `rustc 1.95.0`, passe 11) :
+> conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**, périmètre build
+> **202/202**, `build_verified: true` ; workspace **113 suites, 1562 passés /
 > 0 échec** ; **0 forme `check`-pass / `build`-fail connue** ; gates
-> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Couverture : dernière mesure
-> **88,54 % lignes / 87,86 % régions** (`21cf7d4`, sema + codegen), objectif
-> **100 %** inscrit — écart et plan en §6.
+> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Couverture : mesure du 2026-11-13
+> **88,54 % lignes / 87,81 % régions** (sema + codegen), objectif
+> **100 %** inscrit — écart, causes et plan par fonction en §7 bis.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -72,7 +72,7 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | 43 ADR `PROPOSED` ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | 463 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
+| R2 | **fait sur le périmètre** | 471 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
 | R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels ; programme §5 étendu aux **wrappers sûrs**, modules `trusted`, effets déclarés sur l'`extern` et isolation |
@@ -240,65 +240,78 @@ par la **mutation** (mesure plus honnête pour un compilateur, car un `match`
 géant peut être « couvert » sans être testé) : 100 % de couverture ne prouve pas
 100 % de correction.
 
-## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-12)
+## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-13)
 
-> Mesure de référence : `target/cov-all.json`, export `cargo llvm-cov` du
-> 2026-11-12 00:20 sur le code `21cf7d4` (passe 9). La passe 10 n'a pas
-> re-mesuré : le job `coverage.yml` rejoue la mesure à chaque push et publie
-> l'écart. Les chiffres ci-dessous sont donc **liés à `21cf7d4`**, pas au HEAD.
+> Mesure de référence : `target/cov-now.json`, export `cargo llvm-cov -p
+> ravum-lang-sema -p ravum-lang-codegen --json` du 2026-11-13 sur `e6ca298`
+> (`rustc 1.95.0`, Windows 11 x64). Elle remplace celle du 2026-11-12
+> (`21cf7d4`) : **88,54 % lignes (17 091/19 303) / 87,81 % régions
+> (27 531/31 352)**, tous les planchers tenus, la marge la plus mince restant
+> `check.rs` (80,26 % pour un plancher à 80).
+>
+> **Correction d'analyse (2026-11-13).** Le plan du 2026-11-12 attribuait les
+> écarts par *fonction* sans fusionner les instanciations : l'export contient
+> `sema` **deux fois** (seul, puis comme dépendance de `codegen`), donc une
+> fonction exercée par les tests de `sema` apparaissait « 100 % non couverte »
+> dans la copie liée aux tests de `codegen`. Exemple : `check_const_expr` était
+> annoncé 207/207, il est en réalité **16/207** ; `plan_slot_groups` 210/217,
+> il est en réalité **40/217**. Les chiffres **par fichier** n'étaient pas
+> affectés (les lignes ne sont pas dupliquées), mais les cibles par fonction
+> l'étaient. Les chiffres ci-dessous sont fusionnés (meilleure instanciation par
+> fonction).
 
-- **2 163 lignes** non couvertes, et non « ~2 100 » : le chiffre exact est
-  `python tools/coverage_report.py --input target/cov-all.json --gap`.
-- Répartition : `emit.rs` 757 · `loader.rs` 581 · `typeck.rs` 274 · `own.rs` 182 ·
-  `resolve.rs` 138 · `check.rs` 131 · `builtins.rs` 35 · `facts.rs` 28 ·
-  `effects.rs` 25 · `types.rs` 9 · `lib.rs` 3.
+- **2 189 lignes** non couvertes : `emit.rs` 758 · `loader.rs` 581 · `typeck.rs`
+  296 · `own.rs` 185 · `resolve.rs` 138 · `check.rs` 131 · `builtins.rs` 35 ·
+  `facts.rs` 28 · `effects.rs` 25 · `types.rs` 9 · `lib.rs` 3.
 
-### Où se concentrent les régions non couvertes
+### Où se concentrent les régions non couvertes (fusionné)
 
 | Fichier | Fonctions principales (régions non couvertes / total, ligne) |
 |---|---|
-| `emit.rs` | `MovePlanner::plan_slot_groups` 210/217 (4334), `Emitter::builtin_free_call` 159/236 (2806), `MovePlanner::plan` 129/163 (4534), `chain_move_expr` 117/117 (1703), `MovePlanner::walk_expr` 112/421 (3787), `plan_prefix_slots` 110/110 (4243), `match_text` 95/104 (2054), `pattern_with_float_guards` 89/89 (2113) |
-| `loader.rs` | `resolve_dependency_dir` 201/201 (1299), `collect_dependencies` 197/200 (1122), `resolve_module_file` 162/162 (2201), `parse_toml_value` 122/133 (680), `parse_manifest` 111/192 (830), `update_lockfile` 77/115 (1792) |
-| `typeck.rs` | `check_const_expr` 207/207 (4849), `check_struct_lit` 167/229 (3960), `check_variant_call` 150/150 (2225), `const_binary` 135/135 (5016), `check_call` 120/236 (1682), `check_binary` 115/186 (2993) |
-| `own.rs` | `eval_value` 138/349 (640), `check_let` 32/84 (581), `check_fn` 26/85 (386), `eval_call` 24/83 (1262) |
-| `resolve.rs` | `resolve_type_path` 257/329 (2421), `resolve_value_path` 164/327 (578), `resolve_use_tail` 89/110 (1442), `resolve_extern_block` 88/88 (1854) |
-| `check.rs` | `fact_coverage_tests::walk_expr` 130/265 (646), `walk_module` 54/76 (519), `walk_pat` 33/40 (599) — **du code de test** |
+| `emit.rs` | `builtin_free_call` 121/236 (2810), `match_text` 95/104 (2050), `pattern_with_float_guards` 89/89 (2122), `expr` 75/366 (1854), `syntactic_type_pos` 62/69 (2404), `builtin_fn_value` 55/55 (2250), `fmt_type_pos` 53/155 (2518), `MovePlanner::walk_expr` 51/421 (3794), `pattern` 41/105 (2631), `plan_slot_groups` 40/217 (4334), `builtin_const` 39/59 (812), `literal_pattern` 30/30 (2695) |
+| `loader.rs` | `resolve_dependency_dir` 77/201 (1299), `collect_dependencies` 62/200 (1113), `package_digest` 56/144 (1562), `parse_toml_value` 54/133 (673), `read_text_limited` 54/82 (2496), `update_lockfile` 48/115 (1783), `parse_manifest` 47/192 (827), `resolve_module_file` 47/162 (2201), `parse_basic_string` 40/67 (775) |
+| `typeck.rs` | `check_expr_list` 34/34 (1526), `var_occurs` 32/52 (753), `has_unbound_param` 27/32 (5579), `is_static_text_expr` 20/83 (409), `coverage_ctors` 20/80 (5966), `collect_generic_args` 20/20 (5532 — **aucun appelant**), `pattern_payloads_for_ctor` 19/63 (6086), `check_struct_lit` 18/229 (4125), `check_return` 17/82 (3869), `check_const_expr` 16/207 (5029), `check_call` 15/236 (1852) |
+| `own.rs` | `eval_value` 36/349 (676), `check_let` 36/88 (582), `check_fn` 26/85 (387), `eval_for` 22/154 (1188), `eval_method_call` 15/85 (1359), `eval_while` 13/106 (1059), `eval_call` 12/83 (1288) |
+| `resolve.rs` | `resolve_type_path` 64/329 (2409), `resolve_value_path` 44/327 (569), `resolve_use_target` 15/69 (1291), `same_use_target` 11/20 (1532), `resolve_use_tail` 10/110 (1433) |
+| `check.rs` | `fact_coverage_tests::walk_expr` 130/265 (626), `walk_module` 54/76 (505), `walk_pat` 33/40 (590), `walk_match_arm` 14/14 (730) — **du code de test** |
+| `builtins.rs` | `type_from_str` 47/131 (828), `builtin_assoc_fn_effects` 5/5 (815), `prelude_type` 2/40 (377) |
+| `facts.rs` | `Profile::parse` 10/10 (124), `Effect::from_name` 6/24 (44), `Effect::name` 6/13 (29), `expr_type` 5/5 (389), `is_subset_of` 5/5 (94), `EffectSet::pure` 3/3 (78) |
 
-(Un même fichier peut apparaître deux fois dans l'export, car `sema` est
-instancié deux fois — une fois seul, une fois comme dépendance de `codegen`. Ne
-pas additionner les régions par fonction : la couverture par ligne n'est pas
-dupliquée.)
+### Quatre causes distinctes, quatre traitements
 
-### Trois causes distinctes, trois traitements
-
-1. **Périmètre de mesure incomplet** — `coverage.yml` mesure `cargo test` alors
+1. **Périmètre de mesure incomplet** — `coverage.yml` mesure `cargo test`, alors
    que la conformance exécute le vrai corpus. Les chemins `MovePlanner`,
    `fmt_type_pos` et une partie de `typeck` sont exercés par les cas
-   `array-move-*`, donc comptés comme non couverts. Deux options, à trancher :
-   (a) ajouter des tests in-crate qui reproduisent ces cas ; (b) mesurer aussi
-   l'exécution de `ravum-conformance` (profils `--no-report`, `llvm-profdata
-   merge`). **Aucune n'est appliquée ici.**
-2. **Code de test compté comme code** — `check.rs` : 131 lignes, dont les
+   `array-move-*` mais comptés comme non couverts. **Décision proposée** :
+   garder la mesure sur `cargo test` et fermer par des tests in-crate ; mesurer
+   l'exécution du corpus demanderait d'instrumenter le binaire *enfant* que le
+   harnais lance, ce qui est un chantier séparé (profils `--no-report`,
+   `LLVM_PROFILE_FILE` hérité, `llvm-profdata merge`). Rien n'est appliqué ici.
+2. **Instanciations dupliquées** — `sema` est compilé deux fois dans la même
+   mesure. Toute analyse par fonction doit fusionner (meilleure instanciation) ;
+   sinon elle double les cibles et fabrique de faux « 0 % ».
+3. **Code de test compté comme code** — `check.rs` : 131 lignes, dont les
    *walkers* de `fact_coverage_tests`. Atteindre 100 % exige de piloter ces
-   helpers sur tous les nœuds, ou de les supprimer s'ils sont du code mort (la
-   politique interdit l'exclusion permanente).
-3. **Vrais trous de test** — `loader.rs` (dépendances, manifeste, lockfile),
-   `check_const_expr`/`const_binary` (D-CONST-1), `resolve_type_path`,
-   `eval_value` (D13), `emit` hors moves.
+   helpers sur tous les nœuds, ou de les supprimer s'ils sont du code mort.
+4. **Vrais trous** — `loader.rs` (dépendances, manifeste, lockfile),
+   `typeck` (`check_expr_list`, `var_occurs`, `coverage_ctors`), `emit` hors
+   moves, `resolve_type_path`, `eval_value`.
 
 ### Ordre proposé (risque × taille)
 
-1. **Lots touchés par les passes 6–10** : `MovePlanner`, positions de type
-   (`fmt_type_pos`, `syntactic_type_pos`, `match_text`, guards flottants),
-   `check_const_expr`, `check_struct_lit`, `check_variant_call`, `eval_value`.
-   Ce sont les zones où des régressions ont déjà été trouvées par la suite.
-2. **Chargeur de packages** (`loader.rs`, 581 lignes) : le plus gros bloc
+1. **Déblayer le code mort d'abord** : `collect_generic_args` n'a **aucun
+   appelant** (vérifié par recherche dans tout `crates/`) — la politique dit
+   « le code mort est supprimé, pas exclu ». Petits ajouts ensuite : `facts`
+   (parse/round-trip), `builtins::type_from_str`.
+2. **Lots touchés par les passes 6–10** : `emit` (guards flottants, patterns,
+   positions de type), `typeck` (`check_struct_lit`, `check_return`,
+   `check_const_expr`), `eval_value` (D13). Ce sont les zones où des régressions
+   ont déjà été trouvées par la suite.
+3. **Chargeur de packages** (`loader.rs`, 581 lignes) : le plus gros bloc
    cohérent et le moins testé.
-3. **Résolution et appels** : `resolve_type_path`, `resolve_value_path`,
-   `resolve_use_*`, `check_call`, `check_binary`, `check_lit_pattern`.
-4. **Petits fichiers** : `builtins` (`type_from_str`, `method_env`),
-   `facts` (`Profile::parse`, `Effect::from_name`), `effects::walk_expr`,
-   `types`, `lib.rs` (`CodegenError::fmt`), puis `check.rs`.
+4. **Résolution et appels** : `resolve_type_path`, `resolve_value_path`,
+   `resolve_use_*`, `check_call`, `check_binary`, `check_lit_pattern`, puis
+   `check.rs` (helpers de test).
 
 **Règle de clôture** : un fichier qui atteint 100 % de lignes et de régions
 relève son plancher à 100 dans `tools/coverage_thresholds.json`, dans le même

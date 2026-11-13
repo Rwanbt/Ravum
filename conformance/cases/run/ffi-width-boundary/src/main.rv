@@ -1,0 +1,11 @@
+use std::io;
+
+extern "C" {
+    fn llabs(x: i64) -> i64;
+}
+
+fn main() {
+    let value: i64 = -9000000000;
+    let absolute = unsafe { llabs(value) };
+    io::println(&absolute.to_string());
+}
