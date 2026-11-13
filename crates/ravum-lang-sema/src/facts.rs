@@ -454,7 +454,11 @@ mod tests {
         assert!(empty.names().is_empty());
 
         let mut set = EffectSet::new([Effect::Ffi, Effect::Io]);
-        assert_eq!(set.names(), vec!["io", "ffi"], "BTreeSet order, not insertion");
+        assert_eq!(
+            set.names(),
+            vec!["io", "ffi"],
+            "BTreeSet order, not insertion"
+        );
         assert_eq!(set.display(), "io, ffi");
         assert!(set.contains(Effect::Ffi));
         assert!(!set.contains(Effect::Rt));
@@ -517,10 +521,18 @@ mod tests {
         };
         assert_eq!(info.line_of(0), 1);
         assert_eq!(info.line_of(5), 1);
-        assert_eq!(info.line_of(6), 2, "an offset at a line start belongs to it");
+        assert_eq!(
+            info.line_of(6),
+            2,
+            "an offset at a line start belongs to it"
+        );
         assert_eq!(info.line_of(10), 2);
         assert_eq!(info.line_of(11), 3);
-        assert_eq!(info.line_of(4096), 3, "past the end clamps to the last line");
+        assert_eq!(
+            info.line_of(4096),
+            3,
+            "past the end clamps to the last line"
+        );
     }
 
     #[test]
