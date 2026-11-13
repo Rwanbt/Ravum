@@ -100,7 +100,8 @@ pub fn check_with_timings(
     timings.effects = started.elapsed();
 
     let started = Instant::now();
-    own::check_ownership(&checked, &mut diags);
+    let own_facts = own::check_ownership(&checked, &mut diags);
+    checked.facts.own = own_facts;
     timings.own = started.elapsed();
 
     diags.sort();

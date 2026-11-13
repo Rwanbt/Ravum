@@ -63,10 +63,13 @@
 //! (`E-OWN-LIMIT`), aucune panique sur un AST incomplet (les faits manquants
 //! désactivent seulement la règle correspondante).
 
-use crate::facts::{CallTarget, CheckedProgram, Facts, MethodTarget, Resolution};
+use crate::facts::{
+    CallTarget, CheckedProgram, Facts, MethodTarget, OwnFacts, OwnPlace, Projection,
+    ProjectionIndex, Resolution, UseKind,
+};
 use crate::types::Type;
 use ravum_lang_syntax::ast::{
-    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, ParamKind, Pat,
+    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, NodeId, ParamKind, Pat,
     PatKind, Receiver, Stmt, StmtKind, UnOp,
 };
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
@@ -97,7 +100,7 @@ const E_LIMIT: &str = "E-OWN-LIMIT";
 
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
 /// order by the caller; this function only pushes them.
-pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) {
+pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> OwnFacts {
     // OWN-6.1/6.2: a reference cannot be *stored* — a struct field or an enum
     // payload is such a storage. This is checked on the declaration because no
     // value could ever inhabit it: constructing one from a non-static reference
@@ -105,10 +108,14 @@ pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) {
     check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
     let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
     collect_fns(&checked.program.root, &mut fns);
+    let mut own = OwnFacts::default();
     for (item, f) in fns {
         let mut checker = OwnChecker::new(&checked.facts, diags);
         checker.check_fn(item, f);
+        own.use_kind.append(&mut checker.own.use_kind);
+        own.place.append(&mut checker.own.place);
     }
+    own
 }
 
 /// Walk every stored field type: struct fields and enum variant payloads.
@@ -242,6 +249,17 @@ struct Place {
     steps: Vec<Step>,
 }
 
+/// Convert an internal projection to the public fact representation.
+fn projection(step: &Step) -> Projection {
+    match step {
+        Step::Deref => Projection::Deref,
+        Step::Field(name) => Projection::Field(name.clone()),
+        Step::Tuple(index) => Projection::Tuple(*index),
+        Step::Index(IndexKey::Lit(value)) => Projection::Index(ProjectionIndex::Lit(*value)),
+        Step::Index(IndexKey::Opaque) => Projection::Index(ProjectionIndex::Opaque),
+    }
+}
+
 #[derive(Debug, Clone)]
 struct SlotInfo {
     name: String,
@@ -357,6 +375,8 @@ struct OwnChecker<'a> {
     /// *usage* of the value, not the "second effective move" that
     /// `E-OWN-DOUBLE-MOVE` describes.
     call_depth: u32,
+    /// Ownership decisions recorded for the backend (RFC-OWN-FACTS-1, step A).
+    own: OwnFacts,
 }
 
 impl<'a> OwnChecker<'a> {
@@ -377,6 +397,7 @@ impl<'a> OwnChecker<'a> {
             budget_hit: false,
             too_deep: false,
             call_depth: 0,
+            own: OwnFacts::default(),
         }
     }
 
@@ -686,12 +707,12 @@ impl<'a> OwnChecker<'a> {
             | ExprKind::Str(_) => {}
             ExprKind::SelfValue | ExprKind::Path(_) => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 }
             }
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
@@ -704,7 +725,7 @@ impl<'a> OwnChecker<'a> {
             }
             ExprKind::Index { base, index } => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
@@ -725,7 +746,7 @@ impl<'a> OwnChecker<'a> {
                 UnOp::RefMut => self.eval_borrow(inner, true, expr.span),
                 UnOp::Deref => {
                     if let Some(place) = self.eval_place_expr(expr) {
-                        self.consume_place(&place, expr.span);
+                        self.consume_place(&place, expr.span, expr.id);
                     } else {
                         let inner_ty = self.expr_type(inner);
                         self.eval_value(inner);
@@ -761,17 +782,17 @@ impl<'a> OwnChecker<'a> {
                     self.report_ref_escape(value.span, "stockée");
                 }
                 if let Some(place) = self.eval_place_expr(target) {
-                    self.write_place(&place, target.span);
+                    self.write_place(&place, target.span, target.id);
                 }
             }
             ExprKind::AssignOp { target, value, .. } => {
                 let place = self.eval_place_expr(target);
                 if let Some(p) = &place {
-                    self.read_place(p, target.span);
+                    self.read_place(p, target.span, target.id);
                 }
                 self.eval_value(value);
                 if let Some(p) = place {
-                    self.write_place(&p, target.span);
+                    self.write_place(&p, target.span, target.id);
                 }
             }
             ExprKind::Cast { expr: inner, .. } => self.eval_value(inner),
@@ -807,7 +828,7 @@ impl<'a> OwnChecker<'a> {
                         )],
                     );
                     if let Some(place) = self.eval_place_expr(value) {
-                        self.read_place(&place, value.span);
+                        self.read_place(&place, value.span, value.id);
                     } else {
                         self.eval_value(value);
                     }
@@ -880,7 +901,7 @@ impl<'a> OwnChecker<'a> {
 
     fn eval_borrow(&mut self, operand: &Expr, mutable: bool, span: Span) {
         if let Some(place) = self.eval_place_expr(operand) {
-            self.borrow_place(&place, span, mutable);
+            self.borrow_place(&place, span, mutable, operand.id);
         } else {
             // Borrow of a temporary rvalue: allowed, dies with the instruction.
             self.eval_value(operand);
@@ -1422,7 +1443,7 @@ impl<'a> OwnChecker<'a> {
     fn borrow_receiver(&mut self, receiver: &Expr, mutable: bool) {
         if let Some(mut place) = self.eval_place_expr(receiver) {
             self.auto_deref(&mut place);
-            self.borrow_place(&place, receiver.span, mutable);
+            self.borrow_place(&place, receiver.span, mutable, receiver.id);
         } else {
             self.eval_value(receiver);
         }
@@ -1452,7 +1473,7 @@ impl<'a> OwnChecker<'a> {
                     // temporary consumed by the call.
                     if let Some(mut place) = self.eval_place_expr(arg) {
                         self.auto_deref(&mut place);
-                        self.borrow_place(&place, arg.span, *mutable);
+                        self.borrow_place(&place, arg.span, *mutable, arg.id);
                     } else {
                         self.eval_value(arg);
                     }
@@ -1481,7 +1502,13 @@ impl<'a> OwnChecker<'a> {
     // Place consumption, reads, writes, borrows
     // ------------------------------------------------------------------
 
-    fn consume_place(&mut self, place: &Place, span: Span) {
+    fn consume_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        let kind = if self.place_type(place).is_error_or_copy(self.facts) {
+            UseKind::Copy
+        } else {
+            UseKind::Move
+        };
+        self.record_use(node, kind, place);
         if !self.check_availability(place, span, Access::Move) {
             return;
         }
@@ -1492,13 +1519,20 @@ impl<'a> OwnChecker<'a> {
         self.perform_move(place, span);
     }
 
-    fn read_place(&mut self, place: &Place, span: Span) {
+    fn read_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        let kind = if self.place_type(place).is_error_or_copy(self.facts) {
+            UseKind::Copy
+        } else {
+            UseKind::Borrow
+        };
+        self.record_use(node, kind, place);
         if self.check_availability(place, span, Access::Read) {
             self.mark_used(place.slot);
         }
     }
 
-    fn write_place(&mut self, place: &Place, span: Span) {
+    fn write_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        self.record_place(node, place);
         if !self.check_availability(place, span, Access::Write) {
             return;
         }
@@ -1527,7 +1561,16 @@ impl<'a> OwnChecker<'a> {
         }
     }
 
-    fn borrow_place(&mut self, place: &Place, span: Span, mutable: bool) -> bool {
+    fn borrow_place(&mut self, place: &Place, span: Span, mutable: bool, node: NodeId) -> bool {
+        self.record_use(
+            node,
+            if mutable {
+                UseKind::BorrowMut
+            } else {
+                UseKind::Borrow
+            },
+            place,
+        );
         let access = if mutable {
             Access::BorrowExclusive
         } else {
@@ -1543,6 +1586,26 @@ impl<'a> OwnChecker<'a> {
             span,
         });
         true
+    }
+
+    /// Record a value use for the backend (RFC-OWN-FACTS-1, step A).
+    fn record_use(&mut self, node: NodeId, kind: UseKind, place: &Place) {
+        self.own.use_kind.insert(node, kind);
+        self.own.place.insert(node, self.own_place(place));
+    }
+
+    /// Record a place without a value-use kind (writes).
+    fn record_place(&mut self, node: NodeId, place: &Place) {
+        self.own.place.insert(node, self.own_place(place));
+    }
+
+    fn own_place(&self, place: &Place) -> OwnPlace {
+        let binding = self
+            .slot_info(place.slot)
+            .map(|info| info.decl_span)
+            .unwrap_or_else(Span::dummy);
+        let steps = place.steps.iter().map(projection).collect();
+        OwnPlace { binding, steps }
     }
 
     fn mark_used(&mut self, slot: SlotId) {
