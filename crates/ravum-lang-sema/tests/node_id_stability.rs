@@ -69,7 +69,11 @@ fn load(root: &Path, overrides: BTreeMap<PathBuf, String>) -> Program {
     assert!(
         loaded.diags.is_empty(),
         "loader diagnostics: {:?}",
-        loaded.diags.iter().map(|diag| diag.code.clone()).collect::<Vec<_>>()
+        loaded
+            .diags
+            .iter()
+            .map(|diag| diag.code.clone())
+            .collect::<Vec<_>>()
     );
     loaded.program.expect("the loader produced no program")
 }
@@ -127,7 +131,10 @@ fn file_ids_are_contained_in_the_high_byte_of_node_ids() {
     let util = find_module(&program.root, "util").expect("util module must be loaded");
     let util_file = util.id >> 24;
     let root_file = program.root.id >> 24;
-    assert!(util_file > 0, "the loaded module must have a non-zero FileId");
+    assert!(
+        util_file > 0,
+        "the loaded module must have a non-zero FileId"
+    );
     assert_ne!(
         util_file, root_file,
         "two files must live in two different high bytes (else ids collide across files)"
