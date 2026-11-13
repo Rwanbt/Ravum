@@ -1,0 +1,168 @@
+# LANG-TIMINGS — mesure par phase de la boucle `.rv` (2026-11-13)
+
+> **Document de mesure, pas une promesse de performance.** Tous les chiffres
+> viennent de `scripts/lang-timings.ps1`, exécuté sur cette machine, à ce SHA.
+> `NOT_RUN` et les limites sont explicites. Aucun chiffre n'est arrondi en faveur
+> du produit : les valeurs défavorables sont en tête de chaque tableau.
+
+## 1. Identités
+
+| Élément | Valeur |
+|---|---|
+| SHA de la mesure | `3b6eb755e8dfe0255bcdb1b8ffa83e0716abb455` |
+| Branche | `goal/production-ready` |
+| Machine | Windows 11 Professionnel 10.0.26100 x86-64 |
+| CPU | 13th Gen Intel Core i7-13620H, 10 cœurs / 16 threads |
+| RAM | 16 868 962 304 octets (≈ 15,7 Gio) |
+| Rust | `rustc 1.95.0 (59807616e 2026-04-14)` |
+| Campagne | 20 exécutions à froid + 20 après une ligne modifiée, par exemple et par commande |
+| Sortie brute | `target/lang-timings/lang-timings.json` (non versionnée ; schéma ci-dessous) |
+
+Commande exacte :
+
+```powershell
+pwsh -File scripts/lang-timings.ps1 -Runs 20
+```
+
+Le script copie chaque paquet dans `target/lang-timings/work/` (jamais
+`examples/`), supprime `.ravum/` avant chaque exécution « froide », ajoute une
+ligne `// lang-timings edit N` avant chaque exécution « éditée », puis calcule
+p50/p95 par la méthode du rang le plus proche (20 valeurs ⇒ p95 = 19ᵉ valeur
+triée). Les durées mesurées commencent **dans** le binaire : le lancement du
+processus et l'ordonnancement du système ne sont pas comptés.
+
+## 2. `check` — durée totale (ms)
+
+| Exemple | froid p50 | froid p95 | édition p50 | édition p95 |
+|---|---|---|---|---|
+| `calculator` | 1,7 | 1,9 | 11,1 | **49,8** |
+| `dsp-gain-iir` | 1,8 | 2,0 | 11,2 | 13,9 |
+| `ffi-abs` | 1,1 | 1,3 | 8,9 | 11,0 |
+| `fib` | 1,3 | 1,3 | 10,1 | 15,0 |
+| `file-store` | 5,6 | 6,7 | 16,0 | 21,4 |
+| `file-tool` | 2,4 | 8,1 | 18,3 | 20,7 |
+| `hello` | 1,4 | 1,7 | 14,2 | 16,2 |
+| `package-demo` | 2,5 | 2,9 | 16,6 | 20,4 |
+| `stats` | 2,9 | 3,3 | 16,7 | 20,5 |
+| `tests-demo` | 2,1 | 2,5 | 15,2 | 17,8 |
+
+**Lecture honnête.** À froid, `check` reste sous **8,1 ms** de p95 sur tous les
+exemples. En mode « édition », le p95 de `calculator` atteint **49,8 ms**, soit
+juste sous la cible P0-A de 50 ms ; le poste de coût est `load` (~10-20 ms),
+c'est-à-dire la lecture d'un fichier **venant d'être écrit** (cache disque,
+antivirus, journalisation NTFS), pas une phase du compilateur : les phases
+`parse`/`resolve`/`typeck`/`effects`/`own` sont identiques dans les deux modes
+(§4). Un seul exemple frôle la cible ; trois dépassent 20 ms. La cible P0-A
+concerne le **diagnostic LSP après édition**, qui n'est pas mesuré ici : la
+phase 7 le mesurera séparément. **Aucune revendication P0-A n'est faite dans ce
+rapport.**
+
+## 3. `build` — durée totale (ms) et part de `rustc`
+
+| Exemple | froid p50 | froid p95 | `rustc` p50 | part `rustc` | édition p50 | édition p95 |
+|---|---|---|---|---|---|---|
+| `calculator` | 232,4 | **613,9** | 230,1 | 99,0 % | 235,7 | 497,5 |
+| `dsp-gain-iir` | 199,2 | **646,0** | 196,8 | 98,8 % | 209,0 | 231,0 |
+| `ffi-abs` | 179,4 | 188,6 | 177,7 | 99,1 % | 186,9 | 191,9 |
+| `fib` | 180,1 | 201,4 | 178,3 | 99,0 % | 188,4 | 191,8 |
+| `file-store` | 263,3 | 269,2 | 255,7 | 97,1 % | 278,6 | 375,1 |
+| `file-tool` | 330,8 | 403,3 | 328,0 | 99,2 % | 321,9 | 341,2 |
+| `hello` | 241,4 | 258,4 | 239,8 | 99,3 % | 249,1 | 264,2 |
+| `package-demo` | 247,3 | 263,1 | 243,8 | 98,6 % | 260,1 | 282,4 |
+| `stats` | 304,9 | 331,6 | 301,4 | 98,9 % | 314,6 | 339,6 |
+| `tests-demo` | 243,0 | 266,6 | 239,8 | 98,7 % | 263,5 | 272,7 |
+
+**Deux p95 aberrants assumés** : `calculator` 613,9 ms et `dsp-gain-iir`
+646,0 ms, pour des p50 de 232,4 et 199,2 ms. Le détail brut montre une seule
+exécution lente parmi les 20 (probablement antivirus/IO) ; la valeur est publiée
+telle quelle, pas filtrée. Le frontend complet (load + parse + resolve + typeck +
+effects + own + codegen) représente **0,7 % à 2,9 %** de la durée ; `rustc`
+domine à **97,1-99,3 %**. C'est la justification factuelle de la décision D4 de
+l'audit (mesurer avant d'optimiser) et la raison pour laquelle
+l'incrémentalité frontend (phase 7) ne peut pas, seule, rendre `build` rapide.
+
+## 4. Répartition par phase (échantillons)
+
+`check`, `hello`, à froid (ms) :
+
+| Phase | p50 | p95 |
+|---|---|---|
+| load | 1,100 | 1,385 |
+| parse | 0,077 | 0,102 |
+| resolve | 0,065 | 0,084 |
+| typeck | 0,078 | 0,109 |
+| effects | 0,033 | 0,046 |
+| own | 0,017 | 0,026 |
+| **total** | **1,385** | **1,699** |
+
+`build`, `file-store`, à froid (ms) :
+
+| Phase | p50 | p95 |
+|---|---|---|
+| load | 1,594 | 1,696 |
+| parse | 1,577 | 1,800 |
+| resolve | 0,222 | 0,244 |
+| typeck | 1,475 | 1,703 |
+| effects | 0,237 | 0,272 |
+| own | 0,948 | 1,024 |
+| codegen | 1,511 | 1,632 |
+| rustc | 255,703 | 261,529 |
+| **total** | **263,259** | **269,228** |
+
+En mode « édition », seule la phase `load` augmente (≈ 20 ms pour
+`file-store`) : la lecture d'un fichier fraîchement modifié coûte ce que le
+système de fichiers et l'antivirus décident, pas le compilateur.
+
+## 5. `-C incremental` : mesure et décision (désactivé par défaut)
+
+Protocole : même script, `RAVUM_INCREMENTAL=1`, 5 exécutions par mode, sur trois
+exemples ; plus une mesure contrôlée sur un programme synthétique de
+**800 fonctions** (4 constructions par fonction) avec/sans incrémental, à froid
+et après une ligne modifiée. Résultats (p50, ms) :
+
+| Programme | froid sans | froid avec | édition sans | édition avec |
+|---|---|---|---|---|
+| `hello` | 241,4 | **262,9** | 249,1 | **274,3** |
+| `file-store` | 263,3 | **379,9** | 278,6 | **398,7** |
+| `package-demo` | 247,3 | **257,6** | 260,1 | **272,6** |
+| synthétique 800 fonctions (`rustc` seul) | 784,9 | **863,3** | 789,1 | **868,0** |
+
+**Le gain est nul ou négatif partout** (jusqu'à +44 % sur `file-store`). Cause
+probable : un unique fichier Rust par programme, un `rustc` déjà dominé par le
+link/codegen, et des sessions incrémentales qui paient leur propre lecture/écriture
+sans réutiliser grand-chose. **Décision (3.4)** : l'option existe
+(`RAVUM_INCREMENTAL=1`) mais reste **désactivée par défaut** ; les builds
+`--release` et `test` ne la reçoivent jamais. `ravum-lang cache clean` supprime
+le répertoire `incr/` avec le reste de `.ravum/`.
+
+## 6. Reproductibilité `--release` (3.5)
+
+`pwsh -File scripts/repro-check.ps1` (deux racines, deux `target/`, drapeaux
+`CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0`, `--remap-path-prefix`,
+`-C link-arg=/Brepro`) sur l'arbre de ce SHA :
+
+```
+A = 0C7B63C66C27B0874AF5679FB0576C63A3DFC7B4B76C0E32A7AD8337A6AB64A8
+B = 0C7B63C66C27B0874AF5679FB0576C63A3DFC7B4B76C0E32A7AD8337A6AB64A8
+PASS — the two builds are bit-for-bit identical
+```
+
+Ce digest est celui du **binaire `ravum-lang`** construit depuis deux racines
+différentes, pas le digest d'un programme `.rv` compilé. Les builds release ne
+reçoivent jamais `-C incremental` (la branche retourne `None` pour
+`options.release`), donc la reproductibilité release n'est pas affectée par la
+phase 3.3 ; le contrôle ci-dessus le mesure sur l'arbre courant. Le digest est
+propre à cette machine et à cette toolchain, comme documenté dans
+`docs/qualification/REPRODUCIBILITY.md`.
+
+## 7. Ce que cette mesure ne prouve pas
+
+- Une seule machine, un seul OS, une seule toolchain ; aucun test sous charge
+  concurrente, aucun test multi-images.
+- Les exemples sont petits (1-5 fichiers, ≤ quelques centaines de lignes) ; les
+  durées ne s'extrapolent pas à un gros programme.
+- Le p95 sur 20 valeurs est instable par construction (une exécution lente le
+  déplace) ; c'est pourquoi p50 et valeurs brutes sont publiées ensemble.
+- La latence LSP après édition (cible P0-A) n'est **pas** mesurée ici :
+  `NOT_RUN`, phase 7.
+- Aucune mesure de mémoire, de CPU consommé ni de temps de linking séparé.
