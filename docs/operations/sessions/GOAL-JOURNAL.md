@@ -483,6 +483,11 @@ Correctif : compteur atomique par processus dans les trois helpers
 - Phase 4.5 (étape C), 30 000 programmes, Miri, mutation, couverture 100 %.
 - T4, T12, D9, D10, D7 et ratification de `RFC-RT-TRAPS-1`.
 
+**CI du round 4** : sur `5403734`, **8/8 workflows verts** (documentation,
+contrats, VS Code, coverage ratchet, qualification Windows, macOS, MVP produit,
+impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
+
+
 
 
 
