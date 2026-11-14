@@ -1052,24 +1052,37 @@ impl<'a> Emitter<'a> {
             let Some(expr) = exprs.get(id) else {
                 continue;
             };
-            // A method receiver is auto-deref'd by the call, not by the receiver's
-            // own syntax (`text.len()` records `(*text).len()`); the receiver's
-            // adjusted place is out of scope for this syntactic comparison.
-            if method_receivers.contains(id) {
-                continue;
-            }
             // Passing a reference-typed place to a reference parameter reborrows
             // it with an implicit auto-deref (`compte(v)` with `v: &Vec`); that
             // adjusted place is also out of scope here.
             if reference_args.contains(id) {
                 continue;
             }
+            // A method receiver is auto-deref'd by the call, not by the
+            // receiver's own syntax (`xs.len()` records `(*xs)`). The callee
+            // signature is not part of the receiver's syntax, so the adjusted
+            // place is accepted alongside the syntactic one; any projection
+            // beyond that implicit deref must still match.
+            let auto_deref = method_receivers.contains(id);
             match self.syntactic_place(expr) {
-                Some(expected) if expected == recorded.steps => {}
                 Some(expected) => {
+                    let mut expected_after_deref = expected.clone();
+                    if auto_deref {
+                        self.push_auto_derefs(expr, &mut expected_after_deref);
+                    }
+                    let matches = recorded.steps == expected
+                        || (auto_deref && recorded.steps == expected_after_deref);
+                    if matches {
+                        continue;
+                    }
+                    let suffix = if auto_deref {
+                        format!(", after auto-deref {expected_after_deref:?}")
+                    } else {
+                        String::new()
+                    };
                     return Err(err(format!(
                         "ownership facts disagree with the syntax for expression {id} ({}) at \
-                         {}: recorded place steps {:?}, syntactic place {expected:?}",
+                         {}: recorded place steps {:?}, syntactic place {expected:?}{suffix}",
                         self.expr_location(expr),
                         self.expr_span_text(expr),
                         recorded.steps
@@ -5443,6 +5456,49 @@ mod tests {
             .push(Projection::Deref);
         let error = crate::generate(&checked, &GenOptions::default())
             .expect_err("a corrupted place must be rejected by the step-B place guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for method receivers: the guard now verifies the
+    /// auto-deref-adjusted place instead of skipping the receiver.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn method_receiver_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> usize { return xs.len(); }\n\
+                      fn main() { let a = [1, 2, 3]; let n = first(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *receivers
+            .iter()
+            .next()
+            .expect("the fixture must contain a method receiver");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the receiver's place must be recorded");
+        assert_eq!(
+            place.steps,
+            vec![Projection::Deref],
+            "the fixture must exercise the implicit auto-deref of `xs.len()`"
+        );
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted receiver place must be rejected by the step-B guard");
         assert!(
             error.message.contains("syntactic place"),
             "unexpected error: {}",
