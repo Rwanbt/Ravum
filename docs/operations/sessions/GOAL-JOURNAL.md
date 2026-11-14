@@ -584,6 +584,9 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   du périmètre mesuré qui atteint l'objectif ratifié D10 par des tests, sans
   exclusion.
 - Workspace : **1 601 tests** passés (1 ajouté).
+- **CI** : sur `17ab64e`, **8/8 workflows verts**, coverage ratchet incluse avec
+  le nouveau plancher 100/100 sur `codegen/lib.rs`.
+
 
 
 

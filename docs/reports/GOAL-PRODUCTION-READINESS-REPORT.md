@@ -198,6 +198,10 @@ La **campagne nominale de l'oracle (3 × 10 000)** a été exécutée **localeme
 au round 8 (`aa88479`), pas par la CI de la PR : le workflow dédié
 `.github/workflows/differential-oracle.yml` la rejoue séparément.
 
+Sur `17ab64e` (premier fichier mesuré clos à 100 % de couverture,
+`codegen/lib.rs`, plancher relevé à 100/100), les **8/8 workflows sont verts**,
+coverage ratchet incluse.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
