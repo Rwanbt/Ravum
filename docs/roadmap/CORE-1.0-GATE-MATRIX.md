@@ -32,8 +32,8 @@
 > consolidé.
 >
 > **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
-> les chiffres courants ont évolué — **476 cas : 475 PASS / 0 FAIL / 1 SKIP**,
-> `perimeter=203/203`, `verified=122` ; workspace **100 groupes, 1 605 passés /
+> les chiffres courants ont évolué — **478 cas : 477 PASS / 0 FAIL / 1 SKIP**,
+> `perimeter=206/206`, `verified=123` ; workspace **100 groupes, 1 605 passés /
 > 0 échec / 5 ignorés** ; couverture **89,47/88,87** ; oracle **40 200
 > exécutions issues de 42 gabarits d'instructions indépendantes, sans
 > composition** (0 divergence) ; Miri rejoué en CI Linux et mutation rejouée en CI

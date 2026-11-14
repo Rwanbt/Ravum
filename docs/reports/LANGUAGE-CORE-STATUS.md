@@ -23,7 +23,7 @@
 | Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes `test result` : 1 605 passés / 0 échec / 5 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés** (2 tests debug-only), exit 0 |
 | `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **16 groupes : 701 passés / 0 échec / 1 ignoré**, exit 0 |
-| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=203 covered=203 verified=122 implicit=81 failed=0` ; `build_verified: true` ; exit 0 |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **478 cas : 477 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=206 covered=206 verified=123 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
 | Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
 | Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
 | Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |
