@@ -8,9 +8,9 @@
 > « production » n'est revendiquée.
 >
 > **Dernière mesure : 2026-11-14**, branche `goal/consolidation-2` @
-> `e3823cb` (T5), Windows 11 x64, `rustc 1.95.0`. Les lignes workspace et
+> `986f542` (T6), Windows 11 x64, `rustc 1.95.0`. Les lignes workspace et
 > conformance ont été rejouées à ce SHA ; les autres lignes datent de la mesure
-> T9 (`1da5544`) et n'ont pas été rejouées pour T5. Les chiffres de la
+> T9 (`1da5544`) et n'ont pas été rejouées pour T5/T6. Les chiffres de la
 > **phase 0** (`c931fdf`) restent dans [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
 > L'historique des passes (du 2026-11-09 au 2026-11-14) est déplacé **tel quel**
 > en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
@@ -22,10 +22,10 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 618 passés / 0 échec / 6 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 624 passés / 0 échec / 6 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **non rejoué depuis le round 17** (`ed60f72`) : 100 groupes, 1 603 passés / 0 échec / 5 ignorés (2 tests debug-only) |
-| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 704 passés / 0 échec / 1 ignoré**, exit 0 |
-| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **478 cas : 477 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=206 covered=206 verified=123 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
+| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 711 passés / 0 échec / 1 ignoré**, exit 0 |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **483 cas : 482 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=207 covered=207 verified=124 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
 | Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
 | Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
 | Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |

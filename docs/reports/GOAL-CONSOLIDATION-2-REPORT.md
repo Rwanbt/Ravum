@@ -36,10 +36,10 @@
    littérale a été arrêtée, l'écart a été expliqué et vérifié, puis le travail a
    continué. C'est une **déviation assumée et rapportée**, pas un « octet pour
    octet ».
-4. **Trois tâches sont `NOT_RUN`** : T6 (`rt` par point d'entrée), T7 (garde
-   OwnFacts étendu), T8 (mutants survivants) — raisons en §5. T5 (`FileId` stable
-   LSP), `NOT_RUN` à la première rédaction, est **exécutée depuis**
-   (`e3823cb`, §5).
+4. **Deux tâches restent `NOT_RUN`** : T7 (garde OwnFacts étendu), T8 (mutants
+   survivants) — raisons en §5. T5 (`FileId` stable LSP) et T6 (`rt` par point
+   d'entrée), `NOT_RUN` à la première rédaction, sont **exécutées depuis**
+   (`e3823cb` et `986f542`, §5).
 5. **La campagne nominale 3 × 2 000 de T2 n'est pas terminée** : elle a été
    interrompue après 561 programmes (graine 1) pour corriger la seconde
    divergence trouvée. Le total de 6 000 programmes n'est pas mesuré.
@@ -53,9 +53,10 @@
 
 Aucun test, aucun cas de conformance et aucun seuil n'a été supprimé, ignoré ou
 affaibli. Le corpus passe de **476 à 478 cas** (deux cas ajoutés ; un cas
-existant a changé de mode par obligation, voir T4) et le workspace de **100
-suites / 1 605 tests** à **101 suites / 1 610 tests**, puis **101 suites /
-1 618 tests** après T5 (§5).
+existant a changé de mode par obligation, voir T4), puis à **483 cas** avec les
+cinq cas `rt-entry` de T6 ; le workspace de **100 suites / 1 605 tests** à
+**101 suites / 1 610 tests**, puis **1 618** après T5 et **1 624** après T6
+(§5).
 
 ## 1. T1 — corriger les affirmations (Q0-2) — `TESTED`
 
@@ -309,15 +310,66 @@ paquets concurrents ; `SourceMap::add` et `add_at` partagent le même compteur,
 mais le loader plafonne à 65 536 fichiers, donc un id proche de `u32::MAX` n'est
 pas constructible par ce chemin.
 
-### T6 à T8 — `NOT_RUN`
+### T6 — profil `rt` par point d'entrée et indexation bornée (Q1-3) — `PENDING_HUMAN_APPROVAL` (implémentation `TESTED`)
+
+**Commit** : `986f542` `feat(rt): scope the rt gate to a named entry and bound
+loop indexes`. **RFC amendée** : `docs/rfc/RFC-RT-TRAPS.md` §2 et §7.
+
+**Ce qui est ajouté.**
+
+- `--rt-entry <module::fonction>` sur `check` (exige `--profile rt`) et sur
+  `build` (qui n'a pas `--profile` : l'option y implique l'analyse `rt`). Les
+  effets interdits **et** les traps ne s'appliquent qu'aux fonctions
+  **atteignables** depuis cette entrée ; `--profile rt` sans `--rt-entry` garde
+  le comportement historique (paquet entier, `main`/tests).
+- Atteignabilité calculée sur le graphe d'appels déjà construit par l'inférence
+  d'effets (`effects::reachable_from`), partagée par les deux gates.
+- Entrée inconnue : **`E-TOOL`** (code d'outillage, hors registre du langage),
+  exit 1, aucune vérification exécutée — jamais un ensemble vide accepté.
+- **Indexation bornée** : `a[i]` sûr si `i` est la variable d'un
+  `for i in 0..K` à borne littérale (`Kusize`, l'index de tableau devant être
+  `usize`) avec `K <=` taille du tableau (références dépliées), ou d'un
+  `for i in 0..a.len()` sur un tableau/tranche non réaffecté et non masqué.
+  Refusés : index calculé (`a[i.wrapping_add(0)]`), borne trop grande, variable
+  masquée ou réaffectée, `Vec`.
+- `examples/dsp-gain-iir` réécrit en buffers fixes + entrée `process` :
+  `check --profile rt --rt-entry process` passe, et la **sortie est identique
+  octet pour octet** à l'ancienne version (le seul écart du run complet est la
+  ligne `running: <chemin>` du CLI). Smoke : **43 PASS / 0 FAIL / 0 NOT_RUN**.
+  Le `ravum.lock` de l'exemple suit le digest des sources.
+
+**Preuves.**
+
+```
+cargo test -p ravum-lang-sema --lib traps -- --test-threads=2
+  17 passed / 0 failed   (5 nouveaux : portée de l'entrée sur traps et effets,
+                         deux formes bornées, trois refus, entrée inconnue)
+cargo test -p ravum-lang-cli -- --test-threads=2
+  8 groupes : 54 + 7 + 44 + 6 + 11 + 5 + 3 + 3 passés / 0 échec
+cargo run -p ravum-conformance -- run --verify-build
+  483 cas : 482 PASS / 0 FAIL / 1 SKIP ; perimeter=207/207 ; verified=124
+pwsh -File scripts/evidence.ps1                7 contrôles PASS
+```
+
+**Statut** : la règle et l'option sont `PENDING_HUMAN_APPROVAL` ; l'implémentation
+et les preuves sont `TESTED`. L'audit demandait exactement « statut :
+PENDING_HUMAN_APPROVAL ».
+
+**Limites** : atteignabilité syntaxique, sans analyse d'alias ; l'entrée est
+déclarée, pas prouvée appelée depuis un callback audio ; la règle d'indexation
+est locale à deux formes et ne prouve pas les bornes en général ; `Vec<T>` reste
+refusé ; les méthodes d'`impl` ne sont pas adressables ; `build` sans `--profile`
+ne peut pas exprimer `pure` ; la clause « base non réaffectée » est défensive
+(la réaffectation d'une tranche est déjà refusée par la propriété).
+
+### T7 et T8 — `NOT_RUN`
 
 | Tâche | Statut | Raison |
 |---|---|---|
-| T6 — profil `rt` par point d'entrée | `NOT_RUN` | Non commencée. Amendement de RFC + option CLI `--rt-entry` + règle d'indexation bornée + cas positifs/négatifs + `examples/dsp-gain-iir` : aucun de ces éléments n'a été écrit. |
 | T7 — garde OwnFacts étendu | `NOT_RUN` | Non commencée ; dépend du test de puissance de T2, qui est `NOT_RUN`. |
 | T8 — mutants survivants | `NOT_RUN` | Non commencée ; demande de relire les 24 survivants et de rejouer la campagne mutation en CI. |
 
-Aucun de ces statuts n'est un `PASS` déguisé : rien n'a été exécuté.
+Aucun de ces deux statuts n'est un `PASS` déguisé : rien n'a été exécuté.
 
 ## 6. T9 — source unique des chiffres (Q1-5) — `PARTIAL`
 
@@ -367,9 +419,13 @@ cargo test -p ravum-lang-lsp -- --test-threads=2             exit 0
 cargo test -p ravum-lang-cli -- --test-threads=2             exit 0
 cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (32 + 45 + 6 + 2 ignorés)
 cargo run -p ravum-conformance -- run --verify-build         exit 0
-  478 cas : 477 PASS / 0 FAIL / 1 SKIP ; perimeter=206/206 ; verified=123
+  483 cas : 482 PASS / 0 FAIL / 1 SKIP ; perimeter=207/207 ; verified=124
 cargo test --workspace --all-targets -- --test-threads=2     exit 0
-  101 groupes : 1 618 passés / 0 échec / 6 ignorés
+  101 groupes : 1 624 passés / 0 échec / 6 ignorés
+pwsh -File scripts/lang-smoke.ps1                            exit 0
+  43 PASS / 0 FAIL / 0 NOT_RUN
+cargo run -p ravum-lang-cli -- check examples/dsp-gain-iir --profile rt --rt-entry process
+  exit 0 (0 erreur) — sortie de l'exemple identique à l'ancienne version
 python tools/report_consistency.py --evidence                exit 0 (19 déclarations)
 ```
 
@@ -388,7 +444,12 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
    désactivé » (et lequel), ou exiger des commits de revert recréés.
 4. **`AGENTS.md`** : la révision du 2026-11-13 reste `PENDING_HUMAN_APPROVAL`
    (inchangée par cette session).
-5. **RFC et décisions antérieures toujours ouvertes** : `RFC-OWN-FACTS-1`,
+5. **Amendement T6 de `RFC-RT-TRAPS-1`** : option `--rt-entry` (les règles `rt`
+   s'appliquent aux seules fonctions atteignables) et les deux formes
+   d'indexation bornée. La règle est implémentée, mesurée et documentée dans la
+   RFC, mais **non ratifiée** ; l'entrée est déclarée par l'utilisateur, pas
+   prouvée appelée depuis un callback temps réel.
+6. **RFC et décisions antérieures toujours ouvertes** : `RFC-OWN-FACTS-1`,
    `RFC-RT-TRAPS-1`, `RFC-NODE-ID`, `RFC-RV-DSP-BLOCK-1`, `RFC-DEV-TOOLS-1`,
    D9 (clé), D10 (dénominateur MUST), objectif 100 % de couverture.
 
@@ -400,8 +461,9 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - **T3, LSP de bout en bout à l'échelle** : `NOT_RUN` (pas de client écrit).
 - **T4, comparaison littérale octet pour octet** : déviation documentée (15
   fichiers, ids dans les noms de symboles).
-- **T6, T7, T8** : `NOT_RUN` (non commencées). **T5** : exécutée depuis la
-  rédaction (`e3823cb`, §5).
+- **T7, T8** : `NOT_RUN` (non commencées). **T5** et **T6** : exécutées depuis
+  la rédaction (`e3823cb`, `986f542`, §5) ; la règle T6 reste
+  `PENDING_HUMAN_APPROVAL`.
 - **T10, run CI** : `NOT_RUN` (pas de push).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
 - **Couverture, mutation, fuzz, Miri, Linux** : `NOT_RUN` cette session.
@@ -414,8 +476,9 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 2. Pour le test de puissance : un substitut par désactivation de mécanisme
    est-il recevable, ou faut-il recréer les correctifs historiques en commits
    de revert sur l'arbre courant ?
-3. T6-T8 doivent-elles être planifiées dans une session suivante, et dans quel
-   ordre ? (T7 dépend du test de puissance ; T6 dépend d'un amendement de RFC.)
+3. T7-T8 doivent-elles être planifiées dans une session suivante, et dans quel
+   ordre ? (T7 dépend du test de puissance ; T6 est exécuté et attend la
+   ratification de son amendement.)
 4. Faut-il rejouer la campagne nominale complète de l'oracle **avant** ou
    **après** le test de puissance ?
 5. Le corpus synthétique doit-il être complété par un programme réel d'au moins
@@ -435,5 +498,9 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - T5 est prouvé **in-processus** (analyse LSP et cache de parse) : la table de
   session n'est ni persistée ni bornée, et le transport JSON-RPC n'est pas
   mesuré pour ce cas.
+- T6 est une analyse **syntaxique** : l'atteignabilité suit le graphe d'appels,
+  l'entrée est déclarée par l'utilisateur, et les deux formes d'indexation
+  bornée ne prouvent pas les bornes en général. `Vec` reste refusé et le corpus
+  `rt` reste restreint.
 - Il ne remplace ni l'audit externe (T4) ni le Go/No-Go (T12), qui restent des
   décisions humaines, ni aucune ratification de RFC.

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-14T11:20:42.1422293Z",
-  "git_sha": "1da554485a6c60ff44bebef7ede9871b00b86de2",
-  "git_sha_short": "1da554485a6c",
+  "generated_at": "2026-11-14T13:43:28.2198297Z",
+  "git_sha": "986f5424a80c9af80e1067c65441fabab4816f60",
+  "git_sha_short": "986f5424a80c",
   "git_branch": "goal/consolidation-2",
   "git_dirty": true,
   "os": "Microsoft Windows 11 Professionnel",
@@ -11,25 +11,25 @@
   "ram_bytes": 16868962304,
   "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
   "metrics": {
-    "conformance.not_run": 0,
-    "conformance.cases": 478,
-    "conformance.skip": 1,
-    "conformance.pass": 477,
-    "build.perimeter": 206,
     "build.failed": 0,
-    "build.verified": 123,
+    "conformance.skip": 1,
+    "conformance.not_run": 0,
     "conformance.fail": 0,
-    "build.covered": 206,
+    "conformance.pass": 482,
     "build.implicit": 83,
-    "registry.never_emitted": 0,
-    "registry.unregistered": 0,
+    "build.covered": 207,
+    "build.verified": 124,
+    "build.perimeter": 207,
+    "conformance.cases": 483,
     "registry.declared": 108,
     "registry.emitted": 126,
-    "features.total": 188,
+    "registry.never_emitted": 0,
+    "registry.unregistered": 0,
     "features.covered": 188,
-    "must.unmapped": 344,
-    "must.total": 807,
+    "features.total": 188,
     "must.mapped": 463,
+    "must.total": 807,
+    "must.unmapped": 344,
     "python_tests.count": 38
   },
   "controls": [
@@ -38,7 +38,7 @@
       "command": "cargo fmt --all -- --check",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 1758.454,
+      "wall_ms": 1537.266,
       "numbers": {},
       "output_tail": ""
     },
@@ -47,32 +47,32 @@
       "command": "cargo run -q -p ravum-conformance -- run --verify-build",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 96334.967,
+      "wall_ms": 78545.55,
       "numbers": {
-        "conformance.not_run": 0,
-        "conformance.cases": 478,
-        "conformance.skip": 1,
-        "conformance.pass": 477,
-        "build.perimeter": 206,
         "build.failed": 0,
-        "build.verified": 123,
+        "conformance.skip": 1,
+        "conformance.not_run": 0,
         "conformance.fail": 0,
-        "build.covered": 206,
-        "build.implicit": 83
+        "conformance.pass": 482,
+        "build.implicit": 83,
+        "build.covered": 207,
+        "build.verified": 124,
+        "build.perimeter": 207,
+        "conformance.cases": 483
       },
-      "output_tail": "PASS    security/reserved-windows-name                           19 ms  build=not_applicable\nFAILURES: none\nsummary: total=478 pass=477 fail=0 skip=1 not_run=0\nbuild: perimeter=206 covered=206 verified=123 implicit=83 failed=0 environment=0 not_measured=0\nbuild_verified: true (build dimension only — check `summary` for the rest of the run)\nnote: SKIP and NOT_RUN are never PASS; a green run is an observation on this corpus, host and commit, not a proof"
+      "output_tail": "PASS    security/reserved-windows-name                           22 ms  build=not_applicable\nFAILURES: none\nsummary: total=483 pass=482 fail=0 skip=1 not_run=0\nbuild: perimeter=207 covered=207 verified=124 implicit=83 failed=0 environment=0 not_measured=0\nbuild_verified: true (build dimension only — check `summary` for the rest of the run)\nnote: SKIP and NOT_RUN are never PASS; a green run is an observation on this corpus, host and commit, not a proof"
     },
     {
       "name": "registry",
       "command": "python tools/registry_audit.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 802.878,
+      "wall_ms": 780.799,
       "numbers": {
-        "registry.never_emitted": 0,
-        "registry.unregistered": 0,
         "registry.declared": 108,
-        "registry.emitted": 126
+        "registry.emitted": 126,
+        "registry.never_emitted": 0,
+        "registry.unregistered": 0
       },
       "output_tail": "registry codes : 108\ncodes emitted  : 126\nunregistered   : 0 (language codes emitted but absent from �3)\nignored        : 18 prefix/tooling literals\nnever emitted  : 0 (declared in �3, produced by no source literal)\nclosed W list  : 0 extra warning code(s) outside DIAG-1.6"
     },
@@ -81,10 +81,10 @@
       "command": "python tools/features_coverage.py --strict",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 229.091,
+      "wall_ms": 226.246,
       "numbers": {
-        "features.total": 188,
-        "features.covered": 188
+        "features.covered": 188,
+        "features.total": 188
       },
       "output_tail": "STD           32      32       0         0        0\nSYN           35      35       0         0        0\nTYP           27      27       0         0        0\nUNS           19      19       0         0        0\nexempt      F-META-006   review: Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption. Reexamen obligatoire au plus tard le 2027-02-12 (90 jours apres l'approbation humaine du 2026-11-12).\nstrict traceability: 188/188 rules satisfied (1 justified exemption)"
     },
@@ -93,11 +93,11 @@
       "command": "python tools/must_audit.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 265.488,
+      "wall_ms": 322.606,
       "numbers": {
-        "must.unmapped": 344,
+        "must.mapped": 463,
         "must.total": 807,
-        "must.mapped": 463
+        "must.unmapped": 344
       },
       "output_tail": "  unsupported.md:197   UNS-9.5\nproblem: core-machine.md:88: rule row has an unescaped `|` (5 cells); counted, text may be truncated\nproblem: expressions.md:254: rule row has an unescaped `|` (4 cells); counted, text may be truncated\nproblem: grammar.md:271: rule row has an unescaped `|` (4 cells); counted, text may be truncated\nproblem: grammar.md:411: rule row has an unescaped `|` (5 cells); counted, text may be truncated\nproblem: grammar.md:460: rule row has an unescaped `|` (4 cells); counted, text may be truncated"
     },
@@ -106,18 +106,18 @@
       "command": "python -m unittest discover -s tools/tests",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 1038.462,
+      "wall_ms": 894.534,
       "numbers": {
         "python_tests.count": 38
       },
-      "output_tail": "............\nwrote C:\\Users\\barat\\AppData\\Local\\Temp\\tmpw246j4yy\\out\\audit.json\n..........................\n----------------------------------------------------------------------\nRan 38 tests in 0.786s\nOK"
+      "output_tail": "............\nwrote C:\\Users\\barat\\AppData\\Local\\Temp\\tmpbny0ihh8\\out\\audit.json\n..........................\n----------------------------------------------------------------------\nRan 38 tests in 0.669s\nOK"
     },
     {
       "name": "report_consistency",
       "command": "python tools/report_consistency.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 178.587,
+      "wall_ms": 143.826,
       "numbers": {},
       "output_tail": "  ok     conformance  470 PASS / 0 FAIL / 1 SKIP\n  ok     tests        113 suites\n  ok     tests        1574 pass�s\n  ok     strict       188/188\n  ok     registry     108 codes\nreport-consistency: PASS � the report carries the register figures"
     }

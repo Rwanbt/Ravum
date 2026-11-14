@@ -1054,3 +1054,16 @@ workspace rejoués : **101 groupes, 1 618 passés / 0 échec / 6 ignorés**, exi
 conformance inchangée (**478 / 477 / 0 / 1**, `perimeter=206/206`,
 `verified=123`). L'entrée ci-dessus garde ses chiffres de fin de session ; le
 détail T5 est dans `GOAL-CONSOLIDATION-2-REPORT.md` §5.
+
+### Suite du 2026-11-14 — T6 exécutée (branche `goal/consolidation-2`)
+
+T6 (profil `rt` par point d'entrée + indexation bornée) : commit `986f542`,
+RFC `RFC-RT-TRAPS.md` amendée (§2 et §7). `--rt-entry` sur `check` (avec
+`--profile rt`) et `build` ; atteignabilité sur le graphe d'appels ; deux formes
+d'indexation bornée (`0..Kusize` avec `K <=` taille du tableau, `0..a.len()`
+sur tableau/tranche non réaffecté) ; entrée inconnue refusée (`E-TOOL`).
+`examples/dsp-gain-iir` vérifie en `rt` avec une sortie identique octet pour
+octet (smoke 43/0/0). Conformance **483 / 482 / 0 / 1**, `perimeter=207/207`,
+`verified=124` ; workspace **101 groupes, 1 624 passés / 0 échec / 6 ignorés** ;
+`evidence/current.json` rafraîchi (7 contrôles PASS). Règle :
+`PENDING_HUMAN_APPROVAL`.
