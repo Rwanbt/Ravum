@@ -1,0 +1,69 @@
+name: 'Differential oracle: check => build (long generative campaign)'
+
+# Why this workflow exists
+# -----------------------
+# The fast differential oracle (3 seeds x 200 well-typed programs) runs inside
+# `cargo test -p ravum-lang-codegen --test differential_oracle` and therefore in
+# the normal test jobs. Its long mode (3 seeds x 10 000) is too expensive for
+# every push, but it is the campaign that turns "no known divergence" into a
+# measured rate over a much larger sample: any program accepted by `check` must
+# compile with `rustc`, and debug/release outputs must agree on a sampled subset.
+#
+# What this workflow does NOT prove
+# ---------------------------------
+# * The generator produces a finite, documented subset of Core 1.0; a green run
+#   is a measured rate, not a proof over all programs.
+# * Property 2 (debug == release output) is sampled (`RAVUM_DIFF_RELEASE_EVERY`),
+#   not exhaustive.
+# * A divergence is reduced and uploaded as an artifact; it still has to become a
+#   conformance case and a T2-FINDINGS entry (human-visible work).
+
+on:
+  workflow_dispatch:
+    inputs:
+      programs:
+        description: 'Programs per seed (default 10000)'
+        required: false
+        default: '10000'
+      release_every:
+        description: 'Sample every Nth program for the debug/release comparison'
+        required: false
+        default: '10'
+  schedule:
+    # Weekly, off-peak: keeps the long campaign honest without running it on
+    # every push. The job costs roughly the same as the other qualification jobs.
+    - cron: '0 4 * * 0'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  long-oracle:
+    name: Long differential campaign (3 seeds x N)
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Run the long differential campaign
+        env:
+          RAVUM_DIFF_PROGRAMS: ${{ github.event.inputs.programs || '10000' }}
+          RAVUM_DIFF_RELEASE_EVERY: ${{ github.event.inputs.release_every || '10' }}
+        run: >
+          cargo test -p ravum-lang-codegen --test differential_oracle
+          differential_oracle_long -- --ignored --nocapture
+
+      - name: Upload reduced divergences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-divergences
+          path: target/diff-divergences/
+          if-no-files-found: ignore

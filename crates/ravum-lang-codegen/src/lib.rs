@@ -57,3 +57,19 @@ impl std::error::Error for CodegenError {}
 pub fn generate(checked: &CheckedProgram, options: &GenOptions) -> Result<String, CodegenError> {
     Generator::new(checked, options).generate()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CodegenError;
+
+    #[test]
+    fn codegen_error_displays_its_message() {
+        let error = CodegenError {
+            message: "unsupported builtin method".to_string(),
+        };
+        assert_eq!(error.to_string(), "unsupported builtin method");
+        // The `std::error::Error` impl is empty; this asserts it is usable.
+        let as_error: &dyn std::error::Error = &error;
+        assert_eq!(as_error.to_string(), "unsupported builtin method");
+    }
+}

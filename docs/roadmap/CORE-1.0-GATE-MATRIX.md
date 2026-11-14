@@ -31,6 +31,18 @@
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 >
+> **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
+> les chiffres courants ont évolué — **476 cas : 475 PASS / 0 FAIL / 1 SKIP**,
+> `perimeter=203/203`, `verified=122` ; workspace **100 groupes, 1 605 passés /
+> 0 échec / 5 ignorés** ; couverture **89,47/88,87** ; oracle **40 200
+> programmes, 0 divergence** ; Miri rejoué en CI Linux et mutation rejouée en CI
+> (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
+> `PRODUCTION-READINESS.md` §9 et dans
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+> Le bloc « chiffres courants » ci-dessus reste **inchangé** parce que
+> `report_consistency.py` le confronte au rapport consolidé ; cette note ne le
+> remplace pas.
+>
 > **Sections datées = archives.** Les sections `§0 bis` (passe 6), `§0 ter`
 > (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9), `§0 sexies`
 > (passe 10) et `§1.x` portent les chiffres **de leur passe**, pas les chiffres
@@ -822,6 +834,46 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 - **Un gate peut régresser** : `T3` est passé de `PARTIAL` à `FAIL` parce que la
   passe T2 a produit des contre-exemples exécutables. Une information nouvelle
   qui dégrade un état est un progrès de mesure, pas une régression de qualité.
+
+## 0 octies. Passe 12 — GOAL « prêt pour la revue de production » (2026-11-13)
+
+> Section **datée** : elle ajoute des preuves mesurées dans la session du GOAL,
+> sur la branche `goal/production-ready`. **Aucun état de gate n'est changé par
+> cette section** : les preuves ci-dessous renforcent T2/T10/T11 mais ne ferment
+> ni l'audit externe (T4/T12), ni D10, ni D9. Le détail et les limites sont dans
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 605 passés / 0 échec / 5 ignorés**, exit 0 |
+| Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés**, exit 0 ; 2 tests debug-only exclus (garde Copy/Move, garde de place) |
+| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 476 cas, 0 désaccord**, test négatif vert |
+| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `failed=0`, `build_verified: true` |
+| Traps `rt` (RFC-RT-TRAPS-1) | `cargo test -p ravum-lang-sema --lib traps` + 5 cas `effects/rt-trap-*` | **10/10** tests unitaires (index, division, arithmétique binaire **et composée**, négation, décalages, agrégats/flux, flottants, formes explicites) ; 4 compile-fail `E-EFF-PROFILE`, 1 compile-pass ; `core`/`pure` inchangés |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Registre | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
+| Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |
+| MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 ouverte, inchangée |
+| Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-round16.json` puis `coverage_report.py --check` | **89,47 % lignes / 88,87 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 126** lignes non couvertes (20 182 − 18 056) ; `codegen/lib.rs` **100/100**, `traps.rs` 98,66/96,84, `emit.rs` 87,75/87,09 ; limite des régions `fmt::Error` documentée — [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
+| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | générateur v2 **42 gabarits** : rapide **600** (0 divergence), long local **3 000** (0 divergence), **nominal 3 × 10 000 = 30 000 programmes locaux, 0 divergence, 8 602 s**, **3 × 1 000 rejoué après le garde de places : 3 000, 0 divergence** ; cumul **40 200 programmes, 0 divergence**, 100 % acceptés |
+| Timings | `pwsh -File scripts/lang-timings.ps1 -Runs 20` | `check` p95 froid **1,3-8,1 ms**, édition **11,0-49,8 ms** ; `build` p50 **179-331 ms**, `rustc` **97,1-99,3 %** — [`LANG-TIMINGS.md`](../reports/LANG-TIMINGS.md) |
+| Incrémental | A/B `RAVUM_INCREMENTAL=1` | gain **nul ou négatif** (jusqu'à +44 %) ; opt-in, **désactivé par défaut** |
+| Cache de parse LSP | `cargo test -p ravum-lang-lsp --test parse_cache` et `cargo test -p ravum-lang-cli --test lsp_client` | 2 tests INV-07/réutilisation verts ; analyse p95 **1,362 ms** avec cache vs **1,836 ms** sans ; **bout en bout transport inclus p50 2,061 ms / p95 2,826 ms** ; client LSP **11/0** — [`LSP.md`](../qualification/LSP.md) §7 |
+| `NodeId` | `cargo test -p ravum-lang-sema --test node_id_stability` | **2/2** : ids de `util.rv` inchangés après édition de `main.rv` — migration **sans objet** |
+| Fuzz long | `RAVUM_FUZZ_ITERS=200000 … fuzz_lex_parse -- --ignored` et `RAVUM_FUZZ_ITERS=100000 … fuzz_check` | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` ; **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en `rt`) |
+| Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) |
+| SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets (23 workspace + 41 dépendances) / 170 relations**, `created=1970-01-01`, sha256 `46b65d9fe941123e4ea7ac8fb82cfeb1e4ccb457d7cf29947ec5cd0251647721` |
+| Installateur | `pwsh -File scripts/install.ps1 -Prefix target/install-round13 -SkipBuild` puis deux `-Uninstall` | install exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, rustc 1.95.0, `locked=true` ; désinstallations **0 / 0** (la seconde : « rien à désinstaller ») |
+| LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |
+| Linux qualification (round 19) | `gh workflow run linux-qual.yml --ref goal/production-ready` (run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)) | **7 jobs verts sur `878e212`** : workspace **100 groupes / 1 601 passés / 0 échec / 7 ignorés**, conformance **476 (474 PASS / 0 FAIL / 2 SKIP)** `build_verified: true`, smoke **31/0/0** (stdlib 64/64, CLI 13/13, flags 20/20), **Miri 65 + 134 tests + fuzz court**, fuzz smoke, installateur, wasm32 ; TSan `NOT_APPLICABLE` |
+| Mutation (round 20) | `gh workflow run mutation.yml --ref goal/production-ready` (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293)) | **183 mutants / 150 tués / 24 survivants triés / 9 non viables** sur `own.rs`, `resolve.rs`, `typeck.rs` (portée ciblée), totaux identiques au run de référence ; artefact `mutants-targeted` |
+| Miri, mutation (local) | — | Miri **local `NOT_RUN`** (`cargo-miri` absent) ; mutation **locale `NOT_RUN`** (`cargo-mutants` absent) ; les deux sont rejoués en CI (lignes ci-dessus) |
+
+**Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
+T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,
+aucun tag, aucune release. L'étape A d'`OwnFacts` est additive (aucun
+consommateur) ; l'étape B est un garde-fou de debug ; l'étape C n'est pas faite.
+
 
 
 

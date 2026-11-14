@@ -1,0 +1,12 @@
+{
+  "id": "effects/rt-trap-dynamic-index",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "RFC-RT-TRAPS-1: a slice index has no compile-time bound, so any `xs[i]` is a trap in `rt` (literal bounds are only known for arrays)."
+}

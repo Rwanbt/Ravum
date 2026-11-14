@@ -1,0 +1,4 @@
+fn ratio(x: i32, y: i32) -> i32 effects() { return x / y; }
+
+fn main() { let v = ratio(4, 2); }
+

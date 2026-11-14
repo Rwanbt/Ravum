@@ -4,11 +4,24 @@ use ravum_lang_sema::Profile;
 use std::path::Path;
 
 use crate::json;
-use crate::pipeline::{self, Frontend};
+use crate::pipeline::{self, AnalysisTimings, Frontend};
 use crate::util;
 
-pub fn run(path: &Path, json_output: bool, profile: Profile, locked: bool) -> i32 {
-    let frontend = pipeline::analyze(path, profile, locked);
+pub fn run(
+    path: &Path,
+    json_output: bool,
+    profile: Profile,
+    locked: bool,
+    request_timings: bool,
+) -> i32 {
+    let (frontend, timings) = if request_timings {
+        pipeline::analyze_with_timings(path, profile, locked)
+    } else {
+        (
+            pipeline::analyze(path, profile, locked),
+            AnalysisTimings::default(),
+        )
+    };
     let success = frontend.success();
 
     if json_output {
@@ -34,10 +47,22 @@ pub fn run(path: &Path, json_output: bool, profile: Profile, locked: bool) -> i3
             dependencies_digest: Some(frontend.pkg.dependencies_digest.clone()),
             lockfile_stale: lockfile_stale(&frontend),
         };
-        let envelope = json::envelope(meta, diagnostics, summary);
+        let envelope = json::envelope_with_timings(
+            meta,
+            diagnostics,
+            summary,
+            if request_timings {
+                Some(timings.json())
+            } else {
+                None
+            },
+        );
         json::print(&envelope);
     } else {
         print_human(&frontend, profile);
+        if request_timings {
+            print_timings(&timings);
+        }
     }
 
     if success {
@@ -82,4 +107,18 @@ fn print_human(frontend: &Frontend, profile: Profile) {
         );
     }
     println!("lockfile: {}", frontend.pkg.lockfile_state.name());
+}
+
+fn print_timings(timings: &AnalysisTimings) {
+    println!(
+        "timings: load={:.3}ms parse={:.3}ms resolve={:.3}ms typeck={:.3}ms \
+         effects={:.3}ms own={:.3}ms total={:.3}ms",
+        pipeline::ms(timings.load),
+        pipeline::ms(timings.parse),
+        pipeline::ms(timings.resolve),
+        pipeline::ms(timings.typeck),
+        pipeline::ms(timings.effects),
+        pipeline::ms(timings.own),
+        pipeline::ms(timings.total()),
+    );
 }

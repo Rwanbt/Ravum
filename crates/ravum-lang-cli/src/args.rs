@@ -23,6 +23,7 @@ pub enum Command {
         json: bool,
         profile: Profile,
         locked: bool,
+        timings: bool,
     },
     Build {
         path: PathBuf,
@@ -30,6 +31,7 @@ pub enum Command {
         emit_rust: Option<PathBuf>,
         emit_ir: bool,
         target: BuildTarget,
+        timings: bool,
     },
     Run {
         path: PathBuf,
@@ -163,12 +165,14 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut json = false;
     let mut profile = Profile::Core;
     let mut locked = false;
+    let mut timings = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
             "--locked" => locked = true,
+            "--timings" => timings = true,
             "--profile" => {
                 let value = option_value(rest, &mut i, "--profile")?;
                 profile = parse_profile(&value)?;
@@ -189,6 +193,7 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         json,
         profile,
         locked,
+        timings,
     })
 }
 
@@ -212,12 +217,14 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
     let mut emit_rust: Option<PathBuf> = None;
     let mut emit_ir = false;
     let mut target = BuildTarget::Native;
+    let mut timings = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--release" => release = true,
             "--emit-ir" => emit_ir = true,
+            "--timings" => timings = true,
             "--emit-rust" => {
                 let value = option_value(rest, &mut i, "--emit-rust")?;
                 emit_rust = Some(PathBuf::from(value));
@@ -246,6 +253,7 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         emit_rust,
         emit_ir,
         target,
+        timings,
     })
 }
 
@@ -474,9 +482,9 @@ USAGE:
 
 COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
-    check [PATH] [--json] [--profile core|pure|rt] [--locked]
+    check [PATH] [--json] [--profile core|pure|rt] [--locked] [--timings]
                                         Load, resolve and check a package or a `.rv` file
-    build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]
+    build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--timings]
                                         Check, generate Rust and compile it with `rustc`
     run [PATH] [--target TRIPLE] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
@@ -531,12 +539,13 @@ pub fn help_for(topic: &str) -> String {
                    Creates `ravum.toml`, `src/main.rv` (or `src/lib.rv` with --lib) and a\n\
                    `.gitignore` that ignores `.ravum/`. Refuses a non-empty directory\n\
                    unless --force is given; --force overwrites only the generated files.\n",
-        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] [--locked]\n\n\
+        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] [--locked] \
+                    [--timings]\n\n\
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\
                     not fail unless a later lint --deny turns them into errors.\n",
         "build" => "USAGE: ravum-lang build [PATH] [--release] [--target TRIPLE] \
-                    [--emit-rust FILE] [--emit-ir]\n\n\
+                    [--emit-rust FILE] [--emit-ir] [--timings]\n\n\
                     Checks the package, generates safe Rust and compiles it with\n\
                     `rustc --edition 2021 -C overflow-checks=on -C debuginfo=2`.\n\
                     Artifacts: `<package>/.ravum/gen/main.rs`, `<package>/.ravum/bin/<name>`\n\

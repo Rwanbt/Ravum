@@ -12,15 +12,16 @@ pub mod facts;
 pub mod loader;
 mod own;
 pub mod resolve;
+mod traps;
 pub mod typeck;
 pub mod types;
 
-pub use check::check;
+pub use check::{check, check_with_timings, PhaseTimings};
 pub use facts::{
     CallTarget, CheckOptions, CheckResult, CheckedProgram, ConstInfo, Effect, EffectSet, EnumInfo,
     FnSig, MethodTarget, Profile, Resolution, StructInfo, VariantInfo, VariantKind,
 };
-pub use loader::{load_package, LoadedPackage};
+pub use loader::{load_package, load_package_with_parse_cache, LoadedPackage, ParseCache};
 pub use types::Type;
 
 pub use ravum_lang_syntax as syntax;

@@ -25,6 +25,11 @@ Ce répertoire contient les **propositions d'ingénierie** qui ne sont ni des AD
 | [RFC-P2-EXPERIMENTAL-SURFACE](RFC-P2-EXPERIMENTAL-SURFACE.md) | P2-GATE : contrat d'isolation d'une surface expérimentale non activée par défaut (15 MUST, fail-closed) | `PROPOSED` — rien n'est activé | 2026-11-11 | aucun | 023, 029 |
 | [RFC-P2-CONTINUOUS-COMPILATION](RFC-P2-CONTINUOUS-COMPILATION.md) | P2-F : compilation continue — snapshots, cache valide, invalidation, annulation, rejet des résultats obsolètes, activation/rollback | `PROPOSED` — conception seulement | 2026-11-11 | P0-B (identité/ publication atomique) et P0-C (watch fail-closed) en place | 012, 020, 021, 022 |
 | [RFC-D13-STATICITY](RFC-D13-STATICITY.md) | D13 : preuve déterministe de la staticité de `&str` (règle d'origine + règle de stockage) ; rend `a[1]` retournable sans hypothèse | `PROPOSED` — décision du responsable attendue | 2026-11-11 | conformance 456 cas, `E-OWN-REF-ESCAPE` outillé | — |
+| [RFC-OWN-FACTS](RFC-OWN-FACTS.md) | `own.rs` source unique des faits d'usage : `Facts.own`, comparaison debug, retrait de `MovePlanner` | `PROPOSED` · `PENDING_HUMAN_APPROVAL` | 2026-11-13 | étapes A/B implémentées (garde de places en debug) ; étape C `NOT_RUN` | — |
+| [RFC-RT-TRAPS](RFC-RT-TRAPS.md) | Fermer les traps implicites du profil `rt` : index, division, arithmétique, formes explicites | `PROPOSED` · `PENDING_HUMAN_APPROVAL` | 2026-11-13 | gate `rt` + `wrapping_*`/`saturating_*`/`checked_*` ; 13 tests, 5 cas de conformance | — |
+| [RFC-NODE-ID](RFC-NODE-ID.md) | Identité des nœuds : ce qui est déjà vrai par fichier, et la règle de cache qui manque | `PROPOSED` · `PENDING_HUMAN_APPROVAL` | 2026-11-13 | règle déjà respectée (2 tests de stabilité) | — |
+| [RFC-RV-DSP-BLOCK](RFC-RV-DSP-BLOCK.md) | `ravum-lang build --emit dsp-block` : relier le langage au hot swap DSP | `PROPOSED` · `PENDING_HUMAN_APPROVAL` | 2026-11-13 | aucun (ABI/protocole non implémentés) | — |
+| [RFC-DEV-TOOLS](RFC-DEV-TOOLS.md) | Installation locale des outils de vérification Miri et `cargo-mutants` (déjà utilisés en CI) | `PROPOSED` · `PENDING_HUMAN_APPROVAL` | 2026-11-14 | aucun (demande d'outils ; rien installé) | — |
 
 ## Relation avec les autres documents
 

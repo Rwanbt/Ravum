@@ -16,9 +16,33 @@ use ravum_lang_syntax::ast::Program;
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::source::SourceMap;
 use ravum_lang_syntax::span::Span;
+use std::time::{Duration, Instant};
+
+/// Wall-clock durations of the checker phases, for `ravum-lang --timings`.
+///
+/// Additive measurement only: no phase changes behaviour when timings are
+/// collected. `profile` is folded into `effects` (the profile gate runs inside
+/// `effects::infer_and_check`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PhaseTimings {
+    pub resolve: Duration,
+    pub typeck: Duration,
+    pub effects: Duration,
+    pub own: Duration,
+}
 
 /// Vérifie un programme analysé par le frontend.
 pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> CheckResult {
+    check_with_timings(program, sources, options).0
+}
+
+/// `check`, plus the wall-clock duration of each phase.
+pub fn check_with_timings(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+) -> (CheckResult, PhaseTimings) {
+    let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
     if !edition_supported(&options.edition) {
         diags.push(Diagnostic::error(
@@ -31,24 +55,28 @@ pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> 
             ),
         ));
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
     let program = program.clone();
     let mut world = World::build(&program);
     let mut facts = Facts::default();
 
+    let started = Instant::now();
     let resolved = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
+    timings.resolve = started.elapsed();
     if !resolved || diags.has_errors() {
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
+    let started = Instant::now();
     let typed =
         typeck::typecheck_with_world(&program, &mut facts, &world, Some(sources), &mut diags);
+    timings.typeck = started.elapsed();
     if !typed || diags.has_errors() {
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
     // Le monde emprunte le programme : il doit disparaître avant le déplacement
@@ -62,22 +90,37 @@ pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> 
         profile: options.profile,
     };
 
+    let started = Instant::now();
     effects::infer_and_check(
         &checked.program,
         &mut checked.facts,
         options.profile,
         &mut diags,
     );
-    own::check_ownership(&checked, &mut diags);
+    timings.effects = started.elapsed();
+
+    let started = Instant::now();
+    let own_facts = own::check_ownership(&checked, &mut diags);
+    checked.facts.own = own_facts;
+    timings.own = started.elapsed();
+
+    // RFC-RT-TRAPS-1: intrinsic traps are checked for the `rt` profile only.
+    // `core` and `pure` are unchanged (deliberate asymmetry, see the RFC).
+    if options.profile == crate::facts::Profile::Rt {
+        crate::traps::check_rt_traps(&checked, &mut diags);
+    }
 
     diags.sort();
     if diags.has_errors() {
-        CheckResult::failed(diags)
+        (CheckResult::failed(diags), timings)
     } else {
-        CheckResult {
-            checked: Some(checked),
-            diags,
-        }
+        (
+            CheckResult {
+                checked: Some(checked),
+                diags,
+            },
+            timings,
+        )
     }
 }
 

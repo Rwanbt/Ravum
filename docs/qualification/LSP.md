@@ -105,3 +105,67 @@ Un client LSP standard suffit. Exemple pour un client générique :
 
 L'extension VS Code n'est **pas** fournie dans ce dépôt à ce stade ; la
 déclaration ci-dessus ne constitue pas une affirmation de compatibilité testée.
+
+## 7. Cache de parse par fichier (2026-11-13, phase 7)
+
+**Ce qui est implémenté.** `ravum_lang_sema::loader::ParseCache` mémorise le
+résultat du parser par **`(hash FNV-1a 64 du contenu, FileId)`**. La clé inclut le
+`FileId` parce que les `NodeId` et les spans des diagnostics l'embarquent : un
+résultat de parse ne peut être réutilisé que pour le même `FileId`. Le cache est
+borné à `PARSE_CACHE_LIMIT = 512` entrées (au-delà, il se vide) et vit dans
+l'instance `Server` ; `Analysis::run` (API publique) en crée un neuf à chaque
+appel, donc le comportement existant est inchangé.
+
+Ce qui est mis en cache est **le parser seulement** : `resolve`, `typeck`,
+`own` et `effects` restent globaux et recalculés à chaque analyse. Le cache ne
+change aucun diagnostic : il évite de re-parser les fichiers dont le contenu et
+l'identité n'ont pas bougé.
+
+**Sûreté INV-07.** Deux tests d'intégration
+(`crates/ravum-lang-lsp/tests/parse_cache.rs`) :
+
+- `unchanged_file_is_not_reparsed` : deux analyses identiques ⇒ 2 hits / 0 miss
+  supplémentaires ; une édition de `main.rv` ⇒ 1 miss (le fichier édité) et
+  1 hit (`util.rv` inchangé) ;
+- `stale_diagnostics_are_never_reused_for_the_new_buffer` : un programme avec
+  `E-TYP-MISMATCH` est analysé, puis corrigé dans le même cache ; l'analyse
+  corrigée ne contient **aucun** diagnostic de l'ancien buffer.
+
+**Mesure (7.2).** `cargo test -p ravum-lang-lsp --test parse_cache -- --ignored
+--nocapture` → 30 éditions d'une ligne sur `examples/package-demo`, analyse
+**en processus** (transport JSON-RPC et éditeur exclus) :
+
+| Configuration | p50 | p95 |
+|---|---|---|
+| sans cache de parse | 1,140 ms | 1,836 ms |
+| avec cache de parse | **1,078 ms** | **1,362 ms** |
+
+Cible P0-A « diagnostic p95 < 50 ms » : **atteinte au niveau de la phase
+d'analyse** (1,4 ms), avec une marge de plus de 30×. Ce chiffre **ne mesure
+pas** la latence de bout en bout vue par l'éditeur (transport, sérialisation,
+affichage) : elle reste `NOT_RUN` et ne doit pas être confondue avec la cible.
+
+**Limites.** La vérification sémantique reste globale (pas d'incrémentalité de
+`own`/`typeck`) ; le cache ne couvre que le parser ; une seule machine et un seul
+package mesurés ; le gain observé (≈ 25 % de p95) porte sur un package de deux
+fichiers et ne s'extrapole pas à un gros projet.
+
+**Mesure de bout en bout, transport inclus (2026-11-13, round 3).** Le même
+harnais client (`crates/ravum-lang-cli/tests/lsp_client.rs`) mesure 20 éditions
+d'une ligne de `examples/package-demo/app/src/main.rv` en attendant chaque
+`textDocument/publishDiagnostics` :
+
+```
+cargo test -p ravum-lang-cli --test lsp_client -- --ignored --nocapture \
+  end_to_end_diagnostic_latency
+[lsp-e2e] package-demo (2 files), 20 one-line edits, transport included:
+          p50=2.061 ms p95=2.826 ms
+```
+
+Cela inclut le cadrage JSON-RPC, le serveur, l'analyse (cache de parse actif) et
+la publication. La cible P0-A « p95 < 50 ms » est **atteinte sur cette mesure
+locale** (pipes locaux, une machine) ; ce n'est ni une mesure réseau, ni une
+mesure avec un éditeur réel qui rend les diagnostics. Le fichier est édité **en
+mémoire** : aucun fichier du dépôt n'est modifié.
+
+

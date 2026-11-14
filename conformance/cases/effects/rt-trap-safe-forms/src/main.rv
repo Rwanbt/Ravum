@@ -1,0 +1,19 @@
+fn main() {
+    let a = [1, 2, 3];
+    let v = a[1];
+    let nested = [[1, 2], [3, 4]];
+    let n = nested[0][1];
+    let f = 1.5 * 2.0 + 0.5;
+    let w = v.wrapping_add(2);
+    let s = w.saturating_mul(3);
+    let c = s.checked_sub(1);
+    let r = c.unwrap_or(0);
+    let ten: i32 = 10;
+    let d = ten.checked_div(2);
+    let q = ten / 3;
+    let x = d.unwrap_or(q);
+    let five: i32 = 5;
+    let neg = five.wrapping_neg();
+    let rem = ten.checked_rem(3);
+}
+

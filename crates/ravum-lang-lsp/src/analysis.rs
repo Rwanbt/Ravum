@@ -15,7 +15,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use ravum_lang_sema::facts::{CheckOptions, CheckedProgram};
-use ravum_lang_sema::loader::{load_package_with_options, LoadOptions, LoadedPackage};
+use ravum_lang_sema::loader::{
+    load_package_with_parse_cache, LoadOptions, LoadedPackage, ParseCache,
+};
 use ravum_lang_sema::{check, Profile};
 use ravum_lang_syntax::diag::Diagnostic;
 use ravum_lang_syntax::source::SourceMap;
@@ -34,11 +36,24 @@ pub struct Analysis {
 
 impl Analysis {
     pub fn run(root: &Path, overrides: BTreeMap<PathBuf, String>, profile: Profile) -> Self {
+        let mut cache = ParseCache::default();
+        Self::run_with_cache(root, overrides, profile, &mut cache)
+    }
+
+    /// `run`, reusing the parses stored in `cache` for files whose content (and
+    /// `FileId`) did not change. The semantic check still runs globally over the
+    /// whole package: only the parser is skipped.
+    pub fn run_with_cache(
+        root: &Path,
+        overrides: BTreeMap<PathBuf, String>,
+        profile: Profile,
+        cache: &mut ParseCache,
+    ) -> Self {
         let options = LoadOptions {
             locked: false,
             overrides,
         };
-        let mut package = load_package_with_options(root, &options);
+        let mut package = load_package_with_parse_cache(root, &options, cache);
         let mut diags = std::mem::take(&mut package.diags);
         let mut checked = None;
 

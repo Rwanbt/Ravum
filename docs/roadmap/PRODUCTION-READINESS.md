@@ -15,6 +15,12 @@
 > **89,08 % lignes / 88,39 % régions** (sema + codegen), **86,41 % du seul code
 > produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
 > — écart, causes et plan par fichier en §7 bis.
+>
+> **Mise à jour du 2026-11-14 (branche `goal/production-ready`)** : voir §9 et
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+> Chiffres courants : conformance **476 (475 PASS)**, workspace **1 605** tests,
+> couverture **89,47/88,87**, oracle **40 200 programmes**, Miri et mutation
+> rejoués en CI. Cette ligne date l'état ; les gates restent ceux du §9.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -416,3 +422,48 @@ dans ce lot.
   critères de sortie, pas des tâches d'agent.
 - Les estimations de durée sont volontairement absentes : elles n'ont pas été
   mesurées, et un chiffre inventé vaut moins que pas de chiffre.
+
+## 9. Passe 12 — mesures du GOAL (2026-11-13)
+
+> Section **datée**. Elle ne change aucun verdict de gate ; elle met à jour les
+> preuves disponibles pour chaque critère et renvoie au rapport complet
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md)
+> et au registre inchangé [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+
+| Critère | État au SHA final | Preuve ajoutée / manque |
+|---|---|---|
+| R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
+| R2 | fait sur le périmètre mesuré | 476 cas 0 FAIL **et** oracle génératif : 40 200 programmes (4 campagnes, dont le nominal 30 000), 0 divergence |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
+| R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
+| R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |
+| R6 | fait | gardes `forbid`/wrapper prouvées rouges puis vertes |
+| R7 | `PARTIAL` | deux racines identiques (`98852115…`, round 13) sur une seule machine |
+| R8 | `PARTIAL` | couverture **89,07/88,43**, seuils tenus ; 100 % non atteint ; mutation `NOT_RUN` |
+| R9 | `PARTIAL` | p50/p95 par phase publiés ; pas de campagne sous charge |
+| R10 | `PARTIAL` | politique de dépréciation toujours absente |
+| R11 | `PARTIAL` | installateur Windows non rejoué cette session |
+| R12 | différé | aucune clé (D9) |
+| R13 | `BLOCKED` | audit humain indépendant requis |
+| R14 | `PARTIAL` | gouvernance corrigée ; guide utilisateur absent |
+
+Mesures principales : workspace **100 groupes / 1 605 passés / 0 échec /
+5 ignorés** (et **1 603 / 0 / 5** en profil release) ; conformance **476 / 475 PASS / 0 FAIL / 1 SKIP**,
+`build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
+**11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
+cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
+(transport inclus, 20 éditions d'une ligne). Fuzz long rejoué :
+249 054 entrées / 0 échec et 100 000 itérations / 0 échec (rejoué après la
+passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
+**89,47/88,87**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à
+98,66/96,84. **Miri rejoué vert en CI Linux** sur `878e212` (syntax 65, sema
+134, fuzz court) ; **mutation rejouée en CI** (183 mutants / 150 tués / 24
+survivants triés / 9 non viables, portée ciblée). Miri et mutation locaux
+absents. `OwnFacts` : étape A livrée (faits enregistrés,
+2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
+600 programmes + 476 cas), étape C `NOT_RUN`.
+Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
+entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
+(`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste
+`NOT_RUN` (RFC écrite, aucune implémentation partielle).
+

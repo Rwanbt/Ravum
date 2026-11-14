@@ -1195,3 +1195,157 @@ qu'un run vert signifie exactement. `P0-A` est vert **sur son périmètre mesur�
 et l'invariant général reste une observation outillée. `T2` reste `PARTIAL` pour
 la raison indépendante du dénominateur MUST (807 énoncés, 463 atteignables) —
 décision **D10**.
+
+## 25. Passe 12 — oracle différentiel génératif `check` ⇒ `build` (2026-11-13)
+
+> Mesure du chantier `goal/production-ready`, phase 2. Générateur
+> `crates/ravum-lang-codegen/tests/differential_oracle.rs`, exécuté sur la
+> machine de référence (Windows 11 x64, `rustc 1.95.0`).
+
+### 25.1 Ce qui est mesuré
+
+Le générateur est **déterministe** (graine → programme) et produit des programmes
+bien typés **par construction** : 34 gabarits d'instructions typés, couvrant
+structs, enums à payload (unitaire, tuple, champs), tuples, tableaux `[T; N]`
+imbriqués, `Vec<T>`, `String`, `Option<T>`, `Result<T, Error>` (dont `?`), moves
+par projection (champ, élément de tuple, élément de tableau), `match` avec
+liaisons, `if`/`else` en expression, `while`/`loop`/`for`, shadowing, appels de
+fonctions et méthodes (`&self`, `&mut self`, `self`), arguments `&`/`&mut`,
+coercition `&[T; N] → &[T]` et arithmétique flottante. Chaque valeur non-`Copy`
+est consommée au plus une fois : les programmes ne sont pas des programmes
+aléatoires « bien typés par chance ».
+
+Trois propriétés :
+
+1. si `check` accepte, le Rust généré **compile** avec les drapeaux du CLI
+   (`--edition 2021`, `overflow-checks=on`, `debuginfo=2`, `opt-level=0`) ;
+2. le programme compilé en debug et en release a **même sortie et même code de
+   sortie**, sur un sous-échantillon (`RAVUM_DIFF_RELEASE_EVERY=10`) ;
+3. même graine ⇒ **mêmes octets** ; deux passes `check`/codegen indépendantes
+   donnent le **même résultat**.
+
+### 25.2 Résultats
+
+| Campagne | Commande | Résultat exact |
+|---|---|---|
+| Rapide (dans `cargo test`) | `cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast -- --nocapture` | **3 graines × 200 = 600 programmes ; 600 acceptés par `check` (100 %), 0 rejet, 0 divergence**, 177 s ; comparaison debug/release sur 60 programmes |
+| Longue (exécutée localement) | `RAVUM_DIFF_PROGRAMS=1000 cargo test … differential_oracle_long -- --ignored --nocapture` | **3 graines × 1 000 = 3 000 programmes ; 3 000 acceptés (100 %), 0 rejet, 0 divergence**, 1 104 s ; comparaison debug/release sur 300 programmes |
+| Longue (configuration nominale) | idem avec `RAVUM_DIFF_PROGRAMS=10000` | **`NOT_RUN` localement** : coût estimé ≈ 3 h sur cette machine (mesure : 1 000 programmes ≈ 6-7 min). Le job CI `differential-oracle.yml` exécute 10 000 par graine (hebdomadaire + `workflow_dispatch`). |
+
+**Aucune divergence `check`-pass / `build`-fail** n'a été trouvée sur les 3 600
+programmes mesurés. Ce n'est **pas** une preuve d'absence : c'est un taux observé
+de 0 sur un échantillon déterministe et documenté.
+
+### 25.3 Réducteur et suite
+
+Le réducteur (suppression d'instructions une à une tant que la divergence
+persiste) est implémenté et écrit chaque divergence dans
+`target/diff-divergences/`. Il n'a **pas été exercé** par une vraie divergence
+pendant cette passe : son efficacité reste `UNKNOWN`. Deux tests de
+non-vacuité le bordent :
+
+- `oracle_detects_a_deliberately_invalid_generated_file` : le maillon `rustc`
+  rejette bien un fichier invalide (sinon l'oracle serait vert par accident) ;
+- `generator_produces_distinct_programs_for_distinct_seeds` : deux graines
+  produisent deux programmes distincts.
+
+### 25.4 Ce que cette passe ne prouve pas
+
+- Le générateur ne couvre **pas** tout Core 1.0 : pas de `match` imbriqué dans un
+  bras, pas de génériques utilisateurs, pas de modules multiples, pas de FFI,
+  pas de références stockées (elles sont interdites) ; 8 instructions par
+  programme par défaut (`RAVUM_DIFF_STATEMENTS`).
+- La propriété 2 est **échantillonnée** (1 programme sur 10), pas exhaustive.
+- Une seule machine et une seule toolchain ; le mode long nominal (30 000
+  programmes) n'a pas été exécuté localement.
+- Aucune divergence trouvée ne prouve pas l'absence de forme inconnue ; le
+  corpus de conformance et cet oracle restent deux observations complémentaires.
+
+## 26. Passe 13 — générateur étendu à 42 gabarits, campagnes rejouées (2026-11-13)
+
+> Round 5 du GOAL. Le générateur de la §25 est **étendu** (pas restreint) pour
+> couvrir des formes supplémentaires, puis la campagne rapide et la campagne
+> longue locale sont rejouées avec ces formes.
+
+### 26.1 Huit gabarits ajoutés (34 → 42)
+
+1. deux moves d'éléments de **même tableau** (`a[0]` puis `a[1]`) — forme qui
+   avait produit des E0508 avant la passe 9 ;
+2. move du payload `Option<String>` via une liaison `match` ;
+3. move d'un champ de struct **imbriquée**, puis lecture d'un autre champ du
+   parent (`h.p` déplacé, `h.n` lu) ;
+4. move d'un élément d'un **tableau de structs non-`Copy`** ;
+5. `if`/`else` produisant une `String` possédée, puis déplacée ;
+6. move d'un payload d'enum (`Text::Full(String)`) via `match` ;
+7. méthode `&self` appelée sur un **temporaire struct** ;
+8. `String` shadowée dans un bloc imbriqué, puis relâchée.
+
+### 26.2 Résultats (générateur v2, 42 gabarits)
+
+| Campagne | Commande | Résultat exact |
+|---|---|---|
+| Rapide | `cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast -- --nocapture` | **3 × 200 = 600 programmes : 600 acceptés (100 %), 0 rejet, 0 divergence**, 194 s ; comparaison debug/release sur 60 |
+| Longue locale | `RAVUM_DIFF_PROGRAMS=1000 … differential_oracle_long -- --ignored` | **3 × 1 000 = 3 000 programmes : 3 000 acceptés, 0 divergence**, 928 s ; debug/release sur 300 |
+| Longue nominale | `RAVUM_DIFF_PROGRAMS=10000 …` | **`NOT_RUN` localement** (≈ 3 h) ; job CI `differential-oracle.yml` |
+
+Cumul des deux campagnes déterministes (v1 34 gabarits, v2 42 gabarits) :
+**7 200 programmes exécutés, 0 divergence**. Le générateur v2 a produit 100 %
+de programmes acceptés par `check`, donc l'oracle n'est pas devenu vide en
+s'étendant.
+
+### 26.3 Ce que cela ne prouve pas
+
+Les mêmes limites que §25.4, plus : l'extension ne couvre toujours pas les
+modules multiples, la FFI, les génériques utilisateurs ni les références
+stockées (interdites). Le mode nominal reste `NOT_RUN` localement.
+
+### 26.4 Campagne nominale 3 × 10 000 (2026-11-14)
+
+La configuration nominale du §25 a été exécutée **localement**, sur la même
+machine et le même arbre (`goal/production-ready`, `aa88479`), avec le générateur
+v2 :
+
+```
+RAVUM_DIFF_PROGRAMS=10000 cargo test -p ravum-lang-codegen \
+  --test differential_oracle differential_oracle_long -- --ignored --nocapture
+```
+
+| Graine | Programmes | Acceptés | Divergences | Durée |
+|---|---|---|---|---|
+| `0x00524156554d0001` | 10 000 | 10 000 | **0** | 3 022 s |
+| `0x00524156554d0002` | 10 000 | 10 000 | **0** | 2 797 s |
+| `0x00524156554d0003` | 10 000 | 10 000 | **0** | 2 783 s |
+| **Total** | **30 000** | **30 000** | **0** | **8 602 s** (2 h 23) |
+
+`release_every=10` : 3 000 comparaisons debug == release ont été faites.
+**Acceptation 100 %**, donc la campagne nominale n'est pas vide.
+
+Cumul des trois campagnes déterministes (v1, v2, nominale) :
+**37 200 programmes, 0 divergence**.
+
+Limites inchangées : une seule machine, une seule toolchain, 8 instructions par
+programme, sous-ensemble documenté de Core 1.0. La campagne nominale ne prouve
+pas l'absence de divergence sur toutes les formes — elle ferme seulement le
+`NOT_RUN` du mode nominal local.
+
+### 26.5 Campagne 3 × 1 000 après l'extension du garde de places (2026-11-14, round 18)
+
+Le générateur v2 exécute aussi, en debug, le garde de cohérence de l'étape B
+(`Copy`/`Move` **et** projections de place). Après l'extension de ce garde
+(rounds 15-16), la campagne longue locale a été **rejouée** pour vérifier que la
+comparaison de places ne produit pas de faux refus à l'échelle :
+
+| Graine | Programmes | Acceptés | Divergences | Durée |
+|---|---|---|---|---|
+| `0x00524156554d0001` | 1 000 | 1 000 | **0** | 277 s |
+| `0x00524156554d0002` | 1 000 | 1 000 | **0** | 277 s |
+| `0x00524156554d0003` | 1 000 | 1 000 | **0** | 277 s |
+| **Total** | **3 000** | **3 000** | **0** | **830 s** |
+
+`release_every=10` : 300 comparaisons debug == release. Aucun refus de place,
+aucune divergence. Cumul des campagnes de l'oracle (v1, v2, nominale, post-gardes+places) :
+**40 200 programmes, 0 divergence**.
+
+
+
+

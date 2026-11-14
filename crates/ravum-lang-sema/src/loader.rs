@@ -53,6 +53,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
 
 /// The only package edition accepted by this loader (fail-closed).
 pub const MANIFEST_EDITION: &str = "core-1.0";
@@ -181,6 +182,80 @@ pub struct LoadOptions {
     pub overrides: BTreeMap<PathBuf, String>,
 }
 
+/// Per-session parse cache (language server).
+///
+/// Keyed by `(content hash, FileId)`: a parse result embeds the `FileId` in every
+/// `NodeId` and every diagnostic span, so it may only be reused for the same
+/// `FileId`. An unchanged file whose `FileId` did not move is not parsed again.
+/// The cache is bounded — it clears itself at [`PARSE_CACHE_LIMIT`] entries (each
+/// entry holds a full AST), so a long editor session cannot grow without bound.
+/// `hits`/`misses` are exposed for tests and diagnostics.
+#[derive(Debug, Default)]
+pub struct ParseCache {
+    entries: BTreeMap<(u64, FileId), (Program, Vec<Diagnostic>)>,
+    hits: u64,
+    misses: u64,
+}
+
+/// Maximum number of parsed files kept per session.
+pub const PARSE_CACHE_LIMIT: usize = 512;
+
+impl ParseCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    pub fn hits(&self) -> u64 {
+        self.hits
+    }
+
+    pub fn misses(&self) -> u64 {
+        self.misses
+    }
+
+    fn get(&mut self, key: &(u64, FileId)) -> Option<(Program, Vec<Diagnostic>)> {
+        match self.entries.get(key) {
+            Some((program, diags)) => {
+                self.hits += 1;
+                Some((program.clone(), diags.clone()))
+            }
+            None => {
+                self.misses += 1;
+                None
+            }
+        }
+    }
+
+    fn insert(&mut self, key: (u64, FileId), program: Program, diags: Vec<Diagnostic>) {
+        if self.entries.len() >= PARSE_CACHE_LIMIT {
+            self.entries.clear();
+        }
+        self.entries.insert(key, (program, diags));
+    }
+}
+
+/// FNV-1a 64 over the file text: deterministic, dependency-free cache key.
+fn content_hash(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// Everything the CLI needs after a successful (or failed) load.
 #[derive(Debug)]
 pub struct LoadedPackage {
@@ -205,6 +280,10 @@ pub struct LoadedPackage {
     /// there is no dependency).
     pub dependencies_digest: String,
     pub lockfile_state: LockfileState,
+    /// Wall-clock time spent in the parser while loading this package (all
+    /// files, dependencies included). Additive measurement for `--timings`;
+    /// zero when the package was not parsed.
+    pub parse_time: Duration,
     /// Source files registered in `sources`, in load order (display paths).
     pub loaded_files: Vec<String>,
 }
@@ -223,9 +302,19 @@ pub fn load_package(path: &Path) -> LoadedPackage {
 
 /// Load a package with explicit options (currently `--locked`).
 pub fn load_package_with_options(path: &Path, options: &LoadOptions) -> LoadedPackage {
+    let mut cache = ParseCache::default();
+    load_package_with_parse_cache(path, options, &mut cache)
+}
+
+/// Load a package, reusing the parses stored in `cache` for unchanged files.
+pub fn load_package_with_parse_cache(
+    path: &Path,
+    options: &LoadOptions,
+    cache: &mut ParseCache,
+) -> LoadedPackage {
     match fs::metadata(path) {
-        Ok(meta) if meta.is_file() => load_single_file(path, options),
-        Ok(meta) if meta.is_dir() => load_package_dir(path, options),
+        Ok(meta) if meta.is_file() => load_single_file(path, options, cache),
+        Ok(meta) if meta.is_dir() => load_package_dir(path, options, cache),
         Ok(_) => {
             let mut out = LoadedPackage::empty(path);
             err(
@@ -264,6 +353,7 @@ impl LoadedPackage {
             dependencies: Vec::new(),
             dependencies_digest: empty_dependencies_digest(),
             lockfile_state: LockfileState::NotApplicable,
+            parse_time: Duration::ZERO,
             loaded_files: Vec::new(),
         }
     }
@@ -273,7 +363,7 @@ impl LoadedPackage {
 // Single-file mode
 // ---------------------------------------------------------------------------
 
-fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
+fn load_single_file(path: &Path, options: &LoadOptions, cache: &mut ParseCache) -> LoadedPackage {
     let mut out = LoadedPackage::empty(path);
     let canonical = match fs::canonicalize(path) {
         Ok(p) => p,
@@ -314,6 +404,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
     let mut diags = DiagnosticBag::new();
     let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
     let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut parse_time = Duration::ZERO;
 
     let program = {
         let mut ctx = CrateCtx {
@@ -325,6 +416,8 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
             file_ids: &mut file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut synthetic,
+            parse_time: &mut parse_time,
+            parse_cache: cache,
             overrides: &options.overrides,
         };
         load_crate_root(&mut ctx, &canonical).map(|module| Program {
@@ -334,6 +427,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
     };
 
     out.loaded_files = display_files(&sources);
+    out.parse_time = parse_time;
     if !diags.has_errors() {
         out.program = program;
     }
@@ -346,7 +440,7 @@ fn load_single_file(path: &Path, options: &LoadOptions) -> LoadedPackage {
 // Package mode
 // ---------------------------------------------------------------------------
 
-fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
+fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache) -> LoadedPackage {
     let mut out = LoadedPackage::empty(input);
     let root = match fs::canonicalize(input) {
         Ok(p) => p,
@@ -373,7 +467,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
         // single-file mode. More than one is ambiguous and stays an error.
         match top_level_rv_files(&root) {
             Ok(mut files) if files.len() == 1 => {
-                return load_single_file(&files.remove(0), options);
+                return load_single_file(&files.remove(0), options, cache);
             }
             Ok(files) if files.len() > 1 => {
                 err(
@@ -470,9 +564,17 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
     }
 
     // 3. Crate roots. Errors above make the program unusable; skip parsing then.
+    let mut parse_time = Duration::ZERO;
     if !diags.has_errors() {
-        let (program, lib_program, kind) =
-            load_crates(&root, &graph, &mut sources, &mut diags, options);
+        let (program, lib_program, kind) = load_crates(
+            &root,
+            &graph,
+            &mut sources,
+            &mut diags,
+            &mut parse_time,
+            cache,
+            options,
+        );
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
         if !diags.has_errors() {
@@ -483,6 +585,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions) -> LoadedPackage {
     }
 
     out.loaded_files = display_files(&sources);
+    out.parse_time = parse_time;
     out.sources = sources;
     out.diags = diags;
     out
@@ -1964,9 +2067,13 @@ struct CrateCtx<'a> {
     sources: &'a mut SourceMap,
     diags: &'a mut DiagnosticBag,
     file_ids: &'a mut BTreeMap<PathBuf, FileId>,
-    /// Files already included once in *this* crate (duplicate detection).
+    // Files already included once in *this* crate (duplicate detection).
     loaded: BTreeSet<PathBuf>,
     synthetic: &'a mut u32,
+    /// Accumulated wall-clock time spent in the parser (see `parse_time`).
+    parse_time: &'a mut Duration,
+    /// Per-session parse cache (see [`ParseCache`]).
+    parse_cache: &'a mut ParseCache,
     /// Canonical path -> in-memory text (editor buffers not yet saved).
     overrides: &'a BTreeMap<PathBuf, String>,
 }
@@ -1976,6 +2083,8 @@ fn load_crates(
     graph: &DepGraph,
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
+    parse_time: &mut Duration,
+    parse_cache: &mut ParseCache,
     options: &LoadOptions,
 ) -> (Option<Program>, Option<Program>, Option<CrateKind>) {
     let src = root.join("src");
@@ -2035,6 +2144,8 @@ fn load_crates(
         diags,
         &mut file_ids,
         &mut synthetic,
+        parse_time,
+        parse_cache,
         options,
     );
     (program, None, Some(kind))
@@ -2050,6 +2161,8 @@ fn load_crate_program(
     diags: &mut DiagnosticBag,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
     synthetic: &mut u32,
+    parse_time: &mut Duration,
+    parse_cache: &mut ParseCache,
     options: &LoadOptions,
 ) -> Option<Program> {
     let mut ctx = CrateCtx {
@@ -2061,6 +2174,8 @@ fn load_crate_program(
         file_ids,
         loaded: BTreeSet::new(),
         synthetic,
+        parse_time,
+        parse_cache,
         overrides: &options.overrides,
     };
     let module = load_crate_root(&mut ctx, root_file)?;
@@ -2146,9 +2261,23 @@ fn load_file_module(
 ) -> Option<Module> {
     let file_id = ensure_source(ctx, canonical)?;
     let text = ctx.sources.file(file_id)?.text.clone();
-    let parsed = parse_file(file_id, &text);
-    ctx.diags.extend(parsed.diags);
-    let mut module = parsed.program.root;
+    let key = (content_hash(text.as_bytes()), file_id);
+    let (program, parsed_diags) = match ctx.parse_cache.get(&key) {
+        Some((program, diags)) => (program, diags),
+        None => {
+            let parse_started = Instant::now();
+            let parsed = parse_file(file_id, &text);
+            *ctx.parse_time += parse_started.elapsed();
+            let diags = parsed.diags.into_vec();
+            ctx.parse_cache
+                .insert(key, parsed.program.clone(), diags.clone());
+            (parsed.program, diags)
+        }
+    };
+    for diagnostic in parsed_diags {
+        ctx.diags.push(diagnostic);
+    }
+    let mut module = program.root;
     module.name = name;
     let file_dir = canonical
         .parent()
@@ -2461,6 +2590,8 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
             file_ids: &mut *ctx.file_ids,
             loaded: BTreeSet::new(),
             synthetic: &mut *ctx.synthetic,
+            parse_time: &mut *ctx.parse_time,
+            parse_cache: &mut *ctx.parse_cache,
             overrides: ctx.overrides,
         };
         let module = load_crate_root(&mut dep_ctx, &lib_root);

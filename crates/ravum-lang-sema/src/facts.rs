@@ -7,6 +7,7 @@
 use crate::types::Type;
 use ravum_lang_syntax::ast::{NodeId, Program, Receiver};
 use ravum_lang_syntax::diag::DiagnosticBag;
+use ravum_lang_syntax::span::Span;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -297,6 +298,50 @@ impl FileInfo {
     }
 }
 
+/// How one expression uses its value (RFC-OWN-FACTS-1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UseKind {
+    Move,
+    Copy,
+    Borrow,
+    BorrowMut,
+}
+
+/// Index projection of a place: a literal index, or an opaque one that may
+/// equal any other index (conservative, Q-OWN-5).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ProjectionIndex {
+    Lit(u128),
+    Opaque,
+}
+
+/// One projection on a place, mirroring `own.rs`'s internal `Step`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Projection {
+    Deref,
+    Field(String),
+    Tuple(u32),
+    Index(ProjectionIndex),
+}
+
+/// A place as recorded for one expression: the binding identified by its
+/// declaration span (stable within a checked program) and its projections.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnPlace {
+    pub binding: Span,
+    pub steps: Vec<Projection>,
+}
+
+/// Ownership decisions taken by `own.rs`, recorded for the backend
+/// (RFC-OWN-FACTS-1, step A). Nothing reads them yet.
+#[derive(Debug, Clone, Default)]
+pub struct OwnFacts {
+    /// For every expression with a value use: move, copy, or borrow.
+    pub use_kind: BTreeMap<NodeId, UseKind>,
+    /// For every expression that is a place: binding + projections.
+    pub place: BTreeMap<NodeId, OwnPlace>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
     /// Type of every expression node id.
@@ -338,6 +383,13 @@ pub struct Facts {
     /// Test functions in declaration order.
     pub test_fns: Vec<NodeId>,
     pub main_fn: Option<NodeId>,
+    /// Ownership decisions recorded by `own.rs` (RFC-OWN-FACTS-1, step A).
+    ///
+    /// Nothing reads them yet: they are produced so a later backend can stop
+    /// re-deriving moves/copies/borrows (`emit.rs`'s `MovePlanner`). Additive
+    /// measurement of a decision the checker already takes; see
+    /// `docs/rfc/RFC-OWN-FACTS.md`.
+    pub own: OwnFacts,
 }
 
 #[derive(Debug, Clone)]

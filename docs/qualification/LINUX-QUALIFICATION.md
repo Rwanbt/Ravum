@@ -1,16 +1,16 @@
 # Qualification Linux — méthode et statut
 
-> **Statut global : `PASS` sur le run [43026622427](https://github.com/Rwanbt/Ravum/actions/runs/43026622427)
-> (SHA `c67f17e`, 2026-11-11).** Les 8 jobs du workflow ont un résultat explicite
-> sur `ubuntu-latest` : `workspace-tests`, `conformance`, `smoke`, `install`,
-> `miri`, `fuzz`, `wasm` sont **PASS** ; `tsan` est **SKIP explicite
-> `NOT_APPLICABLE`** (pas de threads/async dans Core 1.0). Sur le même SHA,
-> l'API GitHub compte **12 runs de workflow, tous verts** (12/12, vérification du
-> Lead) ; le run Linux est vérifié job par job au §11. Le premier run vert
-> historique ([42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985),
-> SHA `78c8f72`) reste consigné au §10 pour l'historique, il n'est plus la
-> référence. WSL local reste hors service et n'est **pas** une preuve ; la
-> qualification repose sur une machine indépendante.
+> **Statut global : `PASS` sur le dernier rejeu
+> [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)
+> (SHA `878e212`, 2026-11-14, branche `goal/production-ready`) — voir §12.**
+> Le run de référence antérieur reste
+> [43026622427](https://github.com/Rwanbt/Ravum/actions/runs/43026622427)
+> (SHA `c67f17e`, 2026-11-11, §11) : 8 jobs à résultat explicite sur
+> `ubuntu-latest` (`workspace-tests`, `conformance`, `smoke`, `install`, `miri`,
+> `fuzz`, `wasm` **PASS** ; `tsan` **SKIP `NOT_APPLICABLE`**). Le premier run
+> vert historique ([42675213985](https://github.com/Rwanbt/Ravum/actions/runs/42675213985),
+> SHA `78c8f72`) reste au §10. WSL local reste hors service et n'est **pas** une
+> preuve ; la qualification repose sur une machine indépendante.
 >
 > **Deux échecs ont précédé ce run** (runs `43020732371` et `43023874117`) : deux
 > défauts de **nos propres tests**, révélés par Linux, pas des défauts du
@@ -395,3 +395,41 @@ job par job : chaque affirmation garde son run et son SHA.
 - **Pas de distribution** : l'installateur est testé sous préfixe temporaire,
   sans signature, sans SBOM, sans provenance vérifiable.
 - Les points 2–9 du §7 restent valides ; ce run ne les lève pas.
+
+## 12. Rejeu du 2026-11-14 — run `43562818570` (SHA `878e212`)
+
+Le workflow ne se déclenche pas sur `goal/production-ready` (triggers `main`,
+`dev`, `feat/**`, `fix/**`) ; il a été **dispatché manuellement** :
+
+```
+gh workflow run linux-qual.yml --ref goal/production-ready
+```
+
+Objectif : qualifier Linux et **Miri** sur le code des phases 4-5 (`OwnFacts`,
+`traps.rs`, garde d'ownership étendu aux places), qui n'existait pas au run de
+référence `c67f17e`.
+
+| Job | Résultat exact |
+|---|---|
+| Workspace Linux | **100 groupes, 1 601 passés / 0 échec / 7 ignorés** |
+| Conformance | **476 cas : 474 PASS / 0 FAIL / 2 SKIP**, `build_verified: true` |
+| Smoke | **31 PASS / 0 FAIL / 0 NOT_RUN** ; stdlib **64/64** ; CLI **13/13** ; flags **20/20** |
+| Miri | syntax **65 passés**, sema **134 passés** (dont 13 de `traps.rs`), fuzz court **2 tests** — 0 échec |
+| Fuzz smoke | succès |
+| Installer contract | succès (préfixe temporaire, `--version`) |
+| wasm32-wasip1 | succès (build + exécution via Node WASI) |
+| TSan | `skipped` — `NOT_APPLICABLE` |
+
+Différences avec Windows, assumées et nommées :
+
+- Linux **ignore 7 tests** (contre 5 sous Windows, tests spécifiques au système
+  de fichiers) et saute **2 cas de conformance** au lieu d'un :
+  `security/dependency-absolute-windows` et `security/reserved-windows-name`,
+  tous deux Windows-only. Un SKIP n'est jamais un PASS.
+- Miri reste un **contrôle dynamique borné** aux bibliothèques ; il ne remplace
+  ni l'audit externe ni une preuve, et Miri local reste `NOT_RUN` (composant
+  absent, R5).
+
+Limites : une seule image (`ubuntu-latest`), un seul SHA ; pas de performance,
+pas de TSan, pas de WASI qualifié, pas de distribution signée. Ce run ne lève
+aucun des points 2–9 du §7.

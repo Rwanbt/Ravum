@@ -146,3 +146,34 @@ Deux changements par rapport à la passe 4 :
 Le pas d'étape `repro` refuse par ailleurs un code de sortie 0 qui ne
 contiendrait pas deux digests de 64 caractères identiques : un script qui ne
 mesure rien sort aussi 0, et ce cas ne doit pas passer pour un succès.
+
+## Mesure complémentaire — rounds 13/14 (2026-11-14, SHA `662f63d`)
+
+Rejeu après les phases 4-5 (`OwnFacts`, `traps.rs`, garde de places), sur la
+machine de référence (Windows 11 x64, `rustc 1.95.0`), avec deux racines et deux
+`target/` distincts :
+
+```text
+pwsh -File scripts/repro-check.ps1
+repro-check: A = 988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A
+repro-check: B = 988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A
+repro-check: PASS — the two builds are bit-for-bit identical
+```
+
+Lecture :
+
+1. Le digest a changé par rapport aux passes 4/8 (`847DF0D1…`) : le **code** a
+   changé. Ce qui est prouvé est l'**égalité entre deux racines**, pas la
+   stabilité d'un hash entre versions. Un hash qui ne bougerait jamais malgré un
+   changement de code serait au contraire suspect.
+2. La mesure reste **mono-machine** ; la CI `qualification-evidence.yml` continue
+   d'exécuter son propre `repro-check` sur `windows-latest` avec son propre
+   digest (`C281A035…` mesuré en passe 8), et la reproductibilité
+   **inter-machines** n'est pas revendiquée.
+3. Le même rejeu a rafraîchi le SBOM (`46b65d9f…`) et l'installateur Windows
+   (`bf55aab9…`, deux désinstallations idempotentes) — voir le rapport final §3
+   et §4.4.
+
+Limites inchangées : une machine, une toolchain, un linker ; `-C
+link-arg=/Brepro` et `SOURCE_DATE_EPOCH=0` sont des conditions du résultat, pas
+des options décoratives.

@@ -2821,6 +2821,124 @@ fn audit_ffi_rejects_non_ffi_safe_types() {
 }
 
 // ---------------------------------------------------------------------------
+// 16 bis. Trust-base guards (design §1 and §3.7 bis, FFI-6).
+//
+// The memory-safety net of the B path is `rustc` under `forbid(unsafe_code)`:
+// a program without `extern` must keep the crate-level `forbid`, even when the
+// Ravum source uses an `unsafe { ... }` block (it lowers to a plain Rust block).
+// A program with `extern` relaxes it to `deny` and must contain exactly one
+// generated `unsafe` construct per wrapper, never one outside those wrappers.
+// ---------------------------------------------------------------------------
+
+/// Lines that contain a real `unsafe` construct (`unsafe {` or `unsafe fn`)
+/// outside a generated `rvm_ffi_wrap_*` function body. Attribute lines such as
+/// `#![deny(unsafe_code)]` / `#[allow(unsafe_code)]` are not constructs.
+fn unsafe_constructs_outside_generated_wrappers(code: &str) -> Vec<String> {
+    let mut in_wrapper = false;
+    let mut depth: i32 = 0;
+    let mut offenders = Vec::new();
+    for line in code.lines() {
+        if line.contains("fn rvm_ffi_wrap_") {
+            in_wrapper = true;
+        }
+        let is_construct = line.contains("unsafe {") || line.contains("unsafe fn");
+        if is_construct && !in_wrapper {
+            offenders.push(line.trim().to_string());
+        }
+        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+        if in_wrapper && depth <= 0 {
+            in_wrapper = false;
+            depth = 0;
+        }
+    }
+    offenders
+}
+
+#[test]
+fn audit_no_unsafe_construct_outside_the_generated_ffi_wrapper() {
+    if skip("audit_no_unsafe_construct_outside_the_generated_ffi_wrapper") {
+        return;
+    }
+    let code = generate_source(
+        "ffi-wrapper-guard",
+        r#"use std::io;
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+fn apply(x: i32) -> i32 {
+    let first = unsafe { abs(x) };
+    let second = unsafe { abs(first) };
+    return second;
+}
+fn main() {
+    let n = apply(-9);
+    io::println(&n.to_string());
+}
+"#,
+    );
+    assert!(
+        code.contains("#![deny(unsafe_code)]"),
+        "an FFI program keeps the crate-level deny:\n{code}"
+    );
+    assert!(
+        !code.contains("#![allow(unsafe_code)]"),
+        "the allow must stay local to the wrapper:\n{code}"
+    );
+    let wrappers = code.matches("fn rvm_ffi_wrap_").count();
+    assert_eq!(wrappers, 1, "one extern function => one wrapper:\n{code}");
+    assert_eq!(
+        code.matches("unsafe {").count(),
+        wrappers,
+        "one wrapper => one unsafe construct, no more:\n{code}"
+    );
+    let offenders = unsafe_constructs_outside_generated_wrappers(&code);
+    assert!(
+        offenders.is_empty(),
+        "unsafe construct(s) outside the generated wrapper: {offenders:?}\n{code}"
+    );
+    let built = must_compile(&code, "ffi-wrapper-guard");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "9\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_unsafe_block_without_extern_keeps_forbid_and_emits_no_unsafe() {
+    if skip("audit_unsafe_block_without_extern_keeps_forbid_and_emits_no_unsafe") {
+        return;
+    }
+    let code = generate_source(
+        "unsafe-no-extern",
+        r#"use std::io;
+fn main() {
+    let n = unsafe { 40 + 2 };
+    io::println(&n.to_string());
+}
+"#,
+    );
+    assert!(
+        code.contains("#![forbid(unsafe_code)]"),
+        "a program without `extern` must keep `#![forbid(unsafe_code)]`:\n{code}"
+    );
+    assert!(
+        !code.contains("#![deny(unsafe_code)]"),
+        "forbid must not be relaxed without `extern`:\n{code}"
+    );
+    assert_eq!(
+        code.matches("unsafe {").count(),
+        0,
+        "a Ravum `unsafe` block without FFI lowers to a plain Rust block:\n{code}"
+    );
+    let built = must_compile(&code, "unsafe-no-extern");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "42\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+// ---------------------------------------------------------------------------
 // 16. P0-A divergences: `&str` positions, `mut` parameters, array-element moves.
 //     Each test drives the *real* frontend (loader + checker) so the input is a
 //     program `ravum-lang check` accepts, then compiles the emitted Rust and runs
