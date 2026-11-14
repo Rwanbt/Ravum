@@ -2,8 +2,8 @@
 
 Le gate compare un export `lang-timings -CheckOnly` à la référence versionnée.
 Ces tests figent les règles qui pourraient être « ajustées » pour obtenir du
-vert : plancher, facteur, exemple manquant, export non-check. Ils n'exécutent
-aucun compilateur.
+vert : planchers p50/p95, facteur, exemple manquant, export non-check. Ils
+n'exécutent aucun compilateur.
 """
 
 from __future__ import annotations
@@ -18,21 +18,15 @@ sys.path.insert(0, str(REPO / "tools"))
 import timings_gate  # noqa: E402
 
 
-def example(name: str, cold_ms: float, edit_ms: float = None, *, phases: bool = False) -> dict:
-    edit_ms = cold_ms if edit_ms is None else edit_ms
-    mode = {
-        "total": {"p50": cold_ms, "p95": cold_ms},
-    }
-    if phases:
-        mode["typeck"] = {"p50": cold_ms / 3.0, "p95": cold_ms / 2.0}
+def example(name: str, cold_p50: float, cold_p95: float = None, edit_p50: float = None, edit_p95: float = None) -> dict:
+    cold_p95 = cold_p50 if cold_p95 is None else cold_p95
+    edit_p50 = cold_p50 if edit_p50 is None else edit_p50
+    edit_p95 = cold_p95 if edit_p95 is None else edit_p95
     return {
         "name": name,
         "check": {
-            "cold": mode,
-            "edit": {
-                "total": {"p50": edit_ms, "p95": edit_ms},
-                **({"typeck": {"p50": edit_ms / 3.0, "p95": edit_ms / 2.0}} if phases else {}),
-            },
+            "cold": {"total": {"p50": cold_p50, "p95": cold_p95}},
+            "edit": {"total": {"p50": edit_p50, "p95": edit_p95}},
         },
     }
 
@@ -48,23 +42,51 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(violations, [])
         self.assertEqual(warnings, [])
 
-    def test_a_coarse_regression_fails(self):
+    def test_a_coarse_regression_fails_both_statistics(self):
         _rows, violations, _warnings = timings_gate.evaluate(
-            document(example("hello", 5.0)), document(example("hello", 500.0)), total_floor_ms=200.0
+            document(example("hello", 5.0)),
+            document(example("hello", 500.0)),
+            p50_floor_ms=100.0,
+            p95_floor_ms=500.0,
         )
-        self.assertEqual(len(violations), 4)
-        self.assertTrue(any("hello/cold/p95" in violation for violation in violations))
+        # p50 fails; p95 = 500 is exactly at the loose ceiling.
+        self.assertEqual(len(violations), 2)
+        self.assertTrue(any("hello/cold/p50" in violation for violation in violations))
 
-    def test_the_floor_absorbs_a_slow_runner(self):
-        # 5 ms * 3 = 15 ms, below the 200 ms floor: a 30 ms runner passes.
+    def test_the_p50_floor_absorbs_a_slow_runner(self):
         _rows, violations, _warnings = timings_gate.evaluate(
-            document(example("hello", 5.0)), document(example("hello", 30.0)), total_floor_ms=200.0
+            document(example("hello", 5.0)),
+            document(example("hello", 30.0)),
+            p50_floor_ms=100.0,
+            p95_floor_ms=500.0,
         )
         self.assertEqual(violations, [])
 
-    def test_the_floor_cannot_be_used_to_hide_a_large_regression(self):
+    def test_the_p50_floor_cannot_be_used_to_hide_a_large_regression(self):
         _rows, violations, _warnings = timings_gate.evaluate(
-            document(example("hello", 5.0)), document(example("hello", 201.0)), total_floor_ms=200.0
+            document(example("hello", 5.0)),
+            document(example("hello", 150.0)),
+            p50_floor_ms=100.0,
+            p95_floor_ms=500.0,
+        )
+        self.assertTrue(violations)
+
+    def test_a_single_p95_outlier_is_tolerated_because_p95_is_the_max(self):
+        # Real shape of a shared runner: p50 stable at 2 ms, one 238 ms outlier.
+        _rows, violations, _warnings = timings_gate.evaluate(
+            document(example("fib", 2.0, 6.0)),
+            document(example("fib", 2.3, 238.0)),
+            p50_floor_ms=100.0,
+            p95_floor_ms=500.0,
+        )
+        self.assertEqual(violations, [])
+
+    def test_a_catastrophic_outlier_fails(self):
+        _rows, violations, _warnings = timings_gate.evaluate(
+            document(example("fib", 2.0, 6.0)),
+            document(example("fib", 2.3, 900.0)),
+            p50_floor_ms=100.0,
+            p95_floor_ms=500.0,
         )
         self.assertTrue(violations)
 

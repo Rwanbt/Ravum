@@ -51,7 +51,7 @@ recopié sans sa commande.
 | Miri | rejoué **vert en CI Linux** sur `e58ed35` (syntax + sema, 9 min 23) ; Windows partiel ; local absent | rapport `GOAL-CONSOLIDATION-2-REPORT.md` §7 |
 | Mutation | rejouée en CI le 2026-11-14 (run 43622868110) : **219 / 180 / 30 / 9**, dont la première campagne `emit.rs` (36/30/6) ; 24 survivants historiques triés + 6 nouveaux triés (§12) | [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) §12 |
 | Reproductibilité | Deux runners **distincts**, même digest `9b7f16cc…cdf` (run 43622599083) ; local Windows ≠ Linux reste documenté | [`REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md) §« deux runners » |
-| Performance | Alarme CI `check` verte (run 43622599048), plafond `max(200 ms, ×3)` | [`PERFORMANCE.md`](../qualification/PERFORMANCE.md) §5 |
+| Performance | Alarme CI `check` verte (run 43622599048), plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)` | [`PERFORMANCE.md`](../qualification/PERFORMANCE.md) §5 |
 | Sécurité `unsafe` | `forbid` sur 4 crates, `deny` + 2 `allow` inventoriés sur le CLI ; `tools/unsafe_audit.py` en CI (7 tests) | [`UNSAFE-INVENTORY.md`](../ffi/UNSAFE-INVENTORY.md) |
 | Qualification Linux | 7 jobs verts sur `878e212` (workspace, conformance, smoke, Miri, fuzz, installateur, wasm32) ; contrat installateur élargi ajouté le 2026-11-14 (CI) | rapport §4.5 et [`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md) |
 

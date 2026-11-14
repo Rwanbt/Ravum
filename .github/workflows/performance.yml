@@ -91,7 +91,7 @@ jobs:
       - name: Apply the coarse ceilings (fail-closed)
         shell: pwsh
         run: |
-          python tools/timings_gate.py --baseline docs/qualification/timings-baseline.json --input target/lang-timings/ci.json --factor 3 --total-floor-ms 200
+          python tools/timings_gate.py --baseline docs/qualification/timings-baseline.json --input target/lang-timings/ci.json --factor 3 --p50-floor-ms 100 --p95-floor-ms 500
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::performance alarm: at least one coarse ceiling is exceeded (see the table above)"; exit 1 }
           exit 0
 

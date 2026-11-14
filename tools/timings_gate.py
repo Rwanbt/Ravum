@@ -8,13 +8,21 @@ committed reference `docs/qualification/timings-baseline.json`. For every
 example and every check mode ("cold", "edit") it compares the total p50 and p95
 against a *ceiling*:
 
-    ceiling = max(total_floor_ms, baseline_value * factor)
+    ceiling = max(floor(stat), baseline_value * factor)
 
-The floor absorbs the difference between the reference machine and a shared
-CI runner (and ordinary noise); the factor absorbs a slower CPU. The gate is
-therefore a **coarse alarm**: it catches an order-of-magnitude regression, not
-a 20 % drift. The full JSON export is uploaded by the workflow so that the
-trend can be inspected, and the baseline can be refreshed deliberately.
+Two floors, because the two statistics do not carry the same noise:
+
+* **p50** — `max(100 ms, baseline * 3)`: the stable signal. A sustained
+  regression raises it.
+* **p95** — `max(500 ms, baseline * 3)`: with 10 samples the nearest-rank p95
+  is the maximum, so it is fail-on-one-outlier. Observed on a shared runner:
+  p50 = 2.3 ms, p95 = 238 ms for the same example. This ceiling only catches a
+  catastrophic stall.
+
+The gate is therefore a **coarse alarm**: it catches an order-of-magnitude
+regression, not a 20 % drift. The full JSON export is uploaded by the workflow
+so that the trend can be inspected, and the baseline can be refreshed
+deliberately.
 
 This is not a performance budget: `docs/qualification/PERFORMANCE.md` publishes
 the measured figures and their conditions; a green gate says "no gross
@@ -86,14 +94,24 @@ def evaluate(
     measured: dict,
     *,
     factor: float = 3.0,
-    total_floor_ms: float = 200.0,
+    p50_floor_ms: float = 100.0,
+    p95_floor_ms: float = 500.0,
 ) -> tuple[list[dict], list[str], list[str]]:
-    """Apply the ceilings; return (rows, violations, warnings)."""
+    """Apply the ceilings; return (rows, violations, warnings).
+
+    The two statistics do not carry the same noise. With 10 samples, the
+    nearest-rank p95 is the **maximum**: one scheduler or filesystem outlier
+    fails it (observed on a shared runner: 238 ms while the p50 was 2.3 ms).
+    The gate therefore uses a tight ceiling on p50, the stable signal of a
+    sustained regression, and a deliberately loose ceiling on p95 that only
+    catches a catastrophic stall.
+    """
     if factor <= 0:
         raise ValueError("factor must be > 0")
-    if total_floor_ms < 0:
-        raise ValueError("total_floor_ms must be >= 0")
+    if p50_floor_ms < 0 or p95_floor_ms < 0:
+        raise ValueError("the floors must be >= 0")
 
+    floors = {"p50": p50_floor_ms, "p95": p95_floor_ms}
     expected = _examples(baseline, "baseline")
     actual = _examples(measured, "measurement")
 
@@ -111,7 +129,8 @@ def evaluate(
             for stat in STATS:
                 base_value = _total(reference, name, mode, stat, "baseline")
                 measured_value = _total(candidate, name, mode, stat, "measurement")
-                ceiling = max(total_floor_ms, base_value * factor)
+                floor = floors[stat]
+                ceiling = max(floor, base_value * factor)
                 rows.append(
                     {
                         "example": name,
@@ -126,7 +145,7 @@ def evaluate(
                 if measured_value > ceiling:
                     violations.append(
                         f"{name}/{mode}/{stat}: measured {measured_value:.3f} ms > ceiling "
-                        f"{ceiling:.3f} ms (baseline {base_value:.3f} ms, floor {total_floor_ms:.3f} ms, factor {factor:g})"
+                        f"{ceiling:.3f} ms (baseline {base_value:.3f} ms, floor {floor:.3f} ms, factor {factor:g})"
                     )
 
     for name in sorted(set(actual) - set(expected)):
@@ -138,7 +157,14 @@ def evaluate(
     return rows, violations, warnings
 
 
-def _report(rows: list[dict], violations: list[str], warnings: list[str], factor: float, floor: float) -> None:
+def _report(
+    rows: list[dict],
+    violations: list[str],
+    warnings: list[str],
+    factor: float,
+    p50_floor_ms: float,
+    p95_floor_ms: float,
+) -> None:
     width = max((len(row["example"]) for row in rows), default=7)
     print(f"{'example':<{width}}  mode  stat   baseline     measured      ceiling  verdict")
     for row in rows:
@@ -148,7 +174,10 @@ def _report(rows: list[dict], violations: list[str], warnings: list[str], factor
             f"{row['baseline_ms']:>10.3f}  {row['measured_ms']:>10.3f}  {row['ceiling_ms']:>12.3f}  {verdict}"
         )
     print()
-    print(f"ceiling = max({floor:g} ms, baseline * {factor:g}); {len(rows)} comparisons")
+    print(
+        f"ceiling = max(floor, baseline * {factor:g}), floor p50={p50_floor_ms:g} ms "
+        f"p95={p95_floor_ms:g} ms; {len(rows)} comparisons"
+    )
     for warning in warnings:
         print(f"timings_gate: warning: {warning}")
     if violations:
@@ -165,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", required=True, type=Path, help="reference JSON (docs/qualification/timings-baseline.json)")
     parser.add_argument("--input", required=True, type=Path, help="measurement JSON from scripts/lang-timings.ps1 -CheckOnly")
     parser.add_argument("--factor", type=float, default=3.0, help="multiplier applied to the baseline (default 3.0)")
-    parser.add_argument("--total-floor-ms", type=float, default=200.0, help="absolute ceiling floor in ms (default 200)")
+    parser.add_argument("--p50-floor-ms", type=float, default=100.0, help="absolute p50 ceiling floor in ms (default 100)")
+    parser.add_argument("--p95-floor-ms", type=float, default=500.0, help="absolute p95 ceiling floor in ms (default 500)")
     args = parser.parse_args(argv)
 
     baseline = _read(args.baseline)
@@ -174,9 +204,10 @@ def main(argv: list[str] | None = None) -> int:
         baseline,
         measured,
         factor=args.factor,
-        total_floor_ms=args.total_floor_ms,
+        p50_floor_ms=args.p50_floor_ms,
+        p95_floor_ms=args.p95_floor_ms,
     )
-    _report(rows, violations, warnings, args.factor, args.total_floor_ms)
+    _report(rows, violations, warnings, args.factor, args.p50_floor_ms, args.p95_floor_ms)
     return 1 if violations else 0
 
 

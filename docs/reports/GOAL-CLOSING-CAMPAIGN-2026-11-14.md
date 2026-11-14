@@ -17,7 +17,7 @@
 | Chantier | Avant | Après cette campagne | Statut honnête |
 |---|---|---|---|
 | **R7 — reproductibilité inter-machines** | digest comparé à lui-même sur une machine | **deux runners `ubuntu-latest` distincts** (`runner_id` 1000097957/58) produisent le même digest ; reconfirmé sur un second commit avec deux autres runners | **fait sur son périmètre** (même image + toolchain) ; ni inter-OS ni inter-toolchain |
-| **R9 — non-régression suivie** | p50/p95 publiés, aucun contrôle répété | alarme CI `performance.yml` + `tools/timings_gate.py` (plafond `max(200 ms, ×3)`), premier run vert | `PARTIAL` : `check` seul, pas de budget, ni `build` ni `watch` |
+| **R9 — non-régression suivie** | p50/p95 publiés, aucun contrôle répété | alarme CI `performance.yml` + `tools/timings_gate.py` (plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)`), premier run vert ; le réglage initial `max(200 ms, ×3)` sur p50/p95 a été corrigé après un outlier de runner | `PARTIAL` : `check` seul, pas de budget, ni `build` ni `watch` |
 | **R10 — politique de dépréciation** | absente | [`DEPRECATION-POLICY.md`](../release/DEPRECATION-POLICY.md) (`PROPOSED`, 626 lignes) : 7 interfaces, versionnement, cycle, registre | `PARTIAL` : politique écrite, **non ratifiée** ; aucun avertissement outillé, aucun CHANGELOG |
 | **R11 — installateur Linux public** | installé par la CI, sans contrat public | [`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md) + `scripts/install-contract.sh` ; exécuté par `linux-qual.yml` : **25 vérifications shell + 30 invariants du manifeste** | `PARTIAL` : reste artefact distribuable (SBOM+manifeste) et signature D9 |
 | **R14 — guide et notes de version** | guide absent | [`GETTING-STARTED.md`](../guide/GETTING-STARTED.md) (767 lignes), [`RELEASE-NOTES-0.1.0-DRAFT.md`](../release/RELEASE-NOTES-0.1.0-DRAFT.md) ; audit de véracité partiel | `PARTIAL` : audit exhaustif non rejoué |
@@ -137,6 +137,15 @@ Sur `b172248`, le job `gate-contracts` avait échoué **avant exécution** à ca
 d'un nom d'étape YAML contenant `: ` (interprété comme une clé). Le nom a été
 corrigé (`—`), le workflow s'est exécuté et est vert sur `0f28e43` : c'était un
 défaut de configuration, pas un test en échec.
+
+**Défaut de gate trouvé puis corrigé.** Le premier réglage de l'alarme
+(`max(200 ms, ×3)` appliqué à p50 **et** p95) a échoué sur un run partagé à
+cause de deux outliers isolés (224 ms, 238 ms) alors que le p50 du même exemple
+valait 2,3 ms (run 43629253306). Avec 10 échantillons, le p95 au rang le plus
+proche **est le maximum** : ce réglage était instable. Les plafonds sont
+désormais `p50 max(100 ms, ×3)` (signal stable d'une régression soutenue) et
+`p95 max(500 ms, ×3)` (blocage catastrophique) ; les tests du gate couvrent les
+deux cas (outlier toléré, vraie régression refusée).
 
 ## 7. Ce que ce rapport ne prouve pas
 

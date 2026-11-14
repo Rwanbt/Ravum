@@ -84,10 +84,15 @@ par mesure, chronomètre `check`/`build`, échantillonne la working set toutes l
 - `.github/workflows/performance.yml` : sur `windows-latest`, reconstruit le CLI
   en debug, rejoue la même mesure (`-Runs 10`), puis applique
   `tools/timings_gate.py`.
-- **Plafond** : `max(200 ms, valeur de référence × 3)` sur les totaux p50/p95 de
-  chaque exemple et de chaque mode. C'est une **alarme grossière**, pas un
-  budget : le plancher de 200 ms absorbe la différence entre la machine de
-  référence et un runner partagé, et le facteur 3 absorbe un CPU plus lent.
+- **Plafonds** : `p50 ≤ max(100 ms, valeur de référence × 3)` et
+  `p95 ≤ max(500 ms, valeur de référence × 3)` sur les totaux de chaque exemple
+  et de chaque mode. Deux planchers parce que les deux statistiques n'ont pas le
+  même bruit : avec 10 échantillons, le p95 au rang le plus proche **est le
+  maximum**. Le premier réglage (`max(200 ms, ×3)` sur les deux) a échoué sur un
+  run partagé à cause de deux outliers isolés (224 ms et 238 ms) alors que le
+  p50 du même exemple valait 2,3 ms (run 43629253306) : c'était un défaut du
+  gate, pas une régression. Le p50 porte désormais le signal ; le p95 ne sert
+  qu'à attraper un blocage catastrophique.
 - Le gate ne tourne que lorsqu'un crate du langage, le script de mesure, le gate
   ou la baseline changent (filtre `paths`), pas sur une PR documentaire seule.
 - L'export complet est uploadé à chaque exécution (`lang-timings-ci`) : une
