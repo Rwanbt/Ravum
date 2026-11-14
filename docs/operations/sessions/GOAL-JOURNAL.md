@@ -818,6 +818,26 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   fermé par la PR.
 - Aucun changement de code ni de dépôt hormis cette entrée de journal.
 
+## Entrée 2026-11-14 (round 22) — RFC-DEV-TOOLS-1 : débloquer les deux NOT_RUN locaux
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `docs/rfc/RFC-DEV-TOOLS.md` (neuf) |
+| Statut | `PROPOSED` — `PENDING_HUMAN_APPROVAL` |
+| Objet | autoriser l'installation **locale** de Miri (composant rustup) et de `cargo-mutants 27.1.0`, outils déjà utilisés par la CI |
+
+- Les deux derniers `NOT_RUN` **locaux** (Miri, mutation) ne sont pas bloqués par
+  le code : ils le sont par R5, qui interdit d'ajouter un outil sans RFC. La RFC
+  expose le périmètre exact, les versions épinglées, les commandes prévues (avec
+  les mêmes exclusions `--skip` et filtres `-F` que la CI), les risques et les
+  options (statu quo / installation).
+- **Aucune installation n'a été faite** : la décision appartient au responsable.
+  En attendant, Miri et mutation restent `NOT_RUN` localement, avec les preuves
+  CI datées (runs 43562818570 et 43565189293).
+- Rapport : §5 (RFC ajoutée), §6 (les deux lignes renvoient à la RFC), §7
+  (ratification). Rien d'autre n'est modifié.
+
+
 
 
 

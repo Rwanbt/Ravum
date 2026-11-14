@@ -289,7 +289,10 @@ absent localement (R5) ; la preuve est CI.
    points ouverts : décalages/négation, sort de `pure`.
 4. `RFC-NODE-ID-1` — règle « aucun cache indexé par `FileId` ».
 5. `RFC-RV-DSP-BLOCK-1` — ABI de bloc généré, `unsafe` confiné, digest de schéma.
-6. FFI expérimentale (D7) — contrats ABI/lifetime/unwinding toujours non ratifiés
+6. `RFC-DEV-TOOLS-1` — installation **locale** de Miri et de `cargo-mutants
+   27.1.0` pour fermer les deux `NOT_RUN` locaux ; outils déjà utilisés par la
+   CI, hors produit et hors gates. Statut `PROPOSED`.
+7. FFI expérimentale (D7) — contrats ABI/lifetime/unwinding toujours non ratifiés
    (préexistant à cette session).
 
 ## 6. `BLOCKED` et `NOT_RUN` (raison et tentatives)
@@ -302,8 +305,8 @@ absent localement (R5) ; la preuve est CI.
 | Phase 5 (traps `rt`) | `PARTIAL` : 5.1-5.3 faits, 5.4 `NOT_RUN` | 5.4 exigerait une API de slice sûre (`get`/`set`) + son codegen, hors RFC | gate + 10 tests unitaires + 5 cas ; `examples/dsp-gain-iir` inchangé |
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | **fait** | exécuté localement au round 8 (`aa88479`) : 3 × 10 000, **0 divergence**, 8 602 s ; 3 000 comparaisons debug == release | commande §4, détail `T2-FINDINGS.md` §26.4 |
-| Miri | **CI Linux vert, local `NOT_RUN`** | Composant `cargo-miri` absent de la toolchain locale (l'installer serait un outil supplémentaire, R5). Le workflow `linux-qual.yml` a été déclenché manuellement sur `878e212` : job Miri **vert** (syntax 65 tests, sema 134 tests, fuzz court 2 tests). Miri reste une vérification bornée, pas une preuve. |
-| Mutation | **CI verte, local `NOT_RUN`** | `cargo-mutants` absent localement (R5) ; `mutation.yml` dispatché manuellement sur `b5298db` : **183 mutants, 150 tués, 24 survivants triés, 9 non viables**, identiques au run de référence. Portée **ciblée** sur `own.rs`, `resolve.rs`, `typeck.rs` ; pas un score de crate. |
+| Miri | **CI Linux vert, local `NOT_RUN`** | Composant `cargo-miri` absent de la toolchain locale (l'installer serait un outil supplémentaire, R5). Le workflow `linux-qual.yml` a été déclenché manuellement sur `878e212` : job Miri **vert** (syntax 65 tests, sema 134 tests, fuzz court 2 tests). Miri reste une vérification bornée, pas une preuve. Installation locale demandée par `RFC-DEV-TOOLS-1`. |
+| Mutation | **CI verte, local `NOT_RUN`** | `cargo-mutants` absent localement (R5) ; `mutation.yml` dispatché manuellement sur `b5298db` : **183 mutants, 150 tués, 24 survivants triés, 9 non viables**, identiques au run de référence. Portée **ciblée** sur `own.rs`, `resolve.rs`, `typeck.rs` ; pas un score de crate. Installation locale demandée par `RFC-DEV-TOOLS-1`. |
 | Couverture à 100 % | `NOT_RUN` | 2 126 lignes non couvertes (10 fichiers) ; `codegen/lib.rs` clos à 100/100 ; limites structurelles documentées | mesure + gap + [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
 
@@ -313,8 +316,9 @@ absent localement (R5) ; la preuve est CI.
    prélude). Dossier prêt : `docs/audit/AUDIT-BRIEF.md`.
 2. **T12** : Go/No-Go humain.
 3. **D9** : custody de la clé de signature et publication d'`allowed_signers`.
-4. **Ratifier ou refuser** les quatre RFC de cette session (ordre de priorité :
-   `RFC-OWN-FACTS-1`, `RFC-RV-DSP-BLOCK-1`, `RFC-RT-TRAPS-1`, `RFC-NODE-ID-1`).
+4. **Ratifier ou refuser** les RFC de cette session (ordre de priorité :
+   `RFC-OWN-FACTS-1`, `RFC-RV-DSP-BLOCK-1`, `RFC-RT-TRAPS-1`, `RFC-NODE-ID-1`,
+   `RFC-DEV-TOOLS-1`).
 5. **D10** : dénominateur MUST (807 vs 463 atteignables) **et** objectif de
    couverture 100 % — la limite des régions `fmt::Error` est documentée dans
    [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md),
