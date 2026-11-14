@@ -564,6 +564,28 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   toutes les formes possibles.
 - Aucun changement du compilateur ; mise à jour des documents seulement.
 
+## Entrée 2026-11-14 (round 9) — `codegen/lib.rs` clos à 100 % de couverture
+
+| Champ | Valeur |
+|---|---|
+| Tâche | 9.2 / D10 (couverture par fichier) |
+| Fichier | `crates/ravum-lang-codegen/src/lib.rs`, `tools/coverage_thresholds.json` |
+| Résultat | **100,00 % lignes / 100,00 % régions** sur ce fichier ; plancher relevé de 75/65 à **100/100** |
+
+- Le seul code non couvert de `codegen/lib.rs` était
+  `CodegenError::Display::fmt` ; le test
+  `tests::codegen_error_displays_its_message` l'exerce (y compris via
+  `&dyn std::error::Error`).
+- Mesure après ajout : workspace `sema+codegen` **89,31 / 88,69** (contre
+  89,29/88,67), **2 130** lignes non couvertes (19 925 − 17 795), **10 fichiers**
+  sous l'objectif 100 % (contre 11) ; `traps.rs` inchangé à 93,37/89,39.
+- Le plancher de `codegen/lib.rs` passe à 100/100 dans
+  `tools/coverage_thresholds.json` ; `--check` passe. C'est le premier fichier
+  du périmètre mesuré qui atteint l'objectif ratifié D10 par des tests, sans
+  exclusion.
+- Workspace : **1 601 tests** passés (1 ajouté).
+
+
 
 
 

@@ -833,7 +833,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 600 passés / 0 échec / 5 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 601 passés / 0 échec / 5 ignorés**, exit 0 |
 | `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 475 cas, 0 désaccord**, test négatif vert |
 | Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `failed=0`, `build_verified: true` |
 | Traps `rt` (RFC-RT-TRAPS-1) | `cargo test -p ravum-lang-sema --lib traps` + 5 cas `effects/rt-trap-*` | **10/10** tests unitaires (index, division, arithmétique binaire **et composée**, négation, décalages, agrégats/flux, flottants, formes explicites) ; 4 compile-fail `E-EFF-PROFILE`, 1 compile-pass ; `core`/`pure` inchangés |
@@ -841,7 +841,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Registre | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis** |
 | Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |
 | MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 ouverte, inchangée |
-| Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-round6.json` puis `coverage_report.py --check` | **89,29 % lignes / 88,67 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 133** lignes non couvertes (19 917 − 17 784) ; `traps.rs` **93,37/89,39** (non listé au ratchet) |
+| Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-round9.json` puis `coverage_report.py --check` | **89,31 % lignes / 88,69 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 130** lignes non couvertes (19 925 − 17 795) ; `codegen/lib.rs` **100/100** (plancher relevé à 100), `traps.rs` 93,37/89,39 |
 | Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | générateur v2 **42 gabarits** : rapide **600** (0 divergence), long local **3 000** (0 divergence), **nominal 3 × 10 000 = 30 000 programmes locaux, 0 divergence, 8 602 s** ; cumul **37 200 programmes, 0 divergence**, 100 % acceptés |
 | Timings | `pwsh -File scripts/lang-timings.ps1 -Runs 20` | `check` p95 froid **1,3-8,1 ms**, édition **11,0-49,8 ms** ; `build` p50 **179-331 ms**, `rustc` **97,1-99,3 %** — [`LANG-TIMINGS.md`](../reports/LANG-TIMINGS.md) |
 | Incrémental | A/B `RAVUM_INCREMENTAL=1` | gain **nul ou négatif** (jusqu'à +44 %) ; opt-in, **désactivé par défaut** |
