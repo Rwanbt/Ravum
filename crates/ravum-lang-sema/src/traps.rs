@@ -623,11 +623,14 @@ fn pat_binds(pat: &Pat, name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::check::{check, check_with_entry};
     use crate::facts::{CheckOptions, Profile};
-    use ravum_lang_syntax::ast::{ItemKind, Module, NodeId, Program};
+    use ravum_lang_syntax::ast::{ItemKind, Module, NodeId, Program, StmtKind};
+    use ravum_lang_syntax::diag::DiagnosticBag;
     use ravum_lang_syntax::parser;
     use ravum_lang_syntax::source::SourceMap;
+    use ravum_lang_syntax::span::Span;
 
     fn check_rt(source: &str) -> Vec<String> {
         let mut sources = SourceMap::new();
@@ -695,6 +698,284 @@ mod tests {
 
     fn is_trap(codes: &[String]) -> bool {
         codes.iter().any(|code| code == "E-EFF-PROFILE")
+    }
+
+    // -- coverage drivers -------------------------------------------------
+    //
+    // The bounded-index rule is a pure AST analysis: the rebinding scan and the
+    // pattern walker do not need types. These drivers exercise every shape they
+    // can see, including shapes the type checker rejects (inclusive ranges, open
+    // bounds), so the per-file coverage ratchet keeps its floor.
+
+    fn parse_program(source: &str) -> Program {
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        assert!(
+            parsed.diags.is_empty(),
+            "parse diagnostics: {}",
+            parsed.diags.render(&sources)
+        );
+        parsed.program
+    }
+
+    fn first_fn_body(program: &Program) -> &Block {
+        match &program.root.items[0].kind {
+            ItemKind::Fn(function) => &function.body,
+            other => panic!("expected a function, got {other:?}"),
+        }
+    }
+
+    fn checked_of(source: &str) -> CheckedProgram {
+        let program = parse_program(source);
+        let mut sources = SourceMap::new();
+        sources.add("main.rv", source);
+        let result = check(
+            &program,
+            &sources,
+            &CheckOptions {
+                profile: Profile::Core,
+                edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+            },
+        );
+        result.checked.expect("the driver fixture must check")
+    }
+
+    fn first_for<'a>(block: &'a Block) -> Option<(&'a Pat, &'a Expr, &'a Block)> {
+        for stmt in &block.stmts {
+            if let StmtKind::Expr { expr, .. } = &stmt.kind {
+                if let ExprKind::For { pat, iter, body } = &expr.kind {
+                    return Some((pat, iter, body));
+                }
+            }
+        }
+        if let Some(tail) = block.tail.as_ref() {
+            if let ExprKind::For { pat, iter, body } = &tail.kind {
+                return Some((pat, iter, body));
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn rebinding_scan_visits_every_expression_and_pattern_shape() {
+        let source = "fn main() -> i32 {\n\
+            let mut x: i32 = 1;\n\
+            let z: i32;\n\
+            let mut a = [1, 2, 3];\n\
+            x = 2;\n\
+            x += 1;\n\
+            f(x);\n\
+            x.m(1);\n\
+            x.f;\n\
+            x.0;\n\
+            a[x];\n\
+            a = [1, 2, 3];\n\
+            -x;\n\
+            x as usize;\n\
+            g()?;\n\
+            x + 1;\n\
+            if x > 0 { x = 1; } else { x = 2; }\n\
+            while x > 0 { x = 0; }\n\
+            loop { break; }\n\
+            for j in 0..2usize { x = j; }\n\
+            for k in ..2usize { }\n\
+            for (m, n) in 0..2usize { x = m; }\n\
+            for i in 0..2usize { z = i; }\n\
+            if x > 0 { x = 1; }\n\
+            let b = { x = 1; 2 };\n\
+            unsafe { x = 2; };\n\
+            let t = (x, 1);\n\
+            let arr = [x, 1];\n\
+            let rep = [x; 2];\n\
+            let s = S { a: x };\n\
+            return 0;\n\
+            match x {\n\
+                0 => { x = 1; },\n\
+                (p, q) => { x = p; },\n\
+                E::V(w) => { x = w; },\n\
+                F { a: i } => { x = i; },\n\
+                E::UNIT => { x = 0; },\n\
+                _ => { }\n\
+            }\n\
+        }\n";
+        let program = parse_program(source);
+        let body = first_fn_body(&program);
+        let mut found = false;
+        scan_block(body, "i", None, &mut found);
+        assert!(found, "the nested `for i` must bind the scanned name");
+        let mut found = false;
+        scan_block(body, "x", Some("a"), &mut found);
+        assert!(found, "the scan must see the assignment to `x`");
+        let mut found = false;
+        scan_block(body, "", Some("a"), &mut found);
+        assert!(found, "the scan must see the assignment to `a`");
+        let mut found = false;
+        scan_block(body, "nobody", None, &mut found);
+        assert!(!found);
+        let tail = body.tail.as_ref().expect("the match is the tail");
+        let ExprKind::Match { arms, .. } = &tail.kind else {
+            panic!("the tail must be the match");
+        };
+        assert!(
+            arms.iter().any(|arm| pat_binds(&arm.pat, "i")),
+            "the struct-variant pattern must bind `i`"
+        );
+        assert!(arms.iter().any(|arm| pat_binds(&arm.pat, "w")));
+        assert!(arms.iter().any(|arm| pat_binds(&arm.pat, "p")));
+        for arm in arms {
+            let _ = pat_binds(&arm.pat, "nobody");
+        }
+    }
+
+    #[test]
+    fn safe_loop_rejects_every_non_recognized_shape() {
+        let program = parse_program(
+            "fn main() {\n\
+                for i in 0..=2usize { }\n\
+                for j in 1..3usize { }\n\
+                for k in ..2usize { }\n\
+                for (m, n) in 0..2usize { }\n\
+                for o in 0..a.len(0) { }\n\
+            }\n",
+        );
+        let body = first_fn_body(&program);
+        let trivial = checked_of("fn main() { }");
+        let empty = Block {
+            id: 1,
+            stmts: Vec::new(),
+            tail: None,
+            span: Span::dummy(),
+        };
+        let mut diags = DiagnosticBag::new();
+        let ctx = Ctx {
+            checked: &trivial,
+            diags: &mut diags,
+            loops: Vec::new(),
+        };
+        for stmt in &body.stmts {
+            let StmtKind::Expr { expr, .. } = &stmt.kind else {
+                continue;
+            };
+            let ExprKind::For { pat, iter, body } = &expr.kind else {
+                continue;
+            };
+            let _ = ctx.safe_loop(pat, iter, body);
+        }
+        // A range with an open end cannot be parsed outside a `for`, and a `for`
+        // requires both bounds, so the visitor's refusal is exercised with the
+        // AST the parser would have built if it allowed one.
+        let (pat, iter, _) = first_for(first_fn_body(&program)).expect("a for loop");
+        let ExprKind::Range { start, .. } = &iter.kind else {
+            panic!("expected the range");
+        };
+        let start = start.clone().expect("the range start");
+        let end_none = Expr {
+            id: 999_998,
+            kind: ExprKind::Range {
+                start: Some(start),
+                end: None,
+                inclusive: false,
+            },
+            span: Span::dummy(),
+        };
+        assert!(ctx.safe_loop(pat, &end_none, &empty).is_none());
+        // The scan has to see the same open end (`None` branch).
+        let mut found = false;
+        scan_expr(&end_none, "i", None, &mut found);
+        assert!(!found);
+    }
+
+    #[test]
+    fn trap_walker_covers_method_bodies_unsafe_and_collection_loops() {
+        // An `impl` method body is walked like a free function.
+        assert!(is_trap(&check_rt(
+            "struct S { x: i32 }\n\
+             impl S { fn m(self) -> i32 { return self.x + 1; } }\n\
+             fn main() { let s = S { x: 1 }; let v = s.m(); }"
+        )));
+        // `unsafe { … }` is walked even though the effect gate already refuses it.
+        assert!(is_trap(&check_rt("fn main() { let x = unsafe { 1 }; }")));
+        // A `let` without initializer and an `if` without `else`.
+        let codes = check_rt("fn main() { let z: i32; if false { } else { } }");
+        assert!(!is_trap(&codes), "no trap expected: {codes:?}");
+        // `for` over a collection: the iterator is not a range. The `Vec`
+        // allocation is already a profile error, so only the walk matters here.
+        let _ =
+            check_rt("fn main() { let mut v: Vec<i32> = Vec::new(); v.push(1); for x in v { } }");
+        // `0..v.len()` on a `Vec`: the form is recognized but `Vec` is refused.
+        assert!(is_trap(&check_rt(
+            "fn main() { let mut v: Vec<i32> = Vec::new(); v.push(1); \
+             for i in 0..v.len() { let x = v[i]; } }"
+        )));
+        // `0..a.len()` where the receiver is a field: not a simple path.
+        assert!(is_trap(&check_rt(
+            "struct H { xs: Vec<i32> }\n\
+             fn main() { let mut v: Vec<i32> = Vec::new(); v.push(1); let h = H { xs: v }; \
+             for i in 0..h.xs.len() { let x = h.xs[i]; } }"
+        )));
+    }
+
+    #[test]
+    fn an_entry_inside_an_inline_module_is_found_and_scoped() {
+        let source = "mod dsp {\n\
+                        fn process(a: [i32; 4]) -> i32 { let mut s: i32 = 0; \
+                        for i in 0..4usize { s = s.wrapping_add(a[i]); } return s; }\n\
+                      }\n\
+                      fn main() { let y: i32 = 1 + 1; }";
+        assert!(is_trap(&check_rt(source)), "main's bare `+` is a trap");
+        let codes = check_rt_entry(source, "process");
+        assert!(
+            codes.iter().all(|code| !code.starts_with('E')),
+            "the module entry must scope the gate: {codes:?}"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "is not in the fixture")]
+    fn an_unknown_test_entry_panics() {
+        let _ = check_rt_entry("fn main() { }", "missing");
+    }
+
+    #[test]
+    fn defensive_type_helpers_stay_fail_closed() {
+        use crate::types::Type;
+
+        assert_eq!(integer_bits(&Type::Bool), None);
+        assert!(!is_integer(None));
+        assert!(!is_signed_integer(Some(&Type::Bool)));
+        assert!(!is_signed_integer(None));
+        assert!(!positive_int_literal(&Expr {
+            id: 1,
+            kind: ExprKind::Unit,
+            span: Span::dummy(),
+        }));
+
+        let checked = checked_of("fn main() { let a: i32 = 1; let b = a; }");
+        let body = first_fn_body(&checked.program);
+        let StmtKind::Let(first) = &body.stmts[0].kind else {
+            panic!("expected a let");
+        };
+        let int_literal = first.init.as_ref().expect("the literal");
+        let StmtKind::Let(second) = &body.stmts[1].kind else {
+            panic!("expected a let");
+        };
+        let path = second.init.as_ref().expect("the path");
+        assert_eq!(array_len(&checked, path), None);
+        assert!(!is_array_or_slice(&checked, path));
+
+        let mut without_type = checked.clone();
+        without_type.facts.expr_types.remove(&path.id);
+        assert_eq!(array_len(&without_type, path), None);
+
+        let mut unknown = path.clone();
+        unknown.id = 999_999;
+        assert!(!safe_shift(&unknown, int_literal, &checked));
+
+        let mut float_typed = checked.clone();
+        float_typed.facts.expr_types.insert(path.id, Type::F64);
+        assert!(!safe_shift(path, int_literal, &float_typed));
+        assert!(safe_shift(path, int_literal, &checked));
     }
 
     #[test]

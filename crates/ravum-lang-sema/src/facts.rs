@@ -468,9 +468,8 @@ pub fn file_infos(sources: &ravum_lang_syntax::source::SourceMap) -> Vec<FileInf
         })
         .collect();
     for file in sources.files() {
-        if let Some(slot) = infos.get_mut(file.id as usize) {
-            *slot = source_file_info(file);
-        }
+        // `needed` is `max(id) + 1`, so the slot selected for `file.id` exists.
+        infos[file.id as usize] = source_file_info(file);
     }
     infos
 }
