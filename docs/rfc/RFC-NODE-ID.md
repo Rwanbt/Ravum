@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-NODE-ID-1` |
-| Statut | **PROPOSED** — `PENDING_HUMAN_APPROVAL` pour la règle de cache (§4) |
+| Statut | **PROPOSED** pour la règle de cache (§4), encore `PENDING_HUMAN_APPROVAL` ; le **modèle d'identité** (§3) est **APPROVED** par le responsable, 2026-11-14 (S2) |
 | Date | 2026-11-13 |
 | Auteur | agent de développement (session GOAL) |
 | Portée | `ravum-lang-syntax` (`NodeId`), `ravum-lang-sema` (`Facts`), LSP, futurs caches |
@@ -18,6 +18,14 @@
 > ([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
 > `D-2026-11-14-2`). La règle de cache du §4 n'est pas affectée ; les exemples
 > de §2 doivent être relus avec le layout u64 avant ratification.
+
+> **Ratification partielle du 2026-11-14 (S2).** Le **modèle d'identité** —
+> `NodeId = u64`, 32 bits `FileId` + 32 bits compteur par fichier, plafond
+> **65 536** fichiers — est **approuvé par le responsable, 2026-11-14** et
+> l'amendement ci-dessus devient le texte de référence. La **règle de cache du
+> §4** n'est **pas** couverte par S2 et reste `PENDING_HUMAN_APPROVAL`.
+> Enregistrement :
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 ## 1. Constat mesuré (phase 6.1)
 

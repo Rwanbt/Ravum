@@ -1,6 +1,11 @@
 # Décisions humaines encore ouvertes — dossier unique (Core 1.0)
 
-> **Statut : `PROPOSED` — dossier d'instruction. Aucune décision n'est prise ici.**
+> **Statut : dossier d'instruction et d'enregistrement. Aucune décision n'est
+> prise par ce document.** État au **2026-11-14 (vague 3)** : **15 fiches sont
+> tranchées** par les décisions du responsable S1–S8 et A1–A5 (dont une
+> partiellement, `RFC-NODE-ID`), **6 restent ouvertes** (`D2`, `D4`, `D9`,
+> `T12`, `D-2026-11-14-6`, `D-2026-11-14-7`). Le texte des décisions est recopié
+> dans [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 > Ce document rassemble, en un seul endroit, les décisions qui **n'appartiennent
 > pas aux agents** : ratification, audit indépendant, clé de signature,
 > dénominateurs de preuve, contrats de plateforme, périmètres et texte du mandat.
@@ -19,7 +24,8 @@
 > re-vérifiés avant toute décision.
 >
 > **Aucun `PROVED`, aucune maturité revendiquée.** Les statuts employés sont
-> `PENDING_HUMAN_APPROVAL`, `PARTIAL`, `NOT_RUN`, `À VÉRIFIER`, `PROPOSED`.
+> `PENDING_HUMAN_APPROVAL`, `PARTIAL`, `NOT_RUN`, `À VÉRIFIER`, `PROPOSED`, et
+> pour les enregistrements du 2026-11-14 `APPROUVÉ`, `REPORTÉ`, `REFUSÉ`.
 >
 > **Feuille de signature rapide** :
 > [`SIGN-OFF-2026-11-14.md`](../decision/SIGN-OFF-2026-11-14.md) — huit textes
@@ -75,11 +81,45 @@ méthode du test de puissance (`D-2026-11-14-1`) et le dénominateur de preuve
 (`D10`). Le reste bloque la **revendication production**, une **release publiée**,
 ou la **stabilité d'un contrat**.
 
+### 1 bis. Décisions tranchées le 2026-11-14 (vague 3)
+
+Décisions du responsable, **transmises le 2026-11-14** ; texte intégral :
+[`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md). Chaque fiche
+concernée porte son encadré de statut en §2.
+
+| Fiche | Décision | État |
+|---|---|---|
+| `AGENTS.md` | **S1** | **APPROUVÉE** — révision du 2026-11-13 en vigueur |
+| `D-2026-11-14-2` | **S2** | **APPROUVÉE** — `NodeId` u64 32/32, plafond 65 536 |
+| `RFC-NODE-ID` | **S2** | **PARTIELLE** — modèle d'identité ratifié ; règle de cache §4 encore `PENDING_HUMAN_APPROVAL` |
+| `RFC-RT-TRAPS-1` | **S3** | **APPROUVÉE** — §2 complet + amendement `--rt-entry` |
+| `D-2026-11-14-3` | **S3** | **APPROUVÉE** — amendement T6 tel que spécifié |
+| `RFC-OWN-FACTS-1` | **A1** | **APPROUVÉE** — étape C comprise, aux conditions de l'agent E |
+| `D7` | **S4** | **APPROUVÉE pour la frontière scalaire** — `SAFETY.md` C-FFI-1 à 10 ; `i128`/`u128` retirés ; C-FFI-4 hors contrat |
+| `RFC-RV-DSP-BLOCK-1` | **A2** | **REPORTÉE à la 1.1** — hors périmètre 1.0, ne pas implémenter |
+| `D2-VOIE-C` | **A3** | **TRANCHÉE** — voie B retenue pour 1.0, voie C hors 1.0 |
+| `D11` | **A5** | **RÉSOLUE** — `G-5.14` / `G-6.48` attribués, `Q-GRAM-11` mis à jour |
+| `D-2026-11-14-1` | **S6** | **APPROUVÉE** — inverses exigés, 3 graines × 2 000, score sur 13 |
+| `D10` | **S5** | **RÉSOLUE** — objectif 100 % du code produit, mutation cible, 344 MUST en dette tracée |
+| `D-2026-11-14-4` | **S7** | **APPROUVÉE** — normalisation limitée à `__rv_root_<id>` et `rvm_ffi_<id>` |
+| `D-2026-11-14-5` | **S8** | **REFUSÉE telle que proposée** — cible retenue : p95 < 50 ms jusqu'à 1 000 lignes, p95 ≤ 150 ms à 5 110 lignes en release, linéarité en CI |
+| `RFC-DEV-TOOLS-1` | **A4** | **APPROUVÉE** — Miri et `cargo-mutants` locaux autorisés |
+
+**Restent ouvertes** (aucune décision du 2026-11-14 ne les couvre) : `D2`
+(ratification du socle et de `RFC-D2`), `D4` (audit externe), `D9` (clé de
+signature), `T12` (Go/No-Go), `D-2026-11-14-6` (clôture T6/T9) et
+`D-2026-11-14-7` (politique de dépréciation et installateur Linux).
+
 ## 2. Fiches
 
 ### A. Mandat
 
 #### `AGENTS.md` — Approuver la révision 2026-11-13 du mandat
+
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S1).** La révision du
+> `2026-11-13` remplace la version antérieure ; le bandeau
+> `PENDING_HUMAN_APPROVAL` est retiré d'`AGENTS.md`. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : la révision du `2026-11-13` de `AGENTS.md`, qui se
   déclare `PENDING_HUMAN_APPROVAL` et corrige des faits périmés (« le langage
@@ -109,6 +149,11 @@ ou la **stabilité d'un contrat**.
 ### B. Contrats de plateforme et de langage
 
 #### `D-2026-11-14-2` — `NodeId` u64 / plafond 65 536 + requalification de `modules/file-limit`
+
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S2).** `NodeId = u64`
+> (32 bits `FileId` + 32 bits index) et le plafond de **65 536** fichiers sont
+> contractuels ; `modules/file-limit` reste requalifié `compile-pass`.
+> Enregistrement : [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : (Q1) `NodeId = u64` (32 bits de `FileId`, 32 bits de
   compteur par fichier) et `MAX_SOURCE_FILES` 200 → **65 536** sont-ils acceptés
@@ -144,6 +189,12 @@ ou la **stabilité d'un contrat**.
 
 #### `RFC-NODE-ID` — Ratifier la règle « aucun cache indexé par `FileId` »
 
+> **Décision du responsable, 2026-11-14 — PARTIELLE (S2).** Le **modèle
+> d'identité** (`NodeId = u64` 32/32, plafond 65 536 fichiers) est **ratifié** ;
+> la **règle de cache du §4** n'est pas couverte par S2 et reste
+> `PENDING_HUMAN_APPROVAL`. Le statut de la RFC est mis à jour en conséquence.
+> Enregistrement : [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : le modèle d'identité du §3 et la règle de cache du §4
   (cache indexé par `(chemin, hash de contenu)`, jamais par `FileId` ; résultats
   obsolètes jamais publiés, INV-07 ; références inter-fichiers par chemin de
@@ -175,6 +226,11 @@ ou la **stabilité d'un contrat**.
 
 #### `RFC-RT-TRAPS-1` — Ratifier la règle des traps du profil `rt`
 
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S3).** Le §2 complet et
+> l'amendement `--rt-entry` (portée par point d'entrée, deux formes d'indexation
+> bornée) sont ratifiés ; la RFC passe `ACCEPTED`. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : ratifier le §2 (indexation, division/reste, `+ - *`,
   négation, décalages produisent l'effet `panic` donc `E-EFF-PROFILE` en `rt`,
   sauf formes exemptées ; flottants et `as` exemptés ; `wrapping_*`,
@@ -204,6 +260,12 @@ ou la **stabilité d'un contrat**.
   l'indexation dynamique de `Vec`.
 
 #### `D-2026-11-14-3` — Ratifier l'amendement T6 de `RFC-RT-TRAPS-1` (`--rt-entry`)
+
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S3).** L'amendement est
+> ratifié tel que spécifié : portée par point d'entrée nommé, deux formes
+> d'indexation bornée, entrée inconnue refusée ; les limites du §7 sont
+> consignées comme obligations écrites. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : ratifier l'amendement du 2026-11-14 — (i) les règles `rt`
   (effets interdits **et** traps) s'appliquent aux seules fonctions **atteignables**
@@ -238,6 +300,13 @@ ou la **stabilité d'un contrat**.
 
 #### `RFC-OWN-FACTS-1` — Approuver `OwnFacts`, et l'étape C (suppression du `MovePlanner`)
 
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (A1).** `OwnFacts` **et
+> l'étape C** sont approuvés ; l'étape C reste soumise aux conditions de l'agent
+> E (une famille par commit, Rust généré identique selon S7, retrait de code
+> mort une fois la famille migrée). La RFC passe `ACCEPTED` ; l'étape C n'est
+> **pas exécutée** à cette date. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : (Q1) approuver l'ajout d'`OwnFacts` à `Facts` (interface
   gelée du design §4 : `use_kind` + `place` par `NodeId`) ? (Q2) approuver
   l'étape C — suppression du `MovePlanner`, de `is_copy` local et de
@@ -271,6 +340,15 @@ ou la **stabilité d'un contrat**.
 
 #### `D7` — Ratifier la frontière FFI, et trancher `i128`/`u128`
 
+> **Décision du responsable, 2026-11-14 — APPROUVÉE pour la frontière scalaire
+> (S4).** `docs/ffi/SAFETY.md`, clauses **C-FFI-1 à C-FFI-10**, devient le
+> contrat approuvé de la **frontière scalaire** ; `i128` et `u128` sont
+> **retirés** des types FFI admis ; **C-FFI-4** déclare hors contrat une fonction
+> C qui déroule, `longjmp`, lève un signal ou termine le processus (obligation de
+> l'appelant, non vérifiée). L'audit externe (`D4`) et la revendication
+> « production » restent inchangés. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : (Q1) ratifier la position de
   [`docs/ffi/SAFETY.md`](../ffi/SAFETY.md) — FFI **scalaire expérimentale**,
   liste de types fermée, refus hors `unsafe`, `pure`/`rt` refusés, TCB de la
@@ -302,6 +380,11 @@ ou la **stabilité d'un contrat**.
   contredit créerait un gate `PASS` de forme.
 
 #### `RFC-RV-DSP-BLOCK-1` — Ratifier l'ABI de bloc généré et autoriser la phase 8
+
+> **Décision du responsable, 2026-11-14 — REPORTÉE à la 1.1 (A2).** Le bloc DSP
+> (phase 8) est **hors périmètre 1.0** et **ne doit pas être implémenté** ; T8 et
+> T9 restent `PARTIAL` avec cette mention. La RFC passe `DEFERRED`. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : ratifier l'ABI de bloc (wrapper `unsafe` généré et local,
   corps Ravum en Rust sûr, profil `rt` obligatoire, `#[repr(C)]` `DspState` z1/z2,
@@ -381,6 +464,12 @@ ou la **stabilité d'un contrat**.
 
 #### `D2-VOIE-C` — Voie C et gate T1
 
+> **Décision du responsable, 2026-11-14 — TRANCHÉE (A3).** Option **1+4** : la
+> **voie B** est retenue pour 1.0 et la **voie C est hors 1.0** ; le gate T1 est
+> évalué sur « voies A et B comparées, B retenue pour 1.0 ». La RFC passe
+> `DEFERRED`. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : quelle option retenue pour la voie C (backend natif
   direct) : (1) ratifier la voie B comme backend de Core 1.0 et consigner la voie
   C hors périmètre 1.0 avec date de réexamen ; (2) pilote voie C borné avec oracle
@@ -407,6 +496,12 @@ ou la **stabilité d'un contrat**.
   inexprimable en Rust généré ») qui vaut mieux qu'un symbole de complétude.
 
 #### `D11` — Renuméroter les deux `rule_id` dupliqués ou entériner la collision
+
+> **Décision du responsable, 2026-11-14 — RÉSOLUE (A5).** Renumérotation
+> appliquée : la règle `const_expr` devient **`G-5.14`**, le raccourci de champ
+> `E::V { champ }` devient **`G-6.48`** ; les premières règles gardent `G-5.11`
+> et `G-6.40`. `Q-GRAM-11` consigne la correspondance. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : les comptes de `effects.md` et `features.md` sont
   corrigés (10 groupes, 8 lignes `experimental`), mais deux `rule_id` restent
@@ -436,6 +531,13 @@ ou la **stabilité d'un contrat**.
 ### D. Preuves et verdicts
 
 #### `D-2026-11-14-1` — Méthode du test de puissance T2 et campagne nominale
+
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S6).** Méthode retenue :
+> recréer sur l'arbre courant **l'inverse de chaque correctif historique**,
+> **exiger** qu'un **test existant échoue** avec l'inverse (sinon : lacune de test
+> à documenter, **pas un succès**), puis **3 graines × 2 000 programmes** du
+> générateur dirigé par les types ; **score publié sur 13**. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : (Q1) pour le test de puissance exigé par T2 (« annuler un
   par un les correctifs des 13 formes historiques et vérifier que le générateur
@@ -472,6 +574,14 @@ ou la **stabilité d'un contrat**.
   le moins ambigu ; le rapport laisse d'ailleurs la question ouverte (§11.4).
 
 #### `D10` — Dénominateur MUST, objectif 100 %, statut des lignes de test
+
+> **Décision du responsable, 2026-11-14 — RÉSOLUE (S5).** Objectif officiel :
+> **100 % des lignes et des régions du CODE PRODUIT**, hors modules
+> `#[cfg(test)]` et hors **chemins inatteignables documentés un par un** ; la
+> **mutation ciblée** devient la **seconde métrique** ; les **344 MUST non
+> mappés** sont une **dette tracée**, pas un blocage. Le dénominateur MUST reste
+> 807. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : (Q1) quel **dénominateur** pour la traçabilité : (a) deux
   métriques officielles (FeatureIds + MUST) avec obligation de traiter les 344
@@ -533,6 +643,11 @@ ou la **stabilité d'un contrat**.
 
 #### `D-2026-11-14-4` — Déviation littérale T4 : comparaison du Rust généré
 
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (S7).** Le critère devient
+> l'**identité après normalisation**, **limitée aux deux motifs**
+> `__rv_root_<id>` et `rvm_ffi_<id>`. **Toute autre différence = échec.**
+> Enregistrement : [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+
 - **Question exacte** : le critère du GOAL T4 (« Rust généré identique **octet
   pour octet** sur `examples/` et tout le corpus ; toute différence = arrêt »)
   est-il requalifié en « identique après normalisation des **numéros
@@ -565,6 +680,14 @@ ou la **stabilité d'un contrat**.
   layout intestable sans un mapping dont aucun besoin n'est démontré.
 
 #### `D-2026-11-14-5` — Cible LSP à l'échelle (`p95 < 50 ms`)
+
+> **Décision du responsable, 2026-11-14 — REFUSÉE telle que proposée (S8).** La
+> cible LSP **n'est pas assouplie** pour absorber un défaut algorithmique.
+> Ordre : corriger la phase `own` (agent A), re-mesurer, puis appliquer :
+> **p95 < 50 ms jusqu'à 1 000 lignes** ; **p95 ≤ 150 ms à 5 110 lignes en profil
+> release** ; **contrôle de linéarité en CI** (voir agent A). L'incrémentalité
+> sémantique reste un chantier 1.x. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : la cible « diagnostic `p95 < 50 ms` » n'est pas tenue à
   l'échelle (p95 **337,6 ms** à 5 110 lignes, mesure en **debug**) : accepte-t-on
@@ -789,6 +912,11 @@ ou la **stabilité d'un contrat**.
   exact ; ouvrir (b) est un acte 1.x qui n'appartient pas à ce dossier.
 
 #### `RFC-DEV-TOOLS-1` — Autoriser Miri et `cargo-mutants` en local
+
+> **Décision du responsable, 2026-11-14 — APPROUVÉE (A4).** `cargo-mutants` et
+> Miri peuvent être **installés localement** ; ce sont des **outils de
+> développement**, pas des dépendances. La RFC passe `ACCEPTED`. Enregistrement :
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 - **Question exacte** : autorise-t-on l'installation **locale**, pour la
   vérification seulement, du composant `miri` (toolchain nightly déjà présente)

@@ -1,9 +1,14 @@
 # RFC — Backend natif (voie C) et ratification du bootstrap
 
-> **Statut : `PROPOSED`** · **Date : 2026-11-10** · **Portée : Ravum Core 1.0**
-> **Décision liée : D2** (`docs/roadmap/CORE-1.0-GATE-MATRIX.md` §4)
-> **Ce document ne ratifie rien.** Il prépare une décision humaine. Aucun ADR
-> n'est modifié, aucune fonctionnalité n'est autorisée par sa seule existence.
+> **Statut : `DEFERRED` — voie C hors 1.0** · **Date : 2026-11-10** · **Portée : Core 1.x (hors périmètre 1.0)**
+> **Décision liée : D2 / A3** (`docs/roadmap/CORE-1.0-GATE-MATRIX.md` §4)
+> **Décision du 2026-11-14 (A3)** : la **voie C est hors 1.0** ; le gate T1 est
+> évalué sur « **voies A et B comparées, B retenue pour 1.0** ». La voie B reste
+> le backend de Core 1.0 ; la voie C est reportée à un réexamen 1.x selon les
+> critères de réouverture du §4. Enregistrement :
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+> **Ce document ne ratifie rien** : il documente un report décidé, pas une
+> ratification de backend.
 
 ## 1. Problème
 

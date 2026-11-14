@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-OWN-FACTS-1` |
-| Statut | **PROPOSED** — `PENDING_HUMAN_APPROVAL` (extension de l'interface gelée `Facts`) |
+| Statut | **ACCEPTED** — approuvée par le responsable, 2026-11-14 (A1), étape C comprise |
 | Date | 2026-11-13 |
 | Auteur | agent de développement (session GOAL) |
 | Portée | `crates/ravum-lang-sema/src/own.rs`, `facts.rs`, `crates/ravum-lang-codegen/src/emit.rs` |
@@ -11,11 +11,10 @@
 
 > **Amendement du 2026-11-14 (`goal/consolidation-2`).** Les exemples de §2
 > supposent un `NodeId` `u32` 8/24 bits ; le contrat courant est **`u64`
-> 32/32** (T4, non ratifié). La RFC reste `PROPOSED` et l'**étape C n'est pas
-> exécutée** : la suppression du `MovePlanner` d'`emit.rs` attend la
-> ratification et la preuve de sortie identique
-> ([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
-> `RFC-OWN-FACTS-1`).
+> 32/32**, **ratifié le 2026-11-14** (S2). La RFC est **`ACCEPTED` depuis le
+> 2026-11-14** (A1, étape C comprise) ; l'**étape C n'est pas exécutée** : la
+> suppression du `MovePlanner` d'`emit.rs` attend la preuve de sortie identique
+> ([`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md)).
 
 > **Ce que cette RFC n'est pas.** Elle ne change aucune règle de langage, aucun
 > code de diagnostic, aucun schéma JSON public et aucune sémantique d'ownership.
@@ -167,7 +166,8 @@ ne duplique ni les types, ni les effets, ni les résolutions.
 | **B** — comparaison en debug | **`PARTIAL`** | `emit.rs::verify_ownership_facts` compare la classification `Copy`/`Move` de chaque usage en build debug et échoue en cas de désaccord ; il compare aussi, depuis le round 15, les **projections enregistrées** (`x.f`, `.0`, `[lit]`, `[*]`, `*p`) à une place recalculée **depuis la syntaxe** (et non depuis `MovePlanner`). Deux tests négatifs prouvent la non-vacuité : décision `Copy` injectée sur un `String`, et projection corrompue injectée sur `a[1]` ⇒ `CodegenError`. Mesuré : **600 programmes générés + 476 cas de conformance, 0 désaccord**. Exclusions documentées : l'identité de la liaison (le span de déclaration n'est pas dans l'AST), les **récepteurs de méthode** (auto-déréférence par l'appel) et les **arguments de type référence** (reborrow implicite) ne sont pas comparés. |
 | **C** — suppression de la logique locale | `NOT_RUN` | Le `MovePlanner` est toujours la source du dégradé de déstructurage ; la suppression exigera l'étape B complète et le diff byte-à-byte. |
 
-Statut de la RFC : **`PROPOSED`** — `PENDING_HUMAN_APPROVAL`. L'étape A est
-additive et sans effet sur le Rust émis ; l'étape B est un garde-fou de debug,
-désactivé en release.
+Statut de la RFC : **`ACCEPTED` (2026-11-14, A1)**, étape C comprise. L'étape A
+est additive et sans effet sur le Rust émis ; l'étape B est un garde-fou de
+debug, désactivé en release ; l'étape C reste **`NOT_RUN`** et devra prouver le
+Rust généré identique selon S7, une famille par commit.
 

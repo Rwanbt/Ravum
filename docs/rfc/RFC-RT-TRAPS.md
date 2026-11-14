@@ -3,11 +3,17 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-RT-TRAPS-1` |
-| Statut | **PROPOSED** — `PENDING_HUMAN_APPROVAL` (règle de langage) |
+| Statut | **ACCEPTED** — approuvée par le responsable, 2026-11-14 (S3), amendement `--rt-entry` compris |
 | Date | 2026-11-13 |
 | Auteur | agent de développement (session GOAL) |
 | Portée | `spec/language/effects.md`, `expressions.md`, `stdlib.md`, `effects.rs`, `typeck.rs`/`builtins.rs` |
 | Décision attendue | ratifier la sémantique des traps en `rt`, ou choisir une variante |
+
+> **Ratification du 2026-11-14.** Le responsable a approuvé la règle des traps
+> `rt` **et** son amendement `--rt-entry` (S3) ; décision enregistrée dans
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+> Le statut passe de `PROPOSED` à `ACCEPTED` ; les preuves restent celles du §6
+> et ne deviennent pas `PROVED`.
 
 > **Statut de preuve.** Aucune ligne ci-dessous n'est « prouvée ». Les cas de
 > conformance de la phase 5 mesurent le comportement du compilateur sur le
@@ -184,15 +190,16 @@ divergence ; aucun changement de verdict pour `core`/`pure` sur le corpus
 
 | Tâche | État | Preuve / limite |
 |---|---|---|
-| 5.1 — RFC | fait | ce document, statut `PROPOSED` / `PENDING_HUMAN_APPROVAL` |
+| 5.1 — RFC | fait | ce document, statut `ACCEPTED` (2026-11-14) |
 | 5.2 — gate `rt` + méthodes explicites | **fait** (profil `rt` uniquement) | `crates/ravum-lang-sema/src/traps.rs` : détection index, division/reste, `+ - *` (binaire **et affectation composée** `x += 1`), négation, décalages ; flottants et `as` exemptés ; `check.rs` ne l'appelle que si `Profile::Rt`. Méthodes `wrapping_*`, `saturating_*`, `checked_*` ajoutées aux builtins et au passage direct du codegen. **10 tests unitaires** dans `traps.rs`. `core`/`pure` inchangés (`effects/intrinsic-panic-not-tracked` reste accepté en core). |
 | 5.3 — cas de conformance | **fait** | 5 cas : `rt-trap-bare-arithmetic`, `rt-trap-dynamic-index`, `rt-trap-dynamic-division`, `rt-trap-compound-assignment` (compile-fail, `E-EFF-PROFILE`) et `rt-trap-safe-forms` (compile-pass). Conformance **476 cas / 475 PASS / 0 FAIL / 1 SKIP**, build **203/203**. |
 | 5.4 — adapter `examples/dsp-gain-iir` à `rt` | **fait (T6)** | L'exemple utilise des buffers fixes et une entrée `process` (`--rt-entry process`) : `check` en `rt` passe, la sortie reste identique octet pour octet (smoke **43/0/0**). Les trois obstacles initiaux sont traités : indexation bornée (`for i in 0..4usize`), plus de `Vec::push`, et l'`io` reste dans `main`, hors du point d'entrée. |
-| 5.5 — point d'entrée et indexation bornée (T6) | **fait**, règle `PENDING_HUMAN_APPROVAL` | `--rt-entry` sur `check` (avec `--profile rt`) et `build` ; atteignabilité sur le graphe d'appels ; deux formes d'indexation bornée ; entrée inconnue refusée (`E-TOOL`). 5 tests unitaires, 1 test CLI et 5 cas de conformance (§7). |
+| 5.5 — point d'entrée et indexation bornée (T6) | **fait**, règle `ACCEPTED` (2026-11-14) | `--rt-entry` sur `check` (avec `--profile rt`) et `build` ; atteignabilité sur le graphe d'appels ; deux formes d'indexation bornée ; entrée inconnue refusée (`E-TOOL`). 5 tests unitaires, 1 test CLI et 5 cas de conformance (§7). |
 
-Statut final : **`PROPOSED` — `PENDING_HUMAN_APPROVAL`**. Implémentation
-volontairement limitée à `rt` ; aucune revendication temps réel. L'amendement T6
-(§2 et §7) est implémenté et mesuré, mais la règle elle-même n'est pas ratifiée.
+Statut final : **`ACCEPTED` (2026-11-14, S3)**. Implémentation volontairement
+limitée à `rt` ; aucune revendication temps réel. L'amendement T6 (§2 et §7) est
+implémenté, mesuré et ratifié ; les limites du §7 restent des obligations
+écrites et l'absence de trap sur un programme arbitraire n'est pas prouvée.
 
 ## 7. État T6 (2026-11-14)
 

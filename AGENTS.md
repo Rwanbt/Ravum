@@ -1,9 +1,11 @@
 # AGENTS.md — Mandat permanent des agents de développement Ravum
 
-> **Révision proposée le 2026-11-13 — `PENDING_HUMAN_APPROVAL`.** Ce fichier est
-> le mandat du responsable. Cette révision corrige des **faits périmés** (le
-> langage existe et est fusionné dans `main`) ; elle ne change aucune obligation
-> de mission et ne prend effet qu'après approbation humaine.
+> **Révision du 2026-11-13 — APPROUVÉE par le responsable, 2026-11-14.** Ce
+> fichier est le mandat du responsable. Cette révision corrige des **faits
+> périmés** (le langage existe et est fusionné dans `main`) ; elle ne change
+> aucune obligation de mission. Enregistrement :
+> [`docs/decision/DECISIONS-2026-11-14.md`](docs/decision/DECISIONS-2026-11-14.md)
+> (S1).
 
 > Lisez ce fichier **avant de modifier une ligne**. Il n'autorise aucune acceptation d'ADR, suppression de tests, publication ou déploiement sans instructions explicites du responsable.
 

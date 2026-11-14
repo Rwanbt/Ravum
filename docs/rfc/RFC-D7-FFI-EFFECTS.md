@@ -1,10 +1,21 @@
 # RFC — D7, frontière `unsafe` / FFI : inventaire mesuré, contrats manquants et tests négatifs
 
-> **Statut : `PROPOSED` · `PENDING_HUMAN_APPROVAL`** · **Date : 2026-11-11**
+> **Statut : `PROPOSED`** · **Date : 2026-11-11** · **`SAFETY.md` (frontière
+> scalaire) approuvé le 2026-11-14 (S4) ; ce document reste un dossier
+> d'instruction.**
 > **Décision liée : D7** (`DECISIONS_REQUIRED.md`, `CORE-1.0-GATE-MATRIX.md` §4)
 > **Ce document ne ratifie rien, ne modifie ni `spec/language/`, ni `crates/`, ni
 > `conformance/`.** Il inventorie ce qui existe réellement et propose des tests
 > négatifs ; il ne présente aucune conclusion d'audit comme acquise.
+
+> **Mise à jour du 2026-11-14 (S4).** Le responsable a approuvé
+> [`docs/ffi/SAFETY.md`](../ffi/SAFETY.md) (clauses **C-FFI-1 à C-FFI-10**)
+> comme **contrat de la frontière scalaire**, retiré `i128`/`u128` des types FFI
+> admis et déclaré **C-FFI-4** hors contrat (une fonction C qui déroule,
+> `longjmp`, lève un signal ou termine le processus est à la charge de
+> l'appelant). **Cette RFC reste un dossier d'instruction : elle n'est pas
+> ratifiée en tant que document.** Enregistrement :
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 
 ## 1. Problème
 
