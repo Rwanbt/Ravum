@@ -5308,6 +5308,45 @@ mod tests {
         }
     }
 
+    /// Step B non-vacuity for places: corrupting a recorded projection must be
+    /// rejected in debug builds.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn place_facts_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn main() { let a = [1, 2, 3]; let x = a[1]; }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let id = *checked
+            .facts
+            .own
+            .place
+            .iter()
+            .find(|(_, place)| matches!(place.steps.first(), Some(Projection::Index(_))))
+            .map(|(id, _)| id)
+            .expect("the fixture must record the index place `a[1]`");
+        checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("place exists")
+            .steps
+            .push(Projection::Deref);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted place must be rejected by the step-B place guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
     /// Step B non-vacuity: a disagreement between `OwnFacts` and the backend's
     /// classification must be an error in debug builds, not a silent lowering.
     #[test]
