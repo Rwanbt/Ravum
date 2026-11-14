@@ -657,6 +657,25 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Documents mis à jour : rapport §3/T11, matrice des gates (lignes
   reproductibilité/SBOM/installateur), `PRODUCTION-READINESS.md` R7.
 
+## Entrée 2026-11-14 (round 14) — Revalidation du corpus et des audits
+
+| Contrôle | Résultat (HEAD `2ae9e9f`) |
+|---|---|
+| Conformance `--verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `build_verified: true` |
+| Smoke exemples (`-SkipBuild`) | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Registre | **126 codes émis**, 0 hors registre, 0 jamais émis |
+| Traçabilité | **188/188** (1 exemption) |
+| MUST | **807 énoncés, 344 non mappés** (D10 inchangée) |
+
+- Le code est identique à `28ad5da` depuis la phase 5 ; seuls des tests et des
+  documents ont changé. Les chiffres du rapport sont donc reproductibles sur
+  l'arbre courant, sans écart.
+- `must_audit.py` signale deux lignes de `grammar.md` avec un `|` non échappé
+  (comptage inchangé, texte potentiellement tronqué) ; c'est noté dans le
+  rapport §4.4, pas corrigé ici (hors périmètre de la session, document de spec).
+- Aucun changement de code.
+
+
 
 
 

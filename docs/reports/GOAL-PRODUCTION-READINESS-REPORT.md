@@ -206,6 +206,23 @@ Sur `17ab64e` (premier fichier mesuré clos à 100 % de couverture,
 coverage ratchet incluse. Sur `7977210` (traps à 98,66/96,84, plancher 97/95,
 et document D10), les **8/8 workflows sont verts**, coverage ratchet incluse.
 
+### 4.4 Revalidation du corpus et des audits au HEAD courant (round 14)
+
+Sur l'arbre `2ae9e9f` (code identique à `28ad5da` ; seuls des tests et des
+documents ont changé depuis), les contrôles rapides et le corpus complet ont été
+rejoués :
+
+| Contrôle | Commande | Résultat |
+|---|---|---|
+| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas, 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `build_verified: true` |
+| Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Registre | `python tools/registry_audit.py` | **126 codes émis**, 0 hors registre, 0 jamais émis |
+| Traçabilité | `python tools/features_coverage.py --strict` | **188/188** (1 exemption justifiée) |
+| MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 inchangée (le tool signale deux lignes de `grammar.md` avec un `|` non échappé ; comptage inchangé) |
+
+Aucun écart avec les chiffres « courants » de la §3 : ils sont reproductibles sur
+l'arbre qui porte ce rapport.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
