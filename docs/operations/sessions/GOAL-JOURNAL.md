@@ -708,6 +708,8 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   (20 153 − 18 012), 10 fichiers sous l'objectif. Le reflux de 0,03/0,02 pt est
   dû aux ~240 lignes du garde, exercées par la conformance/l'oracle mais hors
   mesure llvm-cov.
+- **CI** : sur `95e9b8b`, **8/8 workflows verts**, coverage ratchet incluse.
+
 
 
 

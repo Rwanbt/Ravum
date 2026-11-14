@@ -207,6 +207,9 @@ Sur `17ab64e` (premier fichier mesuré clos à 100 % de couverture,
 `codegen/lib.rs`, plancher relevé à 100/100), les **8/8 workflows sont verts**,
 coverage ratchet incluse. Sur `7977210` (traps à 98,66/96,84, plancher 97/95,
 et document D10), les **8/8 workflows sont verts**, coverage ratchet incluse.
+Sur `95e9b8b` (extension du garde d'ownership aux places), les **8/8 workflows
+sont verts**, coverage ratchet incluse malgré ~240 lignes de garde
+supplémentaires.
 
 ### 4.4 Revalidation du corpus et des audits au HEAD courant (round 14)
 
