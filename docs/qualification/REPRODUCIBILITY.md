@@ -210,6 +210,14 @@ Les deux jobs ont démarré à `17:42:55Z` et ont produit le même binaire ; le 
 de comparaison est **PASS**. Les deux `runner_id` sont distincts, ce qui exclut
 la réutilisation d'un même runner et un cache `target/` partagé.
 
+**Deuxième run, autre commit** : [43626136359](https://github.com/Rwanbt/Ravum/actions/runs/43626136359),
+commit de fusion `2eb808e2…` (PR #111 après la campagne de fermeture), mêmes
+deux runners distincts, digest **`c1ad5ca9d70500c5d5492ad6ac1d694a716dbcf8bb5f851a3dfa0596e245decc`**
+(3 887 408 octets) identique sur a et b, comparaison **PASS**. Le digest a changé
+par rapport au run précédent (`9b7f16cc…`) : le **code** a changé entre les deux
+commits (attributs de confinement, tests) — l'égalité entre runners est ce qui
+est prouvé, pas la stabilité d'un hash entre versions.
+
 Lecture :
 
 1. **Ce qui est désormais prouvé** : pour un même OS, une même image et une

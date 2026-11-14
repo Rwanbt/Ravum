@@ -44,7 +44,7 @@ reproductibles par la commande ou le fichier cité.
 | Version du binaire | `ravum-lang 0.1.0 (edition core-1.0-draft.1)` | `target\release\ravum-lang.exe --version` ; crate `0.1.0` (`Cargo.toml:30`) |
 | Aide par commande | `ravum-lang check --help` est une **erreur d'usage (exit 2)** ; l'aide se demande par `help check` | commande du 2026-11-14 |
 | Manifeste d'installation | `schema_version: 1`, 16 champs écrits par les deux installateurs | `scripts/install.ps1:232`, `scripts/install.sh:190` ; exemple réel dans [`INSTALL.md`](INSTALL.md) §4 |
-| Corpus de conformance | **483** fichiers `case.json` | `Get-ChildItem conformance\cases -Recurse -Filter case.json` |
+| Corpus de conformance | **484** fichiers `case.json` | `Get-ChildItem conformance\cases -Recurse -Filter case.json` |
 | Mécanisme de dépréciation | **absent** : 0 occurrence de `deprecat` dans les fichiers `*.rs` du dépôt ; aucune commande `migrate` dans `--help` | recherche de texte ; `ravum-lang --help` |
 | CHANGELOG de projet | **absent** (aucun `CHANGELOG*` hors dépendances npm sous `tools/vscode-ravum/node_modules/`) ; Q-COMPAT-1 le recommande | recherche de fichiers ; `spec/language/compatibility.md` §9 |
 | Spécification de compatibilité | **DRAFT, non ratifiée** ; `COMPAT-3.6`, Q-COMPAT-1 et Q-COMPAT-5 sont ouvertes | [`compatibility.md`](../../spec/language/compatibility.md) |
@@ -618,7 +618,7 @@ Tous les chemins ont été vérifiés présents dans l'arbre au 2026-11-14.
 - [`gate-contracts.yml`](../../.github/workflows/gate-contracts.yml) — registre et traçabilité.
 - [`qualification-evidence.yml`](../../.github/workflows/qualification-evidence.yml) — contrat d'installateur.
 - [`docs-check.yml`](../../.github/workflows/docs-check.yml) — contrôle documentaire.
-- [`conformance/cases/`](../../conformance/cases/) — corpus (483 cas au 2026-11-14).
+- [`conformance/cases/`](../../conformance/cases/) — corpus (484 cas au 2026-11-14).
 
 **Critère**
 

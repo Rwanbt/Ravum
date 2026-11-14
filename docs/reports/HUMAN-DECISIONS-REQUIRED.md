@@ -841,6 +841,36 @@ la politique de dépréciation et le contrat d'installateur Linux sont apparus
 **non suivis** pendant la rédaction (C10). Le jour où ces preuves sont publiées,
 les formulations R7/R9/R10/R11 de `PRODUCTION-READINESS.md` changeront.
 
+> **Mise à jour du 2026-11-14 au soir (campagne de fermeture).** Les constats
+> ci-dessus ont été traités après leur rédaction :
+>
+> - **C1 corrigé** : « 42 ADR » dans `PRODUCTION-READINESS.md` et
+>   `DECISIONS_REQUIRED.md` (comptage `tools/validate_repo_docs.py`).
+> - **C2 résolu** : la mesure release est publiée (`p95 163,5 ms`,
+>   [`LSP.md`](../qualification/LSP.md) §7 et
+>   [`LANG-TIMINGS.md`](LANG-TIMINGS.md) §9) ; le chiffre existe désormais.
+> - **C3 corrigé** : bug de `coverage_product_split.py` (premier `#[cfg(test)]`
+>   au lieu du module `mod tests`), 5 tests, mesure courante **1 557 lignes
+>   produit non couvertes / 13 598 (88,55 %)**, **221** lignes de test. Le
+>   « 781 » était l'artefact du bug.
+> - **C4/C5 amendés** : `RFC-NODE-ID`/`RFC-OWN-FACTS` (NodeId `u64` 32/32) et
+>   `RFC-D2` (`--verify-build`) portent un amendement daté du 2026-11-14.
+> - **C6 actualisé** : `AUDIT-BRIEF.md` ouvre sur un encadré « chiffres
+>   courants » (484 cas, 1 660 tests) et signale que son tableau §3 est daté.
+> - **C7 corrigé** : T9 liste **10** verticales (`file-store` inclus).
+> - **C8 tranché par l'exécution** : contrat Linux écrit et **exercé en CI**
+>   (run 43625955751, job 132541685225 : 25 vérifications shell + 30 invariants) ;
+>   R11 reste `PARTIAL` pour l'artefact distribuable et la signature.
+> - **C9/C10 résolus** : les fichiers sont commités et poussés
+>   (`01ae030`, `216f044`, `b172248`) ; la politique et le contrat Linux
+>   existent dans `HEAD`.
+> - **C11 inchangé** : `cargo-mutants` local absent ; la mutation a été rejouée
+>   en CI (219/180/30/9).
+>
+> Les fiches de §2 qui dépendaient de ces constats (`D-2026-11-14-5`, `D9`/`T11`,
+> `D-2026-11-14-7`, `D4`/`T12`) restent des **décisions humaines**, mais leurs
+> preuves sont à jour.
+
 ### 3.2 Commandes exécutées dans cette passe
 
 | Commande | Résultat réel |

@@ -130,25 +130,25 @@ Vérifié le 2026-11-14 sur de petits programmes : `thread::spawn` →
 
 | Mesure | Commande | Résultat publié | Source / date |
 |---|---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes : 1 634 passés / 0 échec / 7 ignorés**, exit 0 | [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md) §1.1, 2026-11-14, `1b76926` |
-| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **483 cas : 482 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=207`, `verified=124`, `failed=0`, `build_verified: true` | idem |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **102 groupes : 1 660 passés / 0 échec / 7 ignorés**, exit 0 | [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md) §1.1, 2026-11-14, `b172248` |
+| Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=207/207`, `verified=124`, `failed=0`, `build_verified: true` | idem |
 | Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** | idem |
 | Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre** | idem |
 | Traçabilité FeatureId | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption justifiée (`F-META-006`) | idem |
 | Traçabilité MUST | `python tools/must_audit.py` | **807 énoncés, 463 atteignables, 344 sans FeatureId** → décision D10 | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §2 |
-| Couverture sema+codegen | `cargo llvm-cov …` puis `coverage_report.py --check` | **89,79 % lignes / 89,23 % régions**, seuils tenus, objectif 100 % **non atteint** | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 octies |
-| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | **40 200 exécutions, 0 divergence** (42 gabarits, sans composition) | idem |
+| Couverture sema+codegen | `cargo llvm-cov …` puis `coverage_report.py --check` | **90,44 % lignes / 89,88 % régions** (19 237/21 271) ; produit **88,55 %** ; objectif 100 % **non atteint** (10 fichiers) | [COVERAGE-100-OBJECTIVE](../qualification/COVERAGE-100-OBJECTIVE.md) §6 |
+| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | **46 200 exécutions, 0 divergence** (dont le nominal **3 × 2 000 = 6 000**, 0 rejet) | [campagne](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §2 |
 | Fuzz long | `cargo test … fuzz_lex_parse` / `fuzz_check` | **249 054 entrées, 0 échec** ; **100 000 itérations, 0 échec** | idem |
 | Client LSP | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** | idem |
 | LSP bout en bout (petit paquet) | `… end_to_end_diagnostic_latency` | p50 2,061 ms / p95 **2,826 ms** (338 lignes) | [LSP.md](../qualification/LSP.md) §7 |
-| LSP bout en bout (échelle) | `… end_to_end_diagnostic_latency_on_the_scale_corpus` | p50 322,4 ms / p95 **337,6 ms** à **5 110 lignes** — **cible 50 ms non tenue** | [LANG-TIMINGS](../reports/LANG-TIMINGS.md) §9 |
-| Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `9FC5E3F2…757E77` | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 octies |
+| LSP bout en bout (échelle) | `… end_to_end_diagnostic_latency_on_the_scale_corpus` | p50 322,4 / p95 **337,6 ms** en **debug** ; **116,7 / 163,5 ms en release** à **5 110 lignes** — **cible 50 ms non tenue** | [LANG-TIMINGS](../reports/LANG-TIMINGS.md) §9 |
+| Reproductibilité | `pwsh -File scripts/repro-check.ps1` ; `reproducibility.yml` | **PASS**, deux racines et deux `target/` : `9FC5E3F2…757E77` ; **deux runners distincts** : `9b7f16cc…cdf` puis `c1ad5ca9…ecc` (par run, identiques a/b) | [REPRODUCIBILITY](../qualification/REPRODUCIBILITY.md) §« deux runners » |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, déterministe | idem |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild`, puis deux `-Uninstall` | installation exit 0, `--version` correct, `locked=true`, manifeste cohérent ; désinstallations **0 / 0** (« rien à désinstaller ») | **exécuté le 2026-11-14** pour ces notes ; CI : 16/16 |
-| Installateur Linux | `bash scripts/install.sh` | **CI uniquement** (job `install` de `linux-qual.yml`) ; **`NOT_RUN` en local** | [PLATFORMS-MATRIX](../qualification/PLATFORMS-MATRIX.md) §2 |
-| Miri | CI Linux | vert en CI (`878e212`, 65 + 134 tests + fuzz court) ; **local `NOT_RUN`** (`cargo-miri` absent) | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 octies |
-| Mutation | `mutation.yml` | **183 mutants / 150 tués / 24 survivants triés / 9 non viables** (portée ciblée) ; **local `NOT_RUN`** | idem |
-| CI | PR [#111](https://github.com/Rwanbt/Ravum/pull/111) | tous les jobs verts sur `e58ed35` (workspace Linux/macOS, Miri, conformance, couverture, smoke, fuzz, wasm32, installateur, release evidence) ; TSan `NOT_APPLICABLE` | idem |
+| Installateur Linux | `scripts/install-contract.sh --skip-build` | **exécuté en CI le 2026-11-14** (run 43625955751, job 132541685225) : **25 vérifications shell + 30 invariants** ; **`NOT_RUN` en local** | [INSTALL-LINUX](../release/INSTALL-LINUX.md) §1 |
+| Miri | CI Linux | vert en CI sur `e58ed35` (syntax + sema, 9 min 23) ; **local `NOT_RUN`** (`cargo-miri` absent) | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 nonies |
+| Mutation | `mutation.yml` | **219 mutants / 180 tués / 30 survivants triés / 9 non viables** (portée ciblée, dont `emit.rs` 36/30/6) ; **local `NOT_RUN`** | [MUTATION-EQUIVALENCE](../qualification/MUTATION-EQUIVALENCE.md) §12 |
+| CI | PR [#111](https://github.com/Rwanbt/Ravum/pull/111) | tous les jobs verts sur `b172248` après correction du YAML de `gate-contracts.yml` (le run `b172248` n'avait que ce job en échec de configuration, pas de test) ; TSan `NOT_APPLICABLE` | [campagne](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §2 |
 
 Constat défavorable publié sans note de bas de page :
 `check` n'est **pas linéaire** à l'échelle — de 5 110 à 50 110 lignes (×9,8),

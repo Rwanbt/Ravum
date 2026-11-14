@@ -8,41 +8,45 @@
 > `SKIP` et `NOT_RUN` ne sont **jamais** convertis en `PASS`. Un `BLOCKED`
 > n'est jamais converti automatiquement en `PASS`.
 >
-> Dernière mise à jour : 2026-11-13 (passe 11 « cas de conformance FFI » + lot 1
-> couverture : huit cas ajoutés pour EFF-4.7 (`rt` + FFI), EFF-2.9 (propagation
-> transitive), `char`/`&i32` refusés, `bool` admis, `i64` traversant réellement,
-> `extern` dans `impl` et pointeur brut dans `unsafe` ; puis déblayage du code
-> mort et fermeture de `facts.rs`/`builtins.rs` en couverture ; **aucun
-> changement du compilateur** — T2 reste `PARTIAL` pour la raison indépendante
-> D10, D7 reste `OPEN`).
+> Dernière mise à jour : 2026-11-14 (campagne de fermeture des chantiers
+> techniques : 25 tests loader, `&str` refusé à la frontière FFI, confinement
+> `unsafe` imposé et inventorié, première campagne de mutation `emit.rs`,
+> reproductibilité sur deux runners distincts, alarme de performance CI, contrat
+> public de l'installateur Linux, politique de dépréciation, guide utilisateur,
+> correction de l'outil de split produit/test et de plusieurs chiffres
+> documentaires). **Aucun gate n'est promu `PASS` par cette passe** : les
+> verdicts T0–T12 restent ceux du tableau §2, seules les preuves changent.
 >
-> **Chiffres courants (passe 11 + lot 1, `dev`, mesurés le 2026-11-13)** :
-> **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
-> `--verify-build`, `build_verified: true`, `perimeter 202`) ;
-> **113 suites, 1574 passés / 0 échec / 2 ignorés** (workspace, `cargo test --workspace`) ;
+> **Chiffres courants (campagne de fermeture, `goal/consolidation-2`, mesurés
+> le 2026-11-14)** :
+> **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
+> `--verify-build`, `build_verified: true`, `perimeter=207/207`, `verified=124`) ;
+> **102 suites, 1660 passés / 0 échec / 7 ignorés** (workspace,
+> `cargo test --workspace --all-targets -- --test-threads=2`) ;
 > **188/188** règles tracées, **188/188** satisfaites ;
-> **108** codes enregistrés, **126** émis ; couverture **89,08 %** lignes /
-> **88,39 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`** (mesure
-> Windows 11 x64 ; **89,12 / 88,44** sur le runner Linux de `coverage.yml`), et
-> **86,41 %** du seul code produit (1 715 lignes non couvertes hors modules
-> `#[cfg(test)]`), seuils ratchet par fichier tenus, cinq relevés
-> (`facts.rs` 100/100, `builtins.rs` 100/98, `typeck.rs` 93/92,
-> `effects.rs` 92/94, `resolve.rs` 93/93 ; **aucun abaissé**).
+> **108** codes enregistrés, **126** émis ; couverture **90,44 %** lignes /
+> **89,88 %** régions sur **`ravum-lang-sema` + `ravum-lang-codegen`**
+> (19 237/21 271 lignes, 10 fichiers sous l'objectif 100 %) ; code produit
+> **88,55 %** (1 557 lignes non couvertes hors modules `#[cfg(test)]`, outil
+> corrigé le 2026-11-14), seuils ratchet par fichier tenus, **aucun abaissé**.
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 >
-> **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
-> les chiffres courants ont évolué — **483 cas : 482 PASS / 0 FAIL / 1 SKIP**,
-> `perimeter=207/207`, `verified=124` ; workspace **101 groupes, 1 634 passés /
-> 0 échec / 7 ignorés** (T3/T6/T7) ; couverture **89,79/89,23** ; oracle **40 200
-> exécutions issues de 42 gabarits d'instructions indépendantes, sans
-> composition** (0 divergence) ; Miri rejoué en CI Linux et mutation rejouée en CI
-> (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
-> `PRODUCTION-READINESS.md` §9 et dans
-> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
-> Le bloc « chiffres courants » ci-dessus reste **inchangé** parce que
-> `report_consistency.py` le confronte au rapport consolidé ; cette note ne le
-> remplace pas.
+> **Preuves ajoutées par la campagne de fermeture** (détail en `§0 nonies`) :
+> digest **identique sur deux runners distincts** (`9b7f16cc…cdf` au run
+> `43622599083`, puis `c1ad5ca9…ecc` au run `43626136359` sur un autre commit ;
+> chaque paire de runners est d'accord, le digest change avec le code) ; alarme
+> de performance CI verte (run `43622599048`) ; mutation
+> ciblée **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont
+> la première campagne `emit.rs` (36/30/6) ; campagne nominale oracle
+> **3 × 2 000 = 6 000 programmes, 0 divergence** ; 25 tests loader
+> (`loader.rs` 78,85 → 83,46 %) ; confinement `unsafe` imposé par le compilateur
+> et inventorié ; `&str` refusé à la frontière FFI. Les statuts de gates restent
+> ceux du tableau §2 : aucun gate n'est passé à `PASS` par cette liste.
+>
+> Les chiffres de la passe 11 et du GOAL « production ready » restent dans
+> `§0 octies`, `PRODUCTION-READINESS.md` §9 et les rapports datés : ce sont des
+> archives, pas l'état courant.
 >
 > **Sections datées = archives.** Les sections `§0 bis` (passe 6), `§0 ter`
 > (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9), `§0 sexies`
@@ -761,11 +765,16 @@ service HTTP + SQLite, DSP dans un hôte réel, E2E navigateur.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
-1019 tests, 269 cas de conformance, 31 smoke, **fuzz complet rejoué après les
-correctifs (0 échec sur les deux campagnes)**, et **Miri rejoué en CI** : 65 + 93 + 1 = **159 tests,
-0 échec** (respectivement 225,8 s / 142,4 s / 18,5 s). TSan `NOT_APPLICABLE`
-justifié (aucun thread/async exposé). **Audit externe absent** — c'est ce qui
-empêche `PASS`.
+**Mesure du 2026-11-14 (campagne de fermeture)** : **1 660 tests** (102 groupes
+`test result`, 0 échec, 7 ignorés), **484 cas de conformance (483 PASS / 0 FAIL /
+1 SKIP / 0 NOT_RUN)**, smoke **43/0/0**, **Miri rejoué en CI Linux**
+(syntax + sema, 9 min 23 sur `e58ed35`), **mutation ciblée 219/180/30/9** (run
+43622868110), **fuzz long 100 000 itérations / 0 échec** (4 327/s),
+**campagne nominale oracle 6 000 programmes / 0 divergence**. TSan
+`NOT_APPLICABLE` justifié (aucun thread/async exposé). **Audit externe absent** —
+c'est ce qui empêche `PASS`. Les chiffres « 1019 tests / 269 cas / 31 smoke »
+cités dans une version antérieure de cette section étaient ceux d'une passe
+historique, pas du HEAD.
 
 ### T11 — Performance, distribution, supply chain — `PARTIAL`
 
@@ -782,6 +791,19 @@ différents** produisent le même `sha256` (`AA6C1AF1…870B0F`, valeur liée à
 `-C link-arg=/Brepro`. Sans ces drapeaux, trois builds donnaient trois binaires
 différents ; l'écart se limitait à 20 octets, tous des horodatages dans l'en-tête
 PE écrits par `link.exe`.
+
+**Depuis le 2026-11-14, la mesure couvre aussi deux machines** : deux runners
+`ubuntu-latest` distincts produisent le **même digest** `9b7f16cc…cdf` (run
+43622599083). C'est R7 sur son périmètre (même image, même toolchain) ; ce n'est
+ni inter-OS ni inter-toolchain.
+
+**Contrat de l'installateur Linux** (2026-11-14) :
+[`docs/release/INSTALL-LINUX.md`](../release/INSTALL-LINUX.md) (`PROPOSED`) et
+`scripts/install-contract.sh` vérifient les invariants du manifeste, le SHA-256
+installé = construit, la désinstallation idempotente et les codes d'usage ;
+l'étape est exécutée par `linux-qual.yml`. Elle ne remplace ni un artefact
+distribuable (SBOM + manifeste attachés) ni une signature (D9), donc T11 reste
+`PARTIAL`.
 
 **Signature : mécanisme qualifié, ancre absente** —
 [`docs/qualification/SIGNATURES.md`](../qualification/SIGNATURES.md).
@@ -878,6 +900,35 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,
 aucun tag, aucune release. L'étape A d'`OwnFacts` est additive (aucun
 consommateur) ; l'étape B est un garde-fou de debug ; l'étape C n'est pas faite.
+
+## 0 nonies. Campagne de fermeture des chantiers techniques (2026-11-14, soir)
+
+> Section **datée**, branche `goal/consolidation-2`. Elle ajoute des **preuves**
+> et corrige des chiffres ; elle ne change **aucun verdict** de gate (tableau §2)
+> et ne remplace ni l'audit externe (D4/R13) ni le Go/No-Go (T12).
+
+> **Conformance courante (2026-11-14, `--verify-build`)** :
+> **484 cas : 483 PASS / 0 FAIL / 1 SKIP**,
+> `perimeter=207/207`, `verified=124`.
+
+| Preuve | Résultat mesuré | Portée / limite |
+|---|---|---|
+| Reproductibilité inter-runners (R7) | Deux runners `ubuntu-latest` distincts (`runner_id` 1000097957/1000097958), même image, même toolchain épinglée : **digest identique** `9b7f16cc64fdb15ea286eeb48f4351332b513293c1a3d42467ba6b9e07166cdf` (3 887 400 octets), run [43622599083](https://github.com/Rwanbt/Ravum/actions/runs/43622599083) | Ferme R7 **sur son périmètre** (deux runners) ; ne prouve ni inter-OS ni inter-toolchain, ni signature |
+| Alarme de performance (R9) | `tools/timings_gate.py` + `performance.yml` : 40 comparaisons sous plafond `max(200 ms, ×3)`, run [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048) **PASS** | Alarme grossière du `check` seulement ; ni `build`, ni `watch`, ni LSP, ni mémoire |
+| Mutation ciblée (R8) | Run [43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110) : **219 mutants / 180 tués / 30 survivants triés / 9 non viables** ; reproduction exacte des trois campagnes historiques (32/57/94) + **première campagne `emit.rs`** (36/30/6) | Portée `-F` ciblée, pas un score de crate ; 30 survivants triés (§12 de `MUTATION-EQUIVALENCE.md`), 1 lacune de test fermée par un nouveau test, 1 lacune assumée |
+| Couverture (R8) | 25 tests loader : `loader.rs` **78,85 → 83,46 %** lignes et **82,19 → 86,70 %** régions ; totaux **90,44/89,88** (19 237/21 271) ; objectif 100 % toujours non atteint (10 fichiers) | Les seuils ratchet restent tenus, aucun abaissé ; l'objectif 100 % reste une décision D10 |
+| Outil de split produit/test | Bug corrigé : le premier `#[cfg(test)]` (helper ligne 93 de `loader.rs`) était pris pour le module de tests, classant le fichier à 100 % « test » ; le script cherche désormais `#[cfg(test)] mod tests`. 5 tests ajoutés | Chiffres corrigés : **1 557** lignes produit non couvertes / 13 598 (88,55 %), **221** lignes de test |
+| Confinement `unsafe` (D7) | `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` sur le CLI + 2 `allow` inventoriés ; `tools/unsafe_audit.py` en CI, 7 tests ; six sites `// SAFETY:` | Confinement mécanique, pas un audit humain ; D7 toujours `PROPOSED`, R13 `BLOCKED` |
+| Frontière FFI | Cas `types/ffi-str-rejected` (`&str` refusé `E-FFI-TYPE`) ; SAFETY mis à jour (Miri FFI `NOT_RUN` par construction) | Restent `i128`/`u128` (largeur C), unwinding/`longjmp`/signal ; décisions humaines |
+| Oracle nominal (T2) | `3 × 2 000 = 6 000` programmes générés, **0 rejet, 0 divergence**, `release_every=10`, 2 217 s (Windows, binaire debug, branche `goal/consolidation-2`) | Mesure sur un générateur déterministe et ses gabarits, pas une preuve sur tous les programmes ; le test de puissance T2 reste `BLOCKED` par sa méthode |
+| LSP à l'échelle | Profil **release** : p95 **163,5 ms** (p50 116,7) à 5 110 lignes, contre 337,6 ms en debug ; cible 50 ms toujours non tenue | Décision de périmètre ou d'incrémentalité humaine (`D-2026-11-14-5`) |
+| Lutte contre les chiffres faux | « 43 ADR » corrigé en **42** ; T9 « 9 verticales » corrigé en **10** (ajout de `file-store`) ; `AUDIT-BRIEF` doté d'un encadré « chiffres courants » ; RFC-NODE-ID/OWN-FACTS amendées sur `NodeId` u64 32/32 ; RFC-D2 amendée sur `--verify-build` | Corrections factuelles, pas de changement de verdict |
+| Documents produits | Politique de dépréciation (R10), contrat installateur Linux + CI (R11), guide utilisateur + notes de version (R14), dossier **21 décisions humaines** | Tous `PROPOSED` / `PENDING_HUMAN_APPROVAL` ; aucune ratification |
+
+Statuts : R7 **fait sur son périmètre**, R9/R10/R11/R14 restent `PARTIAL` avec
+preuves ajoutées, R8 reste `PARTIAL` (objectif 100 % et portée mutation), R5
+reste `PARTIAL`/`OPEN` (D7 non ratifiée). Aucun tag, aucune release, aucune
+signature, aucun audit externe.
 
 
 

@@ -5,13 +5,17 @@
 > (source de vérité) et que `scripts/install-contract.sh` vérifie. Il n'annonce
 > aucune release, aucun artefact signé, aucune maturité « production ».
 >
-> **Exécution du contrat : `NOT_RUN` localement, `PENDING` en CI.** Le poste de
-> développement est Windows ; l'hôte du contrat doit être Linux (§1). L'exécution
-> réelle est l'étape ajoutée au job `install` de
-> [`.github/workflows/linux-qual.yml`](../../.github/workflows/linux-qual.yml).
-> Tant qu'aucun run vert n'est consigné ici, l'état est `PENDING`, **pas** `PASS`.
-> Le job `install` existant (installation sous préfixe temporaire puis
-> `--version`) est vert au run `43562818570` (SHA `878e212`) ; c'est une preuve
+> **Exécution du contrat : exécuté en CI le 2026-11-14, `NOT_RUN` localement.**
+> Le poste de développement est Windows ; l'hôte du contrat doit être Linux (§1).
+> L'étape ajoutée au job `install` de
+> [`.github/workflows/linux-qual.yml`](../../.github/workflows/linux-qual.yml) a
+> tourné sur `ubuntu-latest` : run
+> [43625955751](https://github.com/Rwanbt/Ravum/actions/runs/43625955751), job
+> `132541685225`, commit `b172248` — **25 vérifications shell + 30 invariants du
+> manifeste** passent (`scripts/install-contract.sh --skip-build`). L'exécution
+> locale Linux reste `NOT_RUN` (Windows) et n'est pas convertie en `PASS`.
+> Le job `install` antérieur (installation sous préfixe temporaire puis
+> `--version`) était vert au run `43562818570` (SHA `878e212`) ; c'est une preuve
 > de l'installateur, pas du contrat élargi décrit ici
 > ([`LINUX-QUALIFICATION.md`](../qualification/LINUX-QUALIFICATION.md) §12).
 
@@ -19,7 +23,7 @@
 
 | Plateforme | État vis-à-vis de ce contrat | Preuve / limite |
 |---|---|---|
-| **Linux x86-64, libc glibc, image `ubuntu-latest`** | **couvert (périmètre)** — exécution `PENDING` jusqu'au premier run vert | installation, manifeste, SHA-256, désinstallation, erreurs d'usage. `scripts/install.sh` + `scripts/install-contract.sh` ; étape CI dans `linux-qual.yml`. L'image n'est **pas** épinglée : `rustc`/Node le sont, pas `ubuntu-latest` ([`LINUX-QUALIFICATION.md`](../qualification/LINUX-QUALIFICATION.md) §7.8) |
+| **Linux x86-64, libc glibc, image `ubuntu-latest`** | **couvert (périmètre), exécuté en CI le 2026-11-14** | installation, manifeste, SHA-256, désinstallation, erreurs d'usage. `scripts/install.sh` + `scripts/install-contract.sh` ; étape CI dans `linux-qual.yml` (run 43625955751, 25 vérifications shell + 30 invariants). L'image n'est **pas** épinglée : `rustc`/Node le sont, pas `ubuntu-latest` ([`LINUX-QUALIFICATION.md`](../qualification/LINUX-QUALIFICATION.md) §7.8) |
 | **Linux x86-64 musl** | **non couvert** (`NOT_RUN`) | aucune cible musl dans `rust-toolchain.toml` ni dans les workflows ; aucune compilation ni installation musl n'a été mesurée |
 | **Linux ARM64** | **non couvert** (`NOT_RUN`) | le CLI refuse `--target aarch64-unknown-linux-gnu` (exit 2) et aucun job CI ARM n'existe ([`PLATFORMS-MATRIX.md`](../qualification/PLATFORMS-MATRIX.md) §2 et §2.3) |
 | **macOS** | **non couvert** par ce contrat (`NOT_RUN` pour l'installation) | `scripts/install.sh` contient des branches `darwin` mais n'a jamais tourné sur macOS ([`INSTALL.md`](INSTALL.md) §3, [`PLATFORMS-MATRIX.md`](../qualification/PLATFORMS-MATRIX.md) §2). `macos-qual.yml` (Tier 2) exécute tests et conformance, **pas** l'installateur |

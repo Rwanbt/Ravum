@@ -16,13 +16,15 @@
 > produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
 > — écart, causes et plan par fichier en §7 bis.
 >
-> **Mise à jour du 2026-11-14 (branche `goal/production-ready`)** : voir §9 et
-> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
-> Chiffres courants : conformance **483 (482 PASS)**, workspace **1 634** tests
-> (couverture T6/T7, branche `goal/consolidation-2`),
-> couverture **89,79/89,23**, oracle **40 200 exécutions de 42 gabarits
-> d'instructions indépendantes, sans composition**, Miri et mutation
-> rejoués en CI. Cette ligne date l'état ; les gates restent ceux du §9.
+> **Mise à jour du 2026-11-14 (campagne de fermeture, branche
+> `goal/consolidation-2`)** : voir §10 et
+> [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+> Chiffres courants : conformance **484 (483 PASS)**, workspace **1 660** tests
+> (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**), mutation
+> ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest **identique
+> sur deux runners distincts**, alarme de performance CI verte. Cette ligne date
+> l'état ; les gates restent ceux du §10 et de
+> [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -81,19 +83,19 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | **42** ADR `PROPOSED` (ADR-000…ADR-041, comptés par `tools/validate_repo_docs.py`) ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | 471 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
+| R2 | **fait sur le périmètre** | **484** cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
-| R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels ; programme §5 étendu aux **wrappers sûrs**, modules `trusted`, effets déclarés sur l'`extern` et isolation |
+| R5 | **`PARTIAL`** | frontière scalaire **confinée et inventoriée** (2026-11-14) : `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` + 2 `allow` audités sur le CLI (`docs/ffi/UNSAFE-INVENTORY.md`, `tools/unsafe_audit.py` en CI), `&str` refusé (`types/ffi-str-rejected`) ; contrats ABI/lifetime/unwinding **écrits mais non ratifiés** (`SAFETY.md`, RFC-D7) ; `i128`/`u128` (largeur C), unwinding/`longjmp`/signal et Miri FFI restent `NOT_RUN` ou humains |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
-| R7 | `PARTIAL` | local `847DF0D1…` ≠ runner `C281A035…` : digest lié à l'environnement, non revendiqué |
-| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (89,08/88,39 totaux au 2026-11-13, lot 1 ; `emit.rs` 87,00/86,02) avec seuils ratchet par fichier ; **objectif ratifié : 100 % lignes ET régions** — `coverage_report.py --gap` liste **10 fichiers sous l'objectif** (**2 098** lignes non couvertes, dont **201** dans du code de test ; **1 715** lignes de code produit, **86,41 %**), détail, causes et plan par fichier en §7 bis ; `facts.rs`, `builtins.rs`, `types.rs` et le code produit de `check.rs` sont à 100 % de lignes ; mutation ciblée rejouée en CI le 2026-11-13 (run `43329512746` : 183 mutants, 150 tués, 24 survivants triés équivalents, 9 non viables) |
-| R9 | `PARTIAL` | mesures de `RFC-D2` sous charge déclarée ; pas de campagne au repos |
-| R10 | `PARTIAL` | CLI et JSON documentés et testés ; politique de dépréciation absente |
-| R11 | `PARTIAL` | installateur Windows CI 16/16 ; Linux installé par la CI de qualification mais pas de contrat d'installateur public |
+| R7 | **fait sur le périmètre** | même digest sur **deux runners distincts** de même image et même toolchain épinglée : `9b7f16cc…cdf`, run [43622599083](https://github.com/Rwanbt/Ravum/actions/runs/43622599083) (2026-11-14) ; la différence local Windows ≠ runner Linux reste documentée et non revendiquée ; ni inter-OS ni inter-toolchain |
+| R8 | `PARTIAL` | couverture **90,44 % lignes / 89,88 % régions** (19 237/21 271, 2026-11-14) ; code produit **88,55 %** (1 557 lignes non couvertes / 13 598, outil de split corrigé) ; `loader.rs` **83,46/86,70** (+4,61/+4,51 pts par 25 tests de contrat) ; **objectif ratifié 100 %** toujours non atteint (**10 fichiers**), détail et causes §7 bis ; mutation ciblée en CI le 2026-11-14 (run [43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110) : **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` 36/30/6) ; seuils ratchet tenus, aucun abaissé |
+| R9 | `PARTIAL` | p50/p95 `check`/`build` publiés ; **alarme de non-régression CI** (`performance.yml` + `tools/timings_gate.py`, run [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048) PASS, plafond `max(200 ms, ×3)`) ; ni `build`, ni `watch`, ni LSP sous gate, et une alarme n'est pas un budget |
+| R10 | `PARTIAL` | CLI, JSON et LSP documentés et testés ; **politique de dépréciation écrite** ([`DEPRECATION-POLICY.md`](../release/DEPRECATION-POLICY.md), `PROPOSED`, 2026-11-14) ; restent : ratification humaine, canal d'avertissement outillé (aucun `W-*` de dépréciation, aucun CHANGELOG) |
+| R11 | `PARTIAL` | installateur Windows CI 16/16 ; **contrat Linux public écrit** ([`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md), `PROPOSED`) et `scripts/install-contract.sh` exécuté par `linux-qual.yml` (manifeste, SHA-256, désinstallation, codes d'usage) ; restent : artefact distribuable (SBOM + manifeste attachés), signature D9 |
 | R12 | **différé** | mécanisme qualifié (refus d'un binaire altéré) ; **aucune clé** (D9 différée) |
 | R13 | `BLOCKED` | quatre revues LLM (Claude, ChatGPT, DeepSeek, + la revue interne) reçues et triées dans `docs/audit/2026-11-reviews/TRIAGE.md` (16 constats vérifiés, verdicts CONFIRMÉ/FAUX/HISTORIQUE) ; un audit humain indépendant reste requis |
-| R14 | `PARTIAL` | quarante affirmations fausses corrigées en passe 8 ; guide utilisateur absent |
+| R14 | `PARTIAL` | guide utilisateur ([`GETTING-STARTED.md`](../guide/GETTING-STARTED.md)) et notes de version DRAFT créés le 2026-11-14 ; corrections de véracité (42 ADR, T9, brief d'audit) ; audit de véracité exhaustif non rejoué |
 
 ## 4. Plan de travail, par ordre de dépendance
 
@@ -468,4 +470,32 @@ Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
 entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
 (`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste
 `NOT_RUN` (RFC écrite, aucune implémentation partielle).
+
+## 10. Passe 13 — campagne de fermeture des chantiers techniques (2026-11-14)
+
+> Section **datée**, branche `goal/consolidation-2`. Rapport détaillé :
+> [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+> Elle met à jour les **preuves** ci-dessus ; elle ne promeut aucun gate et ne
+> remplace ni D4/R13 ni T12.
+
+| Critère | État | Preuve ajoutée / ce qui reste |
+|---|---|---|
+| R1 | `PARTIAL` | 42 ADR comptés (correction du « 43 ») ; toujours `PROPOSED`, aucune ratification |
+| R2 | fait sur le périmètre | 484 cas (483 PASS), 0 FAIL ; oracle nominal **6 000 programmes, 0 divergence** ; ne prouve pas les formes inconnues |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 ouverte |
+| R4 | `BLOCKED` | Miri Linux vert en CI ; audit humain absent |
+| R5 | `PARTIAL` | confinement `unsafe` mécanique + inventaire ; `&str` refusé ; D7 non ratifiée, `i128`/`u128`/unwinding/miri FFI ouverts |
+| R6 | fait | gardes `forbid`/wrapper ; le code généré reste sans `unsafe` hors wrapper |
+| R7 | **fait sur le périmètre** | deux runners distincts, digest `9b7f16cc…cdf` ; pas d'inter-OS/toolchain |
+| R8 | `PARTIAL` | couverture **90,44/89,88**, produit **88,55 %** ; 10 fichiers sous l'objectif ; mutation **219/180/30/9** dont `emit.rs` |
+| R9 | `PARTIAL` | alarme CI `check` (run 43622599048) ; `build`/`watch`/LSP non gatés |
+| R10 | `PARTIAL` | politique de dépréciation écrite (`PROPOSED`) ; aucun avertissement outillé |
+| R11 | `PARTIAL` | contrat Linux écrit + CI ; artefact distribuable et signature absents |
+| R12 | différé | aucune clé (D9) |
+| R13 | `BLOCKED` | audit humain indépendant requis |
+| R14 | `PARTIAL` | guide + notes de version DRAFT ; audit de véracité non exhaustif |
+
+**Décisions humaines** : le dossier unique est
+[`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md)
+(21 fiches, daté 2026-11-14). Aucune n'est tranchée par cette passe.
 
