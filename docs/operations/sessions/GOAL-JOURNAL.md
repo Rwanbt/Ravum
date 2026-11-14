@@ -853,6 +853,26 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   tous deux spécifiques à Windows — au lieu de dire seulement « 2 SKIP ».
 - Aucune conclusion, aucun gate, aucune preuve modifiés.
 
+## Entrée 2026-11-14 (round 24) — Les têtes de registre ne mentent plus par omission
+
+| Champ | Valeur |
+|---|---|
+| Fichiers | `docs/roadmap/CORE-1.0-GATE-MATRIX.md`, `docs/roadmap/PRODUCTION-READINESS.md` |
+| Nature | note datée pointant vers l'état courant ; aucun chiffre « confronté » modifié |
+
+- La matrice des gates affichait en tête « chiffres courants » de la passe 11
+  (471 cas, 1 574 tests, couverture 89,08/88,39) sans dire qu'ils avaient évolué.
+  Une note ajoutée donne l'état au 2026-11-14 (476 cas / 475 PASS, 1 605 tests,
+  89,47/88,87, oracle 40 200, Miri/mutation CI) et renvoie à §0 octies, au §9 de
+  `PRODUCTION-READINESS.md` et au rapport final.
+- `PRODUCTION-READINESS.md` : même note en tête, pointant vers §9.
+- Le bloc « chiffres courants » **reste inchangé** parce que
+  `tools/report_consistency.py` le confronte au rapport consolidé ; la note ne
+  s'y substitue pas. `report_consistency.py` passe après édition.
+- `STATUS.md` n'est pas modifié : ses chiffres sont explicitement datés
+  (`c931fdf`, 2026-11-13) et restent vrais pour cette date.
+
+
 
 
 

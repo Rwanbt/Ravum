@@ -31,6 +31,18 @@
 > Ces chiffres sont ceux que `tools/report_consistency.py` confronte au rapport
 > consolidé.
 >
+> **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
+> les chiffres courants ont évolué — **476 cas : 475 PASS / 0 FAIL / 1 SKIP**,
+> `perimeter=203/203`, `verified=122` ; workspace **100 groupes, 1 605 passés /
+> 0 échec / 5 ignorés** ; couverture **89,47/88,87** ; oracle **40 200
+> programmes, 0 divergence** ; Miri rejoué en CI Linux et mutation rejouée en CI
+> (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
+> `PRODUCTION-READINESS.md` §9 et dans
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+> Le bloc « chiffres courants » ci-dessus reste **inchangé** parce que
+> `report_consistency.py` le confronte au rapport consolidé ; cette note ne le
+> remplace pas.
+>
 > **Sections datées = archives.** Les sections `§0 bis` (passe 6), `§0 ter`
 > (passe 7), `§0 quater` (passe 8), `§0 quinquies` (passe 9), `§0 sexies`
 > (passe 10) et `§1.x` portent les chiffres **de leur passe**, pas les chiffres

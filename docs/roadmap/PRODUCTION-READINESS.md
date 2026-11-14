@@ -15,6 +15,12 @@
 > **89,08 % lignes / 88,39 % régions** (sema + codegen), **86,41 % du seul code
 > produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
 > — écart, causes et plan par fichier en §7 bis.
+>
+> **Mise à jour du 2026-11-14 (branche `goal/production-ready`)** : voir §9 et
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
+> Chiffres courants : conformance **476 (475 PASS)**, workspace **1 605** tests,
+> couverture **89,47/88,87**, oracle **40 200 programmes**, Miri et mutation
+> rejoués en CI. Cette ligne date l'état ; les gates restent ceux du §9.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
