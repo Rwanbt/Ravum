@@ -12,9 +12,10 @@
 > **Amendement du 2026-11-14 (`goal/consolidation-2`).** Les exemples de §2
 > supposent un `NodeId` `u32` 8/24 bits ; le contrat courant est **`u64`
 > 32/32**, **ratifié le 2026-11-14** (S2). La RFC est **`ACCEPTED` depuis le
-> 2026-11-14** (A1, étape C comprise) ; l'**étape C n'est pas exécutée** : la
-> suppression du `MovePlanner` d'`emit.rs` attend la preuve de sortie identique
-> ([`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md)).
+> 2026-11-14** (A1, étape C comprise) ; l'**étape C est `PARTIAL`** : deux
+> familles de décision lisent `OwnFacts` en release (`receiver`, `arguments`),
+> cinq restent dans le backend pour des causes mesurées, une par une (§9). Le
+> `MovePlanner` n'est donc **pas** supprimé.
 
 > **Ce que cette RFC n'est pas.** Elle ne change aucune règle de langage, aucun
 > code de diagnostic, aucun schéma JSON public et aucune sémantique d'ownership.
@@ -164,10 +165,95 @@ ne duplique ni les types, ni les effets, ni les résolutions.
 |---|---|---|
 | **A** — production des faits | **`TESTED`** | `own.rs` remplit `Facts.own` (`use_kind`, `place` avec binding + projections) ; `crates/ravum-lang-sema/tests/own_facts.rs` : 2 tests (move, copy, borrow, move projeté `p.b`, déterminisme) |
 | **B** — comparaison en debug | **`PARTIAL`** | `emit.rs::verify_ownership_facts` compare la classification `Copy`/`Move` de chaque usage en build debug et échoue en cas de désaccord ; il compare aussi, depuis le round 15, les **projections enregistrées** (`x.f`, `.0`, `[lit]`, `[*]`, `*p`) à une place recalculée **depuis la syntaxe** (et non depuis `MovePlanner`). Deux tests négatifs prouvent la non-vacuité : décision `Copy` injectée sur un `String`, et projection corrompue injectée sur `a[1]` ⇒ `CodegenError`. Mesuré : **600 programmes générés + 476 cas de conformance, 0 désaccord**. Exclusions documentées : l'identité de la liaison (le span de déclaration n'est pas dans l'AST), les **récepteurs de méthode** (auto-déréférence par l'appel) et les **arguments de type référence** (reborrow implicite) ne sont pas comparés. |
-| **C** — suppression de la logique locale | `NOT_RUN` | Le `MovePlanner` est toujours la source du dégradé de déstructurage ; la suppression exigera l'étape B complète et le diff byte-à-byte. |
+| **C** — suppression de la logique locale | **`PARTIAL`** | Deux familles (`receiver`, `arguments`) lisent `OwnFacts` **en release** et leur code local est supprimé (§9.1). Cinq familles sont `BLOCKED` avec une cause mesurée chacune (§9.2) : le `MovePlanner` reste nécessaire pour elles, et n'est donc pas supprimé. L'étape B reste le garde-fou de debug des familles non migrées. |
 
 Statut de la RFC : **`ACCEPTED` (2026-11-14, A1)**, étape C comprise. L'étape A
 est additive et sans effet sur le Rust émis ; l'étape B est un garde-fou de
-debug, désactivé en release ; l'étape C reste **`NOT_RUN`** et devra prouver le
-Rust généré identique selon S7, une famille par commit.
+debug, désactivé en release ; l'étape C est **`PARTIAL`** : deux familles sont
+migrées et lisent les faits en release, cinq sont `BLOCKED` (§9). Le
+`MovePlanner` n'est pas supprimé.
+
+## 9. Étape C — familles de décisions (vague 2, 2026-11-14)
+
+### 9.1 Méthode et périmètre de preuve
+
+Une **famille** est un endroit où `emit.rs` prend seul une décision d'usage
+déjà prise par `own.rs`. Chaque famille est migrée par **un commit** qui
+remplace la décision locale par la lecture d'`OwnFacts`, puis vérifiée :
+
+- **S7** : le Rust généré doit être identique à une référence produite sur
+  `goal/wave-3` (`3ca4d0e`, intégration 1) pour **tout `examples/`** et **tout
+  le corpus de conformance**. La normalisation est **limitée** aux deux motifs
+  `__rv_root_<id>` et `rvm_ffi_<id>` (les chiffres qui suivent ces préfixes) ;
+  toute autre différence — y compris `__rv_sel_<id>`, l'ordre, les blancs et
+  les noms — est un échec qui annule le commit de la famille.
+- **Corpus de comparaison** : 497 paquets (11 `examples/` + 486 cas de
+  conformance), dont **239 fichiers Rust** émis (11 + 228) ; les 258 autres
+  cas n'émettent pas par construction (`check-fail`, parse-fail, `unsupported`
+  et méta-cas CLI). La liste des cas émis fait partie de la comparaison : un
+  cas qui cesse d'émettre est un échec.
+- Les tests `backend_audit` et l'oracle typé rapide sont exécutés **à chaque
+  famille**, et ils ne sont pas redondants : `descents` est détectée par le
+  corpus S7 **et** par l'audit backend, tandis que `pattern-consumption` donne
+  un corpus **identique** (239/239) et n'est détectée que par l'oracle typé.
+  Aucune des trois preuves n'est suffisante seule.
+- Les outils de mesure (générateur de référence, comparaison S7) sont **hors
+  dépôt** ; aucun fichier de preuve n'entre dans le dépôt.
+
+### 9.2 Résultat, famille par famille
+
+| Famille | Décision locale d'`emit.rs` | État | Preuve |
+|---|---|---|---|
+| `receiver` | `MovePlanner::by_value_receiver` + `builtin_method_moves_receiver` : récepteur `self` par valeur (signature utilisateur, ou liste STD-11.3 `Option`/`Result` recopiée dans le backend) | **`TESTED`** (migrée) | Rare de `UseKind` de l'expression récepteur : `Move`/`Copy` = consommé, `Borrow`/`BorrowMut` = emprunté. Les deux dérivations locales sont supprimées. S7 : 239/239 fichiers identiques, 497 cas de manifeste inchangés. Conformance 486 cas : 485 pass, 0 fail, 1 skip ; build perimeter 207/207, 0 échec. |
+| `arguments` | `call_argument_positions` + `method_argument_positions` : type du paramètre déclaré (`is_copy_type`) pour les fonctions/méthodes utilisateur, `true` forcé pour les builtins | **`TESTED`** (migrée) | Rare de `UseKind` de chaque expression d'argument. Les deux dérivations locales sont supprimées. S7 : 239/239 identiques, 497 cas inchangés. Conformance 486 cas : 485 pass, 0 fail, 1 skip. |
+| `move-simple` | `is_owned_position` (type non `Copy`) dans `Access::consumed` et dans le drapeau `mobile` d'une projection de champ sur une chaîne d'index | **`BLOCKED`** | **2** fichiers sur 239 changent : `ownership/array-element-projection-move-pass` et `ownership/array-projection-two-moves-pass`. Le déstructurage `let [mut __rv_el_0_0, mut __rv_el_0_1] = a;` … `return __rv_el_0_1.0;` disparaît au profit de `return a[1usize].0;` — la classe **P0-A** (`E0508`) se rouvre. **Cause** : `own.rs` enregistre la décision sur l'expression de place **la plus externe** (`a[1].0`) ; le nœud d'index interne `a[1]` n'a **aucune** entrée `use_kind`. |
+| `descents` | `owned && is_owned_position(expr)` à l'entrée des `descents` (chaîne d'index dont la racine n'est pas une place : `make()[0]`, `a[0].0[1]`, `h.items[0].0[1]`) | **`BLOCKED`** | **1** fichier sur 239 change : `run/array-move-descent` — la descente matérialisée (`{ let __rv_root_# = make(); … into_iter().nth(…) … }`) devient `crate::rvm_root::make()[i]`, et `backend_audit::audit_non_place_array_roots_build_and_run` échoue : `error[E0508]: cannot move out of type [String; 2], a non-copy array`. **Cause** : aucune décision n'est enregistrée pour un index sur une racine rvalue, alors que le type (donc la décision locale) est disponible. |
+| `pattern-consumption` | `pattern_consumes_value` : consommation de l'initialiseur d'un `let` déduite de la forme du motif | **`BLOCKED`** | Le corpus S7 est **identique** (239/239) : il n'exerce pas la forme. L'**oracle typé rapide** diverge : `seed=0x00524156554d1001 index=35 kind=build_failed`, `error[E0508]` sur `v18[1usize]` dans `let v15: String = match (…) { … => { let v18: [String; 2] = …; v18[1] }, … }`. **Cause** : les faits enregistrent des décisions sur des **places** ; un `match`/`if`/bloc n'a pas d'entrée `use_kind`, donc le drapeau « consommé » qui doit traverser ces constructions jusqu'à leur queue est perdu. |
+| `field-projection` | `place_of` : reconstruction syntaxique de la place (liaison résolue par nom + projections `Field`/`Tuple`) | **`BLOCKED`** | `OwnFacts::place` porte `binding: Span`, et le span de déclaration d'un **paramètre** est celui de l'**item** englobant : deux paramètres d'une même fonction enregistrent le **même** span (mesuré : `fn f(a: [String; 2], b: [String; 2])` ⇒ les deux places de `a[0]` et `b[0]` portent `binding=Span { file: 1, start: 0, end: 100 }`). L'identité de liaison que `place_of` rend (`BinderId`, sensible au masquage) n'est donc pas récupérable, et grouper des accès par ce span fusionnerait deux paramètres distincts. |
+| `literal-index` | `constant_index` : valeur d'un index littéral, et bornes via `array_layers` | **`BLOCKED`** | Même cause mesurée que `descents` : les pas `Index(Lit(v))` n'existent que sur l'expression de place **la plus externe** et seulement pour une racine-place ; les deux sites qui baissent les chaînes à racine rvalue (`chain_move_expr`, `first_index` d'un `descent`) n'ont aucun fait. Un remplacement fact-only y produirait exactement l'`E0508` mesuré sur `descents` ; la famille n'a pas fait l'objet d'un run S7 séparé (aucune sortie différente à prouver : elle est impossible à couvrir sans les faits manquants). |
+
+**Ce qui reste de `MovePlanner`, et pourquoi.** Le planificateur reste
+**entier** : il porte les cinq familles `BLOCKED` ci-dessus, c'est-à-dire le
+dégradé de déstructurage des places d'index (`plan`, `build_destructure`,
+`plan_prefix_slots`, `plan_slot_groups`), la dérivation de la place
+(`place_of`), la valeur des index littéraux (`constant_index`) et la
+propagation syntaxique de « consommé » à travers motifs et constructions de
+valeur. Ces cinq décisions reposent sur des informations que `OwnFacts` **ne
+contient pas** aujourd'hui (identité de liaison unique par paramètre, décision
+sur chaque nœud d'une chaîne de place, propagation à travers `match`/`if`/bloc
+et racines rvalue). Les réduire demande une **extension de schéma** (nouvelle
+RFC), pas un simple déplacement de lecture ; c'est la raison pour laquelle la
+RFC ne supprime pas le planificateur.
+
+**Deux limites structurelles du schéma actuel, mesurées** (à l'origine de
+quatre des cinq blocages) :
+
+1. **La décision est enregistrée par expression évaluée, pas par place
+   physique** : une place chaînée `a[1].0` n'a qu'une entrée, sur l'expression
+   la plus externe ; ses sous-places n'en ont aucune, et une racine rvalue n'a
+   aucune entrée du tout.
+2. **L'identité de liaison n'est pas unique** : `OwnPlace::binding` est un
+   `Span` de déclaration, et pour un paramètre (ou `self`) c'est le span de
+   l'item englobant — deux paramètres sont indiscernables. Le garde-fou de
+   l'étape B compare donc ces spans sans pouvoir distinguer deux paramètres
+   d'une même fonction.
+
+Ces deux limites n'invalident pas l'étape A/B : elles bornent ce que l'étape C
+peut déplacer sans nouveau fait.
+
+### 9.3 État des preuves de l'étape C
+
+| Élément | État |
+|---|---|
+| Familles migrées | 2 (`receiver`, `arguments`) — `TESTED` sur le corpus S7, la conformance et les tests du crate |
+| Familles `BLOCKED` | 5 (`move-simple`, `descents`, `pattern-consumption`, `field-projection`, `literal-index`) — cause mesurée pour chacune |
+| `MovePlanner` | conservé (aucune famille ne permet sa suppression) |
+| Code local supprimé | `by_value_receiver`, `builtin_method_moves_receiver`, `call_argument_positions`, `method_argument_positions` |
+| Lecture en release | `Emitter::consumed_by_checker` et `Emitter::moved_by_checker` ne sont **pas** derrière `debug_assertions` : pour les familles migrées il n'y a plus de seconde décision à comparer |
+| Garde-fou de debug | `verify_ownership_facts` reste actif (comparaison `use_kind` ⇔ type, et places ⇔ syntaxe) : il couvre les familles **non** migrées |
+
+Aucun de ces constats n'est un `PROVED` : ce sont des observations liées au
+commit, à la commande et à la machine cités dans le rapport d'exécution. La
+décision A1 approuve l'étape C ; son résultat est **`PARTIAL`** et ne
+revendique ni exhaustivité ni maturité.
 
