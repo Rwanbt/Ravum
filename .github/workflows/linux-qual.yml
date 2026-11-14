@@ -24,7 +24,7 @@ name: Linux qualification (real ubuntu-latest runner)
 on:
   workflow_dispatch:
   push:
-    branches: [main, dev, 'feat/**', 'fix/**']
+    branches: [main, dev, 'goal/**', 'feat/**', 'fix/**']
 
 permissions:
   contents: read
