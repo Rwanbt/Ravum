@@ -497,12 +497,26 @@ partielle**, et l'outil le dit.
 
 **Statut : `PARTIAL`**.
 
-## 7. T10 — CI sur les branches `goal/**` — `TESTED` (configuration)
+## 7. T10 — CI sur les branches `goal/**` — `TESTED`
 
 **Commit** : `1da5544`. `.github/workflows/linux-qual.yml` déclenche désormais
 aussi sur `goal/**` (il ne le faisait que sur `main`, `dev`, `feat/**`,
-`fix/**`). **Aucun run CI n'a été observé sur cette branche dans la session**
-(pas de push) : la configuration est modifiée, l'effet réel est `NOT_RUN`.
+`fix/**`).
+
+**Run réel exécuté après le push (2026-11-14)** : branche poussée et PR
+brouillon **#111** ouverte vers `dev`. Sur `e58ed35`, GitHub Actions exécute la
+qualification de la branche `goal/consolidation-2` — **tous les jobs sont verts** :
+workspace Linux et macOS arm64, **Miri** (nightly, syntax + sema, 9 min 23),
+conformance Linux/Windows/macOS, couverture par fichier, smoke Linux, fuzz
+smoke, wasm32-wasip1, installateur, release evidence (repro, SBOM, provenance),
+mvp, impact, vscode-e2e ; TSan `NOT_APPLICABLE` (aucun thread/async en Core 1.0).
+
+Ce run a trouvé un **vrai défaut** : l'audit des drapeaux documentés
+(`scripts/cli-flag-audit.ps1`) invoquait le nouveau `--rt-entry` sans valeur ni
+`--profile rt`, et le job smoke Linux échouait. Corrigé dans `e58ed35` (valeur
+`main` + compagnon `--profile rt` pour `check` seulement ; `build` choisit le
+profil `rt` lui-même), vérifié localement **22/22 drapeaux acceptés**, puis le
+run complet est repassé au vert. Statut : `TESTED`.
 
 ## 8. Preuves d'ensemble
 
@@ -578,7 +592,10 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   de la campagne `NOT_RUN` (`cargo-mutants` absent, push interdit). **T5**,
   **T6** et **T7** : exécutées depuis la rédaction (`e3823cb`, `986f542`,
   `ad62f32`…`0d04106`, §5) ; la règle T6 reste `PENDING_HUMAN_APPROVAL`.
-- **T10, run CI** : `NOT_RUN` (pas de push).
+- **T10, run CI** : `TESTED` — PR #111, run vert sur `e58ed35` (workspace
+  Linux/macOS, Miri, conformance, couverture, smoke, fuzz, wasm32, installateur,
+  release evidence ; TSan `NOT_APPLICABLE`), après correction du flag audit
+  (`--rt-entry`, 22/22).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
 - **Couverture** : `TESTED` cette session — **89,79/89,23** lignes/régions,
   cliquet rétabli (`traps.rs` **97,61/97,13**, `facts.rs` **100/100**),
