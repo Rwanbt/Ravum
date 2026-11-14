@@ -893,6 +893,28 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Les chiffres de la phase 0 restent dans `GOAL-BASELINE.md` ; l'annexe (§2)
   n'est pas réécrite. `report_consistency.py` passe.
 
+## Entrée 2026-11-14 (round 26) — ABI de bloc DSP : contrat réel et découpage minimal
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `docs/rfc/RFC-RV-DSP-BLOCK.md` §7 (neuf) |
+| Source | `fixtures/dsp/gain_v1.rs`, `crates/ravum-patch-host/src/{block,host}.rs`, tests `block_host.rs` |
+| Nature | analyse de code + découpage ; **aucune implémentation** |
+
+- L'ABI réellement attendue par l'hôte est consignée : exports
+  `ravum_abi_version` (=2), `ravum_manifest_v1` (JSON versionné avec `patch_id`,
+  `export`, `signature`), `ravum_process_block`, `DspState { z1, z2 }` en
+  `repr(C)`.
+- **Écart corrigé** : l'ABI v2 n'a **pas** de digest de schéma d'état ; le digest
+  proposé au §6.2 serait une extension de protocole, pas une condition du
+  contrat actuel. Le découpage minimal (codegen wrapper, CLI `--emit dsp-block`,
+  tests, scan `unsafe`) est écrit, avec le point de couplage langage/hôte à
+  trancher.
+- Rien n'est implémenté : 8.3/8.4 restent `NOT_RUN`. Ce travail réduit le risque
+  d'une future implémentation et évite de confondre l'ABI existante avec la
+  proposition de digest.
+
+
 
 
 

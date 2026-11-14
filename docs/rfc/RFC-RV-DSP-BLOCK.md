@@ -171,3 +171,66 @@ Contraintes :
 2. Ratifier le digest de schéma (FNV-1a 64 + texte exporté) comme frontière de
    compatibilité, ou exiger une empreinte cryptographique (dépendance nouvelle).
 3. Confirmer qu'aucune migration d'état n'est attendue en Core 1.0.
+
+## 7. État d'implémentation et contrat réellement attendu (2026-11-14)
+
+### 7.1 Ce que l'hôte exige aujourd'hui (lu dans le code et les fixtures)
+
+Le contrat de l'ABI **v2** est plus précis que le résumé du §1 ; il est visible
+dans `fixtures/dsp/gain_v1.rs` et dans `ravum_rust_adapter` :
+
+```rust
+#[no_mangle] pub extern "C" fn ravum_abi_version() -> u32 { 2 }        // PATCH_ABI_VERSION
+#[no_mangle] pub extern "C" fn ravum_manifest_v1() -> *const c_char    // JSON + NUL
+#[no_mangle] pub extern "C" fn ravum_process_block(
+    input: *const f32, output: *mut f32, frames: u32, state: *mut DspState);
+#[repr(C)] pub struct DspState { pub z1: f32, pub z2: f32 }
+```
+
+Le manifeste embarqué est un JSON versionné :
+`schema_version`, `patch_id`, `export` (`ravum_process_block`), `signature`
+(`block:f32->f32+state:v1`), `author`. L'hôte vérifie la version, le nom
+d'export, la signature et les gates (`validate_loaded`, `evaluate_gates`,
+`RejectReason`) ; l'état `repr(C)` z1/z2 est possédé par l'hôte, passé par
+pointeur, jamais migré.
+
+**Écart important avec le §6.2** : l'ABI v2 **n'a pas** de digest de schéma
+d'état. Le digest proposé serait donc une **extension de protocole**, pas une
+condition d'activation du contrat actuel.
+
+### 7.2 Ce qui est implémenté, et ce qui ne l'est pas
+
+| Élément | État |
+|---|---|
+| 8.1 — lecture de l'ABI (exports, manifeste, layout, gates) | **fait** (ci-dessus + `block_host.rs`, `crossfade.rs`, `rt_lifecycle.rs`) |
+| 8.2 — RFC | **fait** (ce document) |
+| Wrapper `unsafe` généré pour un `.rv` | **`NOT_RUN`** |
+| `ravum-lang build --emit dsp-block` (cdylib + manifeste) | **`NOT_RUN`** |
+| Test de swap réel d'un bloc **généré** | **`NOT_RUN`** |
+
+Aujourd'hui, seuls des modules Rust écrits à la main remplissent l'ABI ; les
+tests hôte (`block_host.rs`) construisent ces fixtures avec `RustAdapter`, pas
+avec la chaîne `.rv`.
+
+### 7.3 Découpage minimal proposé (si la RFC est ratifiée)
+
+1. `codegen` : mode bloc (nouvelle option de `GenOptions`), émission du wrapper
+   avec `#![deny(unsafe_code)]` + `#[allow(unsafe_code)]` local, `repr(C)`
+   `DspState` z1/z2, conversion par champ vers/depuis le struct utilisateur,
+   distinction `input`/`output` nuls (`frames == 0`), manifeste généré avec
+   `patch_id` du package et `signature` de l'ABI v2.
+2. `cli/pipeline.rs` : `--emit dsp-block`, `--crate-type cdylib`, nom
+   d'artefact `.dll`/`.so`, `build.json` avec `export`/`abi_version`,
+   interaction à auditer avec le scan « pas d'`unsafe` » (le wrapper doit être
+   la seule exception locale, comme pour la FFI).
+3. Tests : (a) test codegen de non-régression du wrapper ; (b) test CLI qui
+   compile un package bloc puis charge le `cdylib` avec le harnais hôte existant
+   (`BlockHost` + `RustAdapter`) et vérifie un swap + l'état — ce test exige de
+   décider où il vit (couplage langage/hôte) ; (c) test « module non compilable
+   ⇒ ancien bloc conservé ».
+4. Le **digest de schéma** (§6.2) reste une extension séparée : il ne doit pas
+   bloquer l'implémentation de l'ABI v2 déjà consommée par l'hôte.
+
+Tant que la RFC n'est pas ratifiée et que ce découpage n'est pas autorisé, les
+éléments 8.3/8.4 restent `NOT_RUN` — aucune demi-implémentation n'est présentée.
+
