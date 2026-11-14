@@ -20,6 +20,10 @@
 >
 > **Aucun `PROVED`, aucune maturité revendiquée.** Les statuts employés sont
 > `PENDING_HUMAN_APPROVAL`, `PARTIAL`, `NOT_RUN`, `À VÉRIFIER`, `PROPOSED`.
+>
+> **Feuille de signature rapide** :
+> [`SIGN-OFF-2026-11-14.md`](../decision/SIGN-OFF-2026-11-14.md) — huit textes
+> d'approbation d'une phrase, sans nouvelle analyse, avec ce que chacun débloque.
 
 ## 0. Comment lire ce dossier
 
