@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "measured_on": "2026-11-13, Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
+  "measured_on": "2026-11-14 (round 9), Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
   "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json",
   "checked_by": "python tools/coverage_report.py --input target/cov-all.json --check",
   "scope": "Two crates since 2026-11-11: `ravum-lang-sema` (frontend) and `ravum-lang-codegen` (the reference backend, which generates the safe Rust). Before that date only sema was measured, so the backend that actually emits code had no coverage gate at all. Including both crates in one instrumented build also means the sema figures now count the sema code exercised by the codegen integration tests.",
@@ -90,11 +90,11 @@
       "note": "New floor 2026-11-11: the backend was never measured before, although it is the code that decides what the generated Rust looks like. Target 90/85. 2026-11-13: re-measured 87.00/86.02 into the 2026-11-13 profile; floor unchanged."
     },
     "crates/ravum-lang-codegen/src/lib.rs": {
-      "lines": 75,
-      "regions": 65,
-      "measured_lines": 76.92,
-      "measured_regions": 66.67,
-      "note": "New floor 2026-11-11. Mostly module wiring and error plumbing; its region floor is low because the entry points are exercised through `generate` from the integration tests."
+      "lines": 100,
+      "regions": 100,
+      "measured_lines": 100.0,
+      "measured_regions": 100.0,
+      "note": "New floor 2026-11-11 (75/65). Raised to 100/100 on 2026-11-14 (round 9): the only uncovered code was `CodegenError`'s `Display::fmt`, now exercised by `tests::codegen_error_displays_its_message`; `cargo llvm-cov` measures 100 % lines and regions on this file."
     },
     "crates/ravum-lang-codegen/src/prelude.rs": {
       "lines": 100,
