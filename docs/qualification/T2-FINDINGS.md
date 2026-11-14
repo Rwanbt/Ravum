@@ -1328,5 +1328,24 @@ programme, sous-ensemble documenté de Core 1.0. La campagne nominale ne prouve
 pas l'absence de divergence sur toutes les formes — elle ferme seulement le
 `NOT_RUN` du mode nominal local.
 
+### 26.5 Campagne 3 × 1 000 après l'extension du garde de places (2026-11-14, round 18)
+
+Le générateur v2 exécute aussi, en debug, le garde de cohérence de l'étape B
+(`Copy`/`Move` **et** projections de place). Après l'extension de ce garde
+(rounds 15-16), la campagne longue locale a été **rejouée** pour vérifier que la
+comparaison de places ne produit pas de faux refus à l'échelle :
+
+| Graine | Programmes | Acceptés | Divergences | Durée |
+|---|---|---|---|---|
+| `0x00524156554d0001` | 1 000 | 1 000 | **0** | 277 s |
+| `0x00524156554d0002` | 1 000 | 1 000 | **0** | 277 s |
+| `0x00524156554d0003` | 1 000 | 1 000 | **0** | 277 s |
+| **Total** | **3 000** | **3 000** | **0** | **830 s** |
+
+`release_every=10` : 300 comparaisons debug == release. Aucun refus de place,
+aucune divergence. Cumul des campagnes de l'oracle (v1, v2, nominale, post-gardes+places) :
+**40 200 programmes, 0 divergence**.
+
+
 
 

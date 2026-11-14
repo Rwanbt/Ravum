@@ -427,7 +427,7 @@ dans ce lot.
 | Critère | État au SHA final | Preuve ajoutée / manque |
 |---|---|---|
 | R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
-| R2 | fait sur le périmètre mesuré | 476 cas 0 FAIL **et** oracle génératif : 37 200 programmes (3 campagnes, dont le nominal 30 000), 0 divergence |
+| R2 | fait sur le périmètre mesuré | 476 cas 0 FAIL **et** oracle génératif : 40 200 programmes (4 campagnes, dont le nominal 30 000), 0 divergence |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
 | R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
 | R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |

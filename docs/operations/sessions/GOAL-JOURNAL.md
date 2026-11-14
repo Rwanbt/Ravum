@@ -745,6 +745,22 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   courant de l'arbre, pas une extrapolation du round 11.
 - Aucun changement de code ; documents seulement.
 
+## Entrée 2026-11-14 (round 18) — Oracle 3 × 1 000 après le garde de places
+
+| Champ | Valeur |
+|---|---|
+| Commande | `RAVUM_DIFF_PROGRAMS=1000 cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_long -- --ignored --nocapture` |
+| Résultat | **3 × 1 000 = 3 000 programmes, 3 000 acceptés, 0 divergence**, 830 s, 300 comparaisons debug == release |
+| Cumul oracle | **40 200 programmes, 0 divergence** (v1, v2, nominale, post-gardes+places) |
+
+- Chaque programme passe par le **garde de cohérence de l'étape B** en debug
+  (`Copy`/`Move` + projections de place) : aucun faux refus, aucune divergence.
+- Ce rejeu valide à l'échelle l'extension des rounds 15-16, sur 3 000 programmes
+  supplémentaires, sans attendre une nouvelle campagne nominale de 2 h 23.
+- Documents : `T2-FINDINGS.md` §26.5, rapport (§1, §2, §3, R2, T2, §9), matrice
+  des gates, `PRODUCTION-READINESS.md` R2.
+
+
 
 
 
