@@ -914,6 +914,25 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   d'une future implémentation et évite de confondre l'ABI existante avec la
   proposition de digest.
 
+## Entrée 2026-11-14 (round 27) — Campagne nominale relancée sur l'arbre courant
+
+| Champ | Valeur |
+|---|---|
+| Commande | `RAVUM_DIFF_PROGRAMS=10000 cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_long -- --ignored --nocapture` |
+| Objet | rejouer les **3 × 10 000** avec le garde de places actif (le nominal précédent, `aa88479`/8 602 s, datait d'avant les rounds 15-16) |
+| État à la clôture | **en cours** — aucun résultat n'est avancé avant la sortie complète |
+
+- Pourquoi : le rapport cite un nominal de 30 000 programmes exécuté **avant**
+  l'extension du garde d'ownership aux places. La campagne 3 × 1 000 du round 18
+  a validé le garde à petite échelle ; rejouer le nominal rend cette preuve
+  homogène avec le code courant.
+- Aucun autre build local n'est lancé pendant la campagne (R12).
+- `RFC-RT-TRAPS.md` §7 : la ligne 5.4 est précisée — trois obstacles indépendants
+  (indexation dynamique, `alloc`, **`io`**), et non un seul. L'exemple affiche
+  son résultat, donc l'adapter en `rt` modifierait ce que le smoke vérifie :
+  décision humaine, pas un contournement d'agent.
+
+
 
 
 
