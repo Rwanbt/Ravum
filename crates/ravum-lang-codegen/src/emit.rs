@@ -32,7 +32,7 @@
 use crate::prelude::PRELUDE;
 use crate::{CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, VariantKind,
+    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind, VariantKind,
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
@@ -947,17 +947,6 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
     }
 }
 
-/// Builtin methods whose `self` receiver is consumed (STD-11.3: `Option::{unwrap,
-/// unwrap_or, ok_or}` and `Result::{unwrap, unwrap_or, ok, err}` take `self` by
-/// value, while the `is_*` predicates take `&self`).
-fn builtin_method_moves_receiver(owner: &str, method: &str) -> bool {
-    match owner {
-        "Option" => matches!(method, "unwrap" | "unwrap_or" | "ok_or"),
-        "Result" => matches!(method, "unwrap" | "unwrap_or" | "ok" | "err"),
-        _ => false,
-    }
-}
-
 /// Split a canonical builtin method path into `(owner, method)`.
 fn split_builtin_method(path: &str) -> Option<(&str, &str)> {
     let path = path.strip_prefix("std::").unwrap_or(path);
@@ -1189,6 +1178,26 @@ impl<'a> Emitter<'a> {
             steps.push(ravum_lang_sema::facts::Projection::Deref);
             ty = Some(inner);
         }
+    }
+
+    /// RFC-OWN-FACTS-1 step C: does the checker take the value of `node`?
+    ///
+    /// `own.rs` records `UseKind::Move` when it moves a place, `UseKind::Copy`
+    /// when it reads a `Copy` one, and `Borrow`/`BorrowMut` when it only borrows
+    /// it. "The value is taken" is therefore exactly `Move | Copy`; the backend
+    /// reads that decision instead of re-deriving it from types or from the
+    /// method signature, and it does so in **release builds too** (this helper
+    /// is not behind `debug_assertions`: for the migrated families there is no
+    /// second decision left to compare).
+    ///
+    /// An expression the checker recorded nothing for is not a place it took a
+    /// decision on (a call result, a literal, an aggregate): it is not consumed
+    /// here, and every caller already handles that case separately.
+    fn consumed_by_checker(&self, node: NodeId) -> bool {
+        matches!(
+            self.facts().own.use_kind.get(&node),
+            Some(UseKind::Move) | Some(UseKind::Copy)
+        )
     }
 
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
@@ -4341,11 +4350,16 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 }
             }
             ExprKind::MethodCall { receiver, args, .. } => {
-                // A `self` receiver is moved by the call; `&self`/`&mut self`
-                // borrow it. Builtin receiver kinds are not modelled by the backend,
-                // so they are treated as borrowed (a loud `E0508` when a lowering
-                // would have been required).
-                let receiver_owned = self.by_value_receiver(expr.id);
+                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker already
+                // decided whether the call takes its receiver by value. It
+                // records `Move`/`Copy` on the receiver expression when it
+                // consumes it (`self` by value, and the STD-11.3 consuming
+                // builtins `Option::{unwrap, unwrap_or, ok_or}` /
+                // `Result::{unwrap, unwrap_or, ok, err}`) and `Borrow`/
+                // `BorrowMut` when it only borrows it (`&self`, `&mut self`).
+                // The backend no longer inspects the signature or the builtin
+                // set itself.
+                let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
                 self.walk_expr(receiver, receiver_owned, top, block_depth);
                 let owned_args = self.method_argument_positions(expr.id, args.len());
                 for (arg, owned) in args.iter().zip(owned_args) {
@@ -4513,27 +4527,6 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 }
             },
             PatKind::Wild | PatKind::Lit(_) => {}
-        }
-    }
-
-    /// True when the method takes `self` by value, so its receiver expression is
-    /// moved by the call: a user method whose signature receiver is `ByValue`, or
-    /// a builtin in the STD-11.3 consuming set (`Option`/`Result`).
-    fn by_value_receiver(&self, call: NodeId) -> bool {
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => self
-                .emitter
-                .facts()
-                .fn_sigs
-                .get(item)
-                .map(|signature| signature.receiver == Some(Receiver::ByValue))
-                .unwrap_or(false),
-            Some(MethodTarget::Builtin { path, .. }) => split_builtin_method(path)
-                .map(|(owner, method)| {
-                    builtin_method_moves_receiver(&normalize_owner(owner), method)
-                })
-                .unwrap_or(false),
-            _ => false,
         }
     }
 
