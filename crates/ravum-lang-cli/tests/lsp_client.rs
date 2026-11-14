@@ -858,6 +858,86 @@ fn warm_incremental_edits_match_a_cold_analysis() {
     warm.shutdown_and_exit();
 }
 
+// ---------------------------------------------------------------------------
+// Latency measurement helpers (S8)
+// ---------------------------------------------------------------------------
+
+/// Nearest-rank percentile of an already sorted sample.
+fn percentile(sorted: &[f64], percent: f64) -> f64 {
+    let rank = ((percent / 100.0) * sorted.len() as f64).ceil() as usize;
+    sorted[rank.max(1).min(sorted.len()) - 1]
+}
+
+/// Serialises the merge below when two measurement tests share one process.
+static EXPORT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Export one `(corpus, p50, p95)` row for `tools/timings_gate.py --lsp`.
+///
+/// The S8 targets must be decided by a program, not by a human reading
+/// `eprintln!` output: when `RAVUM_LSP_LATENCY_OUT` names a file, each
+/// measurement test merges its row into that JSON document. Unset — the default
+/// under a plain `cargo test` — the measurement stays side-effect free.
+///
+/// The row carries **its own profile** because the target is defined on
+/// `--release` only: a debug number must never be compared with it. The gate
+/// therefore rejects a `debug` row instead of trusting the caller.
+///
+/// The merge is a read-modify-write keyed by the exact line count (a `Vec`, as
+/// R5 forbids `HashMap`); a corrupted or foreign file is discarded rather than
+/// partially trusted. Losing a row can only make the gate fail closed
+/// ("missing corpus"), never pass with a stale number.
+fn export_latency(name: &str, lines: usize, edits: usize, p50: f64, p95: f64) {
+    let Some(configured) = std::env::var_os("RAVUM_LSP_LATENCY_OUT") else {
+        return;
+    };
+    let path = PathBuf::from(configured);
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let _guard = EXPORT_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let existing = fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(Value::Null);
+    let mut corpora: Vec<Value> = existing
+        .get("corpora")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    corpora.retain(|entry| entry["lines"].as_u64() != Some(lines as u64));
+    corpora.push(json!({
+        "name": name,
+        "profile": profile,
+        "lines": lines,
+        "edits": edits,
+        "p50_ms": p50,
+        "p95_ms": p95,
+    }));
+    corpora.sort_by_key(|entry| entry["lines"].as_u64().unwrap_or(0));
+    let document = json!({ "schema_version": 1, "corpora": corpora });
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).expect("create the LSP latency export directory");
+        }
+    }
+    fs::write(
+        &path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&document).expect("serialize the LSP latency export")
+        ),
+    )
+    .expect("write the LSP latency export");
+    eprintln!(
+        "[lsp-e2e] exported {name} ({lines} lines) to {}",
+        path.display()
+    );
+}
+
 /// End-to-end latency of one diagnostic after a one-line edit, over the real
 /// LSP transport (JSON-RPC framing, server, analysis, publish).
 ///
@@ -1060,15 +1140,70 @@ fn end_to_end_diagnostic_latency_on_the_scale_corpus() {
 
     let mut sorted = times.clone();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let percentile = |percent: f64| -> f64 {
-        let rank = ((percent / 100.0) * sorted.len() as f64).ceil() as usize;
-        sorted[rank.max(1).min(sorted.len()) - 1]
-    };
-    let p50 = percentile(50.0);
-    let p95 = percentile(95.0);
+    let p50 = percentile(&sorted, 50.0);
+    let p95 = percentile(&sorted, 95.0);
     eprintln!(
         "[lsp-e2e] scale corpus ({lines} lines, 150 modules), 20 one-line edits, \
          transport included: p50={p50:.1} ms p95={p95:.1} ms"
     );
+    export_latency("scale-5110", lines, times.len(), p50, p95);
+    assert!(p50 > 0.0 && p95 >= p50, "invalid measurement");
+}
+
+/// Measurement only (`#[ignore]`): the **small-corpus point of the S8 target**,
+/// 20 one-line edits inside `main` of the 1 025-line, 35-module package
+/// (`tools/gen_scale_corpus.py --preset 1000`).
+///
+/// The target is `p95 < 50 ms` "up to 1 000 lines"; the corpus is 1 025 lines,
+/// so the measurement point is *above* the target envelope and the verdict is
+/// conservative. Every edit adds a new unused binding, so a
+/// `publishDiagnostics` notification is guaranteed on each round trip.
+#[test]
+#[ignore = "measurement: end-to-end LSP latency on the 1 025-line corpus"]
+fn end_to_end_diagnostic_latency_on_the_thousand_line_corpus() {
+    let (package, lines) = TempPackage::multi("scale-latency-1k", 35, 5);
+    assert_eq!(
+        lines, 1_025,
+        "the S8 target is defined on the 1 025-line corpus (35 modules × 5 functions)"
+    );
+    let main = fs::read_to_string(package.main_path()).expect("read main");
+    let uri = package.main_uri();
+    let mut client = LspClient::start();
+    client.initialize(package.dir());
+    client.open(&uri, &main);
+    let _ = client.wait_notification("textDocument/publishDiagnostics");
+
+    let mut text = main.clone();
+    let mut version = 2;
+    let mut times: Vec<f64> = Vec::with_capacity(20);
+    for index in 0..20 {
+        let insertion = format!("    let unused_probe_{index}: i32 = 0;\n");
+        let at = text
+            .find("    io::println")
+            .expect("the scale main must print the result");
+        text.insert_str(at, &insertion);
+        let started = Instant::now();
+        client.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{ "text": text }],
+            }),
+        );
+        version += 1;
+        let _ = client.wait_notification("textDocument/publishDiagnostics");
+        times.push(started.elapsed().as_secs_f64() * 1000.0);
+    }
+    client.shutdown_and_exit();
+
+    let mut sorted = times.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let p50 = percentile(&sorted, 50.0);
+    let p95 = percentile(&sorted, 95.0);
+    eprintln!(
+        "[lsp-e2e] 1 025-line corpus ({lines} lines, 35 modules), 20 one-line edits, \
+         transport included: p50={p50:.3} ms p95={p95:.3} ms"
+    );
+    export_latency("scale-1025", lines, times.len(), p50, p95);
     assert!(p50 > 0.0 && p95 >= p50, "invalid measurement");
 }
