@@ -175,6 +175,25 @@ Toutes les exécutions avec `MIRIFLAGS='-Zmiri-disable-isolation'`.
 15 min. Aucune erreur mémoire (UB, accès invalide, fuite signalée par Miri)
 dans les tests exécutés.
 
+### 4.4 Rejeu en CI Linux après les changements de la phase 4-5 (2026-11-14)
+
+Les mesures §4.3 datent d'avant `OwnFacts`, `traps.rs` et le garde de places.
+Le workflow `linux-qual.yml` a été **dispatché manuellement** sur la branche
+`goal/production-ready`, SHA `878e212` (run
+[43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)) :
+
+| Phase | Résultat |
+|---|---|
+| `syntax --lib` (mêmes exclusions) | **65 passés, 0 échec** |
+| `sema --lib -- --skip loader::` | **134 passés, 0 échec** (inclut les 13 tests `traps.rs`) |
+| `sema` fuzz court (`RAVUM_FUZZ_ITERS=3`) | **2 tests verts** (court + long ignoré) |
+
+Job Miri **vert**. C'est la première exécution Miri sur le code des phases 4-5 ;
+elle reste bornée aux bibliothèques et ne remplace ni l'audit externe ni une
+preuve. Miri **local** reste indisponible (`cargo-miri` absent, R5).
+
+## 5. Reproductibilité
+
 ## 5. Reproductibilité
 
 - Fuzz : graines fixes dans le fichier de test ; budget par `RAVUM_FUZZ_ITERS`.

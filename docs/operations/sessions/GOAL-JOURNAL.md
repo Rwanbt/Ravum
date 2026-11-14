@@ -760,6 +760,28 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Documents : `T2-FINDINGS.md` §26.5, rapport (§1, §2, §3, R2, T2, §9), matrice
   des gates, `PRODUCTION-READINESS.md` R2.
 
+## Entrée 2026-11-14 (round 19) — Qualification Linux + Miri sur l'arbre courant
+
+| Champ | Valeur |
+|---|---|
+| Déclenchement | `gh workflow run linux-qual.yml --ref goal/production-ready` (dispatch manuel, pas la PR) |
+| Run | [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570), SHA `878e212` |
+| Résultat | **7 jobs verts** ; TSan `skipped`/`NOT_APPLICABLE` |
+
+- Workspace Linux : **100 groupes, 1 601 passés / 0 échec / 7 ignorés**.
+- Conformance Linux : total **476**, **474 PASS / 0 FAIL / 2 SKIP**,
+  `build_verified: true` (un SKIP de plus que Windows : cas spécifique plateforme).
+- Smoke Linux : **31/0/0** ; stdlib 64/64 ; CLI 13/13 ; flags 20/20.
+- **Miri** : syntax **65** tests, sema **134** tests (dont les 13 de `traps.rs`),
+  fuzz court **2** tests — job vert. C'est la première exécution Miri sur le code
+  des phases 4-5. Miri local reste `NOT_RUN` (composant absent, R5).
+- wasm32-wasip1 : build + exécution via Node WASI, vert ; installateur : contrat
+  vert ; fuzz smoke : vert.
+- Le workflow ne se déclenche pas sur cette branche (triggers `main`/`dev`/
+  `feat/**`/`fix/**`) ; le dispatch manuel est la seule façon de qualifier Linux
+  sans merge. Ce n'est pas un gate de la PR.
+
+
 
 
 

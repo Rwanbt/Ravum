@@ -853,7 +853,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets (23 workspace + 41 dépendances) / 170 relations**, `created=1970-01-01`, sha256 `46b65d9fe941123e4ea7ac8fb82cfeb1e4ccb457d7cf29947ec5cd0251647721` |
 | Installateur | `pwsh -File scripts/install.ps1 -Prefix target/install-round13 -SkipBuild` puis deux `-Uninstall` | install exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, rustc 1.95.0, `locked=true` ; désinstallations **0 / 0** (la seconde : « rien à désinstaller ») |
 | LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |
-| Miri, mutation | — | **`NOT_RUN`** : raisons dans le rapport §6 (composant Miri absent, cargo-mutants absent) |
+| Linux qualification (round 19) | `gh workflow run linux-qual.yml --ref goal/production-ready` (run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)) | **7 jobs verts sur `878e212`** : workspace **100 groupes / 1 601 passés / 0 échec / 7 ignorés**, conformance **476 (474 PASS / 0 FAIL / 2 SKIP)** `build_verified: true`, smoke **31/0/0** (stdlib 64/64, CLI 13/13, flags 20/20), **Miri 65 + 134 tests + fuzz court**, fuzz smoke, installateur, wasm32 ; TSan `NOT_APPLICABLE` |
+| Miri, mutation | — | Miri **local `NOT_RUN`** (`cargo-miri` absent) mais **CI Linux verte** sur `878e212` ; mutation `NOT_RUN` (cargo-mutants absent) |
 
 **Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
 T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,

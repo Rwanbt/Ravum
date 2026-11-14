@@ -40,11 +40,13 @@
 8. La gouvernance périmée est corrigée (`STATUS.md`, `START_HERE.md`,
    `AGENTS.md` en `PENDING_HUMAN_APPROVAL`, statut du langage en un seul état).
 9. **Non fait** : phase 4.5 (étape C, suppression du `MovePlanner`), phase 5.4
-   (adaptation de l'exemple DSP), phase 8 (bloc DSP) ; Miri et mutation :
-   `NOT_RUN` avec raisons. **Fait depuis la première rédaction** : étapes A/B
-   partielles d'`OwnFacts`, phase 5 implémentée en `rt` (gate de traps, y compris
-   affectation composée, + méthodes explicites + 5 cas), et **campagne nominale
-   de l'oracle (30 000 programmes) exécutée localement**.
+   (adaptation de l'exemple DSP), phase 8 (bloc DSP) ; **mutation** : `NOT_RUN`
+   avec raison. **Fait depuis la première rédaction** : étapes A/B partielles
+   d'`OwnFacts`, phase 5 implémentée en `rt` (gate de traps, y compris
+   affectation composée, + méthodes explicites + 5 cas), **campagne nominale de
+   l'oracle (30 000 programmes)** et **campagne 3 × 1 000 après le garde de
+   places**, et **Miri rejoué vert en CI Linux** (65 tests syntax + 134 sema +
+   fuzz court). Miri local reste absent.
 10. **Rien n'est prouvé** au sens formel. T4 (audit externe) et T12 (Go/No-Go)
     restent `BLOCKED` par construction ; D9 (clé) reste différée.
 
@@ -106,6 +108,7 @@ Les autres chiffres sont identiques ou meilleurs.
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après la passe de traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en profil `rt`) | nouvelle preuve |
 | LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
 | LSP bout en bout (transport inclus) | non mesuré | **p50 2,061 ms / p95 2,826 ms** sur 20 éditions d'une ligne | cible P0-A p95 < 50 ms atteinte sur cette mesure locale |
+| Qualification Linux (run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570), `878e212`) | non rejouée en phase 0 | **7 jobs verts** : workspace **100 groupes, 1 601 / 0 / 7**, conformance **476 (474 PASS, 0 FAIL, 2 SKIP)** avec `build_verified: true`, smoke **31/0/0**, Miri **65 + 134 tests + fuzz court**, fuzz smoke, installateur, wasm32 ; TSan `NOT_APPLICABLE` | nouvelle preuve (dispatch manuel) |
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) | nouvelle preuve |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `bf55aab9…`, commit `662f63d`), désinstallation idempotente **0 / 0** | nouvelle preuve, rejouée au round 13 |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `46b65d9fe941…`, `created=1970-01-01`, déterministe | nouvelle preuve, rejouée au round 13 |
@@ -123,7 +126,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | R1 | Sémantique ratifiée | `PARTIAL` | ADR `PROPOSED`, spec DRAFT ; aucune ratification par un agent |
 | R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 476 cas 0 FAIL + 40 200 programmes générés 0 divergence (dont le nominal 30 000 et 3 000 après le garde de places) ; ne prouve pas l'absence de forme inconnue |
 | R3 | Traçabilité complète | `PARTIAL` | 188/188 FeatureIds ; **463/807 MUST**, 344 non mappés (`must_audit.py`) — D10 |
-| R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri `NOT_RUN` (composant `cargo-miri` absent de la toolchain locale, installer serait un outil supplémentaire) |
+| R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri **local** `NOT_RUN` (composant absent) mais **rejoué vert en CI Linux** sur `878e212` (borné aux libs) |
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
 | R6 | Code généré sûr | **fait** | `forbid(unsafe_code)` sans `extern` ; `deny` + `allow` local au wrapper ; 2 tests de garde, rouges prouvés |
 | R7 | Reproductibilité inter-machines | `PARTIAL` | deux racines identiques sur **cette** machine ; pas de deuxième machine |
@@ -149,8 +152,8 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T7 | `PASS` | LSP : cache de parse et latence mesurée (analyse p95 1,362 ms ; bout en bout p95 2,826 ms, transport inclus) ; client LSP 11/11 |
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
-| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; fuzz sema rejoué après traps ; workspace release vert (1 603/0/5) ; Miri et mutation `NOT_RUN` ; audit externe absent |
-| T11 | `PARTIAL` | reproductibilité release rejouée (`98852115…` sur deux racines, round 13) ; SBOM déterministe (`46b65d9f…`, 64/170) ; installateur rejoué (`bf55aab9…`, 2 désinstallations 0/0) ; aucune clé (D9) |
+| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; **Miri rejoué vert en CI Linux** (`878e212`) ; mutation `NOT_RUN` ; audit externe absent |
+| T11 | `PARTIAL` | reproductibilité release rejouée (`98852115…`, round 13) ; SBOM déterministe (`46b65d9f…`) ; installateur Windows (`bf55aab9…`, 2 désinstallations 0/0) et **contrat installateur Linux vert** au round 19 ; wasm32 vert ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 
 ### 4.3 CI observée sur la PR brouillon
@@ -234,6 +237,30 @@ Complément round 17 : après l'extension du garde d'ownership aux places, le
 re-mesurée sur l'arbre courant (**100 groupes, 1 603 / 0 / 5**, 2 tests
 debug-only exclus). Aucun exemple n'est rejeté par le nouveau garde.
 
+### 4.5 Qualification Linux + Miri rejouée sur l'arbre courant (round 19)
+
+Le workflow `linux-qual.yml` ne se déclenche pas sur `goal/production-ready`
+(seulement `main`, `dev`, `feat/**`, `fix/**`). Il a donc été **dispatché
+manuellement** sur le SHA `878e212` (run
+[43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)) pour
+qualifier Linux et Miri sur le code courant, sans merge.
+
+| Job | Résultat |
+|---|---|
+| Workspace tests (Linux, 1.95.0) | **succès** : 100 groupes, **1 601 passés / 0 échec / 7 ignorés** |
+| Conformance corpus (Linux) | **succès** : total 476, **474 PASS / 0 FAIL / 2 SKIP**, `build_verified: true` |
+| Example smoke suite (Linux) | **succès** : **31 PASS / 0 FAIL / 0 NOT_RUN** ; stdlib **64/64** ; CLI **13/13** ; flags documentés **20/20** |
+| **Miri (nightly, syntax + sema)** | **succès** : syntax **65 tests**, sema **134 tests**, fuzz court **2 tests**, 0 échec |
+| Fuzz smoke | succès |
+| Installer contract (prefix temporaire, `--version`) | succès |
+| wasm32-wasip1 (build + exécution via Node WASI) | succès |
+| TSan | `skipped` — `NOT_APPLICABLE` documenté (aucun chemin concurrent) |
+
+Écarts plateforme assumés, ni cachés ni comptés comme PASS : Linux ignore
+**7** tests (contre 5 sous Windows, tests spécifiques au système de fichiers) et
+le corpus a **2 SKIP** au lieu de 1. Miri est une vérification dynamique bornée
+sur les tests de la lib, pas une preuve.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
@@ -255,7 +282,7 @@ debug-only exclus). Aucun exemple n'est rejeté par le nouveau garde.
 | Phase 5 (traps `rt`) | `PARTIAL` : 5.1-5.3 faits, 5.4 `NOT_RUN` | 5.4 exigerait une API de slice sûre (`get`/`set`) + son codegen, hors RFC | gate + 10 tests unitaires + 5 cas ; `examples/dsp-gain-iir` inchangé |
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | **fait** | exécuté localement au round 8 (`aa88479`) : 3 × 10 000, **0 divergence**, 8 602 s ; 3 000 comparaisons debug == release | commande §4, détail `T2-FINDINGS.md` §26.4 |
-| Miri | `NOT_RUN` | composant `cargo-miri` absent de la toolchain nightly locale ; l'installer serait un outil supplémentaire (R5) ; la preuve CI Linux existante n'est pas rejouée ici | — |
+| Miri | **CI Linux vert, local `NOT_RUN`** | Composant `cargo-miri` absent de la toolchain locale (l'installer serait un outil supplémentaire, R5). Le workflow `linux-qual.yml` a été déclenché manuellement sur `878e212` : job Miri **vert** (syntax 65 tests, sema 134 tests, fuzz court 2 tests). Miri reste une vérification bornée, pas une preuve. |
 | Mutation | `NOT_RUN` | `cargo-mutants` absent ; l'installer serait une nouvelle dépendance (R5) | — |
 | Couverture à 100 % | `NOT_RUN` | 2 126 lignes non couvertes (10 fichiers) ; `codegen/lib.rs` clos à 100/100 ; limites structurelles documentées | mesure + gap + [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
@@ -292,8 +319,9 @@ dans [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md).
 - **Corpus fini** : 476 cas + 40 200 programmes générés sont une observation,
   pas une preuve sur tous les programmes. L'oracle lui-même ne couvre qu'un
   sous-ensemble documenté de Core 1.0.
-- **Aucune preuve formelle** : pas de Kani, pas de Miri cette session, pas
-  d'audit externe. La sûreté mémoire repose sur `rustc` sous `forbid(unsafe_code)`
-  (voie B), pas sur une preuve Ravum.
+- **Aucune preuve formelle** : pas de Kani, pas de Miri **local** (Miri a été
+  rejoué en CI Linux sur `878e212`, mais reste une vérification bornée), pas
+  d'audit externe. La sûreté mémoire repose sur `rustc` sous
+  `forbid(unsafe_code)` (voie B), pas sur une preuve Ravum.
 - **Un audit mené par un agent reste un audit interne** : T4 et T12 ne peuvent
   pas être levés par ce rapport.
