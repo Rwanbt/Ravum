@@ -298,5 +298,6 @@ défaut réel.
 
 ## 7. PR
 
-La PR est ouverte en **brouillon** vers `dev`, avec pour corps les sections 0
-et 5 de ce rapport. Aucune fusion, aucun tag, aucune release, aucune signature.
+La PR est ouverte en **brouillon** vers `dev` : [PR #112](https://github.com/Rwanbt/Ravum/pull/112),
+avec pour corps les sections 0 et 5 de ce rapport. Aucune fusion, aucun tag,
+aucune release, aucune signature.
