@@ -872,6 +872,28 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - `STATUS.md` n'est pas modifié : ses chiffres sont explicitement datés
   (`c931fdf`, 2026-11-13) et restent vrais pour cette date.
 
+## Entrée 2026-11-14 (round 25) — `LANGUAGE-CORE-STATUS.md` remis à l'état courant
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `docs/reports/LANGUAGE-CORE-STATUS.md` |
+| Mesures rejouées | sema **16 groupes / 701 passés / 0 échec / 1 ignoré** ; contrats Python **38 tests OK** |
+| Nature | mise à jour de l'état courant ; l'annexe historique n'est pas réécrite |
+
+- Ce document, lié depuis `STATUS.md`, annonçait « État courant » avec les
+  chiffres de la **phase 0** (`c931fdf` : 94 groupes, 1 574 tests, 471 cas).
+  Il porte désormais les chiffres du 2026-11-14 : workspace **100 groupes,
+  1 605/0/5** (release 1 603), sema **701/0/1**, conformance **476 (475 PASS,
+  build 203/203)**, smoke 43/0/0, registre 108/126/0/0, traçabilité 188/188,
+  contrats Python **38**.
+- Nouvelle §1.3 « Preuves ajoutées depuis la phase 0 » : oracle 40 200
+  programmes, couverture 89,47/88,87 (`codegen/lib.rs` 100/100), fuzz long,
+  LSP de bout en bout, Miri et mutation en CI, qualification Linux — avec liens
+  et rappel qu'aucun n'est un `PROVED`.
+- Les chiffres de la phase 0 restent dans `GOAL-BASELINE.md` ; l'annexe (§2)
+  n'est pas réécrite. `report_consistency.py` passe.
+
+
 
 
 

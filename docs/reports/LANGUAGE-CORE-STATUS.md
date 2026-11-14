@@ -7,32 +7,49 @@
 > [`GOAL-BASELINE.md`](GOAL-BASELINE.md). Aucun `PROVED`, aucune maturité
 > « production » n'est revendiquée.
 >
-> **Dernière mesure : 2026-11-13**, branche `goal/production-ready` @
-> `c931fdfe346474b838ba1856f3a84bf6798bba87`, Windows 11 x64, `rustc 1.95.0`.
-> L'historique des passes (du 2026-11-09 au 2026-11-13) est déplacé **tel quel**
+> **Dernière mesure : 2026-11-14**, branche `goal/production-ready` @
+> `774c34a` (code `878e212`), Windows 11 x64, `rustc 1.95.0`. Les chiffres de la
+> **phase 0** (`c931fdf`) restent dans [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
+> L'historique des passes (du 2026-11-09 au 2026-11-14) est déplacé **tel quel**
 > en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
 > passe, pas ceux du HEAD.
 
 ## 1. État courant
 
-### 1.1 Ce que dit la mesure (phase 0 du GOAL, `c931fdf`)
+### 1.1 Ce que dit la mesure (état au 2026-11-14)
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **94 groupes `test result` : 1574 passés / 0 échec / 2 ignorés**, exit 0 |
-| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **683 passés / 0 échec**, exit 0 |
-| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=202 covered=202 verified=121 implicit=81 failed=0` ; `build_verified: true` ; exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes `test result` : 1 605 passés / 0 échec / 5 ignorés**, exit 0 |
+| Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés** (2 tests debug-only), exit 0 |
+| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **16 groupes : 701 passés / 0 échec / 1 ignoré**, exit 0 |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=203 covered=203 verified=122 implicit=81 failed=0` ; `build_verified: true` ; exit 0 |
 | Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
 | Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
 | Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |
-| Contrats Python | `python -m unittest discover -s tools/tests` | **33 tests OK**, exit 0 |
+| Contrats Python | `python -m unittest discover -s tools/tests` | **38 tests OK**, exit 0 |
 | Formatage | `cargo fmt --all -- --check` | exit 0 |
 
 **Note de comptage.** Les rapports antérieurs annoncent « 113 suites » pour le
-workspace. La commande ci-dessus produit **94** groupes `test result` (un par
-binaire de test), avec exactement le même nombre de tests passés (1574) et
-ignorés (2). La méthode qui donne 113 n'est pas reproduite ; l'écart est consigné
-dans `GOAL-BASELINE.md` §4.2 et aucun chiffre n'est recopié sans sa commande.
+workspace. La commande ci-dessus produit **100** groupes `test result` (un par
+binaire de test) ; la phase 0 en produisait 94 pour 1 574 tests. La méthode qui
+donne 113 n'est pas reproduite ; l'écart est consigné dans `GOAL-BASELINE.md`
+§4.2 et aucun chiffre n'est recopié sans sa commande.
+
+### 1.3 Preuves ajoutées depuis la phase 0 (session GOAL)
+
+| Preuve | Résultat | Détail |
+|---|---|---|
+| Oracle différentiel | **40 200 programmes, 0 divergence** (nominal 30 000, 3 000 après le garde de places) | [`GOAL-PRODUCTION-READINESS-REPORT.md`](GOAL-PRODUCTION-READINESS-REPORT.md) §3 |
+| Couverture sema+codegen | **89,47 / 88,87** ; `codegen/lib.rs` **100/100** (plancher relevé) ; seuils tenus | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
+| Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema 100 000 / 0 échec, rejoué après traps | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
+| LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** | [`LSP.md`](../qualification/LSP.md) §7 |
+| Miri | rejoué **vert en CI Linux** sur `878e212` (65 + 134 tests + fuzz court) ; local absent | rapport §4.5 |
+| Mutation | rejouée en CI sur `b5298db` : **183 / 150 / 24 / 9** (portée ciblée) | [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) §11 |
+| Qualification Linux | 7 jobs verts sur `878e212` (workspace, conformance, smoke, Miri, fuzz, installateur, wasm32) | rapport §4.5 |
+
+Aucun de ces résultats n'est un `PROVED` ; ils sont liés à leur SHA et à leur
+machine (ou au runner CI pour Linux/Miri/mutation).
 
 ### 1.2 Composants (état réel, sans chiffre non mesuré)
 
@@ -43,11 +60,14 @@ dans `GOAL-BASELINE.md` §4.2 et aucun chiffre n'est recopié sans sa commande.
 - `crates/ravum-lang-sema` : résolution de modules/visibilité, table builtins,
   typechecker, exhaustivité, effets transitifs et profils `core`/`pure`/`rt`,
   borrow checker conservateur (init, moves, move partiel, prêts, non-échappement,
-  drop, provenance `&'static str`), faits typés (`CheckedProgram`).
+  drop, provenance `&'static str`), faits typés (`CheckedProgram`), `OwnFacts`
+  (usages et places, RFC-OWN-FACTS-1) et gate de traps du profil `rt`
+  (RFC-RT-TRAPS-1).
 - `crates/ravum-lang-codegen` : un fichier Rust autonome et auditable par
   programme, prélude sûr, `#![forbid(unsafe_code)]` **sans** `extern`, et
   `#![deny(unsafe_code)]` + `#[allow(unsafe_code)]` local au wrapper généré
-  **avec** `extern` (FFI scalaire expérimentale).
+  **avec** `extern` (FFI scalaire expérimentale) ; garde de cohérence des faits
+  d'ownership en debug (étape B, projections comparées à la syntaxe).
 - `crates/ravum-lang-cli` : `ravum-lang` (`init`, `check`, `build`, `run`,
   `watch`/`dev`, `test`, `fmt`, `lint`, `doc`, `cache`, `doctor`, `lsp`), loader
   de packages, JSON versionné (`schema_version: 1`), codes de sortie stables.
