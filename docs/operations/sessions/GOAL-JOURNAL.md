@@ -948,6 +948,23 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   désinstallations idempotentes) du même rejeu sont référencés.
 - Aucun build local pendant la campagne nominale (R12).
 
+## Entrée 2026-11-14 (round 29) — `LINUX-QUALIFICATION.md` pointe le rejeu courant
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `docs/qualification/LINUX-QUALIFICATION.md` |
+| Ajout | §12 : run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570), SHA `878e212` |
+| Nature | documentation d'un run déjà exécuté (round 19) ; aucun build local |
+
+- Le statut global du document pointait encore le run `c67f17e`
+  (2026-11-11), antérieur à `OwnFacts`, `traps.rs` et au garde de places. Il
+  pointe désormais le rejeu `878e212`, tout en conservant les runs antérieurs
+  comme historique (§10/§11).
+- §12 détaille les 7 jobs verts (workspace 1 601, conformance 474 PASS / 2 SKIP,
+  smoke 31, Miri 65+134, fuzz, installateur, wasm32), les **deux SKIP nommés**
+  (Windows-only) et les limites (une image, un SHA, pas de TSan, Miri borné).
+
+
 
 
 
