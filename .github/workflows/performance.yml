@@ -164,3 +164,79 @@ jobs:
           echo "Coarse regression alarm on a shared runner: not the 16 GB reference machine, not a budget, not a proof of constant-time behaviour."
           echo "The linearity exponent (5 110 -> 20 110 lines, ceiling 1.3) is an algorithmic-growth alarm, not a latency budget."
           echo "Baseline and ceilings: docs/qualification/timings-baseline.json and docs/qualification/PERFORMANCE.md."
+
+  lsp-targets:
+    name: LSP end-to-end latency vs the S8 targets (release)
+    # Owner decision S8 (2026-11-14) fixes two product targets on the end-to-end
+    # diagnostic latency — JSON-RPC transport, server, analysis and publish
+    # included — over 20 one-line edits in the release profile:
+    #
+    #     p95 < 50 ms    at 1 025 lines
+    #     p95 <= 150 ms  at 5 110 lines
+    #
+    # They are NOT alarms: no factor, no floor, and the small one is strict.
+    # `tools/timings_gate.py --lsp` applies them to the export of the two
+    # `#[ignore]` measurement tests (`RAVUM_LSP_LATENCY_OUT`), so the verdict is
+    # decided by a program from the numbers the tests actually measured — a
+    # missing corpus, a debug row or a non-positive statistic fails closed.
+    #
+    # Scope: the figures in docs/qualification/LSP.md were measured on the 16 GB
+    # reference machine (i7-13620H, Windows 11, idle). A shared `windows-latest`
+    # runner is slower, so a red run here says "this runner did not reach the
+    # product target"; it does not license relaxing the target (S8 refuses that).
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: never
+      # Absolute on purpose: cargo runs a test binary with the *package* root as
+      # its working directory, so a relative path would be written under
+      # crates/ravum-lang-cli/target/ and the gate step would not find it.
+      RAVUM_LSP_LATENCY_OUT: ${{ github.workspace }}/target/lsp/latency.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache cargo registry and release target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-lsp-targets-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-lsp-targets-
+      - name: Measure the two S8 corpora (release, 20 one-line edits each)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo test --release -p ravum-lang-cli --test lsp_client -j 4 --no-run
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo test --release -p ravum-lang-cli --test lsp_client -j 4 end_to_end_diagnostic_latency_on_the_thousand_line_corpus -- --ignored --nocapture --test-threads=2
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo test --release -p ravum-lang-cli --test lsp_client -j 4 end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture --test-threads=2
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          exit 0
+      - name: Apply the S8 targets (fail-closed)
+        shell: pwsh
+        run: |
+          python tools/timings_gate.py --lsp target/lsp/latency.json --lsp-small-p95-ms 50 --lsp-large-p95-ms 150
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::lsp target: p95 < 50 ms at 1 025 lines or p95 <= 150 ms at 5 110 lines is not met (S8)"; exit 1 }
+          exit 0
+      - name: Upload the measurement for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lsp-latency
+          path: target/lsp/latency.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "S8 product targets, release profile, 20 one-line edits, transport included: p95 < 50 ms at 1 025 lines and p95 <= 150 ms at 5 110 lines."
+          echo "Measured on this runner, not on the 16 GB reference machine; a red run is a runner/algorithm signal, never a reason to relax the target."
+          echo "Published figures and conditions: docs/qualification/LSP.md."

@@ -43,8 +43,27 @@ the same shared runner as the alarm; it is an **algorithmic-growth alarm**
 (quadratic accumulation, accidental O(n²) copies), not a latency budget. The
 measured exponent is published in `docs/reports/LANG-TIMINGS.md`.
 
-Exit codes: 0 all ceilings hold, 1 at least one ceiling is exceeded (or the
-baseline/measurement is incomplete), 2 invalid input.
+LSP target gate (wave 3, S8)
+----------------------------
+Owner decision S8 of 2026-11-14 sets two **product** targets on the end-to-end
+diagnostic latency — JSON-RPC transport, server, analysis and publish included —
+over 20 one-line edits in the `release` profile:
+
+    p95 < 50 ms    at 1 025 lines
+    p95 <= 150 ms  at 5 110 lines
+
+Those are not alarms: there is no factor and no floor, the small target is
+strict (`<`), and a missed target fails the gate. The measurement is produced by
+`crates/ravum-lang-cli/tests/lsp_client.rs` (`--ignored`, `--release`,
+`RAVUM_LSP_LATENCY_OUT=<file>`), which exports one row per corpus. The gate is
+fail-closed on incomplete evidence: a missing corpus, a `debug` row, a
+non-positive time, `p95 < p50` or an edit count other than 20 are all refused,
+because the target is only meaningful on the corpus, the edit count and the
+profile it was measured on. Figures are published in
+`docs/qualification/LSP.md`.
+
+Exit codes: 0 all ceilings and targets hold, 1 at least one ceiling or target is
+exceeded (or the baseline/measurement is incomplete), 2 invalid input.
 
 The module is importable: `evaluate()` returns rows, violations and warnings so
 that `tools/tests/test_timings_gate.py` can exercise the rules without running
@@ -67,6 +86,15 @@ STATS = ("p50", "p95")
 LINEARITY_SMALL_LINES = 5110
 LINEARITY_LARGE_LINES = 20110
 LINEARITY_CEILING = 1.3
+
+# S8 (owner decision, 2026-11-14): end-to-end LSP latency targets. These are
+# product targets, not alarms: no factor, no floor, and the small one is strict.
+LSP_SMALL_LINES = 1025
+LSP_SMALL_P95_MS = 50.0
+LSP_LARGE_LINES = 5110
+LSP_LARGE_P95_MS = 150.0
+LSP_EDITS = 20
+LSP_PROFILE = "release"
 
 
 def _read(path: Path) -> dict:
@@ -282,6 +310,127 @@ def evaluate_linearity(
     return row, violations
 
 
+def _lsp_corpora(document: dict) -> dict[int, dict]:
+    """The exported LSP rows, keyed by exact source line count.
+
+    Fail-closed on anything that would silently weaken the target: a foreign
+    schema, a missing or empty `corpora` list, a non-numeric/absent statistic, a
+    row measured in another profile, a non-positive time, `p95 < p50`, and
+    duplicate line counts are all rejected.
+    """
+    if document.get("schema_version") != 1:
+        raise SystemExit("timings_gate: the LSP measurement must declare schema_version 1")
+    entries = document.get("corpora")
+    if not isinstance(entries, list) or not entries:
+        raise SystemExit("timings_gate: the LSP measurement has no non-empty 'corpora' list")
+    corpora: dict[int, dict] = {}
+    for entry in entries:
+        try:
+            lines = int(entry["lines"])
+            edits = int(entry["edits"])
+            p50 = float(entry["p50_ms"])
+            p95 = float(entry["p95_ms"])
+        except (KeyError, TypeError, ValueError):
+            raise SystemExit(
+                "timings_gate: an LSP corpus entry has no numeric "
+                "'lines' / 'edits' / 'p50_ms' / 'p95_ms'"
+            ) from None
+        name = entry.get("name")
+        profile = entry.get("profile")
+        if profile != LSP_PROFILE:
+            raise SystemExit(
+                f"timings_gate: LSP corpus {name!r} was measured in profile {profile!r}; "
+                f"the S8 target is defined on {LSP_PROFILE!r} only"
+            )
+        if lines <= 0 or edits <= 0:
+            raise SystemExit(f"timings_gate: LSP corpus {name!r} has a non-positive line or edit count")
+        if not (math.isfinite(p50) and math.isfinite(p95)):
+            raise SystemExit(f"timings_gate: LSP corpus {name!r} has a non-finite statistic")
+        if p50 <= 0 or p95 < p50:
+            raise SystemExit(
+                f"timings_gate: LSP corpus {name!r} is inconsistent (p50={p50}, p95={p95})"
+            )
+        if lines in corpora:
+            raise SystemExit(f"timings_gate: duplicate LSP corpus for {lines} lines")
+        corpora[lines] = {
+            "name": name,
+            "profile": profile,
+            "lines": lines,
+            "edits": edits,
+            "p50_ms": p50,
+            "p95_ms": p95,
+        }
+    return corpora
+
+
+def evaluate_lsp(
+    document: dict,
+    *,
+    small_lines: int = LSP_SMALL_LINES,
+    small_p95_ms: float = LSP_SMALL_P95_MS,
+    large_lines: int = LSP_LARGE_LINES,
+    large_p95_ms: float = LSP_LARGE_P95_MS,
+    edits: int = LSP_EDITS,
+) -> tuple[list[dict], list[str]]:
+    """Apply the S8 LSP targets; return (rows, violations).
+
+    The small target is strict (`p95 < 50 ms`), the large one inclusive
+    (`p95 <= 150 ms`), exactly as the owner decision states it. Both corpora are
+    required: a run that silently measured only one of them cannot claim the
+    target.
+    """
+    if small_lines <= 0 or large_lines <= 0:
+        raise ValueError("the corpus sizes must be > 0")
+    if large_lines <= small_lines:
+        raise ValueError("large_lines must be greater than small_lines")
+    if small_p95_ms <= 0 or large_p95_ms <= 0:
+        raise ValueError("the p95 targets must be > 0")
+    if edits <= 0:
+        raise ValueError("the edit count must be > 0")
+
+    corpora = _lsp_corpora(document)
+    missing = [lines for lines in (small_lines, large_lines) if lines not in corpora]
+    if missing:
+        present = ", ".join(str(lines) for lines in sorted(corpora)) or "none"
+        raise SystemExit(
+            f"timings_gate: the LSP gate needs the {small_lines}-line and "
+            f"{large_lines}-line corpora (found: {present})"
+        )
+
+    rows: list[dict] = []
+    violations: list[str] = []
+    for lines, ceiling, strict in (
+        (small_lines, small_p95_ms, True),
+        (large_lines, large_p95_ms, False),
+    ):
+        entry = corpora[lines]
+        ok = entry["p95_ms"] < ceiling if strict else entry["p95_ms"] <= ceiling
+        row = {
+            "name": entry["name"] or f"scale-{lines}",
+            "lines": lines,
+            "edits": entry["edits"],
+            "p50_ms": entry["p50_ms"],
+            "p95_ms": entry["p95_ms"],
+            "ceiling_ms": ceiling,
+            "strict": strict,
+            "ok": ok,
+        }
+        rows.append(row)
+        if entry["edits"] != edits:
+            violations.append(
+                f"lsp {lines} lines: the export covers {entry['edits']} edits, "
+                f"the S8 target is defined on {edits} one-line edits"
+            )
+        if not ok:
+            comparison = "<" if strict else "<="
+            violations.append(
+                f"lsp {lines} lines: p95 {entry['p95_ms']:.3f} ms is not "
+                f"{comparison} {ceiling:g} ms (p50 {entry['p50_ms']:.3f} ms, "
+                f"{entry['edits']} edits, profile {entry['profile']})"
+            )
+    return rows, violations
+
+
 def _report(
     rows: list[dict],
     violations: list[str],
@@ -290,20 +439,22 @@ def _report(
     p50_floor_ms: float,
     p95_floor_ms: float,
     linearity: dict | None = None,
+    lsp: list[dict] | None = None,
 ) -> None:
-    width = max((len(row["example"]) for row in rows), default=7)
-    print(f"{'example':<{width}}  mode  stat   baseline     measured      ceiling  verdict")
-    for row in rows:
-        verdict = "PASS" if row["ok"] else "FAIL"
+    if rows:
+        width = max((len(row["example"]) for row in rows), default=7)
+        print(f"{'example':<{width}}  mode  stat   baseline     measured      ceiling  verdict")
+        for row in rows:
+            verdict = "PASS" if row["ok"] else "FAIL"
+            print(
+                f"{row['example']:<{width}}  {row['mode']:<4}  {row['stat']:<4} "
+                f"{row['baseline_ms']:>10.3f}  {row['measured_ms']:>10.3f}  {row['ceiling_ms']:>12.3f}  {verdict}"
+            )
+        print()
         print(
-            f"{row['example']:<{width}}  {row['mode']:<4}  {row['stat']:<4} "
-            f"{row['baseline_ms']:>10.3f}  {row['measured_ms']:>10.3f}  {row['ceiling_ms']:>12.3f}  {verdict}"
+            f"ceiling = max(floor, baseline * {factor:g}), floor p50={p50_floor_ms:g} ms "
+            f"p95={p95_floor_ms:g} ms; {len(rows)} comparisons"
         )
-    print()
-    print(
-        f"ceiling = max(floor, baseline * {factor:g}), floor p50={p50_floor_ms:g} ms "
-        f"p95={p95_floor_ms:g} ms; {len(rows)} comparisons"
-    )
     if linearity is not None:
         verdict = "PASS" if linearity["ok"] else "FAIL"
         print(
@@ -312,6 +463,23 @@ def _report(
             f"{linearity['large_lines']} lines; exponent {linearity['exponent']:.3f} "
             f"(ceiling {linearity['ceiling']:g})  {verdict}"
         )
+    if lsp is not None:
+        print()
+        print("lsp end-to-end latency, release profile, 20 one-line edits, transport included:")
+        print(
+            f"{'corpus':<14}  {'lines':>6}  {'edits':>5}  {'p50 ms':>9}  "
+            f"{'p95 ms':>9}  {'target':>10}  verdict"
+        )
+        for row in lsp:
+            comparison = "<" if row["strict"] else "<="
+            verdict = "PASS" if row["ok"] else "FAIL"
+            print(
+                f"{row['name']:<14}  {row['lines']:>6}  {row['edits']:>5}  "
+                f"{row['p50_ms']:>9.3f}  {row['p95_ms']:>9.3f}  "
+                f"{comparison + ' ' + format(row['ceiling_ms'], 'g'):>10}  {verdict}"
+            )
+        print("targets: S8 (owner decision, 2026-11-14) — p95 < 50 ms at 1 025 lines,")
+        print("p95 <= 150 ms at 5 110 lines; these are product targets, not alarms.")
     for warning in warnings:
         print(f"timings_gate: warning: {warning}")
     if violations:
@@ -319,14 +487,22 @@ def _report(
             print(f"::error::timings gate: {violation}")
         print(f"timings_gate: FAIL — {len(violations)} ceiling(s) exceeded or incomplete")
     else:
-        print("timings_gate: PASS — every check total is under its coarse ceiling")
-        print("timings_gate: reminder: this is a regression alarm, not a performance budget.")
+        print("timings_gate: PASS — every enabled gate holds")
+        print("timings_gate: reminder: the check ceilings are a regression alarm, not a budget.")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Coarse performance regression alarm for ravum-lang check.")
-    parser.add_argument("--baseline", required=True, type=Path, help="reference JSON (docs/qualification/timings-baseline.json)")
-    parser.add_argument("--input", required=True, type=Path, help="measurement JSON from scripts/lang-timings.ps1 -CheckOnly")
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="reference JSON (docs/qualification/timings-baseline.json); required with --input",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        help="measurement JSON from scripts/lang-timings.ps1 -CheckOnly; required with --baseline",
+    )
     parser.add_argument("--factor", type=float, default=3.0, help="multiplier applied to the baseline (default 3.0)")
     parser.add_argument("--p50-floor-ms", type=float, default=100.0, help="absolute p50 ceiling floor in ms (default 100)")
     parser.add_argument("--p95-floor-ms", type=float, default=500.0, help="absolute p95 ceiling floor in ms (default 500)")
@@ -353,17 +529,47 @@ def main(argv: list[str] | None = None) -> int:
         default=LINEARITY_LARGE_LINES,
         help=f"large generated corpus size in lines (default {LINEARITY_LARGE_LINES})",
     )
+    parser.add_argument(
+        "--lsp",
+        type=Path,
+        help=(
+            "LSP latency export (RAVUM_LSP_LATENCY_OUT) measured in the release "
+            f"profile; applies the S8 targets (p95 < {LSP_SMALL_P95_MS:g} ms at "
+            f"{LSP_SMALL_LINES} lines, p95 <= {LSP_LARGE_P95_MS:g} ms at {LSP_LARGE_LINES} lines)"
+        ),
+    )
+    parser.add_argument(
+        "--lsp-small-p95-ms",
+        type=float,
+        default=LSP_SMALL_P95_MS,
+        help=f"small-corpus p95 target in ms, strict (default {LSP_SMALL_P95_MS:g})",
+    )
+    parser.add_argument(
+        "--lsp-large-p95-ms",
+        type=float,
+        default=LSP_LARGE_P95_MS,
+        help=f"large-corpus p95 target in ms, inclusive (default {LSP_LARGE_P95_MS:g})",
+    )
     args = parser.parse_args(argv)
 
-    baseline = _read(args.baseline)
-    measured = _read(args.input)
-    rows, violations, warnings = evaluate(
-        baseline,
-        measured,
-        factor=args.factor,
-        p50_floor_ms=args.p50_floor_ms,
-        p95_floor_ms=args.p95_floor_ms,
-    )
+    if (args.baseline is None) != (args.input is None):
+        parser.error("--baseline and --input must be given together")
+    if args.baseline is None and args.lsp is None:
+        parser.error("nothing to check: give --baseline/--input, --lsp, or both")
+
+    rows: list[dict] = []
+    violations: list[str] = []
+    warnings: list[str] = []
+    if args.baseline is not None:
+        baseline = _read(args.baseline)
+        measured = _read(args.input)
+        rows, violations, warnings = evaluate(
+            baseline,
+            measured,
+            factor=args.factor,
+            p50_floor_ms=args.p50_floor_ms,
+            p95_floor_ms=args.p95_floor_ms,
+        )
     linearity = None
     if args.scale is not None:
         scale = _read(args.scale)
@@ -374,6 +580,15 @@ def main(argv: list[str] | None = None) -> int:
             large_lines=args.large_lines,
         )
         violations.extend(linearity_violations)
+    lsp = None
+    if args.lsp is not None:
+        lsp_document = _read(args.lsp)
+        lsp, lsp_violations = evaluate_lsp(
+            lsp_document,
+            small_p95_ms=args.lsp_small_p95_ms,
+            large_p95_ms=args.lsp_large_p95_ms,
+        )
+        violations.extend(lsp_violations)
     _report(
         rows,
         violations,
@@ -382,6 +597,7 @@ def main(argv: list[str] | None = None) -> int:
         args.p50_floor_ms,
         args.p95_floor_ms,
         linearity=linearity,
+        lsp=lsp,
     )
     return 1 if violations else 0
 
