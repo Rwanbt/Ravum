@@ -626,6 +626,22 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Aucun changement de code ; preuve ajoutée au rapport (§3), à la matrice des
   gates (T10) et à `PRODUCTION-READINESS.md` §9.
 
+## Entrée 2026-11-14 (round 12) — Fuzz sema rejoué après les traps `rt`
+
+| Champ | Valeur |
+|---|---|
+| Commande | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` |
+| Résultat | **100 000 itérations, 0 échec, 18 957 ms, 5 275/s** |
+| Profil | le générateur choisit `rt` 1 fois sur 3 ⇒ **≈ 33 000 exécutions de la passe `traps.rs`** |
+
+- Le run de 100 000 itérations datait d'**avant** la phase 5 ; ce rejeu exerce
+  `traps.rs` (y compris `AssignOp`, `Try`, ranges, agrégats) sous le fuzz.
+- Aucun panic, aucun diagnostic non déterministe, aucun span invalide.
+  `docs/qualification/FUZZ-MIRI-SEMA.md` §3.1 et §7 consignent la commande et
+  le débit ; le débit plus élevé reflète une machine moins chargée.
+- Aucun changement de code ; documents seulement.
+
+
 
 
 

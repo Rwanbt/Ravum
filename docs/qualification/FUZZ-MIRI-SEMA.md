@@ -40,9 +40,7 @@ n'a été modifié ; aucune mutation git) :
 | OS | Windows x86_64 (hôte des mesures) |
 | RAM | 16 Go (référence projet) |
 
-## 3. Fuzz du frontend (`fuzz_check.rs`)
-
-### 3.1 Générateur
+## 3. Fuzz du frontend (`fuzz_check.rs`)### 3.1 Générateur
 
 - Générateur **xorshift64\*** déterministe, graines fixes :
   - `fuzz_check_short` : graine de base `0x0052_4156_554D_465A` ;
@@ -105,6 +103,28 @@ Remove-Item Env:RAVUM_FUZZ_ITERS
   Mesures finales refaites après les dernières éditions de `src/` (mtimes
   ≤ 2026-11-09 17:30:24) ; les runs Miri et fuzz ci-dessous datent de 17:36–17:43.
 - Aucun bug frontend n'a été trouvé par ce fuzz (voir §6 pour les limites).
+
+### 3.1 Rejeu après l'implémentation des traps `rt` (2026-11-14)
+
+La campagne de 100 000 itérations a été **rejouée après** l'ajout de la passe
+`traps.rs` (RFC-RT-TRAPS-1, round 4). Le générateur choisit le profil `rt` dans
+un cas sur trois (voir `fuzz_round`), donc environ 33 000 exécutions ont exercé
+la nouvelle passe de détection de traps, y compris ses formes d'AST nouvelles.
+
+| Run | Itérations | Durée | Débit | Verdict |
+|---|---:|---:|---:|---|
+| Long post-traps | 100 000 | 18 957 ms | 5 275/s | **PASS** |
+
+Commande :
+
+```
+$env:RAVUM_FUZZ_ITERS='100000'
+cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture
+```
+
+Aucun panic, aucun diagnostic non déterministe, aucun span invalide. Le débit
+plus élevé que le run initial (3 876/s → 5 275/s) reflète une machine moins
+chargée, pas un changement de sémantique.
 
 ## 4. Miri
 
@@ -194,6 +214,7 @@ dans les tests exécutés.
 fuzz_check_short: 300 iterations in 67.2868ms                      -> PASS
 fuzz_check_long: 20000 iterations in 5114 ms (3911/s)              -> PASS
 fuzz_check_long: 100000 iterations in 25800 ms (3876/s)            -> PASS
+fuzz_check_long: 100000 iterations in 18957 ms (5275/s)            -> PASS (post-traps, round 12)
 syntax --lib (miri): 65 passed; 0 failed; 4 filtered; 206.56s      -> PASS
 sema  --lib (miri): 87 passed; 0 failed; 40 filtered; 121.50s      -> PASS
 sema  fuzz  (miri, RAVUM_FUZZ_ITERS=3): 3 iterations in 17.90s     -> PASS

@@ -447,7 +447,8 @@ Mesures principales : workspace **100 groupes / 1 604 passés / 0 échec /
 **11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
 cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
 (transport inclus, 20 éditions d'une ligne). Fuzz long rejoué :
-249 054 entrées / 0 échec et 100 000 itérations / 0 échec. Couverture
+249 054 entrées / 0 échec et 100 000 itérations / 0 échec (rejoué après la
+passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
 **89,41/88,81**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à
 98,66/96,84. `OwnFacts` : étape A livrée (faits enregistrés,
 2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur

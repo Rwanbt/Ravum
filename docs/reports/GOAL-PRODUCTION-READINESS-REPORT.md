@@ -100,7 +100,7 @@ Les autres chiffres sont identiques ou meilleurs.
 | Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 112 lignes)** | +14 lignes (code ajouté, mesuré hors tests de conformance) |
 | Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
-| Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s | nouvelle preuve |
+| Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après la passe de traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en profil `rt`) | nouvelle preuve |
 | LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
 | LSP bout en bout (transport inclus) | non mesuré | **p50 2,061 ms / p95 2,826 ms** sur 20 éditions d'une ligne | cible P0-A p95 < 50 ms atteinte sur cette mesure locale |
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` | nouvelle preuve |
@@ -146,7 +146,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T7 | `PASS` | LSP : cache de parse et latence mesurée (analyse p95 1,362 ms ; bout en bout p95 2,826 ms, transport inclus) ; client LSP 11/11 |
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
-| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; workspace release vert (1 603/0/5) ; Miri et mutation `NOT_RUN` ; audit externe absent |
+| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; fuzz sema rejoué après traps ; workspace release vert (1 603/0/5) ; Miri et mutation `NOT_RUN` ; audit externe absent |
 | T11 | `PARTIAL` | reproductibilité release rejouée (`19743DC2…` sur deux racines) ; SBOM déterministe (64/170) ; installateur rejoué ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 
