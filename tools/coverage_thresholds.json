@@ -28,16 +28,18 @@
       "measured_regions": 98.1
     },
     "crates/ravum-lang-sema/src/effects.rs": {
-      "lines": 91,
-      "regions": 93,
-      "measured_lines": 92.41,
-      "measured_regions": 94.55
+      "lines": 92,
+      "regions": 94,
+      "measured_lines": 93.29,
+      "measured_regions": 95.02,
+      "note": "2026-11-13 (batch 1): raised from 91/93 to 92/94 (measurement 93.29/95.02). The 22 remaining uncovered lines are line 65/81 (fixpoint and signature write-back), 193 (impl fn collection), 252/326/329/372/388/403/405 (defensive match arms) and 128-141 (the `test_fns` entry branch, structurally unreachable while `#[test]` is refused with E-UNSUPPORTED-ATTR)."
     },
     "crates/ravum-lang-sema/src/builtins.rs": {
-      "lines": 90,
-      "regions": 88,
-      "measured_lines": 91.81,
-      "measured_regions": 89.11
+      "lines": 100,
+      "regions": 98,
+      "measured_lines": 100.0,
+      "measured_regions": 98.42,
+      "note": "2026-11-13 (batch 1): raised from 90/88 to 100/98. Line coverage is complete: `type_from_str` now has tests for every compound form it accepts and for the malformed text it must refuse. The region gap is the `?` recovery edges of that parser; the region floor stays one point under the measurement."
     },
     "crates/ravum-lang-sema/src/own.rs": {
       "lines": 91,
@@ -54,11 +56,11 @@
       "note": "Thinnest margin of the file set: 0.26 point above the line floor. It is the file to attack first when raising the sema floors."
     },
     "crates/ravum-lang-sema/src/facts.rs": {
-      "lines": 81,
-      "regions": 76,
-      "measured_lines": 82.86,
-      "measured_regions": 77.91,
-      "note": "2026-11-11: raised from 78/72 to 81/76 (measurement 82.86/77.91; the codegen integration tests exercise the facts types)."
+      "lines": 100,
+      "regions": 100,
+      "measured_lines": 100.0,
+      "measured_regions": 100.0,
+      "note": "2026-11-13 (batch 1): raised from 81/76 to 100/100. The file reached 100 % lines and regions after three dead helpers were deleted (`expr_type`, `EffectSet::pure`, `EffectSet::is_subset_of`) and the contracts were tested: effect name round trip, effect set display/union/difference, profile parse/name/forbidden, `FileInfo::line_of`, `file_infos`. The floor is now the objective, so a regression fails the gate."
     },
     "crates/ravum-lang-sema/src/loader.rs": {
       "lines": 76,
@@ -67,18 +69,18 @@
       "measured_regions": 81.26
     },
     "crates/ravum-lang-sema/src/typeck.rs": {
-      "lines": 92,
-      "regions": 91,
-      "measured_lines": 92.61,
-      "measured_regions": 92.18,
-      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-11: 92.98/92.56 in the two-crate measurement (the denominator is the code written since). 2026-11-13: re-measured 92.61/92.18 after pass 10; floor unchanged. Gate target 90/85 met."
+      "lines": 93,
+      "regions": 92,
+      "measured_lines": 93.47,
+      "measured_regions": 93.01,
+      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-11: 92.98/92.56 in the two-crate measurement (the denominator is the code written since). 2026-11-13 (batch 1): raised from 92/91 to 93/92 after `check_expr_list`, `check_tuple` (no caller) and `collect_generic_args` (no caller) were deleted. Gate target 90/85 met."
     },
     "crates/ravum-lang-sema/src/resolve.rs": {
-      "lines": 92,
-      "regions": 92,
-      "measured_lines": 93.13,
-      "measured_regions": 93.36,
-      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). Gate target 90/85 met."
+      "lines": 93,
+      "regions": 93,
+      "measured_lines": 93.26,
+      "measured_regions": 93.45,
+      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). 2026-11-13 (batch 1): raised from 92/92 to 93/93 after the unused `World::module` accessor was deleted. Gate target 90/85 met."
     },
     "crates/ravum-lang-codegen/src/emit.rs": {
       "lines": 86,

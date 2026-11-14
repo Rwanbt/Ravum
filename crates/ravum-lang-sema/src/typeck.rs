@@ -1523,27 +1523,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         types
     }
 
-    fn check_expr_list(&mut self, items: &[Expr], _expected: Option<&Type>) -> Vec<Type> {
-        let mut types = Vec::with_capacity(items.len());
-        let mut first: Option<Type> = None;
-        for item in items {
-            let ty = self.check_expr(item, first.as_ref());
-            if first.is_none() {
-                first = Some(ty.clone());
-            } else if let Some(f) = &first {
-                if !Self::compatible(&ty, f) {
-                    self.error(
-                        "E-TYP-MISMATCH",
-                        item.span,
-                        format!("array/tuple element type `{ty}` does not match `{f}`"),
-                    );
-                }
-            }
-            types.push(ty);
-        }
-        types
-    }
-
     // ------------------------------------------------------------------
     // Littéraux
     // ------------------------------------------------------------------
@@ -4114,14 +4093,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
     }
 
-    fn check_tuple(&mut self, items: &[Expr]) -> Type {
-        if items.is_empty() {
-            return Type::Unit;
-        }
-        let types = self.check_expr_list(items, None);
-        Type::Tuple(types)
-    }
-
     fn check_struct_lit(
         &mut self,
         expr: &Expr,
@@ -5527,25 +5498,6 @@ fn nominal_subst(world: &World, def: &NodeId, args: &[Type]) -> BTreeMap<usize, 
         }
     }
     subst
-}
-
-fn collect_generic_args(
-    generics: &[String],
-    subst: &BTreeMap<usize, Type>,
-    report: &mut dyn FnMut(Span),
-    span: Span,
-) -> Vec<Type> {
-    let mut out = Vec::with_capacity(generics.len());
-    for index in 0..generics.len() {
-        match subst.get(&index) {
-            Some(t) => out.push(t.clone()),
-            None => {
-                out.push(Type::Error);
-                report(span);
-            }
-        }
-    }
-    out
 }
 
 fn substitute(ty: &Type, subst: &BTreeMap<usize, Type>) -> Type {

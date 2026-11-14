@@ -376,10 +376,6 @@ impl<'a> World<'a> {
         }
     }
 
-    pub fn module(&self, id: ModuleId) -> &ModuleInfo {
-        &self.modules[id]
-    }
-
     /// Recherche un nom dans un espace de noms (item local ou import).
     pub fn lookup(&self, module: ModuleId, ns: Ns, name: &str) -> Option<SymRef> {
         if let Some(item) = self.table(module, ns).get(name) {

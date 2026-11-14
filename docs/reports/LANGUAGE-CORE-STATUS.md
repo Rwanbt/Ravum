@@ -1,5 +1,19 @@
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
 
+> **Mise à jour lot couverture 1 — 2026-11-13.** Aucune ligne du compilateur
+> changée : **neuf éléments de code mort supprimés** (aucun appelant vérifié par
+> recherche sur tout le dépôt), tests de contrat ajoutés sur `facts.rs` et
+> `builtins::type_from_str`, et **la façon de compter l'écart de couverture
+> corrigée** — 201 des lignes « non couvertes » étaient du code de test, et cinq
+> des « cibles » annoncées n'avaient aucun appelant. Mesures : **113 suites,
+> 1574 passés / 0 échec / 2 ignorés** ; couverture **89,08 % lignes / 88,39 %
+> régions** (sema + codegen), **86,41 % du seul code produit** (1 715 lignes
+> restantes) ; `facts.rs` **100/100**, `builtins.rs` **100/98,42**,
+> `types.rs` 100/98,10 ; **cinq seuils relevés, aucun abaissé**. Conformance
+> **471 cas, 470 PASS / 0 FAIL / 1 SKIP**, build **202/202** (121 vérifiés,
+> 81 implicites). D7 reste `OPEN`, `T2` reste `PARTIAL` (D10), gates
+> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Le bloc passe 11 ci-dessous est historique.
+
 > **Mise à jour passe 11 — 2026-11-13.** Huit cas de conformance FFI ajoutés
 > (RFC-D7 §5) sans toucher au compilateur : `rt` + FFI et propagation
 > transitive des effets (**EFF-4.7**, **EFF-2.9**, jusqu'ici non testés),

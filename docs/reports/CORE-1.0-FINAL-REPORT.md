@@ -13,6 +13,52 @@
 > 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6 (`5d88ecb` →
 > `9da9b12`).
 
+## 0 nonies. Addendum lot couverture 1 — code mort, contrats, mesure honnête (2026-11-13)
+
+Cette section **prévaut sur 0 octies et sur toutes les suivantes** pour les
+chiffres courants. Elle ne change **aucune ligne du compilateur** : elle supprime
+du code sans appelant, ajoute des tests de contrat, et **corrige la façon de
+compter** l'écart de couverture.
+
+| Mesure | Résultat |
+|---|---|
+| Conformance (`run --verify-build`) | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **202/202**, **121** vérifiés, **81** implicites, `build_verified: true` — inchangé par ce lot |
+| Tests workspace | **113 suites, 1574 passés / 0 échec / 2 ignorés** (exit 0) — **+12** tests |
+| Couverture (`cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen`) | **89,08 % lignes (17 264/19 380) / 88,39 % régions** (Windows 11 x64 ; **89,12 / 88,44** sur le runner Linux, écart dû au `#[cfg(unix)]` de `loader.rs`), contre **88,54 / 87,81** au lot 0 ; **aucun seuil abaissé** |
+| Écart réel | **1 715** lignes de code **produit** non couvertes sur 12 621 (**86,41 %**), **201** lignes non couvertes dans des modules `#[cfg(test)]` (asserts, `panic!` de test, bras inutilisés des walkers), **2 098** lignes au total dans la lecture `--gap` par instanciation |
+| Fichiers fermés à 100 % lignes | `facts.rs` (**100/100** lignes et régions), `builtins.rs` (**100/98,42**), `types.rs` (100/98,10), et le code **produit** de `check.rs` (46 lignes) |
+| Seuils relevés | `facts.rs` 81/76 → **100/100** ; `builtins.rs` 90/88 → **100/98** ; `typeck.rs` 92/91 → **93/92** ; `effects.rs` 91/93 → **92/94** ; `resolve.rs` 92/92 → **93/93** |
+| Code mort supprimé | **9 éléments sans appelant** : `typeck::collect_generic_args`, `typeck::check_expr_list`, `typeck::check_tuple`, `EffectSet::pure`, `EffectSet::is_subset_of`, `facts::expr_type`, `builtins::builtin_assoc_fn_effects`, `effects::empty`, `World::module` |
+
+Ce que ce lot change, et ce qu'il ne prouve pas :
+
+* **Le dénominateur de l'objectif 100 % était faux dans les deux sens.** Il
+  comptait du **code de test** que rien ne peut couvrir (201 lignes : le message
+  d'un `assert!` ne s'exécute que si le test échoue) et il ignorait que cinq des
+  « fonctions non couvertes » citées comme cibles n'avaient **aucun appelant**.
+  Le plan §7 bis de `PRODUCTION-READINESS.md` est réécrit en conséquence, avec
+  `tools/coverage_product_split.py` versionné pour que la séparation
+  produit/test soit reproductible et discutable.
+* **Cinq avertissements `dead_code` sont conservés volontairement**, parce qu'ils
+  documentent un fait et non un coût : `ModuleInfo::name` et
+  `MethodEntry::impl_generics` (informations redondantes), deux charges de
+  `Resolved` jamais lues, et **`UseTarget::Variant` jamais construit — défaut
+  latent** : le message « variant import … is not supported in Core 1.0 »
+  (`resolve.rs`) ne peut pas s'exécuter, `use E::V;` sort aujourd'hui en
+  `E-RES-UNKNOWN` « unknown import path ».
+* **Constat hors couverture** : `impl<T> Holder<T>` **fonctionne** (sonde
+  locale : `check` passe, le binaire s'exécute, `value_of(self) -> T` rend
+  `41 → 42`, `OK42`) mais **aucun cas de conformance ne le couvre**. C'est une
+  forme supportée non verrouillée par le corpus ; l'ajouter change le compte de
+  cas (471 → 472) et donc tous les chiffres publiés, ce qui en fait un lot
+  séparé.
+* **Ce que cela ne prouve pas** : la couverture reste à **86,41 % du code
+  produit**, et **67 %** de l'écart restant est concentré dans deux fichiers
+  (`emit.rs` 608 lignes, `loader.rs` 537). Un fichier à 100 % de lignes n'est
+  pas un fichier correct : la mutation (183 mutants, 150 tués, 24 survivants
+  triés) reste la mesure de correction, et elle porte sur trois fichiers
+  seulement.
+
 ## 0 octies. Addendum passe 11 — huit cas de conformance FFI (2026-11-13)
 
 Cette section **prévaut sur 0 septies et sur toutes les suivantes** pour les
