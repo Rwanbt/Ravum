@@ -53,7 +53,7 @@ fn main() { io::println("hello"); }        // affiche "hello\n", code 0
 
 | Frontière | Forme | Code |
 |---|---|---|
-| FFI minimale (acceptée) | `extern "C" { fn f(primitives) -> primitives; }`, appel dans `unsafe` | acceptée ; appel hors `unsafe` → `E-UNSAFE-CONTEXT` |
+| FFI minimale (acceptée) | `extern "C" { fn f(primitives) -> primitives; }` (liste fermée : ABI-3.4), appel dans `unsafe` | acceptée ; appel hors `unsafe` → `E-UNSAFE-CONTEXT` |
 | FFI hors sous-ensemble | `#[no_mangle]`, `#[link]`, ABI non-C, types composés/pointeurs dans la signature, `extern "C" fn` avec corps | `E-UNSUPPORTED-ATTR`, `E-UNSUPPORTED-ABI`, `E-FFI-TYPE`, `E-UNSUPPORTED-EXTERN` |
 | Unsafe | `unsafe fn`, pointeurs bruts ; le **bloc** `unsafe { }` est accepté (effet `unsafe`, aucune capacité nouvelle) | `E-UNSUPPORTED-UNSAFE` |
 | ABI explicite | `#[repr(C)]`, `#[repr(u8)]` | `E-UNSUPPORTED-ATTR` |
@@ -69,6 +69,8 @@ fn main() { io::println("hello"); }        // affiche "hello\n", code 0
 | ABI-3.1 | Toute frontière native **hors** du sous-ensemble FFI minimal est refusée au parse ou à la résolution, jamais ignorée : ABI non-C, types composés/pointeurs dans une signature `extern`, attributs de linkage. | MUST |
 | ABI-3.2 | Le refus est un diagnostic explicite : `E-UNSUPPORTED-*` pour les formes syntaxiques, `E-FFI-TYPE` pour un type non FFI-sûr, avec la justification « aucune ABI stable en Core 1.0 ». | MUST |
 | ABI-3.3 | Le code généré ne contient **aucun** `extern`, `#[repr]`, ni `unsafe` **pour un programme sans `extern`** ; pour un programme avec `extern`, il contient uniquement les déclarations `extern "C"` et un bloc `unsafe` par wrapper, vérifiable par `--emit-rust` et par l'audit backend. | MUST |
+| ABI-3.4 | Les types admis à la frontière `extern "C"` sont **exactement** : `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`, `bool`, `()`. `i128` et `u128` en sont **retirés** (APPROUVÉ par le responsable, 2026-11-14, décision S4) : aucune largeur C portable ne les couvre. Tout autre type — `char`, `String`, `Vec`, `&T`, `&str`, tuples, tableaux, structs/enums, `i128`, `u128` — est refusé `E-FFI-TYPE` à la résolution. | MUST |
+| ABI-3.5 | Une fonction C qui déroule (exception C++/`longjmp`), lève un signal ou termine le processus est **hors contrat** (APPROUVÉ par le responsable, 2026-11-14, décision S4) : c'est une obligation de l'appelant, non vérifiée par la toolchain, et aucun comportement n'est spécifié vis-à-vis du hook de panic, du runner de tests ou du contrat de code de sortie. | MUST |
 
 ## 4. Contrat d'émission (backend)
 
