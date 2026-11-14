@@ -148,7 +148,7 @@ Vérifié le 2026-11-14 sur de petits programmes : `thread::spawn` →
 | Installateur Linux | `scripts/install-contract.sh --skip-build` | **exécuté en CI le 2026-11-14** (run 43625955751, job 132541685225) : **25 vérifications shell + 30 invariants** ; **`NOT_RUN` en local** | [INSTALL-LINUX](../release/INSTALL-LINUX.md) §1 |
 | Miri | CI Linux | vert en CI sur `e58ed35` (syntax + sema, 9 min 23) ; **local `NOT_RUN`** (`cargo-miri` absent) | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 nonies |
 | Mutation | `mutation.yml` | **219 mutants / 180 tués / 30 survivants triés / 9 non viables** (portée ciblée, dont `emit.rs` 36/30/6) ; **local `NOT_RUN`** | [MUTATION-EQUIVALENCE](../qualification/MUTATION-EQUIVALENCE.md) §12 |
-| CI | PR [#111](https://github.com/Rwanbt/Ravum/pull/111) | tous les jobs verts sur `b172248` après correction du YAML de `gate-contracts.yml` (le run `b172248` n'avait que ce job en échec de configuration, pas de test) ; TSan `NOT_APPLICABLE` | [campagne](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §2 |
+| CI | PR [#111](https://github.com/Rwanbt/Ravum/pull/111) | tous les jobs verts sur `dbf6360` (23 checks) après correction du YAML de `gate-contracts.yml` et du réglage de l'alarme performance ; TSan `NOT_APPLICABLE` | [campagne](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §6 |
 
 Constat défavorable publié sans note de bas de page :
 `check` n'est **pas linéaire** à l'échelle — de 5 110 à 50 110 lignes (×9,8),

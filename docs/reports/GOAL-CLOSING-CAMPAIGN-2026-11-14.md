@@ -112,13 +112,15 @@ pwsh -File scripts/evidence.ps1                 7 contrôles PASS, evidence/curr
 | Déviation littérale T4 (ids dans les symboles) | D-2026-11-14-4 : accepter la normalisation |
 | `i128`/`u128` FFI, unwinding/`longjmp`/signal | C-FFI-2 et C-FFI-4 à trancher |
 
-## 6. CI de la campagne (PR #111, commit `0f28e43`)
+## 6. CI de la campagne (PR #111, commit `dbf6360`)
 
-Tous les jobs de la PR sont **verts** sur `0f28e43` : workspace Linux
-(**9 min 9**) et macOS arm64 (6 min 57), **Miri** (9 min 47), conformance
-Linux/Windows/macOS, couverture par fichier, smoke Linux, fuzz smoke,
-wasm32-wasip1, installateur, release evidence, `vscode-e2e`, `mvp`, `impact`,
-GC borné ; TSan `NOT_APPLICABLE`.
+Tous les jobs de la PR sont **verts** sur `dbf6360` (23 checks : 22 `pass`,
+1 `skipping` TSan `NOT_APPLICABLE`) : workspace Linux (**11 min 36**) et macOS
+arm64 (4 min 22), **Miri** (5 min 41), conformance Linux/Windows/macOS,
+couverture par fichier, smoke Linux, fuzz smoke, wasm32-wasip1, installateur,
+release evidence, `vscode-e2e`, `mvp`, `impact`, GC borné ; TSan
+`NOT_APPLICABLE`. Le commit `0f28e43`, qui portait le même code, était déjà
+entièrement vert.
 
 Preuves ciblées de cette campagne :
 
@@ -130,8 +132,9 @@ Preuves ciblées de cette campagne :
   uninstall, usage codes)` **success** ;
 - `reproducibility` ([run 43628101940](https://github.com/Rwanbt/Ravum/actions/runs/43628101940)) :
   deux runners, digest identique, comparaison **PASS** ;
-- `performance` ([run 43628101920](https://github.com/Rwanbt/Ravum/actions/runs/43628101920)) :
-  alarme **PASS**.
+- `performance` ([run 43629691517](https://github.com/Rwanbt/Ravum/actions/runs/43629691517),
+  réglage corrigé) : alarme **PASS** ; le premier réglage était vert au run
+  43622599048 mais instable (voir le défaut ci-dessous).
 
 Sur `b172248`, le job `gate-contracts` avait échoué **avant exécution** à cause
 d'un nom d'étape YAML contenant `: ` (interprété comme une clé). Le nom a été

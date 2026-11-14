@@ -663,7 +663,7 @@ Campagne de fermeture, rapport détaillé :
 | T8 — rejeu de la campagne mutation (`NOT_RUN` ici) | **rejoué en CI** (run 43622868110) : 219/180/30/9, dont la première campagne `emit.rs` (36/30/6) ; §12 de [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
 | T2 — campagne nominale 3 × 2 000 (`NOT_RUN` ici) | **exécutée** : 6 000 programmes, 0 rejet, 0 divergence, 2 217 s ; le test de puissance reste `BLOCKED` par sa méthode |
 | Couverture (89,79/89,23 dans ce rapport) | **90,44/89,88**, produit **88,55 %** après 25 tests loader et correction de l'outil de split |
-| T10 — run CI `e58ed35` | le run de la campagne finale est vert sur `0f28e43` (voir le rapport de campagne §6) ; gate-contracts a été corrigé (nom d'étape YAML) |
+| T10 — run CI `e58ed35` | le run de la campagne finale est vert sur `dbf6360` (voir le rapport de campagne §6) ; gate-contracts et le réglage de l'alarme performance ont été corrigés |
 | Mutation locale (`cargo-mutants` absent) | inchangé : la campagne tourne en CI (`RFC-DEV-TOOLS-1` toujours ouverte) |
 
 Les statuts de gates de ce rapport ne changent pas : l'addendum ne fait que

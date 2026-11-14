@@ -92,7 +92,9 @@ par mesure, chronomètre `check`/`build`, échantillonne la working set toutes l
   run partagé à cause de deux outliers isolés (224 ms et 238 ms) alors que le
   p50 du même exemple valait 2,3 ms (run 43629253306) : c'était un défaut du
   gate, pas une régression. Le p50 porte désormais le signal ; le p95 ne sert
-  qu'à attraper un blocage catastrophique.
+  qu'à attraper un blocage catastrophique. Après correction, le job est vert au
+  run [43629691517](https://github.com/Rwanbt/Ravum/actions/runs/43629691517)
+  (commit `dbf6360`).
 - Le gate ne tourne que lorsqu'un crate du langage, le script de mesure, le gate
   ou la baseline changent (filtre `paths`), pas sur une PR documentaire seule.
 - L'export complet est uploadé à chaque exécution (`lang-timings-ci`) : une
