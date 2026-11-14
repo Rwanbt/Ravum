@@ -33,6 +33,9 @@ jobs:
       - name: Diagnostics registry (emitted and promised directions)
         run: python3 tools/registry_audit.py
 
+      - name: Unsafe inventory (D7 confinement — forbid/deny + audited allow sites)
+        run: python3 tools/unsafe_audit.py
+
       - name: Contract self-tests (reproduce both historical false-PASS vectors)
         run: python3 -m unittest discover -s tools/tests -v
 

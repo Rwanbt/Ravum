@@ -1,0 +1,20 @@
+use std::io;
+
+fn gain(samples: &[f64; 4], g: f64) -> [f64; 4] {
+    let mut out: [f64; 4] = [0.0; 4];
+    for i in 0..4usize {
+        out[i] = samples[i] * g;
+    }
+    out
+}
+
+fn process(input: &[f64; 4]) -> [f64; 4] {
+    return gain(input, 2.0);
+}
+
+fn main() {
+    let input = [1.0, 0.5, -0.25, 0.0];
+    let out = process(&input);
+    io::println(&out[0].to_string());
+    let x: i32 = 1 + 1;
+}

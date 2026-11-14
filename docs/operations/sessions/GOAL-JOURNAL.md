@@ -1016,3 +1016,116 @@ mesuré. Aucun correctif CI n'a été nécessaire.
 
 
 
+
+
+---
+
+### Seconde vague de consolidation — 2026-11-14 (branche `goal/consolidation-2`)
+
+Base : `dev` à `49cdc83` (PR #109 et #110 fusionnées). Branche créée depuis
+`dev` ; les tâches T1-T4, T9 et T10 ont été menées, T5-T8 ne l'ont pas été.
+Détail complet : `docs/reports/GOAL-CONSOLIDATION-2-REPORT.md`.
+
+| Tâche | Statut | Commits | Résultat mesuré |
+|---|---|---|---|
+| T1 — affirmations | `TESTED` | `383cf5a` | R2 `PARTIAL` ; chaque « 40 200 » porte « 42 gabarits indépendants, sans composition » ; `report_consistency.py` PASS |
+| T2 — vrai générateur | `PARTIAL` | `40f1737`, `1121308`, `b7e6c7a` | 120 programmes : 110/110 acceptés, 10/10 fautifs refusés, 0 divergence, 53 règles, profondeur 0,96 ; **2 divergences réelles trouvées et corrigées** ; test de puissance **NOT_RUN** (revert en conflit) |
+| T3 — corpus à l'échelle | `PARTIAL` | `7f645d9` | 1 025 / 5 110 / 20 110 / 50 110 lignes ; `check` p50 34 ms → 26 424 ms ; `own` 97,5 % à 50 k ; `rustc` 5,6 % ; incrémental jamais plus rapide ; RSS 151/236 Mo ; LSP à l'échelle `NOT_RUN` |
+| T4 — plafond de fichiers | `PARTIAL` | `c61cb92` | `NodeId` u64 32/32 ; `MAX_SOURCE_FILES=65 536` ; paquet de 1 000 modules accepté ; refus testé ; Rust généré identique après normalisation des noms dérivés d'ids (15/232 fichiers différents littéralement) |
+| T5 — `FileId` stable LSP | `NOT_RUN` | — | — |
+| T6 — `rt` par point d'entrée | `NOT_RUN` | — | — |
+| T7 — garde OwnFacts | `NOT_RUN` | — | — |
+| T8 — mutants survivants | `NOT_RUN` | — | — |
+| T9 — source unique des chiffres | `PARTIAL` | `77c3c0f` | 7 contrôles PASS, `evidence/current.json`, 19 déclarations d'état courant vérifiées (3 documents) |
+| T10 — CI `goal/**` | `TESTED` (config) | `1da5544` | déclencheur ajouté ; run CI non observé sur cette branche |
+
+Fin de session : `cargo test --workspace --all-targets -- --test-threads=2` →
+**101 suites, 1 610 passés / 0 échec / 6 ignorés**, exit 0 ; conformance
+**478 cas : 477 PASS / 0 FAIL / 1 SKIP**, `perimeter=206/206`, `verified=123`.
+Aucun cas, test ni seuil supprimé. Aucune fusion, aucun tag, aucun push.
+
+### Suite du 2026-11-14 — T5 exécutée (branche `goal/consolidation-2`)
+
+T5 (`FileId` stable en session LSP) a été menée **après** la rédaction du
+rapport : commit `e3823cb`, tests positifs et négatifs (3 fichiers inchangés +
+4e module déclaré avant ⇒ 3 hits de cache et `NodeId` inchangés ; même édition
+sans table ⇒ 0 hit), refus fail-closed d'une table incohérente. Conformance et
+workspace rejoués : **101 groupes, 1 618 passés / 0 échec / 6 ignorés**, exit 0 ;
+conformance inchangée (**478 / 477 / 0 / 1**, `perimeter=206/206`,
+`verified=123`). L'entrée ci-dessus garde ses chiffres de fin de session ; le
+détail T5 est dans `GOAL-CONSOLIDATION-2-REPORT.md` §5.
+
+### Suite du 2026-11-14 — T6 exécutée (branche `goal/consolidation-2`)
+
+T6 (profil `rt` par point d'entrée + indexation bornée) : commit `986f542`,
+RFC `RFC-RT-TRAPS.md` amendée (§2 et §7). `--rt-entry` sur `check` (avec
+`--profile rt`) et `build` ; atteignabilité sur le graphe d'appels ; deux formes
+d'indexation bornée (`0..Kusize` avec `K <=` taille du tableau, `0..a.len()`
+sur tableau/tranche non réaffecté) ; entrée inconnue refusée (`E-TOOL`).
+`examples/dsp-gain-iir` vérifie en `rt` avec une sortie identique octet pour
+octet (smoke 43/0/0). Conformance **483 / 482 / 0 / 1**, `perimeter=207/207`,
+`verified=124` ; workspace **101 groupes, 1 624 passés / 0 échec / 6 ignorés** ;
+`evidence/current.json` rafraîchi (7 contrôles PASS). Règle :
+`PENDING_HUMAN_APPROVAL`.
+
+### Suite du 2026-11-14 — T7 exécutée (branche `goal/consolidation-2`)
+
+T7 (garde OwnFacts étendu), un commit par exclusion : `ad62f32` (récepteurs de
+méthode), `7f7f431` (arguments de référence), `0d04106` (identité de liaison —
+`Resolution::Local` porte le span de déclaration, même identité qu'`OwnFacts`).
+Le garde de l'étape B ne saute plus ces catégories, il les vérifie ; trois tests
+négatifs injectent un fait faux et attendent `CodegenError`. Générateur T2 avec
+le garde actif : **120 programmes, 0 divergence, 0 désaccord**, 110/110 acceptés,
+53 règles. Workspace **101 groupes, 1 627 passés / 0 échec / 6 ignorés** ;
+conformance inchangée (**483 / 482 / 0 / 1**, `perimeter=207/207`,
+`verified=124`) ; `evidence/current.json` rafraîchi (7 contrôles PASS).
+Garde debug-only ; campagne rapide seulement.
+
+### Suite du 2026-11-14 — T8 documentée (branche `goal/consolidation-2`)
+
+T8 (mutants survivants) : la liste des 24 et leurs justifications existent déjà
+(`MUTATION-EQUIVALENCE.md` §9.1–§9.2, 24/24, familles E1–E6) et ont été
+**revérifiées à HEAD `0d04106`** (sites et conditions présents ; turbofish
+toujours refusé, `type_is_copy` inchangé, `pattern_contains_float` à quatre
+bras). Rejeu de la campagne **`NOT_RUN`** : `cargo mutants --version` → exit 101
+(outil absent ; installation = `RFC-DEV-TOOLS-1` `PENDING_HUMAN_APPROVAL`),
+workflow `mutation.yml` non déclenchable sans push. Dernier rejeu CI connu :
+2026-11-13, 183 mutants / 150 tués / 24 survivants / 9 non viables, identique.
+Statut T8 : `PARTIAL`.
+
+### Suite du 2026-11-14 — couverture T6/T7 rétablie (branche `goal/consolidation-2`)
+
+La réécriture T6 avait fait passer `traps.rs` à **86,70/78,02**, sous son
+plancher 97/95 : le gate de couverture était rouge et la mesure 89,47/88,87 des
+docs était périmée. Six tests de couverture (balayage AST pur, refus de
+`safe_loop`, corps de méthodes, `unsafe`, boucles sur collection, aides de type)
+et la suppression d'une branche `if let` inatteignable de `facts.rs` rétablissent
+le cliquet **sans l'abaisser** : `traps.rs` **97,61/97,13**, `facts.rs`
+**100/100**, `emit.rs` 87,88/87,21, totaux **89,79/89,23**,
+`coverage_report.py --check` **exit 0**. Conformance **483 / 482 / 0 / 1**,
+workspace **101 groupes / 1 633 passés / 0 échec / 6 ignorés**. Commit
+`1b76926` ; chiffres et `coverage_thresholds.json` (provenance) mis à jour.
+
+### Suite du 2026-11-14 — T3 LSP de bout en bout à l'échelle (branche `goal/consolidation-2`)
+
+T3 comble son dernier manque : deux tests dans `crates/ravum-lang-cli/tests/lsp_client.rs`
+sur un paquet généré de la même forme que `tools/gen_scale_corpus.py` (5 110
+lignes vérifiées contre le générateur Python). Fonctionnel (35 modules, 1 025
+lignes) : définition inter-modules vers `m34.rv`, erreur d'arité publiée puis
+effacée. Latence (`#[ignore]`, 20 éditions) : **p50 322,4 ms / p95 337,6 ms** à
+5 110 lignes contre 2,061/2,826 ms sur `package-demo` — **cible P0-A p95 < 50 ms
+non tenue à cette échelle**, écart documenté (analyse globale, le cache de parse
+ne couvre que le parser). Commit `379b6fe` ; workspace **101 groupes / 1 634
+passés / 0 échec / 7 ignorés** ; conformance inchangée. T3 : `PARTIAL` →
+`TESTED` (le paquet de 1 000 fichiers est couvert par T4).
+
+### Suite du 2026-11-14 — fuzz long et reproductibilité rejoués (branche `goal/consolidation-2`)
+
+Deux mesures de qualification rejouées à HEAD (`379b6fe`) : **fuzz long
+`sema` 100 000 itérations, 0 échec, 4 327/s** (23,1 s) et **repro-check PASS** —
+deux builds, deux racines et deux `target/`, sha256
+`9FC5E3F2159F6E1218149AF773193C78B1CDC6C84C33085A4A93804B44875E77` identique.
+La couverture est déjà rétablie (89,79/89,23) et le LSP à l'échelle mesuré
+(p95 337,6 ms) dans les entrées précédentes. Mutation, Miri et Linux restent
+`NOT_RUN` (outils absents ou CI sans push). Gate matrix : deux lignes datées
+ajoutées ; §10 et §12 du rapport de consolidation mis à jour.

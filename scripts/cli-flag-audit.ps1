@@ -47,6 +47,17 @@ $values = @{
     '--out'          = 'target/flag-audit-doc'
     '--max-rebuilds' = '0'
     '--emit-rust'    = 'target/flag-audit-emit.rs'
+    '--rt-entry'     = 'main'
+}
+
+# Flags that only make sense with a companion flag. `check --rt-entry` requires
+# `--profile rt` (a `build` with an entry selects the rt profile itself), so the
+# audit supplies the companion: without it the invocation is a usage error and
+# the flag would look rejected.
+$companions = @{
+    '--rt-entry' = @{
+        'check' = @('--profile', 'rt')
+    }
 }
 
 $work = Join-Path $root (Join-Path 'target' 'flag-audit')
@@ -75,6 +86,10 @@ foreach ($command in ($documented.Keys | Sort-Object)) {
         }
         $invocation += $flag
         if ($values.ContainsKey($flag)) { $invocation += $values[$flag] }
+        if ($companions.ContainsKey($flag)) {
+            $extra = $companions[$flag][$command]
+            if ($extra) { $invocation += $extra }
+        }
 
         # Bounded run: an audit must never hang on a command that builds or runs
         # a program. A timeout is a FAIL with an explicit reason.

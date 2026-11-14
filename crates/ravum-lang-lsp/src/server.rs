@@ -17,6 +17,7 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use ravum_lang_sema::Profile;
+use ravum_lang_syntax::span::FileId;
 use serde_json::{json, Value};
 
 use crate::analysis::{override_key, package_root, Analysis};
@@ -71,6 +72,10 @@ pub struct Server {
     pub analyses: BTreeMap<PathBuf, Analysis>,
     /// Parse results reused across analyses (unchanged file => no re-parse).
     parse_cache: ravum_lang_sema::loader::ParseCache,
+    /// Append-only session table `canonical path -> FileId` (T5): a file keeps
+    /// its id — and the `NodeId`s that embed it — when another file is added or
+    /// removed between two analyses.
+    file_ids: BTreeMap<PathBuf, FileId>,
     /// Last diagnostics published per URI, so unchanged sets are not re-sent.
     published: BTreeMap<String, String>,
     initialized: bool,
@@ -92,6 +97,7 @@ impl Server {
             docs: BTreeMap::new(),
             analyses: BTreeMap::new(),
             parse_cache: ravum_lang_sema::loader::ParseCache::new(),
+            file_ids: BTreeMap::new(),
             published: BTreeMap::new(),
             initialized: false,
             shutdown: false,
@@ -473,8 +479,13 @@ impl Server {
                 overrides.insert(override_key(&document.path), document.text.clone());
             }
         }
-        let analysis =
-            Analysis::run_with_cache(root, overrides, self.profile, &mut self.parse_cache);
+        let analysis = Analysis::run_with_cache_and_file_ids(
+            root,
+            overrides,
+            self.profile,
+            &mut self.parse_cache,
+            &mut self.file_ids,
+        );
         let outgoing = self.publish(&analysis);
         self.analyses.insert(root.to_path_buf(), analysis);
         outgoing

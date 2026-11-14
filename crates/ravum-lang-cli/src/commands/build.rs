@@ -13,12 +13,22 @@ pub fn run(
     emit_ir: bool,
     target: BuildTarget,
     request_timings: bool,
+    rt_entry: Option<&str>,
 ) -> i32 {
+    // `build` has no `--profile` flag: without `--rt-entry` it keeps the
+    // historical Core analysis; with `--rt-entry` (T6) the analysis applies the
+    // `rt` rules to the functions reachable from that entry, then the same
+    // codegen runs.
+    let profile = if rt_entry.is_some() {
+        Profile::Rt
+    } else {
+        Profile::Core
+    };
     let (frontend, analysis) = if request_timings {
-        pipeline::analyze_with_timings(path, Profile::Core, false)
+        pipeline::analyze_entry_with_timings(path, profile, false, rt_entry)
     } else {
         (
-            pipeline::analyze(path, Profile::Core, false),
+            pipeline::analyze_with_entry(path, profile, false, rt_entry),
             AnalysisTimings::default(),
         )
     };

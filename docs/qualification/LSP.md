@@ -78,10 +78,11 @@ Preuve que l'absence est explicite : `unknown_request_returns_method_not_found`.
   `convert::utf16_columns_count_code_units_not_bytes`.
 - **Annulation** : `$/cancelRequest` est accepté puis ignoré, aucune requête ne
   survivant à son message.
-- **Intégration éditeur réelle** : **non testée dans VS Code**. Le test est un
-  client LSP écrit à la main qui parle le protocole sur des tubes réels
-  (`crates/ravum-lang-cli/tests/lsp_client.rs`). C'est une preuve
-  d'interopérabilité de protocole, **pas** une preuve d'usage dans un IDE.
+- **Intégration éditeur réelle** : **testée** par le harnais `tools/vscode-ravum`
+  dans un vrai processus VS Code (`docs/qualification/VSCODE.md` : 10/10 au
+  repos et 10/10 sous `cargo test --workspace` concurrent ; job CI
+  `vscode-e2e`). Ce qui reste hors preuve : cohabitation avec d'autres
+  extensions, publication marketplace, rendu visuel des diagnostics.
 
 ## 5. Reproduction
 
@@ -103,8 +104,10 @@ Un client LSP standard suffit. Exemple pour un client générique :
 }
 ```
 
-L'extension VS Code n'est **pas** fournie dans ce dépôt à ce stade ; la
-déclaration ci-dessus ne constitue pas une affirmation de compatibilité testée.
+L'extension de développement est fournie dans `tools/vscode-ravum` (elle n'est
+pas publiée sur un marketplace) ; le harnais est décrit dans
+[`VSCODE.md`](VSCODE.md). La configuration ci-dessus reste la configuration
+générique minimale pour un autre client.
 
 ## 7. Cache de parse par fichier (2026-11-13, phase 7)
 
@@ -131,6 +134,25 @@ l'identité n'ont pas bougé.
   `E-TYP-MISMATCH` est analysé, puis corrigé dans le même cache ; l'analyse
   corrigée ne contient **aucun** diagnostic de l'ancien buffer.
 
+**FileId stables en session (T5, 2026-11-14).** Un `FileId` qui bouge invalide
+le cache : le loader allouait les ids dans l'ordre de découverte, donc ajouter un
+module déclaré *avant* les autres renumérotait les fichiers existants. La session
+LSP tient maintenant une table `chemin canonique -> FileId` **croissante et
+jamais réattribuée** (`LoadOptions::file_ids` / `LoadedPackage::file_ids`), que
+`Analysis::run_with_cache_and_file_ids` fusionne après chaque analyse ; le CLI
+garde les ids denses historiques (`file_ids: None`) et le corpus est inchangé.
+Deux tests d'intégration et un test loader couvrent le contrat :
+
+- `session_file_ids_keep_untouched_files_stable` : `main.rv` + `a.rv` + `b.rv` +
+  `c.rv`, puis un 4e module `aa.rv` déclaré **avant** `a` ⇒ les trois fichiers
+  inchangés gardent leur `FileId` et leurs `NodeId`, **3 hits** de cache de parse,
+  et `aa.rv` prend `max + 1` ;
+- `without_a_session_table_a_new_module_renumbers_the_other_files` : la même
+  édition **sans** table ⇒ ids décalés, **0 hit**, `NodeId` changés (preuve que le
+  test positif n'est pas vide) ;
+- `loader::tests::a_session_table_that_maps_one_id_to_two_files_fails_closed` :
+  une table incohérente est refusée (`E-IO`, aucun programme produit).
+
 **Mesure (7.2).** `cargo test -p ravum-lang-lsp --test parse_cache -- --ignored
 --nocapture` → 30 éditions d'une ligne sur `examples/package-demo`, analyse
 **en processus** (transport JSON-RPC et éditeur exclus) :
@@ -143,7 +165,9 @@ l'identité n'ont pas bougé.
 Cible P0-A « diagnostic p95 < 50 ms » : **atteinte au niveau de la phase
 d'analyse** (1,4 ms), avec une marge de plus de 30×. Ce chiffre **ne mesure
 pas** la latence de bout en bout vue par l'éditeur (transport, sérialisation,
-affichage) : elle reste `NOT_RUN` et ne doit pas être confondue avec la cible.
+affichage) : elle est mesurée séparément ci-dessous (p95 2,826 ms sur deux
+fichiers, **337,6 ms à 5 110 lignes**) et ne doit pas être confondue avec la
+cible.
 
 **Limites.** La vérification sémantique reste globale (pas d'incrémentalité de
 `own`/`typeck`) ; le cache ne couvre que le parser ; une seule machine et un seul
@@ -169,3 +193,42 @@ mesure avec un éditeur réel qui rend les diagnostics. Le fichier est édité *
 mémoire** : aucun fichier du dépôt n'est modifié.
 
 
+
+**Mesure de bout en bout à l'échelle (2026-11-14, T3, `379b6fe`).** Même
+harnais, paquet généré de 150 modules / **5 110 lignes** (même forme que
+`tools/gen_scale_corpus.py`, vérifiée), 20 éditions d'une ligne dans `main` :
+
+```
+cargo test -p ravum-lang-cli --test lsp_client \
+  end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
+[lsp-e2e] scale corpus (5110 lines, 150 modules), 20 one-line edits,
+          transport included: p50=322.4 ms p95=337.6 ms
+```
+
+**La cible P0-A « p95 < 50 ms » n'est pas tenue à cette échelle** : le coût est
+celui du `check` complet (365 ms p50 à 5 110 lignes, `LANG-TIMINGS.md` §9),
+l'analyse sémantique reste globale et le cache de parse ne couvre que le parser.
+La cible reste tenue sur les petits paquets (p95 2,826 ms). Un test fonctionnel
+associé (`scale_package_navigation_and_diagnostics_work_end_to_end`, 35 modules,
+1 025 lignes) vérifie la navigation inter-modules et l'aller-retour de
+diagnostic.
+
+**Mesure de bout en bout à l'échelle, profil `release` (2026-11-14, `214bf5e`).**
+Le chiffre debug ci-dessus n'est pas le chiffre produit : le binaire livré est
+compilé en `release`. Même harnais et même corpus, binaire release :
+
+```
+cargo test --release -p ravum-lang-cli --test lsp_client \
+  end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
+[lsp-e2e] scale corpus (5110 lines, 150 modules), 20 one-line edits,
+          transport included: p50=116.7 ms p95=163.5 ms
+```
+
+Le profil release divise la latence par ~2 (337,6 → **163,5 ms** de p95, 322,4 →
+116,7 ms de p50), et **reste au-dessus de la cible de 50 ms** (×3,3). Deux
+conclusions distinctes : (a) publier un chiffre debug comme chiffre produit
+serait faux ; (b) même en release, l'analyse sémantique globale à 5 110 lignes
+ne tient pas la cible — la décision de périmètre (cible réservée aux petits
+paquets) ou d'incrémentalité sémantique reste humaine
+([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
+`D-2026-11-14-5`).

@@ -8,6 +8,12 @@ name: Mutation evidence (weekly, non-blocking gate)
 # its summary step had a schema bug (it read the report as a list), fixed here,
 # and the survivors are now printed by name.
 #
+# Campaign 4 (added 2026-11-14) closes the R8 hole named in
+# `PRODUCTION-READINESS.md`: mutation was never run on `codegen/emit.rs`. The
+# targeted functions are the ones that decide ownership/move behaviour and the
+# extern-wrapper emission, not the whole file: a mutation score over the whole
+# crate would still say nothing about the rest (MUTATION-EQUIVALENCE.md §1).
+#
 # Scope and honesty rules:
 #   * the same targeted `-F` filters are used, so the numbers stay comparable
 #     with the published table;
@@ -15,8 +21,8 @@ name: Mutation evidence (weekly, non-blocking gate)
 #     and triaged in MUTATION-EQUIVALENCE.md §7.1-§7.4. The job therefore does
 #     not fail on survivors; it fails only when the campaign itself could not
 #     run (missing report, crashed tool), which is a real infrastructure defect;
-#   * no mutation score is published for the whole crate: 153/212 on a targeted
-#     scope says nothing about the rest (MUTATION-EQUIVALENCE.md §1).
+#   * no mutation score is published for the whole crate: a targeted score says
+#     nothing about the rest (MUTATION-EQUIVALENCE.md §1).
 #
 # The report is uploaded as an artifact; a maintainer diffs it against the
 # published table and records any new survivor with a reason.
@@ -38,7 +44,7 @@ jobs:
   mutation:
     name: cargo-mutants on the three targeted function sets
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
@@ -99,13 +105,27 @@ jobs:
             2>&1 | tee target/mutants/typeck/campaign.log || true
           if [ -d mutants.out ]; then mv mutants.out target/mutants/typeck/; fi
 
+      # emit.rs decides the shape of the generated Rust: which values move, what
+      # copy semantics apply, how an extern wrapper is emitted. Its local move
+      # logic was removed in T7 (OwnFacts guard) and is the exact kind of code a
+      # "covered" giant match can hide a bug in. Targeted, not whole-file.
+      - name: emit.rs (move/repr decisions and extern wrapper emission)
+        continue-on-error: true
+        run: |
+          mkdir -p target/mutants/emit
+          cargo mutants --no-shuffle -j 8 \
+            --file crates/ravum-lang-codegen/src/emit.rs \
+            -F 'builtin_method_moves_receiver|is_copy_type|is_owned_position|plan_array_moves|verify_ownership_facts|emit_extern_block' \
+            2>&1 | tee target/mutants/emit/campaign.log || true
+          if [ -d mutants.out ]; then mv mutants.out target/mutants/emit/; fi
+
       # A campaign that produced no report is an infrastructure failure, not a
       # mutation result: there is nothing to triage, so the job must fail.
       - name: Verify that every campaign produced a report
         run: |
           set -e
           missing=0
-          for name in own resolve typeck; do
+          for name in own resolve typeck emit; do
             if [ ! -f "target/mutants/$name/mutants.out/outcomes.json" ]; then
               echo "::error::campaign $name produced no mutants.out/outcomes.json (see its log)"
               missing=1
@@ -118,7 +138,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, pathlib
-          for name in ("own", "resolve", "typeck"):
+          for name in ("own", "resolve", "typeck", "emit"):
               path = pathlib.Path(f"target/mutants/{name}/mutants.out/outcomes.json")
               if not path.is_file():
                   print(f"{name}: NO REPORT")

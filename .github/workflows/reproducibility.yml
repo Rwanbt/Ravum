@@ -1,0 +1,188 @@
+name: 'Reproducibility: one digest on two distinct runners'
+
+# Why this workflow exists
+# -----------------------
+# `scripts/repro-check.ps1` proves that the build is independent of the absolute
+# root path **on one machine** (two roots, two target directories, one digest).
+# `docs/qualification/REPRODUCIBILITY.md` records that measurement, including
+# its explicit limit: a digest compared with itself says nothing about a second
+# machine.
+#
+# This workflow measures the other property required by R7: the same commit,
+# built on two **distinct GitHub-hosted runners of the same image**, must produce
+# byte-identical `ravum-lang` binaries. The two jobs run in different VMs; a
+# third job compares their JSON digests and fails if they differ.
+#
+# What it does NOT prove
+# ----------------------
+# * Not cross-OS: a Windows and a Linux binary are different artifacts by
+#   construction, and no claim is made that they match.
+# * Not cross-toolchain: both jobs install the same pinned `1.95.0`; a different
+#   compiler version is expected to produce different bytes (that is why the
+#   toolchain version is recorded).
+# * Not a signature, not a release, not a tag (D9/R12 remain open).
+# * A mismatch is a real finding, not a flake to silence: if two same-image
+#   runners disagree, the environment dependency must be located and documented
+#   before any reproducibility claim is made.
+#
+# The digest is the SHA-256 of the *binary*, produced by
+# `scripts/repro-build.sh` with fixed flags (no incremental metadata, pinned
+# timestamp, remapped paths, content-derived linker build-id).
+
+on:
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  digest:
+    name: Deterministic build on runner ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [a, b]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      # No target/ cache: a cache restored from another commit could hide a
+      # build difference. Only the registry is cached, and only for speed.
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-repro-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-repro-registry-
+
+      - name: Show the environment (recorded, not compared field by field)
+        run: |
+          rustc -vV
+          cargo --version
+          uname -a
+          echo "runner-name=${RUNNER_NAME}"
+          echo "runner-image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          echo "workspace=${GITHUB_WORKSPACE}"
+
+      - name: Build once with fixed flags and write the digest
+        run: |
+          set -euo pipefail
+          bash scripts/repro-build.sh --output "${RUNNER_TEMP}/digest-${{ matrix.shard }}.json"
+          cat "${RUNNER_TEMP}/digest-${{ matrix.shard }}.json"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.shard }}
+          path: ${{ runner.temp }}/digest-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: The two runners must produce the same bytes
+    needs: digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Compare the two measurements (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          files = sorted(pathlib.Path("digests").glob("digest-*.json"))
+          if len(files) != 2:
+              print(f"::error::expected exactly 2 digest files, found {len(files)}: {[str(f) for f in files]}")
+              sys.exit(1)
+
+          measurements = []
+          for path in files:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              if data.get("schema_version") != 1:
+                  print(f"::error::{path.name}: unexpected schema_version {data.get('schema_version')!r}")
+                  sys.exit(1)
+              measurements.append((path.name, data))
+
+          for name, data in measurements:
+              print(
+                  f"{name}: sha256={data['sha256']} size={data['size_bytes']} "
+                  f"commit={data['git_commit'][:12]} rustc={data['rustc']} "
+                  f"os={data['os']} arch={data['arch']} host={data['hostname']}"
+              )
+
+          first = measurements[0][1]
+          problems = []
+          for name, data in measurements[1:]:
+              if data.get("sha256") != first.get("sha256"):
+                  problems.append(f"sha256 differs: {measurements[0][0]}={first.get('sha256')} {name}={data.get('sha256')}")
+              if data.get("size_bytes") != first.get("size_bytes"):
+                  problems.append(f"binary size differs: {first.get('size_bytes')} vs {data.get('size_bytes')}")
+              if data.get("git_commit") != first.get("git_commit"):
+                  problems.append(f"commit differs: {first.get('git_commit')} vs {data.get('git_commit')}")
+              if data.get("rustc") != first.get("rustc"):
+                  problems.append(f"rustc differs: {first.get('rustc')} vs {data.get('rustc')}")
+              if data.get("git_dirty"):
+                  problems.append(f"{name}: the tree was dirty, so the digest does not describe the commit")
+              if str(data.get("sha256", "")).strip() == "":
+                  problems.append(f"{name}: empty digest")
+
+          summary = [
+              "### Reproducibility across two distinct runners",
+              "",
+              f"- digest: `{first.get('sha256')}`",
+              f"- binary size: {first.get('size_bytes')} bytes",
+              f"- commit: `{first.get('git_commit')}`",
+              f"- toolchain: {first.get('rustc')}",
+              f"- runners: {', '.join(name for name, _ in measurements)} (hostnames are recorded in the artifacts, not compared)",
+              "",
+              "Same OS image, same pinned toolchain, same fixed flags; comparison is on the binary digest.",
+          ]
+          if problems:
+              summary.append("")
+              summary.append("**Result: FAIL**")
+              for problem in problems:
+                  print(f"::error::{problem}")
+              sys.exit(1)
+
+          summary.append("")
+          summary.append("**Result: PASS — two distinct runners produced the same bytes.**")
+          print("::notice::the two runners produced the same digest")
+          import os
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as handle:
+                  handle.write("\n".join(summary) + "\n")
+          print("\n".join(summary))
+          PY
+
+      - name: Upload the comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repro-comparison
+          path: digests
+          if-no-files-found: warn
+          retention-days: 30

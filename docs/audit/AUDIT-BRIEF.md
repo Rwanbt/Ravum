@@ -12,6 +12,14 @@
 > une preuve — et l'auditeur doit suspecter les zones qu'il désigne, pas les
 > croire.
 
+> **Chiffres courants au 2026-11-14 (`goal/consolidation-2`), à rejouer et à ne
+> pas croire sur parole** : conformance **484 cas (483 PASS / 0 FAIL / 1 SKIP)**,
+> périmètre build **207/207**, `build_verified: true` ; suite workspace
+> **1 634 passés / 0 échec / 7 ignorés** ; traçabilité **188/188** ; codes
+> **108 déclarés / 126 émis / 0 hors registre** ; couverture sema+codegen
+> **89,79 % lignes / 89,23 % régions**, seuils tenus. Le tableau §3 ci-dessous
+> est daté « passe 5 » : ses chiffres sont **historiques**, pas l'état courant.
+
 ## 1. Pourquoi ce document existe
 
 Les gates `T4` (sécurité mémoire, ownership, effets), `T10` (qualification et
@@ -20,8 +28,9 @@ Un audit mené par un agent, même un autre agent, reste un audit interne. Tant 
 personne n'a ouvert ce dossier, ces trois gates restent `BLOCKED`, quel que soit
 le nombre de tests verts.
 
-Le reste est fait : 323 cas de conformance, 1020 tests, campagnes de fuzz
-rejouées, Miri, repro-bilité bit-à-bit, manifeste de provenance. Ce dossier
+Le reste est fait : conformance, tests workspace, campagnes de fuzz rejouées,
+Miri, repro-bilité bit-à-bit, manifeste de provenance (les chiffres de la
+passe 5 sont dans §3, les chiffres courants dans l'encadré ci-dessus). Ce dossier
 existe pour que l'auditeur n'ait pas à refaire ce travail, et puisse consacrer
 son temps à ce qui n'a **pas** été prouvé.
 

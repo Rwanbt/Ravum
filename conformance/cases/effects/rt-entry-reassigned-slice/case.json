@@ -1,0 +1,15 @@
+{
+  "id": "effects/rt-entry-reassigned-slice",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt",
+    "--rt-entry",
+    "process"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE",
+    "E-OWN-REF-ESCAPE"
+  ],
+  "notes": "T6 negative case for the `0..a.len()` form: `a[i]` is safe only while `a` is not reassigned in the body. The reassignment form `mut a: &[i32]` + `a = b` is already refused by ownership (E-OWN-REF-ESCAPE: a reference cannot be stored in Core 1.0), and the trap is emitted too; the case fixes both codes. No valid Core 1.0 program can reassign a slice binding, so that clause of the rule is defensive (documented in RFC-RT-TRAPS-1 \u00a76)."
+}

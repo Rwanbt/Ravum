@@ -14,6 +14,8 @@
 
 use ravum_lang_lsp::analysis::{override_key, Analysis};
 use ravum_lang_sema::loader::ParseCache;
+use ravum_lang_sema::syntax::span::FileId;
+use ravum_lang_sema::syntax::NodeId;
 use ravum_lang_sema::Profile;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -24,7 +26,8 @@ struct TempDir {
 }
 
 impl TempDir {
-    fn new(label: &str) -> TempDir {
+    /// Directory with `ravum.toml` and `src/`, no source file yet.
+    fn bare(label: &str) -> TempDir {
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
@@ -42,23 +45,57 @@ impl TempDir {
             "[package]\nname = \"cache\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
         )
         .expect("cannot write the manifest");
-        std::fs::write(
-            path.join("src/util.rv"),
-            "pub fn value() -> i32 { let a = 41; return a + 1; }\n",
-        )
-        .expect("cannot write util.rv");
-        std::fs::write(
-            path.join("src/main.rv"),
-            "mod util;\nfn main() { let x: bool = util::value(); }\n",
-        )
-        .expect("cannot write main.rv");
         TempDir { path }
     }
 
+    fn new(label: &str) -> TempDir {
+        let directory = TempDir::bare(label);
+        directory.write(
+            "src/util.rv",
+            "pub fn value() -> i32 { let a = 41; return a + 1; }\n",
+        );
+        directory.write(
+            "src/main.rv",
+            "mod util;\nfn main() { let x: bool = util::value(); }\n",
+        );
+        directory
+    }
+
+    /// Three modules plus `main`, with no error: the fixture behind the T5
+    /// session-`FileId` tests.
+    fn session(label: &str) -> TempDir {
+        let directory = TempDir::bare(label);
+        directory.write("src/a.rv", "pub fn fa() -> i32 { return 1; }\n");
+        directory.write("src/b.rv", "pub fn fb() -> i32 { return 2; }\n");
+        directory.write("src/c.rv", "pub fn fc() -> i32 { return 3; }\n");
+        directory.write("src/main.rv", SESSION_MAIN);
+        directory
+    }
+
+    fn write(&self, relative: &str, text: &str) {
+        std::fs::write(self.path.join(relative), text).expect("cannot write the fixture");
+    }
+
+    fn read(&self, relative: &str) -> String {
+        std::fs::read_to_string(self.path.join(relative)).expect("cannot read the fixture")
+    }
+
+    fn path_of(&self, relative: &str) -> PathBuf {
+        std::fs::canonicalize(self.path.join(relative)).expect("cannot canonicalize the fixture")
+    }
+
     fn main(&self) -> PathBuf {
-        std::fs::canonicalize(self.path.join("src/main.rv")).expect("cannot canonicalize main.rv")
+        self.path_of("src/main.rv")
     }
 }
+
+/// `aa` is declared **before** the three original modules: with dense ids it
+/// would take id 2 and renumber `a`, `b` and `c`.
+const SESSION_MAIN: &str = "mod a;\nmod b;\nmod c;\n\
+     fn main() { let sum: i32 = a::fa() + b::fb() + c::fc(); }\n";
+
+const SESSION_MAIN_WITH_FOURTH: &str = "mod aa;\nmod a;\nmod b;\nmod c;\n\
+     fn main() { let sum: i32 = aa::faa() + a::fa() + b::fb() + c::fc(); }\n";
 
 impl Drop for TempDir {
     fn drop(&mut self) {
@@ -150,6 +187,155 @@ fn stale_diagnostics_are_never_reused_for_the_new_buffer() {
     assert!(
         cache.hits() > 0,
         "the test must exercise a cache hit, otherwise it proves nothing about stale reuse"
+    );
+}
+
+// --- T5: session file ids are stable across reloads ------------------------
+
+fn item_ids_by_file(analysis: &Analysis) -> BTreeMap<u32, Vec<NodeId>> {
+    let mut out: BTreeMap<u32, Vec<NodeId>> = BTreeMap::new();
+    for (id, span) in &analysis.index.items {
+        out.entry(span.file).or_default().push(*id);
+    }
+    for ids in out.values_mut() {
+        ids.sort_unstable();
+    }
+    out
+}
+
+fn session_run(
+    root: &Path,
+    main: &Path,
+    text: &str,
+    cache: &mut ParseCache,
+    file_ids: &mut BTreeMap<PathBuf, FileId>,
+) -> Analysis {
+    let mut overrides = BTreeMap::new();
+    overrides.insert(override_key(main), text.to_string());
+    Analysis::run_with_cache_and_file_ids(root, overrides, Profile::Core, cache, file_ids)
+}
+
+#[test]
+fn session_file_ids_keep_untouched_files_stable() {
+    let package = TempDir::session("session-ids");
+    let main = package.main();
+    let mut cache = ParseCache::new();
+    let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
+
+    let first = session_run(
+        &package.path,
+        &main,
+        &package.read("src/main.rv"),
+        &mut cache,
+        &mut file_ids,
+    );
+    assert!(
+        first.package.program.is_some(),
+        "the fixture must type-check: {:?}",
+        semantic_errors(&first)
+    );
+    assert_eq!(cache.misses(), 4, "main + a + b + c are parsed once");
+    assert_eq!(cache.hits(), 0);
+    let before = item_ids_by_file(&first);
+    let a = package.path_of("src/a.rv");
+    let b = package.path_of("src/b.rv");
+    let c = package.path_of("src/c.rv");
+    let ids_before = (file_ids[&a], file_ids[&b], file_ids[&c]);
+    let old_max = *file_ids.values().max().expect("the table is not empty");
+
+    package.write("src/aa.rv", "pub fn faa() -> i32 { return 7; }\n");
+    package.write("src/main.rv", SESSION_MAIN_WITH_FOURTH);
+    let second = session_run(
+        &package.path,
+        &main,
+        &package.read("src/main.rv"),
+        &mut cache,
+        &mut file_ids,
+    );
+    assert!(
+        second.package.program.is_some(),
+        "the fixture must type-check after the fourth file: {:?}",
+        semantic_errors(&second)
+    );
+
+    assert_eq!(
+        cache.hits(),
+        3,
+        "a, b and c keep their id, so their parse is reusable"
+    );
+    assert_eq!(
+        cache.misses(),
+        6,
+        "only main and the new aa are parsed again"
+    );
+    assert_eq!(
+        (file_ids[&a], file_ids[&b], file_ids[&c]),
+        ids_before,
+        "an untouched file must keep its session FileId"
+    );
+    let aa = package.path_of("src/aa.rv");
+    assert!(
+        file_ids[&aa] > old_max,
+        "a new file takes the next id ({} <= {old_max})",
+        file_ids[&aa]
+    );
+    let after = item_ids_by_file(&second);
+    for (name, id) in [
+        ("a", ids_before.0),
+        ("b", ids_before.1),
+        ("c", ids_before.2),
+    ] {
+        assert_eq!(
+            after.get(&id),
+            before.get(&id),
+            "the NodeIds of `{name}` changed even though its FileId did not"
+        );
+    }
+}
+
+#[test]
+fn without_a_session_table_a_new_module_renumbers_the_other_files() {
+    let package = TempDir::session("session-negative");
+    let main = package.main();
+    let mut cache = ParseCache::new();
+
+    let first = run(
+        &package.path,
+        &main,
+        &package.read("src/main.rv"),
+        &mut cache,
+    );
+    assert_eq!(cache.misses(), 4);
+    let a = package.path_of("src/a.rv");
+    let a_before = first.package.file_ids[&a];
+    let before = item_ids_by_file(&first);
+
+    package.write("src/aa.rv", "pub fn faa() -> i32 { return 7; }\n");
+    package.write("src/main.rv", SESSION_MAIN_WITH_FOURTH);
+    let second = run(
+        &package.path,
+        &main,
+        &package.read("src/main.rv"),
+        &mut cache,
+    );
+
+    assert_eq!(
+        cache.hits(),
+        0,
+        "without a session table every file is renumbered and re-parsed"
+    );
+    assert_eq!(cache.misses(), 9, "five sources are parsed twice");
+    let a_after = second.package.file_ids[&a];
+    assert_ne!(
+        a_before, a_after,
+        "the fourth file declared first must shift `a` without a session table"
+    );
+    let after = item_ids_by_file(&second);
+    assert_ne!(
+        before.get(&a_before),
+        after.get(&a_after),
+        "the negative control must show renumbered NodeIds, otherwise the \
+         positive test would be vacuous"
     );
 }
 

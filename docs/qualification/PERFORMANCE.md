@@ -68,3 +68,51 @@ par mesure, chronomètre `check`/`build`, échantillonne la working set toutes l
   multiples, pas de code de test. La mise à l'échelle réelle peut différer.
 - Ces mesures ne sont **pas** une preuve de performance temps réel, ni une
   comparaison avec un autre compilateur.
+
+## 5. Garde de non-régression en CI (2026-11-14)
+
+**Ce qui manquait.** Des p50/p95 publiés ne suivent rien : un document qui dit
+« 1,3–8,1 ms » reste vert après une régression d'un facteur 10. R9 demande
+« absence de régression **suivie** ».
+
+**Dispositif.**
+
+- `docs/qualification/timings-baseline.json` : référence mesurée sur la machine
+  de référence (Windows 11 x64, `rustc 1.95.0`) le 2026-11-14 à `214bf5e`,
+  `scripts/lang-timings.ps1 -CheckOnly -Runs 10`, 10 exemples, modes
+  `cold` et `edit`.
+- `.github/workflows/performance.yml` : sur `windows-latest`, reconstruit le CLI
+  en debug, rejoue la même mesure (`-Runs 10`), puis applique
+  `tools/timings_gate.py`.
+- **Plafonds** : `p50 ≤ max(100 ms, valeur de référence × 3)` et
+  `p95 ≤ max(500 ms, valeur de référence × 3)` sur les totaux de chaque exemple
+  et de chaque mode. Deux planchers parce que les deux statistiques n'ont pas le
+  même bruit : avec 10 échantillons, le p95 au rang le plus proche **est le
+  maximum**. Le premier réglage (`max(200 ms, ×3)` sur les deux) a échoué sur un
+  run partagé à cause de deux outliers isolés (224 ms et 238 ms) alors que le
+  p50 du même exemple valait 2,3 ms (run 43629253306) : c'était un défaut du
+  gate, pas une régression. Le p50 porte désormais le signal ; le p95 ne sert
+  qu'à attraper un blocage catastrophique.
+- Le gate ne tourne que lorsqu'un crate du langage, le script de mesure, le gate
+  ou la baseline changent (filtre `paths`), pas sur une PR documentaire seule.
+- L'export complet est uploadé à chaque exécution (`lang-timings-ci`) : une
+  dérive peut être inspectée avant de devenir un échec.
+
+**Premier run réel** : [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048),
+commit de fusion `55f11a5e`, 10 exemples, **PASS** (40 comparaisons). Valeurs
+CI (p95 totaux `check`, ms) : `hello` 1,766 ; `fib` 2,365 ; `calculator` 3,878 ;
+`file-store` 14,325 ; `package-demo` 3,997 ; `tests-demo` 2,794. Elles sont
+**meilleures** que la baseline (machine de référence plus chargée), ce qui est
+attendu : la comparaison porte sur le plafond, pas sur une égalité.
+
+**Ce que le gate ne prouve pas.** Il ne mesure ni `build` (dominé par `rustc`),
+ni `watch`, ni la latence LSP, ni la mémoire, ni le corpus à l'échelle ; il ne
+détecte pas une dérive de 20 %. Une dérive légitime (par exemple un test qui
+ajoute du travail au `check`) exige de **régénérer la baseline dans le même
+commit**, avec la machine et le SHA ; relever le facteur pour faire passer un
+rouge est un affaiblissement et doit être refusé.
+
+**Statut R9** : les p50/p95 `check`/`build` restent publiés (§2, et
+`docs/reports/LANG-TIMINGS.md` §2–§4) ; l'absence de régression est désormais
+**suivie sur le `check`** par une alarme CI. R9 reste `PARTIAL` : `build` et
+`watch` ne sont pas sous gate, et une alarme n'est pas un budget.

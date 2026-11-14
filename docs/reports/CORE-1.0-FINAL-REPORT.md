@@ -13,6 +13,26 @@
 > 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6 (`5d88ecb` →
 > `9da9b12`).
 
+## 0 decies. Campagne de fermeture des chantiers techniques (2026-11-14, soir)
+
+Cette section **prévaut sur toutes les précédentes** pour les chiffres courants.
+Branche `goal/consolidation-2`, rapport détaillé :
+[`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+
+| Mesure | Résultat courant |
+|---|---|
+| Conformance (`run --verify-build`) | **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=207/207`, `verified=124`, `build_verified: true` |
+| Tests workspace | **102 suites, 1660 passés / 0 échec / 7 ignorés** (exit 0) |
+| Traçabilité | **188/188** règles tracées, **188/188** satisfaites ; registre **108 codes** déclarés, 126 émis |
+| Couverture | **90,44 %** lignes / **89,88 %** régions ; code produit **88,55 %** (1 557/13 598) ; 10 fichiers sous l'objectif 100 % |
+| Mutation ciblée | **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` (36/30/6) |
+| Reproductibilité | digest **identique sur deux runners distincts** (`9b7f16cc…cdf`, run 43622599083) — même image, même toolchain |
+| Autres preuves | alarme de performance CI verte (43622599048) ; oracle nominal 6 000 programmes / 0 divergence ; confinement `unsafe` outillé ; 25 tests loader ; contrat installateur Linux + politique de dépréciation + guide utilisateur |
+
+Aucun gate n'est promu `PASS` par cette campagne ; les statuts restent ceux de
+la matrice §2, et le dossier des décisions humaines est
+[`HUMAN-DECISIONS-REQUIRED.md`](HUMAN-DECISIONS-REQUIRED.md).
+
 ## 0 nonies. Addendum lot couverture 1 — code mort, contrats, mesure honnête (2026-11-13)
 
 Cette section **prévaut sur 0 octies et sur toutes les suivantes** pour les

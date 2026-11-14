@@ -1,8 +1,5 @@
 {
   "id": "modules/file-limit",
-  "mode": "compile-fail",
-  "expect_codes": [
-    "E-LIMIT-FILES"
-  ],
-  "notes": "diagnostics.md \u00a73 (added): the number of source files of a package is bounded; the loader stops at MAX_SOURCE_FILES = 200 (the parser reserves the high byte of a FileId). The root plus 200 module files is 201 sources, one above the limit."
+  "mode": "compile-pass",
+  "notes": "MAX_SOURCE_FILES moved from 200 to 65 536 on 2026-11-14 (NodeId is now 32/32 bits on a u64): a package with 201 sources is accepted. The refusal path and its E-LIMIT-FILES diagnostic are covered by the loader unit test with a test-local limit; creating 65 537 files is not a conformance case. Before the change this case was compile-fail (E-LIMIT-FILES)."
 }

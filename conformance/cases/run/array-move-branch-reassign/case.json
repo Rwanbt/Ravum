@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-branch-reassign",
+  "mode": "run-pass",
+  "stdout_contains": "b\n",
+  "notes": "OWN-5.x: an element move in one branch of an `if` whose other branch contains a whole-place use of the same array (`a = if cond { a } else { ... }`). The whole use shares the statement index, so it must not block the inline lowering of the move: the two sites are in mutually exclusive branches (or the use precedes the move). Previously check-pass/build-fail with rustc E0508 (`v1[1usize]` emitted literally), found by the type-directed generator at seed 0x00524156554d1001 index 560."
+}

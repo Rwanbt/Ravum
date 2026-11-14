@@ -10,6 +10,12 @@
 //! documented command runs the real pipeline; `lsp` starts a real language
 //! server on stdio (`crates/ravum-lang-lsp`).
 
+// D7 confinement: the CLI is the only language binary that needs `unsafe`, and
+// only for the two small console-control/signal bindings in
+// `commands::watch::signal` (audited and listed in docs/ffi/UNSAFE-INVENTORY.md).
+// `deny` (not `forbid`) leaves room for that one local `#[allow(unsafe_code)]`.
+#![deny(unsafe_code)]
+
 mod args;
 mod commands;
 mod json;
