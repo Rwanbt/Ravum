@@ -105,6 +105,15 @@ fn pattern_contains_float(pat: &Pat) -> bool {
 /// Types the backend accepts at the C ABI boundary in Core 1.0, checked on the
 /// syntax tree so a hand-built `CheckedProgram` cannot smuggle an ABI-unsafe
 /// signature into the output.
+///
+/// The list is **closed** and mirrors the checker's `resolve::ffi_safe` exactly
+/// (C-FFI-1): `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`,
+/// `bool`, `()`. `i128`/`u128` are **not** admitted (S4, 2026-11-14; C-FFI-2):
+/// no portable C width covers them (MSVC has no `__int128`). The checker already
+/// refuses them (`E-FFI-TYPE`); this twin list is the backend's defence in depth
+/// so a hand-built `CheckedProgram` cannot reach the ABI with them either.
+/// `backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`
+/// is the non-vacuity test for this list.
 fn ast_ffi_safe(ty: &AstType) -> bool {
     match &ty.kind {
         TypeKind::Unit => true,
@@ -116,12 +125,10 @@ fn ast_ffi_safe(ty: &AstType) -> bool {
                     "i8" | "i16"
                         | "i32"
                         | "i64"
-                        | "i128"
                         | "u8"
                         | "u16"
                         | "u32"
                         | "u64"
-                        | "u128"
                         | "isize"
                         | "usize"
                         | "f32"

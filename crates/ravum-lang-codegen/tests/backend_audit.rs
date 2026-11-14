@@ -2822,6 +2822,101 @@ fn audit_ffi_rejects_non_ffi_safe_types() {
     );
 }
 
+/// Resolved type of the scalar names this audit needs at the FFI boundary.
+fn scalar_type(b: &B, name: &str) -> (AstType, STy) {
+    let resolved = match name {
+        "i32" => STy::I32,
+        "i128" => STy::I128,
+        "u128" => STy::U128,
+        other => panic!("scalar_type: unhandled type `{other}`"),
+    };
+    (b.named_ty(name, Some(resolved.clone())), resolved)
+}
+
+/// A hand-built program with one `extern "C"` declaration, driven straight into
+/// the backend (no checker in between). `main` never calls the symbol: only the
+/// declaration is audited, so no ABI mismatch is ever executed.
+fn extern_program_with_types(param: Option<&str>, ret: &str) -> CheckedProgram {
+    let b = B::new();
+    let extern_id = b.id();
+    let params = match param {
+        Some(name) => {
+            let (ty, _) = scalar_type(&b, name);
+            vec![make_param(&b, "value", ty)]
+        }
+        None => Vec::new(),
+    };
+    let (ret_ty, _) = scalar_type(&b, ret);
+    let extern_fn = ExternFn {
+        id: extern_id,
+        name: b.ident("foreign"),
+        params,
+        ret: ret_ty,
+        span: span(),
+    };
+    b.items.borrow_mut().push(Item {
+        id: b.id(),
+        vis: Vis::Public(span()),
+        kind: ItemKind::Extern(ExternBlock {
+            abi: b.ident("C"),
+            fns: vec![extern_fn],
+            span: span(),
+        }),
+        span: span(),
+    });
+    b.facts
+        .borrow_mut()
+        .extern_symbols
+        .insert(extern_id, "foreign".to_string());
+
+    let main_id = b.id();
+    let body = b.block(vec![println_text(&b, "declared")], None);
+    let main_ret = unit_ret(&b);
+    let main_item = make_fn(
+        &b,
+        main_id,
+        "main",
+        Vis::Private,
+        false,
+        Vec::new(),
+        main_ret,
+        body,
+    );
+    b.items.borrow_mut().push(main_item);
+    b.finish(Some(main_id), Vec::new())
+}
+
+/// C-FFI-1 (S4, 2026-11-14): the backend's admitted-type list is **closed** and
+/// identical to the checker's. `i128`/`u128` are withdrawn (C-FFI-2): the checker
+/// refuses them before the backend, and this test is the defence-in-depth proof
+/// for the backend's own twin list, on a `CheckedProgram` built by hand (no
+/// checker run, so only `ast_ffi_safe` can refuse).
+#[test]
+fn c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program() {
+    for (label, param, ret) in [
+        ("i128 parameter", Some("i128"), "i32"),
+        ("u128 return", None, "u128"),
+    ] {
+        let checked = extern_program_with_types(param, ret);
+        let error = gen_err(&checked);
+        assert!(
+            error.message.contains("non-FFI-safe"),
+            "{label}: the backend must refuse the ABI-unsafe signature, got: {}",
+            error.message
+        );
+    }
+
+    // Control: the very same hand-built shape with admitted types still
+    // generates, so the refusal above is about the withdrawn types and not the
+    // fixture.
+    let checked = extern_program_with_types(Some("i32"), "i32");
+    let code = gen(&checked);
+    assert!(
+        code.contains("extern \"C\" {"),
+        "admitted scalar types must still reach the ABI:\n{code}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 16 bis. Trust-base guards (design §1 and §3.7 bis, FFI-6).
 //
