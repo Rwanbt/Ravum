@@ -36,10 +36,10 @@
    littérale a été arrêtée, l'écart a été expliqué et vérifié, puis le travail a
    continué. C'est une **déviation assumée et rapportée**, pas un « octet pour
    octet ».
-4. **Deux tâches restent `NOT_RUN`** : T7 (garde OwnFacts étendu), T8 (mutants
-   survivants) — raisons en §5. T5 (`FileId` stable LSP) et T6 (`rt` par point
-   d'entrée), `NOT_RUN` à la première rédaction, sont **exécutées depuis**
-   (`e3823cb` et `986f542`, §5).
+4. **Une tâche reste `NOT_RUN`** : T8 (mutants survivants). T5 (`FileId` stable
+   LSP), T6 (`rt` par point d'entrée) et T7 (garde OwnFacts étendu), `NOT_RUN` à
+   la première rédaction, sont **exécutées depuis** (`e3823cb`, `986f542`,
+   `ad62f32`…`0d04106`, §5).
 5. **La campagne nominale 3 × 2 000 de T2 n'est pas terminée** : elle a été
    interrompue après 561 programmes (graine 1) pour corriger la seconde
    divergence trouvée. Le total de 6 000 programmes n'est pas mesuré.
@@ -55,8 +55,8 @@ Aucun test, aucun cas de conformance et aucun seuil n'a été supprimé, ignoré
 affaibli. Le corpus passe de **476 à 478 cas** (deux cas ajoutés ; un cas
 existant a changé de mode par obligation, voir T4), puis à **483 cas** avec les
 cinq cas `rt-entry` de T6 ; le workspace de **100 suites / 1 605 tests** à
-**101 suites / 1 610 tests**, puis **1 618** après T5 et **1 624** après T6
-(§5).
+**101 suites / 1 610 tests**, puis **1 618** après T5, **1 624** après T6 et
+**1 627** après T7 (§5).
 
 ## 1. T1 — corriger les affirmations (Q0-2) — `TESTED`
 
@@ -362,14 +362,53 @@ refusé ; les méthodes d'`impl` ne sont pas adressables ; `build` sans `--profi
 ne peut pas exprimer `pure` ; la clause « base non réaffectée » est défensive
 (la réaffectation d'une tranche est déjà refusée par la propriété).
 
-### T7 et T8 — `NOT_RUN`
+### T7 — garde OwnFacts étendu (Q1-4) — `TESTED`
+
+**Commits** (un par exclusion) : `ad62f32` (récepteurs de méthode), `7f7f431`
+(arguments de référence), `0d04106` (identité de liaison). Le garde de l'étape B
+(`emit.rs::verify_ownership_facts`, **debug uniquement**) ne *saute* plus ces
+trois catégories : il les vérifie.
+
+- **Récepteurs de méthode** : la place enregistrée est comparée à la place
+  syntaxique et à sa forme après auto-déréf (`xs.len()` enregistre `(*xs)`), la
+  signature de l'appelé ne faisant pas partie de la syntaxe du récepteur.
+- **Arguments de référence** : même règle pour un argument de type référence
+  reborrowé vers un paramètre référence (`g(xs)` avec `xs: &[i32]`).
+- **Identité de liaison** : `Resolution::Local` porte désormais le span de
+  déclaration de la liaison, avec la même identité qu'`OwnFacts::place` (span du
+  `Pat` pour un `let`/match/`for`, span de l'item englobant pour un paramètre ou
+  `self`) ; le garde compare la liaison **avant** les projections.
+
+Chaque extension a son **test négatif** qui injecte un fait faux (projection
+supplémentaire sur un récepteur, sur un argument de référence, span de liaison
+remplacé) et attend un `CodegenError` nommant le désaccord.
+
+**Générateur T2 avec le garde actif** :
+
+```
+cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_fast
+  TOTAL generated=120 faults=10 fault_rejected=10 accepted=110 rejected=0 divergences=0
+  acceptance=100.0% rules_fired=53 statements_generated=2964 depth=0.96/4
+```
+
+**0 désaccord** sur 120 programmes (3 graines) : aucune classification
+checker/backend n'était nécessaire, aucun cas à corriger. Ce n'est pas une
+preuve pour un programme arbitraire (voir limites), et ce n'est pas le test de
+puissance de T2.
+
+**Limites** : garde **debug-only** (les builds release ne le paient pas) ; la
+campagne exécutée est la campagne rapide de 120 programmes, pas la nominale
+`3 × 2 000` (toujours `NOT_RUN` pour T2) ; le générateur actuel ne produit pas
+les 13 formes historiques du test de puissance ; le garde ne vérifie que les
+places *enregistrées*, pas l'absence d'un fait oublié.
+
+### T8 — mutants survivants — `NOT_RUN`
 
 | Tâche | Statut | Raison |
 |---|---|---|
-| T7 — garde OwnFacts étendu | `NOT_RUN` | Non commencée ; dépend du test de puissance de T2, qui est `NOT_RUN`. |
 | T8 — mutants survivants | `NOT_RUN` | Non commencée ; demande de relire les 24 survivants et de rejouer la campagne mutation en CI. |
 
-Aucun de ces deux statuts n'est un `PASS` déguisé : rien n'a été exécuté.
+Ce statut n'est pas un `PASS` déguisé : rien n'a été exécuté.
 
 ## 6. T9 — source unique des chiffres (Q1-5) — `PARTIAL`
 
@@ -417,11 +456,13 @@ cargo fmt --all -- --check                                   exit 0
 cargo test -p ravum-lang-syntax -p ravum-lang-sema -- --test-threads=2   exit 0
 cargo test -p ravum-lang-lsp -- --test-threads=2             exit 0
 cargo test -p ravum-lang-cli -- --test-threads=2             exit 0
-cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (32 + 45 + 6 + 2 ignorés)
+cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (35 + 45 + 6 + 2 ignorés)
+cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_fast
+  garde étape B actif : 120 programmes, 0 divergence, 0 désaccord
 cargo run -p ravum-conformance -- run --verify-build         exit 0
   483 cas : 482 PASS / 0 FAIL / 1 SKIP ; perimeter=207/207 ; verified=124
 cargo test --workspace --all-targets -- --test-threads=2     exit 0
-  101 groupes : 1 624 passés / 0 échec / 6 ignorés
+  101 groupes : 1 627 passés / 0 échec / 6 ignorés
 pwsh -File scripts/lang-smoke.ps1                            exit 0
   43 PASS / 0 FAIL / 0 NOT_RUN
 cargo run -p ravum-lang-cli -- check examples/dsp-gain-iir --profile rt --rt-entry process
@@ -461,9 +502,9 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - **T3, LSP de bout en bout à l'échelle** : `NOT_RUN` (pas de client écrit).
 - **T4, comparaison littérale octet pour octet** : déviation documentée (15
   fichiers, ids dans les noms de symboles).
-- **T7, T8** : `NOT_RUN` (non commencées). **T5** et **T6** : exécutées depuis
-  la rédaction (`e3823cb`, `986f542`, §5) ; la règle T6 reste
-  `PENDING_HUMAN_APPROVAL`.
+- **T8** : `NOT_RUN` (non commencée). **T5**, **T6** et **T7** : exécutées
+  depuis la rédaction (`e3823cb`, `986f542`, `ad62f32`…`0d04106`, §5) ; la
+  règle T6 reste `PENDING_HUMAN_APPROVAL`.
 - **T10, run CI** : `NOT_RUN` (pas de push).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
 - **Couverture, mutation, fuzz, Miri, Linux** : `NOT_RUN` cette session.
@@ -476,9 +517,8 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 2. Pour le test de puissance : un substitut par désactivation de mécanisme
    est-il recevable, ou faut-il recréer les correctifs historiques en commits
    de revert sur l'arbre courant ?
-3. T7-T8 doivent-elles être planifiées dans une session suivante, et dans quel
-   ordre ? (T7 dépend du test de puissance ; T6 est exécuté et attend la
-   ratification de son amendement.)
+3. T8 (mutants survivants) doit-il être planifié dans une session suivante,
+   avec un push pour rejouer la campagne mutation en CI ?
 4. Faut-il rejouer la campagne nominale complète de l'oracle **avant** ou
    **après** le test de puissance ?
 5. Le corpus synthétique doit-il être complété par un programme réel d'au moins
@@ -502,5 +542,8 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   l'entrée est déclarée par l'utilisateur, et les deux formes d'indexation
   bornée ne prouvent pas les bornes en général. `Vec` reste refusé et le corpus
   `rt` reste restreint.
+- T7 est un garde **debug-only**, exécuté ici sur les 120 programmes de la
+  campagne rapide : il ne prouve pas l'absence d'un fait oublié et ne change
+  rien aux builds release.
 - Il ne remplace ni l'audit externe (T4) ni le Go/No-Go (T12), qui restent des
   décisions humaines, ni aucune ratification de RFC.

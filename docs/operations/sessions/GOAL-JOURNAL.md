@@ -1067,3 +1067,16 @@ octet (smoke 43/0/0). Conformance **483 / 482 / 0 / 1**, `perimeter=207/207`,
 `verified=124` ; workspace **101 groupes, 1 624 passés / 0 échec / 6 ignorés** ;
 `evidence/current.json` rafraîchi (7 contrôles PASS). Règle :
 `PENDING_HUMAN_APPROVAL`.
+
+### Suite du 2026-11-14 — T7 exécutée (branche `goal/consolidation-2`)
+
+T7 (garde OwnFacts étendu), un commit par exclusion : `ad62f32` (récepteurs de
+méthode), `7f7f431` (arguments de référence), `0d04106` (identité de liaison —
+`Resolution::Local` porte le span de déclaration, même identité qu'`OwnFacts`).
+Le garde de l'étape B ne saute plus ces catégories, il les vérifie ; trois tests
+négatifs injectent un fait faux et attendent `CodegenError`. Générateur T2 avec
+le garde actif : **120 programmes, 0 divergence, 0 désaccord**, 110/110 acceptés,
+53 règles. Workspace **101 groupes, 1 627 passés / 0 échec / 6 ignorés** ;
+conformance inchangée (**483 / 482 / 0 / 1**, `perimeter=207/207`,
+`verified=124`) ; `evidence/current.json` rafraîchi (7 contrôles PASS).
+Garde debug-only ; campagne rapide seulement.

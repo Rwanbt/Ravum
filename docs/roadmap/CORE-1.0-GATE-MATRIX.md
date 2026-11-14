@@ -33,8 +33,8 @@
 >
 > **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
 > les chiffres courants ont évolué — **483 cas : 482 PASS / 0 FAIL / 1 SKIP**,
-> `perimeter=207/207`, `verified=124` ; workspace **101 groupes, 1 624 passés /
-> 0 échec / 6 ignorés** (T6) ; couverture **89,47/88,87** ; oracle **40 200
+> `perimeter=207/207`, `verified=124` ; workspace **101 groupes, 1 627 passés /
+> 0 échec / 6 ignorés** (T7) ; couverture **89,47/88,87** ; oracle **40 200
 > exécutions issues de 42 gabarits d'instructions indépendantes, sans
 > composition** (0 divergence) ; Miri rejoué en CI Linux et mutation rejouée en CI
 > (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
