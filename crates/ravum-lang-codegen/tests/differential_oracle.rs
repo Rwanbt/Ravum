@@ -120,6 +120,11 @@ struct Holder { p: Pair, n: i32 }
 fn make_holder(n: i32) -> Holder {
     return Holder { p: make_pair(n, String::from("h")), n: n };
 }
+struct PwHolder { items: [String; 2] }
+enum PwBag { Items([String; 2]), Empty }
+fn pw_make() -> [String; 2] {
+    return [String::from("m"), String::from("n")];
+}
 enum Text { Empty, Full(String) }
 fn make_text_enum(flag: bool) -> Text {
     if flag { return Text::Full(String::from("t")); }
@@ -1045,10 +1050,21 @@ struct TypedGen {
     loop_var: Option<String>,
     loop_bound: u8,
     no_move: bool,
+    /// T2 power test (S6): when set, every statement is the selected historical
+    /// form, so a replay can target one divergence at a time.
+    power_form: Option<u8>,
 }
 
 impl TypedGen {
     fn new(seed: u64) -> TypedGen {
+        let power_form = std::env::var("RAVUM_TYPED_POWER_FORM")
+            .ok()
+            .and_then(|value| value.parse::<u8>().ok())
+            .filter(|form| (1..=13).contains(form));
+        TypedGen::new_with_power(seed, power_form)
+    }
+
+    fn new_with_power(seed: u64, power_form: Option<u8>) -> TypedGen {
         TypedGen {
             rng: Rng::new(seed),
             name_counter: 0,
@@ -1056,6 +1072,7 @@ impl TypedGen {
             loop_var: None,
             loop_bound: 0,
             no_move: false,
+            power_form,
         }
     }
 
@@ -1977,6 +1994,13 @@ impl TypedGen {
     // -- statements -----------------------------------------------------------
 
     fn stmt(&mut self, env: &mut TEnv, depth: usize, stats: &mut GenStats) -> String {
+        if let Some(form) = self.power_form {
+            return self.stmt_power(form, stats);
+        }
+        if self.rng.below(100) < 8 {
+            let form = (self.rng.below(13) + 1) as u8;
+            return self.stmt_power(form, stats);
+        }
         if depth == 0 {
             return if self.rng.below(100) < 60 {
                 self.stmt_let(env, 0, stats)
@@ -2201,6 +2225,78 @@ impl TypedGen {
         }
     }
 
+    // -- historical power forms (T2 S6) ---------------------------------------
+
+    /// The 13 historical array-move shapes of `T2-FINDINGS.md` §22-§24, one
+    /// production rule each. Each rule is a self-contained, well-typed block; the
+    /// `p{form}_{id}` names make a divergence attributable to its form without
+    /// reading the whole program. `RAVUM_TYPED_POWER_FORM=k` replays form `k`
+    /// only, which is how the power test measures one divergence at a time.
+    fn stmt_power(&mut self, form: u8, stats: &mut GenStats) -> String {
+        stats.statements += 1;
+        let id = self.name_counter;
+        self.name_counter += 1;
+        let lit = self.lit();
+        let template = match form {
+            1 => {
+                self.rule(stats, "stmt:power:nested-index");
+                "{ let p1_@ID@_a: [[String; 2]; 2] = [[String::from(\"a@LIT@\"), String::from(\"b@LIT@\")], [String::from(\"c@LIT@\"), String::from(\"d@LIT@\")]]; let p1_@ID@_s: String = p1_@ID@_a[0][1]; io::println(p1_@ID@_s.as_str()); }"
+            }
+            2 => {
+                self.rule(stats, "stmt:power:projected");
+                "{ let p2_@ID@_h: PwHolder = PwHolder { items: [String::from(\"a@LIT@\"), String::from(\"b@LIT@\")] }; let p2_@ID@_s: String = p2_@ID@_h.items[1]; io::println(p2_@ID@_s.as_str()); let p2_@ID@_t: ([String; 2], i32) = ([String::from(\"c@LIT@\"), String::from(\"d@LIT@\")], @LIT@); let p2_@ID@_u: String = p2_@ID@_t.0[0]; io::println(p2_@ID@_u.as_str()); }"
+            }
+            3 => {
+                self.rule(stats, "stmt:power:shadowed");
+                "{ let p3_@ID@_a: [String; 2] = [String::from(\"a@LIT@\"), String::from(\"b@LIT@\")]; if true { let p3_@ID@_a: String = String::from(\"inner@LIT@\"); io::println(p3_@ID@_a.as_str()); } let p3_@ID@_s: String = p3_@ID@_a[0]; io::println(p3_@ID@_s.as_str()); }"
+            }
+            4 => {
+                self.rule(stats, "stmt:power:self-receiver");
+                "{ let p4_@ID@_a: [Pair; 2] = [make_pair(@LIT@, String::from(\"x@LIT@\")), make_pair(@LIT@, String::from(\"y@LIT@\"))]; let p4_@ID@_s: String = p4_@ID@_a[0].take_b(); io::println(p4_@ID@_s.as_str()); }"
+            }
+            5 => {
+                self.rule(stats, "stmt:power:match-payload-block");
+                "{ let p5_@ID@_e: PwBag = PwBag::Items([String::from(\"a@LIT@\"), String::from(\"b@LIT@\")]); let p5_@ID@_s: String = match p5_@ID@_e { PwBag::Items(p5_@ID@_p) => { p5_@ID@_p[1] }, PwBag::Empty => { String::from(\"none\") } }; io::println(p5_@ID@_s.as_str()); }"
+            }
+            6 => {
+                self.rule(stats, "stmt:power:nested-dynamic");
+                "{ let p6_@ID@_a: [[String; 2]; 2] = [[String::from(\"a@LIT@\"), String::from(\"b@LIT@\")], [String::from(\"c@LIT@\"), String::from(\"d@LIT@\")]]; let p6_@ID@_i: usize = 1; let p6_@ID@_s: String = p6_@ID@_a[0][p6_@ID@_i]; io::println(p6_@ID@_s.as_str()); let p6_@ID@_b: [[String; 2]; 2] = [[String::from(\"e@LIT@\"), String::from(\"f@LIT@\")], [String::from(\"g@LIT@\"), String::from(\"h@LIT@\")]]; let p6_@ID@_j: usize = 0; let p6_@ID@_t: String = p6_@ID@_b[p6_@ID@_i][p6_@ID@_j]; io::println(p6_@ID@_t.as_str()); }"
+            }
+            7 => {
+                self.rule(stats, "stmt:power:non-place-root");
+                "{ let p7_@ID@_s: String = pw_make()[1]; io::println(p7_@ID@_s.as_str()); let p7_@ID@_a: [([String; 2], i32); 2] = [([String::from(\"x0\"), String::from(\"x1\")], 1), ([String::from(\"y0\"), String::from(\"y1\")], 2)]; let p7_@ID@_t: String = p7_@ID@_a[0].0[1]; io::println(p7_@ID@_t.as_str()); }"
+            }
+            8 => {
+                self.rule(stats, "stmt:power:arm-multi");
+                "{ let p8_@ID@_e: PwBag = PwBag::Items([String::from(\"a@LIT@\"), String::from(\"b@LIT@\")]); let p8_@ID@_t: (String, String) = match p8_@ID@_e { PwBag::Items(p8_@ID@_p) => (p8_@ID@_p[0], p8_@ID@_p[1]), PwBag::Empty => (String::from(\"x\"), String::from(\"y\")) }; io::println(p8_@ID@_t.0.as_str()); io::println(p8_@ID@_t.1.as_str()); }"
+            }
+            9 => {
+                self.rule(stats, "stmt:power:builtin-receiver");
+                "{ let p9_@ID@_a: [Option<String>; 2] = [Option::Some(String::from(\"v@LIT@\")), Option::None]; let p9_@ID@_s: String = p9_@ID@_a[0].unwrap(); io::println(p9_@ID@_s.as_str()); }"
+            }
+            10 => {
+                self.rule(stats, "stmt:power:shared-descents");
+                "{ let p10_@ID@_a: [([String; 2], i32); 2] = [([String::from(\"x0\"), String::from(\"x1\")], 1), ([String::from(\"y0\"), String::from(\"y1\")], 2)]; let p10_@ID@_x: String = p10_@ID@_a[0].0[1]; let p10_@ID@_y: String = p10_@ID@_a[1].0[0]; io::println(p10_@ID@_x.as_str()); io::println(p10_@ID@_y.as_str()); }"
+            }
+            11 => {
+                self.rule(stats, "stmt:power:descent-then-read");
+                "{ let p11_@ID@_a: [([String; 2], i32); 2] = [([String::from(\"x0\"), String::from(\"x1\")], 1), ([String::from(\"y0\"), String::from(\"y1\")], 2)]; let p11_@ID@_x: String = p11_@ID@_a[0].0[1]; let p11_@ID@_n: i32 = p11_@ID@_a[1].1; io::println(p11_@ID@_x.as_str()); acc = acc + p11_@ID@_n; }"
+            }
+            12 => {
+                self.rule(stats, "stmt:power:branch-descents");
+                "{ let p12_@ID@_a: [([String; 2], i32); 2] = [([String::from(\"x0\"), String::from(\"x1\")], 1), ([String::from(\"y0\"), String::from(\"y1\")], 2)]; if true { let p12_@ID@_x: String = p12_@ID@_a[0].0[1]; io::println(p12_@ID@_x.as_str()); } else { let p12_@ID@_y: String = p12_@ID@_a[1].0[0]; io::println(p12_@ID@_y.as_str()); } }"
+            }
+            13 => {
+                self.rule(stats, "stmt:power:nested-descents");
+                "{ let p13_@ID@_a: [([String; 2], i32); 2] = [([String::from(\"x0\"), String::from(\"x1\")], 1), ([String::from(\"y0\"), String::from(\"y1\")], 2)]; if true { let p13_@ID@_x: String = p13_@ID@_a[0].0[1]; let p13_@ID@_y: String = p13_@ID@_a[1].0[0]; io::println(p13_@ID@_x.as_str()); io::println(p13_@ID@_y.as_str()); } }"
+            }
+            other => unreachable!("unknown power form {other}"),
+        };
+        template
+            .replace("@ID@", &id.to_string())
+            .replace("@LIT@", &lit.to_string())
+    }
+
     // -- deliberate faults ----------------------------------------------------
 
     fn fault_statements(&mut self, fault: Fault, stats: &mut GenStats) -> Vec<String> {
@@ -2260,6 +2356,22 @@ fn generate_typed_program(
         },
         stats,
     )
+}
+
+fn generate_power_program(seed: u64, form: u8, statement_count: usize) -> TypedProgram {
+    let mut generator = TypedGen::new_with_power(seed, Some(form));
+    let mut stats = GenStats::default();
+    let mut env = TEnv::new();
+    env.add("acc", Ty::I32, true, 0);
+    let mut statements = Vec::with_capacity(statement_count);
+    for _ in 0..statement_count {
+        statements.push(generator.stmt(&mut env, 4, &mut stats));
+    }
+    TypedProgram {
+        statements,
+        fault_statements: Vec::new(),
+        fault: None,
+    }
 }
 
 #[derive(Default)]
@@ -2528,6 +2640,36 @@ fn typed_generator_is_deterministic_and_seed_sensitive() {
         "two typed seeds produced the same program"
     );
     assert!(first.render().contains("fn main()"));
+}
+
+/// T2 power test (S6): every one of the 13 historical forms is a production rule
+/// of the generator and builds on the healthy tree. This guards the power
+/// campaign against a rule that would produce ill-typed or unbuildable programs
+/// for a reason unrelated to the inverse under test.
+#[test]
+fn power_forms_build_on_the_healthy_tree() {
+    if !rustc_available() {
+        eprintln!("SKIP power_forms_build_on_the_healthy_tree: rustc not available");
+        return;
+    }
+    for form in 1..=13u8 {
+        let program = generate_power_program(0x5057_0000 + form as u64, form, 2);
+        let source = program.render();
+        let rust = match check_program(&source, "power-form") {
+            Ok(Some(rust)) => rust,
+            Err(message) => panic!("power form {form} was rejected by check: {message}\n{source}"),
+            Ok(None) => panic!("power form {form} produced no code: {source}"),
+        };
+        let compiled = match compile_rust(&rust, &format!("power-form-{form}"), false) {
+            Ok(compiled) => compiled,
+            Err(stderr) => panic!("power form {form} does not compile:\n{stderr}\n{source}"),
+        };
+        let (stdout, stderr, code) = run_binary(&compiled.binary);
+        assert_eq!(
+            code, 0,
+            "power form {form} exited {code}; stdout: {stdout:?}; stderr: {stderr:?}\n{source}"
+        );
+    }
 }
 
 /// The three deliberate faults must be refused by `check` with an `E-OWN-*`
