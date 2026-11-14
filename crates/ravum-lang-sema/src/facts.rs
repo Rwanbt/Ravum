@@ -257,13 +257,31 @@ pub struct ConstInfo {
 /// Resolution of a value path (`x`, `f`, `io::println`, `E::V`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolution {
-    Local { name: String, mutable: bool },
-    Item { item: NodeId },
-    Variant { enum_item: NodeId, variant: usize },
+    Local {
+        name: String,
+        mutable: bool,
+        /// Declaration span of the binding: the `Pat` span for a `let`, match
+        /// or `for` binding, and the enclosing item span for a parameter or
+        /// `self` (the same identity `OwnFacts::place` records). The emitter's
+        /// step-B guard uses it to verify the binding, not only the
+        /// projections.
+        decl: Span,
+    },
+    Item {
+        item: NodeId,
+    },
+    Variant {
+        enum_item: NodeId,
+        variant: usize,
+    },
     Module,
     BuiltinModule,
-    BuiltinFn { path: String },
-    BuiltinConst { path: String },
+    BuiltinFn {
+        path: String,
+    },
+    BuiltinConst {
+        path: String,
+    },
     Error,
 }
 

@@ -206,7 +206,7 @@ fn describe(analysis: &Analysis, resolution: &Resolution) -> Option<String> {
                 info.name, payload, definition.name
             ))
         }
-        Resolution::Local { name, mutable } => Some(format!(
+        Resolution::Local { name, mutable, .. } => Some(format!(
             "```ravum\n{} {name}\n```",
             if *mutable { "let mut" } else { "let" }
         )),

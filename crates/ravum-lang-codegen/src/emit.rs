@@ -1063,24 +1063,35 @@ impl<'a> Emitter<'a> {
                 Some(expected) => {
                     let mut expected_after_deref = expected.clone();
                     if auto_deref {
-                        self.push_auto_derefs(expr, &mut expected_after_deref);
+                        self.push_auto_derefs(expr, &mut expected_after_deref.steps);
                     }
-                    let matches = recorded.steps == expected
-                        || (auto_deref && recorded.steps == expected_after_deref);
-                    if matches {
+                    if recorded == &expected || (auto_deref && recorded == &expected_after_deref) {
                         continue;
                     }
+                    // Binding identity first: a place rooted at another binding
+                    // is not a projection mismatch.
+                    if recorded.binding != expected.binding {
+                        return Err(err(format!(
+                            "ownership facts disagree with the syntax for expression {id} ({}) at \
+                             {}: recorded binding {:?}, syntactic binding {:?}",
+                            self.expr_location(expr),
+                            self.expr_span_text(expr),
+                            recorded.binding,
+                            expected.binding
+                        )));
+                    }
                     let suffix = if auto_deref {
-                        format!(", after auto-deref {expected_after_deref:?}")
+                        format!(", after auto-deref {:?}", expected_after_deref.steps)
                     } else {
                         String::new()
                     };
                     return Err(err(format!(
                         "ownership facts disagree with the syntax for expression {id} ({}) at \
-                         {}: recorded place steps {:?}, syntactic place {expected:?}{suffix}",
+                         {}: recorded place steps {:?}, syntactic place {:?}{suffix}",
                         self.expr_location(expr),
                         self.expr_span_text(expr),
-                        recorded.steps
+                        recorded.steps,
+                        expected.steps
                     )));
                 }
                 None => {
@@ -1096,46 +1107,56 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    /// Place projections described by the syntax alone (step B cross-check).
-    fn syntactic_place(&self, expr: &Expr) -> Option<Vec<ravum_lang_sema::facts::Projection>> {
-        use ravum_lang_sema::facts::{Projection as PlaceStep, ProjectionIndex};
+    /// Place described by the syntax alone, binding identity included (step B
+    /// cross-check). See `OwnPlace`.
+    fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
+        use ravum_lang_sema::facts::{OwnPlace, Projection as PlaceStep, ProjectionIndex};
         match &expr.kind {
-            ExprKind::SelfValue => Some(Vec::new()),
+            ExprKind::SelfValue => match self.checked.facts.resolutions.get(&expr.id) {
+                Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                    binding: *decl,
+                    steps: Vec::new(),
+                }),
+                _ => None,
+            },
             ExprKind::Path(path) if path.segments.len() == 1 => {
                 match self.checked.facts.resolutions.get(&path.id) {
-                    Some(Resolution::Local { .. }) => Some(Vec::new()),
+                    Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                        binding: *decl,
+                        steps: Vec::new(),
+                    }),
                     _ => None,
                 }
             }
             ExprKind::Field { base, name } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
-                steps.push(PlaceStep::Field(name.name.clone()));
-                Some(steps)
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Field(name.name.clone()));
+                Some(place)
             }
             ExprKind::TupleIndex { base, index } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
-                steps.push(PlaceStep::Tuple(*index));
-                Some(steps)
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Tuple(*index));
+                Some(place)
             }
             ExprKind::Index { base, index } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
                 let index = match &index.kind {
                     ExprKind::Int { value, .. } => ProjectionIndex::Lit(*value),
                     _ => ProjectionIndex::Opaque,
                 };
-                steps.push(PlaceStep::Index(index));
-                Some(steps)
+                place.steps.push(PlaceStep::Index(index));
+                Some(place)
             }
             ExprKind::Unary {
                 op: UnOp::Deref,
                 expr,
             } => {
-                let mut steps = self.syntactic_place(expr)?;
-                steps.push(PlaceStep::Deref);
-                Some(steps)
+                let mut place = self.syntactic_place(expr)?;
+                place.steps.push(PlaceStep::Deref);
+                Some(place)
             }
             _ => None,
         }
@@ -5257,6 +5278,7 @@ mod tests {
                 Resolution::Local {
                     name: name.to_string(),
                     mutable: false,
+                    decl: span(),
                 },
             );
             self.expr(ExprKind::Path(path), ty)
@@ -5549,6 +5571,51 @@ mod tests {
         );
         assert!(
             error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for the binding identity: the guard compares the
+    /// declaration span recorded by `OwnFacts` with the resolved local's span.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn binding_identity_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::CheckOptions;
+        use ravum_lang_sema::syntax::span::Span;
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn main() { let a: i32 = 1; let b = a; }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "a"
+                ) && checked.facts.own.place.contains_key(id)
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record the place of `a`");
+        checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("place exists")
+            .binding = Span::dummy();
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted binding must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("binding"),
             "unexpected error: {}",
             error.message
         );

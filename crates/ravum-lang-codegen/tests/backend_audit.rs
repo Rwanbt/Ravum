@@ -158,6 +158,7 @@ impl B {
             Resolution::Local {
                 name: name.to_string(),
                 mutable: false,
+                decl: span(),
             },
         );
         self.e(ExprKind::Path(path), ty)
