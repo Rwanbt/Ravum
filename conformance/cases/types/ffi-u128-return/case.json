@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-u128-return",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "S4 (APPROVED by the owner, 2026-11-14): u128 is removed from the admitted FFI types (C-FFI-2, no portable C width); an extern return using it is refused at resolve. The i64 positive case (run/ffi-width-boundary) is unchanged."
+}
