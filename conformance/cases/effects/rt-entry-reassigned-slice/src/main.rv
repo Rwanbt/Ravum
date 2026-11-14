@@ -1,0 +1,10 @@
+fn process(mut a: &[i32], b: &[i32]) -> i32 {
+    let mut s: i32 = 0;
+    for i in 0..a.len() {
+        a = b;
+        s = s.wrapping_add(a[i]);
+    }
+    return s;
+}
+
+fn main() { let v = process(&[1, 2, 3], &[4, 5, 6]); }

@@ -1,0 +1,14 @@
+{
+  "id": "effects/rt-entry-computed-index",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt",
+    "--rt-entry",
+    "process"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "T6 negative case: the bounded-index rule accepts only the loop variable itself; an index computed from it (`a[i.wrapping_add(0)]`) is still a trap in the reachable function."
+}

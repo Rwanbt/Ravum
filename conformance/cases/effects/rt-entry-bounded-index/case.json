@@ -1,0 +1,11 @@
+{
+  "id": "effects/rt-entry-bounded-index",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "rt",
+    "--rt-entry",
+    "process"
+  ],
+  "notes": "T6 positive case: `--rt-entry process` limits the `rt` gate to the reachable functions. Bounded `for i in 0..4usize` indexing of `[f64; 4]` and `&[f64; 4]` is accepted, while the `io` call and the bare `+` of the unreachable `main` stay legal. The build dimension runs `build .` with the historical Core analysis, so it checks the same source without the `rt` gate."
+}

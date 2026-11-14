@@ -16,7 +16,9 @@ mod traps;
 pub mod typeck;
 pub mod types;
 
-pub use check::{check, check_with_timings, PhaseTimings};
+pub use check::{
+    check, check_entry_with_timings, check_with_entry, check_with_timings, PhaseTimings,
+};
 pub use facts::{
     CallTarget, CheckOptions, CheckResult, CheckedProgram, ConstInfo, Effect, EffectSet, EnumInfo,
     FnSig, MethodTarget, Profile, Resolution, StructInfo, VariantInfo, VariantKind,

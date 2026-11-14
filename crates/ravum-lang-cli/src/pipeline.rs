@@ -48,10 +48,11 @@
 use ravum_lang_codegen::{generate, GenOptions, GENERATOR_VERSION};
 use ravum_lang_sema::facts::{CheckOptions, CheckedProgram};
 use ravum_lang_sema::loader::{load_package_with_options, CrateKind, LoadOptions};
-use ravum_lang_sema::{check_with_timings, LoadedPackage, PhaseTimings, Profile};
-use ravum_lang_syntax::ast::{ItemKind, Module, Program};
-use ravum_lang_syntax::diag::DiagnosticBag;
+use ravum_lang_sema::{check_entry_with_timings, LoadedPackage, PhaseTimings, Profile};
+use ravum_lang_syntax::ast::{ItemKind, Module, NodeId, Program};
+use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::source::SourceMap;
+use ravum_lang_syntax::span::Span;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -93,7 +94,21 @@ impl Frontend {
 
 /// Load a package and run the checker on every crate root it contains.
 pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
-    analyze_with_timings(path, profile, locked).0
+    analyze_with_entry(path, profile, locked, None)
+}
+
+/// `analyze`, with the explicit `rt` entry function of T6 (`--rt-entry`).
+///
+/// The name is a module path (`dsp::process`, or `process` at the crate root);
+/// it must name a free function of the primary crate root. Methods of an
+/// `impl` are not addressable and are reported as an unknown entry.
+pub fn analyze_with_entry(
+    path: &Path,
+    profile: Profile,
+    locked: bool,
+    rt_entry: Option<&str>,
+) -> Frontend {
+    analyze_entry_with_timings(path, profile, locked, rt_entry).0
 }
 
 /// Wall-clock durations of one analysis, for `ravum-lang --timings`.
@@ -131,11 +146,12 @@ impl AnalysisTimings {
     }
 }
 
-/// `check`, plus the analysis timings. Additive: `analyze` delegates here.
-pub fn analyze_with_timings(
+/// `check`, plus the analysis timings and the `--rt-entry` function of T6.
+pub fn analyze_entry_with_timings(
     path: &Path,
     profile: Profile,
     locked: bool,
+    rt_entry: Option<&str>,
 ) -> (Frontend, AnalysisTimings) {
     let mut timings = AnalysisTimings::default();
     let load_started = Instant::now();
@@ -151,6 +167,27 @@ pub fn analyze_with_timings(
     timings.parse = pkg.parse_time;
     timings.load = load_total.saturating_sub(timings.parse);
     let mut diags = std::mem::take(&mut pkg.diags);
+    let entry = match rt_entry {
+        Some(name) => match pkg
+            .program
+            .as_ref()
+            .and_then(|program| find_function(program, name))
+        {
+            Some(id) => Some(id),
+            None => {
+                diags.push(Diagnostic::error(
+                    "E-TOOL",
+                    Span::dummy(),
+                    format!(
+                        "`--rt-entry`: no free function named `{name}` in this package; pass \
+                         its module path (for example `dsp::process`)"
+                    ),
+                ));
+                None
+            }
+        },
+        None => None,
+    };
     let options = CheckOptions {
         profile,
         edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
@@ -160,13 +197,13 @@ pub fn analyze_with_timings(
 
     if !diags.has_errors() {
         if let Some(program) = &pkg.program {
-            let (result, phase) = check_with_timings(program, &pkg.sources, &options);
+            let (result, phase) = check_entry_with_timings(program, &pkg.sources, &options, entry);
             add_phases(&mut timings, phase);
             diags.extend(result.diags);
             checked = result.checked;
         }
         if let Some(program) = &pkg.lib_program {
-            let (result, phase) = check_with_timings(program, &pkg.sources, &options);
+            let (result, phase) = check_entry_with_timings(program, &pkg.sources, &options, entry);
             add_phases(&mut timings, phase);
             diags.extend(result.diags);
             lib_checked = result.checked;
@@ -182,6 +219,46 @@ pub fn analyze_with_timings(
         diags,
     };
     (frontend, timings)
+}
+
+/// Free function named by `--rt-entry`, addressed by module path.
+fn find_function(program: &Program, name: &str) -> Option<NodeId> {
+    fn walk(module: &Module, prefix: &str, wanted: &str) -> Option<NodeId> {
+        for item in &module.items {
+            match &item.kind {
+                ItemKind::Fn(function) => {
+                    let full = if prefix.is_empty() {
+                        function.name.name.clone()
+                    } else {
+                        format!("{prefix}::{}", function.name.name)
+                    };
+                    if full == wanted {
+                        return Some(item.id);
+                    }
+                }
+                ItemKind::Mod(inner) => {
+                    let module_name = inner
+                        .name
+                        .as_ref()
+                        .map(|ident| ident.name.as_str())
+                        .unwrap_or("");
+                    let next = if prefix.is_empty() {
+                        module_name.to_string()
+                    } else if module_name.is_empty() {
+                        prefix.to_string()
+                    } else {
+                        format!("{prefix}::{module_name}")
+                    };
+                    if let Some(id) = walk(inner, &next, wanted) {
+                        return Some(id);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+    walk(&program.root, "", name)
 }
 
 fn add_phases(total: &mut AnalysisTimings, phase: PhaseTimings) {

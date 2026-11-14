@@ -7,9 +7,12 @@
 //! de la déclaration est `E-EFF-UNDECLARED`.
 //!
 //! Profils : `core` ne restreint rien ; `pure` et `rt` interdisent les effets
-//! listés par [`Profile::forbidden`] à la fonction d'entrée (`main`, ou chaque
-//! test si le programme est une bibliothèque). Le diagnostic `E-EFF-PROFILE`
-//! porte une note avec la chaîne d'appel et la fonction fautive.
+//! listés par [`Profile::forbidden`] à la fonction d'entrée. Par défaut
+//! l'entrée est `main` (ou chaque test pour une bibliothèque) ; pour `rt`, un
+//! appelant peut désigner une **fonction de traitement** (`--rt-entry`) et les
+//! règles ne s'appliquent alors qu'à ses fonctions atteignables (RFC-RT-TRAPS-1,
+//! amendement T6). Le diagnostic `E-EFF-PROFILE` porte une note avec la chaîne
+//! d'appel et la fonction fautive.
 //!
 //! Limite documentée : ceci est une analyse **statique de capacités**, pas un
 //! bac à sable. Elle ne prouve pas l'absence d'effets non modélisés (timeouts,
@@ -35,13 +38,20 @@ struct FnEffects {
 }
 
 /// Compose les effets de toutes les fonctions, vérifie les bornes déclarées et
-/// le profil. Met à jour `FnSig::effects` et `Facts::effects`.
+/// le profil. Met à jour `FnSig::effects` et `Facts::effects`, et renvoie le
+/// graphe d'appels (`NodeId` de fonction -> ids appelés) pour que le contrôle
+/// des traps puisse appliquer la même atteignabilité.
+///
+/// `rt_entry` remplace l'entrée du profil `rt` (T6, `--rt-entry`) : les effets
+/// interdits ne sont cherchés que depuis cette fonction. Il est ignoré par
+/// `core`, et `None` conserve le comportement historique (`main`/tests).
 pub fn infer_and_check(
     program: &Program,
     facts: &mut Facts,
     profile: Profile,
+    rt_entry: Option<NodeId>,
     diags: &mut DiagnosticBag,
-) {
+) -> BTreeMap<NodeId, Vec<NodeId>> {
     let fns = collect_fns(program);
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
@@ -112,33 +122,61 @@ pub fn infer_and_check(
         }
     }
 
+    // Graphe d'appels (`NodeId` -> ids appelés), réutilisé tel quel par le
+    // contrôle des traps en profil `rt`.
+    let graph: BTreeMap<NodeId, Vec<NodeId>> = direct
+        .iter()
+        .map(|(id, effects)| (*id, effects.edges.clone()))
+        .collect();
+
     // Profil : effet interdit atteint depuis l'entrée.
     let Some(forbidden) = profile.forbidden() else {
-        return;
+        return graph;
     };
-    let entries: Vec<(NodeId, String)> = match facts.main_fn {
-        Some(main) => vec![(
-            main,
-            facts
-                .fn_sigs
-                .get(&main)
-                .map(|s| s.name.clone())
-                .unwrap_or_else(|| "main".to_string()),
-        )],
-        None => facts
-            .test_fns
-            .iter()
-            .map(|id| {
-                (
-                    *id,
-                    facts
-                        .fn_sigs
-                        .get(id)
-                        .map(|s| s.name.clone())
-                        .unwrap_or_else(|| "<test>".to_string()),
-                )
-            })
-            .collect(),
+    let entries: Vec<(NodeId, String)> = match rt_entry {
+        Some(entry) => {
+            if !direct.contains_key(&entry) {
+                diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                    "E-EFF-PROFILE",
+                    Span::dummy(),
+                    "the `rt` entry point is not a function of this program; refusing to \
+                         check an empty reachable set",
+                ));
+                return graph;
+            }
+            vec![(
+                entry,
+                facts
+                    .fn_sigs
+                    .get(&entry)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| format!("fn#{entry}")),
+            )]
+        }
+        None => match facts.main_fn {
+            Some(main) => vec![(
+                main,
+                facts
+                    .fn_sigs
+                    .get(&main)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| "main".to_string()),
+            )],
+            None => facts
+                .test_fns
+                .iter()
+                .map(|id| {
+                    (
+                        *id,
+                        facts
+                            .fn_sigs
+                            .get(id)
+                            .map(|s| s.name.clone())
+                            .unwrap_or_else(|| "<test>".to_string()),
+                    )
+                })
+                .collect(),
+        },
     };
     for (entry, entry_name) in entries {
         if let Some((chain, effect, source)) = find_violation(entry, &forbidden, &direct, facts) {
@@ -168,6 +206,27 @@ pub fn infer_and_check(
             );
         }
     }
+    graph
+}
+
+/// Functions reachable from `entry` through the call graph (`entry` included).
+pub fn reachable_from(graph: &BTreeMap<NodeId, Vec<NodeId>>, entry: NodeId) -> BTreeSet<NodeId> {
+    let mut reached: BTreeSet<NodeId> = BTreeSet::new();
+    let mut queue: VecDeque<NodeId> = VecDeque::new();
+    queue.push_back(entry);
+    while let Some(node) = queue.pop_front() {
+        if !reached.insert(node) {
+            continue;
+        }
+        if let Some(callees) = graph.get(&node) {
+            for callee in callees {
+                if graph.contains_key(callee) {
+                    queue.push_back(*callee);
+                }
+            }
+        }
+    }
+    reached
 }
 
 fn collect_fns<'a>(program: &'a Program) -> BTreeMap<NodeId, &'a FnItem> {

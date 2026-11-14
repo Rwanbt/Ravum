@@ -33,7 +33,20 @@ pub struct PhaseTimings {
 
 /// Vérifie un programme analysé par le frontend.
 pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> CheckResult {
-    check_with_timings(program, sources, options).0
+    check_with_entry(program, sources, options, None)
+}
+
+/// `check`, with an explicit `rt` entry function (T6, `--rt-entry`).
+///
+/// The `rt` effects and trap rules apply to the functions reachable from
+/// `rt_entry` instead of `main`; `None` is the historical whole-`main` behaviour.
+pub fn check_with_entry(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> CheckResult {
+    check_entry_with_timings(program, sources, options, rt_entry).0
 }
 
 /// `check`, plus the wall-clock duration of each phase.
@@ -41,6 +54,16 @@ pub fn check_with_timings(
     program: &Program,
     sources: &SourceMap,
     options: &CheckOptions,
+) -> (CheckResult, PhaseTimings) {
+    check_entry_with_timings(program, sources, options, None)
+}
+
+/// `check_with_timings`, with the explicit `rt` entry function of T6.
+pub fn check_entry_with_timings(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
 ) -> (CheckResult, PhaseTimings) {
     let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
@@ -91,10 +114,11 @@ pub fn check_with_timings(
     };
 
     let started = Instant::now();
-    effects::infer_and_check(
+    let call_graph = effects::infer_and_check(
         &checked.program,
         &mut checked.facts,
         options.profile,
+        rt_entry,
         &mut diags,
     );
     timings.effects = started.elapsed();
@@ -106,8 +130,12 @@ pub fn check_with_timings(
 
     // RFC-RT-TRAPS-1: intrinsic traps are checked for the `rt` profile only.
     // `core` and `pure` are unchanged (deliberate asymmetry, see the RFC).
+    // With `--rt-entry` (T6) only the functions reachable from the entry are
+    // checked: setup code (allocation, I/O) outside the real-time path stays
+    // legal.
     if options.profile == crate::facts::Profile::Rt {
-        crate::traps::check_rt_traps(&checked, &mut diags);
+        let reachable = rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
+        crate::traps::check_rt_traps(&checked, &mut diags, reachable.as_ref());
     }
 
     diags.sort();

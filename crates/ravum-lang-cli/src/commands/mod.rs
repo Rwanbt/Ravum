@@ -24,7 +24,8 @@ pub fn dispatch(command: Command) -> i32 {
             profile,
             locked,
             timings,
-        } => check::run(&path, json, profile, locked, timings),
+            rt_entry,
+        } => check::run(&path, json, profile, locked, timings, rt_entry.as_deref()),
         Command::Build {
             path,
             release,
@@ -32,7 +33,16 @@ pub fn dispatch(command: Command) -> i32 {
             emit_ir,
             target,
             timings,
-        } => build::run(&path, release, emit_rust, emit_ir, target, timings),
+            rt_entry,
+        } => build::run(
+            &path,
+            release,
+            emit_rust,
+            emit_ir,
+            target,
+            timings,
+            rt_entry.as_deref(),
+        ),
         Command::Run { path, args, target } => run::run(&path, &args, target),
         Command::Watch {
             path,
