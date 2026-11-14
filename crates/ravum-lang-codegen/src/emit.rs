@@ -4344,8 +4344,13 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::Call { callee, args } => {
                 self.walk_expr(callee, false, top, block_depth);
-                let owned_args = self.call_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // RFC-OWN-FACTS-1 step C (family `arguments`): the checker records
+                // on the argument expression itself whether the call takes it by
+                // value (`Move`/`Copy`) or only borrows it (`Borrow`/`BorrowMut`).
+                // The backend no longer re-derives it from the callee signature's
+                // parameter types, nor from "a builtin takes bare values".
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
@@ -4361,8 +4366,10 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 // set itself.
                 let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
                 self.walk_expr(receiver, receiver_owned, top, block_depth);
-                let owned_args = self.method_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // Same decision, same source of truth, for the explicit arguments
+                // (family `arguments`): the recorded use of each argument node.
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
@@ -4528,52 +4535,6 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             },
             PatKind::Wild | PatKind::Lit(_) => {}
         }
-    }
-
-    /// Argument positions of a call that consume their value: a user function
-    /// parameter whose type is not `Copy`. A builtin receives its arguments by
-    /// value when Ravum passes a bare value (there is no implicit referencing in
-    /// the language), so builtin arguments are treated as consumed too; a builtin
-    /// that borrows internally still works, because the moved element is then a
-    /// plain local to borrow from.
-    fn call_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().calls.get(&call) {
-            Some(CallTarget::UserFn { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter()) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            Some(CallTarget::VariantCtor { .. }) | Some(CallTarget::BuiltinFn { .. }) => {
-                // Constructing a variant moves its payloads; a builtin receives a
-                // bare value by value.
-                out.fill(true);
-            }
-            _ => {}
-        }
-        out
-    }
-
-    fn method_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    // `params[0]` is the receiver; the remaining parameters map to
-                    // the explicit arguments in order.
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter().skip(1)) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            // Builtin method signatures are not modelled by the backend; a bare
-            // value argument is passed by value in Ravum (`v.push(a[0])`).
-            Some(MethodTarget::Builtin { .. }) => out.fill(true),
-            _ => {}
-        }
-        out
     }
 
     /// Build the destructuring for one place: the array pattern and the binding
