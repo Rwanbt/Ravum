@@ -781,6 +781,24 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   `feat/**`/`fix/**`) ; le dispatch manuel est la seule façon de qualifier Linux
   sans merge. Ce n'est pas un gate de la PR.
 
+## Entrée 2026-11-14 (round 20) — Mutation rejouée en CI sur l'arbre courant
+
+| Champ | Valeur |
+|---|---|
+| Déclenchement | `gh workflow run mutation.yml --ref goal/production-ready` |
+| Run | [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293), SHA `b5298db` |
+| Outil | `cargo-mutants 27.1.0`, `ubuntu-latest`, `rustc 1.95.0`, `--no-shuffle -j 8` |
+| Résultat | **183 mutants / 150 tués / 24 survivants / 9 non viables** (artefact `mutants-targeted`) |
+
+- Portée identique à §9/§10 (`own.rs`, `resolve.rs`, `typeck.rs`, filtres `-F`) ;
+  totaux **exactement identiques** au run de référence de 2026-11-13, malgré les
+  phases 4-5. Aucun nouveau survivant ; le tri E1–E6 reste valable.
+- `cargo-mutants` reste absent localement (R5) : la preuve est CI, ciblée, et ne
+  constitue pas un score de crate.
+- Documents : `MUTATION-EQUIVALENCE.md` §11, rapport (§1, §3, R8, T10, §6),
+  matrice des gates, `PRODUCTION-READINESS.md`.
+
+
 
 
 

@@ -451,7 +451,9 @@ cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
 passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
 **89,47/88,87**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à
 98,66/96,84. **Miri rejoué vert en CI Linux** sur `878e212` (syntax 65, sema
-134, fuzz court) ; Miri local absent. `OwnFacts` : étape A livrée (faits enregistrés,
+134, fuzz court) ; **mutation rejouée en CI** (183 mutants / 150 tués / 24
+survivants triés / 9 non viables, portée ciblée). Miri et mutation locaux
+absents. `OwnFacts` : étape A livrée (faits enregistrés,
 2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
 600 programmes + 476 cas), étape C `NOT_RUN`.
 Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes

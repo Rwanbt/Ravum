@@ -40,13 +40,14 @@
 8. La gouvernance périmée est corrigée (`STATUS.md`, `START_HERE.md`,
    `AGENTS.md` en `PENDING_HUMAN_APPROVAL`, statut du langage en un seul état).
 9. **Non fait** : phase 4.5 (étape C, suppression du `MovePlanner`), phase 5.4
-   (adaptation de l'exemple DSP), phase 8 (bloc DSP) ; **mutation** : `NOT_RUN`
-   avec raison. **Fait depuis la première rédaction** : étapes A/B partielles
-   d'`OwnFacts`, phase 5 implémentée en `rt` (gate de traps, y compris
-   affectation composée, + méthodes explicites + 5 cas), **campagne nominale de
-   l'oracle (30 000 programmes)** et **campagne 3 × 1 000 après le garde de
-   places**, et **Miri rejoué vert en CI Linux** (65 tests syntax + 134 sema +
-   fuzz court). Miri local reste absent.
+   (adaptation de l'exemple DSP), phase 8 (bloc DSP). **Fait depuis la première
+   rédaction** : étapes A/B partielles d'`OwnFacts`, phase 5 implémentée en `rt`
+   (gate de traps, y compris affectation composée, + méthodes explicites +
+   5 cas), **campagne nominale de l'oracle (30 000 programmes)** et **campagne
+   3 × 1 000 après le garde de places**, **Miri rejoué vert en CI Linux** (65
+   tests syntax + 134 sema + fuzz court) et **mutation rejouée en CI** (183
+   mutants, 150 tués, 24 survivants triés, 9 non viables — totaux identiques
+   au run de référence). Miri local reste absent.
 10. **Rien n'est prouvé** au sens formel. T4 (audit externe) et T12 (Go/No-Go)
     restent `BLOCKED` par construction ; D9 (clé) reste différée.
 
@@ -109,6 +110,7 @@ Les autres chiffres sont identiques ou meilleurs.
 | LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
 | LSP bout en bout (transport inclus) | non mesuré | **p50 2,061 ms / p95 2,826 ms** sur 20 éditions d'une ligne | cible P0-A p95 < 50 ms atteinte sur cette mesure locale |
 | Qualification Linux (run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570), `878e212`) | non rejouée en phase 0 | **7 jobs verts** : workspace **100 groupes, 1 601 / 0 / 7**, conformance **476 (474 PASS, 0 FAIL, 2 SKIP)** avec `build_verified: true`, smoke **31/0/0**, Miri **65 + 134 tests + fuzz court**, fuzz smoke, installateur, wasm32 ; TSan `NOT_APPLICABLE` | nouvelle preuve (dispatch manuel) |
+| Mutation (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293), `b5298db`) | non rejouée en phase 0 | **183 mutants, 150 tués, 24 survivants triés, 9 non viables**, totaux **identiques** au run de référence | nouvelle preuve (dispatch manuel, portée ciblée) |
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) | nouvelle preuve |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `bf55aab9…`, commit `662f63d`), désinstallation idempotente **0 / 0** | nouvelle preuve, rejouée au round 13 |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `46b65d9fe941…`, `created=1970-01-01`, déterministe | nouvelle preuve, rejouée au round 13 |
@@ -130,7 +132,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
 | R6 | Code généré sûr | **fait** | `forbid(unsafe_code)` sans `extern` ; `deny` + `allow` local au wrapper ; 2 tests de garde, rouges prouvés |
 | R7 | Reproductibilité inter-machines | `PARTIAL` | deux racines identiques sur **cette** machine ; pas de deuxième machine |
-| R8 | Qualité mesurable | `PARTIAL` | couverture **89,47/88,87**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à 98,66/96,84, `emit.rs` à 87,75/87,09 ; objectif 100 % impossible par tests sur les régions `fmt::Error` ([`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md)) ; **mutation `NOT_RUN`** (cargo-mutants absent) |
+| R8 | Qualité mesurable | `PARTIAL` | couverture **89,47/88,87**, seuils tenus, `codegen/lib.rs` à **100/100** ; **mutation rejouée en CI** (183/150/24/9, identique) mais **portée ciblée** ; objectif 100 % impossible par tests sur les régions `fmt::Error` ([`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md)) |
 | R9 | Performance sous budget | `PARTIAL` | p50/p95 publiés (`LANG-TIMINGS.md`) ; pas de campagne sous charge ni de seuil de non-régression CI |
 | R10 | Interfaces stables | `PARTIAL` | JSON/CLI/diagnostic testés ; politique de dépréciation toujours absente |
 | R11 | Distribution | `PARTIAL` | installateur Windows rejoué (install + 2 désinstallations idempotentes) ; installateur Linux hors contrat ; `wasm`/macOS non couverts |
@@ -152,7 +154,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T7 | `PASS` | LSP : cache de parse et latence mesurée (analyse p95 1,362 ms ; bout en bout p95 2,826 ms, transport inclus) ; client LSP 11/11 |
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
-| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; **Miri rejoué vert en CI Linux** (`878e212`) ; mutation `NOT_RUN` ; audit externe absent |
+| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; **Miri rejoué vert en CI Linux** (`878e212`) ; **mutation rejouée en CI** (183/150/24/9) ; audit externe absent |
 | T11 | `PARTIAL` | reproductibilité release rejouée (`98852115…`, round 13) ; SBOM déterministe (`46b65d9f…`) ; installateur Windows (`bf55aab9…`, 2 désinstallations 0/0) et **contrat installateur Linux vert** au round 19 ; wasm32 vert ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 
@@ -261,6 +263,24 @@ qualifier Linux et Miri sur le code courant, sans merge.
 le corpus a **2 SKIP** au lieu de 1. Miri est une vérification dynamique bornée
 sur les tests de la lib, pas une preuve.
 
+### 4.6 Mutation rejouée en CI sur l'arbre courant (round 20)
+
+`mutation.yml` (dispatch manuel, run
+[43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293),
+SHA `b5298db`) sur les trois ensembles ciblés de `MUTATION-EQUIVALENCE.md` :
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---:|---:|---:|---:|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| **Total** | **183** | **150** | **24** | **9** |
+
+Totaux **identiques** au run de référence ; aucun nouveau survivant. Limites :
+portée ciblée (trois ensembles de fonctions), survivants **triés** et non
+éliminés, aucun test ajouté, aucun score de crate publié. `cargo-mutants` reste
+absent localement (R5) ; la preuve est CI.
+
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 
 1. `AGENTS.md` — révision du mandat (fait périmé corrigé) : commit `fac8a8c`.
@@ -283,7 +303,7 @@ sur les tests de la lib, pas une preuve.
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | **fait** | exécuté localement au round 8 (`aa88479`) : 3 × 10 000, **0 divergence**, 8 602 s ; 3 000 comparaisons debug == release | commande §4, détail `T2-FINDINGS.md` §26.4 |
 | Miri | **CI Linux vert, local `NOT_RUN`** | Composant `cargo-miri` absent de la toolchain locale (l'installer serait un outil supplémentaire, R5). Le workflow `linux-qual.yml` a été déclenché manuellement sur `878e212` : job Miri **vert** (syntax 65 tests, sema 134 tests, fuzz court 2 tests). Miri reste une vérification bornée, pas une preuve. |
-| Mutation | `NOT_RUN` | `cargo-mutants` absent ; l'installer serait une nouvelle dépendance (R5) | — |
+| Mutation | **CI verte, local `NOT_RUN`** | `cargo-mutants` absent localement (R5) ; `mutation.yml` dispatché manuellement sur `b5298db` : **183 mutants, 150 tués, 24 survivants triés, 9 non viables**, identiques au run de référence. Portée **ciblée** sur `own.rs`, `resolve.rs`, `typeck.rs` ; pas un score de crate. |
 | Couverture à 100 % | `NOT_RUN` | 2 126 lignes non couvertes (10 fichiers) ; `codegen/lib.rs` clos à 100/100 ; limites structurelles documentées | mesure + gap + [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
 

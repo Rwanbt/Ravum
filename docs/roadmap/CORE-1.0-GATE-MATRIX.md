@@ -854,7 +854,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Installateur | `pwsh -File scripts/install.ps1 -Prefix target/install-round13 -SkipBuild` puis deux `-Uninstall` | install exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, rustc 1.95.0, `locked=true` ; désinstallations **0 / 0** (la seconde : « rien à désinstaller ») |
 | LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |
 | Linux qualification (round 19) | `gh workflow run linux-qual.yml --ref goal/production-ready` (run [43562818570](https://github.com/Rwanbt/Ravum/actions/runs/43562818570)) | **7 jobs verts sur `878e212`** : workspace **100 groupes / 1 601 passés / 0 échec / 7 ignorés**, conformance **476 (474 PASS / 0 FAIL / 2 SKIP)** `build_verified: true`, smoke **31/0/0** (stdlib 64/64, CLI 13/13, flags 20/20), **Miri 65 + 134 tests + fuzz court**, fuzz smoke, installateur, wasm32 ; TSan `NOT_APPLICABLE` |
-| Miri, mutation | — | Miri **local `NOT_RUN`** (`cargo-miri` absent) mais **CI Linux verte** sur `878e212` ; mutation `NOT_RUN` (cargo-mutants absent) |
+| Mutation (round 20) | `gh workflow run mutation.yml --ref goal/production-ready` (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293)) | **183 mutants / 150 tués / 24 survivants triés / 9 non viables** sur `own.rs`, `resolve.rs`, `typeck.rs` (portée ciblée), totaux identiques au run de référence ; artefact `mutants-targeted` |
+| Miri, mutation (local) | — | Miri **local `NOT_RUN`** (`cargo-miri` absent) ; mutation **locale `NOT_RUN`** (`cargo-mutants` absent) ; les deux sont rejoués en CI (lignes ci-dessus) |
 
 **Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
 T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,

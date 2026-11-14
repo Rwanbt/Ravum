@@ -458,3 +458,26 @@ trois ensembles de fonctions, pas un score de crate ; le tri E1–E6 reste une
 revue statique ; la campagne n'ajoute aucun test. Preuves : artefact
 `mutants-targeted` (rétention 90 jours) du run
 [43326219422](https://github.com/Rwanbt/Ravum/actions/runs/43326219422).
+
+## 11. Campagne CI du 2026-11-14 (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293))
+
+Dispatch manuel de `mutation.yml` sur la branche `goal/production-ready`
+(SHA `b5298db`, code identique à `878e212`), après les phases 4-5
+(`OwnFacts`, `traps.rs`, garde de places dans `emit.rs`) :
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---:|---:|---:|---:|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| **Total** | **183** | **150** | **24** | **9** |
+
+**Reproductibilité** : les totaux sont **identiques** à ceux de §9 et de la
+première campagne CI (§10), malgré les changements de code des phases 4-5
+(les fichiers mutés ne sont pas ceux qui ont changé). Aucun nouveau survivant ;
+le tri E1–E6 de §9.1 reste valable. Preuve : artefact `mutants-targeted` du run.
+
+Ce que cela ne prouve pas : portée **ciblée** (trois ensembles de fonctions,
+`-F`), pas un score de crate ; survivants **triés**, pas éliminés ; aucun test
+ajouté.
+
