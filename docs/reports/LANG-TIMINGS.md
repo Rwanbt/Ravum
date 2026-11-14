@@ -269,12 +269,14 @@ Le profil `release` est mesuré séparément le 2026-11-14 sur `214bf5e`
 (`cargo test --release -p ravum-lang-cli --test lsp_client
 end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture`) :
 le coût est divisé par ~2 par rapport au binaire debug, mais **reste ×3,3
-au-dessus de la cible** à 5 110 lignes. Publier 337,6 ms comme chiffre produit
-serait faux (c'est un binaire debug) ; publier 163,5 ms comme « cible tenue »
-serait faux aussi. La décision de périmètre (cible réservée aux petits paquets)
-ou d'incrémentalité sémantique est humaine
-([`HUMAN-DECISIONS-REQUIRED.md`](HUMAN-DECISIONS-REQUIRED.md),
-`D-2026-11-14-5`).
+au-dessus de l'ancienne cible unique de 50 ms** à 5 110 lignes — et même
+au-dessus de la cible S8 de 150 ms (×1,09). Publier 337,6 ms comme chiffre
+produit serait faux (c'est un binaire debug) ; publier 163,5 ms comme « cible
+tenue » serait faux aussi. **La décision est prise** : S8 (2026-11-14) refuse
+d'assouplir la cible, fixe deux points de mesure (§9.1) et renvoie
+l'incrémentalité sémantique au chantier 1.x. Les verdicts « non tenue » du
+tableau ci-dessus sont ceux de la campagne T3 contre **l'ancienne cible unique de
+50 ms** ; la cible applicable à 5 110 lignes est depuis S8 `p95 ≤ 150 ms`.
 
 Preuve fonctionnelle associée : `scale_package_navigation_and_diagnostics_work_end_to_end`
 (35 modules, 1 025 lignes) vérifie qu'une définition traversant les modules
@@ -283,6 +285,50 @@ retour au texte sain) publie puis efface le diagnostic.
 
 Ce que cela ne prouve pas : ni réseau, ni éditeur réel, ni corpus au-delà de
 5 110 lignes, ni plusieurs machines.
+
+### 9.1 Re-mesure de la vague 3 (S8) : les deux cibles sont tenues
+
+> **Base : `7b615ed`**, branche `goal/wave-3`, worktree `D:\App\ravum-wt-g`,
+> `CARGO_TARGET_DIR=D:\App\ravum-target-g`, binaire `ravum-lang` **release**,
+> machine Intel Core i7-13620H (10 cœurs / 16 processeurs logiques), 16 Go,
+> Windows 11 Professionnel, `rustc 1.95.0`. Protocole et conditions complets :
+> [`../qualification/LSP.md`](../qualification/LSP.md) §8.
+
+Les cibles S8 portent sur deux corpus et deux comparaisons distinctes :
+`p95 < 50 ms` à **1 025 lignes** (strict) et `p95 ≤ 150 ms` à **5 110 lignes**,
+20 éditions d'une ligne, transport inclus, profil release. Trois passages
+consécutifs :
+
+| Corpus | p50 (3 passages) | p95 (3 passages) | Cible | Verdict |
+|---|---|---|---|---|
+| **1 025** lignes (35 × 5) | 18,1181 / 18,7559 / 18,6272 ms | **19,3938 / 19,9060 / 19,7785 ms** | `< 50 ms` | **tenue** (×2,51 de marge) |
+| **5 110** lignes (150 × 6) | 77,2263 / 76,0915 / 75,5331 ms | **80,7698 / 79,7376 / 81,2691 ms** | `≤ 150 ms` | **tenue** (×1,85 de marge) |
+
+La correction de la phase `own` (§10) explique l'écart avec les 163,5 ms du
+§9 : les deux chiffres ne mesurent pas le même arbre. Ils ne sont pas
+comparables ligne à ligne, mais la conclusion de la campagne T3 (« la cible
+n'est pas tenue à 5 110 lignes ») est **périmée sur l'arbre courant**.
+
+**Condition de mesure, à lire avant le chiffre.** La machine était partagée avec
+les jobs des autres sous-agents (`cargo-mutants`, `cargo-llvm-cov`,
+`differential_oracle`) : **259 runs** enregistrés (130 à 1 025 lignes, 129 à
+5 110), charge étrangère de ~0 % à ~95 %. Les trois passages publiés sont les
+plus proches du critère d'acceptation fixé avant les mesures (machine ≥ 85 %
+idle) : 89–90 % d'idle pour le petit corpus, 83–85 % pour le grand ; un seul
+atteint strictement 85 % sur les deux. Les 4 runs à ≥ 80 % d'idle donnent la même
+bande (78,23–81,27 ms à 5 110 lignes). La contention ne peut qu'**augmenter** la
+latence, donc ces passages sont des **majorants** de la latence sur machine au
+repos. Aucun chiffre de cette section n'autorise à relâcher une cible.
+
+**Contrôle CI.** `.github/workflows/performance.yml`, job `lsp-targets` : les
+deux tests `#[ignore]` écrivent `target/lsp/latency.json` via
+`RAVUM_LSP_LATENCY_OUT` (chemin absolu, car un binaire de test tourne dans la
+racine du paquet), puis
+`python tools/timings_gate.py --lsp target/lsp/latency.json --lsp-small-p95-ms 50 --lsp-large-p95-ms 150`
+applique les cibles et échoue fermé (corpus manquant, ligne `debug`, statistique
+incohérente). Les cibles ont été établies sur la machine de référence ; un run
+rouge sur un runner partagé signale la capacité du runner, pas une cible à
+assouplir.
 
 ## 10. Phase `own` : la croissance quadratique est corrigée (2026-11-14, vague 3)
 
