@@ -283,3 +283,193 @@ retour au texte sain) publie puis efface le diagnostic.
 
 Ce que cela ne prouve pas : ni réseau, ni éditeur réel, ni corpus au-delà de
 5 110 lignes, ni plusieurs machines.
+
+## 10. Phase `own` : la croissance quadratique est corrigée (2026-11-14, vague 3)
+
+> **Base : `124e7a444de4df090e4f013bd2788ae8b2f967e3`**, branche
+> `wave3/a-own-perf`, worktree `D:\App\ravum-wt-a`,
+> `CARGO_TARGET_DIR=D:\App\ravum-target-a`. Tous les chiffres ci-dessous viennent
+> de commandes exécutées dans ce worktree à ce SHA, comparées à l'état
+> **d'avant correction** (même SHA, avant le commit de cette section — le `HEAD`
+> reste `124e7a4` jusqu'au commit). Statut : **TESTED** pour les mesures et les
+> tests cités ; jamais `PROVED`, jamais « production ready ».
+
+Le fait défavorable du §8 est pris en tête : sur cette forme de paquet, `check`
+passait de **365 ms à 5 110 lignes** à **26 424 ms à 50 110 lignes** (campagne
+T4, autre SHA). Re-mesuré ici à `124e7a4`, il passe de 292,410 ms à
+**26 879,663 ms**, dont **26 271,523 ms** (97,7 %) dans la seule phase `own` :
+la croissance était quadratique.
+
+### 10.1 Le constat, re-mesuré (valeurs défavorables en tête)
+
+Commande, identique avant et après la correction :
+
+```powershell
+pwsh -File scripts/lang-timings.ps1 -Scale -ScaleRuns 3 -Output target\lang-timings\scale-baseline.json
+pwsh -File scripts/lang-timings.ps1 -Scale -ScaleRuns 3 -Output target\lang-timings\scale-after.json
+```
+
+Les deux exports ont été produits dans la même session, sur la même machine
+(Windows 11, i7-13620H, 16 Go), avec un binaire **debug** ; `ScaleRuns = 3`
+(p50 = 2ᵉ des 3 valeurs triées).
+
+| Taille (lignes) | `check` p50 | dont `own` | part `own` | `check` wall médian | Pic RSS |
+|---|---|---|---|---|---|
+| **50 110** | **26 879,663** | **26 271,523** | 97,7 % | 27 105,031 | 152 Mo |
+| **20 110** | **4 011,945** | **3 797,214** | 94,6 % | 4 108,108 | 67 Mo |
+| **5 110** | 292,410 | 214,517 | 73,4 % | 334,963 | 23 Mo |
+| **1 025** | 29,258 | 9,688 | 33,1 % | 53,576 | 10 Mo |
+
+(SHA `124e7a4`, avant correction ; sortie brute : `target/lang-timings/scale-baseline.json`, non versionnée.)
+
+Exposants d'avant correction, sur `total` : **1,9803** entre 5 110 et 50 110
+lignes, **1,9116** entre 5 110 et 20 110 ; sur `own` : **2,1059**. La phase `own`
+croissait donc comme n², exactement le signal de l'hypothèse.
+
+### 10.2 Hypothèse instrumentée à 20 110 lignes — confirmée
+
+Instrumentation **temporaire** (retirée avant le commit : elle n'existe dans
+aucun fichier versionné), dans `check_ownership`, mesurant séparément le temps du
+`checker.check_fn` et celui des deux `BTreeMap::append` :
+
+```text
+own-instrument fns=3901 check_fn=60.919ms append_use_kind=926.735ms append_place=2367.086ms entries_use_kind=8249 entries_place=8249
+own-instrument fns=3901 check_fn=60.424ms append_use_kind=941.527ms append_place=2391.903ms entries_use_kind=8249 entries_place=8249
+own-instrument fns=3901 check_fn=61.649ms append_use_kind=938.814ms append_place=2302.873ms entries_use_kind=8249 entries_place=8249
+```
+
+| Exécution (20 110 lignes) | `check_fn` | `append(use_kind)` | `append(place)` | `own` total | `check` total |
+|---|---|---|---|---|---|
+| 1 | 60,919 | 926,735 | 2 367,086 | 3 362,692 | 3 595,710 |
+| 2 | 60,424 | 941,527 | 2 391,903 | 3 401,571 | 3 621,383 |
+| 3 | 61,649 | 938,814 | 2 302,873 | 3 311,282 | 3 533,596 |
+
+**Hypothèse confirmée.** Les deux `append` portent **98,00 %** de la phase `own`
+à 20 110 lignes (3 333,430 ms sur 3 401,571 ms à l'exécution 2), contre
+**1,78 %** pour la totalité du `check_fn` (3 901 fonctions) ; le seul
+`append(place)` en porte 70,3 %. `BTreeMap::append` reconstruit la table entière
+à chaque appel, et l'appel avait lieu une fois par fonction : le coût total est
+quadratique en nombre de fonctions, pas en nombre de décisions enregistrées.
+
+### 10.3 Correction
+
+`crates/ravum-lang-sema/src/own.rs` uniquement :
+
+* `check_ownership` crée **un seul** `OwnFacts` pour tout le programme ;
+* `OwnChecker` reçoit `&mut OwnFacts` (`OwnChecker::new(facts, diags, own)`) et
+  insère directement au lieu de tenir une table par fonction ;
+* les deux `BTreeMap::append` sont supprimés : une décision enregistrée = un
+  `insert` ordonné, jamais un vidage/reconstruction de table.
+
+Aucune règle d'ownership, aucun diagnostic, aucun seuil n'est touché. Aucune
+dépendance ajoutée, aucun `HashMap`/`HashSet` ajouté.
+
+### 10.4 Preuve d'équivalence : les deux accumulations produisent les mêmes tables
+
+Test `own::tests::own_facts_are_identical_to_the_append_accumulation`
+(`cargo test -p ravum-lang-sema --lib … -- --nocapture`) :
+
+```text
+own facts equivalence: 207 packages compared, 178 recorded facts, 0 difference
+test result: ok. 1 passed; 0 failed; 0 ignored
+```
+
+Périmètre : les **10 exemples** de `examples/` et **197 cas de conformance**
+(`compile-pass` + `run-pass`, les seuls modes dont le programme doit passer
+`check`) → **207 packages chargés par le vrai loader**, vérifiés, puis analysés
+deux fois sur le même `CheckedProgram` : l'accumulation d'aujourd'hui et
+l'ancienne accumulation par `append` (recopiée dans le test, jamais liée au
+produit). Les tables `use_kind` et `place` **sérialisées** (`Debug` ordonné) et
+les **diagnostics d'ownership** (code, gravité, message, span, notes) doivent être
+identiques ; 178 des 207 packages produisent des tables non vides, donc la preuve
+n'est pas vide. Un seul écart fait échouer le test avec le cas nommé.
+
+### 10.5 Re-mesure (même commande, même machine, même SHA de base)
+
+| Taille (lignes) | `check` avant | `check` après | gain | `own` avant | `own` après | gain | part `own` après |
+|---|---|---|---|---|---|---|---|
+| **50 110** | **26 879,663** | **602,621** | **×44,60** | **26 271,523** | **79,680** | **×329,71** | 13,2 % |
+| **20 110** | 4 011,945 | 271,942 | ×14,75 | 3 797,214 | 31,443 | ×120,77 | 11,6 % |
+| **5 110** | 292,410 | 89,121 | ×3,28 | 214,517 | 7,800 | ×27,50 | 8,8 % |
+| **1 025** | 29,258 | 22,559 | ×1,30 | 9,688 | 1,585 | ×6,11 | 7,0 % |
+
+(SHA `124e7a4` + correction non encore commitée au moment de la mesure ; sortie
+brute : `target/lang-timings/scale-after.json`. Les colonnes « avant » et
+« après » viennent de deux campagnes distinctes, dans la même session, à
+3 exécutions par point.)
+
+Exposants (formule exigée : `e = ln(t50k / t5k) / ln(50110 / 5110)`) :
+
+| Métrique | avant | après |
+|---|---|---|
+| `check` total, 5 110 → 50 110 | 1,9803 | **0,8372** |
+| `check` total, 5 110 → 20 110 | 1,9116 | **0,8143** |
+| `own`, 5 110 → 50 110 | 2,1059 | **1,0179** |
+| `own`, 5 110 → 20 110 | 2,0975 | **1,0175** |
+
+`own` reste légèrement au-dessus de 1 (1,018) : c'est le facteur `log` d'une
+table ordonnée, pas une croissance quadratique. Le total `check` passe sous 1
+parce que les coûts fixes (`load`, `parse`) s'amortissent. Le pic mémoire est
+inchangé (152 → 153 Mo à 50 110 lignes) : la vitesse n'est pas payée en RAM.
+
+Contrôle de reproductibilité sur l'arbre corrigé de la branche
+(`wave3/a-own-perf`, corpus régénérés à l'identique — générateur déterministe —
+et 3 exécutions à processus froid) :
+`check` p50 = **102,619 ms** (5 110), **299,390 ms** (20 110), **653,640 ms**
+(50 110) ; exposants **0,811** (5 110 → 50 110) et **0,782** (5 110 → 20 110).
+Ces trois points sont 7 à 15 % au-dessus de la campagne ci-dessus (cache de
+fichiers vide, processus froid) ; ils restent très au-dessous de la cible de 3 s
+et l'exposant reste sous 1,3.
+
+**Lecture honnête.** 602,621 ms à 50 110 lignes est tenu sous la cible de 3 s
+demandée, mais le binaire est **debug**, le corpus est **synthétique** et régulier
+(structs + appels de fonctions ; ni `Vec`, ni emprunts imbriqués, ni `match`
+complexe), et ce n'est **pas** une mesure LSP. Les cibles P0-A/S8 (`p95 < 50 ms`
+jusqu'à 1 000 lignes, `p95 ≤ 150 ms` à 5 110 lignes en **release**) ne sont pas
+évaluées ici : elles portent sur la latence de diagnostic après édition, mesurée
+dans un autre lot.
+
+### 10.6 Contrôle de linéarité en CI (S8)
+
+`tools/timings_gate.py` accepte `--scale <json>` et applique l'exposant entre les
+deux corpus générés de 5 110 et 20 110 lignes :
+
+```text
+e = ln(total_p50(20 110) / total_p50(5 110)) / ln(20 110 / 5 110)   ;   e <= 1,3
+```
+
+`.github/workflows/performance.yml` génère ces deux corpus
+(`tools/gen_scale_corpus.py`, 150 × 6 et 150 × 26), mesure `check` trois fois sur
+chacun, écrit `target/linearity/scale.json` et passe l'export au gate. Le gate
+échoue fermé si un corpus manque, si un p50 est nul/absent ou si une taille est
+dupliquée ; le témoin « cas linéaire accepté / cas quadratique refusé » est dans
+`tools/tests/test_timings_gate.py` (23 tests, dont 11 nouveaux sur la linéarité,
+tous verts).
+
+Rejeu local du chemin CI complet (corpus régénérés, 3 exécutions) :
+
+```text
+linearity: scale-5k = 5110 lines, check p50 = 102.232 ms, p95 = 104.701 ms
+linearity: scale-20k = 20110 lines, check p50 = 270.948 ms, p95 = 318.847 ms
+```
+
+soit un exposant de **0,7114** (≤ 1,3) : le contrôle passe sur l'arbre corrigé.
+L'écart avec le 0,8143 de la campagne (§10.5) vient du cache de fichiers
+(5 110 lignes à froid ici) : l'exposant porte sur un rapport, il reste sous le
+plafond dans les deux mesures, et c'est le plafond qui décide.
+
+### 10.7 Ce que cette section ne prouve pas
+
+- Une seule machine, un seul OS, un seul compilateur (`rustc 1.95.0`), un binaire
+  **debug** ; aucune mesure sous charge concurrente ni multi-plateforme.
+- Corpus synthétique régulier, généré par `tools/gen_scale_corpus.py` ; la forme
+  des programmes réels n'est couverte que par les 207 packages de §10.4.
+- `ScaleRuns = 3` : le p50 est une médiane de trois exécutions, pas un intervalle
+  de confiance.
+- La preuve d'équivalence porte sur les programmes **acceptés** (les seuls dont
+  un `CheckedProgram` existe) ; les programmes refusés sont couverts par la suite
+  de conformance (`0 FAIL`, même nombre de cas), pas par ce test.
+- Aucune revendication `PROVED`, ni de maturité « production », ni de
+  linéarité garantie sur des entrées arbitraires : l'exposant est une mesure
+  bornée par un plafond CI.
+
