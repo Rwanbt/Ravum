@@ -1,0 +1,9 @@
+fn main() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    if false {
+        a = if true { a } else { [String::from("c"), String::from("d")] };
+    } else {
+        let moved: String = a[1];
+        io::println(moved.as_str());
+    }
+}

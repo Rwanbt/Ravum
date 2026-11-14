@@ -5011,7 +5011,19 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                 let inline_ok = accesses.iter().all(|access| {
                     access.node == first.node || (!access.consumed && access.top < first.top)
                 });
-                if inline_ok && !blocked && first.consumed {
+                // A whole use inside the *same* statement does not invalidate the
+                // inline form: either it is evaluated before the access (a read
+                // whose borrow has ended), or it lives in a disjoint branch. A
+                // sequential whole use *after* the move would have been rejected
+                // by `check` (partial move), so the inline block is emitted at the
+                // access itself and cannot be observed by it.
+                let inline_blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && use_site.top != first.top
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                if inline_ok && !inline_blocked && first.consumed {
                     let access = first;
                     if let Some(chain) = self.constant_chain(access) {
                         let base = self.place_text(place);
