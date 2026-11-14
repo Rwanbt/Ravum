@@ -5643,6 +5643,31 @@ mod tests {
         );
     }
 
+    /// Step B non-vacuity, second direction: a Move decision on a **Copy** type
+    /// must also be rejected. The previous test only covers Copy-on-mobile; the
+    /// 2026-11-14 mutation campaign found that the `UseKind::Move if copies`
+    /// guard had no test, so replacing its `copies` condition with `false`
+    /// survived.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn ownership_facts_move_on_a_copy_type_is_rejected_in_debug_builds() {
+        let mut checked = build_program_d();
+        let id = 999_998;
+        checked.facts.expr_types.insert(id, STy::I32);
+        checked
+            .facts
+            .own
+            .use_kind
+            .insert(id, ravum_lang_sema::facts::UseKind::Move);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a Move decision on i32 must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("ownership facts disagree"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
     fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
         crate::generate(checked, options).expect("code generation must succeed")
     }

@@ -5,6 +5,8 @@
 //! [`facts::CheckedProgram`] that the code generator may consume; a failed result
 //! carries diagnostics and no checked program.
 
+#![forbid(unsafe_code)]
+
 pub mod builtins;
 pub mod check;
 pub mod effects;

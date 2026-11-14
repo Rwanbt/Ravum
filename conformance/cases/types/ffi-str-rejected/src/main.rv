@@ -1,0 +1,6 @@
+extern "C" {
+    fn f() -> &str;
+}
+
+fn main() {
+}
