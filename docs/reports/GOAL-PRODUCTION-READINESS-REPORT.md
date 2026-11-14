@@ -54,12 +54,12 @@
 | **1** Gouvernance et base de confiance | `TESTED` (+1 `PENDING_HUMAN_APPROVAL`) | `41851db`, `fac8a8c`, `c04f33e`, `dddfd32`, `b129024`, `85e993e`, `0ea05b7` | +2 gardes codegen (positifs) avec preuve de rouge ; +1 garde HashMap (positif, rouge prouvé) ; +5 tests d'hygiène racine | docs PASS ; gardes prouvées rouges puis vertes ; `C`+U+F03A supprimé après preuve (0 fichier, 6 répertoires vides) |
 | **2** Oracle `check ⇒ build` | **`TESTED`** | `2539d5c`, `272ece3`, `825aea1` + campagne `aa88479` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur **34 → 42 gabarits** | fast **600** (600 acceptés, 0 divergence) ; long local **3 000** (0 divergence) ; **nominal 3 × 10 000 = 30 000 programmes locaux, 30 000 acceptés, 0 divergence, 8 602 s**, 3 000 comparaisons release ; cumul **37 200 programmes**. Détail : `T2-FINDINGS.md` §25-§26 |
 | **3** Mesure et incrémental | `TESTED` | `4262569`, `84eaa08`, `3b6eb75`, `d186e3d`, `1265de2` | +3 contrats `--timings` (JSON additif, absence du champ sans flag, phases build) | `scripts/lang-timings.ps1 -Runs 20` : chiffres §3 ; `repro-check.ps1` PASS ; tests contrat 3/3 |
-| **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B) | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 30/30 ; conformance 476 / 475 / 0 / 1 ; oracle rapide **600 programmes, 0 divergence**. L'étape B ne compare que la classification `Copy`/`Move`, pas les places |
+| **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B), extension round 15 | +3 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 1 test négatif (désaccord injecté ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` 31/31 ; conformance **476 / 475 / 0 / 1** ; oracle rapide **600 programmes, 0 divergence**. L'étape B compare `Copy`/`Move` **et les projections** (`x.f`, `.0`, `[lit]`, `[*]`, `*p`) à la syntaxe ; exclusions : identité de liaison, récepteurs de méthode, arguments de référence (reborrow). Étape C non faite |
 | **5** Traps `rt` | **`PARTIAL`** : 5.1-5.3 `TESTED`, 5.4 `NOT_RUN` | `43fbd68` (RFC) + `21533dd` | +10 tests unitaires (négatifs/positifs, affectation composée, largeurs de décalage) et **5 cas de conformance** (4 compile-fail `E-EFF-PROFILE`, 1 compile-pass) | `cargo test -p ravum-lang-sema --lib traps` **10/10** ; conformance **476 / 475 / 0 / 1**, build **203/203** ; `core`/`pure` inchangés (`intrinsic-panic-not-tracked` toujours accepté). 5.4 : aucun accesseur de slice sûr en stdlib, exemple inchangé |
 | **6** `NodeId` | `TESTED` (sans objet) | `0595b9f`, `7916840`, `91d3621` | +2 tests (stabilité inter-fichiers, layout 8/24 bits) | `cargo test -p ravum-lang-sema --test node_id_stability` : 2/2 ; `util.rv` inchangé après édition de `main.rv` |
 | **7** Cache de parse LSP | **`TESTED`** (analyse et bout en bout local) | `a0a7c26`, `2d432be`, `5860ef3`, `6257b84`, `a980717` | +2 tests (réutilisation exacte hits/misses ; INV-07) +2 mesures `#[ignore]` (analyse, bout en bout) | `cargo test -p ravum-lang-lsp --test parse_cache` 2/2 ; `cargo test -p ravum-lang-cli --test lsp_client` 11/0 ; bout en bout **p50 2,061 ms / p95 2,826 ms** ; `docs/qualification/LSP.md` §7 |
 | **8** Bloc DSP | `NOT_RUN` | `bb3edea` (RFC) | — | ABI lue (8.1) ; RFC-RV-DSP-BLOCK-1 (8.2) ; aucun wrapper, aucun test de swap |
-| **9** Qualification | `PARTIAL` | ce rapport et les sections datées des registres | — | Voir §4 ; couverture **89,41/88,81** (seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à 98,66/96,84), fuzz long rejoué, mutation/Miri `NOT_RUN`, PR brouillon |
+| **9** Qualification | `PARTIAL` | ce rapport et les sections datées des registres | — | Voir §4 ; couverture **89,38/88,79** (seuils tenus, `codegen/lib.rs` à **100/100**), fuzz long rejoué, mutation/Miri `NOT_RUN`, PR brouillon |
 
 ### 2.8 SHA final mesuré
 
@@ -72,15 +72,17 @@ sur `aa88479` (arbre inchangé depuis `28ad5da`, seuls des documents diffèrent)
 
 ## 3. Comparaison baseline (phase 0) → état final
 
-**Une baisse mesurée au round 5, résorbée aux rounds 6-10.** La couverture totale
-était passée de 89,21/88,61 à **89,07/88,43** après l'ajout d'`OwnFacts` et de
-`traps.rs`. Les tests ajoutés ensuite la ramènent à **89,41/88,81** (round 10) :
-`CodegenError::fmt` couvert fait passer `codegen/lib.rs` à **100,00/100,00**
-(plancher relevé à 100/100), `traps.rs` passe à **98,66/96,84** avec 13 tests et
-entre au cliquet à 97/95. **Tous les seuils par fichier sont tenus**, 2 112
-lignes restent non couvertes (19 950 − 17 838), 10 fichiers restent sous
-l'objectif. La limite structurelle des 100 % de **régions** (chemins d'erreur
-`fmt::Error` inatteignables) est documentée dans
+**Une baisse mesurée au round 5, résorbée aux rounds 6-10, puis un léger
+reflux au round 15.** La couverture totale était passée de 89,21/88,61 à
+**89,07/88,43** après l'ajout d'`OwnFacts` et de `traps.rs`. Les tests ajoutés
+ensuite la ramènent à **89,41/88,81** (round 10), puis l'extension du garde de
+l'étape B (comparaison des places, ~240 lignes de debug) la fait redescendre à
+**89,38/88,79** : ces lignes s'exécutent pour les programmes réels mais restent
+hors de la mesure (la couverture ne compte ni la conformance ni l'oracle
+complet). **Tous les seuils par fichier sont tenus** (`emit.rs` 87,43/86,85,
+plancher 86/85), 2 141 lignes restent non couvertes (20 153 − 18 012), 10
+fichiers restent sous l'objectif. La limite structurelle des 100 % de **régions**
+(chemins d'erreur `fmt::Error` inatteignables) est documentée dans
 [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) et
 soumise à décision humaine.
 
@@ -96,8 +98,8 @@ Les autres chiffres sont identiques ou meilleurs.
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
 | MUST | 807, 463 atteignables | **identique** | 0 |
-| Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,41 / 88,81**, seuils tenus | +0,33 / +0,42 pt ; `codegen/lib.rs` clos à 100/100, `traps.rs` à 98,66/96,84 |
-| Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 112 lignes)** | +14 lignes (code ajouté, mesuré hors tests de conformance) |
+| Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,38 / 88,79**, seuils tenus | +0,30 / +0,40 pt ; `codegen/lib.rs` clos à 100/100 ; reflux de 0,03/0,02 pt au round 15 (garde de places) |
+| Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 141 lignes)** | +43 lignes (code ajouté, mesuré hors tests de conformance) |
 | Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après la passe de traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en profil `rt`) | nouvelle preuve |
@@ -124,7 +126,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
 | R6 | Code généré sûr | **fait** | `forbid(unsafe_code)` sans `extern` ; `deny` + `allow` local au wrapper ; 2 tests de garde, rouges prouvés |
 | R7 | Reproductibilité inter-machines | `PARTIAL` | deux racines identiques sur **cette** machine ; pas de deuxième machine |
-| R8 | Qualité mesurable | `PARTIAL` | couverture **89,41/88,81**, seuils tenus, `codegen/lib.rs` à **100/100** (plancher relevé), `traps.rs` à 98,66/96,84 ; objectif 100 % impossible par tests sur les régions `fmt::Error` ([`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md)) ; **mutation `NOT_RUN`** (cargo-mutants absent) |
+| R8 | Qualité mesurable | `PARTIAL` | couverture **89,38/88,79**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à 98,66/96,84, `emit.rs` à 87,43/86,85 (planchers tenus) ; objectif 100 % impossible par tests sur les régions `fmt::Error` ([`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md)) ; **mutation `NOT_RUN`** (cargo-mutants absent) |
 | R9 | Performance sous budget | `PARTIAL` | p50/p95 publiés (`LANG-TIMINGS.md`) ; pas de campagne sous charge ni de seuil de non-régression CI |
 | R10 | Interfaces stables | `PARTIAL` | JSON/CLI/diagnostic testés ; politique de dépréciation toujours absente |
 | R11 | Distribution | `PARTIAL` | installateur Windows rejoué (install + 2 désinstallations idempotentes) ; installateur Linux hors contrat ; `wasm`/macOS non couverts |
@@ -240,13 +242,13 @@ l'arbre qui porte ce rapport.
 |---|---|---|---|
 | Audit externe T4/T12 | `BLOCKED` | décision humaine | — (par construction) |
 | Clé de signature D9 | `PENDING_HUMAN_APPROVAL` | aucune clé hors ligne fournie | — |
-| Phase 4.3-4.5 (`OwnFacts` A/B/C) | `PARTIAL` : A `TESTED`, B partiel, C `NOT_RUN` | B ne compare que les `Copy`/`Move` ; C (suppression du `MovePlanner`) exige la comparaison des places et le diff byte-à-byte | 2 tests + garde de debug ; 600 programmes + 476 cas, 0 désaccord |
+| Phase 4.3-4.5 (`OwnFacts` A/B/C) | `PARTIAL` : A `TESTED`, B étendu, C `NOT_RUN` | B compare `Copy`/`Move` et les projections ; l'identité de liaison, les récepteurs de méthode et les arguments de référence restent hors du garde ; C (suppression du `MovePlanner`) exige le diff byte-à-byte | 2 tests + garde de debug ; 600 programmes + 476 cas, 0 désaccord |
 | Phase 5 (traps `rt`) | `PARTIAL` : 5.1-5.3 faits, 5.4 `NOT_RUN` | 5.4 exigerait une API de slice sûre (`get`/`set`) + son codegen, hors RFC | gate + 10 tests unitaires + 5 cas ; `examples/dsp-gain-iir` inchangé |
 | Phase 8 (bloc DSP) | `NOT_RUN` | ABI + protocole + codegen, hors budget de session | RFC écrite, ABI lue |
 | Mode long nominal de l'oracle (30 000) | **fait** | exécuté localement au round 8 (`aa88479`) : 3 × 10 000, **0 divergence**, 8 602 s ; 3 000 comparaisons debug == release | commande §4, détail `T2-FINDINGS.md` §26.4 |
 | Miri | `NOT_RUN` | composant `cargo-miri` absent de la toolchain nightly locale ; l'installer serait un outil supplémentaire (R5) ; la preuve CI Linux existante n'est pas rejouée ici | — |
 | Mutation | `NOT_RUN` | `cargo-mutants` absent ; l'installer serait une nouvelle dépendance (R5) | — |
-| Couverture à 100 % | `NOT_RUN` | 2 112 lignes non couvertes (10 fichiers) ; `codegen/lib.rs` clos à 100/100 ; limites structurelles documentées | mesure + gap + [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
+| Couverture à 100 % | `NOT_RUN` | 2 141 lignes non couvertes (10 fichiers) ; `codegen/lib.rs` clos à 100/100 ; limites structurelles documentées | mesure + gap + [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
 
 ## 7. Décisions humaines restantes
@@ -269,11 +271,10 @@ l'arbre qui porte ce rapport.
 Voir le tableau §6. En plus : aucun test sous charge concurrente, aucune mesure
 mémoire/CPU, aucune deuxième machine, aucun macOS/ARM, aucun WASM, aucun
 `ravum-lang install` Linux, aucun dogfood indépendant. Les chiffres de
-couverture (89,41/88,81) ont été re-mesurés au round 10 ; `codegen/lib.rs` est à
-**100/100** avec un plancher relevé à 100, `traps.rs` à 98,66/96,84 (plancher
-97/95), et les seuils par fichier restent tenus. La limite structurelle des 100 %
-de régions est documentée dans
-[`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md).
+couverture (89,38/88,79) ont été re-mesurés au round 15 ; `codegen/lib.rs` est à
+**100/100**, `traps.rs` à 98,66/96,84, `emit.rs` à 87,43/86,85, et les seuils par
+fichier restent tenus. La limite structurelle des 100 % de régions est documentée
+dans [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md).
 
 ## 9. Limites
 

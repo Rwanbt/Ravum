@@ -156,8 +156,8 @@ ne duplique ni les types, ni les effets, ni les résolutions.
 | Étape | État | Preuve / limite |
 |---|---|---|
 | **A** — production des faits | **`TESTED`** | `own.rs` remplit `Facts.own` (`use_kind`, `place` avec binding + projections) ; `crates/ravum-lang-sema/tests/own_facts.rs` : 2 tests (move, copy, borrow, move projeté `p.b`, déterminisme) |
-| **B** — comparaison en debug | **`PARTIAL`** | `emit.rs::verify_ownership_facts` compare la classification `Copy`/`Move` de chaque usage en build debug et échoue en cas de désaccord. Mesuré : **600 programmes générés + 471 cas de conformance, 0 désaccord** ; test de non-vacuité (décision `Copy` injectée sur un `String` ⇒ `CodegenError`). **Les places ne sont pas encore comparées** : le `MovePlanner` ne mappe pas ses décisions sur les `NodeId`. |
-| **C** — suppression de la logique locale | `NOT_RUN` | Le `MovePlanner` est toujours la source du dégradé de déstructurage ; la suppression exige l'étape B complète (places) et le diff byte-à-byte. |
+| **B** — comparaison en debug | **`PARTIAL`** | `emit.rs::verify_ownership_facts` compare la classification `Copy`/`Move` de chaque usage en build debug et échoue en cas de désaccord ; il compare aussi, depuis le round 15, les **projections enregistrées** (`x.f`, `.0`, `[lit]`, `[*]`, `*p`) à une place recalculée **depuis la syntaxe** (et non depuis `MovePlanner`). Mesuré : **600 programmes générés + 471 cas de conformance, 0 désaccord** puis, après extension, **600 programmes + 476 cas, 0 désaccord**. Exclusions documentées : l'identité de la liaison (le span de déclaration n'est pas dans l'AST), les **récepteurs de méthode** (auto-déréférence par l'appel) et les **arguments de type référence** (reborrow implicite) ne sont pas comparés. |
+| **C** — suppression de la logique locale | `NOT_RUN` | Le `MovePlanner` est toujours la source du dégradé de déstructurage ; la suppression exigera l'étape B complète et le diff byte-à-byte. |
 
 Statut de la RFC : **`PROPOSED`** — `PENDING_HUMAN_APPROVAL`. L'étape A est
 additive et sans effet sur le Rust émis ; l'étape B est un garde-fou de debug,

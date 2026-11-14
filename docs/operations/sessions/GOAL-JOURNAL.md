@@ -675,6 +675,42 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   rapport §4.4, pas corrigé ici (hors périmètre de la session, document de spec).
 - Aucun changement de code.
 
+## Entrée 2026-11-14 (round 15) — Étape B étendue : comparaison des places
+
+| Champ | Valeur |
+|---|---|
+| Fichiers | `crates/ravum-lang-codegen/src/emit.rs`, `docs/rfc/RFC-OWN-FACTS.md` |
+| Vérification | conformance **476 / 475 / 0 / 1**, build **203/203** ; oracle rapide **600, 0 divergence** ; codegen lib **31/31** |
+| Statut | 4.4 reste `PARTIAL` ; 4.5 `NOT_RUN` |
+
+- `verify_ownership_facts` (debug uniquement) compare désormais, pour chaque
+  expression ayant une place enregistrée, les **projections** (`Field`, `Tuple`,
+  `Index(Lit/Opaque)`, `Deref`) à une place recalculée depuis la **syntaxe** —
+  indépendamment de `MovePlanner`. Les places enregistrées qui n'ont pas de
+  contrepartie syntaxique sont rejetées.
+- Deux ajustements exigés par la sémantique du langage, découverts par le garde
+  lui-même sur des cas réels :
+  1. une projection sur une **référence** (`self.a` avec `&self`, `xs[0]` avec
+     `&[T]`) auto-déréférence la base : un `Deref` est attendu avant la
+     projection (un par couche de référence) ;
+  2. un **récepteur de méthode** (`text.len()`) et un **argument de type
+     référence** passé à un paramètre référence (`compte(v)`) sont réborrowés avec
+     auto-déréférence par l'appel ; ces deux contextes sont **exclus** de la
+     comparaison (limitation écrite).
+- L'identité de la liaison (span de déclaration) n'est pas comparable depuis
+  l'AST ; elle reste hors du garde. C'est la limite qui maintient 4.4 en
+  `PARTIAL`.
+- Aucune régression : les 4 échecs initiaux de conformance étaient tous des
+  auto-déréférences contextuelles, pas des bugs du checker ; le garde a été
+  précisé (types des bases, exclusions) sans toucher au compilateur.
+- Couverture re-mesurée : **89,38/88,79** (contre 89,41/88,81 au round 10),
+  `emit.rs` **87,43/86,85** (planchers 86/85 tenus), 2 141 lignes non couvertes
+  (20 153 − 18 012), 10 fichiers sous l'objectif. Le reflux de 0,03/0,02 pt est
+  dû aux ~240 lignes du garde, exercées par la conformance/l'oracle mais hors
+  mesure llvm-cov.
+
+
+
 
 
 
