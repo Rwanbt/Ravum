@@ -19,9 +19,11 @@
    (4 campagnes longues et la mesure LSP de bout en bout, lancées à part) ; le
    **profil release** a été re-mesuré au round 17 : **1 603 / 0 / 5**
    (2 tests debug-only exclus, tous deux des gardes).
-3. Un **oracle différentiel** neuf a mesuré **40 200 programmes** bien typés
-   (quatre campagnes déterministes ; générateur étendu à 42 gabarits) :
-   `check` accepte ⇒ `rustc` compile, **0 divergence** ; la configuration
+3. Un **oracle différentiel** neuf a exécuté **40 200 programmes** bien typés,
+   issus de **42 gabarits d'instructions indépendantes, sans composition**
+   (quatre campagnes déterministes) : `check` accepte ⇒ `rustc` compile,
+   **0 divergence** ; ces nombres comptent des exécutions, pas des formes
+   distinctes. La configuration
    **nominale 3 × 10 000 = 30 000 programmes a été exécutée localement**
    (8 602 s, 3 000 comparaisons debug == release, 100 % acceptés) et une
    campagne **3 × 1 000** a été rejouée après l'extension du garde de places
@@ -57,7 +59,7 @@
 |---|---|---|---|---|
 | **0** Baseline | `TESTED` | `c931fdf`, `e82ed14`, `ded0e60` | — | `cargo test --workspace --all-targets -- --test-threads=2` : 94 groupes, 1574 / 0 / 2 ; conformance 471 / 470 / 0 / 1 ; smoke 43/0/0 ; docs PASS ; registre 108/126 ; 188/188 ; fmt 0. Détail : `docs/reports/GOAL-BASELINE.md` |
 | **1** Gouvernance et base de confiance | `TESTED` (+1 `PENDING_HUMAN_APPROVAL`) | `41851db`, `fac8a8c`, `c04f33e`, `dddfd32`, `b129024`, `85e993e`, `0ea05b7` | +2 gardes codegen (positifs) avec preuve de rouge ; +1 garde HashMap (positif, rouge prouvé) ; +5 tests d'hygiène racine | docs PASS ; gardes prouvées rouges puis vertes ; `C`+U+F03A supprimé après preuve (0 fichier, 6 répertoires vides) |
-| **2** Oracle `check ⇒ build` | **`TESTED`** | `2539d5c`, `272ece3`, `825aea1` + campagne `aa88479` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur **34 → 42 gabarits** | fast **600** (600 acceptés, 0 divergence) ; long local **3 000** (0 divergence) ; **nominal 3 × 10 000 = 30 000 programmes locaux, 30 000 acceptés, 0 divergence, 8 602 s**, 3 000 comparaisons release ; **campagne 3 × 1 000 rejouée après le garde de places : 3 000, 0 divergence** ; cumul **40 200 programmes**. Détail : `T2-FINDINGS.md` §25-§26 |
+| **2** Oracle `check ⇒ build` | **`TESTED`** | `2539d5c`, `272ece3`, `825aea1` + campagne `aa88479` | +2 tests de non-vacuité (rustc rejette un fichier invalide ; deux graines distinctes) ; générateur **34 → 42 gabarits** | fast **600** (600 acceptés, 0 divergence) ; long local **3 000** (0 divergence) ; **nominal 3 × 10 000 = 30 000 programmes locaux, 30 000 acceptés, 0 divergence, 8 602 s**, 3 000 comparaisons release ; **campagne 3 × 1 000 rejouée après le garde de places : 3 000, 0 divergence** ; cumul **40 200 exécutions issues de 42 gabarits d'instructions indépendantes, sans composition**. Détail : `T2-FINDINGS.md` §25-§26 |
 | **3** Mesure et incrémental | `TESTED` | `4262569`, `84eaa08`, `3b6eb75`, `d186e3d`, `1265de2` | +3 contrats `--timings` (JSON additif, absence du champ sans flag, phases build) | `scripts/lang-timings.ps1 -Runs 20` : chiffres §3 ; `repro-check.ps1` PASS ; tests contrat 3/3 |
 | **4** `OwnFacts` | **`PARTIAL`** : 4.1-4.3 `TESTED`, 4.4 `PARTIAL`, 4.5 `NOT_RUN` | `e91ecc3` (RFC), `afb5783` (étape A), `fbb0aeb` (étape B), extension rounds 15-16 | +4 : 2 tests d'intégration (move/copy/borrow/move projeté + déterminisme) et 2 tests négatifs (décision `Copy` injectée, projection de place corrompue ⇒ `CodegenError`) | `cargo test -p ravum-lang-sema --test own_facts` 2/2 ; `cargo test -p ravum-lang-codegen --lib` **32/32** ; conformance **476 / 475 / 0 / 1** ; oracle rapide **600 programmes, 0 divergence**. L'étape B compare `Copy`/`Move` **et les projections** (`x.f`, `.0`, `[lit]`, `[*]`, `*p`) à la syntaxe ; exclusions : identité de liaison, récepteurs de méthode, arguments de référence. Étape C non faite |
 | **5** Traps `rt` | **`PARTIAL`** : 5.1-5.3 `TESTED`, 5.4 `NOT_RUN` | `43fbd68` (RFC) + `21533dd` | +10 tests unitaires (négatifs/positifs, affectation composée, largeurs de décalage) et **5 cas de conformance** (4 compile-fail `E-EFF-PROFILE`, 1 compile-pass) | `cargo test -p ravum-lang-sema --lib traps` **10/10** ; conformance **476 / 475 / 0 / 1**, build **203/203** ; `core`/`pure` inchangés (`intrinsic-panic-not-tracked` toujours accepté). 5.4 : trois obstacles indépendants (indexation dynamique sans accesseur sûr, `alloc`, **`io`**) ; l'exemple affiche son résultat, donc l'adapter changerait le smoke — décision humaine requise, exemple inchangé |
@@ -114,7 +116,7 @@ Les autres chiffres sont identiques ou meilleurs.
 | Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) | nouvelle preuve |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `bf55aab9…`, commit `662f63d`), désinstallation idempotente **0 / 0** | nouvelle preuve, rejouée au round 13 |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `46b65d9fe941…`, `created=1970-01-01`, déterministe | nouvelle preuve, rejouée au round 13 |
-| Oracle différentiel | inexistant | **40 200 programmes (4 campagnes), 0 divergence** | nouvelle preuve |
+| Oracle différentiel | inexistant | **40 200 exécutions (4 campagnes) de 42 gabarits d'instructions indépendantes, sans composition : 0 divergence** | nouvelle preuve bornée à ces ~42 formes |
 
 ## 4. Critères PRODUCTION-READINESS et gates T0–T12
 
@@ -126,7 +128,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | # | Critère | État | Preuve / manque |
 |---|---|---|---|
 | R1 | Sémantique ratifiée | `PARTIAL` | ADR `PROPOSED`, spec DRAFT ; aucune ratification par un agent |
-| R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 476 cas 0 FAIL + 40 200 programmes générés 0 divergence (dont le nominal 30 000 et 3 000 après le garde de places) ; ne prouve pas l'absence de forme inconnue |
+| R2 | Aucune divergence connue | `PARTIAL` | 476 cas 0 FAIL ; oracle **40 200 exécutions** issues de **42 gabarits d'instructions indépendantes, sans composition** — 0 divergence (dont le nominal 30 000 et 3 000 après le garde de places), soit environ 42 formes sans composition ; ne prouve pas l'absence de forme inconnue |
 | R3 | Traçabilité complète | `PARTIAL` | 188/188 FeatureIds ; **463/807 MUST**, 344 non mappés (`must_audit.py`) — D10 |
 | R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri **local** `NOT_RUN` (composant absent) mais **rejoué vert en CI Linux** sur `878e212` (borné aux libs) |
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
@@ -146,7 +148,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 |---|---|---|
 | T0 | `PASS` | inchangé (aucune modification du socle) |
 | T1 | `PARTIAL` | inchangé (voie C toujours gelée, décision humaine) |
-| T2 | `PARTIAL` | **preuve renforcée** (oracle 40 200 programmes dont le nominal 30 000, 0 divergence) ; le verdict reste `PARTIAL` pour D10 (344 MUST non mappés) |
+| T2 | `PARTIAL` | **preuve renforcée mais bornée** (oracle 40 200 exécutions de 42 gabarits d'instructions indépendantes, sans composition, dont le nominal 30 000 ; 0 divergence) ; le verdict reste `PARTIAL` pour D10 (344 MUST non mappés) |
 | T3 | `PASS` | fuzz long rejoué (249 054 entrées, 0 échec) |
 | T4 | `BLOCKED` | inchangé : audit humain absent. Aucun agent ne peut le lever |
 | T5 | `PASS` | inchangé (smoke 43/0/0, binaires natifs) |
@@ -342,7 +344,8 @@ dans [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md).
 
 - **Une seule machine** (Windows 11 x64) : les chiffres de performance et de
   reproductibilité sont liés à cette machine et à `rustc 1.95.0`.
-- **Corpus fini** : 476 cas + 40 200 programmes générés sont une observation,
+- **Corpus fini** : 476 cas + 40 200 exécutions issues de 42 gabarits
+  d'instructions indépendantes, sans composition, sont une observation,
   pas une preuve sur tous les programmes. L'oracle lui-même ne couvre qu'un
   sous-ensemble documenté de Core 1.0.
 - **Aucune preuve formelle** : pas de Kani, pas de Miri **local** (Miri a été

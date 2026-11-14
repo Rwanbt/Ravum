@@ -35,7 +35,8 @@
 > les chiffres courants ont évolué — **476 cas : 475 PASS / 0 FAIL / 1 SKIP**,
 > `perimeter=203/203`, `verified=122` ; workspace **100 groupes, 1 605 passés /
 > 0 échec / 5 ignorés** ; couverture **89,47/88,87** ; oracle **40 200
-> programmes, 0 divergence** ; Miri rejoué en CI Linux et mutation rejouée en CI
+> exécutions issues de 42 gabarits d'instructions indépendantes, sans
+> composition** (0 divergence) ; Miri rejoué en CI Linux et mutation rejouée en CI
 > (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
 > `PRODUCTION-READINESS.md` §9 et dans
 > [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
@@ -855,7 +856,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |
 | MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 ouverte, inchangée |
 | Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-round16.json` puis `coverage_report.py --check` | **89,47 % lignes / 88,87 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 126** lignes non couvertes (20 182 − 18 056) ; `codegen/lib.rs` **100/100**, `traps.rs` 98,66/96,84, `emit.rs` 87,75/87,09 ; limite des régions `fmt::Error` documentée — [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
-| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | générateur v2 **42 gabarits** : rapide **600** (0 divergence), long local **3 000** (0 divergence), **nominal 3 × 10 000 = 30 000 programmes locaux, 0 divergence, 8 602 s**, **3 × 1 000 rejoué après le garde de places : 3 000, 0 divergence** ; cumul **40 200 programmes, 0 divergence**, 100 % acceptés |
+| Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | générateur v2 **42 gabarits d'instructions indépendantes, sans composition** : rapide **600** (0 divergence), long local **3 000** (0 divergence), **nominal 3 × 10 000 = 30 000 programmes locaux, 0 divergence, 8 602 s**, **3 × 1 000 rejoué après le garde de places : 3 000, 0 divergence** ; cumul **40 200 exécutions, 0 divergence**, 100 % acceptés — ces nombres comptent des exécutions, pas des formes distinctes |
 | Timings | `pwsh -File scripts/lang-timings.ps1 -Runs 20` | `check` p95 froid **1,3-8,1 ms**, édition **11,0-49,8 ms** ; `build` p50 **179-331 ms**, `rustc` **97,1-99,3 %** — [`LANG-TIMINGS.md`](../reports/LANG-TIMINGS.md) |
 | Incrémental | A/B `RAVUM_INCREMENTAL=1` | gain **nul ou négatif** (jusqu'à +44 %) ; opt-in, **désactivé par défaut** |
 | Cache de parse LSP | `cargo test -p ravum-lang-lsp --test parse_cache` et `cargo test -p ravum-lang-cli --test lsp_client` | 2 tests INV-07/réutilisation verts ; analyse p95 **1,362 ms** avec cache vs **1,836 ms** sans ; **bout en bout transport inclus p50 2,061 ms / p95 2,826 ms** ; client LSP **11/0** — [`LSP.md`](../qualification/LSP.md) §7 |

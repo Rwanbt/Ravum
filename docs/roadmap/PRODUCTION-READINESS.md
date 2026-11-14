@@ -19,7 +19,8 @@
 > **Mise à jour du 2026-11-14 (branche `goal/production-ready`)** : voir §9 et
 > [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
 > Chiffres courants : conformance **476 (475 PASS)**, workspace **1 605** tests,
-> couverture **89,47/88,87**, oracle **40 200 programmes**, Miri et mutation
+> couverture **89,47/88,87**, oracle **40 200 exécutions de 42 gabarits
+> d'instructions indépendantes, sans composition**, Miri et mutation
 > rejoués en CI. Cette ligne date l'état ; les gates restent ceux du §9.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
@@ -433,7 +434,7 @@ dans ce lot.
 | Critère | État au SHA final | Preuve ajoutée / manque |
 |---|---|---|
 | R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
-| R2 | fait sur le périmètre mesuré | 476 cas 0 FAIL **et** oracle génératif : 40 200 programmes (4 campagnes, dont le nominal 30 000), 0 divergence |
+| R2 | `PARTIAL` | 476 cas 0 FAIL ; oracle **40 200 exécutions** de **42 gabarits d'instructions indépendantes, sans composition** (4 campagnes, dont le nominal 30 000), 0 divergence — aucune garantie au-delà de ces ~42 formes |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
 | R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
 | R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |
