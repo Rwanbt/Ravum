@@ -11,7 +11,13 @@
 
 use crate::span::{FileId, Span};
 
-pub type NodeId = u32;
+/// A node identity, unique across every file of one program.
+///
+/// The high 32 bits carry the [`FileId`], the low 32 bits a per-file counter, so
+/// ids are unique without a global allocator and an id keeps its file when other
+/// files are added. The pre-2026-11-14 layout was 8/24 bits on a `u32`, which
+/// capped a program at 200 source files and 16.7 M nodes per file.
+pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ident {

@@ -66,9 +66,10 @@ pub const MANIFEST_NAME: &str = "ravum.toml";
 /// Maximum size of any single file the loader will read (8 MiB).
 pub const MAX_FILE_SIZE: u64 = 8 * 1024 * 1024;
 /// Maximum number of source files registered in one [`SourceMap`]. `NodeId`
-/// carries the `FileId` in its high byte (see `syntax::parser`), and ids 0..=253
-/// are reserved for real files.
-pub const MAX_SOURCE_FILES: usize = 200;
+/// carries the `FileId` in its high 32 bits (see `syntax::parser`), so the
+/// bound is 2^32 - 1 in the type; the policy limit is 65 536 (it admits a
+/// package of 1 000 modules plus its manifest and dependency manifests).
+pub const MAX_SOURCE_FILES: usize = 65_536;
 /// Maximum dependency-graph depth (root = 0), matching the path-escape policy.
 pub const MAX_PACKAGE_DEPTH: usize = 8;
 /// Maximum number of path components accepted in a dependency `path`.
@@ -78,10 +79,31 @@ pub const MAX_PACKAGE_FILES: usize = 4096;
 /// Maximum size of an existing `ravum.lock` read for comparison.
 pub const MAX_LOCKFILE_SIZE: u64 = 1024 * 1024;
 
-/// High byte used for synthetic (`NodeId`, `Span`) values created by the loader
-/// for dependency wrapper modules. Real files use ids 0..=253, so this cannot
-/// collide with a parsed file.
-const SYNTHETIC_HIGH: u32 = 0xFE;
+/// File id used for synthetic (`NodeId`, `Span`) values created by the loader
+/// for dependency wrapper modules. Real files use ids below
+/// [`MAX_SOURCE_FILES`] (65 536), so `u32::MAX - 1` cannot collide with a parsed
+/// file. The previous marker was the high byte `0xFE` of a 32-bit `NodeId`,
+/// which *can* collide once 254 files are allowed.
+const SYNTHETIC_FILE: u32 = u32::MAX - 1;
+
+/// The effective source-file limit. Production uses [`MAX_SOURCE_FILES`]; the
+/// unit tests lower it (thread-locally) so the refusal path and its diagnostic
+/// can be exercised without creating 65 536 files.
+fn source_file_limit() -> usize {
+    #[cfg(test)]
+    {
+        if let Some(limit) = TEST_SOURCE_FILE_LIMIT.with(std::cell::Cell::get) {
+            return limit;
+        }
+    }
+    MAX_SOURCE_FILES
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_SOURCE_FILE_LIMIT: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -403,7 +425,7 @@ fn load_single_file(path: &Path, options: &LoadOptions, cache: &mut ParseCache) 
     let mut sources = SourceMap::new();
     let mut diags = DiagnosticBag::new();
     let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
-    let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut synthetic: u64 = ((SYNTHETIC_FILE as u64) << 32) | 1;
     let mut parse_time = Duration::ZERO;
 
     let program = {
@@ -2069,7 +2091,7 @@ struct CrateCtx<'a> {
     file_ids: &'a mut BTreeMap<PathBuf, FileId>,
     // Files already included once in *this* crate (duplicate detection).
     loaded: BTreeSet<PathBuf>,
-    synthetic: &'a mut u32,
+    synthetic: &'a mut u64,
     /// Accumulated wall-clock time spent in the parser (see `parse_time`).
     parse_time: &'a mut Duration,
     /// Per-session parse cache (see [`ParseCache`]).
@@ -2129,7 +2151,7 @@ fn load_crates(
     }
 
     let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
-    let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut synthetic: u64 = ((SYNTHETIC_FILE as u64) << 32) | 1;
     let (root_file, kind) = if has_main {
         (&main_path, CrateKind::Bin)
     } else {
@@ -2160,7 +2182,7 @@ fn load_crate_program(
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
-    synthetic: &mut u32,
+    synthetic: &mut u64,
     parse_time: &mut Duration,
     parse_cache: &mut ParseCache,
     options: &LoadOptions,
@@ -2499,14 +2521,15 @@ fn ensure_source(ctx: &mut CrateCtx<'_>, canonical: &Path) -> Option<FileId> {
     if let Some(id) = ctx.file_ids.get(canonical) {
         return Some(*id);
     }
-    if ctx.sources.len() >= MAX_SOURCE_FILES {
+    if ctx.sources.len() >= source_file_limit() {
+        let limit = source_file_limit();
         err(
             ctx.diags,
             "E-LIMIT-FILES",
             Span::dummy(),
             format!(
-                "more than {MAX_SOURCE_FILES} source files were loaded; the parser's NodeId \
-                 reserves the high byte for the FileId"
+                "more than {limit} source files were loaded; the parser's NodeId \
+                 reserves 32 bits for the FileId"
             ),
         );
         return None;
@@ -2611,11 +2634,11 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
     }
 }
 
-fn next_synthetic(counter: &mut u32) -> NodeId {
+fn next_synthetic(counter: &mut NodeId) -> NodeId {
     let id = *counter;
     *counter = counter.saturating_add(1);
-    if (*counter >> 24) >= 0xFF {
-        *counter = (SYNTHETIC_HIGH << 24) | 1;
+    if (*counter >> 32) != u64::from(SYNTHETIC_FILE) {
+        *counter = (u64::from(SYNTHETIC_FILE) << 32) | 1;
     }
     id
 }
@@ -3813,5 +3836,40 @@ mod tests {
         temp.file("src/main.rv", "fn main() { }\r\n");
         let crlf = package_digest(&temp.path, &mut DiagnosticBag::new()).unwrap();
         assert_eq!(lf, crlf);
+    }
+
+    /// T4: the source-file ceiling is exercised without creating 65 536 files.
+    /// The limit is lowered thread-locally, so no other test is affected.
+    #[test]
+    fn the_source_file_limit_is_refused_with_the_existing_diagnostic() {
+        let temp = TempDir::new("file-limit");
+        temp.file("ravum.toml", &manifest("file-limit", ""));
+        temp.file("src/main.rv", "mod a;\nmod b;\nfn main() { }\n");
+        temp.file("src/a.rv", "pub fn a() -> i32 { return 1; }\n");
+        temp.file("src/b.rv", "pub fn b() -> i32 { return 2; }\n");
+        TEST_SOURCE_FILE_LIMIT.with(|limit| limit.set(Some(3)));
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                locked: false,
+                overrides: std::collections::BTreeMap::new(),
+            },
+        );
+        TEST_SOURCE_FILE_LIMIT.with(|limit| limit.set(None));
+        let found = codes(&loaded.diags);
+        assert!(
+            found.iter().any(|code| code == "E-LIMIT-FILES"),
+            "expected E-LIMIT-FILES, got {found:?}"
+        );
+        let message = loaded
+            .diags
+            .iter()
+            .find(|diag| diag.code == "E-LIMIT-FILES")
+            .map(|diag| diag.message.clone())
+            .unwrap_or_default();
+        assert!(
+            message.contains("more than 3 source files"),
+            "the diagnostic must name the effective limit: {message}"
+        );
     }
 }

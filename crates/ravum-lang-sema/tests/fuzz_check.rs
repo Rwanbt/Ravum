@@ -269,16 +269,16 @@ fn snapshot(bag: &DiagnosticBag) -> Vec<DiagSnap> {
 /// Instantané des faits produits par un programme accepté.
 #[derive(Debug, Clone, PartialEq)]
 struct FactsSnap {
-    expr_types: Vec<(u32, ravum_lang_sema::Type)>,
-    pat_types: Vec<(u32, ravum_lang_sema::Type)>,
-    type_nodes: Vec<(u32, ravum_lang_sema::Type)>,
-    item_paths: Vec<(u32, String)>,
-    effects: Vec<(u32, Vec<String>)>,
-    calls: Vec<(u32, String)>,
-    resolutions: Vec<(u32, String)>,
-    methods: Vec<(u32, String)>,
-    main_fn: Option<u32>,
-    test_fns: Vec<u32>,
+    expr_types: Vec<(u64, ravum_lang_sema::Type)>,
+    pat_types: Vec<(u64, ravum_lang_sema::Type)>,
+    type_nodes: Vec<(u64, ravum_lang_sema::Type)>,
+    item_paths: Vec<(u64, String)>,
+    effects: Vec<(u64, Vec<String>)>,
+    calls: Vec<(u64, String)>,
+    resolutions: Vec<(u64, String)>,
+    methods: Vec<(u64, String)>,
+    main_fn: Option<u64>,
+    test_fns: Vec<u64>,
 }
 
 #[derive(Debug, PartialEq)]

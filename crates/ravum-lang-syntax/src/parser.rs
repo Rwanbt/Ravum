@@ -6,8 +6,8 @@
 //!
 //! * `parse_file` never panics on arbitrary input and never loops forever;
 //!   every loop either consumes a token or leaves because of a stop condition.
-//! * node ids (see [`crate::ast`]) are unique across a file: the high 8 bits
-//!   carry the [`FileId`], the low 24 bits a per-file counter. Every `Item`,
+//! * node ids (see [`crate::ast`]) are unique across a file: the high 32 bits
+//!   carry the [`FileId`], the low 32 bits a per-file counter. Every `Item`,
 //!   `Module`, `Stmt`, `Block`, `Expr`, `Pat`, `Param`, `GenericParam`,
 //!   `FieldDef`, `VariantDef`, `MatchArm`, `Type` and `Path` gets exactly one id.
 //! * every syntax error is a [`crate::diag::Diagnostic`] with a stable
@@ -21,7 +21,7 @@
 //!   rest of the file (the partial program is returned).
 //! * [`MAX_TOKENS`] bounds the token stream; beyond it `E-PARSE-TOO-LARGE` is
 //!   emitted and an empty root module is returned.
-//! * [`MAX_NODES`] bounds allocated node ids so the 24-bit counter can never
+//! * [`MAX_NODES`] bounds allocated node ids so the per-file counter can never
 //!   overflow into the file bits; a single `E-PARSE-TOO-LARGE` is emitted.
 //!
 //! # Known limitations (Core 1.0 draft)
@@ -56,7 +56,7 @@ use std::collections::BTreeSet;
 pub const MAX_DEPTH: u32 = 256;
 /// Largest token stream accepted before `E-PARSE-TOO-LARGE`.
 pub const MAX_TOKENS: usize = 300_000;
-/// Largest number of nodes a single file may allocate (24-bit counter).
+/// Largest number of nodes a single file may allocate (per-file counter).
 pub const MAX_NODES: u32 = 2_000_000;
 
 pub struct ParseResult {
@@ -64,9 +64,9 @@ pub struct ParseResult {
     pub diags: DiagnosticBag,
 }
 
-/// Allocates node ids. The high 8 bits carry the `FileId`, the low 24 bits a
+/// Allocates node ids. The high 32 bits carry the FileId, the low 32 bits a
 /// per-file counter, so ids are unique across files without a global allocator.
-/// This caps a file at ~16.7 M nodes, far below [`MAX_NODES`].
+/// The policy limit per file is [MAX_NODES], far below 2^32.
 struct NodeIds {
     next: NodeId,
 }
@@ -74,7 +74,7 @@ struct NodeIds {
 impl NodeIds {
     fn new(file: FileId) -> Self {
         Self {
-            next: (file & 0xff) << 24 | 1,
+            next: (u64::from(file) << 32) | 1,
         }
     }
 
@@ -4275,7 +4275,7 @@ mod tests {
             let program = parse_ok(src);
             assert!(program.root.items.is_empty(), "{src:?}");
             assert_ne!(program.root.id, 0);
-            assert_eq!(program.root.id >> 24, 0);
+            assert_eq!(program.root.id >> 32, 0);
         }
     }
 
@@ -5257,7 +5257,7 @@ mod inner {
         for id in &ids {
             assert_ne!(*id, 0, "node id 0 is not allowed");
             assert!(seen.insert(*id), "duplicate node id {id}");
-            assert_eq!(*id >> 24, 0, "id {id} does not carry file 0");
+            assert_eq!(*id >> 32, 0, "id {id} does not carry file 0");
         }
 
         let result = parse_file(7, RICH);
@@ -5267,7 +5267,7 @@ mod inner {
         let set7: BTreeSet<NodeId> = ids7.iter().copied().collect();
         assert_eq!(set7.len(), ids7.len(), "duplicate node id for file 7");
         for id in &ids7 {
-            assert_eq!(*id >> 24, 7, "id {id} does not carry file 7");
+            assert_eq!(*id >> 32, 7, "id {id} does not carry file 7");
             assert!(!seen.contains(id), "file 7 id {id} collides with file 0");
         }
     }

@@ -3,7 +3,7 @@
 //! The audit (2026-11-13, C5) suspected that adding an instruction to one file
 //! shifts the identifiers of every file loaded after it, which would make any
 //! per-file cache unsound. The parser allocates `NodeId` as
-//! `(FileId << 24) | per_file_counter` (`ravum-lang-syntax/src/parser.rs`), so
+//! `(FileId << 32) | per_file_counter` (`ravum-lang-syntax/src/parser.rs`), so
 //! the hypothesis is only true if the `FileId` itself moves.
 //!
 //! The test loads a two-file package, then loads it again with one extra
@@ -127,31 +127,31 @@ fn editing_one_file_does_not_move_the_other_files_node_ids() {
 }
 
 #[test]
-fn file_ids_are_contained_in_the_high_byte_of_node_ids() {
+fn file_ids_are_contained_in_the_high_32_bits_of_node_ids() {
     let package = TempDir::new("high-byte");
     let program = load(&package.path, BTreeMap::new());
     let util = find_module(&program.root, "util").expect("util module must be loaded");
-    let util_file = util.id >> 24;
-    let root_file = program.root.id >> 24;
+    let util_file = util.id >> 32;
+    let root_file = program.root.id >> 32;
     assert!(
         util_file > 0,
         "the loaded module must have a non-zero FileId"
     );
     assert_ne!(
         util_file, root_file,
-        "two files must live in two different high bytes (else ids collide across files)"
+        "two files must live in two different FileIds (else ids collide across files)"
     );
     assert_ne!(
-        util.id & 0x00ff_ffff,
+        util.id & 0xffff_ffff,
         0,
-        "the per-file counter is stored in the low 24 bits"
+        "the per-file counter is stored in the low 32 bits"
     );
-    // Every item of the unchanged module belongs to the same file byte.
+    // Every item of the unchanged module belongs to the same FileId.
     for item in &util.items {
         assert_eq!(
-            item.id >> 24,
+            item.id >> 32,
             util_file,
-            "an item of util.rv carries another file's high byte"
+            "an item of util.rv carries another FileId"
         );
     }
 }
