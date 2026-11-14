@@ -145,3 +145,95 @@ non couvertes par instanciation (le total produit+test fusionné en compte
 1 778 ; l'écart est la duplication d'instanciations documentée en §7 bis de
 `PRODUCTION-READINESS.md`). Aucun test n'est ajouté « pour la ligne » et aucun
 plancher n'est relevé tant qu'un fichier n'atteint pas 100 %.
+
+## 7. Campagne de fermeture « vague 3 » du 2026-11-14 (agent F, décision S5)
+
+**Décision appliquée.** S5, APPROUVÉE par le responsable le 2026-11-14 : « 100 %
+lignes et régions du CODE PRODUIT, hors modules `#[cfg(test)]` et hors chemins
+inatteignables documentés un par un ; seconde métrique : mutation ciblée ».
+Cette section remplace, pour la mesure, la formulation « par fichier toutes
+lignes confondues » de §1 : le dénominateur est le code produit, et les chemins
+inatteignables sont listés **un par un** dans `tools/coverage_exemptions.json`
+(bloc `line_coverage_exemptions`, 14 entrées, statut
+`PENDING_HUMAN_APPROVAL`). Aucun seuil n'a été abaissé ; aucun test existant
+n'a été modifié, supprimé ni affaibli.
+
+**Contexte mesuré.** Branche `wave3/f-coverage-mutation` créée de `goal/wave-3`
+au SHA `3ca4d0e` (intégration 1 : agents A, C, D fusionnés), Windows 11 x86-64,
+`rustc 1.95.0`, `cargo-llvm-cov 0.9.1`. Commande :
+
+```
+cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
+python tools/coverage_product_split.py --input target/cov-all.json
+python tools/coverage_report.py --input target/cov-all.json --gap --check
+```
+
+**Tests ajoutés (65, tous de comportement, tous nouveaux fichiers).**
+`crates/ravum-lang-codegen/tests/emit_constructs.rs` (39 : types, motifs,
+constantes, échappements, builtins libres et méthodes, FFI, mode test, refus) ;
+`crates/ravum-lang-sema/tests/checker_entry_contracts.rs` (16 :
+`check_with_timings`, entrée `rt` valide et refusée, `self` hors méthode,
+`use crate::`/`super::super`, `test fn`, motif de variante structure, refus du
+`let` déstructurant et du `ModDecl` résiduel) ;
+`crates/ravum-lang-sema/tests/loader_manifest_contracts.rs` (10 : sections et
+clés strictes, erreurs lexicales TOML, formes de dépendance, deux racines,
+inlining des modules, identifiants `CrateKind`/`LockfileState`). Chaque test
+asserte un code de diagnostic exact, un texte émis exact ou un fait consommé par
+le backend : aucun test ne se contente d'incrémenter un compteur.
+
+**Mesure officielle (même JSON pour les deux chiffres).**
+
+| Fichier | Lignes produit avant | Après | Régions avant | Après | Plancher avant → après |
+|---|---|---|---|---|---|
+| `codegen/emit.rs` | 88,00 | **90,61** | 87,26 | **90,69** | 86/85 → **90/90** |
+| `sema/loader.rs` | 83,46 | **85,31** | 86,70 | **88,09** | 76/80 → **85/88** |
+| `sema/typeck.rs` | 93,53 | 93,53 | 93,11 | 93,11 | 93/92 → **93/93** |
+| `sema/own.rs` | 92,47 | 92,47 | 90,75 | 90,75 | 91/89 → **92/90** |
+| `sema/resolve.rs` | 93,26 | 93,26 | 93,45 | 93,45 | 93/93 (inchangé) |
+| `sema/effects.rs` | 92,61 | **96,59** | 94,26 | **96,98** | 92/94 → **96/96** |
+| `sema/check.rs` | 80,52 | **81,30** | 73,16 | **73,72** | 80/72 → **81/73** |
+| `sema/traps.rs` | 97,61 | 97,61 | 97,13 | 97,13 | 97/95 → **97/97** |
+| `sema/types.rs` | 100,00 | 100,00 | 98,10 | 98,10 | 100/97 → **100/98** |
+| `sema/builtins.rs` | 100,00 | 100,00 | 98,42 | **98,89** | 100/98 (inchangé) |
+| `sema/facts.rs`, `codegen/lib.rs`, `codegen/prelude.rs` | 100,00 | 100,00 | 100,00 | 100,00 | 100/100, 100/100, 100/97 → **100/100** |
+
+Totaux mesurés : **lignes 91,48 % (19 650/21 479), régions 91,23 %**.
+**Code produit seul (S5)** : `coverage_product_split.py` donne **90,17 %
+(12 259/13 596), 1 337 lignes produit non couvertes** — contre **88,61 %
+(1 549/13 596)** au même SHA avant les tests. Progression :
+**+1,56 point, 212 lignes produit fermées**, aucun code produit modifié.
+`tools/coverage_report.py --check` : **exit 0** avec les planchers relevés.
+
+**Chemins inatteignables déclarés (14 entrées, 140 lignes).** Chaque entrée de
+`line_coverage_exemptions` porte : la plage de lignes, la raison, la preuve
+(test exécuté qui montre le refus au bon endroit, ou argument statique sur le
+parseur/checker), et une condition de réexamen. Elles couvrent : `builtin_fn_value`
+(builtin en position de valeur ⇒ `E-TYP-CALL`), les arités `panic`/`assert`/
+`assert_eq` (⇒ `E-TYP-ARITY`), les constantes builtin autres que `Option::None`
+(⇒ `E-RES-UNKNOWN`), le repli `to_string` mort, la garde release-only
+`verify_ownership_facts`, le bras `ModDecl` (le chargeur inline les modules),
+les bras `PathRoot::Plain` `crate`/`self`/`super` et `super::super` de
+`resolve.rs` (parseur), le `let` déstructurant et le repli de signature
+`own.rs`, les arêtes `fmt::Error` de `types.rs`/`builtins.rs` (§2), et deux
+formes TOML que le lecteur du manifeste ne peut pas produire. **140 lignes
+seulement** sont ainsi couvertes par une exemption : le solde **1 197 lignes
+produit (91,20 % hors exemptions)** reste une **dette comptée**, pas un achèvement.
+
+**Ce qui reste, par fichier (résiduel non exempté).** `emit.rs` 406 lignes
+(branches défensives de l'émetteur : rendu de types sans faits, chemins
+d'erreur, planificateur de moves d'arrays) ; `loader.rs` 310 (E/S et
+diagnostics de graphe de dépendances) ; `typeck.rs` 236 (bras défensifs de
+contrôle et d'exhaustivité) ; `own.rs` 121 ; `resolve.rs` 108 ;
+`effects.rs` 10 ; `traps.rs` 6 ; `check.rs` 0. **L'objectif S5 n'est pas
+atteint** : 1 337 lignes brutes (1 197 hors exemptions proposées) restent non
+couvertes, `10` fichiers sont sous 100 %, et aucune exemption n'est ratifiée par
+un humain.
+
+**Ce que cette campagne ne prouve pas.** Elle ne prouve pas que les 140 lignes
+exemptées sont définitivement mortes (chaque entrée nomme sa condition de
+réexamen) ; elle ne prouve pas l'absence de trous de comportement dans le code
+couvert (la seconde métrique, la mutation ciblée, est publiée séparément dans
+`MUTATION-EQUIVALENCE.md` §13) ; et elle ne change aucun gate : D10 et T12
+restent des décisions humaines, et les seuils relevés sont un cliquet, pas une
+preuve de maturité.
+
