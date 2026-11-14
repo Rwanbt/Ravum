@@ -83,12 +83,12 @@ Les autres chiffres sont identiques ou meilleurs.
 | Conformance | 471 cas, 470 PASS / 0 FAIL / 1 SKIP | **476 cas, 475 PASS / 0 FAIL / 1 SKIP** | +5 cas (`rt-trap-*`), 0 échec |
 | Périmètre build | 202/202, vérifiés 121, implicites 81, échecs 0 | **203/203**, vérifiés 122, implicites 81, échecs 0 | +1 cas vérifié |
 | Workspace | 94 groupes, 1 574 / 0 / 2 | **100 groupes, 1 600 / 0 / 5** | +6 groupes, +26 tests, +3 ignorés (campagnes de mesure) |
-| `ravum-lang-sema` | 683 / 0 | 695 / 0 (NodeId, OwnFacts, traps `rt`) | +12 |
+| `ravum-lang-sema` | 683 / 0 | 698 / 0 (NodeId, OwnFacts, traps `rt`) | +15 |
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
 | MUST | 807, 463 atteignables | **identique** | 0 |
 | Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,29 / 88,67**, seuils tenus | +0,21 / +0,28 pt ; baisse du round 5 (89,07/88,43) résorbée |
-| Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 103 lignes)** | +5 lignes (code de cache LSP, mesuré hors tests LSP) |
+| Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 133 lignes)** | +35 lignes (code ajouté, mesuré hors tests de conformance) |
 | Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s | nouvelle preuve |
@@ -111,7 +111,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | R1 | Sémantique ratifiée | `PARTIAL` | ADR `PROPOSED`, spec DRAFT ; aucune ratification par un agent |
 | R2 | Aucune divergence connue | **fait sur le périmètre mesuré** | 476 cas 0 FAIL + 7 200 programmes générés 0 divergence ; ne prouve pas l'absence de forme inconnue |
 | R3 | Traçabilité complète | `PARTIAL` | 188/188 FeatureIds ; **463/807 MUST**, 344 non mappés (`must_audit.py`) — D10 |
-| R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri `NOT_RUN` (nightly non garanti hors CI) |
+| R4 | Sûreté du frontend | `BLOCKED` | audit externe absent (T4) ; Miri `NOT_RUN` (composant `cargo-miri` absent de la toolchain locale, installer serait un outil supplémentaire) |
 | R5 | Frontière FFI sûre | `PARTIAL` | inventaire et refus outillés ; contrats ABI/lifetime/unwinding non écrits ; D7 ouvert |
 | R6 | Code généré sûr | **fait** | `forbid(unsafe_code)` sans `extern` ; `deny` + `allow` local au wrapper ; 2 tests de garde, rouges prouvés |
 | R7 | Reproductibilité inter-machines | `PARTIAL` | deux racines identiques sur **cette** machine ; pas de deuxième machine |
@@ -211,7 +211,7 @@ documentaires.
 | Mode long nominal de l'oracle (30 000) | `NOT_RUN` | ≈ 3 h sur cette machine ; job CI hebdomadaire fourni | 3 000 exécutés |
 | Miri | `NOT_RUN` | composant `cargo-miri` absent de la toolchain nightly locale ; l'installer serait un outil supplémentaire (R5) ; la preuve CI Linux existante n'est pas rejouée ici | — |
 | Mutation | `NOT_RUN` | `cargo-mutants` absent ; l'installer serait une nouvelle dépendance (R5) | — |
-| Couverture à 100 % | `NOT_RUN` | 2 103 lignes non couvertes (vue instanciations) ; aucun test « pour la ligne » ajouté | mesure + gap |
+| Couverture à 100 % | `NOT_RUN` | 2 133 lignes non couvertes (vue instanciations) ; aucun test « pour la ligne » ajouté | mesure + gap |
 | Découpage des monolithes (9.7) | `NOT_RUN` | conditionné à « tout le reste terminé » | — |
 
 ## 7. Décisions humaines restantes
@@ -231,7 +231,7 @@ documentaires.
 Voir le tableau §6. En plus : aucun test sous charge concurrente, aucune mesure
 mémoire/CPU, aucune deuxième machine, aucun macOS/ARM, aucun WASM, aucun
 `ravum-lang install` Linux, aucun dogfood indépendant. Les chiffres de
-couverture (89,29/88,67) a été re-mesurée au round 6 après `OwnFacts` et
+couverture (89,29/88,67) ont été re-mesurés au round 6 après `OwnFacts` et
 `traps.rs` ; la baisse du round 5 (89,07/88,43) est résorbée par 3 tests
 supplémentaires sur `traps.rs`, qui atteint 93,37/89,39, et les seuils par
 fichier restent tenus.
