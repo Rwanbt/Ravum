@@ -240,3 +240,34 @@ M ≤ 150 parce que `MAX_SOURCE_FILES` valait 200 au moment de la mesure (T4 le
 porte à 65 536, la campagne n'a pas été rejouée après) ; les `p50` des phases
 viennent des `timings` du CLI, pas d'un profileur.
 
+
+## 9. LSP de bout en bout à l'échelle (2026-11-14, T3)
+
+> **Base : `379b6fe`**, branche `goal/consolidation-2`. Le paquet est généré par
+> le test lui-même, avec la même forme que `tools/gen_scale_corpus.py`
+> (déterminisme vérifié contre le générateur Python : **5 110 lignes**, 150
+> modules × 6 fonctions, 152 fichiers). Commande :
+> `cargo test -p ravum-lang-cli --test lsp_client end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture`.
+> 20 éditions d'une ligne dans `main` (un `let` inutilisé ajouté à chaque tour),
+> chaque tour attendant `textDocument/publishDiagnostics` ; cadrage JSON-RPC,
+> serveur, analyse et publication inclus ; fichiers temporaires uniquement.
+
+**Le fait défavorable, en premier : la latence suit le paquet, pas la ligne
+éditée.** p95 **337,6 ms** à 5 110 lignes contre **2,826 ms** sur
+`package-demo` (2 fichiers) : **×119**. La cible P0-A « diagnostic p95 < 50 ms »
+est tenue sur les petits paquets, **pas à cette échelle** ; le coût est celui du
+`check` complet (365 ms p50 à 5 110 lignes, §8), donc l'analyse sémantique reste
+**globale** et le cache de parse ne réduit que le parsing.
+
+| Corpus | Lignes | Modules | Éditions | p50 | p95 | Cible 50 ms |
+|---|---|---|---|---|---|---|
+| `package-demo` | 338 (2 fichiers) | — | 20 | **2,061 ms** | **2,826 ms** | tenue |
+| échelle générée | **5 110** | 150 | 20 | **322,4 ms** | **337,6 ms** | **non tenue** |
+
+Preuve fonctionnelle associée : `scale_package_navigation_and_diagnostics_work_end_to_end`
+(35 modules, 1 025 lignes) vérifie qu'une définition traversant les modules
+aboutit dans `m34.rv` et qu'un aller-retour diagnostic (erreur d'arité puis
+retour au texte sain) publie puis efface le diagnostic.
+
+Ce que cela ne prouve pas : ni réseau, ni éditeur réel, ni corpus au-delà de
+5 110 lignes, ni plusieurs machines.

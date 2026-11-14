@@ -1105,3 +1105,16 @@ le cliquet **sans l'abaisser** : `traps.rs` **97,61/97,13**, `facts.rs`
 `coverage_report.py --check` **exit 0**. Conformance **483 / 482 / 0 / 1**,
 workspace **101 groupes / 1 633 passés / 0 échec / 6 ignorés**. Commit
 `1b76926` ; chiffres et `coverage_thresholds.json` (provenance) mis à jour.
+
+### Suite du 2026-11-14 — T3 LSP de bout en bout à l'échelle (branche `goal/consolidation-2`)
+
+T3 comble son dernier manque : deux tests dans `crates/ravum-lang-cli/tests/lsp_client.rs`
+sur un paquet généré de la même forme que `tools/gen_scale_corpus.py` (5 110
+lignes vérifiées contre le générateur Python). Fonctionnel (35 modules, 1 025
+lignes) : définition inter-modules vers `m34.rv`, erreur d'arité publiée puis
+effacée. Latence (`#[ignore]`, 20 éditions) : **p50 322,4 ms / p95 337,6 ms** à
+5 110 lignes contre 2,061/2,826 ms sur `package-demo` — **cible P0-A p95 < 50 ms
+non tenue à cette échelle**, écart documenté (analyse globale, le cache de parse
+ne couvre que le parser). Commit `379b6fe` ; workspace **101 groupes / 1 634
+passés / 0 échec / 7 ignorés** ; conformance inchangée. T3 : `PARTIAL` →
+`TESTED` (le paquet de 1 000 fichiers est couvert par T4).

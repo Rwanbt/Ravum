@@ -162,7 +162,9 @@ Deux tests d'intégration et un test loader couvrent le contrat :
 Cible P0-A « diagnostic p95 < 50 ms » : **atteinte au niveau de la phase
 d'analyse** (1,4 ms), avec une marge de plus de 30×. Ce chiffre **ne mesure
 pas** la latence de bout en bout vue par l'éditeur (transport, sérialisation,
-affichage) : elle reste `NOT_RUN` et ne doit pas être confondue avec la cible.
+affichage) : elle est mesurée séparément ci-dessous (p95 2,826 ms sur deux
+fichiers, **337,6 ms à 5 110 lignes**) et ne doit pas être confondue avec la
+cible.
 
 **Limites.** La vérification sémantique reste globale (pas d'incrémentalité de
 `own`/`typeck`) ; le cache ne couvre que le parser ; une seule machine et un seul
@@ -188,3 +190,22 @@ mesure avec un éditeur réel qui rend les diagnostics. Le fichier est édité *
 mémoire** : aucun fichier du dépôt n'est modifié.
 
 
+
+**Mesure de bout en bout à l'échelle (2026-11-14, T3, `379b6fe`).** Même
+harnais, paquet généré de 150 modules / **5 110 lignes** (même forme que
+`tools/gen_scale_corpus.py`, vérifiée), 20 éditions d'une ligne dans `main` :
+
+```
+cargo test -p ravum-lang-cli --test lsp_client \
+  end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
+[lsp-e2e] scale corpus (5110 lines, 150 modules), 20 one-line edits,
+          transport included: p50=322.4 ms p95=337.6 ms
+```
+
+**La cible P0-A « p95 < 50 ms » n'est pas tenue à cette échelle** : le coût est
+celui du `check` complet (365 ms p50 à 5 110 lignes, `LANG-TIMINGS.md` §9),
+l'analyse sémantique reste globale et le cache de parse ne couvre que le parser.
+La cible reste tenue sur les petits paquets (p95 2,826 ms). Un test fonctionnel
+associé (`scale_package_navigation_and_diagnostics_work_end_to_end`, 35 modules,
+1 025 lignes) vérifie la navigation inter-modules et l'aller-retour de
+diagnostic.

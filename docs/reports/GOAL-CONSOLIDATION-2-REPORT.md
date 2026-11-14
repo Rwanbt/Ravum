@@ -58,7 +58,8 @@ affaibli. Le corpus passe de **476 à 478 cas** (deux cas ajoutés ; un cas
 existant a changé de mode par obligation, voir T4), puis à **483 cas** avec les
 cinq cas `rt-entry` de T6 ; le workspace de **100 suites / 1 605 tests** à
 **101 suites / 1 610 tests**, puis **1 618** après T5, **1 624** après T6,
-**1 627** après T7 et **1 633** après la re-mesure de couverture (§5). Aucun
+**1 627** après T7 et **1 634** après les mesures de couverture et de latence
+LSP à l'échelle (§5). Aucun
 plancher de couverture n'a été abaissé : la réécriture T6 avait fait passer
 `traps.rs` sous son plancher, il est rétabli à **97,61/97,13** par six tests de
 couverture et les totaux remontent à **89,79/89,23** (`coverage_report --check`
@@ -171,7 +172,7 @@ cargo run -p ravum-conformance -- run --verify-build
 **Statut : `PARTIAL`** — générateur et corrections `TESTED` ; test de puissance
 `NOT_RUN` ; campagne nominale incomplète.
 
-## 3. T3 — corpus à l'échelle (Q0-4) — `PARTIAL`
+## 3. T3 — corpus à l'échelle (Q0-4) — `TESTED`
 
 **Commit** : `7f645d9`. **Livrables** :
 `tools/gen_scale_corpus.py` (déterministe : M modules, F fonctions chaînées,
@@ -203,11 +204,24 @@ les tailles et au mieux égal après édition (+1,7 % à 50 k) ; mémoire 151 Mo
 **Limites** : corpus synthétique régulier, **2 exécutions** par point, une
 machine, M ≤ 150 (la limite de 200 était en vigueur au moment de la mesure), pic
 mesuré par échantillonnage du process `ravum-lang` (les enfants `rustc` ne sont
-pas comptés), `p50` issus des `timings` du CLI (pas de profileur). **LSP de bout
-en bout à l'échelle : `NOT_RUN`** — aucun client n'a été écrit pour ce corpus ;
-la seule mesure LSP reste celle des petits exemples (p95 2,826 ms).
+pas comptés), `p50` issus des `timings` du CLI (pas de profileur).
 
-**Statut : `PARTIAL`**.
+**LSP de bout en bout à l'échelle (ajout, commit `379b6fe`).** Le harnais client
+existant (`crates/ravum-lang-cli/tests/lsp_client.rs`) reçoit deux tests sur un
+paquet généré de la même forme que `tools/gen_scale_corpus.py` (déterminisme
+vérifié contre le générateur Python : 5 110 lignes, 150 modules, 152 fichiers) :
+un test fonctionnel (35 modules, 1 025 lignes — définition inter-modules vers
+`m34.rv`, erreur d'arité publiée puis effacée) et une mesure `#[ignore]` de 20
+éditions d'une ligne. Résultat : **p50 322,4 ms / p95 337,6 ms** à 5 110 lignes,
+contre **2,061 / 2,826 ms** sur `package-demo`. **La cible P0-A « p95 < 50 ms »
+n'est pas tenue à cette échelle** : le coût est celui du `check` complet (365 ms
+p50 à 5 110 lignes, [`LANG-TIMINGS.md`](LANG-TIMINGS.md) §9) ; l'analyse
+sémantique reste globale et le cache de parse ne couvre que le parser. Écart
+documenté, pas un `PASS` déguisé ; la cible reste tenue sur les petits paquets.
+
+**Statut : `TESTED`** — les deux manques de T3 (corpus, latence LSP) sont
+mesurés ; le paquet de 1 000 fichiers est couvert par
+`crates/ravum-lang-sema/tests/source_file_limit.rs` (T4).
 
 ## 4. T4 — plafond de fichiers et `NodeId` 64 bits (Q1-1) — `PARTIAL`
 
@@ -500,13 +514,18 @@ cargo test -p ravum-lang-cli -- --test-threads=2             exit 0
 cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (35 + 45 + 6 + 2 ignorés)
 cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_fast
   garde étape B actif : 120 programmes, 0 divergence, 0 désaccord
+cargo test -p ravum-lang-cli --test lsp_client                        exit 0
+  12 passés / 0 échec / 2 ignorés ; paquet d'échelle 1 025 lignes : définition
+  inter-modules + aller-retour diagnostic
+cargo test -p ravum-lang-cli --test lsp_client end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
+  p50=322,4 ms p95=337,6 ms (5 110 lignes, 150 modules) — cible 50 ms non tenue
 cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
 python tools/coverage_report.py --input target/cov-all.json --check    exit 0
   89,79 % lignes / 89,23 % régions ; traps.rs 97,61/97,13 ; facts.rs 100/100
 cargo run -p ravum-conformance -- run --verify-build         exit 0
   483 cas : 482 PASS / 0 FAIL / 1 SKIP ; perimeter=207/207 ; verified=124
 cargo test --workspace --all-targets -- --test-threads=2     exit 0
-  101 groupes : 1 633 passés / 0 échec / 6 ignorés
+  101 groupes : 1 634 passés / 0 échec / 7 ignorés
 pwsh -File scripts/lang-smoke.ps1                            exit 0
   43 PASS / 0 FAIL / 0 NOT_RUN
 cargo run -p ravum-lang-cli -- check examples/dsp-gain-iir --profile rt --rt-entry process
@@ -545,7 +564,10 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - **T2, test de puissance** : `BLOCKED` par les conflits de revert (preuve
   ci-dessus) ; score non mesuré.
 - **T2, campagne nominale 3 × 2 000** : `NOT_RUN` (interrompue à 561 programmes).
-- **T3, LSP de bout en bout à l'échelle** : `NOT_RUN` (pas de client écrit).
+- **T3, LSP de bout en bout à l'échelle** : `TESTED` depuis (`379b6fe`) —
+  p95 **337,6 ms** à 5 110 lignes ; **la cible P0-A « p95 < 50 ms » n'est pas
+  tenue à cette échelle** (écart documenté, [`LANG-TIMINGS.md`](LANG-TIMINGS.md)
+  §9) ; la cible reste tenue sur les petits paquets (2,826 ms).
 - **T4, comparaison littérale octet pour octet** : déviation documentée (15
   fichiers, ids dans les noms de symboles).
 - **T8** : `PARTIAL` — liste et justifications 24/24 revérifiées à HEAD ; rejeu

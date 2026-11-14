@@ -23,7 +23,7 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 633 passés / 0 échec / 6 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 634 passés / 0 échec / 7 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **non rejoué depuis le round 17** (`ed60f72`) : 100 groupes, 1 603 passés / 0 échec / 5 ignorés (2 tests debug-only) |
 | `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 711 passés / 0 échec / 1 ignoré**, exit 0 |
 | Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **483 cas : 482 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=207 covered=207 verified=124 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
@@ -46,7 +46,7 @@ donne 113 n'est pas reproduite ; l'écart est consigné dans `GOAL-BASELINE.md`
 | Oracle différentiel | **40 200 programmes, 0 divergence** (nominal 30 000, 3 000 après le garde de places) | [`GOAL-PRODUCTION-READINESS-REPORT.md`](GOAL-PRODUCTION-READINESS-REPORT.md) §3 |
 | Couverture sema+codegen | **89,79 / 89,23** ; `codegen/lib.rs` **100/100**, `traps.rs` **97,61/97,13** ; seuils tenus (exit 0) | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §5 |
 | Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema 100 000 / 0 échec, rejoué après traps | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
-| LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** | [`LSP.md`](../qualification/LSP.md) §7 |
+| LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** (2 fichiers) et **337,6 ms** à 5 110 lignes — cible 50 ms non tenue à cette échelle | [`LSP.md`](../qualification/LSP.md) §7 |
 | Miri | rejoué **vert en CI Linux** sur `878e212` (65 + 134 tests + fuzz court) ; local absent | rapport §4.5 |
 | Mutation | rejouée en CI sur `b5298db` : **183 / 150 / 24 / 9** (portée ciblée) | [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) §11 |
 | Qualification Linux | 7 jobs verts sur `878e212` (workspace, conformance, smoke, Miri, fuzz, installateur, wasm32) | rapport §4.5 |
