@@ -1052,18 +1052,13 @@ impl<'a> Emitter<'a> {
             let Some(expr) = exprs.get(id) else {
                 continue;
             };
-            // Passing a reference-typed place to a reference parameter reborrows
-            // it with an implicit auto-deref (`compte(v)` with `v: &Vec`); that
-            // adjusted place is also out of scope here.
-            if reference_args.contains(id) {
-                continue;
-            }
-            // A method receiver is auto-deref'd by the call, not by the
-            // receiver's own syntax (`xs.len()` records `(*xs)`). The callee
-            // signature is not part of the receiver's syntax, so the adjusted
+            // A method receiver is auto-deref'd by the call (`xs.len()` records
+            // `(*xs)`) and so is a reference-typed argument reborrowed for a
+            // reference parameter (`g(xs)` with `xs: &[i32]`). The callee
+            // signature is not part of that expression's syntax, so the adjusted
             // place is accepted alongside the syntactic one; any projection
-            // beyond that implicit deref must still match.
-            let auto_deref = method_receivers.contains(id);
+            // beyond the implicit deref must still match.
+            let auto_deref = method_receivers.contains(id) || reference_args.contains(id);
             match self.syntactic_place(expr) {
                 Some(expected) => {
                     let mut expected_after_deref = expected.clone();
@@ -5499,6 +5494,59 @@ mod tests {
         place.steps.push(Projection::Field("nope".to_string()));
         let error = crate::generate(&checked, &GenOptions::default())
             .expect_err("a corrupted receiver place must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for reference arguments: a reborrowed `&[i32]`
+    /// argument records an auto-deref place and the guard now verifies it
+    /// instead of skipping the argument.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn reference_argument_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> i32 { return xs[0]; }\n\
+                      fn second(ys: &[i32]) -> i32 { return first(ys); }\n\
+                      fn main() { let a = [1, 2, 3]; let v = second(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "ys"
+                ) && checked
+                    .facts
+                    .own
+                    .place
+                    .get(id)
+                    .is_some_and(|place| place.steps == vec![Projection::Deref])
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record `ys` with its implicit auto-deref");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the argument's place must be recorded");
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default()).expect_err(
+            "a corrupted reference-argument place must be rejected by the step-B guard",
+        );
         assert!(
             error.message.contains("syntactic place"),
             "unexpected error: {}",
