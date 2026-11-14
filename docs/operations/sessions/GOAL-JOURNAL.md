@@ -932,6 +932,23 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   son résultat, donc l'adapter en `rt` modifierait ce que le smoke vérifie :
   décision humaine, pas un contournement d'agent.
 
+## Entrée 2026-11-14 (round 28) — Reproductibilité : mesure courante consignée
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `docs/qualification/REPRODUCIBILITY.md` |
+| Mesure | `scripts/repro-check.ps1` au SHA `662f63d` : deux racines, **`988521151EFE…`** identique, PASS |
+| Nature | documentation d'une mesure déjà exécutée (round 13) ; aucun build relancé pendant la campagne nominale |
+
+- Le document de qualification s'arrêtait à la passe 8 ; il porte maintenant la
+  mesure du code des phases 4-5, avec l'explication du **changement de digest**
+  (le code a changé ; ce qui est prouvé est l'égalité entre racines, pas la
+  stabilité entre versions) et le rappel que la CI garde son propre digest.
+- Le SBOM (`46b65d9f…`) et l'installateur Windows (`bf55aab9…`, deux
+  désinstallations idempotentes) du même rejeu sont référencés.
+- Aucun build local pendant la campagne nominale (R12).
+
+
 
 
 
