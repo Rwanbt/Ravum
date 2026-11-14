@@ -176,7 +176,7 @@ variable d'environnement `RAVUM_INCREMENTAL=1` (vérifié dans l'aide et le code
 
 **Commande** :
 `pwsh -File scripts/lang-timings.ps1 -Scale -ScaleRuns 2 -Output target/lang-timings/scale.json`
-sur `1da5544` + scripts T3 non commités.
+sur `c61cb92` (T4) + scripts T3 non commités.
 
 | Lignes | Modules | `check` p50 | pic RSS | dont `own` | build froid | dont `rustc` | incrémental froid |
 |---|---|---|---|---|---|---|---|
@@ -299,7 +299,7 @@ cargo test --workspace --all-targets -- --test-threads=2     exit 0
 python tools/report_consistency.py --evidence                exit 0 (19 déclarations)
 ```
 
-Aucune fusion, aucun tag, aucun push, aucun RFC accepté. Les 24 `ravum.lock`
+Aucune fusion, aucun tag, aucun push, aucun RFC accepté. Les 455 `ravum.lock` 
 générés dans les cas de conformance par les campagnes locales ont été supprimés
 (ils n'étaient pas suivis) ; les caches `.ravum` restent des artefacts ignorés.
 

@@ -169,7 +169,7 @@ propre à cette machine et à cette toolchain, comme documenté dans
 
 ## 8. Corpus à l'échelle (2026-11-14) — la valeur défavorable est en tête
 
-> **Base : `1da5544`**, branche `goal/consolidation-2`, scripts T3 non encore
+> **Base : `c61cb92`** (T4), branche `goal/consolidation-2`, scripts T3 non encore
 > commités au moment de la mesure. Commande :
 > `pwsh -File scripts/lang-timings.ps1 -Scale -ScaleRuns 2 -Output target/lang-timings/scale.json`.
 > Les paquets sont générés par `tools/gen_scale_corpus.py` (déterministe) dans
