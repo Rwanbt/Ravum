@@ -835,7 +835,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 |---|---|---|
 | Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 604 passés / 0 échec / 5 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés**, exit 0 ; 1 test debug-only exclu (`verify_ownership_facts`) |
-| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 475 cas, 0 désaccord**, test négatif vert |
+| `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 476 cas, 0 désaccord**, test négatif vert |
 | Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `failed=0`, `build_verified: true` |
 | Traps `rt` (RFC-RT-TRAPS-1) | `cargo test -p ravum-lang-sema --lib traps` + 5 cas `effects/rt-trap-*` | **10/10** tests unitaires (index, division, arithmétique binaire **et composée**, négation, décalages, agrégats/flux, flottants, formes explicites) ; 4 compile-fail `E-EFF-PROFILE`, 1 compile-pass ; `core`/`pure` inchangés |
 | Smoke exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN** |
@@ -849,9 +849,11 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Cache de parse LSP | `cargo test -p ravum-lang-lsp --test parse_cache` et `cargo test -p ravum-lang-cli --test lsp_client` | 2 tests INV-07/réutilisation verts ; analyse p95 **1,362 ms** avec cache vs **1,836 ms** sans ; **bout en bout transport inclus p50 2,061 ms / p95 2,826 ms** ; client LSP **11/0** — [`LSP.md`](../qualification/LSP.md) §7 |
 | `NodeId` | `cargo test -p ravum-lang-sema --test node_id_stability` | **2/2** : ids de `util.rv` inchangés après édition de `main.rv` — migration **sans objet** |
 | Fuzz long | `RAVUM_FUZZ_ITERS=200000 … fuzz_lex_parse -- --ignored` et `RAVUM_FUZZ_ITERS=100000 … fuzz_check` | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` ; **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en `rt`) |
-| Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` |
+| Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) |
+| SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets (23 workspace + 41 dépendances) / 170 relations**, `created=1970-01-01`, sha256 `46b65d9fe941123e4ea7ac8fb82cfeb1e4ccb457d7cf29947ec5cd0251647721` |
+| Installateur | `pwsh -File scripts/install.ps1 -Prefix target/install-round13 -SkipBuild` puis deux `-Uninstall` | install exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, rustc 1.95.0, `locked=true` ; désinstallations **0 / 0** (la seconde : « rien à désinstaller ») |
 | LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |
-| Miri, mutation, 30 000 programmes, installateur | — | **`NOT_RUN`** : reasons in the GOAL report §6 (nightly not guaranteed, cargo-mutants absent, ≈ 3 h, not replayed) |
+| Miri, mutation | — | **`NOT_RUN`** : raisons dans le rapport §6 (composant Miri absent, cargo-mutants absent) |
 
 **Ce que cette passe ne change pas** : T4 et T12 restent `BLOCKED` (humains) ;
 T2 reste `PARTIAL` (D10) ; T11 reste `PARTIAL` (D9) ; aucune ratification d'ADR,

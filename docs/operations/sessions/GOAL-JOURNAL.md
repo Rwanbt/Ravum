@@ -641,6 +641,23 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   le débit ; le débit plus élevé reflète une machine moins chargée.
 - Aucun changement de code ; documents seulement.
 
+## Entrée 2026-11-14 (round 13) — Reproductibilité, SBOM et installateur rejoués au SHA courant
+
+| Preuve | Résultat (HEAD `662f63d`) |
+|---|---|
+| Reproductibilité | `repro-check.ps1` **PASS** : deux racines, deux `target/`, sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` |
+| SBOM | SPDX-2.3, **64 paquets (23 workspace + 41 dépendances) / 170 relations**, `created=1970-01-01`, sha256 `46b65d9fe941123e4ea7ac8fb82cfeb1e4ccb457d7cf29947ec5cd0251647721` |
+| Installateur | install `-SkipBuild` exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, `locked=true`, rustc 1.95.0 ; désinstallation **0**, seconde désinstallation **0** (« rien à désinstaller ») |
+
+- Ces trois preuves dataient du SHA `faf65cb`/`303da6a` ; elles sont rejouées sur
+  l'arbre courant (code des phases 4-5 inclus) sans changement de procédure.
+- Le sha256 du binaire change par rapport au run précédent (`19743DC2…`) : c'est
+  attendu, le code a changé ; la propriété prouvée est l'**identité entre deux
+  racines**, pas un hash stable entre versions.
+- Documents mis à jour : rapport §3/T11, matrice des gates (lignes
+  reproductibilité/SBOM/installateur), `PRODUCTION-READINESS.md` R7.
+
+
 
 
 

@@ -103,9 +103,9 @@ Les autres chiffres sont identiques ou meilleurs.
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après la passe de traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en profil `rt`) | nouvelle preuve |
 | LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
 | LSP bout en bout (transport inclus) | non mesuré | **p50 2,061 ms / p95 2,826 ms** sur 20 éditions d'une ligne | cible P0-A p95 < 50 ms atteinte sur cette mesure locale |
-| Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `19743DC29F3937E09E3765A485FFAB545B412D4DF22E2B8FBB2A2CD0BECD10B6` | nouvelle preuve |
-| Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `3c52d353…`, commit `faf65cb`), désinstallation idempotente **0 / 0** | nouvelle preuve |
-| SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `5119e194…`, déterministe | nouvelle preuve |
+| Reproductibilité release | non mesurée en phase 0 | **PASS**, deux racines identiques, sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) | nouvelle preuve |
+| Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild` puis `-Uninstall` deux fois | install exit 0 (manifeste sha256 `bf55aab9…`, commit `662f63d`), désinstallation idempotente **0 / 0** | nouvelle preuve, rejouée au round 13 |
+| SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, sha256 `46b65d9fe941…`, `created=1970-01-01`, déterministe | nouvelle preuve, rejouée au round 13 |
 | Oracle différentiel | inexistant | **37 200 programmes (3 campagnes), 0 divergence** | nouvelle preuve |
 
 ## 4. Critères PRODUCTION-READINESS et gates T0–T12
@@ -147,7 +147,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
 | T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; fuzz sema rejoué après traps ; workspace release vert (1 603/0/5) ; Miri et mutation `NOT_RUN` ; audit externe absent |
-| T11 | `PARTIAL` | reproductibilité release rejouée (`19743DC2…` sur deux racines) ; SBOM déterministe (64/170) ; installateur rejoué ; aucune clé (D9) |
+| T11 | `PARTIAL` | reproductibilité release rejouée (`98852115…` sur deux racines, round 13) ; SBOM déterministe (`46b65d9f…`, 64/170) ; installateur rejoué (`bf55aab9…`, 2 désinstallations 0/0) ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 
 ### 4.3 CI observée sur la PR brouillon
