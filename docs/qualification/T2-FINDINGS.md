@@ -1567,3 +1567,165 @@ Ce que cette passe ne prouve pas : le générateur n'explore qu'un sous-ensemble
 de Core 1.0 (pas de références stockées, pas de traits/closures, une seule
 projection) ; 53 règles ne sont pas 53 formes de programme ; et le test de
 puissance n'a pas eu lieu.
+
+## 28. Passe 15 — test de puissance T2 (S6) : 9 inverses sur 13, une divergence nouvelle (2026-11-14)
+
+> Base `124e7a4` (branche `goal/wave-3`). Windows 11 x64, `rustc 1.95.0`.
+> Worktrees `D:\App\ravum-wt-b` (ajouts durables) et `D:\App\ravum-wt-b-scratch`
+> (inverses, jamais commités). Le temps mural n'a pas permis d'aller au bout :
+> **4 formes sur 13 restent `NOT_RUN`**, et la campagne nominale 3 × 2 000 n'a
+> pas été exécutée. Aucun chiffre de cette section n'est extrapolé.
+
+### 28.1 Méthode
+
+Les 13 formes historiques des §22 à §24 sont recréées **sur l'arbre courant** par
+l'inverse écrit à la main du mécanisme du correctif (jamais `git revert` : cf.
+§27.5, les commits de 2026-11-11 ne s'appliquent plus). Chaque inverse vit dans
+un worktree jetable, est recompilé, puis :
+
+1. le cas de conformance associé doit **échouer** (`check` 0, `build` 1) ;
+2. le générateur dirigé par les types tourne avec **3 graines × 200 programmes
+   (600), `release_every=0`, 53 règles**, et ses divergences sont inspectées.
+
+L'extension du générateur (étape 5 de la fiche) est un ajout durable : 13 règles
+`stmt:power:*` (une par forme historique), plus le test
+`power_forms_build_on_the_healthy_tree` qui vérifie que chaque forme est acceptée
+par `check`, compilée par `rustc` et exécutée sur l'arbre sain. Le rejeu ciblé
+d'une forme se fait par `RAVUM_TYPED_POWER_FORM=k` (générateur étendu, 66 règles).
+
+### 28.2 Tableau des 13 formes — état réel mesuré
+
+`Inverse` = l'inverse a été réalisé et compilé ; `Cas` = le cas de conformance
+associé échoue sous cet inverse ; `Campagne` = 3 × 200 programmes exécutés
+(600, durée mesurée) ; `Retrouvée` = une divergence de **cette forme** est
+apparue dans la campagne initiale (53 règles).
+
+| # | Forme (§) | Cas de conformance | Zone du correctif (`emit.rs`) | Inverse | Cas | Campagne | Retrouvée |
+|---|---|---|---|---|---|---|---|
+| 1 | `a[0][1]` (§22.1) | `run/array-move-nested` | `build_destructure` : déstructuration récursive des niveaux | oui | **FAIL** | oui (600, 183 s) | non |
+| 2 | `h.items[0]` / `t.0[0]` (§22.1) | `run/array-move-projected` | `place_of` : place derrière projection de champ/tuple | oui | **FAIL** | oui (600, 181 s) | non |
+| 3 | liaison ombrée (§22.1) | `run/array-move-shadowed` | identité de liaison par déclaration (`declare`/`resolve`) | oui | **FAIL** | oui (600, 177 s) | **oui** (graine `…1003`, index 72) |
+| 4 | `a[0].take()` self par valeur (§22.1) | `run/array-move-self-receiver` | `by_value_receiver` : `Receiver::ByValue` des méthodes utilisateur | oui | **FAIL** | oui (600, 302 s) | non |
+| 5 | payload de tableau dans un bras de `match` (§22.1) | `run/array-move-match-payload` | `hoist_anchor`/`plan` : liaison `ArmPattern` | oui | **FAIL** | oui (600, 285 s) | non (initiale) ; **oui après extension** |
+| 6 | index dynamique imbriqué `a[0][i]`, `a[i][j]` (§23.1) | `run/array-move-nested-dynamic` | `plan_prefix_slots` + `SingleMove::Chain` | oui | **FAIL** | oui (600, 285 s) | non (initiale) ; **oui après extension** |
+| 7 | racine qui n'est pas une place `make()[0]`, `a[0].0[1]` (§23.1) | `run/array-move-descent` | boucle finale `descents` : `SingleMove::Chain` | oui | **FAIL** | oui (600, 297 s) | non |
+| 8 | plusieurs accès dans un bras en corps d'expression (§23.1) | `run/array-move-arm-multi` | `hoist_anchor` : bloc synthétique du corps de bras | oui | **FAIL** | oui (600, 297 s) | non (initiale) ; **oui après extension** |
+| 9 | récepteur *by value* d'un builtin (§23.1) | `run/array-move-builtin-receiver` | `by_value_receiver` : table STD-11.3 | oui | **FAIL** | oui (600, 297 s) | non |
+| 10 | deux descentes sur des éléments différents (§23.2) | `run/array-move-shared-descent` (première fonction) | `plan_slot_groups` : groupe par place | **non** | — | **NOT_RUN** | **NOT_RUN** |
+| 11 | descente puis lecture d'un autre élément (§23.2) | `run/array-move-shared-descent` (seconde fonction) | `plan_slot_groups` : groupe mono-descente | **non** | — | **NOT_RUN** | **NOT_RUN** |
+| 12 | descentes dans deux branches (§24) | `run/array-move-branch-descents` | ancrage sur la plus ancienne instruction du bloc du binder | **non** | — | **NOT_RUN** | **NOT_RUN** |
+| 13 | deux descentes dans un bloc imbriqué (§24) | `run/array-move-nested-descents` | idem | **non** | — | **NOT_RUN** | **NOT_RUN** |
+
+**Score brut : 9 formes testées sur 13** (inverse + cas en échec + campagne
+exécutée), **4 non testées** (`NOT_RUN`). Sur les 9 testées, la campagne
+initiale retrouve **1 forme** (la n° 3) ; après extension du générateur, **4
+formes** (3, 5, 6, 8) sont retrouvées. Ce n'est pas un score sur 13.
+
+### 28.3 Campagnes exécutées et divergences
+
+Neuf campagnes de 600 programmes (3 graines × 200) ont été exécutées,
+`release_every=0`, 53 règles :
+
+| Inverse | Programmes | Divergences | Dont la forme visée | Durée |
+|---|---|---|---|---|
+| 1 | 600 | 1 | 0 | 183 s |
+| 2 | 600 | 1 | 0 | 181 s |
+| 3 | 600 | 2 | **1** (index 72) | 177 s |
+| 4 | 600 | 1 | 0 | 302 s |
+| 5 | 600 | 1 | 0 | 285 s |
+| 6 | 600 | 1 | 0 | 285 s |
+| 7 | 600 | 1 | 0 | 297 s |
+| 8 | 600 | 1 | 0 | 297 s |
+| 9 | 600 | 1 | 0 | 297 s |
+| **Total** | **5 400** | **10** | **1** | — |
+
+Neuf des dix divergences sont **la même divergence nouvelle** (graine
+`0x00524156554d1003`, index 197), présente sous **chaque** inverse : elle est
+donc **antérieure aux inverses**. La dixième (graine `…1003`, index 72) n'existe
+que sous l'inverse n° 3 et son programme construit sur l'arbre sain : c'est la
+forme ombrée, retrouvée.
+
+Extension (générateur 66 règles), rejeux réellement exécutés :
+
+| Inverse | Règles | Programmes | Divergences | Attribution |
+|---|---|---|---|---|
+| 5 | 66 | 600 | 60 | **60/60** contiennent `p5_` ou `p8_` (formes 5 et 8) |
+| 6 | 66 | 600 | 31 | **31/31** contiennent `p6_` (forme 6) |
+
+Aucun rejeu ciblé `RAVUM_TYPED_POWER_FORM=k` n'a été exécuté pour les autres
+formes : elles restent `NOT_RUN` après extension.
+
+### 28.4 Divergence nouvelle sur l'arbre sain — `run/power-array-move-write-region-nested`
+
+Trouvée par le générateur pendant la vague (générateur initial, 53 règles) à
+l'index 197 de la graine `0x00524156554d1003`, puis **confirmée sur l'arbre
+sain** hors de tout inverse (`check` 0, `build` 1). Elle est réapparue dans
+**les neuf campagnes d'inverse** au même index : elle est antérieure aux
+inverses. Programme réduit (cas
+`conformance/cases/run/power-array-move-write-region-nested`) :
+
+```rv
+fn main() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    {
+        a = if true { a } else { [String::from("c"), String::from("d")] };
+        let s: String = a[0];
+        io::println(s.as_str());
+        let t: String = a[1];
+        io::println(t.as_str());
+    }
+}
+```
+
+Mesure : `check` exit **0** ; `build` exit **1**, rustc
+`error[E0508]: cannot move out of type [String; 2], a non-copy array`. Le Rust
+généré conserve les deux accès littéraux :
+
+```rust
+let s: String = a[0usize];
+let t: String = a[1usize];
+```
+
+Cause observée : une **écriture de liaison entière** (`a = if c { a } else { … }`)
+dans un bloc imbriqué bloque l'abaissement des déplacements d'éléments situés
+**après** elle dans ce même bloc ; le `whole use` de `a` dans la branche du RHS
+est pris pour un usage bloquant alors que l'écriture ré-initialise la place.
+Au niveau de la fonction (sans bloc imbriqué, cas `run/array-move-assign-back`)
+la même forme construit correctement : le défaut est propre au bloc imbriqué.
+Le programme généré brut (index 197, avant réduction) produit de son côté
+`E0382: use of moved value` : deux déstructurations successives de la même place.
+
+Le défaut **n'est pas corrigé** (S6 : signaler, ne pas corriger le compilateur) ;
+il est **enregistré** par le cas de conformance ci-dessus, qui échoue. Toute
+correction exige une décision de l'orchestrateur.
+
+Campagne nominale réduite sur l'arbre sain, 3 × 200 programmes,
+`release_every=0` : générateur **initial** (53 règles), **600 programmes, 1
+divergence** (celle-ci, index 197), 417 s ; générateur **étendu** (66 règles),
+**600 programmes, 0 divergence**, 274 s — le flux du RNG change avec les règles
+ajoutées, donc ce ne sont pas les mêmes programmes. La campagne nominale **3 × 2 000** de la
+fiche n'est **pas exécutée** (`NOT_RUN`).
+
+### 28.5 Commandes exactes
+
+| Commande | Résultat |
+|---|---|
+| `cargo build -p ravum-lang-cli -j 4` (par inverse) | exit 0 |
+| `cargo run -p ravum-conformance -- run --filter run/array-move-<forme>` | le cas visé : **FAIL** pour chaque inverse 1…9 |
+| `RAVUM_TYPED_PROGRAMS=200 RAVUM_TYPED_RELEASE_EVERY=0 cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_long -- --ignored --nocapture` | 600 programmes par inverse ; chiffres du tableau |
+| `cargo test -p ravum-lang-codegen --test differential_oracle power_forms_build_on_the_healthy_tree -- --nocapture` | 1 test passés : 13 formes acceptées, compilées et exécutées |
+| `cargo run -p ravum-conformance -- run --verify-build` (arbre courant) | **485 cas : 483 PASS / 1 FAIL / 1 SKIP / 0 NOT_RUN** ; le seul FAIL est `run/power-array-move-write-region-nested` (E0508) ; `perimeter=208`, `covered=207`, `verified=124`, `implicit=83`, `failed=0`, `not_measured=1` ; **`build_verified: false`** |
+
+### 28.6 Ce que cette passe ne prouve pas
+
+- 4 formes sur 13 ne sont **pas testées** : le score de puissance est `1/9`
+  (initiale) et `4/9` (après extension) sur les formes testées, jamais `1/13`.
+- La campagne nominale 3 × 2 000 n'a pas été exécutée ; les campagnes d'inverse
+  sont des campagnes **réduites** (3 × 200), et le générateur à 66 règles reste
+  un sous-ensemble de Core 1.0.
+- Les inverses désactivent le mécanisme du correctif ; ils ne rejouent pas le
+  commit historique (impossible, cf. §27.5) : ils mesurent un mécanisme désactivé.
+- Une inversion peut échouer pour une raison voisine ; les 9 « FAIL » sont
+  vérifiés sur le message rustc attendu (`E0508`/`E0382`) et sur la forme réduite.
+- La divergence nouvelle est une observation liée à ce SHA, un seul OS, une seule
+  toolchain ; elle n'est ni corrigée, ni close.
