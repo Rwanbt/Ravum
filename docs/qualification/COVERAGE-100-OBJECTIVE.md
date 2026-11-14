@@ -81,3 +81,24 @@ Trois options, aucune ne peut être tranchée par un agent :
 En attendant la décision : **aucun changement de code ni de seuil** ; D10 reste
 `PARTIAL` ; la Couverture totale est publiée à **89,41/88,81** (round 10) et les
 planchers par fichier sont tenus.
+
+## 5. Re-mesure du 2026-11-14 (consolidation 2, après T6/T7)
+
+La réécriture T6 de `traps.rs` (indexation bornée, `--rt-entry`) a fait
+descendre le fichier à **86,70/78,02**, sous son plancher 97/95 : le gate de
+couverture était rouge. Il a été remis au vert **sans toucher aucun seuil**, par
+six tests de couverture qui exercent l'analyse AST pure (balayage de
+réaffectation sur toutes les formes d'expression et de motif, refus de
+`safe_loop`, corps de méthodes, blocs `unsafe`, boucles sur collection, aides de
+type défensives) ; `facts.rs` a supprimé une branche `if let` inatteignable (la
+table `FileInfo` est dimensionnée `max(id) + 1`).
+
+| Fichier | Lignes | Régions | Plancher |
+|---|---|---|---|
+| `crates/ravum-lang-sema/src/traps.rs` | **97,61** | **97,13** | 97 / 95 |
+| `crates/ravum-lang-sema/src/facts.rs` | **100,00** | **100,00** | 100 / 100 |
+| Totaux sema+codegen | **89,79** | **89,23** | — |
+
+`coverage_report.py --check` : **exit 0**, tous les seuils tenus ; 21 257
+lignes instrumentées, 19 087 couvertes. Aucun fichier n'a été exclu et aucun
+plancher n'a été abaissé (commit `1b76926`).

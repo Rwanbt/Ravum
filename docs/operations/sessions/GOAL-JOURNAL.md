@@ -1092,3 +1092,16 @@ bras). Rejeu de la campagne **`NOT_RUN`** : `cargo mutants --version` → exit 1
 workflow `mutation.yml` non déclenchable sans push. Dernier rejeu CI connu :
 2026-11-13, 183 mutants / 150 tués / 24 survivants / 9 non viables, identique.
 Statut T8 : `PARTIAL`.
+
+### Suite du 2026-11-14 — couverture T6/T7 rétablie (branche `goal/consolidation-2`)
+
+La réécriture T6 avait fait passer `traps.rs` à **86,70/78,02**, sous son
+plancher 97/95 : le gate de couverture était rouge et la mesure 89,47/88,87 des
+docs était périmée. Six tests de couverture (balayage AST pur, refus de
+`safe_loop`, corps de méthodes, `unsafe`, boucles sur collection, aides de type)
+et la suppression d'une branche `if let` inatteignable de `facts.rs` rétablissent
+le cliquet **sans l'abaisser** : `traps.rs` **97,61/97,13**, `facts.rs`
+**100/100**, `emit.rs` 87,88/87,21, totaux **89,79/89,23**,
+`coverage_report.py --check` **exit 0**. Conformance **483 / 482 / 0 / 1**,
+workspace **101 groupes / 1 633 passés / 0 échec / 6 ignorés**. Commit
+`1b76926` ; chiffres et `coverage_thresholds.json` (provenance) mis à jour.

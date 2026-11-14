@@ -18,9 +18,9 @@
 >
 > **Mise à jour du 2026-11-14 (branche `goal/production-ready`)** : voir §9 et
 > [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md).
-> Chiffres courants : conformance **483 (482 PASS)**, workspace **1 627** tests
-> (T7, branche `goal/consolidation-2`),
-> couverture **89,47/88,87**, oracle **40 200 exécutions de 42 gabarits
+> Chiffres courants : conformance **483 (482 PASS)**, workspace **1 633** tests
+> (couverture T6/T7, branche `goal/consolidation-2`),
+> couverture **89,79/89,23**, oracle **40 200 exécutions de 42 gabarits
 > d'instructions indépendantes, sans composition**, Miri et mutation
 > rejoués en CI. Cette ligne date l'état ; les gates restent ceux du §9.
 

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-14T14:24:28.6494982Z",
-  "git_sha": "0d041067d7cd8a4d0262ba1422c5dd659cdb9d06",
-  "git_sha_short": "0d041067d7cd",
+  "generated_at": "2026-11-14T15:12:10.5664252Z",
+  "git_sha": "1b76926ee8866585fe459878c5c774ebb6b7a945",
+  "git_sha_short": "1b76926ee886",
   "git_branch": "goal/consolidation-2",
   "git_dirty": true,
   "os": "Microsoft Windows 11 Professionnel",
@@ -11,20 +11,20 @@
   "ram_bytes": 16868962304,
   "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
   "metrics": {
-    "conformance.fail": 0,
     "build.implicit": 83,
     "conformance.pass": 482,
-    "conformance.cases": 483,
-    "build.failed": 0,
-    "build.perimeter": 207,
     "conformance.skip": 1,
+    "conformance.cases": 483,
+    "build.covered": 207,
     "build.verified": 124,
     "conformance.not_run": 0,
-    "build.covered": 207,
-    "registry.emitted": 126,
-    "registry.never_emitted": 0,
+    "build.failed": 0,
+    "build.perimeter": 207,
+    "conformance.fail": 0,
     "registry.unregistered": 0,
     "registry.declared": 108,
+    "registry.emitted": 126,
+    "registry.never_emitted": 0,
     "features.covered": 188,
     "features.total": 188,
     "must.unmapped": 344,
@@ -38,7 +38,7 @@
       "command": "cargo fmt --all -- --check",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 1472.866,
+      "wall_ms": 1917.834,
       "numbers": {},
       "output_tail": ""
     },
@@ -47,32 +47,32 @@
       "command": "cargo run -q -p ravum-conformance -- run --verify-build",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 81490.217,
+      "wall_ms": 87348.439,
       "numbers": {
-        "conformance.fail": 0,
         "build.implicit": 83,
         "conformance.pass": 482,
-        "conformance.cases": 483,
-        "build.failed": 0,
-        "build.perimeter": 207,
         "conformance.skip": 1,
+        "conformance.cases": 483,
+        "build.covered": 207,
         "build.verified": 124,
         "conformance.not_run": 0,
-        "build.covered": 207
+        "build.failed": 0,
+        "build.perimeter": 207,
+        "conformance.fail": 0
       },
-      "output_tail": "PASS    security/reserved-windows-name                           23 ms  build=not_applicable\nFAILURES: none\nsummary: total=483 pass=482 fail=0 skip=1 not_run=0\nbuild: perimeter=207 covered=207 verified=124 implicit=83 failed=0 environment=0 not_measured=0\nbuild_verified: true (build dimension only — check `summary` for the rest of the run)\nnote: SKIP and NOT_RUN are never PASS; a green run is an observation on this corpus, host and commit, not a proof"
+      "output_tail": "PASS    security/reserved-windows-name                           22 ms  build=not_applicable\nFAILURES: none\nsummary: total=483 pass=482 fail=0 skip=1 not_run=0\nbuild: perimeter=207 covered=207 verified=124 implicit=83 failed=0 environment=0 not_measured=0\nbuild_verified: true (build dimension only — check `summary` for the rest of the run)\nnote: SKIP and NOT_RUN are never PASS; a green run is an observation on this corpus, host and commit, not a proof"
     },
     {
       "name": "registry",
       "command": "python tools/registry_audit.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 912.308,
+      "wall_ms": 641.699,
       "numbers": {
-        "registry.emitted": 126,
-        "registry.never_emitted": 0,
         "registry.unregistered": 0,
-        "registry.declared": 108
+        "registry.declared": 108,
+        "registry.emitted": 126,
+        "registry.never_emitted": 0
       },
       "output_tail": "registry codes : 108\ncodes emitted  : 126\nunregistered   : 0 (language codes emitted but absent from �3)\nignored        : 18 prefix/tooling literals\nnever emitted  : 0 (declared in �3, produced by no source literal)\nclosed W list  : 0 extra warning code(s) outside DIAG-1.6"
     },
@@ -81,7 +81,7 @@
       "command": "python tools/features_coverage.py --strict",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 209.944,
+      "wall_ms": 200.521,
       "numbers": {
         "features.covered": 188,
         "features.total": 188
@@ -93,7 +93,7 @@
       "command": "python tools/must_audit.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 336.83,
+      "wall_ms": 340.864,
       "numbers": {
         "must.unmapped": 344,
         "must.total": 807,
@@ -106,18 +106,18 @@
       "command": "python -m unittest discover -s tools/tests",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 942.649,
+      "wall_ms": 879.663,
       "numbers": {
         "python_tests.count": 38
       },
-      "output_tail": "............\nwrote C:\\Users\\barat\\AppData\\Local\\Temp\\tmp0qylxg9k\\out\\audit.json\n..........................\n----------------------------------------------------------------------\nRan 38 tests in 0.701s\nOK"
+      "output_tail": "............\nwrote C:\\Users\\barat\\AppData\\Local\\Temp\\tmpv5xwxbqb\\out\\audit.json\n..........................\n----------------------------------------------------------------------\nRan 38 tests in 0.655s\nOK"
     },
     {
       "name": "report_consistency",
       "command": "python tools/report_consistency.py",
       "result": "PASS",
       "exit_code": 0,
-      "wall_ms": 163.476,
+      "wall_ms": 167.517,
       "numbers": {},
       "output_tail": "  ok     conformance  470 PASS / 0 FAIL / 1 SKIP\n  ok     tests        113 suites\n  ok     tests        1574 pass�s\n  ok     strict       188/188\n  ok     registry     108 codes\nreport-consistency: PASS � the report carries the register figures"
     }

@@ -33,8 +33,8 @@
 >
 > **Depuis la passe 11 (état au 2026-11-14, branche `goal/production-ready`)** :
 > les chiffres courants ont évolué — **483 cas : 482 PASS / 0 FAIL / 1 SKIP**,
-> `perimeter=207/207`, `verified=124` ; workspace **101 groupes, 1 627 passés /
-> 0 échec / 6 ignorés** (T7) ; couverture **89,47/88,87** ; oracle **40 200
+> `perimeter=207/207`, `verified=124` ; workspace **101 groupes, 1 633 passés /
+> 0 échec / 6 ignorés** (T6/T7) ; couverture **89,79/89,23** ; oracle **40 200
 > exécutions issues de 42 gabarits d'instructions indépendantes, sans
 > composition** (0 divergence) ; Miri rejoué en CI Linux et mutation rejouée en CI
 > (183/150/24/9). Le détail daté et les SHA sont dans `§0 octies`, dans
@@ -856,6 +856,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Traçabilité | `python tools/features_coverage.py --strict` | **188/188**, 1 exemption |
 | MUST | `python tools/must_audit.py` | **807 énoncés, 344 non mappés** — D10 ouverte, inchangée |
 | Couverture | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-round16.json` puis `coverage_report.py --check` | **89,47 % lignes / 88,87 % régions**, **tous les seuils tenus**, 10 fichiers sous l'objectif 100 %, **2 126** lignes non couvertes (20 182 − 18 056) ; `codegen/lib.rs` **100/100**, `traps.rs` 98,66/96,84, `emit.rs` 87,75/87,09 ; limite des régions `fmt::Error` documentée — [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
+| Couverture (re-mesure consolidation 2) | `cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json` puis `coverage_report.py --check` | **89,79 % lignes / 89,23 % régions**, **tous les seuils tenus (exit 0)**, 21 257 lignes instrumentées / 19 087 couvertes ; `traps.rs` **97,61/97,13** après six tests de couverture (la réécriture T6 l'avait mis à 86,70/78,02), `facts.rs` **100/100**, `emit.rs` 87,88/87,21 ; aucun plancher abaissé — [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §5 |
 | Oracle différentiel | `cargo test -p ravum-lang-codegen --test differential_oracle` | générateur v2 **42 gabarits d'instructions indépendantes, sans composition** : rapide **600** (0 divergence), long local **3 000** (0 divergence), **nominal 3 × 10 000 = 30 000 programmes locaux, 0 divergence, 8 602 s**, **3 × 1 000 rejoué après le garde de places : 3 000, 0 divergence** ; cumul **40 200 exécutions, 0 divergence**, 100 % acceptés — ces nombres comptent des exécutions, pas des formes distinctes |
 | Timings | `pwsh -File scripts/lang-timings.ps1 -Runs 20` | `check` p95 froid **1,3-8,1 ms**, édition **11,0-49,8 ms** ; `build` p50 **179-331 ms**, `rustc` **97,1-99,3 %** — [`LANG-TIMINGS.md`](../reports/LANG-TIMINGS.md) |
 | Incrémental | A/B `RAVUM_INCREMENTAL=1` | gain **nul ou négatif** (jusqu'à +44 %) ; opt-in, **désactivé par défaut** |

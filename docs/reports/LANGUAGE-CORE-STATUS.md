@@ -8,10 +8,11 @@
 > « production » n'est revendiquée.
 >
 > **Dernière mesure : 2026-11-14**, branche `goal/consolidation-2` @
-> `0d04106` (T7), Windows 11 x64, `rustc 1.95.0`. Les lignes workspace et
-> conformance ont été rejouées à ce SHA ; les autres lignes datent de la mesure
-> T9 et n'ont pas été rejouées pour T5-T7. Les chiffres de la
-> **phase 0** (`c931fdf`) restent dans [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
+> `1b76926` (couverture T6/T7), Windows 11 x64, `rustc 1.95.0`. Les lignes
+> workspace, conformance et couverture ont été rejouées à ce SHA ; les autres
+> lignes datent de la mesure T9 et n'ont pas été rejouées pour T5-T7. Les
+> chiffres de la **phase 0** (`c931fdf`) restent dans
+> [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
 > L'historique des passes (du 2026-11-09 au 2026-11-14) est déplacé **tel quel**
 > en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
 > passe, pas ceux du HEAD.
@@ -22,7 +23,7 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 627 passés / 0 échec / 6 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **101 groupes `test result` : 1 633 passés / 0 échec / 6 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **non rejoué depuis le round 17** (`ed60f72`) : 100 groupes, 1 603 passés / 0 échec / 5 ignorés (2 tests debug-only) |
 | `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 711 passés / 0 échec / 1 ignoré**, exit 0 |
 | Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **483 cas : 482 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=207 covered=207 verified=124 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
@@ -43,7 +44,7 @@ donne 113 n'est pas reproduite ; l'écart est consigné dans `GOAL-BASELINE.md`
 | Preuve | Résultat | Détail |
 |---|---|---|
 | Oracle différentiel | **40 200 programmes, 0 divergence** (nominal 30 000, 3 000 après le garde de places) | [`GOAL-PRODUCTION-READINESS-REPORT.md`](GOAL-PRODUCTION-READINESS-REPORT.md) §3 |
-| Couverture sema+codegen | **89,47 / 88,87** ; `codegen/lib.rs` **100/100** (plancher relevé) ; seuils tenus | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) |
+| Couverture sema+codegen | **89,79 / 89,23** ; `codegen/lib.rs` **100/100**, `traps.rs` **97,61/97,13** ; seuils tenus (exit 0) | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §5 |
 | Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema 100 000 / 0 échec, rejoué après traps | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
 | LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** | [`LSP.md`](../qualification/LSP.md) §7 |
 | Miri | rejoué **vert en CI Linux** sur `878e212` (65 + 134 tests + fuzz court) ; local absent | rapport §4.5 |

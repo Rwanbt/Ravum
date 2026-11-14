@@ -57,8 +57,12 @@ Aucun test, aucun cas de conformance et aucun seuil n'a été supprimé, ignoré
 affaibli. Le corpus passe de **476 à 478 cas** (deux cas ajoutés ; un cas
 existant a changé de mode par obligation, voir T4), puis à **483 cas** avec les
 cinq cas `rt-entry` de T6 ; le workspace de **100 suites / 1 605 tests** à
-**101 suites / 1 610 tests**, puis **1 618** après T5, **1 624** après T6 et
-**1 627** après T7 (§5).
+**101 suites / 1 610 tests**, puis **1 618** après T5, **1 624** après T6,
+**1 627** après T7 et **1 633** après la re-mesure de couverture (§5). Aucun
+plancher de couverture n'a été abaissé : la réécriture T6 avait fait passer
+`traps.rs` sous son plancher, il est rétabli à **97,61/97,13** par six tests de
+couverture et les totaux remontent à **89,79/89,23** (`coverage_report --check`
+exit 0, §5 T6 et §8).
 
 ## 1. T1 — corriger les affirmations (Q0-2) — `TESTED`
 
@@ -404,6 +408,14 @@ campagne exécutée est la campagne rapide de 120 programmes, pas la nominale
 les 13 formes historiques du test de puissance ; le garde ne vérifie que les
 places *enregistrées*, pas l'absence d'un fait oublié.
 
+**Suivi de couverture (même jour).** La réécriture T6 avait fait passer
+`traps.rs` sous son plancher (86,70/78,02 < 97/95) : le gate de qualification
+était rouge. Il est rétabli **sans abaisser aucun seuil** — six tests de
+couverture pour l'analyse AST pure et la suppression d'une branche inatteignable
+de `facts.rs` (commit `1b76926`) : `traps.rs` **97,61/97,13**, `facts.rs`
+**100/100**, totaux **89,79/89,23**, `coverage_report.py --check` **exit 0**
+(§8, [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §5).
+
 ### T8 — mutants survivants (Q1-6) — `PARTIAL`
 
 **Ce qui existe déjà** : `docs/qualification/MUTATION-EQUIVALENCE.md` §9 (passe 7,
@@ -488,10 +500,13 @@ cargo test -p ravum-lang-cli -- --test-threads=2             exit 0
 cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (35 + 45 + 6 + 2 ignorés)
 cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_fast
   garde étape B actif : 120 programmes, 0 divergence, 0 désaccord
+cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
+python tools/coverage_report.py --input target/cov-all.json --check    exit 0
+  89,79 % lignes / 89,23 % régions ; traps.rs 97,61/97,13 ; facts.rs 100/100
 cargo run -p ravum-conformance -- run --verify-build         exit 0
   483 cas : 482 PASS / 0 FAIL / 1 SKIP ; perimeter=207/207 ; verified=124
 cargo test --workspace --all-targets -- --test-threads=2     exit 0
-  101 groupes : 1 627 passés / 0 échec / 6 ignorés
+  101 groupes : 1 633 passés / 0 échec / 6 ignorés
 pwsh -File scripts/lang-smoke.ps1                            exit 0
   43 PASS / 0 FAIL / 0 NOT_RUN
 cargo run -p ravum-lang-cli -- check examples/dsp-gain-iir --profile rt --rt-entry process
