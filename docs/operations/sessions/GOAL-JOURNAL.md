@@ -587,6 +587,30 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - **CI** : sur `17ab64e`, **8/8 workflows verts**, coverage ratchet incluse avec
   le nouveau plancher 100/100 sur `codegen/lib.rs`.
 
+## Entrée 2026-11-14 (round 10) — `traps.rs` à 98,66 % et limite D10 documentée
+
+| Champ | Valeur |
+|---|---|
+| Tâche | 9.2 / D10 |
+| Fichiers | `sema/src/traps.rs` (+3 tests), `tools/coverage_thresholds.json`, `docs/qualification/COVERAGE-100-OBJECTIVE.md` (neuf) |
+| Mesure | workspace **1 604 tests** ; couverture **89,41/88,81** ; `traps.rs` **98,66/96,84** |
+
+- **`traps.rs` 93,37/89,39 → 98,66/96,84** avec 3 tests supplémentaires
+  (`?`/`Try`, bloc-expression + `[0; 3]` + `for i in 0..2`, largeurs i64/u64/
+  isize/usize) et un test `#[should_panic]` qui exerce le rendu des diagnostics
+  de parse. Le fichier entre au cliquet à **97/95**.
+- **Limite structurelle trouvée et documentée** : `types.rs` (100 % lignes)
+  plafonne à **98,10 % de régions** et `builtins.rs` à 98,42 %, parce que
+  `llvm-cov` compte comme régions les chemins d'erreur `?` des `write!` dans
+  `impl Display` ; ces régions ne sont atteignables que si le `Formatter`
+  échoue. Le document `docs/qualification/COVERAGE-100-OBJECTIVE.md` fournit les
+  segments mesurés (`count=0` sur les seuls `?`) et propose trois options
+  humaines : exclusion ciblée, changement d'objectif, ou statu quo.
+- Aucun seuil abaissé ; `codegen/lib.rs` reste à 100/100. Totaux :
+  **2 112** lignes non couvertes (19 950 − 17 838), **10 fichiers** sous
+  l'objectif.
+
+
 
 
 
