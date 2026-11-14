@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "measured_on": "2026-11-14 (consolidation 2, re-mesure T6/T7), Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
+  "measured_on": "2026-11-14 (vague 3, agent F, branche wave3/f-coverage-mutation sur goal/wave-3 3ca4d0e), Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
   "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json",
   "checked_by": "python tools/coverage_report.py --input target/cov-all.json --check",
   "scope": "Two crates since 2026-11-11: `ravum-lang-sema` (frontend) and `ravum-lang-codegen` (the reference backend, which generates the safe Rust). Before that date only sema was measured, so the backend that actually emits code had no coverage gate at all. Including both crates in one instrumented build also means the sema figures now count the sema code exercised by the codegen integration tests.",
-  "policy": "Ratchet. A floor never goes down: lowering one requires changing this file in the same commit with a justification, and the reviewer must ask why the code that used to be covered no longer is. Floors sit one point below the measurement of the commit that introduced them so a compiler or llvm-cov upgrade cannot flip the gate on rounding noise; the real target is the gate target below, not the floor.",
+  "policy": "Ratchet. A floor never goes down: lowering one requires changing this file in the same commit with a justification, and the reviewer must ask why the code that used to be covered no longer is. The 2026-11-14 wave-3 pass raises every floor to the integer part of its measured value (owner decision S5: the target is the measured product-code level, not a rounded-down comfort margin); the remaining decimals are the only slack, so any later drift must be investigated and fixed, never absorbed by lowering a floor.",
   "objective": {
     "lines": 100,
     "regions": 100,
     "decided_on": "2026-11-11",
-    "note": "Objectif ratifié par le responsable : 100 % de couverture de lignes ET de régions sur chaque fichier mesuré. Les seuils `files` restent le cliquet qui garde la CI verte aujourd'hui ; ils sont relevés à chaque passe, et `python tools/coverage_report.py --input ... --gap` liste, fichier par fichier, les lignes non couvertes qui restent à traiter. Aucune exclusion permanente : le code mort est supprimé, pas exclu, et un fichier à 100 % doit l'être par des tests."
+    "note": "Objectif ratifié par le responsable : 100 % de couverture de lignes ET de régions sur chaque fichier mesuré. La décision S5 du 2026-11-14 (APPROUVÉE par le responsable, 2026-11-14) précise la portée : 100 % du CODE PRODUIT, hors modules `#[cfg(test)]` et hors chemins inatteignables documentés un par un dans `tools/coverage_exemptions.json` (bloc `line_coverage_exemptions`, statut PENDING_HUMAN_APPROVAL). Les seuils `files` restent le cliquet qui garde la CI verte aujourd'hui ; ils sont relevés à chaque passe, et `python tools/coverage_report.py --input ... --gap` liste, fichier par fichier, les lignes non couvertes qui restent à traiter."
   },
   "gate_targets": {
     "files": [
@@ -18,83 +18,85 @@
     ],
     "lines": 90,
     "regions": 85,
-    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Not met yet on these two files: the floors below are the current proven level, and they are raised whenever a pass raises the measurement. The codegen files are new floors (2026-11-11): their target is also 90/85, and `emit.rs` carries the most risk because it is the code that decides what the generated Rust looks like."
+    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Met on `typeck.rs` (93.53/93.11) and `resolve.rs` (93.26/93.45) — measured 2026-11-14 (wave 3). The codegen files were added as floors on 2026-11-11: `emit.rs` now meets the target too (90.61/90.69); `loader.rs` is still below it on lines (85.31/88.09) and is the thinnest remaining file of the set."
   },
   "files": {
     "crates/ravum-lang-sema/src/traps.rs": {
       "lines": 97,
-      "regions": 95,
+      "regions": 97,
       "measured_lines": 97.61,
       "measured_regions": 97.13,
-      "note": "Floor 97/95 since 2026-11-14 (round 10). The T6 bounded-index rewrite briefly took the file to 86.70/78.02; the consolidation re-measure is 97.61/97.13 after six coverage drivers that exercise the pure AST scan, the safe_loop refusals (including a synthetic open-end range), method bodies, unsafe blocks and the defensive type helpers. Remaining holes are defensive arms the parser/checker cannot produce today; they stay defensive rather than removed."
+      "note": "Floor 97/95 since 2026-11-14 (round 10), regions floor raised to 97 (wave 3) at the measured level. The T6 bounded-index rewrite briefly took the file to 86.70/78.02; the consolidation re-measure is 97.61/97.13 after six coverage drivers that exercise the pure AST scan, the safe_loop refusals (including a synthetic open-end range), method bodies, unsafe blocks and the defensive type helpers. Remaining holes are defensive arms the parser/checker cannot produce today; they stay defensive rather than removed."
     },
     "crates/ravum-lang-sema/src/types.rs": {
       "lines": 100,
-      "regions": 97,
+      "regions": 98,
       "measured_lines": 100.0,
-      "measured_regions": 98.1
+      "measured_regions": 98.1,
+      "note": "Wave 3 (2026-11-14): regions floor raised from 97 to 98 at the measured level. Line coverage is complete; the remaining regions are the `fmt::Error` recovery edges of the `impl Display` for semantic types, documented with proof in `tools/coverage_exemptions.json` (`E-LINE-DISPLAY-FMT-ERROR`, PENDING_HUMAN_APPROVAL)."
     },
     "crates/ravum-lang-sema/src/effects.rs": {
-      "lines": 92,
-      "regions": 94,
-      "measured_lines": 93.29,
-      "measured_regions": 95.02,
-      "note": "2026-11-13 (batch 1): raised from 91/93 to 92/94 (measurement 93.29/95.02). The 22 remaining uncovered lines are line 65/81 (fixpoint and signature write-back), 193 (impl fn collection), 252/326/329/372/388/403/405 (defensive match arms) and 128-141 (the `test_fns` entry branch, structurally unreachable while `#[test]` is refused with E-UNSUPPORTED-ATTR)."
+      "lines": 96,
+      "regions": 96,
+      "measured_lines": 96.59,
+      "measured_regions": 96.98,
+      "note": "Wave 3 (2026-11-14): raised from 92/94 to 96/96 after the `check_with_entry`/`rt`-entry contracts and the `test fn` library contracts (`crates/ravum-lang-sema/tests/checker_entry_contracts.rs`). The 22 remaining uncovered lines of the 2026-11-13 note are now mostly closed; what is left are defensive match arms (see `coverage_report.py --uncovered`)."
     },
     "crates/ravum-lang-sema/src/builtins.rs": {
       "lines": 100,
       "regions": 98,
       "measured_lines": 100.0,
-      "measured_regions": 98.42,
-      "note": "2026-11-13 (batch 1): raised from 90/88 to 100/98. Line coverage is complete: `type_from_str` now has tests for every compound form it accepts and for the malformed text it must refuse. The region gap is the `?` recovery edges of that parser; the region floor stays one point under the measurement."
+      "measured_regions": 98.89,
+      "note": "2026-11-13 (batch 1): raised from 90/88 to 100/98. Line coverage is complete: `type_from_str` now has tests for every compound form it accepts and for the malformed text it must refuse. Wave 3 re-measured 98.89 regions and kept the 98 floor; the gap is the `?` recovery edges, documented with proof in `tools/coverage_exemptions.json` (`E-LINE-BUILTINS-TO-STR-EDGES`)."
     },
     "crates/ravum-lang-sema/src/own.rs": {
-      "lines": 91,
-      "regions": 89,
-      "measured_lines": 92.43,
-      "measured_regions": 90.17,
-      "note": "2026-11-11: raised from 89/86 to 91/89 (measurement 92.11/90.14 with the codegen integration tests included). 2026-11-13: re-measured 92.43/90.17; floor unchanged."
+      "lines": 92,
+      "regions": 90,
+      "measured_lines": 92.47,
+      "measured_regions": 90.75,
+      "note": "2026-11-11: raised from 89/86 to 91/89. Wave 3 (2026-11-14): raised to 92/90 at the measured level after the entry-point contracts (`Option<String>` borrowed then consumed). The destructured-`let` path and the missing-signature fallback are documented unreachable (`E-LINE-OWN-DESTRUCTURED-LET`, `E-LINE-OWN-SIGNATURE-FALLBACK`)."
     },
     "crates/ravum-lang-sema/src/check.rs": {
-      "lines": 80,
-      "regions": 72,
-      "measured_lines": 80.26,
-      "measured_regions": 72.58,
-      "note": "Thinnest margin of the file set: 0.26 point above the line floor. It is the file to attack first when raising the sema floors."
+      "lines": 81,
+      "regions": 73,
+      "measured_lines": 81.3,
+      "measured_regions": 73.72,
+      "note": "Wave 3 (2026-11-14): raised from 80/72 to 81/73. The `check_with_timings` entry is now covered end to end (`checker_entry_contracts.rs`), including the `rt` entry-point refusal. Line coverage of the *product* part of this file is 100 % (`coverage_product_split.py`: 0 of 87 product lines uncovered); the remaining lines of the file are its `#[cfg(test)]` module (143), excluded by S5."
     },
     "crates/ravum-lang-sema/src/facts.rs": {
       "lines": 100,
       "regions": 100,
       "measured_lines": 100.0,
       "measured_regions": 100.0,
-      "note": "2026-11-13 (batch 1): raised from 81/76 to 100/100. The file reached 100 % lines and regions after three dead helpers were deleted (`expr_type`, `EffectSet::pure`, `EffectSet::is_subset_of`) and the contracts were tested: effect name round trip, effect set display/union/difference, profile parse/name/forbidden, `FileInfo::line_of`, `file_infos`. The floor is now the objective, so a regression fails the gate."
+      "note": "2026-11-13 (batch 1): raised from 81/76 to 100/100. The file reached 100 % lines and regions after three dead helpers were deleted (`expr_type`, `EffectSet::pure`, `EffectSet::is_subset_of`) and the contracts were tested. The floor is now the objective, so a regression fails the gate. Re-measured 100/100 on 2026-11-14 (wave 3)."
     },
     "crates/ravum-lang-sema/src/loader.rs": {
-      "lines": 76,
-      "regions": 80,
-      "measured_lines": 77.24,
-      "measured_regions": 81.26
+      "lines": 85,
+      "regions": 88,
+      "measured_lines": 85.31,
+      "measured_regions": 88.09,
+      "note": "Wave 3 (2026-11-14): raised from 76/80 to 85/88 at the measured level, after the manifest-contract batch (`crates/ravum-lang-sema/tests/loader_manifest_contracts.rs`: strict sections/keys, TOML lexical errors, dependency shapes, both crate roots, module inlining, enum identifiers). Still below the 90/85 gate target on lines: it is the largest remaining product gap and the next file to attack."
     },
     "crates/ravum-lang-sema/src/typeck.rs": {
       "lines": 93,
-      "regions": 92,
-      "measured_lines": 93.47,
-      "measured_regions": 93.01,
-      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-11: 92.98/92.56 in the two-crate measurement (the denominator is the code written since). 2026-11-13 (batch 1): raised from 92/91 to 93/92 after `check_expr_list`, `check_tuple` (no caller) and `collect_generic_args` (no caller) were deleted. Gate target 90/85 met."
+      "regions": 93,
+      "measured_lines": 93.53,
+      "measured_regions": 93.11,
+      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-13 (batch 1): raised from 92/91 to 93/92. Wave 3 (2026-11-14): regions floor raised to 93 at the measured level. Gate target 90/85 met."
     },
     "crates/ravum-lang-sema/src/resolve.rs": {
       "lines": 93,
       "regions": 93,
       "measured_lines": 93.26,
       "measured_regions": 93.45,
-      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). 2026-11-13 (batch 1): raised from 92/92 to 93/93 after the unused `World::module` accessor was deleted. Gate target 90/85 met."
+      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). 2026-11-13 (batch 1): raised from 92/92 to 93/93. Wave 3 confirmed 93.26/93.45 unchanged; the uncovered remainder is dominated by the `PathRoot::Plain` arms for `crate`/`self`/`super` and the `super::super` loops, documented unreachable with proof (`E-LINE-RESOLVE-PLAIN-ROOT-ARMS`). Gate target 90/85 met."
     },
     "crates/ravum-lang-codegen/src/emit.rs": {
-      "lines": 86,
-      "regions": 85,
-      "measured_lines": 87.00,
-      "measured_regions": 86.02,
-      "note": "New floor 2026-11-11: the backend was never measured before, although it is the code that decides what the generated Rust looks like. Target 90/85. 2026-11-13: re-measured 87.00/86.02 into the 2026-11-13 profile; floor unchanged."
+      "lines": 90,
+      "regions": 90,
+      "measured_lines": 90.61,
+      "measured_regions": 90.69,
+      "note": "New floor 2026-11-11 (86/85). Wave 3 (2026-11-14): raised to 90/90 at the measured level after 39 construct contracts (`crates/ravum-lang-codegen/tests/emit_constructs.rs`): float patterns lowered to guards (G-6.36), literal patterns of every family, constants, array/tuple/slice/never spelling, free-builtin mapping, signed-zero tie, assertion helpers, FFI wrapper, primitive and text methods, test-mode runner. Gate target 90/85 met. Remaining gap: defensive emitter arms documented one by one in `tools/coverage_exemptions.json` plus the residual listed in COVERAGE-100-OBJECTIVE.md §7."
     },
     "crates/ravum-lang-codegen/src/lib.rs": {
       "lines": 100,
@@ -105,10 +107,10 @@
     },
     "crates/ravum-lang-codegen/src/prelude.rs": {
       "lines": 100,
-      "regions": 97,
+      "regions": 100,
       "measured_lines": 100.0,
       "measured_regions": 100.0,
-      "note": "New floor 2026-11-11: the emitted runtime prelude is a string constant, fully covered by construction; the region floor leaves rounding room for a toolchain change."
+      "note": "New floor 2026-11-11 (100/97): the emitted runtime prelude is a string constant, fully covered by construction. Wave 3 (2026-11-14) re-measured 100/100 and raised the region floor from 97 to 100 at the measured level."
     }
   }
 }
