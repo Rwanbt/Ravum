@@ -260,8 +260,10 @@ qualifier Linux et Miri sur le code courant, sans merge.
 
 Écarts plateforme assumés, ni cachés ni comptés comme PASS : Linux ignore
 **7** tests (contre 5 sous Windows, tests spécifiques au système de fichiers) et
-le corpus a **2 SKIP** au lieu de 1. Miri est une vérification dynamique bornée
-sur les tests de la lib, pas une preuve.
+le corpus a **2 SKIP** au lieu de 1 — les deux cas explicitement Windows
+(`security/dependency-absolute-windows`, `security/reserved-windows-name`), qui
+ne sont pas exécutés sur Linux. Miri est une vérification dynamique bornée sur
+les tests de la lib, pas une preuve.
 
 ### 4.6 Mutation rejouée en CI sur l'arbre courant (round 20)
 

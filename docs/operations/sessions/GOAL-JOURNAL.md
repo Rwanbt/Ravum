@@ -837,6 +837,23 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Rapport : §5 (RFC ajoutée), §6 (les deux lignes renvoient à la RFC), §7
   (ratification). Rien d'autre n'est modifié.
 
+## Entrée 2026-11-14 (round 23) — Index des RFC complété, SKIP Linux nommés
+
+| Champ | Valeur |
+|---|---|
+| Fichiers | `docs/rfc/README.md`, rapport §4.5 |
+| Nature | traçabilité / transparence de la revue, aucun changement de code |
+
+- L'index `docs/rfc/README.md` s'arrêtait à `RFC-D13-STATICITY` : les cinq RFC de
+  cette session (`OWN-FACTS`, `RT-TRAPS`, `NODE-ID`, `RV-DSP-BLOCK`,
+  `DEV-TOOLS`) n'y figuraient pas. Elles sont ajoutées avec statut
+  `PROPOSED · PENDING_HUMAN_APPROVAL`, date, état du prototype et lien.
+- Le rapport §4.5 nomme désormais les **2 SKIP Linux** :
+  `security/dependency-absolute-windows` et `security/reserved-windows-name`,
+  tous deux spécifiques à Windows — au lieu de dire seulement « 2 SKIP ».
+- Aucune conclusion, aucun gate, aucune preuve modifiés.
+
+
 
 
 
