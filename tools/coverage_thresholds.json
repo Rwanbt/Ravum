@@ -21,6 +21,13 @@
     "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Not met yet on these two files: the floors below are the current proven level, and they are raised whenever a pass raises the measurement. The codegen files are new floors (2026-11-11): their target is also 90/85, and `emit.rs` carries the most risk because it is the code that decides what the generated Rust looks like."
   },
   "files": {
+    "crates/ravum-lang-sema/src/traps.rs": {
+      "lines": 97,
+      "regions": 95,
+      "measured_lines": 98.66,
+      "measured_regions": 96.84,
+      "note": "New floor 2026-11-14 (round 10), first ratchet entry for the RFC-RT-TRAPS-1 module introduced in round 4: measured 98.66/96.84 after 13 unit tests. The remaining holes are defensive arms (`let` without initializer, non-integer shift operands, missing types) that the parser/checker cannot produce today; they stay defensive rather than removed."
+    },
     "crates/ravum-lang-sema/src/types.rs": {
       "lines": 100,
       "regions": 97,

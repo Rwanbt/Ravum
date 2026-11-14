@@ -466,4 +466,38 @@ mod tests {
             "fn main() { let x: i64 = 1; let y = x as i32; }"
         )));
     }
+
+    #[test]
+    fn try_blocks_ranges_and_repeat_arrays_are_walked() {
+        // `?` exercises ExprKind::Try.
+        assert!(!is_trap(&check_rt(
+            "fn get() -> Result<i32, Error> { return Ok(1); }\n\
+             fn pass() -> Result<i32, Error> { let v = get()?; return Ok(v); }\n\
+             fn main() { let v = get().unwrap_or(0); }"
+        )));
+        // Block expression, array repeat and range/for.
+        assert!(!is_trap(&check_rt(
+            "fn main() { let x = { 1 }; let a = [0; 3]; \
+             let mut acc: i32 = 0; \
+             for i in 0..2 { acc = acc.wrapping_add(i); } }"
+        )));
+    }
+
+    #[test]
+    fn every_integer_width_is_known_to_the_shift_rule() {
+        assert!(!is_trap(&check_rt(
+            "fn main() { \
+             let a: i64 = 1; let b = a << 1; \
+             let c: u64 = 1; let d = c << 1; \
+             let e: isize = 1; let f = e << 1; \
+             let g: usize = 1; let h = g << 1; \
+             let i: i64 = 5; let j = i.wrapping_neg(); }"
+        )));
+    }
+
+    #[test]
+    #[should_panic(expected = "parse diagnostics")]
+    fn invalid_source_panics_with_rendered_diagnostics() {
+        let _ = check_rt("fn main( {");
+    }
 }
