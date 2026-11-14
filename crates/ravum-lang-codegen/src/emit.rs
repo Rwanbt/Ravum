@@ -1024,7 +1024,135 @@ impl<'a> Emitter<'a> {
                 _ => {}
             }
         }
+        // Step B (extended): the recorded place must match the place the syntax
+        // describes. The binding identity is not re-derived (the AST does not
+        // carry the declaration span of a resolved local), but every projection
+        // (`x.f`, `.0`, `[lit]`, `[*]`, deref) is checked independently.
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut method_receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(
+            &self.checked.program.root,
+            &mut exprs,
+            &mut method_receivers,
+        );
+        let mut reference_args: BTreeSet<NodeId> = BTreeSet::new();
+        for expr in exprs.values() {
+            if let ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } = &expr.kind {
+                for arg in args {
+                    if matches!(
+                        self.checked.facts.expr_types.get(&arg.id),
+                        Some(Type::Ref { .. })
+                    ) {
+                        reference_args.insert(arg.id);
+                    }
+                }
+            }
+        }
+        for (id, recorded) in &self.checked.facts.own.place {
+            let Some(expr) = exprs.get(id) else {
+                continue;
+            };
+            // A method receiver is auto-deref'd by the call, not by the receiver's
+            // own syntax (`text.len()` records `(*text).len()`); the receiver's
+            // adjusted place is out of scope for this syntactic comparison.
+            if method_receivers.contains(id) {
+                continue;
+            }
+            // Passing a reference-typed place to a reference parameter reborrows
+            // it with an implicit auto-deref (`compte(v)` with `v: &Vec`); that
+            // adjusted place is also out of scope here.
+            if reference_args.contains(id) {
+                continue;
+            }
+            match self.syntactic_place(expr) {
+                Some(expected) if expected == recorded.steps => {}
+                Some(expected) => {
+                    return Err(err(format!(
+                        "ownership facts disagree with the syntax for expression {id} ({}) at \
+                         {}: recorded place steps {:?}, syntactic place {expected:?}",
+                        self.expr_location(expr),
+                        self.expr_span_text(expr),
+                        recorded.steps
+                    )));
+                }
+                None => {
+                    return Err(err(format!(
+                        "ownership facts recorded a place for expression {id} ({}) at {}, but \
+                         the expression has no syntactic place",
+                        self.expr_location(expr),
+                        self.expr_span_text(expr)
+                    )));
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// Place projections described by the syntax alone (step B cross-check).
+    fn syntactic_place(&self, expr: &Expr) -> Option<Vec<ravum_lang_sema::facts::Projection>> {
+        use ravum_lang_sema::facts::{Projection as PlaceStep, ProjectionIndex};
+        match &expr.kind {
+            ExprKind::SelfValue => Some(Vec::new()),
+            ExprKind::Path(path) if path.segments.len() == 1 => {
+                match self.checked.facts.resolutions.get(&path.id) {
+                    Some(Resolution::Local { .. }) => Some(Vec::new()),
+                    _ => None,
+                }
+            }
+            ExprKind::Field { base, name } => {
+                let mut steps = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut steps);
+                steps.push(PlaceStep::Field(name.name.clone()));
+                Some(steps)
+            }
+            ExprKind::TupleIndex { base, index } => {
+                let mut steps = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut steps);
+                steps.push(PlaceStep::Tuple(*index));
+                Some(steps)
+            }
+            ExprKind::Index { base, index } => {
+                let mut steps = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut steps);
+                let index = match &index.kind {
+                    ExprKind::Int { value, .. } => ProjectionIndex::Lit(*value),
+                    _ => ProjectionIndex::Opaque,
+                };
+                steps.push(PlaceStep::Index(index));
+                Some(steps)
+            }
+            ExprKind::Unary {
+                op: UnOp::Deref,
+                expr,
+            } => {
+                let mut steps = self.syntactic_place(expr)?;
+                steps.push(PlaceStep::Deref);
+                Some(steps)
+            }
+            _ => None,
+        }
+    }
+
+    /// Human location of an expression for a debug-guard error message.
+    fn expr_location(&self, expr: &Expr) -> String {
+        match self.checked.files.get(expr.span.file as usize) {
+            Some(file) => format!("{}:{}", file.path, file.line_of(expr.span.start)),
+            None => "unknown-file".to_string(),
+        }
+    }
+
+    fn expr_span_text(&self, expr: &Expr) -> String {
+        format!("{}..{}", expr.span.start, expr.span.end)
+    }
+
+    /// A field/tuple/index projection on a reference auto-derefs it: the checker
+    /// records one `Deref` step per reference layer before the projection.
+    fn push_auto_derefs(&self, base: &Expr, steps: &mut Vec<ravum_lang_sema::facts::Projection>) {
+        let mut ty = self.checked.facts.expr_types.get(&base.id);
+        while let Some(Type::Ref { inner, .. }) = ty {
+            steps.push(ravum_lang_sema::facts::Projection::Deref);
+            ty = Some(inner);
+        }
     }
 
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
@@ -3609,6 +3737,143 @@ fn pattern_text(
         path.pop();
     }
     out.push(']');
+}
+
+/// Collect every expression node of a module (step B place cross-check).
+fn collect_module_exprs<'a>(
+    module: &'a Module,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Fn(function) => collect_block_exprs(&function.body, out, receivers),
+            ItemKind::Impl(implementation) => {
+                for member in &implementation.items {
+                    if let ItemKind::Fn(function) = &member.kind {
+                        collect_block_exprs(&function.body, out, receivers);
+                    }
+                }
+            }
+            ItemKind::Mod(inner) => collect_module_exprs(inner, out, receivers),
+            _ => {}
+        }
+    }
+}
+
+fn collect_block_exprs<'a>(
+    block: &'a Block,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    for statement in &block.stmts {
+        match &statement.kind {
+            StmtKind::Let(let_statement) => {
+                if let Some(init) = &let_statement.init {
+                    collect_expr(init, out, receivers);
+                }
+            }
+            StmtKind::Expr { expr, .. } => collect_expr(expr, out, receivers),
+        }
+    }
+    if let Some(tail) = &block.tail {
+        collect_expr(tail, out, receivers);
+    }
+}
+
+fn collect_expr<'a>(
+    expr: &'a Expr,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    out.insert(expr.id, expr);
+    match &expr.kind {
+        ExprKind::Call { callee, args } => {
+            collect_expr(callee, out, receivers);
+            for arg in args {
+                collect_expr(arg, out, receivers);
+            }
+        }
+        ExprKind::MethodCall { receiver, args, .. } => {
+            receivers.insert(receiver.id);
+            collect_expr(receiver, out, receivers);
+            for arg in args {
+                collect_expr(arg, out, receivers);
+            }
+        }
+        ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
+            collect_expr(base, out, receivers);
+        }
+        ExprKind::Index { base, index } => {
+            collect_expr(base, out, receivers);
+            collect_expr(index, out, receivers);
+        }
+        ExprKind::Unary { expr, .. } | ExprKind::Cast { expr, .. } => {
+            collect_expr(expr, out, receivers);
+        }
+        ExprKind::Binary { lhs, rhs, .. } => {
+            collect_expr(lhs, out, receivers);
+            collect_expr(rhs, out, receivers);
+        }
+        ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+            collect_expr(target, out, receivers);
+            collect_expr(value, out, receivers);
+        }
+        ExprKind::If {
+            cond,
+            then_block,
+            else_branch,
+        } => {
+            collect_expr(cond, out, receivers);
+            collect_block_exprs(then_block, out, receivers);
+            if let Some(else_branch) = else_branch {
+                collect_expr(else_branch, out, receivers);
+            }
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            collect_expr(scrutinee, out, receivers);
+            for arm in arms {
+                collect_expr(&arm.body, out, receivers);
+            }
+        }
+        ExprKind::While { cond, body } => {
+            collect_expr(cond, out, receivers);
+            collect_block_exprs(body, out, receivers);
+        }
+        ExprKind::Loop { body } => collect_block_exprs(body, out, receivers),
+        ExprKind::For { iter, body, .. } => {
+            collect_expr(iter, out, receivers);
+            collect_block_exprs(body, out, receivers);
+        }
+        ExprKind::Block(block) | ExprKind::Unsafe(block) => {
+            collect_block_exprs(block, out, receivers);
+        }
+        ExprKind::Tuple(items) | ExprKind::Array(items) => {
+            for item in items {
+                collect_expr(item, out, receivers);
+            }
+        }
+        ExprKind::ArrayRepeat { value, len } => {
+            collect_expr(value, out, receivers);
+            collect_expr(len, out, receivers);
+        }
+        ExprKind::StructLit { fields, .. } => {
+            for field in fields {
+                collect_expr(&field.value, out, receivers);
+            }
+        }
+        ExprKind::Range { start, end, .. } => {
+            if let Some(start) = start {
+                collect_expr(start, out, receivers);
+            }
+            if let Some(end) = end {
+                collect_expr(end, out, receivers);
+            }
+        }
+        ExprKind::Try(inner) => collect_expr(inner, out, receivers),
+        ExprKind::Return(Some(value)) => collect_expr(value, out, receivers),
+        _ => {}
+    }
 }
 
 /// True when a `let` pattern consumes its initializer by value.
