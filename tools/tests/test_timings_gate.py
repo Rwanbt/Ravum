@@ -4,6 +4,11 @@ Le gate compare un export `lang-timings -CheckOnly` à la référence versionné
 Ces tests figent les règles qui pourraient être « ajustées » pour obtenir du
 vert : planchers p50/p95, facteur, exemple manquant, export non-check. Ils
 n'exécutent aucun compilateur.
+
+Depuis la vague 3 (S8), le gate porte aussi le contrôle de linéarité : entre les
+corpus générés de 5 110 et 20 110 lignes, l'exposant de `check` doit rester
+≤ 1,3. Les tests ci-dessous vérifient qu'une croissance linéaire passe, qu'une
+croissance quadratique échoue, et que toute donnée incomplète échoue fermée.
 """
 
 from __future__ import annotations
@@ -33,6 +38,21 @@ def example(name: str, cold_p50: float, cold_p95: float = None, edit_p50: float 
 
 def document(*examples: dict) -> dict:
     return {"schema_version": 1, "check_only": True, "examples": list(examples)}
+
+
+def scale_document(points: dict[int, float]) -> dict:
+    """A `scale_corpus` measurement, one entry per generated line count."""
+    return {
+        "schema_version": 1,
+        "scale_corpus": [
+            {
+                "name": f"scale-{lines}",
+                "source_lines": lines,
+                "check": {"phases": {"total": {"p50": value}}},
+            }
+            for lines, value in sorted(points.items())
+        ],
+    }
 
 
 class EvaluateTest(unittest.TestCase):
@@ -122,6 +142,81 @@ class EvaluateTest(unittest.TestCase):
     def test_invalid_factor_rejected(self):
         with self.assertRaises(ValueError):
             timings_gate.evaluate(document(example("hello", 5.0)), document(example("hello", 5.0)), factor=0.0)
+
+
+class LinearityTest(unittest.TestCase):
+    """S8: the `check` exponent between the 5 110- and 20 110-line corpora."""
+
+    RATIO = 20110 / 5110
+
+    def test_the_exponent_formula_is_applied_to_the_p50_totals(self):
+        # t = base * n^0.5: the measured exponent must be 0.5.
+        scale = scale_document({5110: 100.0, 20110: 100.0 * self.RATIO**0.5})
+        self.assertAlmostEqual(timings_gate.check_exponent(scale), 0.5, places=9)
+
+    def test_linear_growth_is_accepted(self):
+        scale = scale_document({5110: 300.0, 20110: 300.0 * self.RATIO})
+        row, violations = timings_gate.evaluate_linearity(scale)
+        self.assertAlmostEqual(row["exponent"], 1.0, places=9)
+        self.assertTrue(row["ok"])
+        self.assertEqual(violations, [])
+
+    def test_quadratic_growth_is_refused(self):
+        # The pre-fix shape: ×19.3 of time for ×3.93 of lines is e = 2.
+        scale = scale_document({5110: 365.0, 20110: 365.0 * self.RATIO**2})
+        row, violations = timings_gate.evaluate_linearity(scale)
+        self.assertAlmostEqual(row["exponent"], 2.0, places=9)
+        self.assertFalse(row["ok"])
+        self.assertEqual(len(violations), 1)
+        self.assertIn("linearity", violations[0])
+        self.assertIn("exponent 2.000", violations[0])
+
+    def test_the_ceiling_is_the_one_that_decides(self):
+        linear = scale_document({5110: 300.0, 20110: 300.0 * self.RATIO})
+        _row, violations = timings_gate.evaluate_linearity(linear, ceiling=1.3)
+        self.assertEqual(violations, [])
+        _row, violations = timings_gate.evaluate_linearity(linear, ceiling=0.9)
+        self.assertEqual(len(violations), 1)
+
+    def test_a_high_ceiling_cannot_be_used_to_accept_quadratic_growth(self):
+        quadratic = scale_document({5110: 300.0, 20110: 300.0 * self.RATIO**2})
+        _row, violations = timings_gate.evaluate_linearity(quadratic, ceiling=1.3)
+        self.assertEqual(len(violations), 1)
+
+    def test_a_missing_corpus_size_fails_closed(self):
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent(scale_document({5110: 300.0}))
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent(scale_document({20110: 3000.0}))
+
+    def test_an_empty_scale_section_fails_closed(self):
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent({"scale_corpus": []})
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent({})
+
+    def test_a_non_positive_time_fails_closed(self):
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent(scale_document({5110: 0.0, 20110: 3000.0}))
+
+    def test_a_missing_p50_fails_closed(self):
+        broken = scale_document({5110: 300.0, 20110: 3000.0})
+        del broken["scale_corpus"][0]["check"]["phases"]["total"]["p50"]
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent(broken)
+
+    def test_duplicate_corpus_sizes_fail_closed(self):
+        duplicated = scale_document({5110: 300.0, 20110: 3000.0})
+        duplicated["scale_corpus"].append(dict(duplicated["scale_corpus"][0]))
+        with self.assertRaises(SystemExit):
+            timings_gate.check_exponent(duplicated)
+
+    def test_an_invalid_ceiling_or_order_is_rejected(self):
+        linear = scale_document({5110: 300.0, 20110: 1200.0})
+        with self.assertRaises(ValueError):
+            timings_gate.evaluate_linearity(linear, ceiling=0.0)
+        with self.assertRaises(ValueError):
+            timings_gate.check_exponent(linear, small_lines=20110, large_lines=5110)
 
 
 if __name__ == "__main__":
