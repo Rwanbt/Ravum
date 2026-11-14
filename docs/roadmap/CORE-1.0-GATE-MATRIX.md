@@ -864,6 +864,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | `NodeId` | `cargo test -p ravum-lang-sema --test node_id_stability` | **2/2** : ids de `util.rv` inchangés après édition de `main.rv` — migration **sans objet** |
 | Fuzz long | `RAVUM_FUZZ_ITERS=200000 … fuzz_lex_parse -- --ignored` et `RAVUM_FUZZ_ITERS=100000 … fuzz_check` | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` ; **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en `rt`) |
 | Reproductibilité | `pwsh -File scripts/repro-check.ps1` | **PASS**, deux racines et deux `target/` : sha256 `988521151EFE827EA62448343C08128370CA3801A3EAEF312C04B298C43FDE8A` (rejoué au round 13 sur `662f63d`) |
+| Fuzz long (consolidation 2) | `RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored --nocapture` | **100 000 itérations, 0 échec, 4 327/s** (23,1 s) à `1b76926` |
+| Reproductibilité (consolidation 2) | `pwsh -File scripts/repro-check.ps1` | **PASS** : deux builds, deux racines et deux `target/`, sha256 `9FC5E3F2159F6E1218149AF773193C78B1CDC6C84C33085A4A93804B44875E77` |
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets (23 workspace + 41 dépendances) / 170 relations**, `created=1970-01-01`, sha256 `46b65d9fe941123e4ea7ac8fb82cfeb1e4ccb457d7cf29947ec5cd0251647721` |
 | Installateur | `pwsh -File scripts/install.ps1 -Prefix target/install-round13 -SkipBuild` puis deux `-Uninstall` | install exit 0, manifeste commit `662f63d`, binaire sha256 `bf55aab9…`, rustc 1.95.0, `locked=true` ; désinstallations **0 / 0** (la seconde : « rien à désinstaller ») |
 | LSP client | `cargo test -p ravum-lang-cli --test lsp_client` | **11 / 0** |

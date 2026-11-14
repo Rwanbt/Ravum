@@ -45,7 +45,7 @@ donne 113 n'est pas reproduite ; l'écart est consigné dans `GOAL-BASELINE.md`
 |---|---|---|
 | Oracle différentiel | **40 200 programmes, 0 divergence** (nominal 30 000, 3 000 après le garde de places) | [`GOAL-PRODUCTION-READINESS-REPORT.md`](GOAL-PRODUCTION-READINESS-REPORT.md) §3 |
 | Couverture sema+codegen | **89,79 / 89,23** ; `codegen/lib.rs` **100/100**, `traps.rs` **97,61/97,13** ; seuils tenus (exit 0) | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §5 |
-| Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema 100 000 / 0 échec, rejoué après traps | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
+| Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema **100 000 / 0 échec, 4 327/s** (rejoué à HEAD, `1b76926`) | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
 | LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** (2 fichiers) et **337,6 ms** à 5 110 lignes — cible 50 ms non tenue à cette échelle | [`LSP.md`](../qualification/LSP.md) §7 |
 | Miri | rejoué **vert en CI Linux** sur `878e212` (65 + 134 tests + fuzz court) ; local absent | rapport §4.5 |
 | Mutation | rejouée en CI sur `b5298db` : **183 / 150 / 24 / 9** (portée ciblée) | [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) §11 |

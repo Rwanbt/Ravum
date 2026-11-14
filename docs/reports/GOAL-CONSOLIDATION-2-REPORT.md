@@ -519,6 +519,10 @@ cargo test -p ravum-lang-cli --test lsp_client                        exit 0
   inter-modules + aller-retour diagnostic
 cargo test -p ravum-lang-cli --test lsp_client end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
   p50=322,4 ms p95=337,6 ms (5 110 lignes, 150 modules) — cible 50 ms non tenue
+RAVUM_FUZZ_ITERS=100000 cargo test -p ravum-lang-sema --test fuzz_check fuzz_check_long -- --ignored
+  100 000 itérations, 0 échec, 4 327/s (23,1 s)
+pwsh -File scripts/repro-check.ps1                           PASS (exit 0)
+  deux racines, deux target/ : sha256 9FC5E3F2…757E77 identique
 cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json
 python tools/coverage_report.py --input target/cov-all.json --check    exit 0
   89,79 % lignes / 89,23 % régions ; traps.rs 97,61/97,13 ; facts.rs 100/100
@@ -576,7 +580,17 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   `ad62f32`…`0d04106`, §5) ; la règle T6 reste `PENDING_HUMAN_APPROVAL`.
 - **T10, run CI** : `NOT_RUN` (pas de push).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
-- **Couverture, mutation, fuzz, Miri, Linux** : `NOT_RUN` cette session.
+- **Couverture** : `TESTED` cette session — **89,79/89,23** lignes/régions,
+  cliquet rétabli (`traps.rs` **97,61/97,13**, `facts.rs` **100/100**),
+  `coverage_report --check` exit 0 (§5 T6, §8).
+- **Fuzz long** : `TESTED` cette session — **100 000 itérations, 0 échec**,
+  4 327/s (23,1 s) à HEAD.
+- **Reproductibilité** : `TESTED` cette session — deux builds, deux racines et
+  deux `target/` : sha256
+  `9FC5E3F2159F6E1218149AF773193C78B1CDC6C84C33085A4A93804B44875E77`.
+- **Mutation** : `NOT_RUN` cette session (`cargo-mutants` absent ; installation =
+  `RFC-DEV-TOOLS-1` `PENDING_HUMAN_APPROVAL`).
+- **Miri, Linux** : `NOT_RUN` cette session (CI seulement, push interdit).
 
 ## 11. Questions pour le responsable
 
@@ -603,8 +617,10 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   preuve de correction.
 - Il ne dit rien de la performance d'un programme réel : le corpus est
   synthétique et régulier.
-- Il ne qualifie pas le LSP à l'échelle, ni la sûreté mémoire, ni la
-  reproductibilité, ni Linux : ces mesures ne sont pas rejouées ici.
+- Il ne qualifie pas la sûreté mémoire (Miri) ni Linux : ces mesures ne sont pas
+  rejouées ici. Le LSP à l'échelle est mesuré (p95 **337,6 ms** à 5 110 lignes,
+  cible 50 ms non tenue) et la reproductibilité est rejouée (**PASS**, sha256
+  `9FC5E3F2…757E77`).
 - T5 est prouvé **in-processus** (analyse LSP et cache de parse) : la table de
   session n'est ni persistée ni bornée, et le transport JSON-RPC n'est pas
   mesuré pour ce cas.

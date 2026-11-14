@@ -1118,3 +1118,14 @@ non tenue à cette échelle**, écart documenté (analyse globale, le cache de p
 ne couvre que le parser). Commit `379b6fe` ; workspace **101 groupes / 1 634
 passés / 0 échec / 7 ignorés** ; conformance inchangée. T3 : `PARTIAL` →
 `TESTED` (le paquet de 1 000 fichiers est couvert par T4).
+
+### Suite du 2026-11-14 — fuzz long et reproductibilité rejoués (branche `goal/consolidation-2`)
+
+Deux mesures de qualification rejouées à HEAD (`379b6fe`) : **fuzz long
+`sema` 100 000 itérations, 0 échec, 4 327/s** (23,1 s) et **repro-check PASS** —
+deux builds, deux racines et deux `target/`, sha256
+`9FC5E3F2159F6E1218149AF773193C78B1CDC6C84C33085A4A93804B44875E77` identique.
+La couverture est déjà rétablie (89,79/89,23) et le LSP à l'échelle mesuré
+(p95 337,6 ms) dans les entrées précédentes. Mutation, Miri et Linux restent
+`NOT_RUN` (outils absents ou CI sans push). Gate matrix : deux lignes datées
+ajoutées ; §10 et §12 du rapport de consolidation mis à jour.
