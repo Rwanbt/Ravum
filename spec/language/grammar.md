@@ -221,7 +221,7 @@ const_atom     = INT_LIT | FLOAT_LIT | "true" | "false" | CHAR_LIT | STRING_LIT
 
 | ID | Règle | Niveau |
 |---|---|---|
-| G-5.11 | Un `const_expr` n'a ni variable, ni appel, ni accès de champ, ni indexation, ni `?`, ni bloc. Présence → `E-TYP-CONST`. | MUST |
+| G-5.14 | Un `const_expr` n'a ni variable, ni appel, ni accès de champ, ni indexation, ni `?`, ni bloc. Présence → `E-TYP-CONST`. | MUST |
 | G-5.12 | L'évaluation est faite par le compilateur, en arithmétique **vérifiée** : un débordement ou une division par zéro dans un `const_expr` est `E-TYP-CONST` (erreur de compilation, jamais une valeur enveloppée silencieuse). | MUST |
 | G-5.13 | Un `const` ne peut pas référencer un autre `const` en Core 1.0 (pas de dépendances entre constantes) : `E-TYP-CONST`. Voir Q-GRAM-4. | MUST |
 
@@ -268,7 +268,7 @@ place_suffix   = "." ( IDENT | INT_LIT )
 | G-6.5 | Une **instruction-expression** (block_like sans `;` incluse) **MUST** avoir le type `()` ; une expression de type non-`()` utilisée en instruction est `E-TYP-STATEMENT-VALUE`. `return`/`break`/`continue`/`panic` ont le type `!` (Never), compatible avec tout type attendu. | MUST |
 | G-6.6 | `return;` est valide seulement dans une fonction retournant `()` ; sinon `E-TYP-MISMATCH`. `return e` dans une fonction `()` est `E-TYP-MISMATCH`. | MUST |
 | G-6.7 | `break;` et `continue;` sont valides seulement dans une boucle (`while`, `loop`, `for`) ; ailleurs `E-TYP-BREAK-OUTSIDE`. `break e;` n'existe pas (`E-PARSE-EXPECTED`). | MUST |
-| G-6.8 | L'affectation est une **instruction**, jamais une expression : `if (x = 1) { }` est `E-PARSE-UNEXPECTED`. La **famille complète** des opérateurs composés est acceptée (`+= -= *= /= %= &= |= ^= <<= >>=`) avec la sémantique `place = place op e` (une seule évaluation de `place`). | MUST |
+| G-6.8 | L'affectation est une **instruction**, jamais une expression : `if (x = 1) { }` est `E-PARSE-UNEXPECTED`. La **famille complète** des opérateurs composés est acceptée (`+= -= *= /= %= &= \|= ^= <<= >>=`) avec la sémantique `place = place op e` (une seule évaluation de `place`). | MUST |
 | G-6.9 | La cible d'affectation est un *place* mutable ; `*(&mut x) = e` est valide seulement si le déréférencement porte sur un `&mut T`. Toute autre cible est `E-OWN-IMMUTABLE` ou `E-TYP-MISMATCH`. | MUST |
 | G-6.10 | `;;` et `;` seuls sont acceptés et sans effet. | MUST |
 | G-6.11 | Un `place` ne peut pas être un littéral, un appel ni une opération : `(a + b).0 = 1;` → `E-PARSE-UNEXPECTED`. | MUST |
@@ -408,7 +408,7 @@ for_iterable   = or_expr ".." or_expr        (* plage entière exclusive *)
 | G-6.40 | `unsafe { ... }` est une expression de bloc : son type est celui du bloc et son exécution ajoute l'effet `unsafe`. Les appels de fonctions `extern` y sont autorisés ; hors d'un tel bloc, ils produisent `E-UNSAFE-CONTEXT`. L'ownership s'applique à l'intérieur comme à l'extérieur. | MUST |
 | G-6.31 | `t.0.1` est refusé (`E-PARSE-UNEXPECTED`) : il faut `(t.0).0`. Les indices de champ ne se chaînent pas sans parenthèses. | MUST |
 | G-6.32 | Un appel de fonction ordinaire ne peut pas être suivi d'un littéral de bloc ambigu : `f { x }` n'est pas une syntaxe de Core 1.0. Un `struct_expr` exige qu'un type soit identifiable ; dans `if x { }`, `x` n'est jamais traité comme un type de struct. Le parser **désactive** la lecture de `struct_expr` dans la condition d'un `if`/`while`/`match` (règle de lookahead 2, G-6.35). | MUST |
-| G-6.33 | Il n'y a **aucune** expression de fermeture (`|x| x + 1`) : `E-UNSUPPORTED-CLOSURE`. | MUST |
+| G-6.33 | Il n'y a **aucune** expression de fermeture (`\|x\| x + 1`) : `E-UNSUPPORTED-CLOSURE`. | MUST |
 | G-6.34 | Il n'y a **aucun** `async`/`await` : `E-UNSUPPORTED-ASYNC`. Aucun `move` : `E-UNSUPPORTED-TOKEN`. | MUST |
 | G-6.35 | **Désambiguïsation `Type { ... }` vs bloc** : en position de condition (`if`, `while`, `match` scrutinee), une séquence `path {` est **toujours** interprétée comme la fin de la condition suivie d'un bloc, jamais comme un littéral de struct. Un littéral de struct en condition exige des parenthèses : `if (P { x: 1 }) == p { }`. | MUST |
 
@@ -457,8 +457,8 @@ literal_pat    = INT_LIT | CHAR_LIT | STRING_LIT | "true" | "false" | "-" INT_LI
 | G-6.36 | Un pattern littéral **flottant** est **accepté** : il correspond si la valeur du scrutinee est **égale** (`==`) au littéral. `NaN` ne correspond donc **jamais** (y compris à lui-même) ; `-0.0` et `0.0` correspondent l'un à l'autre. Aucune comparaison de bits n'est faite. | MUST |
 | G-6.37 | `-N` est admis en pattern pour un **entier** (`-1`) et pour un **flottant** (`-1.0`). Toute autre forme négative (`-x`, `-(1 + 2)`) est `E-PARSE-EXPECTED`. | MUST |
 | G-6.38 | Le pattern `IDENT` lie par valeur (move ou copy). Il n'existe **aucun** pattern `ref`/`&pattern`/`ref mut` : `ref` étant un identifiant valide, `ref x` est un motif de liaison suivi d'un token inattendu (`E-PARSE-EXPECTED`) ; `&x` et `ref mut` sont `E-UNSUPPORTED-TOKEN`. | MUST |
-| G-6.39 | Il n'existe **aucun** pattern ou (`p | q`) ni de plage (`1..=5`) : `E-UNSUPPORTED-TOKEN`. | MUST |
-| G-6.40 | Le raccourci de champ `E::V { champ }` lie `champ` à `champ`, conformément au design §3.4. Il est **autorisé en pattern seulement**. | MUST |
+| G-6.39 | Il n'existe **aucun** pattern ou (`p \| q`) ni de plage (`1..=5`) : `E-UNSUPPORTED-TOKEN`. | MUST |
+| G-6.48 | Le raccourci de champ `E::V { champ }` lie `champ` à `champ`, conformément au design §3.4. Il est **autorisé en pattern seulement**. | MUST |
 | G-6.41 | Un pattern de variante d'enum **utilisateur** doit être qualifié (`Shape::Circle(r)`) ; les quatre constructeurs du prélude (`Some`, `None`, `Ok`, `Err`) sont acceptés avec ou sans qualification. Aucune variante n'est importable par `use` ([`modules.md`](modules.md) MOD-3.5). | MUST |
 | G-6.42 | Un bras `p => e,` dont `e` est un bloc n'exige pas la virgule ; `p => { ... }` suivi d'un autre bras est valide sans virgule. | MUST |
 | G-6.43 | Un bras ne peut pas être vide ; `=> ,` est `E-PARSE-EXPECTED`. | MUST |
@@ -502,7 +502,7 @@ expr_path      = ( "crate" | "super" | "self" | IDENT ) { "::" ( IDENT | "self" 
 | `#[...]`, `#![...]` | `E-UNSUPPORTED-ATTR` |
 | `trait`, `impl Trait`, `where`, bornes | `E-UNSUPPORTED-TRAIT`, `E-UNSUPPORTED-IMPL-TRAIT`, `E-UNSUPPORTED-WHERE`, `E-UNSUPPORTED-BOUNDS` |
 | `dyn T` | `E-RES-UNKNOWN` (`dyn` = identifiant valide) |
-| closures `|x| e` | `E-UNSUPPORTED-CLOSURE` |
+| closures `\|x\| e` | `E-UNSUPPORTED-CLOSURE` |
 | `async`, `await`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-AWAIT`, `E-UNSUPPORTED-MOVE` |
 | `unsafe`, `extern`, pointeurs bruts | `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN` (`*const`/`*mut` → `E-UNSUPPORTED-UNSAFE`) |
 | `macro!`, `macro_rules!` | `E-UNSUPPORTED-MACRO` |
@@ -577,7 +577,32 @@ fn f(p: P) -> i32 {
 - **Q-GRAM-8** — `test fn` : le design écrit `test fn nom() { }`. La position de `test` avant `fn` est retenue. Faut-il aussi accepter `fn nom() test` ou un attribut `#[test]` (refusé, attributs UNSUPPORTED) ? Non tranché par le design.
 - **Q-GRAM-9** — G-5.5 interdit `[T; 0]`. Cela empêche les tableaux vides utiles au code DSP générique. À confirmer.
 - **Q-GRAM-10** — `!` est désormais nommable (G-5.11) et coercible vers tout type, mais reste interdit en paramètre, champ, élément de `Vec` et retour d'une fonction non divergente. Confirmer cette restriction : elle évite les signatures « qui ne rendent jamais » ambiguës.
-- **Q-GRAM-11 (D11, 2026-11-11)** — Deux `rule_id` sont partagés par deux règles distinctes, et c'est **documenté, pas renuméroté** : renommer un `rule_id` change un identifiant contractuel (Q-DIAG-4) que les cas de conformance, les tests et les rapports citent. Les collisions :
-  - **G-5.11** — « `!` est le **type Never** » (table des types) **et** « un `const_expr` n'a ni variable, ni appel, … » (table des constantes). Deux règles indépendantes, même identifiant.
-  - **G-6.40** — « `unsafe { ... }` est une expression de bloc » (table des expressions) **et** « le raccourci de champ `E::V { champ }` » (table des patterns). Deux règles indépendantes, même identifiant.
-  Toute citation de `G-5.11` ou `G-6.40` doit donc nommer le sujet visé. `tools/must_audit.py` compte 807 énoncés MUST pour 805 identifiants uniques, ce qui matérialise exactement ces deux collisions ; aucune autre n'existe dans le corpus actuel.
+- **Q-GRAM-11 (D11, 2026-11-11 ; renumérotée le 2026-11-14 par A5)** — Deux
+  `rule_id` étaient partagés par deux règles distinctes. La décision du
+  responsable (2026-11-14, A5) applique la règle « la première règle garde son
+  numéro, la seconde reçoit un numéro neuf inutilisé » :
+  - **`G-5.11`** — « `!` est le **type Never** » (table des types) garde
+    **`G-5.11`** ; « un `const_expr` n'a ni variable, ni appel, … » (table des
+    constantes) devient **`G-5.14`**.
+  - **`G-6.40`** — « `unsafe { ... }` est une expression de bloc » (table des
+    expressions) garde **`G-6.40`** ; « le raccourci de champ `E::V { champ }` »
+    (table des patterns) devient **`G-6.48`**.
+  Les identifiants `G-5.14` et `G-6.48` n'étaient utilisés par aucune règle
+  (`tools/must_audit.py` comptait 807 énoncés MUST pour 805 identifiants
+  uniques) ; le nombre d'énoncés ne change pas, seuls les identifiants
+  deviennent uniques. Les citations de `features.md` sont réalignées :
+  `F-SYN-008` cite **`G-5.14`**, `F-SYN-031` cite **`G-6.41, G-6.48`**, et
+  **`G-6.40`** (bloc `unsafe`, table des expressions) est désormais cité par
+  **`F-EFF-009`**, le FeatureId des effets `unsafe`/`ffi`. **Faux positif
+  historique corrigé** : l'ancienne plage `G-6.40–6.41` de `F-SYN-031` mappait
+  les **deux** lignes qui partageaient l'identifiant `G-6.40` — le bloc
+  `unsafe` (table des expressions) **et** le raccourci de champ (table des
+  patterns) — donc l'énoncé du bloc `unsafe` était compté comme tracé vers une
+  feature de patterns. Après renumérotation, le bloc `unsafe` doit être lié
+  explicitement à un FeatureId d'effets : c'est `F-EFF-009` qui le porte.
+  **Résultat mesuré** : `python tools/must_audit.py` → **807** énoncés MUST,
+  **463/807** atteignables, **344** non mappés, **188/188** FeatureIds. Le
+  décompte est identique à l'état d'avant la renumérotation, mais la provenance
+  de `G-6.40` est correcte (effets, plus patterns).
+  Enregistrement :
+  [`docs/decision/DECISIONS-2026-11-14.md`](../../docs/decision/DECISIONS-2026-11-14.md).

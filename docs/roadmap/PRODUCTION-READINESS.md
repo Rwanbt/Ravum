@@ -59,7 +59,7 @@ Chaque critère a une preuve attendue. Tant qu'elle manque, le critère est
 | **R5** | Frontière FFI sûre | programme D7 ci-dessous : contrats écrits + refus outillés + tests négatifs + `pure` qui la refuse |
 | **R6** | Code généré sûr | `#![forbid(unsafe_code)]` dans tout fichier généré (déjà) ; aucun `unsafe` hors du module d'interop audité ; revue du prélude runtime |
 | **R7** | Reproductibilité inter-machines | même digest sur **deux runners distincts** (aujourd'hui : local et CI diffèrent, c'est documenté et non revendiqué) |
-| **R8** | Qualité mesurable | couverture de **tous** les crates à logique + seuils ratchet ; mutation sur `sema/own.rs`, `sema/typeck.rs`, `codegen/emit.rs` |
+| **R8** | Qualité mesurable | couverture de **tous** les crates à logique + seuils ratchet ; mutation sur `sema/own.rs`, `sema/typeck.rs`, `codegen/emit.rs` ; objectif redéfini par S5 (2026-11-14) : voir §11 |
 | **R9** | Performance sous budget | `check`/`build`/`watch` sur machine de référence 16 Go, au repos, p50/p95 publiés, absence de régression suivie |
 | **R10** | Interfaces stables | CLI `--help` = contrat, schémas JSON versionnés, registre de codes figé, LSP testé ; politique de dépréciation écrite |
 | **R11** | Distribution | installateur Windows **et** Linux, désinstallation propre, provenance + SBOM attachés à l'artefact |
@@ -89,8 +89,8 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | R5 | **`PARTIAL`** | frontière scalaire **confinée et inventoriée** (2026-11-14) : `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` + 2 `allow` audités sur le CLI (`docs/ffi/UNSAFE-INVENTORY.md`, `tools/unsafe_audit.py` en CI), `&str` refusé (`types/ffi-str-rejected`) ; contrats ABI/lifetime/unwinding **écrits mais non ratifiés** (`SAFETY.md`, RFC-D7) ; `i128`/`u128` (largeur C), unwinding/`longjmp`/signal et Miri FFI restent `NOT_RUN` ou humains |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
 | R7 | **fait sur le périmètre** | même digest sur **deux runners distincts** de même image et même toolchain épinglée : `9b7f16cc…cdf`, run [43622599083](https://github.com/Rwanbt/Ravum/actions/runs/43622599083) (2026-11-14) ; la différence local Windows ≠ runner Linux reste documentée et non revendiquée ; ni inter-OS ni inter-toolchain |
-| R8 | `PARTIAL` | couverture **90,44 % lignes / 89,88 % régions** (19 237/21 271, 2026-11-14) ; code produit **88,55 %** (1 557 lignes non couvertes / 13 598, outil de split corrigé) ; `loader.rs` **83,46/86,70** (+4,61/+4,51 pts par 25 tests de contrat) ; **objectif ratifié 100 %** toujours non atteint (**10 fichiers**), détail et causes §7 bis ; mutation ciblée en CI le 2026-11-14 (run [43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110) : **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` 36/30/6) ; seuils ratchet tenus, aucun abaissé |
-| R9 | `PARTIAL` | p50/p95 `check`/`build` publiés ; **alarme de non-régression CI** (`performance.yml` + `tools/timings_gate.py`, plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)`, runs [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048) puis [43629691517](https://github.com/Rwanbt/Ravum/actions/runs/43629691517) PASS) ; ni `build`, ni `watch`, ni LSP sous gate, et une alarme n'est pas un budget |
+| R8 | `PARTIAL` | couverture **90,44 % lignes / 89,88 % régions** (19 237/21 271, 2026-11-14) ; code produit **88,55 %** (1 557 lignes non couvertes / 13 598, outil de split corrigé) ; `loader.rs` **83,46/86,70** (+4,61/+4,51 pts par 25 tests de contrat) ; **objectif ratifié 100 %** toujours non atteint (**10 fichiers**), détail et causes §7 bis ; mutation ciblée en CI le 2026-11-14 (run [43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110) : **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` 36/30/6) ; seuils ratchet tenus, aucun abaissé. Objectif redéfini par S5 (2026-11-14) : voir §11 |
+| R9 | `PARTIAL` | p50/p95 `check`/`build` publiés ; **alarme de non-régression CI** (`performance.yml` + `tools/timings_gate.py`, plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)`, runs [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048) puis [43629691517](https://github.com/Rwanbt/Ravum/actions/runs/43629691517) PASS) ; ni `build`, ni `watch`, ni LSP sous gate, et une alarme n'est pas un budget. Cible LSP de S8 (2026-11-14, refusée telle que proposée) : voir §11 |
 | R10 | `PARTIAL` | CLI, JSON et LSP documentés et testés ; **politique de dépréciation écrite** ([`DEPRECATION-POLICY.md`](../release/DEPRECATION-POLICY.md), `PROPOSED`, 2026-11-14) ; restent : ratification humaine, canal d'avertissement outillé (aucun `W-*` de dépréciation, aucun CHANGELOG) |
 | R11 | `PARTIAL` | installateur Windows CI 16/16 ; **contrat Linux public écrit** ([`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md), `PROPOSED`) et `scripts/install-contract.sh` exécuté par `linux-qual.yml` (manifeste, SHA-256, désinstallation, codes d'usage) ; restent : artefact distribuable (SBOM + manifeste attachés), signature D9 |
 | R12 | **différé** | mécanisme qualifié (refus d'un binaire altéré) ; **aucune clé** (D9 différée) |
@@ -252,6 +252,12 @@ pour que la couverture ne puisse plus redescendre. Reste aussi à étendre la me
 par la **mutation** (mesure plus honnête pour un compilateur, car un `match`
 géant peut être « couvert » sans être testé) : 100 % de couverture ne prouve pas
 100 % de correction.
+
+**Objectif officiel redéfini (S5, décision du responsable, 2026-11-14)** :
+**100 % des lignes et des régions du CODE PRODUIT**, hors modules
+`#[cfg(test)]` et hors chemins inatteignables **documentés un par un** ; la
+**mutation ciblée** est la **seconde métrique** ; les **344 MUST non mappés**
+sont une **dette tracée**, pas un blocage. Détail et impacts : §11.
 
 ## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-13, lot 1)
 
@@ -498,4 +504,30 @@ entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
 **Décisions humaines** : le dossier unique est
 [`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md)
 (21 fiches, daté 2026-11-14). Aucune n'est tranchée par cette passe.
+
+## 11. Décisions du responsable du 2026-11-14 — objectifs et cibles
+
+> Section **datée**. Elle enregistre les décisions S1–S8 et A1–A5 qui touchent
+> les critères de ce document ; texte intégral dans
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+> **Aucun état de critère n'est changé ici** : un `PARTIAL` reste `PARTIAL` tant
+> qu'une commande de la vague 3 ne prouve pas autre chose.
+
+| Décision | Ce qui change dans ce document | Critères concernés |
+|---|---|---|
+| **S5** | L'objectif de couverture est **défini** : **100 % des lignes et des régions du CODE PRODUIT**, hors modules `#[cfg(test)]` et hors chemins inatteignables **documentés un par un** ; la **mutation ciblée** est la **seconde métrique** ; les **344 MUST non mappés** sont une **dette tracée**, pas un blocage. Le dénominateur MUST reste **807** | **R3** et **R8** restent `PARTIAL` ; **aucun seuil abaissé** |
+| **S8** | Cible LSP : **REFUSÉE telle que proposée** — la cible n'est pas assouplie pour absorber un défaut algorithmique. Cible retenue : **p95 < 50 ms jusqu'à 1 000 lignes** ; **p95 ≤ 150 ms à 5 110 lignes en profil release** ; **contrôle de linéarité en CI** ; incrémentalité sémantique = chantier 1.x | **R9** reste `PARTIAL` ; T7 inchangé |
+| **S7** | Comparaison du Rust généré : identité **après normalisation limitée** aux motifs `__rv_root_<id>` et `rvm_ffi_<id>` ; **toute autre différence = échec** | Item T4 du GOAL ; **R1/R6** inchangés |
+| **A2** | Bloc DSP (phase 8, `RFC-RV-DSP-BLOCK-1`) **reporté à la 1.1**, hors périmètre 1.0, ne pas l'implémenter | T8 et T9 restent `PARTIAL` **avec cette mention** |
+| **A3** | Voie C **hors 1.0** ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | T1 reste `PARTIAL` |
+| **S1–S4, S6, A1, A4, A5** | Enregistrées (mandat, `NodeId` u64, profil `rt`, frontière FFI scalaire, méthode du test de puissance, `OwnFacts` étape C, outils locaux, `rule_id`) | **Aucun état de critère changé** |
+
+**Ce que cette section ne prouve pas.** Les seules commandes exécutées pour cet
+enregistrement sont documentaires (`validate_repo_docs.py`,
+`report_consistency.py`, `must_audit.py`) ; elles ne mesurent ni la performance,
+ni la couverture, ni la mutation. `must_audit.py` mesure **807** énoncés MUST,
+**463/807** atteignables et **344** non mappés après la renumérotation A5 et le
+réalignement des citations `features.md` (`F-SYN-008` → `G-5.14`, `F-SYN-031` →
+`G-6.41, G-6.48`, `G-6.40` rattaché à `F-EFF-009`) ; le faux positif historique
+de la plage `G-6.40–6.41` est expliqué dans `Q-GRAM-11`.
 

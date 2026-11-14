@@ -590,6 +590,11 @@ parité A/B antérieure `MATCH` sur 4 programmes. **La voie C (backend natif
 direct) n'existe pas** : `NOT_IMPLEMENTED` n'est pas `PASS`, donc M5 ne peut pas
 être vert. Décision humaine D2.
 
+**Périmètre 1.0 (A3, décision du responsable, 2026-11-14)** : la **voie C est
+hors 1.0** ; le gate est évalué sur « **voies A et B comparées, B retenue pour
+1.0** ». Le verdict reste `PARTIAL` : ce changement de formulation ne prouve
+rien de nouveau.
+
 ### T2 — Spécification formelle — `PARTIAL` (traçabilité FeatureId acquise, dénominateur MUST ouvert)
 
 Le tableau de la §2 fait foi : `PARTIAL`, parce que le critère `188/188`
@@ -757,11 +762,20 @@ texte, avec une assertion de non-vacuité (au moins un lot doit changer l'arbre)
 Une régression d'invalidation devient donc un échec de test, pas une erreur
 silencieuse dans l'éditeur.
 
+**Périmètre 1.0 (A2, décision du responsable, 2026-11-14)** : le **bloc DSP**
+(phase 8, `RFC-RV-DSP-BLOCK-1`) est **reporté à la 1.1**, **hors périmètre
+1.0** ; T8 reste `PARTIAL` avec cette mention.
+
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 
 10 verticales exécutées (`hello`, `fib`, `calculator`, `file-tool`, `stats`,
 `dsp-gain-iir`, `package-demo`, `tests-demo`, `ffi-abs`, `file-store`). Absents :
 service HTTP + SQLite, DSP dans un hôte réel, E2E navigateur.
+
+**Périmètre 1.0 (A2, décision du responsable, 2026-11-14)** : le **bloc DSP**
+(phase 8, `RFC-RV-DSP-BLOCK-1`) est **reporté à la 1.1** ; la verticale DSP dans
+un hôte réel reste absente **par décision de périmètre**, pas par oubli. T9 reste
+`PARTIAL` avec cette mention.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 
@@ -828,8 +842,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | D3 | Fusion dans `main` et publication | **RÉSOLUE (2026-11-12)** : fusion sans release — PR #101 → `dev` (`a2b8db5`), PR #104 → `main` (`94f3ac4`), enregistrement `8a58357` ; **aucun tag, aucune release, aucune signature** ; rollback = `git revert -m 1 94f3ac4` |
 | D4 | Audit externe (T4/T10/T12) | **OUVERTE** — bloque T4 et T12 ; cadre de mission prêt : [`AUDIT-BRIEF.md`](../audit/AUDIT-BRIEF.md) |
 | D5 | Périmètre Tier 1 | **PARTIELLE** : Windows local + Linux CI ; **macOS CI Tier 2** ajouté et vert (2026-11-11, run 43132064512) |
-| D6 | Périmètre des fonctionnalités universelles | **RÉSOLUE (2026-11-11, périmètre gelé)** : toute extension est une version 1.x, jamais une modification de 1.0 |
-| D7 | Ratification de la frontière `unsafe`/FFI | **OUVERTE** — programme en 4 étages écrit (`PRODUCTION-READINESS.md` §5) ; rien n'est ratifié |
+| D6 | Périmètre des fonctionnalités universelles | **RÉSOLUE (2026-11-11, périmètre gelé)** : toute extension est une version 1.x, jamais une modification de 1.0. **A2/A3 (2026-11-14)** précisent le périmètre 1.0 : bloc DSP reporté à la 1.1, voie C hors 1.0 |
+| D7 | Ratification de la frontière `unsafe`/FFI | **APPROUVÉE pour la frontière scalaire (2026-11-14, S4)** : `docs/ffi/SAFETY.md` clauses C-FFI-1 à C-FFI-10 est le contrat approuvé ; `i128`/`u128` sont retirés des types FFI admis ; C-FFI-4 déclare hors contrat une fonction C qui déroule, `longjmp`, lève un signal ou termine le processus. L'audit externe (D4) reste requis. Unification `ffi_safe`/`ast_ffi_safe` suivie par la vague 3 |
 
 | **D8** | Arbitrage des codes de diagnostic | **RÉSOLUE** — le registre (`diagnostics.md` §3) déclare « tout code absent est interdit » ; les codes fautifs ont été remplacés. Le dernier restant, `W-TYP-UNREACHABLE`, n'a **pas** été enregistré : EXPR-5.9, G-6.44 et DIAG-1.6 imposent qu'un bras inatteignable ne produise aucun diagnostic, donc l'émission a été retirée et un test la verrouille |
 | **D9** | **Custody de la clé de signature et publication de `allowed_signers`** | **REPORTÉE (2026-11-11)** : le responsable ne veut pas de clé tant que le langage n'est pas prêt pour la production. Procédure proposée : [`KEY-CUSTODY.md`](../release/KEY-CUSTODY.md) |
@@ -840,8 +854,8 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | **D-CONST-1** | `const_expr` interdit : G-5.11/G-5.13 (MUST, `E-TYP-CONST`) vs code émis `E-RES-CONST-NOT-CONST`, réservé par `diagnostics.md` §3.1 aux valeurs non représentables | **RÉSOLUE (2026-11-10, clôture de la passe 5)** : bloc, appel, variable, champ, index, `?` et référence à un autre `const` émettent `E-TYP-CONST` ; la constante flottante garde `E-RES-CONST-NOT-CONST`. Deux tests qui figeaient l'ancien code corrigés ; `mutation_gaps::const_block_is_refused_by_name` resserré. Preuve : `T2-FINDINGS.md` §20.5 |
 | **D-COERCE-1** | Coercition implicite `String → &str` en position d'argument (`types.md` TYP-13.1 n'admet que `&String → &str`, TYP-8.5 rend la conversion explicite) | **RÉSOLUE par conformité (2026-11-11)** : TYP-8.5 (MUST) rend `String → &str` explicite et TYP-13.1 (MUST) n'admet que `&String → &str` ; l'implémentation acceptait le `String` possédé, donc `check` passait et `build` échouait (E0308). La coercition a été retirée ; `examples/stats` et `run/stats` migrent vers `.as_str()`. Aucune règle modifiée, aucun test supprimé. Texte normatif proposé : `docs/rfc/RFC-D-COERCE-1-MATRIX.md`. |
 
-| **D10** | **Dénominateur de la traçabilité** : `188/188` FeatureIds vs **807 énoncés MUST**, dont **344** sans FeatureId (`tools/must_audit.py`) | **OUVERTE**. Elle bloque le `PASS` de T2. L'objectif **100 % de couverture** (D10-couverture) est acté séparément et inscrit dans `tools/coverage_thresholds.json`. Options : (a) redéfinir le critère T2 en deux métriques et exiger un plan de traçabilité des 344 MUST ; (b) déclarer les 344 MUST hors périmètre du gate avec justification écrite ; (c) tracer les 344. Aucune option prise par un agent. |
-| **D11** | **Contradictions internes de spécification** : `effects.md` EFF-1.1 dit « 9 groupes » alors que son tableau et `facts.rs` en comptent **10** ; `features.md` FEAT-12.5 énumère **6** lignes `experimental` alors que **8** lignes du tableau le sont (`F-STD-031`, `F-META-006`) ; deux `rule_id` sont dupliqués (**G-5.11**, **G-6.40**) | **RÉSOLUE pour les comptes (2026-11-11)** : `effects.md` dit 10, `features.md` dit 8. Les collisions `G-5.11`/`G-6.40` sont **documentées** (Q-GRAM-11) mais **pas renumérotées** : un `rule_id` est un identifiant contractuel (Q-DIAG-4), la renumérotation reste une décision humaine. |
+| **D10** | **Dénominateur de la traçabilité** : `188/188` FeatureIds vs **807 énoncés MUST**, dont **344** sans FeatureId (`tools/must_audit.py`) | **RÉSOLUE (2026-11-14, S5)** : objectif officiel = **100 % des lignes et régions du CODE PRODUIT**, hors modules `#[cfg(test)]` et hors chemins inatteignables documentés un par un ; la **mutation ciblée** est la seconde métrique ; les **344 MUST non mappés** sont une **dette tracée**, pas un blocage. Le dénominateur MUST reste **807**. T2 reste `PARTIAL` sur les autres motifs. **Mesure courante après A5 : `must_audit.py` donne 463/807 et 344 non mappés** (807 énoncés, 188/188 FeatureIds), citations réalignées sur `G-5.14`/`G-6.48` et `G-6.40` rattaché à `F-EFF-009` ; le faux positif historique de la plage `G-6.40–6.41` est expliqué dans `Q-GRAM-11` |
+| **D11** | **Contradictions internes de spécification** : `effects.md` EFF-1.1 dit « 9 groupes » alors que son tableau et `facts.rs` en comptent **10** ; `features.md` FEAT-12.5 énumère **6** lignes `experimental` alors que **8** lignes du tableau le sont (`F-STD-031`, `F-META-006`) ; deux `rule_id` sont dupliqués (**G-5.11**, **G-6.40**) | **RÉSOLUE (2026-11-14, A5)** : `effects.md` dit 10, `features.md` dit 8 ; les collisions `G-5.11`/`G-6.40` sont **renumérotées** — la règle `const_expr` devient **`G-5.14`**, le raccourci de champ `E::V { champ }` devient **`G-6.48`** (les premières règles gardent leur numéro), consigné dans `Q-GRAM-11`. |
 | **D12** | **Disposition des divergences `check → build` sur les moves de tableau** | **RÉSOLUE (option (a), 2026-11-11)** : abaissement général par place, sans amendement de règle. Les 11 formes trouvées sont toutes fermées — passe 7 (`0f73738`), passe 8 (`5268838`, `d693162`), passe 9 (`21cf7d4`) — et le corpus est passé de 443 à **463 cas** (périmètre build 182 → 200). Aucune forme ouverte connue ; `P0-A` vert sur son périmètre mesuré, jamais revendiqué comme preuve universelle |
 | **D13** | **Provenance de `&'static str` à travers les agrégats** : `let s = a[1];` et `fn f(a: [&str; 2]) -> &str` étaient refusés (`E-OWN-REF-ESCAPE`) alors que TYP-6.3 (MUST) fait de `&str` une valeur `Copy`, stockable et retournable ; OWN-6.2 ne nommait que le littéral | **RÉSOLUE et IMPLÉMENTÉE (2026-11-12)** : ni A (hypothèse) ni B (refus) — **la preuve** (règle d'origine + règle de stockage, `docs/rfc/RFC-D13-STATICITY.md` §6). `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str` statique et les copies locales à travers un appel sont acceptés ; `String::as_str()` reste refusé. Preuves : 12 tests d'audit, 10 unitaires, 3 backend, 7 cas de conformance ; corpus **463 cas / 462 PASS / 0 FAIL**, `build_verified: true`. La passe a aussi fermé deux divergences backend (positions de type `&str` imbriquées, `str::as_str` sans abaissement) |
 ## 5. Règles de mise à jour
@@ -929,6 +943,41 @@ Statuts : R7 **fait sur son périmètre**, R9/R10/R11/R14 restent `PARTIAL` avec
 preuves ajoutées, R8 reste `PARTIAL` (objectif 100 % et portée mutation), R5
 reste `PARTIAL`/`OPEN` (D7 non ratifiée). Aucun tag, aucune release, aucune
 signature, aucun audit externe.
+
+## 0 decies. Décisions du responsable du 2026-11-14 — portée et cibles
+
+> Section **datée**. Elle enregistre les décisions S1–S8 et A1–A5 applicables à
+> ce registre ; texte intégral dans
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+> **Aucun verdict du tableau §2 n'est changé par cette section** : un `PARTIAL`
+> reste `PARTIAL` tant qu'une commande de la vague 3 ne prouve pas autre chose.
+
+### Périmètre et cibles (A2, A3, S5, S7, S8)
+
+| Décision | Enregistrement | Effet sur les gates |
+|---|---|---|
+| **A2** — bloc DSP (phase 8) reporté à la 1.1 | Hors périmètre 1.0, **ne pas l'implémenter** ; `RFC-RV-DSP-BLOCK-1` → `DEFERRED` | **T8 et T9 restent `PARTIAL` avec cette mention** (§3) ; aucun verdict changé |
+| **A3** — voie C hors 1.0 | Voie B retenue pour 1.0 ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | **T1 reste `PARTIAL`** ; seule la formulation du périmètre change |
+| **S5** — objectif de couverture | **100 % des lignes et régions du code produit**, hors modules `#[cfg(test)]` et hors chemins inatteignables **documentés un par un** ; **mutation ciblée** en seconde métrique ; **344 MUST non mappés = dette tracée**, pas un blocage | T10 et R8 restent `PARTIAL` ; **aucun seuil abaissé** |
+| **S7** — comparaison du Rust généré | Identité **après normalisation**, **limitée** aux motifs `__rv_root_<id>` et `rvm_ffi_<id>` ; **toute autre différence = échec** | Item T4 du GOAL ; **aucune promotion de gate** |
+| **S8** — cible LSP | **REFUSÉ tel que proposé** : la cible n'est pas assouplie pour absorber un défaut algorithmique. Cible retenue : **p95 < 50 ms jusqu'à 1 000 lignes** ; **p95 ≤ 150 ms à 5 110 lignes en profil release** ; **contrôle de linéarité en CI**. Incrémentalité sémantique = chantier 1.x | R9 et T7 inchangés ; la cible n'est pas assouplie |
+
+### Autres décisions enregistrées (aucun effet de verdict)
+
+| Décision | Enregistrement | Effet sur les gates |
+|---|---|---|
+| **S1** — `AGENTS.md`, révision du 2026-11-13 | Approuvée ; bandeau `PENDING_HUMAN_APPROVAL` retiré | Aucun |
+| **S2** — `NodeId = u64` 32/32, plafond 65 536 | Approuvé ; `modules/file-limit` requalifié `compile-pass` | Item T4 du GOAL ; `RFC-NODE-ID` : modèle ratifié, règle de cache §4 encore `PENDING_HUMAN_APPROVAL` ; aucun verdict changé |
+| **S3** — `RFC-RT-TRAPS-1` + amendement `--rt-entry` | Approuvés ; RFC `ACCEPTED` | T6 reste `PARTIAL` |
+| **S4** — frontière FFI scalaire | `SAFETY.md` C-FFI-1 à 10 approuvé ; `i128`/`u128` retirés ; C-FFI-4 hors contrat | T6/R5 restent `PARTIAL` ; audit externe (D4) requis |
+| **S6** — méthode du test de puissance T2 | Inverse de chaque correctif, test existant en échec exigé, 3 graines × 2 000, score sur 13 | Aucun ; méthode seulement |
+| **A1** — `RFC-OWN-FACTS-1` | Approuvée, étape C comprise, aux conditions de l'agent E | Aucun ; étape C `NOT_RUN` |
+| **A4** — outils locaux | `cargo-mutants`/Miri autorisés en local | Aucun |
+| **A5** — `rule_id` dupliqués | `G-5.14`/`G-6.48` ; barres verticales non échappées des lignes de table de `grammar.md` corrigées | Aucun verdict ; `must_audit.py` mesure **463/807 et 344 non mappés** après réalignement des citations `features.md` (voir `Q-GRAM-11`) |
+
+**Les cibles S8 ne sont pas des mesures.** Aucune n'est tenue à cette date et
+aucune n'est présentée comme tenue ; les verdicts seront réévalués par
+l'orchestrateur après les commandes de la vague.
 
 
 

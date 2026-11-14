@@ -3,11 +3,16 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-RV-DSP-BLOCK-1` |
-| Statut | **PROPOSED** — `PENDING_HUMAN_APPROVAL` (ABI, `unsafe` généré, extension du protocole) |
+| Statut | **DEFERRED** — reportée à la 1.1 par le responsable, 2026-11-14 (A2) ; **hors périmètre 1.0**, ne pas implémenter |
 | Date | 2026-11-13 |
 | Auteur | agent de développement (session GOAL) |
 | Portée | `crates/ravum-lang-codegen` (wrapper), `crates/ravum-lang-cli` (`--emit dsp-block`), `crates/ravum-protocol` (schéma d'état), `crates/ravum-patch-host` (consommation) |
 | Décision attendue | ratifier l'ABI, le digest de schéma d'état et le confinement de l'`unsafe` généré |
+
+> **Report du 2026-11-14.** Le responsable a **reporté** le bloc DSP (phase 8) à
+> la **1.1** : hors périmètre 1.0, **ne pas l'implémenter**. T8 et T9 restent
+> `PARTIAL` avec cette mention. Décision enregistrée dans
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md) (A2).
 
 > **Ce que cette RFC ne promet pas.** Ni « temps réel garanti », ni « hard-RT ».
 > Elle relie un compilateur à un hôte existant qui a mesuré 0 allocation au
