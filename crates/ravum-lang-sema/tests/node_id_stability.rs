@@ -66,6 +66,7 @@ fn load(root: &Path, overrides: BTreeMap<PathBuf, String>) -> Program {
         &LoadOptions {
             locked: false,
             overrides,
+            ..Default::default()
         },
     );
     assert!(

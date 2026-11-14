@@ -85,6 +85,7 @@ fn a_package_of_a_thousand_source_files_is_accepted() {
         &LoadOptions {
             locked: false,
             overrides: BTreeMap::new(),
+            ..Default::default()
         },
     );
     assert!(

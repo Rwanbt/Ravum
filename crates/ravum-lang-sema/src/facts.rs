@@ -430,23 +430,44 @@ impl CheckResult {
 }
 
 /// Convert a source map to the codegen-facing file table.
+///
+/// The backend indexes this table by `span.file` (`emit::location`), so a
+/// session map with `add_at` gaps must keep the hole slots: a hole holds
+/// `<unknown>` and is never referenced by a span. The common dense map (CLI,
+/// tests) takes the historical fast path where position == id.
 pub fn file_infos(sources: &ravum_lang_syntax::source::SourceMap) -> Vec<FileInfo> {
-    sources
+    let needed = sources
         .files()
-        .iter()
-        .map(|f| {
-            let mut line_starts = vec![0u32];
-            for (i, byte) in f.text.bytes().enumerate() {
-                if byte == b'\n' {
-                    line_starts.push(i as u32 + 1);
-                }
-            }
-            FileInfo {
-                path: f.path.clone(),
-                line_starts,
-            }
+        .last()
+        .map_or(0, |file| file.id as usize + 1);
+    if needed == sources.len() {
+        return sources.files().iter().map(source_file_info).collect();
+    }
+    let mut infos: Vec<FileInfo> = (0..needed)
+        .map(|_| FileInfo {
+            path: "<unknown>".to_string(),
+            line_starts: vec![0],
         })
-        .collect()
+        .collect();
+    for file in sources.files() {
+        if let Some(slot) = infos.get_mut(file.id as usize) {
+            *slot = source_file_info(file);
+        }
+    }
+    infos
+}
+
+fn source_file_info(f: &ravum_lang_syntax::span::SourceFile) -> FileInfo {
+    let mut line_starts = vec![0u32];
+    for (i, byte) in f.text.bytes().enumerate() {
+        if byte == b'\n' {
+            line_starts.push(i as u32 + 1);
+        }
+    }
+    FileInfo {
+        path: f.path.clone(),
+        line_starts,
+    }
 }
 
 #[cfg(test)]
@@ -601,5 +622,16 @@ mod tests {
         );
         assert_eq!(infos[0].line_of(12), 2);
         assert_eq!(infos[0].line_of(14), 3);
+    }
+
+    #[test]
+    fn file_infos_are_indexed_by_file_id_when_the_source_map_has_gaps() {
+        let mut sources = SourceMap::new();
+        sources.add_at(2, "src/late.rv", "fn main() {\n}\n");
+        let infos = file_infos(&sources);
+        assert_eq!(infos.len(), 3, "the backend indexes the table by FileId");
+        assert_eq!(infos[2].path, "src/late.rv");
+        assert_eq!(infos[2].line_of(12), 2);
+        assert_eq!(infos[0].path, "<unknown>", "a hole has no source file");
     }
 }

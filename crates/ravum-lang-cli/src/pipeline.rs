@@ -144,6 +144,7 @@ pub fn analyze_with_timings(
         &LoadOptions {
             locked,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     let load_total = load_started.elapsed();
@@ -617,6 +618,7 @@ fn current_snapshot_digest(frontend: &Frontend) -> Result<String, String> {
         &LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     if reloaded.diags.has_errors() {

@@ -611,6 +611,7 @@ fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> Strin
         &ravum_lang_sema::loader::LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     assert!(

@@ -407,6 +407,7 @@ fn check_program(source: &str, label: &str) -> Result<Option<String>, String> {
         &LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     // `check` accepts a program with warnings (the CLI exits 0): only errors
