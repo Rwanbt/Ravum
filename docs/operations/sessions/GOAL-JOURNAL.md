@@ -710,6 +710,27 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   mesure llvm-cov.
 - **CI** : sur `95e9b8b`, **8/8 workflows verts**, coverage ratchet incluse.
 
+## Entrée 2026-11-14 (round 16) — Non-vacuité du garde de places
+
+| Champ | Valeur |
+|---|---|
+| Fichier | `crates/ravum-lang-codegen/src/emit.rs` (test) |
+| Test | `place_facts_disagreement_is_rejected_in_debug_builds` |
+| Résultat | codegen lib **32/32** ; workspace **1 605** ; couverture **89,47/88,87** |
+
+- Le test parse et check un vrai programme (`let a = [1, 2, 3]; let x = a[1];`),
+  sélectionne la place enregistrée de `a[1]`, y **injecte une projection `Deref`
+  erronée**, et exige que `crate::generate` échoue avec un message de place
+  syntaxique. Il prouve que le garde de l'étape B n'est pas vide : une place
+  corrompue est bien rejetée.
+- Couverture : `emit.rs` **87,75/87,09** (planchers 86/85), totaux **89,47/88,87**
+  (contre 89,38/88,79 au round 15), 2 126 lignes non couvertes
+  (20 182 − 18 056), 10 fichiers sous l'objectif.
+- Le test est `#[cfg(debug_assertions)]` : avec le test négatif Copy/Move, il
+  porte à **2** le nombre de tests exclus en profil release (la mesure release du
+  round 11 reste 1 603/0/5).
+
+
 
 
 
