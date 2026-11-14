@@ -86,13 +86,17 @@ supprime tout par défaut.
 - **La valeur du hash dépend de l'arbre** : elle change dès qu'une ligne de code change ; c'est le but, et ce n'est donc pas une constante à citer hors de son SHA.
 - **Un seul binaire** : `ravum-lang.exe`. Les autres binaires du workspace
   (outillage, coordonnateur) ne sont pas couverts.
-- **Une seule plateforme** : Windows x86-64. Sur Linux, le drapeau `/Brepro`
-  n'existe pas ; le script substitue `-Wl,--build-id=sha1`, mais **cette branche
-  n'a pas été exécutée** et n'est donc pas une preuve.
+- **Une seule plateforme** (constat de la passe 4) : Windows x86-64. Depuis le
+  2026-11-14, la branche Linux (`-Wl,--build-id=sha1`) est **réellement
+  exécutée** par `.github/workflows/reproducibility.yml` sur deux runners
+  (section en fin de document) ; les sorties Windows et Linux restent des
+  artefacts différents, non comparés entre eux.
 - **Pas de reproductibilité inter-machines** : deux machines avec des versions de
   `rustc`, de `link.exe` ou de bibliothèques système différentes produiront
   vraisemblablement des binaires différents. C'est une propriété du toolchain,
-  pas du projet.
+  pas du projet. **Nuance du 2026-11-14** : deux runners de **même image** et de
+  **même toolchain épinglée** produisent le même digest (mesure en fin de
+  document) ; c'est ce périmètre, et lui seul, qui est désormais revendiqué.
 - **Les sorties `ravum-lang build --emit-rust`** ne sont pas couvertes par ce
   test ; elles sont produites par le même émetteur déterministe, mais aucune
   mesure ne le prouve ici.
@@ -177,3 +181,45 @@ Lecture :
 Limites inchangées : une machine, une toolchain, un linker ; `-C
 link-arg=/Brepro` et `SOURCE_DATE_EPOCH=0` sont des conditions du résultat, pas
 des options décoratives.
+
+## Mesure complémentaire — deux runners distincts (2026-11-14, PR #111)
+
+**Ce qui manquait** : toutes les mesures ci-dessus comparent un digest avec
+lui-même sur **une** machine (deux racines, deux `target/`) ou dans **un** job
+CI. R7 demande le même digest sur **deux runners distincts**. La CI de
+`qualification-evidence.yml` tourne sur un seul runner Windows ; elle ne pouvait
+donc pas répondre.
+
+**Dispositif.** `.github/workflows/reproducibility.yml` lance deux jobs
+`ubuntu-latest` en matrice (`a`, `b`), sans cache `target/`, chacun exécutant
+`scripts/repro-build.sh` (mêmes drapeaux : `CARGO_INCREMENTAL=0`,
+`SOURCE_DATE_EPOCH=0`, `--remap-path-prefix` de la racine et du cache cargo,
+`-C link-arg=-Wl,--build-id=sha1`). Un troisième job télécharge les deux JSON et
+échoue si le `sha256` ou la taille du binaire diffèrent.
+
+**Run réel** : [43622599083](https://github.com/Rwanbt/Ravum/actions/runs/43622599083),
+PR #111 (commit de fusion `55f11a5e`), image `ubuntu-26.04`
+(`20261111.196.1`), `rustc 1.95.0 (59807616e 2026-04-14)` :
+
+| Runner | `runner_id` | Digest | Taille | Commit | `git_dirty` |
+|---|---|---|---|---|---|
+| a | 1000097957 | `9b7f16cc64fdb15ea286eeb48f4351332b513293c1a3d42467ba6b9e07166cdf` | 3 887 400 | `55f11a5e…` | false |
+| b | 1000097958 | **identique** | 3 887 400 | `55f11a5e…` | false |
+
+Les deux jobs ont démarré à `17:42:55Z` et ont produit le même binaire ; le job
+de comparaison est **PASS**. Les deux `runner_id` sont distincts, ce qui exclut
+la réutilisation d'un même runner et un cache `target/` partagé.
+
+Lecture :
+
+1. **Ce qui est désormais prouvé** : pour un même OS, une même image et une
+   toolchain épinglée, deux machines distinctes produisent des octets
+   **identiques**. C'est la lettre de R7 pour « deux runners distincts ».
+2. **Ce qui n'est pas prouvé** : reproductibilité **entre OS** (un binaire
+   Windows et un binaire Linux diffèrent par construction ; les digests
+   `9FC5E3F2…`/`0C7B63C6…`/`847DF0D1…`/`C281A035…` selon la plateforme et le SHA
+   le montrent), entre **toolchains** différentes, ni **artefact signé**. Les
+   `hostname` des deux JSON sont identiques alors que les `runner_id` diffèrent :
+   la comparaison porte sur le digest, pas sur le nom d'hôte.
+3. **Statut R7** : `fait sur le périmètre` (même image + toolchain épinglée,
+   deux runners) ; la limite inter-OS reste écrite et non revendiquée.

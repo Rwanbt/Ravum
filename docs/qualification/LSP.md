@@ -78,10 +78,11 @@ Preuve que l'absence est explicite : `unknown_request_returns_method_not_found`.
   `convert::utf16_columns_count_code_units_not_bytes`.
 - **Annulation** : `$/cancelRequest` est accepté puis ignoré, aucune requête ne
   survivant à son message.
-- **Intégration éditeur réelle** : **non testée dans VS Code**. Le test est un
-  client LSP écrit à la main qui parle le protocole sur des tubes réels
-  (`crates/ravum-lang-cli/tests/lsp_client.rs`). C'est une preuve
-  d'interopérabilité de protocole, **pas** une preuve d'usage dans un IDE.
+- **Intégration éditeur réelle** : **testée** par le harnais `tools/vscode-ravum`
+  dans un vrai processus VS Code (`docs/qualification/VSCODE.md` : 10/10 au
+  repos et 10/10 sous `cargo test --workspace` concurrent ; job CI
+  `vscode-e2e`). Ce qui reste hors preuve : cohabitation avec d'autres
+  extensions, publication marketplace, rendu visuel des diagnostics.
 
 ## 5. Reproduction
 
@@ -103,8 +104,10 @@ Un client LSP standard suffit. Exemple pour un client générique :
 }
 ```
 
-L'extension VS Code n'est **pas** fournie dans ce dépôt à ce stade ; la
-déclaration ci-dessus ne constitue pas une affirmation de compatibilité testée.
+L'extension de développement est fournie dans `tools/vscode-ravum` (elle n'est
+pas publiée sur un marketplace) ; le harnais est décrit dans
+[`VSCODE.md`](VSCODE.md). La configuration ci-dessus reste la configuration
+générique minimale pour un autre client.
 
 ## 7. Cache de parse par fichier (2026-11-13, phase 7)
 
@@ -209,3 +212,23 @@ La cible reste tenue sur les petits paquets (p95 2,826 ms). Un test fonctionnel
 associé (`scale_package_navigation_and_diagnostics_work_end_to_end`, 35 modules,
 1 025 lignes) vérifie la navigation inter-modules et l'aller-retour de
 diagnostic.
+
+**Mesure de bout en bout à l'échelle, profil `release` (2026-11-14, `214bf5e`).**
+Le chiffre debug ci-dessus n'est pas le chiffre produit : le binaire livré est
+compilé en `release`. Même harnais et même corpus, binaire release :
+
+```
+cargo test --release -p ravum-lang-cli --test lsp_client \
+  end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture
+[lsp-e2e] scale corpus (5110 lines, 150 modules), 20 one-line edits,
+          transport included: p50=116.7 ms p95=163.5 ms
+```
+
+Le profil release divise la latence par ~2 (337,6 → **163,5 ms** de p95, 322,4 →
+116,7 ms de p50), et **reste au-dessus de la cible de 50 ms** (×3,3). Deux
+conclusions distinctes : (a) publier un chiffre debug comme chiffre produit
+serait faux ; (b) même en release, l'analyse sémantique globale à 5 110 lignes
+ne tient pas la cible — la décision de périmètre (cible réservée aux petits
+paquets) ou d'incrémentalité sémantique reste humaine
+([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
+`D-2026-11-14-5`).

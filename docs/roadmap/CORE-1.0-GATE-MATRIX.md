@@ -755,9 +755,9 @@ silencieuse dans l'éditeur.
 
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 
-9 verticales exécutées (`hello`, `fib`, `calculator`, `file-tool`, `stats`,
-`dsp-gain-iir`, `package-demo`, `tests-demo`, `ffi-abs`). Absents : service HTTP
-+ SQLite, DSP dans un hôte réel, E2E navigateur.
+10 verticales exécutées (`hello`, `fib`, `calculator`, `file-tool`, `stats`,
+`dsp-gain-iir`, `package-demo`, `tests-demo`, `ffi-abs`, `file-store`). Absents :
+service HTTP + SQLite, DSP dans un hôte réel, E2E navigateur.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 

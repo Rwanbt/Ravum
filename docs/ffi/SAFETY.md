@@ -37,6 +37,7 @@ l'omettrait donnerait un `PASS` de forme sur une sûreté non démontrée.
 | `unsafe fn`, `*const`/`*mut`, `&raw` | refusés `E-UNSUPPORTED-UNSAFE` | parser ; `unsupported.md` §3 |
 | `#[link]`, `#[no_mangle]`, `#[repr]` | refusés `E-UNSUPPORTED-ATTR` | `unsupported.md` §3 |
 | Effets | un `extern` porte `{unsafe, ffi}` ; un appel `extern` ajoute `ffi` | `resolve.rs:1930` ; `effects.rs:228` |
+| Confinement | `#![forbid(unsafe_code)]` sur `syntax`, `sema`, `codegen`, `lsp` ; le CLI porte `#![deny(unsafe_code)]` et **deux** `#[allow(unsafe_code)]` seulement, sur `commands::watch::signal` | inventaire : [`UNSAFE-INVENTORY.md`](UNSAFE-INVENTORY.md) ; vérifié par `tools/unsafe_audit.py` (CI `gate-contracts`) |
 | Profil `pure` + FFI | refusé `E-EFF-PROFILE` | `ffi.rs::unsafe_is_forbidden_by_the_pure_profile` ; cas `effects/pure-ffi-profile` |
 | Émission | `extern "C"` + un wrapper `#[allow(unsafe_code)]` ; l'entête passe de `#![forbid(unsafe_code)]` à `#![deny(unsafe_code)]` | `emit.rs:1008-1012`, `emit.rs:1256`, `emit.rs:1197` (`emit_extern_block`) |
 | Édition de liens | **aucune** : seul `#[link_name]` existe, donc seuls les symboles déjà liés par défaut (CRT/libm) sont atteignables | RFC-D7 §2.4 ; mesure `run/ffi-abs` (`abs` de la CRT) |
@@ -71,7 +72,7 @@ devra être refusé.
 | `extern "system" { … }` | `E-UNSUPPORTED-ABI` | couvert (parser) |
 | `extern "C" fn f() { … }` | `E-UNSUPPORTED-EXTERN` | couvert |
 | `extern "C" { fn f() -> String; }` | `E-FFI-TYPE` | couvert (`types/ffi-bad-type`) |
-| `extern "C" { fn f() -> &str; }` | `E-FFI-TYPE` | **à verrouiller par cas** (la famille `&i32` est couverte) |
+| `extern "C" { fn f() -> &str; }` | `E-FFI-TYPE` | couvert (`types/ffi-str-rejected`, 2026-11-14) |
 | `extern "C" { fn f() -> char; }` | `E-FFI-TYPE` | couvert (`types/ffi-char-rejected`, 2026-11-13) |
 | `extern "C" { fn f(x: &i32) -> i32; }` | `E-FFI-TYPE` | couvert (`types/ffi-reference-rejected`, 2026-11-13) |
 | appel `extern` hors `unsafe` | `E-UNSAFE-CONTEXT` | couvert |
@@ -89,17 +90,28 @@ devra être refusé.
 
 **Vérifié par test ou par exécution réelle** : refus hors `unsafe`, acceptation
 dans `unsafe`, refus sous `pure` **et** sous `rt`, propagation transitive à
-travers deux wrappers, refus d'un type non scalaire (`String`, `char`, `&i32`),
-`self` et paramètre dupliqué, `extern` dans un `impl`, pointeur brut refusé dans
-un `unsafe`, `deny` + un seul `allow` local, compilation et exécution réelles de
-`abs` (`run/ffi-abs`), passage réel d'un `i64` (`run/ffi-width-boundary`),
-admission + build d'un `bool` (`types/ffi-bool-boundary`), transparence de
-l'`unsafe` pour l'ownership.
+travers deux wrappers, refus d'un type non scalaire (`String`, `char`, `&i32`,
+`&str`), `self` et paramètre dupliqué, `extern` dans un `impl`, pointeur brut
+refusé dans un `unsafe`, `deny` + un seul `allow` local, compilation et exécution
+réelles de `abs` (`run/ffi-abs`), passage réel d'un `i64`
+(`run/ffi-width-boundary`), admission + build d'un `bool`
+(`types/ffi-bool-boundary`), transparence de l'`unsafe` pour l'ownership.
+
+**Confinement vérifié mécaniquement (2026-11-14)** : `python tools/unsafe_audit.py`
+→ PASS. Les quatre crates du langage portent `#![forbid(unsafe_code)]` ; le CLI
+porte `#![deny(unsafe_code)]` et exactement deux `#[allow(unsafe_code)]`, sur
+`commands::watch::signal`, avec commentaires `// SAFETY:` sur les six sites.
+L'inventaire complet est [`UNSAFE-INVENTORY.md`](UNSAFE-INVENTORY.md) ; le script
+tourne dans `gate-contracts.yml` et a 7 tests. Le lint du compilateur rend
+l'ajout d'un `unsafe` non listé impossible à compiler dans ces crates.
 
 **Non mesuré, et donc jamais présenté comme un `PASS`** : `i128`/`u128`/`isize`/
-`usize` à l'exécution (déclarations seules), valeur `bool` traversante,
-unwinding/`longjmp`/signal, ABI multi-plateforme, toute fonction C qui touche la
-mémoire (impossible : aucun pointeur n'est admis).
+`usize` à l'exécution (déclarations seules ; la largeur C de `i128`/`u128` est
+une décision ouverte, C-FFI-2), valeur `bool` traversante, unwinding/`longjmp`/
+signal, ABI multi-plateforme, toute fonction C qui touche la mémoire (impossible :
+aucun pointeur n'est admis). **Miri sur les cas FFI `NOT_RUN` par construction** :
+les cas exécutables appellent la vraie CRT (`abs`, `llabs`), que Miri ne peut pas
+interpréter ; Miri couvre les crates du langage hors appels C, pas la frontière.
 
 **Hypothèse assumée** : seuls les symboles déjà liés par défaut sont atteignables
 (conséquence de l'absence de `#[link]`).
@@ -114,11 +126,12 @@ hors TCB.
    `unsupported.md` §3 acceptent `extern "C"` et que l'audit backend **exige** le
    wrapper `unsafe`. ABI-3.1/3.2 refusent au parse ce que G-3.10 accepte. Un
    `MUST` doit céder : c'est une décision humaine, pas un correctif.
-2. **Tests** : huit des neuf cas de RFC-D7 §5 sont écrits (2026-11-13, corpus
+2. **Tests** : les neuf cas de RFC-D7 §5 sont écrits (2026-11-13, corpus
    `effects/ffi-*`, `types/ffi-*`, `run/ffi-width-boundary`,
-   `types/unsafe-does-not-unlock-pointers`) ; restent l'extension `doctor`,
-   un cas `&str` dédié, `i128`/`u128`/`isize`/`usize` à l'exécution et
-   unwinding/`longjmp`/signal.
+   `types/unsafe-does-not-unlock-pointers`) ; `&str` est couvert depuis le
+   2026-11-14 (`types/ffi-str-rejected`). Restent l'extension `doctor`,
+   `i128`/`u128`/`isize`/`usize` à l'exécution (largeur C à trancher, C-FFI-2) et
+   unwinding/`longjmp`/signal (aucun comportement spécifié aujourd'hui).
 3. **Phrase de TCB** dans la documentation utilisateur (§1 et C-FFI-10).
 4. **Périmètre** : décider si « FFI scalaire seulement » justifie le mot « FFI »
    dans la communication de Core 1.0.

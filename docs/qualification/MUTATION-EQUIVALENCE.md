@@ -481,3 +481,38 @@ Ce que cela ne prouve pas : portée **ciblée** (trois ensembles de fonctions,
 `-F`), pas un score de crate ; survivants **triés**, pas éliminés ; aucun test
 ajouté.
 
+## 12. Campagne CI du 2026-11-14 — reproduction des trois campagnes et première campagne `emit.rs`
+
+Dispatch manuel de `mutation.yml` sur `goal/consolidation-2` (HEAD `6b6edd7`,
+workflow de la branche), run
+[43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110),
+artefact `mutants-targeted` téléchargé et recompté localement.
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---:|---:|---:|---:|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| `emit.rs` (**nouveau**) | 36 | 30 | **6** | 0 |
+| **Total** | **219** | **180** | **30** | **9** |
+
+**Reproduction des campagnes historiques.** Les trois premières lignes sont
+**identiques** à §11 (mêmes noms de survivants : `check_availability` `&&`,
+bras `crate`/`self`/`super` de `resolve_use_target` et `resolve_type_path`,
+`type_is_copy`, `check_struct_lit`, `check_const_expr`,
+`pattern_contains_float`) malgré les changements T4–T7 : le tri E1–E6 de §9.1
+reste valable. Aucune régression de test.
+
+**Triage des 6 survivants `emit.rs` :**
+
+| # | Mutant | Classe | Justification |
+|---|---|---|---|
+| E7.1 | `emit_extern_block` 1465 : `-=` → `/=`, `-=` → `+=` | **équivalent (formatage)** | `indent` est un `usize` ; `/= 1` est un no-op littéral, `+= 1` ne change que l'indentation de la ligne `}` émise. Le Rust émis compile et se comporte pareil ; aucun test n'asserte l'indentation (il ne doit pas). |
+| E7.2 | idem 1478 : `-=` → `/=`, `-=` → `+=` | **équivalent (formatage)** | même raison, second bloc de l'`extern`. |
+| E7.3 | `builtin_method_moves_receiver` (947) → `true` | **lacune de test, non fermée** | marquerait `Option::is_some()`/`Result::is_ok()` comme consommant le receiver. Un test discriminatoire demande un `Option<String>` non-`Copy` utilisé **après** un appel d'emprunt ; aucun test actuel ne le fait. Le mutant est équivalent sur les programmes testés (receiver non réutilisé), **pas** prouvé équivalent en général. Lacune assumée, pas convertie en `PASS`. |
+| E7.4 | `verify_ownership_facts` 1018 : `copies` → `false` | **lacune de test, fermée depuis** | désactivait la branche `UseKind::Move if copies` (disaccord Move-sur-Copy). Test ajouté : `emit::tests::ownership_facts_move_on_a_copy_type_is_rejected_in_debug_builds`, vérifié vert localement. Le prochain run devrait tuer ce mutant ; ce n'est pas encore **observé**, donc la ligne reste « fermée depuis », pas « tuée ». |
+
+Ce que cela ne prouve pas : un score sur le crate `codegen` (36 mutants sur un
+ensemble ciblé de six fonctions), ni que les survivants E7.3/E7.4 soient
+équivalents en général ; la portée reste celle de `-F`.
+

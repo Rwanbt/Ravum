@@ -259,10 +259,22 @@ est tenue sur les petits paquets, **pas à cette échelle** ; le coût est celui
 `check` complet (365 ms p50 à 5 110 lignes, §8), donc l'analyse sémantique reste
 **globale** et le cache de parse ne réduit que le parsing.
 
-| Corpus | Lignes | Modules | Éditions | p50 | p95 | Cible 50 ms |
-|---|---|---|---|---|---|---|
-| `package-demo` | 338 (2 fichiers) | — | 20 | **2,061 ms** | **2,826 ms** | tenue |
-| échelle générée | **5 110** | 150 | 20 | **322,4 ms** | **337,6 ms** | **non tenue** |
+| Corpus | Profil | Lignes | Modules | Éditions | p50 | p95 | Cible 50 ms |
+|---|---|---|---|---|---|---|---|
+| `package-demo` | debug | 338 (2 fichiers) | — | 20 | **2,061 ms** | **2,826 ms** | tenue |
+| échelle générée | debug | **5 110** | 150 | 20 | **322,4 ms** | **337,6 ms** | **non tenue** |
+| échelle générée | **release** | **5 110** | 150 | 20 | **116,7 ms** | **163,5 ms** | **non tenue** |
+
+Le profil `release` est mesuré séparément le 2026-11-14 sur `214bf5e`
+(`cargo test --release -p ravum-lang-cli --test lsp_client
+end_to_end_diagnostic_latency_on_the_scale_corpus -- --ignored --nocapture`) :
+le coût est divisé par ~2 par rapport au binaire debug, mais **reste ×3,3
+au-dessus de la cible** à 5 110 lignes. Publier 337,6 ms comme chiffre produit
+serait faux (c'est un binaire debug) ; publier 163,5 ms comme « cible tenue »
+serait faux aussi. La décision de périmètre (cible réservée aux petits paquets)
+ou d'incrémentalité sémantique est humaine
+([`HUMAN-DECISIONS-REQUIRED.md`](HUMAN-DECISIONS-REQUIRED.md),
+`D-2026-11-14-5`).
 
 Preuve fonctionnelle associée : `scale_package_navigation_and_diagnostics_work_end_to_end`
 (35 modules, 1 025 lignes) vérifie qu'une définition traversant les modules

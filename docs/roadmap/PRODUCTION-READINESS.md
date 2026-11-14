@@ -80,7 +80,7 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 
 | Critère | État | Preuve / manque |
 |---|---|---|
-| R1 | `PARTIAL` | 43 ADR `PROPOSED` ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
+| R1 | `PARTIAL` | **42** ADR `PROPOSED` (ADR-000…ADR-041, comptés par `tools/validate_repo_docs.py`) ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
 | R2 | **fait sur le périmètre** | 471 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
