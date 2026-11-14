@@ -834,7 +834,7 @@ développé le compilateur, et Go/No-Go humain. Verdict plafonné à
 | Mesure | Commande | Résultat exact |
 |---|---|---|
 | Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **100 groupes : 1 605 passés / 0 échec / 5 ignorés**, exit 0 |
-| Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés**, exit 0 ; 2 tests debug-only exclus |
+| Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **100 groupes : 1 603 passés / 0 échec / 5 ignorés**, exit 0 ; 2 tests debug-only exclus (garde Copy/Move, garde de place) |
 | `OwnFacts` (RFC-OWN-FACTS-1) | `cargo test -p ravum-lang-sema --test own_facts` + `cargo test -p ravum-lang-codegen --lib` | étape A **2/2** (move, copie, emprunt, move projeté `p.b`, déterminisme) ; étape B partielle : garde de cohérence, **600 programmes + 476 cas, 0 désaccord**, test négatif vert |
 | Conformance + build | `cargo run -p ravum-conformance -- run --verify-build` | **476 cas : 475 PASS / 0 FAIL / 1 SKIP** ; `perimeter=203/203`, `verified=122`, `implicit=81`, `failed=0`, `build_verified: true` |
 | Traps `rt` (RFC-RT-TRAPS-1) | `cargo test -p ravum-lang-sema --lib traps` + 5 cas `effects/rt-trap-*` | **10/10** tests unitaires (index, division, arithmétique binaire **et composée**, négation, décalages, agrégats/flux, flottants, formes explicites) ; 4 compile-fail `E-EFF-PROFILE`, 1 compile-pass ; `core`/`pure` inchangés |

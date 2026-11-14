@@ -17,8 +17,8 @@
    `build_verified: true`, périmètre build **203/203**, aucune régression.
 2. Le workspace est vert : **100 groupes, 1 605 passés / 0 échec / 5 ignorés**
    (4 campagnes longues et la mesure LSP de bout en bout, lancées à part) ; le
-   **profil release** a passé la même suite au round 11 : **1 603 / 0 / 5**
-   (l'arbre courant contient 2 tests debug-only, tous deux des gardes).
+   **profil release** a été re-mesuré au round 17 : **1 603 / 0 / 5**
+   (2 tests debug-only exclus, tous deux des gardes).
 3. Un **oracle différentiel** neuf a mesuré **37 200 programmes** bien typés
    (trois campagnes déterministes ; générateur étendu à 42 gabarits) :
    `check` accepte ⇒ `rustc` compile, **0 divergence** ; la configuration
@@ -92,14 +92,14 @@ Les autres chiffres sont identiques ou meilleurs.
 | Conformance | 471 cas, 470 PASS / 0 FAIL / 1 SKIP | **476 cas, 475 PASS / 0 FAIL / 1 SKIP** | +5 cas (`rt-trap-*`), 0 échec |
 | Périmètre build | 202/202, vérifiés 121, implicites 81, échecs 0 | **203/203**, vérifiés 122, implicites 81, échecs 0 | +1 cas vérifié |
 | Workspace | 94 groupes, 1 574 / 0 / 2 | **100 groupes, 1 605 / 0 / 5** | +6 groupes, +31 tests, +3 ignorés (campagnes de mesure) |
-| Workspace `--release` | non rejoué | **100 groupes, 1 603 / 0 / 5** (round 11, `140a7da`) | nouvelle preuve ; l'arbre courant a 2 tests debug-only (garde Copy/Move et garde de place) |
+| Workspace `--release` | non rejoué | **100 groupes, 1 603 / 0 / 5** (round 17, `ed60f72`) | nouvelle preuve ; 2 tests debug-only exclus (gardes Copy/Move et place) |
 | `ravum-lang-sema` | 683 / 0 | 698 / 0 (NodeId, OwnFacts, traps `rt`) | +15 |
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
 | MUST | 807, 463 atteignables | **identique** | 0 |
 | Couverture sema+codegen | 89,08 / 88,39 (docs, non re-mesurée en phase 0) | **89,47 / 88,87**, seuils tenus | +0,39 / +0,48 pt ; `codegen/lib.rs` clos à 100/100 ; test négatif de place au round 16 |
 | Fichiers sous l'objectif 100 % | 10 (2 098 lignes, vue instanciations) | **10 (2 126 lignes)** | +28 lignes (code ajouté, mesuré hors tests de conformance) |
-| Smoke exemples | 43 / 0 / 0 | **identique** | 0 |
+| Smoke exemples | 43 / 0 / 0 | **identique** ; rejoué au round 17 **après** le garde de places : 43/0/0 | 0 |
 | Fuzz syntaxe | non rejoué en phase 0 | **249 054 entrées, 0 échec**, digest `0x9b09fc61e761b87e` | nouvelle preuve |
 | Fuzz sema | non rejoué en phase 0 | **100 000 itérations, 0 échec**, 4 660/s ; **rejoué après la passe de traps `rt`** : 100 000, 0 échec, 5 275/s (≈ 33 000 en profil `rt`) | nouvelle preuve |
 | LSP client | non rejoué en phase 0 | **11 / 0** (+1 mesure `#[ignore]`) | nouvelle preuve |
@@ -226,6 +226,11 @@ rejoués :
 
 Aucun écart avec les chiffres « courants » de la §3 : ils sont reproductibles sur
 l'arbre qui porte ce rapport.
+
+Complément round 17 : après l'extension du garde d'ownership aux places, le
+**smoke des exemples** a été rejoué (**43 / 0 / 0**) et la **suite release**
+re-mesurée sur l'arbre courant (**100 groupes, 1 603 / 0 / 5**, 2 tests
+debug-only exclus). Aucun exemple n'est rejeté par le nouveau garde.
 
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 

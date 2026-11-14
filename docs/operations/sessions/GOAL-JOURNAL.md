@@ -730,6 +730,22 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   porte à **2** le nombre de tests exclus en profil release (la mesure release du
   round 11 reste 1 603/0/5).
 
+## Entrée 2026-11-14 (round 17) — Smoke et suite release rejoués après le garde de places
+
+| Contrôle | Résultat (arbre `ed60f72`) |
+|---|---|
+| Smoke exemples | **43 PASS / 0 FAIL / 0 NOT_RUN** |
+| Workspace `--release` | **100 groupes, 1 603 passés / 0 échec / 5 ignorés**, exit 0 (2 tests debug-only exclus) |
+
+- Le smoke a été rejoué **après** l'extension du garde d'ownership aux places :
+  aucun des 43 exemples n'est rejeté par la nouvelle comparaison (ils passent
+  tous par `check` **et** `build`, donc par le garde en debug).
+- La suite release confirme que le profil livré passe la même suite que le debug
+  à l'exclusion des deux tests `#[cfg(debug_assertions)]` ; c'est la mesure
+  courant de l'arbre, pas une extrapolation du round 11.
+- Aucun changement de code ; documents seulement.
+
+
 
 
 
