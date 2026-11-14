@@ -442,7 +442,7 @@ dans ce lot.
 | R14 | `PARTIAL` | gouvernance corrigée ; guide utilisateur absent |
 
 Mesures principales : workspace **100 groupes / 1 604 passés / 0 échec /
-5 ignorés** ; conformance **476 / 475 PASS / 0 FAIL / 1 SKIP**,
+5 ignorés** (et **1 603 / 0 / 5** en profil release) ; conformance **476 / 475 PASS / 0 FAIL / 1 SKIP**,
 `build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
 **11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
 cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout

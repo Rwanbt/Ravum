@@ -16,7 +16,9 @@
 1. Le corpus officiel est vert : **476 cas, 475 PASS / 0 FAIL / 1 SKIP**,
    `build_verified: true`, périmètre build **203/203**, aucune régression.
 2. Le workspace est vert : **100 groupes, 1 604 passés / 0 échec / 5 ignorés**
-   (4 campagnes longues et la mesure LSP de bout en bout, lancées à part).
+   (4 campagnes longues et la mesure LSP de bout en bout, lancées à part) ; le
+   **profil release** passe la même suite : **1 603 / 0 / 5** (1 test
+   debug-only exclu).
 3. Un **oracle différentiel** neuf a mesuré **37 200 programmes** bien typés
    (trois campagnes déterministes ; générateur étendu à 42 gabarits) :
    `check` accepte ⇒ `rustc` compile, **0 divergence** ; la configuration
@@ -89,6 +91,7 @@ Les autres chiffres sont identiques ou meilleurs.
 | Conformance | 471 cas, 470 PASS / 0 FAIL / 1 SKIP | **476 cas, 475 PASS / 0 FAIL / 1 SKIP** | +5 cas (`rt-trap-*`), 0 échec |
 | Périmètre build | 202/202, vérifiés 121, implicites 81, échecs 0 | **203/203**, vérifiés 122, implicites 81, échecs 0 | +1 cas vérifié |
 | Workspace | 94 groupes, 1 574 / 0 / 2 | **100 groupes, 1 604 / 0 / 5** | +6 groupes, +30 tests, +3 ignorés (campagnes de mesure) |
+| Workspace `--release` | non rejoué | **100 groupes, 1 603 / 0 / 5** | nouvelle preuve ; 1 test debug-only exclu (`verify_ownership_facts`) |
 | `ravum-lang-sema` | 683 / 0 | 698 / 0 (NodeId, OwnFacts, traps `rt`) | +15 |
 | Registre | 108 / 126 / 0 / 0 | **identique** | 0 |
 | Traçabilité FeatureId | 188/188 (1 exemption) | **identique** | 0 |
@@ -143,7 +146,7 @@ journal ; un `PARTIAL` n'est jamais arrondi en `PASS`.
 | T7 | `PASS` | LSP : cache de parse et latence mesurée (analyse p95 1,362 ms ; bout en bout p95 2,826 ms, transport inclus) ; client LSP 11/11 |
 | T8 | `PARTIAL` | redémarrage, pas de préservation d'état ; le bloc DSP `.rv` reste `NOT_RUN` (phase 8) |
 | T9 | `PARTIAL` | inchangé (10 verticales, pas de DSP hôte `.rv`) |
-| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; Miri et mutation `NOT_RUN` ; audit externe absent |
+| T10 | `PARTIAL` | couverture/fuzz/LSP/oracle nominal mesurés ; workspace release vert (1 603/0/5) ; Miri et mutation `NOT_RUN` ; audit externe absent |
 | T11 | `PARTIAL` | reproductibilité release rejouée (`19743DC2…` sur deux racines) ; SBOM déterministe (64/170) ; installateur rejoué ; aucune clé (D9) |
 | T12 | `BLOCKED` | Go/No-Go humain |
 

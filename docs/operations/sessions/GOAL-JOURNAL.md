@@ -612,6 +612,21 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - **CI** : sur `7977210`, **8/8 workflows verts**, coverage ratchet incluse avec
   les planchers `codegen/lib.rs` 100/100 et `traps.rs` 97/95.
 
+## Entrée 2026-11-14 (round 11) — Suite complète en profil `--release`
+
+| Champ | Valeur |
+|---|---|
+| Commande | `cargo test --workspace --all-targets --release -- --test-threads=2` |
+| Résultat | **100 groupes, 1 603 passés / 0 échec / 5 ignorés**, exit 0 |
+| Écart debug | 1 test de moins : `ownership_facts_disagreement_is_rejected_in_debug_builds` est `#[cfg(debug_assertions)]` (le garde de l'étape B est compilé hors release) |
+
+- Le profil livré (release) passe la même suite que le debug, à l'exclusion du
+  test qui vérifie le garde de debug. Aucun test ne dépend d'un comportement
+  debug-only pour réussir.
+- Aucun changement de code ; preuve ajoutée au rapport (§3), à la matrice des
+  gates (T10) et à `PRODUCTION-READINESS.md` §9.
+
+
 
 
 
