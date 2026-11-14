@@ -1299,4 +1299,34 @@ Les mêmes limites que §25.4, plus : l'extension ne couvre toujours pas les
 modules multiples, la FFI, les génériques utilisateurs ni les références
 stockées (interdites). Le mode nominal reste `NOT_RUN` localement.
 
+### 26.4 Campagne nominale 3 × 10 000 (2026-11-14)
+
+La configuration nominale du §25 a été exécutée **localement**, sur la même
+machine et le même arbre (`goal/production-ready`, `aa88479`), avec le générateur
+v2 :
+
+```
+RAVUM_DIFF_PROGRAMS=10000 cargo test -p ravum-lang-codegen \
+  --test differential_oracle differential_oracle_long -- --ignored --nocapture
+```
+
+| Graine | Programmes | Acceptés | Divergences | Durée |
+|---|---|---|---|---|
+| `0x00524156554d0001` | 10 000 | 10 000 | **0** | 3 022 s |
+| `0x00524156554d0002` | 10 000 | 10 000 | **0** | 2 797 s |
+| `0x00524156554d0003` | 10 000 | 10 000 | **0** | 2 783 s |
+| **Total** | **30 000** | **30 000** | **0** | **8 602 s** (2 h 23) |
+
+`release_every=10` : 3 000 comparaisons debug == release ont été faites.
+**Acceptation 100 %**, donc la campagne nominale n'est pas vide.
+
+Cumul des trois campagnes déterministes (v1, v2, nominale) :
+**37 200 programmes, 0 divergence**.
+
+Limites inchangées : une seule machine, une seule toolchain, 8 instructions par
+programme, sous-ensemble documenté de Core 1.0. La campagne nominale ne prouve
+pas l'absence de divergence sur toutes les formes — elle ferme seulement le
+`NOT_RUN` du mode nominal local.
+
+
 

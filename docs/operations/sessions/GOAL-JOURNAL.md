@@ -543,6 +543,28 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
   **PASS** — c'était une contention d'environnement, pas une régression.
 - **CI** : sur `28ad5da`, **8/8 workflows verts**, coverage ratchet incluse.
 
+## Entrée 2026-11-14 (round 8) — Campagne nominale de l'oracle : 30 000 programmes, 0 divergence
+
+| Champ | Valeur |
+|---|---|
+| Tâche | 2.4 (mode long nominal) — **fait** |
+| Commande | `RAVUM_DIFF_PROGRAMS=10000 cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_long -- --ignored --nocapture` |
+| Résultat | **3 × 10 000 = 30 000 programmes, 30 000 acceptés, 0 rejet, 0 divergence**, 8 602 s (2 h 23), 3 000 comparaisons debug == release (`release_every=10`) |
+| Cumul | v1 + v2 + nominale = **37 200 programmes, 0 divergence** |
+
+- Graines : `…0001` 10 000/10 000 acceptés en 3 022 s ; `…0002` 10 000/10 000
+  en 2 797 s ; `…0003` 10 000/10 000 en 2 783 s.
+- Le journal de la campagne est conservé dans `target/goal-nominal-oracle.log`
+  (artefact local non versionné).
+- Conséquence : le mode long nominal n'est plus `NOT_RUN` localement ; la phase 2
+  passe à **`TESTED`**. La gate **T2 reste `PARTIAL`** pour D10 (344 MUST non
+  mappés) — ce sont deux états différents.
+- Limites inchangées : une machine, une toolchain, 8 instructions par programme,
+  sous-ensemble documenté de Core 1.0 ; aucune preuve d'absence de divergence sur
+  toutes les formes possibles.
+- Aucun changement du compilateur ; mise à jour des documents seulement.
+
+
 
 
 
