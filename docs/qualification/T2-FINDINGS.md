@@ -1349,3 +1349,221 @@ aucune divergence. Cumul des campagnes de l'oracle (v1, v2, nominale, post-garde
 
 
 
+
+## 27. Passe 14 — second générateur dirigé par les types, deux divergences `check → build` (2026-11-14)
+
+> Base : branche `goal/consolidation-2`. Commits `40f1737` (générateur),
+> `1121308` et `b7e6c7a` (corrections). Windows 11 x64, `rustc 1.95.0`.
+
+### 27.1 Ce qui est mesuré
+
+L'audit du 2026-11-14 (N1/DA) a montré que l'oracle « 40 200 programmes » était
+la concaténation de **42 gabarits d'instructions indépendantes** : il ne compose
+pas, donc il ne peut pas produire les 13 formes historiques de la §22 à la §24,
+toutes nées d'imbrication, de branches ou de shadowing. Un **second générateur**,
+additif, est ajouté dans `crates/ravum-lang-codegen/tests/differential_oracle.rs` ;
+le générateur à gabarits et ses tests restent **inchangés** et tournent toujours.
+
+Il compose à partir d'un **environnement typé** :
+
+* une variable = `{ nom, type, état }`, état ∈ `Init`, `Moved`,
+  `PartMoved(champs)`, `Uninit`, et une pile de portées (shadowing réel) ;
+* types produits : `i32`, `bool`, `String`, `(T, U)` (quatre combinaisons),
+  `[i32; 2]`, `[i32; 3]`, `[String; 2]`, `Vec<i32>`, `Option<i32>`,
+  `Option<String>`, `Pair` et `Holder` (structs de l'en-tête), `Shape` et `Text`
+  (enums de l'en-tête) ;
+* `gen_expr(ty, profondeur)` tire parmi les règles qui **produisent** `ty` :
+  littéral, variable vivante (move si non-`Copy`), projection `x.f`, `x.0`,
+  `x[littéral]`, appel d'une fonction de l'en-tête, constructeur, `if/else`,
+  `match` avec liaisons, bloc `{ let …; expr }` ; profondeur maximale 4, et à 0
+  seulement littéral/variable ;
+* `gen_stmt` : `let` (avec shadowing), affectation, `if/else`, `match`,
+  `while` borné, `for i in 0..K`, bloc imbriqué ;
+* **jonction de branches = intersection** : une valeur déplacée dans une branche
+  est considérée déplacée après le `if`/`match` ;
+* **10 %** des programmes reçoivent une faute volontaire (usage après move,
+  double move, variable non initialisée) ; la propriété exigée est alors que
+  `check` **refuse** avec un code `E-OWN-*`.
+
+Correction d'outillage au passage : `check_program` comptait **tout diagnostic,
+y compris un warning**, comme un refus. Le CLI sort 0 avec des warnings ; le
+générateur typé déclare beaucoup de variables inutilisées, donc son taux
+d'acceptation était de 0 % pour cette seule raison. La référence est désormais
+l'exit code du CLI : seuls les **erreurs** refusent (même commit `40f1737`).
+
+### 27.2 Taux d'acceptation, histogramme, profondeur
+
+Campagne rapide (toujours exécutée par `cargo test`) : **3 graines × 40
+programmes = 120**, profondeur 4, 6 instructions par programme,
+`release_every=0` :
+
+| Mesure | Valeur |
+|---|---|
+| Programmes générés | 120 |
+| Sans faute | 110 |
+| Acceptés par `check` | **110 / 110 = 100,0 %** |
+| Refusés (sans faute) | **0** |
+| Fautifs | 10 |
+| Fautifs refusés avec `E-OWN-*` | **10 / 10 = 100 %** |
+| Divergences `check → build` | **0** |
+| Règles distinctes tirées | **53** |
+| Instructions générées | 2 964 |
+| Profondeur moyenne des expressions | **0,96** (max **4**) |
+| Durée | ≈ 30 s (3 graines) |
+
+Le taux de 100 % est **attendu et publié comme tel** : le générateur est
+bien typé par construction, donc la discrimination vient des 10 % fautifs et de
+la propriété `check accepté ⇒ rustc compile`, pas du taux de refus. Un chiffre
+de programmes n'est pas une preuve : les formes distinctes sont les **53 règles**
+effectivement tirées, listées ci-dessous.
+
+| Règle (expression) | Tirages | Règle (instruction) | Tirages |
+|---|---|---|---|
+| `expr:leaf:i32` | 5 586 | `stmt:let` | 2 085 |
+| `expr:block` | 1 732 | `stmt:loop` | 321 |
+| `expr:if` | 1 699 | `stmt:assign` | 137 |
+| `expr:match` | 1 209 | `stmt:match` | 123 |
+| `cond:cmp` | 966 | `stmt:if` | 121 |
+| `expr:var` | 969 | `stmt:while` | 109 |
+| `cond:literal` | 860 | `stmt:for` | 103 |
+| `expr:bin_add` | 842 | `stmt:shadow` | 102 |
+| `expr:leaf:option` | 749 | `stmt:block` | 98 |
+| `expr:leaf:String` | 595 | `stmt:if_no_else` | 86 |
+| `expr:leaf:bool` | 503 | `stmt:loop` (corps) | 321 |
+| `expr:leaf:tuple` | 537 | `fault` | 10 |
+| `expr:leaf:Shape` | 515 | | |
+| `expr:leaf:array` | 355 | | |
+| `expr:leaf:Text` | 203 | | |
+| `expr:leaf:Pair` | 171 | | |
+| `expr:leaf:Vec` | 173 | | |
+| `expr:leaf:Holder` | 134 | | |
+| `expr:tuple:new` | 133 | | |
+| `expr:call:make_text` | 109 | | |
+| `expr:array:new` | 104 | | |
+| `expr:enum:shape.rect` | 100 | | |
+| `expr:opt:maybe` | 99 | | |
+| `expr:cmp_i32` | 90 | | |
+| `expr:enum:shape.line` | 86 | | |
+| `expr:enum:text.full` | 58 | | |
+| `expr:struct:pair` | 57 | | |
+| `expr:proj:holder.n` | 51 | | |
+| `expr:call:len_of` | 49 | | |
+| `expr:proj:array.i32` | 45 | | |
+| `expr:struct:holder` | 36 | | |
+| `expr:opt:maybe_text` | 32 | | |
+| `expr:proj:pair.a` | 27 | | |
+| `expr:call:shape_area` | 25 | | |
+| `expr:call:a_value` | 18 | | |
+| `expr:call:vec_len` | 16 | | |
+| `expr:call:first_of` | 15 | | |
+| `expr:opt:some` | 150 | | |
+| `expr:proj:string` | 12 | | |
+| `expr:proj:array.loop` | 8 | | |
+| `expr:call:take_b` | 4 | | |
+| `expr:cmp:len` | 2 | | |
+
+(Le tableau complet fait 53 lignes ; les compteurs sont ceux de la campagne
+rapide.)
+
+### 27.3 Première divergence trouvée — `a = [a[0], …]`
+
+La campagne nominale **3 × 2 000** a été lancée puis **interrompue** après
+**561 programmes de la graine `0x00524156554d1001`**, parce qu'elle a trouvé la
+seconde divergence et qu'il fallait corriger avant de continuer. Elle est
+`NOT_RUN` en totalité (voir §27.5). La première divergence est à l'index **35** :
+
+```rv
+fn main() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    a = [a[0], String::from("c")];
+}
+```
+
+Avant correction : `check` exit 0, `build` exit 1,
+**`E0508: cannot move out of type [String; 2]`** — le backend émettait
+`a[0usize]` littéralement. Cause : la cible d'affectation `a` était enregistrée
+comme un *whole use* de la place, ce qui bloquait le hiss dont le RHS a besoin.
+Une écriture n'est pas une lecture : elle ré-initialise la place **après**
+l'évaluation du RHS. Correction `1121308` : la cible d'affectation d'un binding
+entier n'est plus un whole use, et une **région de hiss** se termine à
+l'écriture (les accès postérieurs lisent la place ré-initialisée au lieu des
+slots périmés — sinon `E0382`). Cas de conformance :
+`conformance/cases/run/array-move-assign-back` (run-pass, sortie
+`a / c / y / x / 6`). Après correction : `check` 0, `build` 0, exécution
+conforme.
+
+### 27.4 Seconde divergence — move d'élément dans une branche à côté d'un whole use
+
+Index **560** de la même graine. Réduit à :
+
+```rv
+fn main() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    if false {
+        a = if true { a } else { [String::from("c"), String::from("d")] };
+    } else {
+        let moved: String = a[1];
+        io::println(moved.as_str());
+    }
+}
+```
+
+Avant correction : `check` 0, `build` 1, **`E0508`** sur `v1[1usize]` : le
+`whole use` de `a` dans la branche `then` partage l'index d'instruction avec le
+move de la branche `else`, donc le fallback inline refusait de s'appliquer. Les
+deux sites sont dans des branches **mutuellement exclusives** (ou le whole use
+précède le move) : un whole use de la **même instruction** ne doit pas bloquer
+le lowering inline, qui est émis *au site de l'accès*. Correction `b7e6c7a` ;
+cas `conformance/cases/run/array-move-branch-reassign` (run-pass, sortie `b`).
+
+### 27.5 Test de puissance — NOT_RUN, et le score exact
+
+Le GOAL exige : dans un worktree jetable, annuler un par un les correctifs des
+13 formes historiques et vérifier si le générateur retrouve la divergence en
+3 × 2 000 programmes, score exact sur 13. **Ce test n'a pas été exécuté.**
+
+Tentative mesurée : `git revert -n 21cf7d4` (le correctif d'ancrage des
+descents, §24) dans un worktree détaché à `1121308` :
+
+```
+CONFLICT (content): Merge conflict in crates/ravum-lang-codegen/src/emit.rs
+CONFLICT (content): Merge conflict in crates/ravum-lang-codegen/tests/backend_audit.rs
+error: could not revert 21cf7d4...
+```
+
+Les commits de correctif de 2026-11-11 ne s'appliquent plus à l'arbre courant :
+`emit.rs` a été réécrit depuis (places, régions, garde OwnFacts). Le worktree a
+été supprimé ; aucun revert n'a été forcé, aucune branche de travail n'a été
+modifiée.
+
+Substitut **non exécuté** : désactiver le *mécanisme* (par exemple rendre
+`plan_slot_groups` inerte) dans le worktree. C'est un autre test (il mesure un
+mécanisme désactivé, pas le commit annulé) et il coûte ≈ 25 min par mécanisme
+(4 lots de correctifs, 13 formes). Budget de la session insuffisant après les
+tâches 1 à 10.
+
+**Score exact : 0 / 13 formes testées — `NOT_RUN`, et non « 0 trouvée ».** Le
+critère d'acceptation « score de puissance publié » n'est donc **pas** satisfait ;
+T2 est `PARTIAL` pour cette raison, indépendamment des deux divergences
+corrigées.
+
+Formes hors de la grammaire actuelle du générateur, par construction :
+projections d'un seul niveau, pas de tableau de tuples ni de struct contenant un
+tableau, pas de récepteur `self` sur un élément, pas de tableau imbriqué — soit
+5 des 13 formes historiques que ce générateur ne peut pas produire. Les deux
+divergences trouvées sont, elles, deux classes que le générateur à 42 gabarits
+n'avait jamais produites.
+
+### 27.6 Commandes et résultats
+
+| Commande | Résultat |
+|---|---|
+| `cargo test -p ravum-lang-codegen --test differential_oracle typed_oracle_fast -- --nocapture` | 120 programmes, 110/110 acceptés, 10/10 fautifs refusés, 0 divergence, 53 règles, profondeur 0,96 |
+| `cargo test -p ravum-lang-codegen --test differential_oracle` | 6 passés / 2 ignorés (campagnes longues) |
+| `cargo run -p ravum-conformance -- run --verify-build` | **478 cas : 477 PASS / 0 FAIL / 1 SKIP** ; `perimeter=206/206`, `verified=123`, `build_verified: true` |
+| `git revert -n 21cf7d4` (worktree jetable) | **conflit** — voir §27.5 |
+
+Ce que cette passe ne prouve pas : le générateur n'explore qu'un sous-ensemble
+de Core 1.0 (pas de références stockées, pas de traits/closures, une seule
+projection) ; 53 règles ne sont pas 53 formes de programme ; et le test de
+puissance n'a pas eu lieu.

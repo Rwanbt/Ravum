@@ -1016,3 +1016,30 @@ mesuré. Aucun correctif CI n'a été nécessaire.
 
 
 
+
+
+---
+
+### Seconde vague de consolidation — 2026-11-14 (branche `goal/consolidation-2`)
+
+Base : `dev` à `49cdc83` (PR #109 et #110 fusionnées). Branche créée depuis
+`dev` ; les tâches T1-T4, T9 et T10 ont été menées, T5-T8 ne l'ont pas été.
+Détail complet : `docs/reports/GOAL-CONSOLIDATION-2-REPORT.md`.
+
+| Tâche | Statut | Commits | Résultat mesuré |
+|---|---|---|---|
+| T1 — affirmations | `TESTED` | `383cf5a` | R2 `PARTIAL` ; chaque « 40 200 » porte « 42 gabarits indépendants, sans composition » ; `report_consistency.py` PASS |
+| T2 — vrai générateur | `PARTIAL` | `40f1737`, `1121308`, `b7e6c7a` | 120 programmes : 110/110 acceptés, 10/10 fautifs refusés, 0 divergence, 53 règles, profondeur 0,96 ; **2 divergences réelles trouvées et corrigées** ; test de puissance **NOT_RUN** (revert en conflit) |
+| T3 — corpus à l'échelle | `PARTIAL` | `7f645d9` | 1 025 / 5 110 / 20 110 / 50 110 lignes ; `check` p50 34 ms → 26 424 ms ; `own` 97,5 % à 50 k ; `rustc` 5,6 % ; incrémental jamais plus rapide ; RSS 151/236 Mo ; LSP à l'échelle `NOT_RUN` |
+| T4 — plafond de fichiers | `PARTIAL` | `c61cb92` | `NodeId` u64 32/32 ; `MAX_SOURCE_FILES=65 536` ; paquet de 1 000 modules accepté ; refus testé ; Rust généré identique après normalisation des noms dérivés d'ids (15/232 fichiers différents littéralement) |
+| T5 — `FileId` stable LSP | `NOT_RUN` | — | — |
+| T6 — `rt` par point d'entrée | `NOT_RUN` | — | — |
+| T7 — garde OwnFacts | `NOT_RUN` | — | — |
+| T8 — mutants survivants | `NOT_RUN` | — | — |
+| T9 — source unique des chiffres | `PARTIAL` | `77c3c0f` | 7 contrôles PASS, `evidence/current.json`, 19 déclarations d'état courant vérifiées (3 documents) |
+| T10 — CI `goal/**` | `TESTED` (config) | `1da5544` | déclencheur ajouté ; run CI non observé sur cette branche |
+
+Fin de session : `cargo test --workspace --all-targets -- --test-threads=2` →
+**101 suites, 1 610 passés / 0 échec / 6 ignorés**, exit 0 ; conformance
+**478 cas : 477 PASS / 0 FAIL / 1 SKIP**, `perimeter=206/206`, `verified=123`.
+Aucun cas, test ni seuil supprimé. Aucune fusion, aucun tag, aucun push.
