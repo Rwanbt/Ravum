@@ -131,6 +131,25 @@ l'identité n'ont pas bougé.
   `E-TYP-MISMATCH` est analysé, puis corrigé dans le même cache ; l'analyse
   corrigée ne contient **aucun** diagnostic de l'ancien buffer.
 
+**FileId stables en session (T5, 2026-11-14).** Un `FileId` qui bouge invalide
+le cache : le loader allouait les ids dans l'ordre de découverte, donc ajouter un
+module déclaré *avant* les autres renumérotait les fichiers existants. La session
+LSP tient maintenant une table `chemin canonique -> FileId` **croissante et
+jamais réattribuée** (`LoadOptions::file_ids` / `LoadedPackage::file_ids`), que
+`Analysis::run_with_cache_and_file_ids` fusionne après chaque analyse ; le CLI
+garde les ids denses historiques (`file_ids: None`) et le corpus est inchangé.
+Deux tests d'intégration et un test loader couvrent le contrat :
+
+- `session_file_ids_keep_untouched_files_stable` : `main.rv` + `a.rv` + `b.rv` +
+  `c.rv`, puis un 4e module `aa.rv` déclaré **avant** `a` ⇒ les trois fichiers
+  inchangés gardent leur `FileId` et leurs `NodeId`, **3 hits** de cache de parse,
+  et `aa.rv` prend `max + 1` ;
+- `without_a_session_table_a_new_module_renumbers_the_other_files` : la même
+  édition **sans** table ⇒ ids décalés, **0 hit**, `NodeId` changés (preuve que le
+  test positif n'est pas vide) ;
+- `loader::tests::a_session_table_that_maps_one_id_to_two_files_fails_closed` :
+  une table incohérente est refusée (`E-IO`, aucun programme produit).
+
 **Mesure (7.2).** `cargo test -p ravum-lang-lsp --test parse_cache -- --ignored
 --nocapture` → 30 éditions d'une ligne sur `examples/package-demo`, analyse
 **en processus** (transport JSON-RPC et éditeur exclus) :

@@ -36,9 +36,10 @@
    littérale a été arrêtée, l'écart a été expliqué et vérifié, puis le travail a
    continué. C'est une **déviation assumée et rapportée**, pas un « octet pour
    octet ».
-4. **Cinq tâches ne sont pas exécutées** : T5 (`FileId` stable LSP), T6 (`rt` par
-   point d'entrée), T7 (garde OwnFacts étendu), T8 (mutants survivants). Elles
-   sont `NOT_RUN` avec leur raison en §5.
+4. **Trois tâches sont `NOT_RUN`** : T6 (`rt` par point d'entrée), T7 (garde
+   OwnFacts étendu), T8 (mutants survivants) — raisons en §5. T5 (`FileId` stable
+   LSP), `NOT_RUN` à la première rédaction, est **exécutée depuis**
+   (`e3823cb`, §5).
 5. **La campagne nominale 3 × 2 000 de T2 n'est pas terminée** : elle a été
    interrompue après 561 programmes (graine 1) pour corriger la seconde
    divergence trouvée. Le total de 6 000 programmes n'est pas mesuré.
@@ -53,7 +54,8 @@
 Aucun test, aucun cas de conformance et aucun seuil n'a été supprimé, ignoré ou
 affaibli. Le corpus passe de **476 à 478 cas** (deux cas ajoutés ; un cas
 existant a changé de mode par obligation, voir T4) et le workspace de **100
-suites / 1 605 tests** à **101 suites / 1 610 tests**.
+suites / 1 605 tests** à **101 suites / 1 610 tests**, puis **101 suites /
+1 618 tests** après T5 (§5).
 
 ## 1. T1 — corriger les affirmations (Q0-2) — `TESTED`
 
@@ -236,11 +238,81 @@ construction.
 **Statut : `PARTIAL`** — la migration est complète et testée, mais le critère
 littéral « octet pour octet, toute différence = arrêt » n'est pas satisfait.
 
-## 5. T5 à T8 — `NOT_RUN`
+## 5. T5 — `FileId` stable en session LSP (Q1-2) — `TESTED`
+
+**Commit** : `e3823cb` `feat(lsp): keep session file ids stable across reloads`.
+**Fichiers** : `crates/ravum-lang-syntax/src/source.rs`,
+`crates/ravum-lang-sema/src/{loader,facts}.rs`,
+`crates/ravum-lang-lsp/src/{analysis,server}.rs`, tests associés, plus la mise à
+jour mécanique des `LoadOptions` littéraux (cli, codegen).
+
+**Problème.** Chaque `NodeId` embarque le `FileId` (T4 : 32 bits hauts). Le
+loader allouait les ids **dans l'ordre de découverte** (`SourceMap::add` =
+position). Ajouter un module déclaré *avant* les autres — ou en retirer un —
+renumérote les fichiers suivants : leur entrée de cache de parse devient
+inutilisable (`(hash, FileId)`) et leurs `NodeId` changent, alors que l'utilisateur
+ne les a pas touchés.
+
+**Changement.**
+
+- `LoadOptions::file_ids` (optionnel) : table de session `chemin canonique ->
+  FileId`, **croissante et jamais réattribuée**. `LoadedPackage::file_ids` renvoie
+  la table effectivement utilisée, que la session fusionne après chaque analyse.
+  Le loader réutilise l'id d'un chemin connu et donne `max(id) + 1` à un chemin
+  inconnu ; `ravum.toml` et les manifestes de dépendances font partie de la table
+  (ce sont des `SourceFile` comme les autres).
+- `SourceMap::add_at` : les ids deviennent des **valeurs, pas des positions** ;
+  `files()` reste un slice trié par id (recherche binaire), et
+  `facts::file_infos` remplit les trous pour que le backend continue d'indexer la
+  table par `span.file` (`emit::location`), sans changer le chemin dense du CLI.
+- `Analysis::run_with_cache_and_file_ids` et le champ `file_ids` de `Server` : la
+  session LSP garde la table d'une analyse à l'autre ; `Analysis::run_with_cache`
+  (tests, CLI) passe `file_ids: None` et garde les ids denses historiques.
+- Table incohérente (un id pour deux fichiers) ⇒ **`E-IO`, chargement refusé**
+  (`program` à `None`), jamais de réutilisation silencieuse.
+
+**Preuve.** Test positif = celui du GOAL, dans
+`crates/ravum-lang-lsp/tests/parse_cache.rs` : paquet à **3 modules**
+(`a.rv`, `b.rv`, `c.rv`) + `main.rv`, puis un **4e module déclaré avant**
+(`mod aa;` inséré avant `mod a;`). Les trois fichiers inchangés gardent leur
+`FileId` et leurs `NodeId`, le cache de parse sert **3 hits** (seuls `main.rv` et
+`aa.rv` sont re-parsés), et `aa.rv` prend `max + 1`. Le test négatif rejoue la
+même édition **sans** table de session : ids décalés, **0 hit**, `NodeId`
+changés — la preuve que le test positif n'est pas vide. Deux tests loader
+couvrent la réutilisation des ids et le refus fail-closed.
+
+```
+cargo test -p ravum-lang-lsp --test parse_cache -- --test-threads=2
+  test session_file_ids_keep_untouched_files_stable ... ok
+  test without_a_session_table_a_new_module_renumbers_the_other_files ... ok
+  test unchanged_file_is_not_reparsed ... ok
+  test stale_diagnostics_are_never_reused_for_the_new_buffer ... ok
+  test result: ok. 4 passed; 0 failed; 1 ignored
+
+cargo test -p ravum-lang-sema --lib session -- --test-threads=2
+  loader::tests::a_session_table_that_maps_one_id_to_two_files_fails_closed ... ok
+  loader::tests::session_file_ids_survive_a_file_added_before_the_existing_ones ... ok
+  test result: ok. 2 passed; 0 failed
+
+cargo run -p ravum-conformance -- run --verify-build
+  summary: total=478 pass=477 fail=0 skip=1 not_run=0
+  build: perimeter=206 covered=206 verified=123 implicit=83 failed=0
+```
+
+**Effet sur le corpus** : aucun — conformance et périmètre inchangés (le CLI
+n'utilise pas la table de session). Workspace : voir §8.
+
+**Limites.** La table vit le temps du processus `ravum-lang-lsp` (aucune
+persistance, aucune borne de croissance au-delà de la mémoire) ; le gain n'est
+mesuré qu'in-processus, pas à travers le transport JSON-RPC ni sur plusieurs
+paquets concurrents ; `SourceMap::add` et `add_at` partagent le même compteur,
+mais le loader plafonne à 65 536 fichiers, donc un id proche de `u32::MAX` n'est
+pas constructible par ce chemin.
+
+### T6 à T8 — `NOT_RUN`
 
 | Tâche | Statut | Raison |
 |---|---|---|
-| T5 — `FileId` stable en session LSP | `NOT_RUN` | Non commencée. T4 fournit la base (ids stables par fichier), mais la table chemin canonique → `FileId` de session et le champ optionnel de `LoadOptions` demandent une passe dédiée (loader + LSP + test des 3 fichiers). |
 | T6 — profil `rt` par point d'entrée | `NOT_RUN` | Non commencée. Amendement de RFC + option CLI `--rt-entry` + règle d'indexation bornée + cas positifs/négatifs + `examples/dsp-gain-iir` : aucun de ces éléments n'a été écrit. |
 | T7 — garde OwnFacts étendu | `NOT_RUN` | Non commencée ; dépend du test de puissance de T2, qui est `NOT_RUN`. |
 | T8 — mutants survivants | `NOT_RUN` | Non commencée ; demande de relire les 24 survivants et de rejouer la campagne mutation en CI. |
@@ -291,11 +363,13 @@ aussi sur `goal/**` (il ne le faisait que sur `main`, `dev`, `feat/**`,
 ```
 cargo fmt --all -- --check                                   exit 0
 cargo test -p ravum-lang-syntax -p ravum-lang-sema -- --test-threads=2   exit 0
+cargo test -p ravum-lang-lsp -- --test-threads=2             exit 0
+cargo test -p ravum-lang-cli -- --test-threads=2             exit 0
 cargo test -p ravum-lang-codegen -- --test-threads=2         exit 0 (32 + 45 + 6 + 2 ignorés)
 cargo run -p ravum-conformance -- run --verify-build         exit 0
   478 cas : 477 PASS / 0 FAIL / 1 SKIP ; perimeter=206/206 ; verified=123
 cargo test --workspace --all-targets -- --test-threads=2     exit 0
-  101 suites, 1 610 passés / 0 échec / 6 ignorés
+  101 groupes : 1 618 passés / 0 échec / 6 ignorés
 python tools/report_consistency.py --evidence                exit 0 (19 déclarations)
 ```
 
@@ -326,7 +400,8 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - **T3, LSP de bout en bout à l'échelle** : `NOT_RUN` (pas de client écrit).
 - **T4, comparaison littérale octet pour octet** : déviation documentée (15
   fichiers, ids dans les noms de symboles).
-- **T5, T6, T7, T8** : `NOT_RUN` (non commencées).
+- **T6, T7, T8** : `NOT_RUN` (non commencées). **T5** : exécutée depuis la
+  rédaction (`e3823cb`, §5).
 - **T10, run CI** : `NOT_RUN` (pas de push).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
 - **Couverture, mutation, fuzz, Miri, Linux** : `NOT_RUN` cette session.
@@ -339,7 +414,7 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 2. Pour le test de puissance : un substitut par désactivation de mécanisme
    est-il recevable, ou faut-il recréer les correctifs historiques en commits
    de revert sur l'arbre courant ?
-3. T5-T8 doivent-elles être planifiées dans une session suivante, et dans quel
+3. T6-T8 doivent-elles être planifiées dans une session suivante, et dans quel
    ordre ? (T7 dépend du test de puissance ; T6 dépend d'un amendement de RFC.)
 4. Faut-il rejouer la campagne nominale complète de l'oracle **avant** ou
    **après** le test de puissance ?
@@ -357,5 +432,8 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   synthétique et régulier.
 - Il ne qualifie pas le LSP à l'échelle, ni la sûreté mémoire, ni la
   reproductibilité, ni Linux : ces mesures ne sont pas rejouées ici.
+- T5 est prouvé **in-processus** (analyse LSP et cache de parse) : la table de
+  session n'est ni persistée ni bornée, et le transport JSON-RPC n'est pas
+  mesuré pour ce cas.
 - Il ne remplace ni l'audit externe (T4) ni le Go/No-Go (T12), qui restent des
   décisions humaines, ni aucune ratification de RFC.

@@ -1043,3 +1043,14 @@ Fin de session : `cargo test --workspace --all-targets -- --test-threads=2` →
 **101 suites, 1 610 passés / 0 échec / 6 ignorés**, exit 0 ; conformance
 **478 cas : 477 PASS / 0 FAIL / 1 SKIP**, `perimeter=206/206`, `verified=123`.
 Aucun cas, test ni seuil supprimé. Aucune fusion, aucun tag, aucun push.
+
+### Suite du 2026-11-14 — T5 exécutée (branche `goal/consolidation-2`)
+
+T5 (`FileId` stable en session LSP) a été menée **après** la rédaction du
+rapport : commit `e3823cb`, tests positifs et négatifs (3 fichiers inchangés +
+4e module déclaré avant ⇒ 3 hits de cache et `NodeId` inchangés ; même édition
+sans table ⇒ 0 hit), refus fail-closed d'une table incohérente. Conformance et
+workspace rejoués : **101 groupes, 1 618 passés / 0 échec / 6 ignorés**, exit 0 ;
+conformance inchangée (**478 / 477 / 0 / 1**, `perimeter=206/206`,
+`verified=123`). L'entrée ci-dessus garde ses chiffres de fin de session ; le
+détail T5 est dans `GOAL-CONSOLIDATION-2-REPORT.md` §5.
