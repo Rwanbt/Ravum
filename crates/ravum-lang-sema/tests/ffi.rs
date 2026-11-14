@@ -4,6 +4,7 @@
 //! FFI signature the code generator consumes.
 
 use ravum_lang_sema::facts::{CheckOptions, Profile};
+use ravum_lang_syntax::diag::Severity;
 use std::path::PathBuf;
 
 struct TempPackage {
@@ -31,7 +32,7 @@ impl TempPackage {
         TempPackage { dir }
     }
 
-    fn check(&self, profile: Profile) -> Vec<String> {
+    fn check_result(&self, profile: Profile) -> ravum_lang_sema::CheckResult {
         let loaded = ravum_lang_sema::load_package(&self.dir);
         assert!(
             loaded.diags.is_empty(),
@@ -43,8 +44,11 @@ impl TempPackage {
             profile,
             ..CheckOptions::default()
         };
-        let checked = ravum_lang_sema::check(&program, &loaded.sources, &options);
-        checked
+        ravum_lang_sema::check(&program, &loaded.sources, &options)
+    }
+
+    fn check(&self, profile: Profile) -> Vec<String> {
+        self.check_result(profile)
             .diags
             .as_slice()
             .iter()
@@ -161,5 +165,121 @@ fn main() {
     assert!(
         codes.iter().any(|code| code == "E-FFI-TYPE"),
         "expected E-FFI-TYPE, got {codes:?}"
+    );
+}
+
+/// Error codes only, in deterministic order. Warnings (for example
+/// `W-OWN-UNUSED-VARIABLE`) are not part of the FFI contract under test.
+fn error_codes(result: &ravum_lang_sema::CheckResult) -> Vec<String> {
+    result
+        .diags
+        .as_slice()
+        .iter()
+        .filter(|diag| diag.severity == Severity::Error)
+        .map(|diag| diag.code.clone())
+        .collect()
+}
+
+#[test]
+fn i128_parameter_is_rejected_at_the_ffi_boundary() {
+    let package = TempPackage::new(
+        "ffi-i128-param",
+        r#"extern "C" {
+    fn take_128(x: i128) -> i32;
+}
+
+fn main() {
+}
+"#,
+    );
+    let result = package.check_result(Profile::Core);
+    assert_eq!(
+        error_codes(&result),
+        vec!["E-FFI-TYPE"],
+        "i128 is not FFI-safe as an extern parameter (S4, 2026-11-14)"
+    );
+    assert!(
+        result.checked.is_none(),
+        "a refused extern declaration must not produce a CheckedProgram"
+    );
+}
+
+#[test]
+fn u128_return_is_rejected_at_the_ffi_boundary() {
+    let package = TempPackage::new(
+        "ffi-u128-return",
+        r#"extern "C" {
+    fn give_128() -> u128;
+}
+
+fn main() {
+}
+"#,
+    );
+    let result = package.check_result(Profile::Core);
+    assert_eq!(
+        error_codes(&result),
+        vec!["E-FFI-TYPE"],
+        "u128 is not FFI-safe as an extern return (S4, 2026-11-14)"
+    );
+    assert!(
+        result.checked.is_none(),
+        "a refused extern declaration must not produce a CheckedProgram"
+    );
+}
+
+/// C-FFI-1 on the verifier side (S4, APPROVED by the owner, 2026-11-14).
+///
+/// `i128` and `u128` are out of the admitted FFI types. The twin backend list
+/// (`crates/ravum-lang-codegen/src/emit.rs`, `ast_ffi_safe`) still admits them
+/// on this branch and is aligned by agent E (wave 2). This test proves the
+/// front-end gate runs **before** the backend: `check` emits `E-FFI-TYPE` and
+/// returns **no** `CheckedProgram`, so codegen can never receive an
+/// `i128`/`u128` extern signature even while its own guard is still permissive.
+#[test]
+fn c_ffi_1_verifier_refuses_i128_and_u128_before_the_backend() {
+    let package = TempPackage::new(
+        "ffi-128-before-backend",
+        r#"extern "C" {
+    fn take_128(x: i128) -> u128;
+}
+
+fn main() {
+}
+"#,
+    );
+    let result = package.check_result(Profile::Core);
+    assert_eq!(
+        error_codes(&result),
+        vec!["E-FFI-TYPE", "E-FFI-TYPE"],
+        "expected one E-FFI-TYPE for the i128 parameter and one for the u128 return"
+    );
+    assert!(
+        result.checked.is_none(),
+        "the verifier must refuse before the backend: no CheckedProgram may be produced"
+    );
+}
+
+#[test]
+fn i64_declaration_remains_ffi_safe() {
+    let package = TempPackage::new(
+        "ffi-i64-admitted",
+        r#"extern "C" {
+    fn take_64(x: i64) -> i64;
+}
+
+fn main() {
+}
+"#,
+    );
+    let result = package.check_result(Profile::Core);
+    assert_eq!(
+        error_codes(&result),
+        Vec::<String>::new(),
+        "i64 stays in the admitted set"
+    );
+    assert!(
+        result.checked.is_some(),
+        "an admitted extern signature still produces a CheckedProgram"
     );
 }

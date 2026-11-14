@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-i128-param",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "S4 (APPROVED by the owner, 2026-11-14): i128 is removed from the admitted FFI types (C-FFI-2, no portable C width); an extern parameter using it is refused at resolve."
+}

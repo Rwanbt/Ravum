@@ -1,0 +1,6 @@
+extern "C" {
+    fn give_128() -> u128;
+}
+
+fn main() {
+}
