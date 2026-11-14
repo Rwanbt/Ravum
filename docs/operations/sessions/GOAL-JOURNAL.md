@@ -1080,3 +1080,15 @@ le garde actif : **120 programmes, 0 divergence, 0 désaccord**, 110/110 accept�
 conformance inchangée (**483 / 482 / 0 / 1**, `perimeter=207/207`,
 `verified=124`) ; `evidence/current.json` rafraîchi (7 contrôles PASS).
 Garde debug-only ; campagne rapide seulement.
+
+### Suite du 2026-11-14 — T8 documentée (branche `goal/consolidation-2`)
+
+T8 (mutants survivants) : la liste des 24 et leurs justifications existent déjà
+(`MUTATION-EQUIVALENCE.md` §9.1–§9.2, 24/24, familles E1–E6) et ont été
+**revérifiées à HEAD `0d04106`** (sites et conditions présents ; turbofish
+toujours refusé, `type_is_copy` inchangé, `pattern_contains_float` à quatre
+bras). Rejeu de la campagne **`NOT_RUN`** : `cargo mutants --version` → exit 101
+(outil absent ; installation = `RFC-DEV-TOOLS-1` `PENDING_HUMAN_APPROVAL`),
+workflow `mutation.yml` non déclenchable sans push. Dernier rejeu CI connu :
+2026-11-13, 183 mutants / 150 tués / 24 survivants / 9 non viables, identique.
+Statut T8 : `PARTIAL`.

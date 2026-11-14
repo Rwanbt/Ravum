@@ -36,10 +36,12 @@
    littérale a été arrêtée, l'écart a été expliqué et vérifié, puis le travail a
    continué. C'est une **déviation assumée et rapportée**, pas un « octet pour
    octet ».
-4. **Une tâche reste `NOT_RUN`** : T8 (mutants survivants). T5 (`FileId` stable
-   LSP), T6 (`rt` par point d'entrée) et T7 (garde OwnFacts étendu), `NOT_RUN` à
-   la première rédaction, sont **exécutées depuis** (`e3823cb`, `986f542`,
-   `ad62f32`…`0d04106`, §5).
+4. **T8 est `PARTIAL`** : la liste des 24 survivants et une justification écrite
+   par mutant existent (`MUTATION-EQUIVALENCE.md` §9.1–§9.2, 24/24) et ont été
+   revérifiées à HEAD ; le **rejeu de la campagne** est `NOT_RUN` cette session
+   (`cargo-mutants` absent ; son installation = `RFC-DEV-TOOLS-1` en attente ;
+   la CI demande un push, interdit). T5, T6 et T7 sont **exécutées depuis** la
+   rédaction (`e3823cb`, `986f542`, `ad62f32`…`0d04106`, §5).
 5. **La campagne nominale 3 × 2 000 de T2 n'est pas terminée** : elle a été
    interrompue après 561 programmes (graine 1) pour corriger la seconde
    divergence trouvée. Le total de 6 000 programmes n'est pas mesuré.
@@ -402,13 +404,40 @@ campagne exécutée est la campagne rapide de 120 programmes, pas la nominale
 les 13 formes historiques du test de puissance ; le garde ne vérifie que les
 places *enregistrées*, pas l'absence d'un fait oublié.
 
-### T8 — mutants survivants — `NOT_RUN`
+### T8 — mutants survivants (Q1-6) — `PARTIAL`
 
-| Tâche | Statut | Raison |
-|---|---|---|
-| T8 — mutants survivants | `NOT_RUN` | Non commencée ; demande de relire les 24 survivants et de rejouer la campagne mutation en CI. |
+**Ce qui existe déjà** : `docs/qualification/MUTATION-EQUIVALENCE.md` §9 (passe 7,
+2026-11-11, `1376449`) liste **les 24 survivants ligne par ligne** (§9.1) et
+donne pour chacun une justification écrite d'équivalence (§9.2, classes E1–E6) :
+**24/24 justifiés, 0 lacune de test**. La répartition est 1 E1 (`own.rs`), 15 E2
+(`resolve.rs`, bras `PathRoot::Plain`/`Self` rendus inatteignables par le
+parseur), 1 E3 (`resolve.rs::type_is_copy`), 3 E4 (`typeck.rs::check_struct_lit`,
+arguments génériques refusés en expression), 1 E5 (`check_const_expr`), 4 E6
+(`pattern_contains_float`, filtre redondant depuis la matrice de couverture
+récursive). La campagne CI du 2026-11-13 (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293),
+`b5298db`) retrouve **exactement** 183 mutants / 150 tués / 24 survivants / 9 non
+viables : les mêmes familles, aucun nouveau survivant. Aucun test n'a été ajouté
+— un test qui ne peut pas échouer sur le code muté serait un faux `PASS` (§9.1).
 
-Ce statut n'est pas un `PASS` déguisé : rien n'a été exécuté.
+**Revérification à HEAD (`0d04106`, cette session)** : les sites et les
+conditions des six classes sont toujours présents (numéros de ligne décalés) —
+`own.rs::check_availability` garde `!st.partial.is_empty() && !whole_reinit` ;
+`resolve.rs` garde les bras `"crate"/"self"/"super"` et le `||` de
+`type_is_copy` avec `PRELUDE_ERROR_DEF` ; `typeck.rs` garde
+`check_struct_lit`, `check_const_expr` (borné par `int_value_fits`),
+`pattern_contains_float` et ses quatre bras ; `Boite::<i32> { … }` est toujours
+refusé par le parseur (`E-PARSE-UNEXPECTED`, mesuré). Les changements T4–T7 ne
+touchent aucun de ces sites.
+
+**Rejeu de la campagne — `NOT_RUN` cette session.** `cargo mutants --version`
+→ **exit 101** (outil absent localement ; son installation est l'objet de
+`RFC-DEV-TOOLS-1`, `PENDING_HUMAN_APPROVAL`), et le workflow `mutation.yml` ne
+peut être dispatché que sur une branche poussée — aucun push n'est autorisé.
+
+**Statut : `PARTIAL`** — la liste et les justifications (l'exigence « un test qui
+le tue, ou une justification écrite d'équivalence ») sont présentes, revérifiées
+et référencées ; le rejeu de la campagne de cette session est `NOT_RUN`, avec sa
+cause. Ce n'est pas un `PASS` déguisé.
 
 ## 6. T9 — source unique des chiffres (Q1-5) — `PARTIAL`
 
@@ -467,6 +496,8 @@ pwsh -File scripts/lang-smoke.ps1                            exit 0
   43 PASS / 0 FAIL / 0 NOT_RUN
 cargo run -p ravum-lang-cli -- check examples/dsp-gain-iir --profile rt --rt-entry process
   exit 0 (0 erreur) — sortie de l'exemple identique à l'ancienne version
+cargo mutants --version                                      exit 101 (outil absent localement)
+cargo run -q -p ravum-lang-cli -- check <turbofish>.rv       exit 1 (E-PARSE-UNEXPECTED, condition E4)
 python tools/report_consistency.py --evidence                exit 0 (19 déclarations)
 ```
 
@@ -502,9 +533,10 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - **T3, LSP de bout en bout à l'échelle** : `NOT_RUN` (pas de client écrit).
 - **T4, comparaison littérale octet pour octet** : déviation documentée (15
   fichiers, ids dans les noms de symboles).
-- **T8** : `NOT_RUN` (non commencée). **T5**, **T6** et **T7** : exécutées
-  depuis la rédaction (`e3823cb`, `986f542`, `ad62f32`…`0d04106`, §5) ; la
-  règle T6 reste `PENDING_HUMAN_APPROVAL`.
+- **T8** : `PARTIAL` — liste et justifications 24/24 revérifiées à HEAD ; rejeu
+  de la campagne `NOT_RUN` (`cargo-mutants` absent, push interdit). **T5**,
+  **T6** et **T7** : exécutées depuis la rédaction (`e3823cb`, `986f542`,
+  `ad62f32`…`0d04106`, §5) ; la règle T6 reste `PENDING_HUMAN_APPROVAL`.
 - **T10, run CI** : `NOT_RUN` (pas de push).
 - **T9, portée** : 3 documents, 19 déclarations (pas un balayage exhaustif).
 - **Couverture, mutation, fuzz, Miri, Linux** : `NOT_RUN` cette session.
@@ -517,8 +549,9 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 2. Pour le test de puissance : un substitut par désactivation de mécanisme
    est-il recevable, ou faut-il recréer les correctifs historiques en commits
    de revert sur l'arbre courant ?
-3. T8 (mutants survivants) doit-il être planifié dans une session suivante,
-   avec un push pour rejouer la campagne mutation en CI ?
+3. Le rejeu de la campagne mutation doit-il être fait en CI (push autorisé), et
+   faut-il autoriser l'installation locale de `cargo-mutants`
+   (`RFC-DEV-TOOLS-1`) pour éviter un push à chaque rejeu ?
 4. Faut-il rejouer la campagne nominale complète de l'oracle **avant** ou
    **après** le test de puissance ?
 5. Le corpus synthétique doit-il être complété par un programme réel d'au moins
@@ -545,5 +578,8 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 - T7 est un garde **debug-only**, exécuté ici sur les 120 programmes de la
   campagne rapide : il ne prouve pas l'absence d'un fait oublié et ne change
   rien aux builds release.
+- T8 ne rejoue pas la campagne : les justifications E1–E6 sont des revues
+  statiques revérifiées à HEAD, pas une mesure de mutants exécutée cette
+  session ; 150/183 reste un chiffre ciblé, pas un score de crate.
 - Il ne remplace ni l'audit externe (T4) ni le Go/No-Go (T12), qui restent des
   décisions humaines, ni aucune ratification de RFC.
