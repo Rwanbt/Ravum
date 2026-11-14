@@ -10,13 +10,15 @@
 > la frontière, et aucun document ne peut écrire `PROVED` ni « production
 > ready ».
 >
-> État de l'implémentation sur cette branche : le vérificateur
-> (`crates/ravum-lang-sema/src/resolve.rs`, `ffi_safe`) applique la liste
-> approuvée ; la liste jumelle du backend
-> (`crates/ravum-lang-codegen/src/emit.rs`, `ast_ffi_safe`) admet encore
-> `i128`/`u128` et doit être alignée (agent E, vague 2). C-FFI-1 reste une
-> exigence : cette divergence est un défaut de sûreté **tracé**, et le test
-> C-FFI-1 prouve que le vérificateur refuse avant le backend.
+> État de l'implémentation : le vérificateur
+> (`crates/ravum-lang-sema/src/resolve.rs`, `ffi_safe`) et la liste jumelle du
+> backend (`crates/ravum-lang-codegen/src/emit.rs`, `ast_ffi_safe`) appliquent
+> la même liste approuvée ; le backend a été aligné au commit `30085ea`
+> (agent E), avec le test
+> `c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`. C-FFI-1 est
+> donc satisfaite des deux côtés : le vérificateur refuse avant le backend
+> (test C-FFI-1 côté sema) et le backend refuse aussi un `CheckedProgram`
+> construit à la main.
 > Inventaire détaillé, contradictions de spécification et tests proposés :
 > [`RFC-D7-FFI-EFFECTS.md`](../rfc/RFC-D7-FFI-EFFECTS.md).
 
@@ -42,7 +44,7 @@ l'omettrait donnerait un `PASS` de forme sur une sûreté non démontrée.
 | Déclaration `extern "C" { fn f(…) -> …; }` | acceptée, **module uniquement** | `parser.rs` (G-3.10/G-3.11) ; cas `unsupported/extern-fn` |
 | Définition `extern "C" fn f() { … }` | refusée `E-UNSUPPORTED-EXTERN` | parser ; cas `unsupported/extern-fn` |
 | ABI autre que `"C"` | refusée `E-UNSUPPORTED-ABI` | parser ; `unsupported.md` §3 |
-| Types admis | **exactement** `i8 i16 i32 i64 u8 u16 u32 u64 isize usize f32 f64 bool ()` ; `i128`/`u128` **retirés** (S4, 2026-11-14) et refusés `E-FFI-TYPE` | `resolve.rs` (`ffi_safe`) ; copie défensive côté backend `emit.rs` (`ast_ffi_safe`), **encore à aligner** (agent E) |
+| Types admis | **exactement** `i8 i16 i32 i64 u8 u16 u32 u64 isize usize f32 f64 bool ()` ; `i128`/`u128` **retirés** (S4, 2026-11-14) et refusés `E-FFI-TYPE` | `resolve.rs` (`ffi_safe`) ; liste jumelle identique côté backend `emit.rs` (`ast_ffi_safe`), alignée au commit `30085ea` |
 | `char`, `i128`, `u128`, `String`, `Vec`, `&T`, `&str`, `&mut T`, tuples, tableaux, structs/enums | refusés `E-FFI-TYPE` | `resolve.rs` (`resolve_extern_block`) ; cas `types/ffi-bad-type`, `types/ffi-i128-param`, `types/ffi-u128-return` |
 | Appel `extern` hors `unsafe` | refusé `E-UNSAFE-CONTEXT` | `typeck.rs` (`E-UNSAFE-CONTEXT`) ; cas `types/ffi-outside-unsafe` |
 | `unsafe { … }` | accepté, transparent pour l'ownership | `own.rs` ; cas `ownership/unsafe-transparent` |
@@ -67,7 +69,7 @@ bibliothèque C appelée.
 
 | ID | Clause |
 |---|---|
-| **C-FFI-1 — Types** | La liste admise est **fermée** : `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`, `bool`, `()`. `i128`/`u128` en sont **retirés** (S4, 2026-11-14 ; C-FFI-2). La liste doit être **identique** dans le vérificateur (`ffi_safe`) et dans le backend (`ast_ffi_safe`) ; toute divergence est un défaut de sûreté. Le vérificateur refuse `i128`/`u128` **avant** le backend (test `c_ffi_1_verifier_refuses_i128_and_u128_before_the_backend`, et cas `types/ffi-i128-param` / `types/ffi-u128-return`). Quand l'agent E aligne `ast_ffi_safe`, un test doit en plus construire un `CheckedProgram` à la main et vérifier que le backend refuse. |
+| **C-FFI-1 — Types** | La liste admise est **fermée** : `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`, `bool`, `()`. `i128`/`u128` en sont **retirés** (S4, 2026-11-14 ; C-FFI-2). La liste est **identique** dans le vérificateur (`ffi_safe`) et dans le backend (`ast_ffi_safe`, aligné au commit `30085ea`). Le vérificateur refuse `i128`/`u128` **avant** le backend (test `c_ffi_1_verifier_refuses_i128_and_u128_before_the_backend`, et cas `types/ffi-i128-param` / `types/ffi-u128-return`) ; le backend aligné refuse en plus un `CheckedProgram` construit à la main (`backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`, paramètre `i128` et retour `u128`). |
 | **C-FFI-2 — ABI** | Seul `"C"` est admis. Aucune ABI stable n'est revendiquée : la convention d'appel est celle de la cible. `i128`/`u128` sont **retirés** des types admis (S4, 2026-11-14) : aucune largeur C portable ne les couvre (MSVC n'a pas `__int128`). Toute déclaration qui les utilise est refusée `E-FFI-TYPE`. |
 | **C-FFI-3 — Durées de vie et propriété** | Aucune référence ne traverse ; rien de possédé ne traverse. Il n'y a donc rien à libérer **aujourd'hui**. Dès qu'un pointeur sera admis, un tableau propriétaire/libérateur et une règle d'aliasing deviennent obligatoires. |
 | **C-FFI-4 — Déroulement et terminaison** | Une panique Ravum ne traverse pas la frontière (`panic=abort` dans les harnais concernés). Une fonction C qui déroule (exception C++/`longjmp`), `abort()`, lève un signal ou termine le processus est **hors contrat** (S4, 2026-11-14) : c'est une **obligation de l'appelant**, **non vérifiée** par la toolchain, et aucun comportement n'est spécifié vis-à-vis du hook de panic, du runner de tests ou du contrat de code de sortie de la CLI. |
@@ -113,13 +115,15 @@ seul `allow` local, compilation et exécution réelles de `abs` (`run/ffi-abs`),
 passage réel d'un `i64` (`run/ffi-width-boundary`), admission + build d'un
 `bool` (`types/ffi-bool-boundary`), transparence de l'`unsafe` pour l'ownership.
 
-**Dette d'implémentation tracée (2026-11-14)** : sur cette branche,
-`emit.rs::ast_ffi_safe` admet encore `i128`/`u128` alors que `resolve.rs::ffi_safe`
-ne les admet plus. L'alignement du backend est confié à l'agent E (vague 2).
-Tant que la divergence existe, C-FFI-1 est un **défaut de sûreté tracé**, pas un
-`PASS` : le vérificateur refuse avant le backend (test C-FFI-1 + deux cas de
-conformance), donc aucun programme accepté ne peut les atteindre, mais la liste
-jumelle n'est pas encore identique.
+**Alignement des listes jumelles (2026-11-14)** : `emit.rs::ast_ffi_safe` a été
+aligné sur `resolve.rs::ffi_safe` au commit `30085ea` (agent E) ; les deux listes
+sont désormais exactement `i8 i16 i32 i64 u8 u16 u32 u64 isize usize f32 f64
+bool ()`. Le backend refuse un `CheckedProgram` construit à la main avec un
+paramètre `i128` ou un retour `u128`
+(`backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`),
+en plus du refus frontal (test C-FFI-1 côté sema et cas `types/ffi-i128-param` /
+`types/ffi-u128-return`). C-FFI-1 est satisfaite des deux côtés ; ce constat vaut
+pour le commit `30085ea` et doit être revérifié après intégration.
 
 **Confinement vérifié mécaniquement (2026-11-14)** : `python tools/unsafe_audit.py`
 → PASS. Les quatre crates du langage portent `#![forbid(unsafe_code)]` ; le CLI
@@ -161,12 +165,8 @@ approbation et ne doivent jamais être présentés comme des preuves :
    `unsupported.md` §3 acceptent `extern "C"` et que l'audit backend **exige** le
    wrapper `unsafe`. ABI-3.1/3.2 refusent au parse ce que G-3.10 accepte. La
    résolution d'un `MUST` reste une décision humaine.
-4. **Liste jumelle du backend** : `emit.rs::ast_ffi_safe` admet encore
-   `i128`/`u128` ; l'alignement est confié à l'agent E (vague 2). C'est une
-   divergence **tracée**, couverte côté vérificateur (test C-FFI-1), pas un
-   `PASS` de C-FFI-1.
-5. **Go/No-Go (`T12`)** : non tranché.
-6. **`C-FFI-4`** : une fonction C qui déroule, `longjmp`, lève un signal ou
+4. **Go/No-Go (`T12`)** : non tranché.
+5. **`C-FFI-4`** : une fonction C qui déroule, `longjmp`, lève un signal ou
    termine le processus est **hors contrat**, à la charge de l'appelant. Aucun
    test ne peut l'établir pour une bibliothèque hors TCB.
 
