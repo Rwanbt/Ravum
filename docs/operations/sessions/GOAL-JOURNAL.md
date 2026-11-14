@@ -798,6 +798,27 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Documents : `MUTATION-EQUIVALENCE.md` §11, rapport (§1, §3, R8, T10, §6),
   matrice des gates, `PRODUCTION-READINESS.md`.
 
+## Entrée 2026-11-14 (round 21) — Corps de la PR #110 remis à jour
+
+| Champ | Valeur |
+|---|---|
+| Action | `gh pr edit 110 --title … --body-file target/pr-110-body.md` |
+| État | PR **toujours brouillon**, base `dev`, tête `7dd076a` ; aucun merge/tag/release |
+
+- Le corps de la PR datait de `8abf258` : il annonçait encore 99 groupes /
+  1 587 tests, 471 cas, 3 600 programmes, phases 4-5 `NOT_RUN`, Miri et mutation
+  `NOT_RUN`. Il est réécrit avec les chiffres courants : workspace
+  **1 605/0/5** (release 1 603), conformance **476 (475 PASS)**, oracle
+  **40 200 programmes**, phases 4-5 partielles documentées, Miri et mutation
+  **rejoués en CI** (runs et liens), couverture **89,47/88,87**.
+- Le titre ne prétend plus « 4/5/8 not run » mais « phases 4-5 partial, 8 not
+  run » — plus exact.
+- Le corps rappelle la base de branche (`test/coverage-batch-1`, 3 commits absents
+  de `dev`), les décisions humaines bloquantes, et le fait qu'aucun gate n'est
+  fermé par la PR.
+- Aucun changement de code ni de dépôt hormis cette entrée de journal.
+
+
 
 
 
