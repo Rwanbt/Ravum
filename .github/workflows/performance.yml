@@ -23,6 +23,16 @@ name: 'Performance alarm (check latency, Windows)'
 # The gate does not run on every push: only when the compiler crates, the timing
 # script, the gate or its baseline change. A documentation-only PR does not pay
 # for it.
+#
+# Linearity gate (wave 3, S8, owner decision of 2026-11-14)
+# --------------------------------------------------------
+# The example ceilings are blind to a superlinear algorithm: the examples are a
+# few hundred lines. The job therefore also generates the two deterministic
+# corpora of tools/gen_scale_corpus.py (5 110 and 20 110 lines), measures
+# `check` three times on each and applies `tools/timings_gate.py --scale`:
+# the growth exponent e = ln(t20k/t5k)/ln(20110/5110) must stay <= 1.3. The
+# ratio is machine-independent, so it is meaningful on a shared runner. It is
+# still an alarm on algorithmic growth, not a budget.
 
 on:
   pull_request:
@@ -30,6 +40,7 @@ on:
     paths:
       - 'crates/ravum-lang-*/**'
       - 'scripts/lang-timings.ps1'
+      - 'tools/gen_scale_corpus.py'
       - 'tools/timings_gate.py'
       - 'docs/qualification/timings-baseline.json'
       - '.github/workflows/performance.yml'
@@ -88,11 +99,52 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::lang-timings exited $LASTEXITCODE"; exit 1 }
           exit 0
 
-      - name: Apply the coarse ceilings (fail-closed)
+      - name: Generate the two linearity corpora and measure check (3 runs each)
         shell: pwsh
         run: |
-          python tools/timings_gate.py --baseline docs/qualification/timings-baseline.json --input target/lang-timings/ci.json --factor 3 --p50-floor-ms 100 --p95-floor-ms 500
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::performance alarm: at least one coarse ceiling is exceeded (see the table above)"; exit 1 }
+          $ErrorActionPreference = 'Stop'
+          $binary = 'target\debug\ravum-lang.exe'
+          $presets = @(
+            @{ name = 'scale-5k';  modules = 150; fns = 6 },
+            @{ name = 'scale-20k'; modules = 150; fns = 26 }
+          )
+          $entries = @()
+          foreach ($preset in $presets) {
+            $package = "target/linearity/$($preset.name)"
+            $generated = (& python tools/gen_scale_corpus.py --modules $preset.modules --fns $preset.fns --out $package 2>&1 | Out-String)
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::the corpus generator failed for $($preset.name)"; Write-Host $generated; exit 1 }
+            if ($generated -notmatch '(\d+) lines') { Write-Host "::error::no line count in the generator output for $($preset.name)"; exit 1 }
+            $lines = [int]$matches[1]
+            $samples = @()
+            for ($i = 0; $i -lt 3; $i++) {
+              $text = (& $binary check $package --json --timings | Out-String)
+              if ($LASTEXITCODE -ne 0) { Write-Host "::error::check failed on $($preset.name)"; Write-Host $text; exit 1 }
+              $samples += [double](($text.Trim() | ConvertFrom-Json).timings.total_ms)
+            }
+            $sorted = @($samples | Sort-Object)
+            $p50 = $sorted[[int][math]::Floor($sorted.Count / 2)]
+            $p95 = $sorted[$sorted.Count - 1]
+            $entries += [ordered]@{
+              name         = $preset.name
+              source_lines = $lines
+              check        = [ordered]@{
+                phases = [ordered]@{
+                  total = [ordered]@{ p50 = $p50; p95 = $p95 }
+                }
+              }
+            }
+            Write-Host ("linearity: {0} = {1} lines, check p50 = {2:N3} ms, p95 = {3:N3} ms" -f $preset.name, $lines, $p50, $p95)
+          }
+          New-Item -ItemType Directory -Force -Path target/linearity | Out-Null
+          $scale = [ordered]@{ schema_version = 1; scale_corpus = $entries }
+          $scale | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath target/linearity/scale.json -Encoding utf8
+          exit 0
+
+      - name: Apply the coarse ceilings and the linearity gate (fail-closed)
+        shell: pwsh
+        run: |
+          python tools/timings_gate.py --baseline docs/qualification/timings-baseline.json --input target/lang-timings/ci.json --scale target/linearity/scale.json --factor 3 --p50-floor-ms 100 --p95-floor-ms 500 --exponent-ceiling 1.3
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::performance alarm: a coarse ceiling or the linearity exponent is exceeded (see the table above)"; exit 1 }
           exit 0
 
       - name: Upload the measurement for trend inspection
@@ -100,7 +152,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lang-timings-ci
-          path: target/lang-timings/ci.json
+          path: |
+            target/lang-timings/ci.json
+            target/linearity/scale.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -108,4 +162,5 @@ jobs:
         if: always()
         run: |
           echo "Coarse regression alarm on a shared runner: not the 16 GB reference machine, not a budget, not a proof of constant-time behaviour."
+          echo "The linearity exponent (5 110 -> 20 110 lines, ceiling 1.3) is an algorithmic-growth alarm, not a latency budget."
           echo "Baseline and ceilings: docs/qualification/timings-baseline.json and docs/qualification/PERFORMANCE.md."
