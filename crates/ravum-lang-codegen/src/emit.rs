@@ -3656,6 +3656,16 @@ struct Descent {
 struct WholeUse {
     place: PlaceKey,
     top: usize,
+    /// Walk order of the enclosing statement, used to bound a hoist to the
+    /// region between two whole-place writes.
+    order: usize,
+}
+
+/// A whole-binding assignment (`a = ...`): it re-initialises the place *after*
+/// the right-hand side is evaluated, so it ends the region of any hoist.
+struct WholeWrite {
+    place: PlaceKey,
+    order: usize,
 }
 
 /// `[len0, len1, ...]` of a (possibly nested) array type.
@@ -3896,6 +3906,8 @@ struct MovePlanner<'e, 'a> {
     binders: Vec<Binder>,
     accesses: Vec<Access>,
     whole_uses: Vec<WholeUse>,
+    /// Whole-binding assignments (`a = ...`), in walk order.
+    whole_writes: Vec<WholeWrite>,
     /// Accesses whose chain crosses an element move or starts at an rvalue.
     descents: Vec<Descent>,
     /// Innermost enclosing `match` arm body (see [`Access::arm_body`]).
@@ -3918,6 +3930,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             binders: Vec::new(),
             accesses: Vec::new(),
             whole_uses: Vec::new(),
+            whole_writes: Vec::new(),
             descents: Vec::new(),
             arm_anchor: None,
             loop_depth: 0,
@@ -4099,13 +4112,47 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
     }
 
     fn record_whole_place_use(&mut self, binder: BinderId, top: usize) {
+        let order = self.current_order().unwrap_or(0);
         self.whole_uses.push(WholeUse {
             place: PlaceKey {
                 binder,
                 projections: Vec::new(),
             },
             top,
+            order,
         });
+    }
+
+    /// Walk order of the statement being walked, when known.
+    fn current_order(&self) -> Option<usize> {
+        self.statement_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied())
+    }
+
+    /// Region of an access: the number of whole-place writes that happen
+    /// strictly before it. A hoist may only rewrite accesses of its own region:
+    /// after `a = ...`, the slots of a previous destructuring are stale.
+    fn region_of_order(&self, place: &PlaceKey, order: Option<usize>) -> usize {
+        let Some(order) = order else {
+            return 0;
+        };
+        self.whole_writes
+            .iter()
+            .filter(|write| write.order < order && Self::places_overlap(&write.place, place))
+            .count()
+    }
+
+    fn region_of_access(&self, access: &Access) -> usize {
+        let order = access
+            .stmt_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied());
+        self.region_of_order(&access.place, order)
+    }
+
+    fn region_of_use(&self, place: &PlaceKey, use_site: &WholeUse) -> usize {
+        self.region_of_order(place, Some(use_site.order))
     }
 
     /// `owned` is true when the *value* of `expr` is consumed by its parent
@@ -4156,7 +4203,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                         // A dynamic index before a constant one, or an index
                         // outside the array layers, cannot be lowered: make the
                         // whole place bail out (loud E0508).
-                        self.whole_uses.push(WholeUse { place, top });
+                        let order = self.current_order().unwrap_or(0);
+                        self.whole_uses.push(WholeUse { place, top, order });
                     }
                     for index in indices {
                         self.walk_expr(index, false, top, block_depth);
@@ -4223,7 +4271,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 if let Some((place, _)) = self.place_of(expr) {
                     // A whole use of this place (not an element access).
-                    self.whole_uses.push(WholeUse { place, top });
+                    let order = self.current_order().unwrap_or(0);
+                    self.whole_uses.push(WholeUse { place, top, order });
                     return;
                 }
                 // Element projection (`a[1].0`) over an index chain: a mobile
@@ -4269,7 +4318,24 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::Assign { target, value } => {
                 self.walk_expr(value, true, top, block_depth);
-                self.walk_expr(target, false, top, block_depth);
+                // A whole-binding target (`a = ...`) is written *after* the RHS
+                // is evaluated: it is not a read of the place, and the write
+                // re-initialises the binding, so it must not block a hoist the
+                // RHS needs when it moves an element of the same array
+                // (`a = [a[0], ...]`, measured `E0508` before this rule).
+                if matches!(target.kind, ExprKind::Path(_)) {
+                    // The place is re-initialised after the RHS: record the
+                    // write so a hoist stops rewriting accesses past it.
+                    if let Some((place, _)) = self.place_of(target) {
+                        if place.projections.is_empty() {
+                            let order = self.current_order().unwrap_or(0);
+                            self.whole_writes.push(WholeWrite { place, order });
+                        }
+                    }
+                    self.tick();
+                } else {
+                    self.walk_expr(target, false, top, block_depth);
+                }
             }
             ExprKind::AssignOp { target, value, .. } => {
                 self.walk_expr(value, true, top, block_depth);
@@ -4696,6 +4762,16 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         for (place, members) in groups {
             let lens = members[0].lens.clone();
             let binder = &self.binders[place.binder.0 as usize];
+            // A whole-binding write re-initialises the place, so a shared hoist
+            // would be invalidated by it (and accesses past it must not be
+            // rewritten). Those descents keep the inline or loud plain form.
+            if self
+                .whole_writes
+                .iter()
+                .any(|write| Self::places_overlap(&write.place, &place))
+            {
+                continue;
+            }
             let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
             let mut ordered: Vec<(usize, NodeId)> = members
                 .iter()
@@ -4866,102 +4942,117 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         }
         let mut sequence = 0usize;
         for (place, accesses) in &by_place {
-            let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
-                continue;
-            };
-            // Uses of the place itself or of an ancestor at/after the first move
-            // would observe the partial move (see `whole_use_blocks`).
-            let blocked = self
-                .whole_uses
-                .iter()
-                .any(|use_site| Self::whole_use_blocks(place, use_site, first.top));
-            let binder = &self.binders[place.binder.0 as usize];
-            let hoist = self.hoist_anchor(first, binder);
-            let has_dynamic = accesses
-                .iter()
-                .any(|access| access.indices.iter().any(|level| level.is_none()));
-            if let Some((hoist_key, _)) = hoist {
-                if !blocked {
-                    if has_dynamic {
-                        if self
-                            .plan_prefix_slots(
-                                sequence, &mut plan, place, accesses, first, hoist_key,
-                            )
-                            .is_some()
-                        {
-                            sequence += 1;
-                            continue;
-                        }
-                    } else {
-                        let rewritten: Vec<&Access> = accesses
-                            .iter()
-                            .copied()
-                            .filter(|access| access.top >= first.top)
-                            .collect();
-                        if let Some((pattern, rewrites)) =
-                            self.build_destructure(sequence, &rewritten)
-                        {
-                            plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-                                base: self.place_text(place),
-                                pattern,
-                            });
-                            for (node, binding) in rewrites {
-                                plan.rewrites.insert(node, binding);
+            // A whole-binding write (`a = ...`) re-initialises the place after
+            // the RHS: accesses after it must not be rewritten to the slots of
+            // a hoist that started before it.
+            let mut by_region: BTreeMap<usize, Vec<&Access>> = BTreeMap::new();
+            for access in accesses {
+                by_region
+                    .entry(self.region_of_access(access))
+                    .or_default()
+                    .push(*access);
+            }
+            for (region, accesses) in &by_region {
+                let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
+                    continue;
+                };
+                // Uses of the place itself or of an ancestor at/after the first move
+                // would observe the partial move (see `whole_use_blocks`).
+                let blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                let binder = &self.binders[place.binder.0 as usize];
+                let hoist = self.hoist_anchor(first, binder);
+                let has_dynamic = accesses
+                    .iter()
+                    .any(|access| access.indices.iter().any(|level| level.is_none()));
+                if let Some((hoist_key, _)) = hoist {
+                    if !blocked {
+                        if has_dynamic {
+                            if self
+                                .plan_prefix_slots(
+                                    sequence, &mut plan, place, accesses, first, hoist_key,
+                                )
+                                .is_some()
+                            {
+                                sequence += 1;
+                                continue;
                             }
-                            sequence += 1;
-                            continue;
+                        } else {
+                            let rewritten: Vec<&Access> = accesses
+                                .iter()
+                                .copied()
+                                .filter(|access| access.top >= first.top)
+                                .collect();
+                            if let Some((pattern, rewrites)) =
+                                self.build_destructure(sequence, &rewritten)
+                            {
+                                plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
+                                    base: self.place_text(place),
+                                    pattern,
+                                });
+                                for (node, binding) in rewrites {
+                                    plan.rewrites.insert(node, binding);
+                                }
+                                sequence += 1;
+                                continue;
+                            }
                         }
                     }
                 }
-            }
-            // Fallback: the first move can be lowered inline when every other use of
-            // the place is a read in an earlier statement (the place is still intact
-            // there) and no whole-place use blocks it. This keeps `match` arm
-            // payloads (an expression-bodied arm has no statement to hoist before),
-            // a single dynamic access, and reads followed by a dynamic move working.
+                // Fallback: the first move can be lowered inline when every other use of
+                // the place is a read in an earlier statement (the place is still intact
+                // there) and no whole-place use blocks it. This keeps `match` arm
+                // payloads (an expression-bodied arm has no statement to hoist before),
+                // a single dynamic access, and reads followed by a dynamic move working.
 
-            let inline_ok = accesses.iter().all(|access| {
-                access.node == first.node || (!access.consumed && access.top < first.top)
-            });
-            if inline_ok && !blocked && first.consumed {
-                let access = first;
-                if let Some(chain) = self.constant_chain(access) {
-                    let base = self.place_text(place);
-                    if let Some((pattern, rewrites)) = self.build_destructure(sequence, &[access]) {
-                        if let Some((_, binding)) = rewrites.into_iter().next() {
-                            plan.single.insert(
-                                access.node,
-                                SingleMove::Block {
-                                    base,
-                                    pattern,
-                                    binding,
-                                },
-                            );
-                            sequence += 1;
-                            continue;
+                let inline_ok = accesses.iter().all(|access| {
+                    access.node == first.node || (!access.consumed && access.top < first.top)
+                });
+                if inline_ok && !blocked && first.consumed {
+                    let access = first;
+                    if let Some(chain) = self.constant_chain(access) {
+                        let base = self.place_text(place);
+                        if let Some((pattern, rewrites)) =
+                            self.build_destructure(sequence, &[access])
+                        {
+                            if let Some((_, binding)) = rewrites.into_iter().next() {
+                                plan.single.insert(
+                                    access.node,
+                                    SingleMove::Block {
+                                        base,
+                                        pattern,
+                                        binding,
+                                    },
+                                );
+                                sequence += 1;
+                                continue;
+                            }
                         }
+                        let _ = chain;
+                    } else if access.indices.len() == 1 {
+                        // A flat place with one dynamic level keeps the dedicated
+                        // `into_iter().nth()` form (it does not need a materialized
+                        // root).
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Dynamic {
+                                base: self.place_text(place),
+                                len: access.lens.first().copied().unwrap_or(0),
+                            },
+                        );
+                    } else {
+                        // A deeper dynamic chain over a single-use place: materialize
+                        // the place once and walk the chain inline.
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Chain {
+                                base: ChainBase::Root,
+                            },
+                        );
                     }
-                    let _ = chain;
-                } else if access.indices.len() == 1 {
-                    // A flat place with one dynamic level keeps the dedicated
-                    // `into_iter().nth()` form (it does not need a materialized
-                    // root).
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Dynamic {
-                            base: self.place_text(place),
-                            len: access.lens.first().copied().unwrap_or(0),
-                        },
-                    );
-                } else {
-                    // A deeper dynamic chain over a single-use place: materialize
-                    // the place once and walk the chain inline.
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Chain {
-                            base: ChainBase::Root,
-                        },
-                    );
                 }
             }
         }
