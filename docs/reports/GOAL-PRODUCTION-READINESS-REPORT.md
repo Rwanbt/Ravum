@@ -200,7 +200,8 @@ au round 8 (`aa88479`), pas par la CI de la PR : le workflow dédié
 
 Sur `17ab64e` (premier fichier mesuré clos à 100 % de couverture,
 `codegen/lib.rs`, plancher relevé à 100/100), les **8/8 workflows sont verts**,
-coverage ratchet incluse.
+coverage ratchet incluse. Sur `7977210` (traps à 98,66/96,84, plancher 97/95,
+et document D10), les **8/8 workflows sont verts**, coverage ratchet incluse.
 
 ## 5. Éléments `PENDING_HUMAN_APPROVAL`
 

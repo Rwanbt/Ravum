@@ -609,6 +609,9 @@ impact), coverage ratchet incluse malgré `traps.rs` et les 4 nouveaux cas.
 - Aucun seuil abaissé ; `codegen/lib.rs` reste à 100/100. Totaux :
   **2 112** lignes non couvertes (19 950 − 17 838), **10 fichiers** sous
   l'objectif.
+- **CI** : sur `7977210`, **8/8 workflows verts**, coverage ratchet incluse avec
+  les planchers `codegen/lib.rs` 100/100 et `traps.rs` 97/95.
+
 
 
 
