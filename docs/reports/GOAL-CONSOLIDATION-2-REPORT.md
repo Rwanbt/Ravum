@@ -629,8 +629,7 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
 ## 12. Ce que ce rapport ne prouve pas
 
 - Il ne prouve aucune absence de divergence : il prouve que **deux** classes
-  absentes des 42 gabarits ont été trouvées et corrigées, sur 561 programmes
-  d'une génération compositionnelle. Aucun nombre de programmes n'est une
+  absentes des 42 gabarits ont été trouvées et corrigées, sur 561 programmes  d'une génération compositionnelle. Aucun nombre de programmes n'est une
   preuve de correction.
 - Il ne dit rien de la performance d'un programme réel : le corpus est
   synthétique et régulier.
@@ -653,3 +652,19 @@ générés dans les cas de conformance par les campagnes locales ont été suppr
   session ; 150/183 reste un chiffre ciblé, pas un score de crate.
 - Il ne remplace ni l'audit externe (T4) ni le Go/No-Go (T12), qui restent des
   décisions humaines, ni aucune ratification de RFC.
+
+## 13. Addendum du 2026-11-14 (soir) — les `NOT_RUN` de ce rapport ont été rejoués
+
+Campagne de fermeture, rapport détaillé :
+[`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+
+| Point de ce rapport | État à l'addendum |
+|---|---|
+| T8 — rejeu de la campagne mutation (`NOT_RUN` ici) | **rejoué en CI** (run 43622868110) : 219/180/30/9, dont la première campagne `emit.rs` (36/30/6) ; §12 de [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) |
+| T2 — campagne nominale 3 × 2 000 (`NOT_RUN` ici) | **exécutée** : 6 000 programmes, 0 rejet, 0 divergence, 2 217 s ; le test de puissance reste `BLOCKED` par sa méthode |
+| Couverture (89,79/89,23 dans ce rapport) | **90,44/89,88**, produit **88,55 %** après 25 tests loader et correction de l'outil de split |
+| T10 — run CI `e58ed35` | le run de la campagne finale est vert sur `0f28e43` (voir le rapport de campagne §6) ; gate-contracts a été corrigé (nom d'étape YAML) |
+| Mutation locale (`cargo-mutants` absent) | inchangé : la campagne tourne en CI (`RFC-DEV-TOOLS-1` toujours ouverte) |
+
+Les statuts de gates de ce rapport ne changent pas : l'addendum ne fait que
+remplacer des `NOT_RUN` par des preuves datées.

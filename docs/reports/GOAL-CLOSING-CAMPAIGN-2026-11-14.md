@@ -112,7 +112,33 @@ pwsh -File scripts/evidence.ps1                 7 contrôles PASS, evidence/curr
 | Déviation littérale T4 (ids dans les symboles) | D-2026-11-14-4 : accepter la normalisation |
 | `i128`/`u128` FFI, unwinding/`longjmp`/signal | C-FFI-2 et C-FFI-4 à trancher |
 
-## 5. Ce que ce rapport ne prouve pas
+## 6. CI de la campagne (PR #111, commit `0f28e43`)
+
+Tous les jobs de la PR sont **verts** sur `0f28e43` : workspace Linux
+(**9 min 9**) et macOS arm64 (6 min 57), **Miri** (9 min 47), conformance
+Linux/Windows/macOS, couverture par fichier, smoke Linux, fuzz smoke,
+wasm32-wasip1, installateur, release evidence, `vscode-e2e`, `mvp`, `impact`,
+GC borné ; TSan `NOT_APPLICABLE`.
+
+Preuves ciblées de cette campagne :
+
+- `contracts` ([run 43628101844](https://github.com/Rwanbt/Ravum/actions/runs/43628101844),
+  job `132548419590`) : `unsafe_audit: PASS` en CI (4 `forbid`, 1 `deny`,
+  2 `allow` inventoriés) et **7 tests** `test_unsafe_audit` verts ;
+- job `installer` ([run 43627978266](https://github.com/Rwanbt/Ravum/actions/runs/43627978266),
+  job `132548038496`) : étape `Public installer contract (manifest, sha256,
+  uninstall, usage codes)` **success** ;
+- `reproducibility` ([run 43628101940](https://github.com/Rwanbt/Ravum/actions/runs/43628101940)) :
+  deux runners, digest identique, comparaison **PASS** ;
+- `performance` ([run 43628101920](https://github.com/Rwanbt/Ravum/actions/runs/43628101920)) :
+  alarme **PASS**.
+
+Sur `b172248`, le job `gate-contracts` avait échoué **avant exécution** à cause
+d'un nom d'étape YAML contenant `: ` (interprété comme une clé). Le nom a été
+corrigé (`—`), le workflow s'est exécuté et est vert sur `0f28e43` : c'était un
+défaut de configuration, pas un test en échec.
+
+## 7. Ce que ce rapport ne prouve pas
 
 - Aucun gate n'est passé à `PASS` : T0/T3/T5/T6/T7/T10 sont inchangés dans le
   registre, T4/T12 restent `BLOCKED`, et les `PARTIAL` le restent.
