@@ -235,7 +235,7 @@ impl Pipeline {
         mut timings: StageTimings,
         build: BuildOutcome,
         current: &dyn Fn() -> SnapshotId,
-        mut broker: Option<&mut ProofBroker>,
+        broker: Option<&mut ProofBroker>,
     ) -> LoopReport {
         let verify_started = Instant::now();
         let evidence = match smoke_verify(&build.build) {
@@ -260,7 +260,7 @@ impl Pipeline {
         // Declared obligations must be satisfied by the same artifact. The verdicts
         // are evidence, not decoration: an unsatisfied one blocks publication.
         if !self.obligations.is_empty() {
-            let Some(broker) = broker.as_deref_mut() else {
+            let Some(broker) = broker else {
                 report.outcome = LoopOutcome::Error {
                     detail: "obligations are declared but no proof broker was provided; refusing to skip verification"
                         .to_owned(),
@@ -569,7 +569,7 @@ pub fn smoke_verify(build: &BuildOutput) -> Result<EvidenceRecord, RejectReason>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ravum_rust_adapter::RustAdapter;
+
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -243,14 +243,13 @@ impl RetentionState {
                 state.load_error = None;
                 state
             }
-            Err(error) => {
-                let mut state = RetentionState::default();
-                state.load_error = Some(format!(
+            Err(error) => RetentionState {
+                load_error: Some(format!(
                     "retention hints ignored: {} is not valid JSON: {error}",
                     path.display()
-                ));
-                state
-            }
+                )),
+                ..Default::default()
+            },
         }
     }
 
@@ -658,44 +657,44 @@ pub fn run_gc(
     let mut deleted = GcDeleted::default();
     let mut freed_bytes: u64 = 0;
     if !policy.dry_run {
-        for index in 0..cache.len() {
-            if !cache[index].planned || cache[index].deleted {
+        for entry in &mut cache {
+            if !entry.planned || entry.deleted {
                 continue;
             }
-            match delete_path_safely(&cache[index].path) {
+            match delete_path_safely(&entry.path) {
                 Ok(()) => {
-                    cache[index].deleted = true;
-                    freed_bytes += cache[index].bytes;
-                    deleted.cache_keys.push(cache[index].key.clone());
+                    entry.deleted = true;
+                    freed_bytes += entry.bytes;
+                    deleted.cache_keys.push(entry.key.clone());
                     deleted.files += 1;
                 }
                 Err(error) => push_error(&mut errors, error),
             }
         }
-        for index in 0..snapshots.len() {
-            if !snapshots[index].planned || snapshots[index].deleted {
+        for entry in &mut snapshots {
+            if !entry.planned || entry.deleted {
                 continue;
             }
-            match delete_path_safely(&snapshots[index].path) {
+            match delete_path_safely(&entry.path) {
                 Ok(()) => {
-                    snapshots[index].deleted = true;
-                    freed_bytes += snapshots[index].bytes;
-                    deleted.snapshots.push(snapshots[index].id.clone());
-                    deleted.files += snapshots[index].files;
+                    entry.deleted = true;
+                    freed_bytes += entry.bytes;
+                    deleted.snapshots.push(entry.id.clone());
+                    deleted.files += entry.files;
                     deleted.dirs += 1;
                 }
                 Err(error) => push_error(&mut errors, error),
             }
         }
-        for index in 0..contexts.len() {
-            if !contexts[index].planned || contexts[index].deleted {
+        for context in &mut contexts {
+            if !context.planned || context.deleted {
                 continue;
             }
             let mut okay = true;
             for path in [
-                contexts[index].incremental.clone(),
-                contexts[index].out.clone(),
-                contexts[index].units.clone(),
+                context.incremental.clone(),
+                context.out.clone(),
+                context.units.clone(),
             ] {
                 if !path.exists() {
                     continue;
@@ -706,11 +705,11 @@ pub fn run_gc(
                 }
             }
             if okay {
-                contexts[index].deleted = true;
-                freed_bytes += contexts[index].bytes;
-                deleted.contexts.push(contexts[index].short.clone());
-                deleted.files += contexts[index].files;
-                deleted.dirs += contexts[index].dir_count as u64;
+                context.deleted = true;
+                freed_bytes += context.bytes;
+                deleted.contexts.push(context.short.clone());
+                deleted.files += context.files;
+                deleted.dirs += context.dir_count as u64;
             }
         }
     }
@@ -722,20 +721,20 @@ pub fn run_gc(
         ..Default::default()
     };
     if policy.compact_incremental {
-        for index in 0..contexts.len() {
-            if contexts[index].deleted || contexts[index].planned {
+        for context in &mut contexts {
+            if context.deleted || context.planned {
                 // Never touch a context that is being removed by this same pass.
                 continue;
             }
             let freed = compact_incremental_sessions(
-                &contexts[index].incremental,
+                &context.incremental,
                 policy.keep_incremental_sessions,
                 policy.dry_run,
                 &mut errors,
                 &mut compaction,
             );
             if !policy.dry_run {
-                contexts[index].bytes = contexts[index].bytes.saturating_sub(freed);
+                context.bytes = context.bytes.saturating_sub(freed);
                 freed_bytes = freed_bytes.saturating_add(freed);
             }
         }
@@ -1884,7 +1883,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.before.total_bytes, 0);
-        assert!(report.dry_run == false);
+        assert!(!report.dry_run);
 
         let partial = sample_work_dir("partial");
         std::fs::create_dir_all(partial.join(CACHE_DIR)).unwrap();
@@ -1919,9 +1918,11 @@ mod tests {
         for seed in 1u8..=3 {
             write_cache_entry(&work, &hex_id(seed), &hex_id(seed + 0x40), seed as u64);
         }
-        let mut protection = GcProtection::default();
-        protection.last_cache_key = Some(hex_id(1)); // oldest, but it is "current"
-        protection.last_snapshot_id = Some(hex_id(0x41));
+        let protection = GcProtection {
+            last_cache_key: Some(hex_id(1)), // oldest, but it is "current"
+            last_snapshot_id: Some(hex_id(0x41)),
+            ..Default::default()
+        };
         let policy = GcPolicy {
             max_cache_bytes: Some(1),
             keep_recent: 1,

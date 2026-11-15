@@ -149,7 +149,7 @@ impl<'a> Lexer<'a> {
             );
             return;
         }
-        let kind = match Kw::from_str(text) {
+        let kind = match Kw::parse(text) {
             Some(kw) => TokenKind::Kw(kw),
             None => TokenKind::Ident(text.to_string()),
         };

@@ -643,7 +643,7 @@ impl Daemon {
             UnitLockOutcome::Superseded(report) => {
                 drop(slot);
                 self.bump(|stats| stats.superseded += 1);
-                return Ok(report);
+                return Ok(*report);
             }
         };
 
@@ -1093,7 +1093,7 @@ impl Daemon {
                                 request.revision
                             ),
                         );
-                        return UnitLockOutcome::Superseded(report);
+                        return UnitLockOutcome::Superseded(Box::new(report));
                     }
                     std::thread::sleep(poll);
                 }
@@ -1229,7 +1229,7 @@ impl Daemon {
 
 enum UnitLockOutcome<'a> {
     Locked(std::sync::MutexGuard<'a, ()>),
-    Superseded(AnalysisReport),
+    Superseded(Box<AnalysisReport>),
 }
 
 /// Convenience constructor for tests and tools: a request with one root file.

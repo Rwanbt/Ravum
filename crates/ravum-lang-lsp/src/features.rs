@@ -389,7 +389,7 @@ pub fn is_identifier(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
-    if ravum_lang_syntax::token::Kw::from_str(name).is_some() {
+    if ravum_lang_syntax::token::Kw::parse(name).is_some() {
         return false;
     }
     let mut chars = name.chars();

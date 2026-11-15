@@ -109,7 +109,9 @@ impl Sanitizer {
             sanitizer.home = Some(path_text(&home));
             sanitizer.prefixes.push((path_text(&home), "<home>"));
         }
-        sanitizer.prefixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        sanitizer
+            .prefixes
+            .sort_by_key(|prefix| std::cmp::Reverse(prefix.0.len()));
         sanitizer
     }
 

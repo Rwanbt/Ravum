@@ -229,7 +229,7 @@ pub fn reachable_from(graph: &BTreeMap<NodeId, Vec<NodeId>>, entry: NodeId) -> B
     reached
 }
 
-fn collect_fns<'a>(program: &'a Program) -> BTreeMap<NodeId, &'a FnItem> {
+fn collect_fns(program: &Program) -> BTreeMap<NodeId, &FnItem> {
     let mut out = BTreeMap::new();
     collect_module_fns(&program.root, &mut out);
     out

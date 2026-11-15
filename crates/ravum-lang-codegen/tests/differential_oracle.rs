@@ -473,7 +473,7 @@ fn evaluate(seed: u64, index: usize, source: &str, release_every: usize) -> Verd
             "debug exit {debug_code}; stdout: {debug_out:?}; stderr: {debug_err}"
         ));
     }
-    if release_every > 0 && index % release_every == 0 {
+    if release_every > 0 && index.is_multiple_of(release_every) {
         let release = match compile_rust(&rust, &format!("{label}-release"), true) {
             Ok(compiled) => compiled,
             Err(stderr) => return Verdict::BuildReleaseFailed(stderr),
@@ -1481,33 +1481,35 @@ impl TypedGen {
         let mut candidates: Vec<(String, String, Step)> = Vec::new();
         for bind in env.bindings() {
             match bind.ty {
-                Ty::Pair => {
-                    if env.can_use(&bind.name, &[Step::Field("b")]) && self.can_move_binding(&bind)
-                    {
-                        candidates.push((
-                            bind.name.clone(),
-                            format!("{}.b", bind.name),
-                            Step::Field("b"),
-                        ));
-                    }
+                Ty::Pair
+                    if env.can_use(&bind.name, &[Step::Field("b")])
+                        && self.can_move_binding(&bind) =>
+                {
+                    candidates.push((
+                        bind.name.clone(),
+                        format!("{}.b", bind.name),
+                        Step::Field("b"),
+                    ));
                 }
-                Ty::Tup(TupTy::SI) => {
-                    if env.can_use(&bind.name, &[Step::Index(0)]) && self.can_move_binding(&bind) {
-                        candidates.push((
-                            bind.name.clone(),
-                            format!("{}.0", bind.name),
-                            Step::Index(0),
-                        ));
-                    }
+                Ty::Tup(TupTy::SI)
+                    if env.can_use(&bind.name, &[Step::Index(0)])
+                        && self.can_move_binding(&bind) =>
+                {
+                    candidates.push((
+                        bind.name.clone(),
+                        format!("{}.0", bind.name),
+                        Step::Index(0),
+                    ));
                 }
-                Ty::Tup(TupTy::IS) => {
-                    if env.can_use(&bind.name, &[Step::Index(1)]) && self.can_move_binding(&bind) {
-                        candidates.push((
-                            bind.name.clone(),
-                            format!("{}.1", bind.name),
-                            Step::Index(1),
-                        ));
-                    }
+                Ty::Tup(TupTy::IS)
+                    if env.can_use(&bind.name, &[Step::Index(1)])
+                        && self.can_move_binding(&bind) =>
+                {
+                    candidates.push((
+                        bind.name.clone(),
+                        format!("{}.1", bind.name),
+                        Step::Index(1),
+                    ));
                 }
                 Ty::Arr(ArrTy::Strx2) => {
                     for index in 0..2u8 {

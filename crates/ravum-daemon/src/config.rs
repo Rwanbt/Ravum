@@ -384,8 +384,10 @@ mod tests {
 
     #[test]
     fn invalid_crate_name_and_edition_are_rejected() {
-        let mut context = BuildContext::default();
-        context.edition = "1999".to_owned();
+        let mut context = BuildContext {
+            edition: "1999".to_owned(),
+            ..Default::default()
+        };
         assert!(context.validate().is_err());
         context.edition = "2021".to_owned();
         context.crate_name = "not-a-name".to_owned();

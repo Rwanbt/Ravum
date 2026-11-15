@@ -1,0 +1,6 @@
+# Ravum ownership. The responsible maintainer reviews the normative surface,
+# the conformance corpus, CI and the Core 1.0 compiler crates.
+/spec/ @Rwanbt
+/conformance/ @Rwanbt
+/.github/ @Rwanbt
+/crates/ravum-lang-*/ @Rwanbt

@@ -355,16 +355,29 @@ struct ModeResult {
     target_disk_bytes: u64,
 }
 
-fn run_mode(
-    _repo_root: &Path,
-    work_root: &Path,
+#[derive(Clone, Copy)]
+struct ModeInput<'a> {
+    _repo_root: &'a Path,
+    work_root: &'a Path,
     rep: usize,
-    mode: &str,
-    base: &str,
-    edits: &[EditDef],
-    cargo_toml: &str,
-    tests_source: &str,
-) -> Result<ModeResult, String> {
+    mode: &'a str,
+    base: &'a str,
+    edits: &'a [EditDef],
+    cargo_toml: &'a str,
+    tests_source: &'a str,
+}
+
+fn run_mode(input: ModeInput<'_>) -> Result<ModeResult, String> {
+    let ModeInput {
+        _repo_root,
+        work_root,
+        rep,
+        mode,
+        base,
+        edits,
+        cargo_toml,
+        tests_source,
+    } = input;
     let mode_dir = work_root
         .join(format!("rep-{rep:02}"))
         .join(mode.replace('/', "_"));
@@ -844,16 +857,16 @@ pub fn run(options: &BatchE2eOptions) -> Result<Value, String> {
         let order = rotated_modes(rep - 1);
         let mut runs = Vec::new();
         for mode in &order {
-            let result = run_mode(
-                &options.repo_root,
-                &options.work_root,
+            let result = run_mode(ModeInput {
+                _repo_root: &options.repo_root,
+                work_root: &options.work_root,
                 rep,
                 mode,
-                &base,
-                &edits,
-                &cargo_toml,
-                &tests_source,
-            )?;
+                base: &base,
+                edits: &edits,
+                cargo_toml: &cargo_toml,
+                tests_source: &tests_source,
+            })?;
             runs.push(json!({
                 "mode": mode,
                 "cold_ms": result.cold_ms,

@@ -136,7 +136,7 @@ fn real_chain_dependency_rmeta_then_dependent_then_hit() {
 
     let dependent = request("api", "api", api_v1());
     let report = daemon
-        .analyze_with_externs(&dependent, &[extern_core.clone()])
+        .analyze_with_externs(&dependent, std::slice::from_ref(&extern_core))
         .expect("dependent analysis");
     assert!(report.success, "chained analysis must succeed: {report:?}");
     assert!(report.is_current());
@@ -177,7 +177,10 @@ fn changed_extern_without_source_change_is_a_real_miss_with_correct_diagnostic()
     let (interface_v1, bytes_v1, _) = analyze_dependency(&daemon, core_v1());
     let extern_v1 = ExternInput::new("core", "core", bytes_v1).expect("extern v1");
     let first = daemon
-        .analyze_with_externs(&request("api", "api", api_v1()), &[extern_v1.clone()])
+        .analyze_with_externs(
+            &request("api", "api", api_v1()),
+            std::slice::from_ref(&extern_v1),
+        )
         .expect("first chained analysis");
     assert!(first.success && !first.cache.hit);
     let snapshot_v1 = first.snapshot_id.clone();
@@ -188,7 +191,10 @@ fn changed_extern_without_source_change_is_a_real_miss_with_correct_diagnostic()
     assert_ne!(interface_v1, interface_v2, "interface must change");
     let extern_v2 = ExternInput::new("core", "core", bytes_v2).expect("extern v2");
     let second = daemon
-        .analyze_with_externs(&request("api", "api", api_v1()), &[extern_v2.clone()])
+        .analyze_with_externs(
+            &request("api", "api", api_v1()),
+            std::slice::from_ref(&extern_v2),
+        )
         .expect("second chained analysis");
     assert!(
         !second.cache.hit,
@@ -241,8 +247,7 @@ fn extern_validation_is_fail_closed() {
     let duplicate = ExternInput::new("core", "core_v2", bytes.clone()).expect("second bytes");
     let error = daemon
         .analyze_with_externs(&request, &[valid.clone(), duplicate])
-        .err()
-        .expect("duplicate extern names must be refused");
+        .expect_err("duplicate extern names must be refused");
     assert_eq!(error.kind, ErrorKind::InvalidRequest);
 
     // A tampered interface id is refused (fail-closed).
@@ -250,8 +255,7 @@ fn extern_validation_is_fail_closed() {
     tampered.interface_id = "a".repeat(64);
     let error = daemon
         .analyze_with_externs(&request, &[tampered])
-        .err()
-        .expect("tampered interface must be refused");
+        .expect_err("tampered interface must be refused");
     assert_eq!(error.kind, ErrorKind::InvalidRequest);
 
     // Bytes and names are validated at construction time too.
@@ -265,8 +269,7 @@ fn extern_validation_is_fail_closed() {
     std::fs::write(&artifact_path, b"tampered artifact").expect("tamper artifact");
     let error = daemon
         .artifact(&interface)
-        .err()
-        .expect("tampered artifact must be refused");
+        .expect_err("tampered artifact must be refused");
     assert_eq!(error.kind, ErrorKind::SnapshotCorrupt);
     let _ = std::fs::remove_dir_all(&work);
 }
@@ -302,7 +305,7 @@ fn legacy_schema_one_snapshot_still_verifies_without_externs() {
         1
     );
     let _ = std::fs::remove_dir_all(&root);
-    let _ = std::fs::remove_dir_all(&temp_dir("legacy-store-unused"));
+    let _ = std::fs::remove_dir_all(temp_dir("legacy-store-unused"));
 }
 
 #[test]

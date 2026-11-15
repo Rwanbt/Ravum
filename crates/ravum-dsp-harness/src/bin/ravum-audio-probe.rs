@@ -340,12 +340,7 @@ impl Config {
             }
         }
 
-        if config.seconds < MIN_SECONDS {
-            config.seconds = MIN_SECONDS;
-        }
-        if config.seconds > MAX_SECONDS {
-            config.seconds = MAX_SECONDS;
-        }
+        config.seconds = config.seconds.clamp(MIN_SECONDS, MAX_SECONDS);
         if !(1..=16).contains(&config.buffers) {
             return Err(format!(
                 "--buffers must be in 1..=16 (got {})",
@@ -1129,11 +1124,9 @@ impl MissedPeriodCounter {
     /// Whole periods missed, from the highest deficit observed so far. `0` when the
     /// period is unknown (never a division by zero, never an invented count).
     fn missed_periods(&self) -> u64 {
-        if self.period_frames == 0 {
-            0
-        } else {
-            self.missed_frames() / self.period_frames
-        }
+        self.missed_frames()
+            .checked_div(self.period_frames)
+            .unwrap_or(0)
     }
 
     fn remainder_frames(&self) -> u64 {
@@ -1416,7 +1409,7 @@ mod win {
             Self { low: 0, high: 0 }
         }
 
-        fn to_u64(&self) -> u64 {
+        fn to_u64(self) -> u64 {
             ((self.high as u64) << 32) | self.low as u64
         }
     }
@@ -1738,7 +1731,7 @@ mod win {
         /// `SetThreadPriority`. Any failure is explicit: the returned `Failure` carries
         /// the Win32 error and the partial state is reported, so a request that was not
         /// fulfilled can never look like a success.
-        fn apply(config: &Config) -> Result<Self, (Failure, Value)> {
+        fn apply(config: &Config) -> Result<Self, Box<(Failure, Value)>> {
             let mut state = RealtimeState {
                 mmcss_requested: config.mmcss,
                 mmcss_acquired: false,
@@ -1785,7 +1778,7 @@ mod win {
                         error,
                         "MMCSS 'Pro Audio' registration failed; refusing to run as if a real-time priority had been applied",
                     );
-                    return Err((failure, state.to_json()));
+                    return Err(Box::new((failure, state.to_json())));
                 }
                 state.mmcss_acquired = true;
                 state.mmcss_handle = handle;
@@ -1815,7 +1808,7 @@ mod win {
                         error,
                         "AVRT_PRIORITY_CRITICAL could not be set; refusing to report a real-time priority that was not applied",
                     );
-                    return Err((failure, state.to_json()));
+                    return Err(Box::new((failure, state.to_json())));
                 }
                 state.mmcss_priority_set = true;
                 state
@@ -1852,7 +1845,7 @@ mod win {
                             choice.win32_name()
                         ),
                     );
-                    return Err((failure, state.to_json()));
+                    return Err(Box::new((failure, state.to_json())));
                 }
                 state.thread_priority_set = true;
                 state.applied_order.push(match choice {
@@ -2453,11 +2446,14 @@ mod win {
             host: Option<Arc<BlockHost>>,
             stop: &AtomicBool,
             input: &[f32],
-            run_start: Instant,
-            thread_start: Instant,
-            capacity: usize,
-            baseline_delta: f32,
+            timing: RenderTiming,
         ) -> RunData {
+            let RenderTiming {
+                run_start,
+                thread_start,
+                capacity,
+                baseline_delta,
+            } = timing;
             let frames = (self.format_bytes_per_buffer / self.format.n_block_align as u32) as usize;
             let period_us =
                 (frames as u64 * 1_000_000) / self.format.n_samples_per_sec.max(1) as u64;
@@ -2626,7 +2622,7 @@ mod win {
                         match self.position_samples() {
                             Ok(played_samples) => {
                                 let expected =
-                                    (total_completions as u64).saturating_mul(frames as u64) as i64;
+                                    total_completions.saturating_mul(frames as u64) as i64;
                                 let drift = played_samples as i64 - expected;
                                 if !in_warmup {
                                     run.position_drift_frames.push(drift);
@@ -2636,7 +2632,7 @@ mod win {
                                     let position = u64::from(played_samples);
                                     run.xrun_position_first_frames.get_or_insert(position);
                                     run.xrun_position_last_frames = Some(position);
-                                    let wall_expected = ((run_start.elapsed().as_micros() as u128
+                                    let wall_expected = ((run_start.elapsed().as_micros()
                                         * self.format.n_samples_per_sec as u128)
                                         / 1_000_000)
                                         as u64;
@@ -2778,6 +2774,15 @@ mod win {
         } else {
             -((earlier - later).as_micros() as i64)
         }
+    }
+
+    /// Timing inputs common to the MME and WASAPI render loops.
+    #[derive(Clone, Copy)]
+    struct RenderTiming {
+        run_start: Instant,
+        thread_start: Instant,
+        capacity: usize,
+        baseline_delta: f32,
     }
 
     /// One measured render session. Per-completion vectors are consumed by `execute`
@@ -3408,7 +3413,8 @@ mod win {
             //     applied is a hard failure, never a silent no-op.
             let mut realtime = match RealtimeState::apply(&render_config) {
                 Ok(state) => state,
-                Err((failure, partial)) => {
+                Err(boxed) => {
+                    let (failure, partial) = *boxed;
                     let _ = open_tx.send(Err((failure, partial)));
                     return Err(Failure::new(
                         "realtime",
@@ -3437,10 +3443,12 @@ mod win {
                 render_host,
                 &render_stop,
                 &input,
-                run_start,
-                thread_start,
-                capacity,
-                baseline_delta,
+                RenderTiming {
+                    run_start,
+                    thread_start,
+                    capacity,
+                    baseline_delta,
+                },
             );
             let cleanup = session.close();
             // Restore the thread characteristics explicitly before the thread ends.
@@ -4685,7 +4693,7 @@ mod win {
     fn unique_rates(first: u32, second: u32, extra: &[u32]) -> Vec<u32> {
         let mut rates = vec![first];
         for rate in [second].into_iter().chain(extra.iter().copied()) {
-            if rate >= 8_000 && rate <= 192_000 && !rates.contains(&rate) {
+            if (8_000..=192_000).contains(&rate) && !rates.contains(&rate) {
                 rates.push(rate);
             }
         }
@@ -5476,11 +5484,14 @@ mod win {
             host: Option<Arc<BlockHost>>,
             stop: &AtomicBool,
             input: &[f32],
-            run_start: Instant,
-            thread_start: Instant,
-            capacity: usize,
-            baseline_delta: f32,
+            timing: RenderTiming,
         ) -> WasapiRunData {
+            let RenderTiming {
+                run_start,
+                thread_start,
+                capacity,
+                baseline_delta,
+            } = timing;
             let mut run = WasapiRunData::new(
                 self.engine.event_period_us.max(1) as u64,
                 self.engine.buffer_frames,
@@ -5596,7 +5607,7 @@ mod win {
                             run.clock_position_first_frames
                                 .get_or_insert(position_frames);
                             run.clock_position_last_frames = Some(position_frames);
-                            let wall_expected = ((run_start.elapsed().as_micros() as u128
+                            let wall_expected = ((run_start.elapsed().as_micros()
                                 * self.output_rate as u128)
                                 / 1_000_000) as u64;
                             if run.xrun.observations() == 0 {
@@ -6100,7 +6111,8 @@ mod win {
             let thread_start = Instant::now();
             let mut realtime = match RealtimeState::apply(&render_config) {
                 Ok(state) => state,
-                Err((failure, partial)) => {
+                Err(boxed) => {
+                    let (failure, partial) = *boxed;
                     let _ = init_tx.send(Err((failure, partial)));
                     return Err(Failure::new(
                         "realtime",
@@ -6123,10 +6135,12 @@ mod win {
                 render_host,
                 &render_stop,
                 &input,
-                run_start,
-                thread_start,
-                capacity,
-                baseline_delta,
+                RenderTiming {
+                    run_start,
+                    thread_start,
+                    capacity,
+                    baseline_delta,
+                },
             );
             let cleanup = session.close();
             let revert = realtime.revert();

@@ -102,7 +102,7 @@ impl Probe {
             diagnostic
                 .code
                 .as_deref()
-                .map_or(false, |code| !code.is_empty())
+                .is_some_and(|code| !code.is_empty())
         })
     }
 
@@ -667,8 +667,8 @@ pub fn infer_crate_root(snapshot: &SourceSnapshot) -> Option<String> {
 /// Two schemas are accepted because the CLI changes across toolchains:
 /// * cargo-wrapped rustc: `{"reason":"compiler-message","message":{...}}`;
 /// * direct rustc 1.95 CLI: `{"$message_type":"diagnostic","message":...}` (flat).
-/// A schema the parser does not recognise never becomes a silent pass: the
-/// failure status of the process still fails the check (see `compile_metadata`).
+///   A schema the parser does not recognise never becomes a silent pass: the
+///   failure status of the process still fails the check (see `compile_metadata`).
 pub fn parse_rustc_json_errors(stderr: &str) -> Vec<MergeDiagnostic> {
     let mut out = Vec::new();
     for line in stderr.lines() {

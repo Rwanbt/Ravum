@@ -211,7 +211,7 @@ pub(crate) fn child_exit_code(raw: Option<i32>) -> ChildExit {
                     .to_string(),
             ),
         },
-        Some(code) if code == 0 => ChildExit {
+        Some(0) => ChildExit {
             code: util::EXIT_OK,
             note: None,
         },

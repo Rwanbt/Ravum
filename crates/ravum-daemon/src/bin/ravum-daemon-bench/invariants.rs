@@ -160,7 +160,7 @@ pub fn run(options: &InvariantOptions) -> Result<Value, String> {
             cold_fixed.signatures() == ravum_daemon::signature_set(&daemon_fixed.diagnostics);
         suite.check(
             "cross_module_signature_invalidation",
-            cold_broken.diagnostics.len() > 0
+            !cold_broken.diagnostics.is_empty()
                 && !cold_broken.success
                 && !daemon_broken.success
                 && consistent

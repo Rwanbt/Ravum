@@ -216,12 +216,9 @@ impl Watch {
         let deadline = Instant::now() + timeout;
         loop {
             if let Some(child) = self.child.as_mut() {
-                match child.try_wait().expect("try_wait on watch") {
-                    Some(status) => {
-                        self.child.take();
-                        return status.code();
-                    }
-                    None => {}
+                if let Some(status) = child.try_wait().expect("try_wait on watch") {
+                    self.child.take();
+                    return status.code();
                 }
             } else {
                 return None;
@@ -332,13 +329,12 @@ fn wait_for_copies(root: &Path, expected: usize, timeout: Duration) -> Vec<PathB
 /// the child that owns it is still alive.
 #[cfg(windows)]
 fn assert_child_still_holds(path: &Path, context: &str) {
-    match fs::remove_file(path) {
-        Ok(()) => panic!(
+    if let Ok(()) = fs::remove_file(path) {
+        panic!(
             "{context}: the staged copy {} could be deleted, so no child is holding it \
-             (the process is gone)",
+         (the process is gone)",
             path.display()
-        ),
-        Err(_) => {}
+        )
     }
 }
 

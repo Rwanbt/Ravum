@@ -29,3 +29,13 @@ Aucun secret, identifiant privé ni donnée de production dans une issue, un pat
 ## Avant d'ouvrir une PR
 
 Vérifier le code adapté au périmètre, la documentation, les tests négatifs, les changements de schéma et les hypothèses. Si seule la documentation existe, la CI ne prouve **aucune** qualité d'exécutable.
+
+Les garde-fous sont bloquants :
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+cargo deny check
+```
+
+`cargo-deny` applique `deny.toml` : avis RustSec, licences autorisées, doublons de versions et sources inconnues. Un avertissement Clippy n'est pas un signal consultatif : il fait échouer le job. Ajouter les changements visibles dans [CHANGELOG.md](CHANGELOG.md) et respecter les zones de revue de [.github/CODEOWNERS](.github/CODEOWNERS).

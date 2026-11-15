@@ -626,14 +626,17 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
     // 3. Crate roots. Errors above make the program unusable; skip parsing then.
     let mut parse_time = Duration::ZERO;
     if !diags.has_errors() {
+        let mut caches = LoadCratesCaches {
+            parse_time: &mut parse_time,
+            parse_cache: cache,
+            options,
+        };
         let (program, lib_program, kind) = load_crates(
             &root,
             &graph,
             &mut sources,
             &mut diags,
-            &mut parse_time,
-            cache,
-            options,
+            &mut caches,
             &mut file_ids,
             &mut next_file_id,
         );
@@ -858,9 +861,8 @@ fn parse_toml_value(
         let inner = &s[1..s.len() - 1];
         let mut entries = Vec::new();
         if !inner.trim().is_empty() {
-            for (idx, part) in split_top_level_commas(inner).into_iter().enumerate() {
-                let part_start =
-                    base + 1 + inner.find(part).unwrap_or(0) as u32 + if idx == 0 { 0 } else { 0 };
+            for part in split_top_level_commas(inner) {
+                let part_start = base + 1 + inner.find(part).unwrap_or(0) as u32;
                 let trimmed = part.trim();
                 if trimmed.is_empty() {
                     continue;
@@ -2169,17 +2171,25 @@ struct CrateCtx<'a> {
     overrides: &'a BTreeMap<PathBuf, String>,
 }
 
+/// Parse-time buffers shared by the crate-root loader.
+struct LoadCratesCaches<'a> {
+    parse_time: &'a mut Duration,
+    parse_cache: &'a mut ParseCache,
+    options: &'a LoadOptions,
+}
+
 fn load_crates(
     root: &Path,
     graph: &DepGraph,
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
-    parse_time: &mut Duration,
-    parse_cache: &mut ParseCache,
-    options: &LoadOptions,
+    caches: &mut LoadCratesCaches<'_>,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
     next_file_id: &mut FileId,
 ) -> (Option<Program>, Option<Program>, Option<CrateKind>) {
+    let parse_time = &mut *caches.parse_time;
+    let parse_cache = &mut *caches.parse_cache;
+    let options = caches.options;
     let src = root.join("src");
     let main_path = src.join("main.rv");
     let lib_path = src.join("lib.rv");
@@ -2342,9 +2352,7 @@ fn load_crate_root(ctx: &mut CrateCtx<'_>, root_file: &Path) -> Option<Module> {
         );
         return None;
     }
-    if check_path_no_symlinks(&ctx.src_root, &canonical, ctx.diags).is_none() {
-        return None;
-    }
+    check_path_no_symlinks(&ctx.src_root, &canonical, ctx.diags)?;
     ctx.loaded.insert(canonical.clone());
     load_file_module(ctx, &canonical, None)
 }
@@ -2571,9 +2579,7 @@ fn resolve_module_file(
         );
         return None;
     }
-    if check_path_no_symlinks(&ctx.src_root, &canonical, ctx.diags).is_none() {
-        return None;
-    }
+    check_path_no_symlinks(&ctx.src_root, &canonical, ctx.diags)?;
     if ctx.loaded.contains(&canonical) {
         err(
             ctx.diags,
@@ -3133,7 +3139,7 @@ impl Sha256 {
         } else {
             120 - remainder
         };
-        padding.extend(std::iter::repeat(0u8).take(pad_len));
+        padding.extend(std::iter::repeat_n(0u8, pad_len));
         padding.extend_from_slice(&bit_len.to_be_bytes());
         // `update` would count the padding in `length`; use a direct path.
         let saved_len = self.length;
@@ -3833,7 +3839,7 @@ mod tests {
     fn directory_with_one_rv_file_uses_single_file_mode() {
         let temp = TempDir::new("lone-rv");
         temp.file("solo.rv", "fn main() { }\n");
-        let loaded = load_package(&temp.path());
+        let loaded = load_package(temp.path());
         assert_eq!(loaded.crate_kind, Some(CrateKind::File));
         assert_eq!(loaded.package_name.as_deref(), Some("solo"));
         assert_eq!(loaded.lockfile_state, LockfileState::NotApplicable);
@@ -3844,7 +3850,7 @@ mod tests {
         let temp = TempDir::new("two-rv");
         temp.file("a.rv", "fn main() { }\n");
         temp.file("b.rv", "fn main() { }\n");
-        let loaded = load_package(&temp.path());
+        let loaded = load_package(temp.path());
         assert!(codes(&loaded.diags).contains(&"E-MOD-MANIFEST".to_string()));
     }
 

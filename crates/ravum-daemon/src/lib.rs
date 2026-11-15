@@ -11,9 +11,9 @@
 //!
 //! A long-lived daemon owns:
 //!
-//! * **immutable snapshots** addressed by `SHA-256(source bytes + build context
-//!   + toolchain)` — unsaved editor buffers are supported, user files are never
-//!   modified;
+//! * **immutable snapshots** addressed by `SHA-256(source bytes + build
+//!   context + toolchain)` — unsaved editor buffers are supported, user files
+//!   are never modified;
 //! * a **stable compile unit** per build context, so repeated `rustc` runs with
 //!   `-C incremental=<persistent dir>` see the same source paths across edits;
 //! * a **two-level content-addressed result cache** (memory LRU + persistent

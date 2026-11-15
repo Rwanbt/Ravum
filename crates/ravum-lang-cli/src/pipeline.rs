@@ -331,15 +331,6 @@ pub struct BuildTimings {
     pub rustc: Duration,
 }
 
-impl BuildTimings {
-    pub fn json(&self) -> serde_json::Value {
-        json!({
-            "codegen_ms": ms(self.codegen),
-            "rustc_ms": ms(self.rustc),
-        })
-    }
-}
-
 pub fn render_diags(frontend: &Frontend) -> String {
     frontend.diags.render(&frontend.pkg.sources)
 }
@@ -1000,8 +991,7 @@ pub fn compile_program_with_timings(
     // Stale guard: the artifact is only valid for the snapshot it was generated
     // from. Re-load the package now and compare the snapshot digest; if it
     // changed while rustc ran, refuse to publish anything.
-    let current_digest =
-        current_snapshot_digest(frontend).map_err(|message| BuildError::Stale(message))?;
+    let current_digest = current_snapshot_digest(frontend).map_err(BuildError::Stale)?;
     if current_digest != identity.source_digest {
         return Err(BuildError::Stale(format!(
             "the sources changed during the build (analysed {}, now {}); nothing was \
