@@ -40,6 +40,11 @@
       "lines": 90,
       "regions": 90,
       "note": "2026-11-15 (E4, P-6): `own.rs` measured 92.47/90.75 before the split, a total that counted the 1433 lines of the inline #[cfg(test)] module. Measured on the CI artifact after the split, the four product files of the own module are 91.16/90.97 together. The old 92/90 file floor stays on `own.rs` for the model part; this aggregate guards the submodules. E6 raises the set toward 100 %."
+    },
+    "crates/ravum-lang-sema/src/resolve/": {
+      "lines": 93,
+      "regions": 93,
+      "note": "2026-11-15 (E4, P-6): `resolve.rs` measured 93.26/93.45 before its split and the whole module still measures 93.60/93.57, so the old 93/93 floor is kept unchanged as this aggregate (resolve had no inline `#[cfg(test)]` module, unlike emit/loader/own)."
     }
   },
   "files": {
@@ -100,11 +105,11 @@
       "note": "Wave 3 (2026-11-14): raised from 76/80 to 85/88 at the measured level, after the manifest-contract batch (`crates/ravum-lang-sema/tests/loader_manifest_contracts.rs`: strict sections/keys, TOML lexical errors, dependency shapes, both crate roots, module inlining, enum identifiers). Still below the 90/85 gate target on lines: it is the largest remaining product gap and the next file to attack."
     },
     "crates/ravum-lang-sema/src/resolve.rs": {
-      "lines": 93,
-      "regions": 93,
-      "measured_lines": 93.26,
-      "measured_regions": 93.45,
-      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). 2026-11-13 (batch 1): raised from 92/92 to 93/93. Wave 3 confirmed 93.26/93.45 unchanged; the uncovered remainder is dominated by the `PathRoot::Plain` arms for `crate`/`self`/`super` and the `super::super` loops, documented unreachable with proof (`E-LINE-RESOLVE-PLAIN-ROOT-ARMS`). Gate target 90/85 met."
+      "lines": 61,
+      "regions": 68,
+      "measured_lines": 61.54,
+      "measured_regions": 68.75,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
     },
     "crates/ravum-lang-codegen/src/emit/mod.rs": {
       "lines": 92,
@@ -357,6 +362,41 @@
       "measured_lines": 89.95,
       "measured_regions": 93.53,
       "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/resolve/copy.rs": {
+      "lines": 97,
+      "regions": 98,
+      "measured_lines": 97.96,
+      "measured_regions": 98.92,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/header.rs": {
+      "lines": 95,
+      "regions": 94,
+      "measured_lines": 95.12,
+      "measured_regions": 94.56,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/paths.rs": {
+      "lines": 92,
+      "regions": 92,
+      "measured_lines": 92.11,
+      "measured_regions": 92.53,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/uses.rs": {
+      "lines": 86,
+      "regions": 87,
+      "measured_lines": 86.34,
+      "measured_regions": 87.3,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/world.rs": {
+      "lines": 99,
+      "regions": 99,
+      "measured_lines": 99.59,
+      "measured_regions": 99.15,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
     }
   }
 }
