@@ -592,9 +592,10 @@ avertissements) avec le sens, la phase et la sévérité de chaque code. Le sch�
 JSON versionné est au §7 du même document. L'audit outillé
 `python tools/registry_audit.py` vérifie que le compilateur n'émet aucun code
 hors registre : **108 codes enregistrés / 126 émis / 0 hors registre**, chiffre
-de la passe 12 ([`../roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md)
-§0 octies, 2026-11-13), re-mesuré le 2026-11-14
-([`../reports/LANGUAGE-CORE-STATUS.md`](../reports/LANGUAGE-CORE-STATUS.md) §1.1).
+courant (re-mesuré le 2026-11-15,
+[`../reports/LANGUAGE-CORE-STATUS.md`](../reports/LANGUAGE-CORE-STATUS.md) §1.1) ;
+les chiffres des passes antérieures sont archivés dans
+[`../roadmap/archive/CORE-1.0-GATE-MATRIX-ARCHIVE.md`](../roadmap/archive/CORE-1.0-GATE-MATRIX-ARCHIVE.md).
 
 R10 (interfaces stables) reste **`PARTIAL`** : le registre est audité, mais la
 **politique de dépréciation n'est pas ratifiée** et le gel du registre de codes

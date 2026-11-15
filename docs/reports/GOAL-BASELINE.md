@@ -6,6 +6,12 @@
 > `UNKNOWN`, `BLOCKED`, `PENDING_HUMAN_APPROVAL`. Aucun `PROVED` n'est écrit.
 > Ce fichier est la référence de non-régression des phases 1 à 9 : aucun chiffre
 > ci-dessous ne doit diminuer.
+>
+> **Ce n'est pas l'état courant.** C'est une **baseline figée de la phase 0**
+> (`c931fdf`, 2026-11-13) : les chiffres du HEAD sont plus élevés et vivent dans
+> [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md) (bloc « état
+> courant ») et [`LANGUAGE-CORE-STATUS.md`](LANGUAGE-CORE-STATUS.md) §1. Un
+> lecteur qui cherche l'état actuel doit lire ces deux documents, pas celui-ci.
 
 ## 1. Identités
 

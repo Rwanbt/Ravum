@@ -16,15 +16,24 @@
 > produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
 > — écart, causes et plan par fichier en §7 bis.
 >
-> **Mise à jour du 2026-11-14 (campagne de fermeture, branche
-> `goal/consolidation-2`)** : voir §10 et
+> **Mise à jour du 2026-11-15 (E1, fermeture de la divergence `check → build`,
+> branche `goal/production-plan-2026-11-15`, fusionnée dans `dev`)** : voir
+> [`PRODUCTION-PLAN-2026-11-15.md`](PRODUCTION-PLAN-2026-11-15.md) et
+> [`CORE-1.0-FINAL-REPORT.md`](../reports/CORE-1.0-FINAL-REPORT.md) §0 undecies.
+> Chiffres courants : conformance **503 (502 PASS)**, workspace **1 740** tests
+> (124 suites), `build_verified: true` (périmètre 222/222, vérifiés 124,
+> implicites 98), MUST **811 / 467 mappés / 344 non mappés**. Aucun gate promu :
+> T2 reste `PARTIAL`, T4/T12 restent humains. Cette ligne date l'état ; les gates
+> restent ceux du §10 et de [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+
+> **Historique (2026-11-14, campagne de fermeture)** : voir §10 et
 > [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
-> Chiffres courants : conformance **484 (483 PASS)**, workspace **1 660** tests
-> (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**), mutation
-> ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest **identique
-> sur deux runners distincts**, alarme de performance CI verte. Cette ligne date
-> l'état ; les gates restent ceux du §10 et de
-> [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+> Chiffres de cette passe : conformance **484 cas (483 PASS)**, workspace **1 660**
+> tests (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**),
+> mutation ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest
+> **identique sur deux runners distincts**, alarme de performance CI verte.
+> Section conservée comme archive ; les chiffres courants sont ceux du bloc
+> ci-dessus.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
