@@ -10,7 +10,7 @@
   `docs/architecture/STATUS.md`, `docs/roadmap/MVP.md`, `docs/roadmap/BACKLOG.md`.
 - `docs/reviews/2026-11-08-consolidation.md`, `docs/mvp/INTEGRATION-0abc.md`,
   `docs/mvp/MVP-0d-REPORT.md`, `MVP-0d-{incremental,overlays,batch-window}.md`.
-- ADR `docs/adr/` : 43 fichiers, **tous PROPOSED** (aucune ratification par ce rapport).
+- ADR `docs/adr/` : 42 fichiers, **tous PROPOSED** (aucune ratification par ce rapport).
 - `docs/architecture/RAVUM-CORE-DESIGN.md` (décision technique candidate de cette itération).
 
 ## 2. Environnement de mesure

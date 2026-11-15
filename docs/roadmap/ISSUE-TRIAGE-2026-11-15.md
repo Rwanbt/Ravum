@@ -123,6 +123,21 @@ expérimentale » pour les distinguer du chantier Core 1.0.
 | #76 | [RAV-053][M6+] Mesurer empreinte énergétique et budgets par profil de cible |
 | #79 | [RFC][M0/M1] Shared workspace multi-agents sans worktrees : propositions, confli |
 
+## 3 bis. Première vérification par issue : T0 (#88)
+
+Vérification faite selon la règle de la §1. **Conclusion : ne pas fermer.**
+
+- l'issue exige un rapport `docs/reports/T0-AUDIT.md` lié au SHA ;
+- ce rapport existe, mais son en-tête dit lui-même **« Statut : PARTIAL en cours »** ;
+- il ne peut donc pas servir de preuve de clôture « completed » au sens de P-14.
+
+Correction faite au passage : le rapport citait **43** fichiers ADR alors que le
+dépôt en compte **42** (vérifié par `validate_repo_docs.py`).
+
+C'est l'argument contre le tri par lot : la proposition « fermable après
+vérification » était une hypothèse, et la vérification l'a infirmée pour T0.
+T3, T5 et T7 doivent subir la même lecture avant toute clôture.
+
 ## 4. Ce que ce tri ne fait pas
 
 - Il ne ferme aucune issue : la clôture est un acte séparé, par issue, avec la preuve citée.
