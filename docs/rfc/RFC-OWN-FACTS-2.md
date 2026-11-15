@@ -1,8 +1,12 @@
 # RFC-OWN-FACTS-2 — supprimer la re-dérivation d'ownership dans le backend
 
 - **Statut** : `ACCEPTED` **sous délégation** (plan `PRODUCTION-PLAN-2026-11-15`,
-  décision **P-7**, 2026-11-15). L'implémentation est `PENDING` : ce document
-  définit le schéma et l'ordre de migration, il ne revendique aucune mesure.
+  décision **P-7**, 2026-11-15).
+- **Implémentation** : **C1 faite** (`copy_type`, PR #134, merge `b7b534e`) ;
+  **C2–C5 `PENDING`**. C1 a immédiatement révélé une divergence réelle :
+  `sema::own::is_copy_type` classait `Slice(I32)` comme `Copy` alors qu'OWN-2.1
+  ne l'y met pas et qu'OWN-2.2 rend mobile tout le reste ; le backend avait
+  raison, le classifieur a été corrigé et un test le verrouille.
 - **Motif** : deux implémentations de la même connaissance (le checker et le
   backend) sont la cause de toutes les divergences `check → build` trouvées
   depuis la passe 6. Tant qu'elles existent, une divergence est possible par
@@ -88,7 +92,7 @@ Quatre tables supplémentaires, chacune répondant à un site de re-dérivation 
 Chaque étape est indépendante, vérifiable, et **ne supprime un site de
 re-dérivation qu'après** avoir prouvé l'équivalence sur le corpus :
 
-1. **Étape C1 — `copy_type`.** Émettre la table, l'utiliser dans `Emitter::is_copy_type`
+1. **Étape C1 — `copy_type` (FAITE, 2026-11-15).** Émettre la table, l'utiliser dans `Emitter::is_copy_type`
    en repli (fait d'abord, puis re-dérivation supprimée), étendre l'étape B pour
    exiger l'égalité sur tout le corpus.
 2. **Étape C2 — `owned_position`.** Même schéma pour `is_owned_position`.
