@@ -264,3 +264,100 @@ fn parameters_and_shadowing_bindings_have_distinct_identities() {
     assert_eq!(identities.len(), 3, "three places, three distinct bindings");
     crate::generate(&checked, &GenOptions::default()).expect("the fixture generates");
 }
+
+/// C4 in the lowering: borrowing an element of one array parameter while an
+/// element of *another* parameter is moved out leaves the first array whole,
+/// so it is read in place. Both parameters share a declaration span; before
+/// the binding identity they were taken for one array and `b[1]` was lowered
+/// through a pattern as if `b` were partially moved.
+#[test]
+fn an_unrelated_parameter_is_not_treated_as_partially_moved() {
+    let source = "fn f(a: [String; 2], b: [String; 2]) -> String {\n\
+        let n = b[1].len();\n\
+        let x = a[0];\n\
+        x\n\
+    }\n\
+    fn main() {}\n";
+    let mut sources = SourceMap::new();
+    let file = sources.add("main.rv", source);
+    let parsed = parser::parse_file(file, source);
+    let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+    let checked = result.checked.expect("the fixture program must check");
+    let code = crate::generate(&checked, &GenOptions::default()).expect("the fixture generates");
+    assert!(
+        code.contains("let n: usize = b[1usize].len();"),
+        "`b` is not partially moved and must be read in place:\n{}",
+        code.split("pub mod rvm_root").nth(1).unwrap_or(&code)
+    );
+    assert!(
+        code.contains("let [__rv_el_"),
+        "`a[0]` is still moved out by a pattern"
+    );
+}
+
+/// The same body on one array: `a[1]` *is* in a partially moved array and
+/// keeps its pattern lowering.
+#[test]
+fn an_element_of_a_partially_moved_array_keeps_its_pattern_lowering() {
+    let source = "fn f(a: [String; 2]) -> String {\n\
+        let n = a[1].len();\n\
+        let x = a[0];\n\
+        x\n\
+    }\n\
+    fn main() {}\n";
+    let mut sources = SourceMap::new();
+    let file = sources.add("main.rv", source);
+    let parsed = parser::parse_file(file, source);
+    let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+    let checked = result.checked.expect("the fixture program must check");
+    let code = crate::generate(&checked, &GenOptions::default()).expect("the fixture generates");
+    assert!(
+        code.contains("let [_, ref __rv_el_"),
+        "`a[1]` must be borrowed through a pattern:\n{}",
+        code.split("pub mod rvm_root").nth(1).unwrap_or(&code)
+    );
+}
+
+/// End to end: two array parameters (distinct bindings) and an element move
+/// in unreachable code (its decision is recorded like any other) build with
+/// `rustc` and run.
+#[test]
+fn two_array_parameters_and_unreachable_moves_build_and_run() {
+    if !super::rustc_available() {
+        eprintln!("SKIP two_array_parameters_and_unreachable_moves_build_and_run: no rustc");
+        return;
+    }
+    let source = "fn take(s: String) -> usize { return s.len(); }\n\
+        fn two_arrays(a: [String; 2], b: [String; 2]) -> String {\n\
+            let n = b[1].len();\n\
+            let x = a[0];\n\
+            if n == 2 { return x; }\n\
+            return b[0];\n\
+        }\n\
+        fn after_return(a: [String; 2]) -> usize {\n\
+            return take(a[1]);\n\
+            let again = a[0];\n\
+            take(again)\n\
+        }\n\
+        fn main() {\n\
+            let a = [String::from(\"first\"), String::from(\"second\")];\n\
+            let b = [String::from(\"left\"), String::from(\"rt\")];\n\
+            io::println(two_arrays(a, b).as_str());\n\
+            let c = [String::from(\"dead\"), String::from(\"alive\")];\n\
+            if after_return(c) == 5 { io::println(\"five\"); }\n\
+        }\n";
+    let mut sources = SourceMap::new();
+    let file = sources.add("main.rv", source);
+    let parsed = parser::parse_file(file, source);
+    let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+    let checked = result.checked.expect("the fixture program must check");
+    let code = crate::generate(&checked, &GenOptions::default()).expect("the fixture generates");
+    assert!(
+        code.contains("let again: String = ({ let [__rv_el_"),
+        "the unreachable `a[0]` is moved out by a pattern like a reachable one"
+    );
+    let binary = super::compile(&code, "own-facts-two-arrays");
+    let (stdout, stderr, status) = super::run(&binary);
+    assert_eq!(stdout, "first\nfive\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}

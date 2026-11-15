@@ -32,7 +32,8 @@
 use crate::prelude::PRELUDE;
 use crate::{CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind, VariantKind,
+    BindingId, CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind,
+    VariantKind,
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
@@ -237,13 +238,16 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
-    /// Step B of RFC-OWN-FACTS-1 (debug builds only): compare the backend's
-    /// copy/move classification with the checker's `OwnFacts`.
+    /// Step B of RFC-OWN-FACTS-1 (debug builds only): check that the ownership
+    /// facts the backend reads are coherent.
     ///
-    /// The emitter mirrors `sema::own::is_copy_type` in [`Emitter::is_copy_type`]
-    /// — the duplication this RFC removes. In debug builds a disagreement is an
-    /// error instead of a silently different lowering. Release builds skip the
-    /// check (it is a test/audit guard, not a semantic rule).
+    /// Since RFC-OWN-FACTS-2 step C5 the emitter has no copy/move classifier of
+    /// its own: `ravum_lang_sema::is_copy_type` is the single implementation,
+    /// and it is called here only to check that the published tables still
+    /// match the types they were computed from (a stale or hand-assembled
+    /// table). In debug builds an incoherence is an error instead of a silently
+    /// different lowering. Release builds skip the check (it is a test/audit
+    /// guard, not a semantic rule).
     fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
         if !cfg!(debug_assertions) {
             return Ok(());
@@ -252,7 +256,7 @@ impl<'a> Emitter<'a> {
             let Some(ty) = self.checked.facts.expr_types.get(id) else {
                 continue;
             };
-            let copies = self.is_copy_type(ty);
+            let copies = ravum_lang_sema::is_copy_type(ty, &self.checked.facts);
             match kind {
                 ravum_lang_sema::facts::UseKind::Copy if !copies => {
                     return Err(err(format!(
@@ -269,17 +273,15 @@ impl<'a> Emitter<'a> {
                 _ => {}
             }
         }
-        // RFC-OWN-FACTS-2 step C1: the checker now publishes copy-ness per type
-        // node. While `Emitter::is_copy_type` still exists it is compared against
-        // the table, so the two can never drift apart unnoticed; once every
-        // consumer reads the fact, the mirror is deleted (step C5).
+        // RFC-OWN-FACTS-2 step C1: copy-ness is published per type node; the
+        // table must be the one the single classifier yields for these types.
         for (id, ty) in &self.checked.facts.type_nodes {
-            let derived = self.is_copy_type(ty);
+            let derived = ravum_lang_sema::is_copy_type(ty, &self.checked.facts);
             let recorded = self.checked.facts.own.copy_type.contains(id);
             if derived != recorded {
                 return Err(err(format!(
-                    "ownership facts disagree with the backend for type {id}: the checker says \
-                     Copy={recorded}, the emitter classifies `{ty:?}` as Copy={derived}"
+                    "ownership facts disagree with the backend for type {id}: the table says \
+                     Copy={recorded}, the classifier says Copy={derived} for `{ty:?}`"
                 )));
             }
         }
@@ -533,26 +535,6 @@ impl<'a> Emitter<'a> {
             steps.push(ravum_lang_sema::facts::Projection::Deref);
             ty = Some(inner);
         }
-    }
-
-    /// RFC-OWN-FACTS-1 step C: does the checker take the value of `node`?
-    ///
-    /// `own.rs` records `UseKind::Move` when it moves a place, `UseKind::Copy`
-    /// when it reads a `Copy` one, and `Borrow`/`BorrowMut` when it only borrows
-    /// it. "The value is taken" is therefore exactly `Move | Copy`; the backend
-    /// reads that decision instead of re-deriving it from types or from the
-    /// method signature, and it does so in **release builds too** (this helper
-    /// is not behind `debug_assertions`: for the migrated families there is no
-    /// second decision left to compare).
-    ///
-    /// An expression the checker recorded nothing for is not a place it took a
-    /// decision on (a call result, a literal, an aggregate): it is not consumed
-    /// here, and every caller already handles that case separately.
-    fn consumed_by_checker(&self, node: NodeId) -> bool {
-        matches!(
-            self.facts().own.use_kind.get(&node),
-            Some(UseKind::Move) | Some(UseKind::Copy)
-        )
     }
 
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {

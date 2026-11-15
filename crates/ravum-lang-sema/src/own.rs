@@ -432,7 +432,7 @@ pub(super) struct OwnChecker<'a> {
 mod checker_a;
 mod checker_b;
 mod state;
-pub(crate) use state::is_copy_type;
+pub use state::is_copy_type;
 use state::*;
 
 #[cfg(test)]

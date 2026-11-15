@@ -314,59 +314,5 @@ impl<'a> Emitter<'a> {
 
     // -- array-element moves (OWN-5.4 / P0-A.2) ----------------------------
 
-    /// `true` when values of `ty` are copied instead of moved.
-    ///
-    /// This mirrors `sema::own::is_copy_type` (OWN-2.1) so the emitter can tell
-    /// a *copy read* from a *move* when it lowers `a[i]`. A mismatch is harmless
-    /// in both directions: calling a Copy type mobile only moves a value with no
-    /// observable drop, and calling a mobile type Copy leaves the plain `a[i]`
-    /// that rustc rejects loudly — never a silent semantic change.
-    pub(super) fn is_copy_type(&self, ty: &Type) -> bool {
-        match ty {
-            Type::I8
-            | Type::I16
-            | Type::I32
-            | Type::I64
-            | Type::I128
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::Isize
-            | Type::Usize
-            | Type::F32
-            | Type::F64
-            | Type::Bool
-            | Type::Char
-            | Type::Unit
-            | Type::Never
-            | Type::Str
-            | Type::Ref { .. } => true,
-            Type::Array { elem, .. } => self.is_copy_type(elem),
-            Type::Tuple(items) => items.iter().all(|item| self.is_copy_type(item)),
-            Type::Option(inner) => self.is_copy_type(inner),
-            Type::Result(ok, error) => self.is_copy_type(ok) && self.is_copy_type(error),
-            Type::Nominal { def, .. } => self
-                .facts()
-                .structs
-                .get(def)
-                .map(|info| info.is_copy)
-                .or_else(|| self.facts().enums.get(def).map(|info| info.is_copy))
-                .unwrap_or(false),
-            Type::String | Type::Vec(_) | Type::Slice(_) | Type::Param { .. } | Type::Error => {
-                false
-            }
-        }
-    }
-
-    pub(super) fn is_owned_position(&self, expr: &Expr) -> bool {
-        self.facts()
-            .expr_types
-            .get(&expr.id)
-            .map(|ty| !self.is_copy_type(ty))
-            .unwrap_or(false)
-    }
-
     // -- expressions -------------------------------------------------------
 }

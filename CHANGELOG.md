@@ -27,12 +27,20 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   checker/backend disagreement becomes a compile error rather than a stale
   value.
 - `rust-version` now names the toolchain actually tested (`1.95.0`).
+- The backend no longer re-derives ownership decisions (RFC-OWN-FACTS-2, steps
+  C2–C5). The checker publishes `owned_position`, `consumed` and
+  `binding_identity`; the emitter reads them, and its own copy/move classifier
+  (`is_copy_type`, `is_owned_position`, `consumed_by_checker`) is removed.
+  Generated Rust is byte-identical on the examples and the conformance corpus.
 
 ### Fixed
 
 - `run/power-array-move-write-region-nested`: `check` accepted the program but
   `build` emitted a plain `a[0]`/`a[1]` and `rustc` rejected it with `E0508`.
   The case remains in the corpus and now passes.
+- Two array parameters of one function are distinct bindings for the
+  array-element lowering: moving `a[0]` no longer lowers reads of an unrelated
+  parameter `b` as if `b` were partially moved.
 - `OWN-5.11`/`OWN-5.12`: element re-initialisation and non-literal indexes are
   now expressed with rules the backend can preserve exactly.
 
