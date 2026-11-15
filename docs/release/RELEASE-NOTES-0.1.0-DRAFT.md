@@ -146,7 +146,7 @@ Vérifié le 2026-11-14 sur de petits programmes : `thread::spawn` →
 | SBOM | `SOURCE_DATE_EPOCH=0 pwsh -File scripts/sbom.ps1` | SPDX-2.3, **64 paquets / 170 relations**, déterministe | idem |
 | Installateur Windows | `scripts/install.ps1 -Prefix <tmp> -SkipBuild`, puis deux `-Uninstall` | installation exit 0, `--version` correct, `locked=true`, manifeste cohérent ; désinstallations **0 / 0** (« rien à désinstaller ») | **exécuté le 2026-11-14** pour ces notes ; CI : 16/16 |
 | Installateur Linux | `scripts/install-contract.sh --skip-build` | **exécuté en CI le 2026-11-14** (run 43625955751, job 132541685225) : **25 vérifications shell + 30 invariants** ; **`NOT_RUN` en local** | [INSTALL-LINUX](../release/INSTALL-LINUX.md) §1 |
-| Miri | CI Linux | vert en CI sur `e58ed35` (syntax + sema, 9 min 23) ; **local `NOT_RUN`** (`cargo-miri` absent) | [matrice](../roadmap/CORE-1.0-GATE-MATRIX.md) §0 nonies |
+| Miri | CI Linux | vert en CI sur `e58ed35` (syntax + sema, 9 min 23) ; **local `NOT_RUN`** (`cargo-miri` absent) | [archive](../roadmap/archive/CORE-1.0-GATE-MATRIX-ARCHIVE.md) §0 nonies |
 | Mutation | `mutation.yml` | **219 mutants / 180 tués / 30 survivants triés / 9 non viables** (portée ciblée, dont `emit.rs` 36/30/6) ; **local `NOT_RUN`** | [MUTATION-EQUIVALENCE](../qualification/MUTATION-EQUIVALENCE.md) §12 |
 | CI | PR [#111](https://github.com/Rwanbt/Ravum/pull/111) | tous les jobs verts sur `dbf6360` (23 checks) après correction du YAML de `gate-contracts.yml` et du réglage de l'alarme performance ; TSan `NOT_APPLICABLE` | [campagne](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §6 |
 
