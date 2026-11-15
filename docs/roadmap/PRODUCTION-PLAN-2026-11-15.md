@@ -75,7 +75,7 @@ cette session ; `INFERRED` = déduit, non exécuté.
 Chaque étape = une issue GitHub + une PR vers `dev`. « Fait » exige : commande,
 sortie, SHA, CI verte.
 
-- [ ] **E1 — Remettre `dev` au vert (P-1, P-2).** Corriger la planification des
+- [x] **E1 — Remettre `dev` au vert (P-1, P-2).** Corriger la planification des
   moves d'élément après une écriture entière imbriquée ; tests négatifs et
   positifs `rustc`-vérifiés ; sondage des variantes voisines (écriture
   conditionnelle, accès hors du bloc de l'écriture, boucle) ; conformance
@@ -105,3 +105,4 @@ sortie, SHA, CI verte.
 | 2026-11-15 | E1 (en cours, **non terminé**) | Sondages : 17 programmes défaillants sur 30 acceptés, dont **6 sorties fausses silencieuses** ; `MovePlanner` remplacé par un abaissement par accès ; règles `OWN-5.11`/`OWN-5.12` ; 16 cas de conformance ; RFC et `T2-FINDINGS` §29 | 32 programmes de sondage rejoués : 28 sorties attendues, 4 refus au `check` ; oracle rapide graines 1 et 2 : 0 divergence | Fin de l'oracle, tests, conformance, 3e sondage, chiffres, issue + PR |
 | 2026-11-15 | E1 (vérification locale terminée) | Oracle rapide **3 graines × 200, 0 divergence** ; `cargo fmt` ; **7 tests unitaires** `own.rs` et **1 test backend** pour champs/tuples/imbriqués/`self`/`match` ; **503 cas : 502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` (périmètre 222/222, 124 vérifiés, 98 implicites) ; workspace **1 740 / 0 / 8** ; MUST **811 / 467 / 344** ; docs courantes réalignées | Commandes et sorties : `T2-FINDINGS.md` §29.5 ; `target/conformance-e1.json` ; `target/e1-cargo-test-final.log` | Commit `c255445` ; **issue [#118](https://github.com/Rwanbt/Ravum/issues/118)**, **PR [#119](https://github.com/Rwanbt/Ravum/pull/119)** vers `dev` ; **CI trois OS en cours** |
 | 2026-11-15 | E1 (contrôle final) | Aucun gate promu ; la campagne nominale T2 reste E7 ; le cas rouge reste dans le corpus sans `expected-fail` | PR #119 | Attendre la CI ; fusionner seulement si les trois OS sont verts, puis E2 |
+| 2026-11-15 | **E1 terminé** | PR [#119](https://github.com/Rwanbt/Ravum/pull/119) fusionnée dans `dev` (`b38491e`, merge commit `b38491eb06e5b27a7e31696825821c6815951af2`) ; issue [#118](https://github.com/Rwanbt/Ravum/issues/118) fermée par le merge ; trois OS verts | CI `dev` sur `b38491e` : **8/8 runs verts** — Linux `43706785627`, MVP `43706785645`, macOS `43706785683`, Windows evidence `43706785653`, coverage `43706785754`, contracts `43706785667`, docs `43706785657`, VS Code `43706785699` | **E2** : garde-fous (clippy, cargo-deny, Dependabot, CODEOWNERS, CHANGELOG, MSRV) |
