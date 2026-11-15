@@ -107,6 +107,51 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("absent from the report", result.stderr)
 
+    def test_module_aggregate_holds_when_every_part_passes(self):
+        # Splitting a file re-baselines its per-file floors; the aggregate keeps
+        # the floor the whole file had before the split.
+        result = self.run_tool(
+            [
+                entry("crates/ravum-lang-codegen/src/emit/mod.rs", 92, 100),
+                entry("crates/ravum-lang-codegen/src/emit/emitter_types.rs", 56, 100),
+            ],
+            {
+                "files": {
+                    "crates/ravum-lang-codegen/src/emit/mod.rs": {"lines": 90, "regions": 90},
+                    "crates/ravum-lang-codegen/src/emit/emitter_types.rs": {"lines": 56, "regions": 56},
+                },
+                "modules": {"crates/ravum-lang-codegen/src/emit/": {"lines": 74, "regions": 74}},
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_module_aggregate_fails_even_when_each_part_passes(self):
+        # 60 + 100 -> aggregate 80 < 90 even though both parts meet (or beat)
+        # their own floors. This is the regression a per-file gate would hide.
+        result = self.run_tool(
+            [
+                entry("crates/ravum-lang-codegen/src/emit/mod.rs", 100, 100),
+                entry("crates/ravum-lang-codegen/src/emit/emitter_calls.rs", 60, 100),
+            ],
+            {
+                "files": {
+                    "crates/ravum-lang-codegen/src/emit/mod.rs": {"lines": 90, "regions": 90},
+                    "crates/ravum-lang-codegen/src/emit/emitter_calls.rs": {"lines": 60, "regions": 60},
+                },
+                "modules": {"crates/ravum-lang-codegen/src/emit/": {"lines": 90, "regions": 90}},
+            },
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("module lines", result.stderr)
+
+    def test_module_without_measured_files_fails(self):
+        result = self.run_tool(
+            [entry("crates/ravum-lang-codegen/src/lib.rs", 100, 100)],
+            {"modules": {"crates/ravum-lang-codegen/src/emit/": {"lines": 90, "regions": 90}}},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no measured file matches", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
