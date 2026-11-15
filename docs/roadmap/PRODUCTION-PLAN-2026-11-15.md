@@ -84,7 +84,7 @@ sortie, SHA, CI verte.
   `cargo-deny`, Dependabot, `CODEOWNERS`, `CHANGELOG.md`, `rust-version`.
 - [x] **E3 — Véracité documentaire (P-12).** Archivage des sections datées,
   chiffres courants re-mesurés, `START_HERE.md`/`STATUS.md` corrigés.
-- [ ] **E4 — Découpage des six fichiers (P-6).** Ordre : `emit.rs`, `typeck.rs`,
+- [x] **E4 — Découpage des six fichiers (P-6).** Ordre : `emit.rs`, `typeck.rs`,
   `parser.rs`, `loader.rs`, `own.rs`, `resolve.rs`.
 - [ ] **E5 — `OwnFacts` étape C complète (P-7).** RFC d'extension de schéma,
   migration des cinq familles, suppression de la re-dérivation.
@@ -117,3 +117,4 @@ sortie, SHA, CI verte.
 | 2026-11-15 | E4 (3/6 — `parser.rs`) | `parser.rs` 5 411 → 11 fichiers ≤ 1 348. PR [#127](https://github.com/Rwanbt/Ravum/pull/127) fusionnée (`5bdc095`). Premier passage CI rouge sur `cargo fmt` (ligne vide en tête de `parser/tests.rs`) : corrigé, vérification `cargo fmt --all -- --check` systématisée avant push. | 72 tests syntaxe ; S7 ; conformance | `loader.rs` |
 | 2026-11-15 | E4 (4/6 — `loader.rs`) | `loader.rs` 4 162 → 11 fichiers ≤ 939. PR [#128](https://github.com/Rwanbt/Ravum/pull/128) fusionnée (`24a1cb2`). La découpe laissait les sous-modules **mesurés mais non jugés** alors que le plancher 85/88 ne couvrait plus que 111 lignes : 9 planchers ajoutés + agrégat de module. Code produit : **80,65/83,15** (l'ancien 85,31/88,09 comptait 939 lignes de tests). | `coverage_report.py --check` sur artefact CI ; tests ; conformance | `own.rs` |
 | 2026-11-15 | E4 (5/6 — `own.rs`) | `own.rs` 3 963 → 5 fichiers ≤ 1 433. PR [#129](https://github.com/Rwanbt/Ravum/pull/129) fusionnée (`a1645bc`). Implémentation `OwnChecker` coupée à une frontière de méthode (ligne 1 227) ; `pub(crate) use state::is_copy_type` conserve le chemin visible par la caisse. Agrégat de module 90/90, code produit 91,16/90,97. | 20 binaires de tests ; S7 ; conformance 503/502/0/1 | `resolve.rs` (dernier fichier) |
+| 2026-11-15 | **E4 terminé (6/6)** | `resolve.rs` 2 961 → 6 fichiers ≤ 1 240 (PR [#131](https://github.com/Rwanbt/Ravum/pull/131), `fa03252`). Découpe **neutre** : module 93,60/93,57 contre 93,26/93,45, plancher **93/93 conservé**. `HeaderCtx` gardé en un bloc (1 240 lignes) plutôt que d'élargir ses champs privés. Les six fichiers du constat B5 (`emit`, `typeck`, `parser`, `loader`, `own`, `resolve`) sont tous découpés ; aucun n'excède 1 500 lignes. | 20 binaires de tests, clippy, fmt, S7, conformance 503/502/0/1 ; artefacts CI pour chaque re-baseline de couverture | **E5** : `OwnFacts` étape C |
