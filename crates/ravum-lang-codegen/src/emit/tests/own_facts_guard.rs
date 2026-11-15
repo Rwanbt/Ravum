@@ -361,3 +361,27 @@ fn two_array_parameters_and_unreachable_moves_build_and_run() {
     assert_eq!(stdout, "first\nfive\n", "stderr: {stderr}");
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+#[test]
+#[cfg(debug_assertions)]
+fn a_missing_copy_type_fact_is_refused() {
+    let mut checked = checked_fixture();
+    let id = *checked
+        .facts
+        .own
+        .copy_type
+        .iter()
+        .next()
+        .expect("the fixture has a Copy type node");
+    checked.facts.own.copy_type.remove(&id);
+
+    let message = rejection(&checked, "the guard must reject a stale Copy table");
+    assert!(
+        message.contains(&format!("backend for type {id}")),
+        "{message}"
+    );
+    assert!(
+        message.contains("Copy=false, the classifier says Copy=true"),
+        "{message}"
+    );
+}
