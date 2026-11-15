@@ -1,0 +1,6 @@
+{
+  "id": "run/array-element-reinit-then-whole-borrow",
+  "mode": "run-pass",
+  "stdout_contains": "z\na\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): a moved element is assigned again and the whole array is then borrowed. Was check-pass / build-fail (rustc E0508). OWN-5.4: the array is rebuilt around the new value."
+}

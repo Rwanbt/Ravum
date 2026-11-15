@@ -37,7 +37,7 @@ use ravum_lang_sema::facts::{
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
     Block, EnumItem, Expr, ExprKind, ExternBlock, FloatTy, FnItem, GenericParam, Ident, ImplItem,
-    IntTy, Item, ItemKind, LitPat, MatchArm, Module, NodeId, Param, ParamKind, Pat, PatKind, Path,
+    IntTy, Item, ItemKind, LitPat, MatchArm, Module, NodeId, ParamKind, Pat, PatKind, Path,
     PathRoot, Receiver, Stmt, StmtKind, StructItem, Type as AstType, TypeKind, UnOp,
     VariantDefFields, VariantPatFields,
 };
@@ -1575,9 +1575,9 @@ impl<'a> Emitter<'a> {
         }
         signature.push(' ');
 
-        // Plan the array-element moves of this body (OWN-5.4) before emitting it:
-        // `expr` consults the plan when it reaches an index expression.
-        *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body, &fun.params);
+        // Plan the array-element paths of this body (OWN-5.4) before emitting it:
+        // `expr` consults the plan when it reaches a projection or an index.
+        *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body);
         let body = self.block_text(buf.indent, &fun.body)?;
         buf.line(&format!("{signature}{body}"));
         Ok(())
@@ -1735,11 +1735,9 @@ impl<'a> Emitter<'a> {
         buf.out.push_str("{\n");
         buf.indent += 1;
         for statement in &block.stmts {
-            self.emit_hoists(&mut buf, statement.id);
             self.emit_stmt(&mut buf, statement)?;
         }
         if let Some(tail) = &block.tail {
-            self.emit_hoists(&mut buf, tail.id);
             let text = self.expr(tail, buf.indent)?;
             buf.line(text.trim_end_matches('\n'));
         }
@@ -1748,21 +1746,6 @@ impl<'a> Emitter<'a> {
         // The caller embeds the block inline (`fn f() {`, `if c {`, `=> {`), so
         // the closing brace must not carry a trailing newline.
         Ok(buf.finish().trim_end_matches('\n').to_string())
-    }
-
-    /// Emit the array destructuring(s) hoisted before one statement or block tail
-    /// (see [`ArrayMovePlan`]). Every bound slot is `mut` so a rewritten
-    /// `&mut a[k]` borrow stays writable; the generated file already allows
-    /// `unused_mut` and `unused_variables` (slots that are never moved are bound
-    /// too, to keep their scope-lifetime drop order).
-    fn emit_hoists(&self, buf: &mut Buf, key: NodeId) {
-        let plan = self.array_moves.borrow();
-        let Some(hoists) = plan.hoists.get(&key) else {
-            return;
-        };
-        for hoist in hoists {
-            buf.line(&format!("let {} = {};", hoist.pattern, hoist.base));
-        }
     }
 
     fn emit_stmt(&self, buf: &mut Buf, statement: &Stmt) -> Result<(), CodegenError> {
@@ -1872,173 +1855,250 @@ impl<'a> Emitter<'a> {
             .unwrap_or(false)
     }
 
-    /// Plan the array-place moves of one function body (see [`ArrayMovePlan`]).
-    fn plan_array_moves(&self, body: &Block, params: &[Param]) -> ArrayMovePlan {
-        let mut planner = MovePlanner::new(self);
-        planner.walk_function(params, body);
+    /// Plan the array-element paths of one function body (see [`ArrayMovePlan`]).
+    fn plan_array_moves(&self, body: &Block) -> ArrayMovePlan {
+        let mut planner = PathPlanner::new(self);
+        planner.walk_block(body, true);
         planner.plan()
     }
 
-    /// Lower one single-use array-element move inline (see [`SingleMove`]).
-    ///
-    /// Block form: `{ let <pattern> = <place>; <binding> }` — an array pattern is
-    /// irrefutable, so it moves the selected slot; the other slots are dropped at
-    /// the access instead of at the end of the enclosing scope. That is
-    /// unobservable in Core 1.0 because the language has no `Drop`/trait
-    /// implementations (`impl` is inherent only), so no user code can run at either
-    /// point; memory is simply released earlier.
-    ///
-    /// Dynamic form: `{ match <place>.into_iter().nth(i) { ... } }` consumes the
-    /// place and drops the same slots; an out-of-range index panics with the text
-    /// rustc uses for `a[i]` ("index out of bounds: the len is N but the index is
-    /// I"), measured on rustc 1.95 (see `tests/backend_audit.rs`).
-    fn single_move_expr(
-        &self,
-        id: NodeId,
-        expr: &Expr,
-        index: &Expr,
-        single: &SingleMove,
-        indent: usize,
-    ) -> Result<String, CodegenError> {
-        match single {
-            SingleMove::Block {
-                base,
-                pattern,
-                binding,
-            } => Ok(format!("{{ let {pattern} = {base}; {binding} }}")),
-            SingleMove::Dynamic { base, len } => {
-                let index_text = self.expr(index, indent)?;
-                Ok(format!(
-                    "{{ let __rv_idx_{id}: usize = {index_text}; \
-                     match {base}.into_iter().nth(__rv_idx_{id}) {{ \
-                     Some(__rv_el_{id}) => __rv_el_{id}, \
-                     None => panic!(\"index out of bounds: the len is {{}} but the index is {{}}\", {len}usize, __rv_idx_{id}) }} }}"
-                ))
-            }
-            SingleMove::Chain { base } => self.chain_move_expr(id, expr, base, indent),
+    fn path_mode(&self, node: NodeId) -> Option<PathMode> {
+        self.array_moves.borrow().paths.get(&node).copied()
+    }
+
+    /// Element count of the fixed-size array an index step applies to.
+    fn indexed_array_len(&self, step: &PathStep<'_>) -> Option<usize> {
+        let PathStep::Index { base, .. } = step else {
+            return None;
+        };
+        match self.facts().expr_types.get(&base.id) {
+            Some(Type::Array { len, .. }) => Some(*len),
+            _ => None,
         }
     }
 
-    /// Lower one access as an inline descent: `{ let __rv_root = <root>; ...steps...
-    /// <element> }` (see [`SingleMove::Chain`]).
-    ///
-    /// Each index level keeps the original order (the value being indexed is
-    /// evaluated before its index expression) and, for a dynamic level, the exact
-    /// rustc bounds-panic text. A constant level moves the selected element out of
-    /// the array with an irrefutable array pattern; the other slots are dropped at
-    /// that point, which is unobservable in Core 1.0 (no `Drop`/trait impls).
-    fn chain_move_expr(
-        &self,
-        id: NodeId,
-        expr: &Expr,
-        base: &ChainBase,
-        indent: usize,
-    ) -> Result<String, CodegenError> {
-        let mut steps: Vec<PathStep<'_>> = Vec::new();
-        let root = collect_path_steps(expr, &mut steps);
-        let mut out = String::from("{ ");
-        let mut current = match base {
-            ChainBase::Root => {
-                out.push_str(&format!(
-                    "let __rv_root_{id} = {}; ",
-                    self.expr(root, indent)?
-                ));
-                format!("__rv_root_{id}")
+    /// The pattern position a step selects, when a Rust pattern can express it:
+    /// a literal, in-range index of a fixed-size array, a tuple element or a
+    /// struct field. A step through a reference, a `Vec`, a slice or a
+    /// non-literal index has no pattern form.
+    fn slot_of(&self, step: &PathStep<'_>) -> Option<Slot> {
+        match step {
+            PathStep::Index { index, .. } => {
+                let len = self.indexed_array_len(step)?;
+                let at = constant_index(index)?;
+                (at < len).then_some(Slot::Index { len, at })
             }
-            ChainBase::Slot { text, skip } => {
-                // Drop the projections before the first index and the `skip`
-                // index steps already applied by the enclosing destructuring.
-                let mut applied = 0usize;
-                let mut start = 0usize;
-                for (position, step) in steps.iter().enumerate() {
-                    if matches!(step, PathStep::Index { .. }) {
-                        applied += 1;
-                        if applied == *skip {
-                            start = position + 1;
-                            break;
-                        }
-                    }
+            PathStep::Tuple { base, index } => match self.facts().expr_types.get(&base.id) {
+                Some(Type::Tuple(items)) => {
+                    let at = usize::try_from(*index).ok()?;
+                    (at < items.len()).then_some(Slot::Tuple {
+                        len: items.len(),
+                        at,
+                    })
                 }
-                steps.drain(..start);
-                text.clone()
+                _ => None,
+            },
+            PathStep::Field { base, name } => match self.facts().expr_types.get(&base.id) {
+                Some(Type::Nominal { def, .. }) => {
+                    let info = self.facts().structs.get(def)?;
+                    Some(Slot::Field {
+                        path: self.item_path(*def).ok()?,
+                        fields: info
+                            .fields
+                            .iter()
+                            .map(|field| mangle_ident(&field.name))
+                            .collect(),
+                        name: mangle_ident(name),
+                    })
+                }
+                _ => None,
+            },
+        }
+    }
+
+    /// Resolve an expression as an element path: a chain of projections and
+    /// indexes that goes through at least one fixed-size array index.
+    fn element_path<'x>(&self, expr: &'x Expr) -> Option<ElementPath<'x>> {
+        let mut steps = Vec::new();
+        let root = collect_path_steps(expr, &mut steps);
+        let first = steps
+            .iter()
+            .position(|step| self.indexed_array_len(step).is_some())?;
+        let mut slots = Vec::new();
+        for step in &steps[first..] {
+            match self.slot_of(step) {
+                Some(slot) => slots.push(slot),
+                None => break,
             }
+        }
+        Some(ElementPath {
+            root,
+            steps,
+            first,
+            slots,
+        })
+    }
+
+    /// Lower a planned element path, or `None` when the expression keeps its
+    /// plain form.
+    fn element_path_expr(
+        &self,
+        expr: &Expr,
+        indent: usize,
+    ) -> Result<Option<String>, CodegenError> {
+        match self.path_mode(expr.id) {
+            // A re-initialised target is lowered by its assignment.
+            None | Some(PathMode::Reinit) => Ok(None),
+            Some(PathMode::Move) => self.element_move_expr(expr, indent).map(Some),
+            Some(PathMode::Shared) => self.element_borrow_expr(expr, false, indent).map(Some),
+            Some(PathMode::Exclusive) => self.element_borrow_expr(expr, true, indent).map(Some),
+        }
+    }
+
+    fn planned_path<'x>(&self, expr: &'x Expr) -> Result<ElementPath<'x>, CodegenError> {
+        self.element_path(expr).ok_or_else(|| {
+            err(format!(
+                "internal: expression {} was planned as an array-element path but is not one",
+                expr.id
+            ))
+        })
+    }
+
+    /// Move the value of an element path out of its array.
+    ///
+    /// The constant run is one irrefutable pattern applied to the array *place*
+    /// (`let [_, __rv_el, ..] = a;`): rustc records a move of exactly that
+    /// element, so the other elements stay usable and every later use is checked
+    /// by rustc itself. What follows the constant run works on the moved value:
+    /// a non-literal index consumes its array with `into_iter().nth(i)` and
+    /// keeps the exact rustc bounds-panic text ("index out of bounds: the len is
+    /// N but the index is I", measured in `tests/backend_audit.rs`); the value
+    /// being indexed is always evaluated before its index expression.
+    fn element_move_expr(&self, expr: &Expr, indent: usize) -> Result<String, CodegenError> {
+        let path = self.planned_path(expr)?;
+        let id = expr.id;
+        let array = self.expr(path.array(), indent)?;
+        let mut out = String::from("({ ");
+        let mut current = if path.slots.is_empty() {
+            out.push_str(&format!("let __rv_root_{id} = {array}; "));
+            format!("__rv_root_{id}")
+        } else {
+            let binding = format!("__rv_el_{id}");
+            out.push_str(&format!(
+                "let {} = {array}; ",
+                slot_pattern(&path.slots, &binding)
+            ));
+            binding
         };
-        for (level, step) in steps.iter().enumerate() {
+        for (level, step) in path.rest().iter().enumerate() {
             match step {
-                PathStep::Field(name) => current.push_str(&format!(".{}", mangle_ident(name))),
-                PathStep::Tuple(position) => current.push_str(&format!(".{position}")),
-                PathStep::Index { level_base, index } => {
-                    let len = array_layers(self.facts().expr_types.get(&level_base.id))
-                        .first()
-                        .copied()
-                        .unwrap_or(0);
-                    match constant_index(index) {
-                        Some(position) if position < len => {
-                            let selected = format!("__rv_sel_{id}_{level}");
-                            let mut slots: Vec<String> = (0..len)
-                                .map(|slot| {
-                                    if slot == position {
-                                        selected.clone()
-                                    } else {
-                                        "_".to_string()
-                                    }
-                                })
-                                .collect();
-                            if slots.is_empty() {
-                                slots.push("_".to_string());
-                            }
-                            out.push_str(&format!("let [{}] = {current}; ", slots.join(", ")));
+                PathStep::Field { name, .. } => {
+                    current.push_str(&format!(".{}", mangle_ident(name)));
+                }
+                PathStep::Tuple { index, .. } => current.push_str(&format!(".{index}")),
+                PathStep::Index { index, .. } => {
+                    let selected = format!("__rv_sel_{id}_{level}");
+                    match (self.indexed_array_len(step), constant_index(index)) {
+                        (Some(len), Some(at)) if at < len => {
+                            out.push_str(&format!(
+                                "let {} = {current}; ",
+                                slot_pattern(&[Slot::Index { len, at }], &selected)
+                            ));
                             current = selected;
                         }
-                        Some(position) => {
-                            // The checker rejects a constant out-of-bounds index;
-                            // fail closed with the plain form rather than a pattern
-                            // Rust cannot match.
-                            current = format!("{current}[{position}usize]");
-                        }
-                        None => {
+                        (Some(len), None) => {
                             let index_name = format!("__rv_idx_{id}_{level}");
-                            let selected = format!("__rv_sel_{id}_{level}");
                             out.push_str(&format!(
                                 "let {index_name}: usize = {}; ",
                                 self.expr(index, indent)?
                             ));
                             out.push_str(&format!(
                                 "let {selected} = match {current}.into_iter().nth({index_name}) {{ \
-                                 Some(__rv_el_{id}_{level}) => __rv_el_{id}_{level}, \
+                                 Some(__rv_nth_{id}_{level}) => __rv_nth_{id}_{level}, \
                                  None => panic!(\"index out of bounds: the len is {{}} but the index is {{}}\", {len}usize, {index_name}) }}; "
                             ));
                             current = selected;
+                        }
+                        // Not a fixed-size array level, or a literal index the
+                        // checker should have rejected: keep the plain form so
+                        // rustc reports it instead of a pattern it cannot match.
+                        _ => {
+                            current = format!("{current}[{}]", self.expr(index, indent)?);
                         }
                     }
                 }
             }
         }
         out.push_str(&current);
-        out.push('}');
+        out.push_str(" })");
         Ok(out)
     }
 
-    /// The body of a `match` arm. When the planner hoisted a destructuring into an
-    /// expression-bodied arm (an arm binding has no statement of its own), the body
-    /// is wrapped in a block whose first line is that destructuring.
-    fn arm_body_text(&self, arm: &MatchArm, indent: usize) -> Result<String, CodegenError> {
-        let body = self.expr(&arm.body, indent)?;
-        let hoisted = {
-            let plan = self.array_moves.borrow();
-            plan.hoists.contains_key(&arm.body.id)
+    /// Borrow an element of an array that is partially moved somewhere in the
+    /// function: `(*{ let [_, ref __rv_el, ..] = a; __rv_el })`.
+    ///
+    /// A plain `a[1]` borrows the whole array, which rustc refuses once another
+    /// element has been moved; a `ref` binding borrows that element only. The
+    /// result is a place expression, so reads, `&`, `&mut`, method calls and
+    /// assignments keep working, and the steps after the constant run are
+    /// applied to it unchanged.
+    fn element_borrow_expr(
+        &self,
+        expr: &Expr,
+        exclusive: bool,
+        indent: usize,
+    ) -> Result<String, CodegenError> {
+        let path = self.planned_path(expr)?;
+        let binding = format!("__rv_el_{}", expr.id);
+        let leaf = if exclusive {
+            format!("ref mut {binding}")
+        } else {
+            format!("ref {binding}")
         };
-        if !hoisted {
-            return Ok(body);
+        let mut text = format!(
+            "(*{{ let {} = {}; {binding} }})",
+            slot_pattern(&path.slots, &leaf),
+            self.expr(path.array(), indent)?
+        );
+        for step in path.rest() {
+            match step {
+                PathStep::Field { name, .. } => text.push_str(&format!(".{}", mangle_ident(name))),
+                PathStep::Tuple { index, .. } => text.push_str(&format!(".{index}")),
+                PathStep::Index { index, .. } => {
+                    text.push_str(&format!("[{}]", self.expr(index, indent)?));
+                }
+            }
         }
-        let mut buf = Buf::new(indent + 1);
-        self.emit_hoists(&mut buf, arm.body.id);
+        Ok(text)
+    }
+
+    /// Re-initialise a moved place under an array index by rebuilding the array
+    /// around the new value (OWN-5.4): `{ let new = <value>; a = [new, <a[1]>]; }`.
+    ///
+    /// Rust only re-initialises an array element by assigning the whole array.
+    /// The checker accepts such a write only when every other part of the array
+    /// is still initialised (`OwnFacts::element_reinit`), so each of them can be
+    /// moved out and back. The value is evaluated first, as in a plain
+    /// assignment.
+    fn element_reinit_expr(
+        &self,
+        target: &Expr,
+        value: &Expr,
+        indent: usize,
+    ) -> Result<String, CodegenError> {
+        let path = self.planned_path(target)?;
+        if !path.rest().is_empty() {
+            return Err(err(format!(
+                "internal: re-initialised array element {} is not reachable by a constant path",
+                target.id
+            )));
+        }
+        let array = self.expr(path.array(), indent)?;
+        let fresh = format!("__rv_new_{}", target.id);
+        let rebuilt = rebuild_text(&path.slots, 0, &array, &fresh);
         Ok(format!(
-            "{{\n{}{}{}\n{}}}",
-            buf.finish(),
-            indent_text(indent + 1),
-            body.trim_end_matches('\n'),
-            indent_text(indent)
+            "{{ let {fresh} = {}; {array} = {rebuilt}; }}",
+            self.expr(value, indent)?
         ))
     }
 
@@ -2098,24 +2158,25 @@ impl<'a> Emitter<'a> {
                 method,
                 args,
             } => self.method_call_expr(expr, receiver, method, args, indent),
-            ExprKind::Field { base, name } => Ok(format!(
-                "{}.{}",
-                self.operand(base, indent)?,
-                mangle_ident(&name.name)
-            )),
+            ExprKind::Field { base, name } => {
+                if let Some(text) = self.element_path_expr(expr, indent)? {
+                    return Ok(text);
+                }
+                Ok(format!(
+                    "{}.{}",
+                    self.operand(base, indent)?,
+                    mangle_ident(&name.name)
+                ))
+            }
             ExprKind::TupleIndex { base, index } => {
+                if let Some(text) = self.element_path_expr(expr, indent)? {
+                    return Ok(text);
+                }
                 Ok(format!("{}.{}", self.operand(base, indent)?, index))
             }
             ExprKind::Index { base, index } => {
-                // The plan is per function body, so the borrow ends before the
-                // recursive emission below.
-                let rewrite = self.array_moves.borrow().rewrites.get(&expr.id).cloned();
-                if let Some(binding) = rewrite {
-                    return Ok(binding);
-                }
-                let single = self.array_moves.borrow().single.get(&expr.id).cloned();
-                if let Some(single) = single {
-                    return self.single_move_expr(expr.id, expr, index, &single, indent);
+                if let Some(text) = self.element_path_expr(expr, indent)? {
+                    return Ok(text);
                 }
                 Ok(format!(
                     "{}[{}]",
@@ -2139,11 +2200,16 @@ impl<'a> Emitter<'a> {
                 op.as_str(),
                 self.operand(rhs, indent)?
             )),
-            ExprKind::Assign { target, value } => Ok(format!(
-                "{} = {}",
-                self.operand(target, indent)?,
-                self.expr(value, indent)?
-            )),
+            ExprKind::Assign { target, value } => {
+                if self.path_mode(target.id) == Some(PathMode::Reinit) {
+                    return self.element_reinit_expr(target, value, indent);
+                }
+                Ok(format!(
+                    "{} = {}",
+                    self.operand(target, indent)?,
+                    self.expr(value, indent)?
+                ))
+            }
             ExprKind::AssignOp { op, target, value } => Ok(format!(
                 "{} {}= {}",
                 self.operand(target, indent)?,
@@ -2305,7 +2371,7 @@ impl<'a> Emitter<'a> {
             let mut conditions: Vec<String> = Vec::new();
             let pattern =
                 self.pattern_with_float_guards(&arm.pat, &mut counter, &mut conditions)?;
-            let body = self.arm_body_text(arm, indent + 2)?;
+            let body = self.expr(&arm.body, indent + 2)?;
             text.push_str(&indent_text(indent + 2));
             text.push_str(&pattern);
             if !conditions.is_empty() {
@@ -2332,7 +2398,7 @@ impl<'a> Emitter<'a> {
         let mut text = format!("match {} {{\n", self.operand(scrutinee, indent)?);
         for arm in arms {
             let pattern = self.pattern(&arm.pat)?;
-            let body = self.arm_body_text(arm, indent + 1)?;
+            let body = self.expr(&arm.body, indent + 1)?;
             text.push_str(&indent_text(indent + 1));
             text.push_str(&pattern);
             text.push_str(" => ");
@@ -3398,228 +3464,79 @@ impl<'a> Emitter<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Array-element move planner (OWN-5.4 / P0-A.2).
+// Array-element paths (OWN-5.4 / P0-A.2).
 // ---------------------------------------------------------------------------
+// Ravum tracks moves per element of a fixed-size array (OWN-5.4): after
+// `let s = a[0];` the element `a[0]` is moved, the others stay usable, the whole
+// array is not, and assigning the array restores it. Rust has the same model, but
+// only through *patterns*: `a[0]` is refused (`E0508`) while
+// `let [s, ..] = a;` moves that element alone and rustc keeps checking every
+// later use of the array, branch by branch.
 //
-// Ravum allows moving an element out of a tuple *or* an array when the aggregate
-// is never reused (OWN-5.4; OWN-5.5 forbids only `Vec` indices, which the checker
-// already rejects with `E-OWN-PARTIAL-MOVE`). Rust cannot move out of an array
-// `a[i]` at all (`E0508`), so the backend lowers such a move by destructuring the
-// array place into one binding per element.
+// The backend therefore lowers each element path at the access itself and keeps
+// the array a Rust array. Nothing is hoisted and no element is copied into a
+// separate local, so no generated binding can go stale when the array is assigned
+// again, whatever block, branch or loop the access sits in.
 //
-// A *place* is a local binding plus a chain of field/tuple projections: `a`,
-// `h.items`, `t.0`. Destructuring works on any such place (`let [e0, e1] =
-// h.items;` partially moves the field, which OWN-5.3 allows), and an index chain
-// such as `a[0][1]` or `h.items[0][1]` is destructured recursively (`let [[e00,
-// e01], [e10, e11]] = a;`). Slots that are never moved are bound too, so they keep
-// dropping at the end of the scope instead of at the destructuring.
+// An *element path* is a chain of field/tuple projections and indexes that goes
+// through at least one index of a fixed-size array: `a[0]`, `h.items[1]`,
+// `a[1].0`, `b[0][i]`, `make()[0]`. Its *constant run* is the longest stretch,
+// starting at that index, that one pattern can express (literal in-range
+// indexes, tuple elements, struct fields).
 //
-// Bindings are identified by *declaration* (a scope stack in this walk), not by
-// name, so a `let a = ...` shadowing the parameter `a` no longer blocks the
-// lowering of the parameter's own array: OWN-5.4 does not care about names.
+// * Moved path: `({ let [_, __rv_el, ..] = a; __rv_el })`. Past the constant run
+//   the moved value is consumed step by step; a non-literal index consumes its
+//   whole array (`into_iter().nth(i)`), which is also what the checker assumes.
+// * Borrowed path of an array that is partially moved somewhere in the function:
+//   `(*{ let [_, ref __rv_el, ..] = a; __rv_el })`, because a plain `a[1]`
+//   borrows the whole array. Arrays that are never moved from keep `a[1]`.
+// * Re-initialised path (`a[0] = e` after `a[0]` was moved): the array is
+//   rebuilt around the new value. The checker decides when that is possible and
+//   records it (`OwnFacts::element_reinit`).
 //
-// The destructuring consumes the whole place, so the emitter must prove locally
-// that every use of that place at or after the destructuring is one of the
-// rewritten element accesses:
-// * the binder is a parameter, a `let`, a `for` binding or a `match` arm binding
-//   (an arm binding is visible at the arm body's block depth, so a *block-bodied*
-//   arm destructures before its first statement, and an expression-bodied arm has
-//   its body wrapped in a block so the destructuring gets a statement boundary);
-// * every rewritten access is a fully constant, in-range index chain, or a dynamic
-//   access whose constant prefix is bound whole by the destructuring (the dynamic
-//   remainder then continues inline from that slot);
-// * no whole-place use (`h.items`, `f(h.items)`, `&h.items`, `h.items.len()`,
-//   assignment) occurs at or after the hoist — a whole use after a partial move is
-//   `E-OWN-PARTIAL-MOVE`, which the checker already rejects;
-// * the binder is declared before the hoist statement of its own block.
+// Every form is checked again by rustc: a disagreement between the checker and
+// this lowering is a compile error in the generated code, never a silently
+// different program.
 //
-// The destructuring is hoisted immediately before the statement of the binder's
-// block that contains the first move (`stmt_chain[d]` for a binder at block depth
-// `d`), and every constant access at or after that statement is rewritten to its
-// element binding by AST node id (no name ambiguity). Reads, copies, moves,
-// `&`/`&mut` borrows and Copy projections keep working because each element is a
-// plain local.
-//
-// Three access shapes cannot be expressed by one destructuring and use an *inline
-// descent* instead (`{ let __rv_root = <root>; ...steps...; <element> }`), which
-// materializes the root once and applies each projection/index step in order,
-// binding intermediate values to locals:
-// * a dynamic index into a nested array (`a[0][i]`, `a[i][j]`): the constant prefix
-//   is destructured once and the dynamic remainder continues with
-//   `into_iter().nth(i)` from the slot (a single-use place, or an rvalue root,
-//   walks the whole chain inline);
-// * an index chain whose root is not a place: an rvalue root (`make()[0]`,
-//   `make_p().items[1]`) is materialized once, and a path that moves an element
-//   before the indexed array (`a[0].0[1]`, `h.items[0].0[1]`, `self.items[0]` in a
-//   by-value `self` method) descends through the projection;
-// * an access in an expression-bodied `match` arm whose body is a plain expression
-//   (the body is wrapped in a block, so a destructuring can be hoisted into it).
-//
-// Builtin methods that consume their receiver by value are modelled from the
-// stdlib table (STD-11.3: `Option::{unwrap, unwrap_or, ok_or}`,
-// `Result::{unwrap, unwrap_or, ok, err}`); the `is_*` predicates take `&self`.
-//
-// Observable difference: the destructured slots become locals, so they drop at the
-// end of the enclosing scope in reverse declaration order instead of with the array
-// (array order); an inline descent's intermediate bindings follow the same rule, and
-// the slots an array pattern does not keep drop at the destructuring. That is
-// unobservable in Core 1.0: the language has no `Drop`/trait implementations (`impl`
-// is inherent only), so no user code can run at either point; only the instant
-// memory is released can differ.
-//
-// Several descents that move elements of the same array place (`let x = a[0].0[1];
-// let y = a[1].0[0];`, or a descent plus a read of another element) share one
-// level-0 destructuring: the hoist binds every element of the place once and each
-// use continues from its slot (`let [e0, e1] = a; let x = <e0.0[1]>; let y =
-// <e1.0[0]>;`). The anchor of a group is the *earliest* statement of the binder's
-// own block among the descents' enclosing statements, so the descents may sit in
-// distinct branches of the same `if`, several of them in one nested block, or in
-// plain sibling statements: the bindings live in the anchor's block, hence every
-// statement of that block at or after the anchor — and everything nested inside
-// those statements — sees them. A use in an *earlier* statement of the same block
-// still sees the intact place, so it is left alone when it reads; a move there
-// refuses the group (and keeps the plain form). Loop bodies are excluded: a hoist
-// there would destructure the same place once per iteration.
-//
-// When the proof fails the emitter keeps the plain `a[i]`, which rustc rejects
-// loudly (`E0508`) — never a silent semantic change. The shapes still in that state
-// are measured, reproduced and listed in
-// `docs/qualification/CONFORMANCE-BUILD-CONTRACT.md` §9 (never here, so the list
-// cannot drift away from a measurement).
-// A dynamic index at the first level combined with a *later* use of the same place
-// (`let x = a[i]; let n = a[0].len();`) never reaches this lowering: the checker
-// already rejects it (`E-OWN-USE-AFTER-MOVE` / `E-OWN-PARTIAL-MOVE`), so no plain
-// form is emitted for such a program.
+// Observable difference with a naive reading: an element that is moved out is
+// dropped where its new owner is dropped rather than with the array. Core 1.0
+// has no `Drop`/trait implementations (`impl` is inherent only), so no user code
+// runs at either point; only the instant memory is released can differ.
 
-/// What the emitter does with the array places of one function body.
+/// How the emitter lowers the element paths of one function body.
 #[derive(Debug, Default)]
 struct ArrayMovePlan {
-    /// Outermost index expression node -> element binding identifier.
-    rewrites: BTreeMap<NodeId, String>,
-    /// Statement node (or block-tail expression node) -> destructuring(s) to emit
-    /// immediately before it.
-    hoists: BTreeMap<NodeId, Vec<HoistPlan>>,
-    /// Inline single-use lowering, when no statement boundary exists to hoist a
-    /// destructuring (a `match` arm body that is a plain expression, ...).
-    single: BTreeMap<NodeId, SingleMove>,
-}
-
-/// A destructuring hoisted before one statement or block tail.
-#[derive(Debug, Clone)]
-struct HoistPlan {
-    /// Emitted Rust text of the array place (`a`, `h.items`, `t.0`, ...).
-    base: String,
-    /// Array pattern covering every slot, e.g.
-    /// `[mut __rv_el_0_0, [mut __rv_el_0_1_0, mut __rv_el_0_1_1]]`.
-    pattern: String,
-}
-
-/// A single-use array-element move lowered inline at the access.
-#[derive(Debug, Clone)]
-enum SingleMove {
-    /// `{ let <pattern> = <base>; <binding> }` — a constant index chain.
-    Block {
-        base: String,
-        pattern: String,
-        binding: String,
-    },
-    /// `{ match <base>.into_iter().nth(i) { ... } }` — a single dynamic level.
-    Dynamic { base: String, len: usize },
-    /// An inline descent over the whole access chain: materialize the root once,
-    /// then apply each projection/index step, binding intermediate values to
-    /// locals. Needed when the chain mixes dynamic levels, crosses a projection
-    /// over an element move (`a[0].0[1]`), starts at an rvalue (`make()[0]`), or
-    /// continues from a destructured slot.
-    Chain { base: ChainBase },
-}
-
-/// Where an inline descent starts.
-#[derive(Debug, Clone)]
-enum ChainBase {
-    /// Materialize the chain's deepest root expression (a place or an rvalue) once
-    /// and descend from it.
-    Root,
-    /// Continue from a destructured slot: `text` is the binding and `skip` is the
-    /// number of index levels the enclosing destructuring already applied.
-    Slot { text: String, skip: usize },
+    /// Outermost expression of an element path -> lowering.
+    paths: BTreeMap<NodeId, PathMode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BinderKind {
-    Param,
-    Let,
-    /// `for pat in ...`: the hoist is emitted inside the loop body, so it runs
-    /// once per iteration with that iteration's binding.
-    ForPattern,
-    /// `match` arm pattern binding: its block depth is the arm body's block, so a
-    /// block-bodied arm can destructure before its first statement, and an
-    /// expression-bodied arm falls back to the inline single-use lowering.
-    ArmPattern,
+enum PathMode {
+    /// The element is moved out by value.
+    Move,
+    /// The element is read or borrowed immutably.
+    Shared,
+    /// The element is assigned or borrowed mutably.
+    Exclusive,
+    /// The assignment target re-initialises a moved element.
+    Reinit,
 }
 
-/// A local binding, identified by declaration (never by name), so a shadowing
-/// `let` cannot be confused with the binding it shadows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct BinderId(u32);
-
-#[derive(Debug, Clone)]
-struct Binder {
-    name: String,
-    kind: BinderKind,
-    /// Block nesting depth at which the binding is visible (0 = function body).
-    block_depth: usize,
-    /// Walk order of the declaring statement (0 for parameters).
-    order: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Projection {
-    Field(String),
-    Tuple(u32),
-}
-
-/// An array place: a local binder plus a chain of field/tuple projections.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct PlaceKey {
-    binder: BinderId,
-    projections: Vec<Projection>,
-}
-
-/// One array-place access: the outermost `[...]` of an index chain.
-struct Access {
-    /// Node id of the outermost index expression.
-    node: NodeId,
-    place: PlaceKey,
-    /// Constant index of each level, outermost first; `None` at a level whose
-    /// index is a runtime expression (only the trailing levels can vary: a
-    /// constant chain is required up to the first dynamic index for a hoist).
-    indices: Vec<Option<usize>>,
-    /// Element counts of the place's array layers, outermost first.
-    lens: Vec<usize>,
-    /// `true` when this access consumes the element by value.
-    consumed: bool,
-    /// Enclosing function-body statement index (== number of body statements for
-    /// the body tail).
-    top: usize,
-    /// Enclosing statement ids, outermost first. `stmt_chain[d]` is the statement,
-    /// in the block at depth `d`, that contains this access.
-    stmt_chain: Vec<NodeId>,
-    /// Innermost enclosing `match` arm body expression, when any: an arm binding
-    /// has no statement of its own in an expression-bodied arm, so the
-    /// destructuring is hoisted into a block wrapping that body.
-    arm_body: Option<NodeId>,
-}
-
-/// One step of an expression path: a projection or an index.
+/// One step of an expression path, with the expression it applies to.
 enum PathStep<'x> {
-    Field(&'x str),
-    Tuple(u32),
-    /// `level_base` is the array expression being indexed (its type gives this
-    /// level's element count); `index` is the index expression.
-    Index {
-        level_base: &'x Expr,
-        index: &'x Expr,
-    },
+    Field { base: &'x Expr, name: &'x str },
+    Tuple { base: &'x Expr, index: u32 },
+    Index { base: &'x Expr, index: &'x Expr },
+}
+
+impl<'x> PathStep<'x> {
+    fn base(&self) -> &'x Expr {
+        match self {
+            PathStep::Field { base, .. }
+            | PathStep::Tuple { base, .. }
+            | PathStep::Index { base, .. } => base,
+        }
+    }
 }
 
 /// Collect the path from the deepest non-projection/non-index expression down to
@@ -3629,20 +3546,23 @@ fn collect_path_steps<'x>(expr: &'x Expr, out: &mut Vec<PathStep<'x>>) -> &'x Ex
     match &expr.kind {
         ExprKind::Field { base, name } => {
             let root = collect_path_steps(base, out);
-            out.push(PathStep::Field(name.name.as_str()));
+            out.push(PathStep::Field {
+                base,
+                name: name.name.as_str(),
+            });
             root
         }
         ExprKind::TupleIndex { base, index } => {
             let root = collect_path_steps(base, out);
-            out.push(PathStep::Tuple(*index));
+            out.push(PathStep::Tuple {
+                base,
+                index: *index,
+            });
             root
         }
         ExprKind::Index { base, index } => {
             let root = collect_path_steps(base, out);
-            out.push(PathStep::Index {
-                level_base: base,
-                index,
-            });
+            out.push(PathStep::Index { base, index });
             root
         }
         _ => expr,
@@ -3657,143 +3577,140 @@ fn constant_index(expr: &Expr) -> Option<usize> {
     }
 }
 
-/// True when the expression is a chain of projections/indexes over a local
-/// binding (as opposed to an rvalue: a call result, a temporary aggregate, ...).
-fn roots_at_local(expr: &Expr, resolutions: &BTreeMap<NodeId, Resolution>) -> bool {
-    let mut current = expr;
-    loop {
-        match &current.kind {
-            ExprKind::Field { base, .. }
-            | ExprKind::TupleIndex { base, .. }
-            | ExprKind::Index { base, .. } => current = base,
-            ExprKind::Path(path) => {
-                return matches!(resolutions.get(&path.id), Some(Resolution::Local { .. }));
-            }
-            _ => return false,
-        }
+/// A projection one Rust pattern can express, resolved against the checked types.
+#[derive(Debug, Clone)]
+enum Slot {
+    /// Element `at` of an array of `len` elements.
+    Index { len: usize, at: usize },
+    /// Element `at` of a tuple of `len` elements.
+    Tuple { len: usize, at: usize },
+    /// Field `name` of the struct at Rust path `path`, whose fields are `fields`.
+    Field {
+        path: String,
+        fields: Vec<String>,
+        name: String,
+    },
+}
+
+/// An element path resolved against the checked types (see the section header).
+struct ElementPath<'x> {
+    /// Deepest expression that is neither a projection nor an index.
+    root: &'x Expr,
+    steps: Vec<PathStep<'x>>,
+    /// Position in `steps` of the first index into a fixed-size array.
+    first: usize,
+    /// The constant run, starting at `steps[first]`.
+    slots: Vec<Slot>,
+}
+
+impl<'x> ElementPath<'x> {
+    /// The array expression the constant run applies to.
+    fn array(&self) -> &'x Expr {
+        self.steps[self.first].base()
+    }
+
+    /// The steps after the constant run.
+    fn rest(&self) -> &[PathStep<'x>] {
+        &self.steps[self.first + self.slots.len()..]
     }
 }
 
-/// A place reached by a path that contains an element move before the projected
-/// array (`a[0].0[1]`), or an rvalue root (`make()[0]`): neither can be
-/// destructured as a single place, so the access is lowered by an inline descent
-/// that materializes the root once and applies each step.
-struct Descent {
-    /// Node id of the outermost index expression.
-    node: NodeId,
-    /// The local place consumed by the descent, when the root is a place
-    /// (`a[0].0[1]` -> `Some(a)`); `None` for an rvalue root.
-    base: Option<PlaceKey>,
-    /// Constant index of the first path step when the descent starts with an
-    /// element move out of the base place (`a[0].0[1]` -> `Some(0)`).
-    first_index: Option<usize>,
-    /// Array layers of the base place, outermost first.
-    lens: Vec<usize>,
-    /// Walk order of the enclosing statement(s), outermost first.
-    stmt_chain: Vec<NodeId>,
-    top: usize,
-    /// `true` when the access is inside a `while`/`loop`/`for` body (no hoist is
-    /// planned there, see [`MovePlanner::plan_slot_groups`]).
-    in_loop: bool,
-}
-
-/// A use of the whole place (as opposed to one element access).
-struct WholeUse {
-    place: PlaceKey,
-    top: usize,
-    /// Walk order of the enclosing statement, used to bound a hoist to the
-    /// region between two whole-place writes.
-    order: usize,
-}
-
-/// A whole-binding assignment (`a = ...`): it re-initialises the place *after*
-/// the right-hand side is evaluated, so it ends the region of any hoist.
-struct WholeWrite {
-    place: PlaceKey,
-    order: usize,
-}
-
-/// `[len0, len1, ...]` of a (possibly nested) array type.
-fn array_layers(ty: Option<&Type>) -> Vec<usize> {
-    let mut lens = Vec::new();
-    let mut current = ty;
-    while let Some(Type::Array { elem, len }) = current {
-        lens.push(*len);
-        current = Some(elem);
+/// `_, _, <inner>, ..` selecting position `at` out of `len`.
+fn positional_pattern(at: usize, len: usize, inner: &str, tuple: bool) -> String {
+    let mut parts: Vec<&str> = vec!["_"; at];
+    parts.push(inner);
+    if at + 1 < len {
+        parts.push("..");
     }
-    lens
+    let mut text = parts.join(", ");
+    if tuple && len == 1 {
+        text.push(',');
+    }
+    text
 }
 
-/// Slot tree used to build one array pattern. A slot is either destructured
-/// further (children) or bound as a value.
-#[derive(Debug, Default)]
-struct SlotTree {
-    bound: bool,
-    children: BTreeMap<usize, SlotTree>,
-}
-
-impl SlotTree {
-    /// Record one constant index chain. `None` means the chains are inconsistent
-    /// (one access stops at a slot another one destructures), so the place cannot
-    /// be lowered.
-    fn insert(&mut self, chain: &[usize]) -> Option<()> {
-        let (index, rest) = chain.split_first()?;
-        let slot = self.children.entry(*index).or_default();
-        if rest.is_empty() {
-            if !slot.children.is_empty() {
-                return None;
-            }
-            slot.bound = true;
-            Some(())
-        } else {
-            if slot.bound {
-                return None;
-            }
-            slot.insert(rest)
-        }
+/// The irrefutable pattern that reaches the end of `slots` and binds `leaf`
+/// there; every other position is `_` or `..`, which moves and borrows nothing.
+fn slot_pattern(slots: &[Slot], leaf: &str) -> String {
+    let Some((slot, rest)) = slots.split_first() else {
+        return leaf.to_string();
+    };
+    let inner = slot_pattern(rest, leaf);
+    match slot {
+        Slot::Index { len, at } => format!("[{}]", positional_pattern(*at, *len, &inner, false)),
+        Slot::Tuple { len, at } => format!("({})", positional_pattern(*at, *len, &inner, true)),
+        Slot::Field { path, name, .. } => format!("{path} {{ {name}: {inner}, .. }}"),
     }
 }
 
-/// Element binding identifier for one slot path.
-fn element_binding(sequence: usize, path: &[usize]) -> String {
-    let joined = path
-        .iter()
-        .map(usize::to_string)
-        .collect::<Vec<_>>()
-        .join("_");
-    format!("__rv_el_{sequence}_{joined}")
-}
-
-/// Render one array pattern for `tree` at `level`; every slot of every
-/// destructured level is bound (`mut`) so it keeps its scope-lifetime drop order.
-fn pattern_text(
-    tree: &SlotTree,
-    lens: &[usize],
-    level: usize,
-    sequence: usize,
-    path: &mut Vec<usize>,
-    out: &mut String,
-) {
-    out.push('[');
-    for index in 0..lens[level] {
-        if index > 0 {
-            out.push_str(", ");
+/// The value of the aggregate reached by `slots[..depth]` with the place at the
+/// end of `slots` replaced by `fresh`: every sibling is moved out of `array` and
+/// put back unchanged.
+fn rebuild_text(slots: &[Slot], depth: usize, array: &str, fresh: &str) -> String {
+    let Some(slot) = slots.get(depth) else {
+        return fresh.to_string();
+    };
+    let keep = |sibling: Slot| {
+        let mut path = slots[..depth].to_vec();
+        path.push(sibling);
+        format!(
+            "{{ let {} = {array}; __rv_keep }}",
+            slot_pattern(&path, "__rv_keep")
+        )
+    };
+    let replaced = || rebuild_text(slots, depth + 1, array, fresh);
+    match slot {
+        Slot::Index { len, at } => {
+            let items: Vec<String> = (0..*len)
+                .map(|position| {
+                    if position == *at {
+                        replaced()
+                    } else {
+                        keep(Slot::Index {
+                            len: *len,
+                            at: position,
+                        })
+                    }
+                })
+                .collect();
+            format!("[{}]", items.join(", "))
         }
-        path.push(index);
-        match tree.children.get(&index) {
-            Some(slot) if !slot.children.is_empty() => {
-                pattern_text(slot, lens, level + 1, sequence, path, out);
-            }
-            _ => {
-                out.push_str("mut ");
-                out.push_str(&element_binding(sequence, path));
-            }
+        Slot::Tuple { len, at } => {
+            let items: Vec<String> = (0..*len)
+                .map(|position| {
+                    if position == *at {
+                        replaced()
+                    } else {
+                        keep(Slot::Tuple {
+                            len: *len,
+                            at: position,
+                        })
+                    }
+                })
+                .collect();
+            let trailing = if *len == 1 { "," } else { "" };
+            format!("({}{trailing})", items.join(", "))
         }
-        path.pop();
+        Slot::Field { path, fields, name } => {
+            let items: Vec<String> = fields
+                .iter()
+                .map(|field| {
+                    let value = if field == name {
+                        replaced()
+                    } else {
+                        keep(Slot::Field {
+                            path: path.clone(),
+                            fields: fields.clone(),
+                            name: field.clone(),
+                        })
+                    };
+                    format!("{field}: {value}")
+                })
+                .collect();
+            format!("{path} {{ {} }}", items.join(", "))
+        }
     }
-    out.push(']');
 }
-
 /// Collect every expression node of a module (step B place cross-check).
 fn collect_module_exprs<'a>(
     module: &'a Module,
@@ -3943,547 +3860,225 @@ fn pattern_consumes_value(pat: &Pat) -> bool {
     }
 }
 
-/// Syntactic walk that finds array-place accesses and whole-place uses, with a
-/// scope stack that gives every binding its own identity.
-struct MovePlanner<'e, 'a> {
-    emitter: &'e Emitter<'a>,
-    scopes: Vec<BTreeMap<String, BinderId>>,
-    binders: Vec<Binder>,
-    accesses: Vec<Access>,
-    whole_uses: Vec<WholeUse>,
-    /// Whole-binding assignments (`a = ...`), in walk order.
-    whole_writes: Vec<WholeWrite>,
-    /// Accesses whose chain crosses an element move or starts at an rvalue.
-    descents: Vec<Descent>,
-    /// Innermost enclosing `match` arm body (see [`Access::arm_body`]).
-    arm_anchor: Option<NodeId>,
-    /// Nesting depth of `while`/`loop`/`for` bodies: a destructuring hoisted inside
-    /// one of them would run once per iteration and move the same place twice.
-    loop_depth: usize,
-    /// Walk order of every statement id (and block-tail expression id).
-    statement_order: BTreeMap<NodeId, usize>,
-    /// Enclosing statement ids, outermost first.
-    statement_chain: Vec<NodeId>,
-    order: usize,
+/// An array place: a local binding, identified by its declaration, and the
+/// field/tuple projections that lead to the array (`a`, `h.items`, `t.0`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ArrayPlace {
+    binding: Span,
+    lead: Vec<String>,
 }
 
-impl<'e, 'a> MovePlanner<'e, 'a> {
+impl ArrayPlace {
+    /// True when one place contains the other, so a move out of one can leave
+    /// the other partially moved.
+    fn overlaps(&self, other: &ArrayPlace) -> bool {
+        self.binding == other.binding
+            && (self.lead.starts_with(&other.lead) || other.lead.starts_with(&self.lead))
+    }
+}
+
+/// One element path found in a function body.
+struct PathAccess {
+    /// Outermost expression of the path.
+    node: NodeId,
+    /// The array place, when the path is rooted at a local binding.
+    place: Option<ArrayPlace>,
+    /// The path's value is moved out.
+    consumed: bool,
+    /// The path is assigned or borrowed mutably.
+    exclusive: bool,
+    /// The constant run is not empty: a pattern reaches the element.
+    constant: bool,
+}
+
+/// Syntactic walk of one function body that classifies its element paths.
+struct PathPlanner<'e, 'a> {
+    emitter: &'e Emitter<'a>,
+    accesses: Vec<PathAccess>,
+    reinits: Vec<NodeId>,
+}
+
+impl<'e, 'a> PathPlanner<'e, 'a> {
     fn new(emitter: &'e Emitter<'a>) -> Self {
         Self {
             emitter,
-            scopes: Vec::new(),
-            binders: Vec::new(),
             accesses: Vec::new(),
-            whole_uses: Vec::new(),
-            whole_writes: Vec::new(),
-            descents: Vec::new(),
-            arm_anchor: None,
-            loop_depth: 0,
-            statement_order: BTreeMap::new(),
-            statement_chain: Vec::new(),
-            order: 0,
+            reinits: Vec::new(),
         }
     }
 
-    fn tick(&mut self) -> usize {
-        self.order += 1;
-        self.order
-    }
-
-    fn push_scope(&mut self) {
-        self.scopes.push(BTreeMap::new());
-    }
-
-    fn pop_scope(&mut self) {
-        self.scopes.pop();
-    }
-
-    fn declare(&mut self, name: &str, kind: BinderKind, block_depth: usize, order: usize) {
-        let id = BinderId(self.binders.len() as u32);
-        self.binders.push(Binder {
-            name: name.to_string(),
-            kind,
-            block_depth,
-            order,
-        });
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), id);
-        }
-    }
-
-    fn resolve(&self, name: &str) -> Option<BinderId> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(id) = scope.get(name) {
-                return Some(*id);
-            }
-        }
-        None
-    }
-
-    fn place_text(&self, key: &PlaceKey) -> String {
-        let mut text = mangle_ident(&self.binders[key.binder.0 as usize].name);
-        for projection in &key.projections {
-            text.push('.');
-            match projection {
-                Projection::Field(name) => text.push_str(&mangle_ident(name)),
-                Projection::Tuple(index) => text.push_str(&index.to_string()),
-            }
-        }
-        text
-    }
-
-    /// The array place an expression denotes, when it is a local or a chain of
-    /// field/tuple projections rooted at a local.
-    fn place_of(&self, expr: &Expr) -> Option<(PlaceKey, Vec<usize>)> {
-        let mut projections = Vec::new();
-        let mut current = expr;
-        loop {
-            match &current.kind {
-                ExprKind::Field { base, name } => {
-                    projections.push(Projection::Field(name.name.clone()));
-                    current = base;
-                }
-                ExprKind::TupleIndex { base, index } => {
-                    projections.push(Projection::Tuple(*index));
-                    current = base;
-                }
-                ExprKind::Path(path) => {
-                    let Resolution::Local { name, .. } =
-                        self.emitter.facts().resolutions.get(&path.id)?
-                    else {
-                        return None;
-                    };
-                    let binder = self.resolve(name)?;
-                    projections.reverse();
-                    let key = PlaceKey {
-                        binder,
-                        projections,
-                    };
-                    let lens = array_layers(self.emitter.facts().expr_types.get(&expr.id));
-                    return Some((key, lens));
-                }
-                _ => return None,
-            }
-        }
-    }
-
-    /// Flatten `place[i][j]...` into its root expression and index expressions,
-    /// outermost first.
-    fn flatten_index_chain<'x>(expr: &'x Expr) -> (&'x Expr, Vec<&'x Expr>) {
-        let mut indices = Vec::new();
-        let mut current = expr;
-        while let ExprKind::Index { base, index } = &current.kind {
-            indices.push(index.as_ref());
-            current = base;
-        }
-        indices.reverse();
-        (current, indices)
-    }
-
-    /// `(root path, number of index levels)` when the base chain of `expr` bottoms
-    /// out at a local.
-    fn chain_root_local(expr: &Expr) -> Option<(&Path, usize)> {
-        let mut depth = 0usize;
-        let mut current = expr;
-        while let ExprKind::Index { base, .. } = &current.kind {
-            depth += 1;
-            current = base;
-        }
-        match &current.kind {
-            ExprKind::Path(path) => Some((path, depth)),
-            _ => None,
-        }
-    }
-
-    fn walk_function(&mut self, params: &[Param], body: &Block) {
-        self.push_scope();
-        for param in params {
-            if let ParamKind::Binding { name, .. } = &param.kind {
-                let name = name.name.clone();
-                self.declare(&name, BinderKind::Param, 0, 0);
-            }
-        }
-        for (index, statement) in body.stmts.iter().enumerate() {
-            self.walk_statement(statement, index, 0);
-        }
-        if let Some(tail) = &body.tail {
-            let order = self.tick();
-            self.statement_order.insert(tail.id, order);
-            self.statement_chain.push(tail.id);
-            let top = body.stmts.len();
-            self.walk_expr(tail, true, top, 0);
-            self.statement_chain.pop();
-        }
-        self.pop_scope();
-    }
-
-    fn walk_statement(&mut self, statement: &Stmt, top: usize, block_depth: usize) {
-        let order = self.tick();
-        self.statement_order.insert(statement.id, order);
-        self.statement_chain.push(statement.id);
-        match &statement.kind {
-            StmtKind::Let(declaration) => {
-                if let Some(init) = &declaration.init {
-                    let owned = pattern_consumes_value(&declaration.pat);
-                    self.walk_expr(init, owned, top, block_depth);
-                }
-                // The binding becomes visible only after its initializer.
-                self.walk_pattern(&declaration.pat, BinderKind::Let, block_depth, top, order);
-            }
-            StmtKind::Expr { expr, .. } => self.walk_expr(expr, false, top, block_depth),
-        }
-        self.statement_chain.pop();
-    }
-
-    fn walk_nested_block(
-        &mut self,
-        block: &Block,
-        owned_tail: bool,
-        top: usize,
-        block_depth: usize,
-    ) {
-        self.push_scope();
+    fn walk_block(&mut self, block: &Block, owned_tail: bool) {
         for statement in &block.stmts {
-            self.walk_statement(statement, top, block_depth + 1);
+            match &statement.kind {
+                StmtKind::Let(declaration) => {
+                    if let Some(init) = &declaration.init {
+                        let owned = pattern_consumes_value(&declaration.pat);
+                        self.walk_expr(init, owned, false);
+                    }
+                }
+                StmtKind::Expr { expr, .. } => self.walk_expr(expr, false, false),
+            }
         }
         if let Some(tail) = &block.tail {
-            let order = self.tick();
-            self.statement_order.insert(tail.id, order);
-            self.statement_chain.push(tail.id);
-            self.walk_expr(tail, owned_tail, top, block_depth + 1);
-            self.statement_chain.pop();
+            self.walk_expr(tail, owned_tail, false);
         }
-        self.pop_scope();
     }
 
-    fn record_whole_place_use(&mut self, binder: BinderId, top: usize) {
-        let order = self.current_order().unwrap_or(0);
-        self.whole_uses.push(WholeUse {
-            place: PlaceKey {
-                binder,
-                projections: Vec::new(),
-            },
-            top,
-            order,
-        });
+    /// The array place of a path rooted at a local binding through field/tuple
+    /// projections only.
+    fn array_place(&self, path: &ElementPath<'_>) -> Option<ArrayPlace> {
+        let binding = self.emitter.syntactic_place(path.root)?.binding;
+        let mut lead = Vec::new();
+        for step in &path.steps[..path.first] {
+            match step {
+                PathStep::Field { name, .. } => lead.push((*name).to_string()),
+                PathStep::Tuple { index, .. } => lead.push(index.to_string()),
+                PathStep::Index { .. } => return None,
+            }
+        }
+        Some(ArrayPlace { binding, lead })
     }
 
-    /// Walk order of the statement being walked, when known.
-    fn current_order(&self) -> Option<usize> {
-        self.statement_chain
-            .last()
-            .and_then(|id| self.statement_order.get(id).copied())
-    }
-
-    /// Region of an access: the number of whole-place writes that happen
-    /// strictly before it. A hoist may only rewrite accesses of its own region:
-    /// after `a = ...`, the slots of a previous destructuring are stale.
-    fn region_of_order(&self, place: &PlaceKey, order: Option<usize>) -> usize {
-        let Some(order) = order else {
-            return 0;
+    /// Record `expr` (a field, tuple-index or index expression) when it is an
+    /// element path, and walk the expressions evaluated inside it.
+    fn walk_path(&mut self, expr: &Expr, owned: bool, exclusive: bool) {
+        let mut steps = Vec::new();
+        let root = collect_path_steps(expr, &mut steps);
+        if !matches!(root.kind, ExprKind::Path(_) | ExprKind::SelfValue) {
+            self.walk_expr(root, false, false);
+        }
+        for step in &steps {
+            if let PathStep::Index { index, .. } = step {
+                self.walk_expr(index, false, false);
+            }
+        }
+        let Some(path) = self.emitter.element_path(expr) else {
+            return;
         };
-        self.whole_writes
-            .iter()
-            .filter(|write| write.order < order && Self::places_overlap(&write.place, place))
-            .count()
-    }
-
-    fn region_of_access(&self, access: &Access) -> usize {
-        let order = access
-            .stmt_chain
-            .last()
-            .and_then(|id| self.statement_order.get(id).copied());
-        self.region_of_order(&access.place, order)
-    }
-
-    fn region_of_use(&self, place: &PlaceKey, use_site: &WholeUse) -> usize {
-        self.region_of_order(place, Some(use_site.order))
+        let borrowed_mutably = matches!(
+            self.emitter.facts().own.use_kind.get(&expr.id),
+            Some(UseKind::BorrowMut)
+        );
+        self.accesses.push(PathAccess {
+            node: expr.id,
+            place: self.array_place(&path),
+            consumed: owned && self.emitter.is_owned_position(expr),
+            exclusive: exclusive || borrowed_mutably,
+            constant: !path.slots.is_empty(),
+        });
     }
 
     /// `owned` is true when the *value* of `expr` is consumed by its parent
-    /// (returned, bound by value, moved into an aggregate, ...).
-    fn walk_expr(&mut self, expr: &Expr, owned: bool, top: usize, block_depth: usize) {
-        self.tick();
+    /// (returned, bound by value, moved into an aggregate, ...); `exclusive` is
+    /// true when `expr` is assigned or mutably borrowed.
+    fn walk_expr(&mut self, expr: &Expr, owned: bool, exclusive: bool) {
         match &expr.kind {
-            ExprKind::Path(path) => {
-                if let Some(Resolution::Local { name, .. }) =
-                    self.emitter.facts().resolutions.get(&path.id)
-                {
-                    if let Some(binder) = self.resolve(name) {
-                        self.record_whole_place_use(binder, top);
-                    }
-                }
-            }
-            ExprKind::Index { .. } => {
-                // One logical access per index chain, with its full constant path.
-                let (root, indices) = Self::flatten_index_chain(expr);
-                if let Some((place, lens)) = self.place_of(root) {
-                    let per_level: Vec<Option<usize>> =
-                        indices.iter().map(|index| constant_index(index)).collect();
-                    let depth_ok = per_level.len() <= lens.len();
-                    let constant_prefix_ok = per_level
-                        .iter()
-                        .take_while(|level| level.is_some())
-                        .enumerate()
-                        .all(|(level, index)| match index {
-                            Some(index) => level < lens.len() && *index < lens[level],
-                            None => false,
-                        });
-                    if depth_ok && constant_prefix_ok {
-                        // Constant chains are bounds-checked and lowered (or
-                        // refused) when the place is planned; dynamic levels keep
-                        // either the single-use `into_iter().nth()` form or the
-                        // prefix-slot form (see [`SingleMove::Chain`]).
-                        self.accesses.push(Access {
-                            node: expr.id,
-                            place,
-                            indices: per_level,
-                            lens: lens.clone(),
-                            consumed: owned && self.emitter.is_owned_position(expr),
-                            top,
-                            stmt_chain: self.statement_chain.clone(),
-                            arm_body: self.arm_anchor,
-                        });
-                    } else {
-                        // A dynamic index before a constant one, or an index
-                        // outside the array layers, cannot be lowered: make the
-                        // whole place bail out (loud E0508).
-                        let order = self.current_order().unwrap_or(0);
-                        self.whole_uses.push(WholeUse { place, top, order });
-                    }
-                    for index in indices {
-                        self.walk_expr(index, false, top, block_depth);
-                    }
-                    return;
-                }
-                // The chain root is not a place (`make()[0]`, `a[0].0[1]`, ...):
-                // the entry from the outermost index is either a descent (the
-                // root is an rvalue, or the path moves an element before the
-                // projected array) or nothing can be lowered and rustc rejects
-                // the plain form loudly.
-                let mut steps: Vec<PathStep<'_>> = Vec::new();
-                let deep_root = collect_path_steps(expr, &mut steps);
-                let consumed = owned && self.emitter.is_owned_position(expr);
-                let rooted_at_place = self.place_of(deep_root).map(|(place, _)| place);
-                if consumed {
-                    if let Some(place) = rooted_at_place.clone() {
-                        // A path over a local place, with at least one index step
-                        // before the indexed array: the descent materializes the
-                        // place once and walks the steps.
-                        let (first_index, lens) = match steps.first() {
-                            Some(PathStep::Index { level_base, index }) => (
-                                constant_index(index),
-                                array_layers(self.emitter.facts().expr_types.get(&level_base.id)),
-                            ),
-                            _ => (None, Vec::new()),
-                        };
-                        self.descents.push(Descent {
-                            node: expr.id,
-                            base: Some(place),
-                            first_index,
-                            lens,
-                            stmt_chain: self.statement_chain.clone(),
-                            top,
-                            in_loop: self.loop_depth > 0,
-                        });
-                    } else if !roots_at_local(deep_root, &self.emitter.facts().resolutions) {
-                        // An rvalue root: a call result, a temporary aggregate,
-                        // a constant, ... Each such access has its own root
-                        // expression instance, so they never share storage.
-                        self.descents.push(Descent {
-                            node: expr.id,
-                            base: None,
-                            first_index: None,
-                            lens: Vec::new(),
-                            stmt_chain: self.statement_chain.clone(),
-                            top,
-                            in_loop: self.loop_depth > 0,
-                        });
-                    }
-                }
-                // Walk the root (only an rvalue root can contain further
-                // accesses: a place root is consumed by the descent and its
-                // interior is a plain path) and every index expression.
-                if rooted_at_place.is_none() {
-                    self.walk_expr(deep_root, false, top, block_depth);
-                }
-                for step in &steps {
-                    if let PathStep::Index { index, .. } = step {
-                        self.walk_expr(index, false, top, block_depth);
-                    }
-                }
-            }
-            ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
-                if let Some((place, _)) = self.place_of(expr) {
-                    // A whole use of this place (not an element access).
-                    let order = self.current_order().unwrap_or(0);
-                    self.whole_uses.push(WholeUse { place, top, order });
-                    return;
-                }
-                // Element projection (`a[1].0`) over an index chain: a mobile
-                // projection moves out of the element, a Copy one reads it.
-                if let Some((_, depth)) = Self::chain_root_local(base) {
-                    if depth > 0 {
-                        let mobile = self.emitter.is_owned_position(expr);
-                        self.walk_expr(base, owned && mobile, top, block_depth);
-                        return;
-                    }
-                }
-                self.walk_expr(base, false, top, block_depth);
+            ExprKind::Field { .. } | ExprKind::TupleIndex { .. } | ExprKind::Index { .. } => {
+                self.walk_path(expr, owned, exclusive);
             }
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
                 // Constructing an aggregate moves its elements.
                 for item in items {
-                    self.walk_expr(item, true, top, block_depth);
+                    self.walk_expr(item, true, false);
                 }
             }
             ExprKind::StructLit { fields, .. } => {
                 for field in fields {
-                    self.walk_expr(&field.value, true, top, block_depth);
+                    self.walk_expr(&field.value, true, false);
                 }
             }
             ExprKind::Call { callee, args } => {
-                self.walk_expr(callee, false, top, block_depth);
+                self.walk_expr(callee, false, false);
                 // RFC-OWN-FACTS-1 step C (family `arguments`): the checker records
                 // on the argument expression itself whether the call takes it by
-                // value (`Move`/`Copy`) or only borrows it (`Borrow`/`BorrowMut`).
-                // The backend no longer re-derives it from the callee signature's
-                // parameter types, nor from "a builtin takes bare values".
+                // value (`Move`/`Copy`) or only borrows it.
                 for arg in args {
                     let owned = self.emitter.consumed_by_checker(arg.id);
-                    self.walk_expr(arg, owned, top, block_depth);
+                    self.walk_expr(arg, owned, false);
                 }
             }
             ExprKind::MethodCall { receiver, args, .. } => {
-                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker already
-                // decided whether the call takes its receiver by value. It
-                // records `Move`/`Copy` on the receiver expression when it
-                // consumes it (`self` by value, and the STD-11.3 consuming
-                // builtins `Option::{unwrap, unwrap_or, ok_or}` /
-                // `Result::{unwrap, unwrap_or, ok, err}`) and `Borrow`/
-                // `BorrowMut` when it only borrows it (`&self`, `&mut self`).
-                // The backend no longer inspects the signature or the builtin
-                // set itself.
+                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker records
+                // `Move`/`Copy` on a receiver the call takes by value (`self`, and
+                // the STD-11.3 consuming builtins) and `Borrow`/`BorrowMut` when
+                // the call only borrows it.
                 let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
-                self.walk_expr(receiver, receiver_owned, top, block_depth);
-                // Same decision, same source of truth, for the explicit arguments
-                // (family `arguments`): the recorded use of each argument node.
+                self.walk_expr(receiver, receiver_owned, false);
                 for arg in args {
                     let owned = self.emitter.consumed_by_checker(arg.id);
-                    self.walk_expr(arg, owned, top, block_depth);
+                    self.walk_expr(arg, owned, false);
                 }
             }
             ExprKind::Assign { target, value } => {
-                self.walk_expr(value, true, top, block_depth);
-                // A whole-binding target (`a = ...`) is written *after* the RHS
-                // is evaluated: it is not a read of the place, and the write
-                // re-initialises the binding, so it must not block a hoist the
-                // RHS needs when it moves an element of the same array
-                // (`a = [a[0], ...]`, measured `E0508` before this rule).
-                if matches!(target.kind, ExprKind::Path(_)) {
-                    // The place is re-initialised after the RHS: record the
-                    // write so a hoist stops rewriting accesses past it.
-                    if let Some((place, _)) = self.place_of(target) {
-                        if place.projections.is_empty() {
-                            let order = self.current_order().unwrap_or(0);
-                            self.whole_writes.push(WholeWrite { place, order });
-                        }
-                    }
-                    self.tick();
-                } else {
-                    self.walk_expr(target, false, top, block_depth);
+                self.walk_expr(value, true, false);
+                self.walk_expr(target, false, true);
+                if self.emitter.facts().own.element_reinit.contains(&target.id) {
+                    self.reinits.push(target.id);
                 }
             }
             ExprKind::AssignOp { target, value, .. } => {
-                self.walk_expr(value, true, top, block_depth);
-                self.walk_expr(target, false, top, block_depth);
+                self.walk_expr(value, true, false);
+                self.walk_expr(target, false, true);
             }
-            ExprKind::Return(Some(value)) => self.walk_expr(value, true, top, block_depth),
-            ExprKind::Return(None) | ExprKind::Break | ExprKind::Continue => {}
+            ExprKind::Return(Some(value)) => self.walk_expr(value, true, false),
             ExprKind::If {
                 cond,
                 then_block,
                 else_branch,
             } => {
-                self.walk_expr(cond, false, top, block_depth);
-                self.walk_nested_block(then_block, owned, top, block_depth);
+                self.walk_expr(cond, false, false);
+                self.walk_block(then_block, owned);
                 if let Some(else_branch) = else_branch {
-                    self.walk_expr(else_branch, owned, top, block_depth);
+                    self.walk_expr(else_branch, owned, false);
                 }
             }
-            ExprKind::Block(block) | ExprKind::Unsafe(block) => {
-                self.walk_nested_block(block, owned, top, block_depth)
-            }
+            ExprKind::Block(block) | ExprKind::Unsafe(block) => self.walk_block(block, owned),
             ExprKind::Match { scrutinee, arms } => {
-                // The scrutinee's move-ness depends on the arm patterns; stay
-                // conservative and let a plain `a[i]` be rejected loudly.
-                self.walk_expr(scrutinee, false, top, block_depth);
+                // The checker decides whether the arms take the scrutinee by
+                // value (OWN-5.9) and records it on the scrutinee expression.
+                let scrutinee_owned = self.emitter.consumed_by_checker(scrutinee.id);
+                self.walk_expr(scrutinee, scrutinee_owned, false);
                 for arm in arms {
-                    let order = self.order;
-                    self.push_scope();
-                    // An arm binding lives in the arm body's own scope: when the body
-                    // is a block, the destructuring can be hoisted before its first
-                    // statement (`block_depth + 1`); otherwise the single-use inline
-                    // lowering handles it.
-                    self.walk_pattern(
-                        &arm.pat,
-                        BinderKind::ArmPattern,
-                        block_depth + 1,
-                        top,
-                        order,
-                    );
-                    let previous_anchor = self.arm_anchor.replace(arm.body.id);
-                    self.walk_expr(&arm.body, owned, top, block_depth);
-                    self.arm_anchor = previous_anchor;
-                    self.pop_scope();
+                    self.walk_expr(&arm.body, owned, false);
                 }
             }
             ExprKind::While { cond, body } => {
-                self.walk_expr(cond, false, top, block_depth);
-                self.loop_depth += 1;
-                self.walk_nested_block(body, false, top, block_depth);
-                self.loop_depth -= 1;
+                self.walk_expr(cond, false, false);
+                self.walk_block(body, false);
             }
-            ExprKind::Loop { body } => {
-                self.loop_depth += 1;
-                self.walk_nested_block(body, false, top, block_depth);
-                self.loop_depth -= 1;
-            }
-            ExprKind::For { pat, iter, body } => {
-                self.walk_expr(iter, false, top, block_depth);
-                let order = self.order;
-                self.push_scope();
-                self.walk_pattern(pat, BinderKind::ForPattern, block_depth + 1, top, order);
-                self.loop_depth += 1;
-                self.walk_nested_block(body, false, top, block_depth);
-                self.loop_depth -= 1;
-                self.pop_scope();
+            ExprKind::Loop { body } => self.walk_block(body, false),
+            ExprKind::For { iter, body, .. } => {
+                self.walk_expr(iter, false, false);
+                self.walk_block(body, false);
             }
             ExprKind::ArrayRepeat { value, len } => {
-                // `[value; len]` copies `value`; it cannot move an array element
-                // out of a non-Copy array in the first place.
-                self.walk_expr(value, false, top, block_depth);
-                self.walk_expr(len, false, top, block_depth);
+                // `[value; len]` copies `value`: it never moves an element out.
+                self.walk_expr(value, false, false);
+                self.walk_expr(len, false, false);
             }
             ExprKind::Range { start, end, .. } => {
                 if let Some(start) = start {
-                    self.walk_expr(start, false, top, block_depth);
+                    self.walk_expr(start, false, false);
                 }
                 if let Some(end) = end {
-                    self.walk_expr(end, false, top, block_depth);
+                    self.walk_expr(end, false, false);
                 }
             }
-            // Borrows, dereferences, casts, `?`, comparisons and the remaining
-            // operand positions all read; a mobile array index there keeps the
-            // plain indexed form.
-            ExprKind::Unary { expr: inner, .. }
-            | ExprKind::Cast { expr: inner, .. }
-            | ExprKind::Try(inner) => self.walk_expr(inner, false, top, block_depth),
-            ExprKind::Binary { lhs, rhs, .. } => {
-                self.walk_expr(lhs, false, top, block_depth);
-                self.walk_expr(rhs, false, top, block_depth);
+            ExprKind::Unary { op, expr: inner } => {
+                self.walk_expr(inner, false, matches!(op, UnOp::RefMut));
             }
-            ExprKind::Unit
+            ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) => {
+                self.walk_expr(inner, false, false);
+            }
+            ExprKind::Binary { lhs, rhs, .. } => {
+                self.walk_expr(lhs, false, false);
+                self.walk_expr(rhs, false, false);
+            }
+            ExprKind::Return(None)
+            | ExprKind::Break
+            | ExprKind::Continue
+            | ExprKind::Path(_)
+            | ExprKind::Unit
             | ExprKind::Int { .. }
             | ExprKind::Float { .. }
             | ExprKind::Bool(_)
@@ -4493,615 +4088,37 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         }
     }
 
-    /// Declare the bindings of a pattern and record its constant paths as uses.
-    fn walk_pattern(
-        &mut self,
-        pat: &Pat,
-        kind: BinderKind,
-        block_depth: usize,
-        top: usize,
-        order: usize,
-    ) {
-        match &pat.kind {
-            PatKind::Binding { name, .. } => {
-                let name = name.name.clone();
-                self.declare(&name, kind, block_depth, order);
-            }
-            PatKind::Path(path) => {
-                if let Some(Resolution::Local { name, .. }) =
-                    self.emitter.facts().resolutions.get(&path.id)
-                {
-                    if let Some(binder) = self.resolve(name) {
-                        self.record_whole_place_use(binder, top);
-                    }
-                }
-            }
-            PatKind::Tuple(items) => {
-                for item in items {
-                    self.walk_pattern(item, kind, block_depth, top, order);
-                }
-            }
-            PatKind::Variant { fields, .. } => match fields {
-                VariantPatFields::Tuple(items) => {
-                    for item in items {
-                        self.walk_pattern(item, kind, block_depth, top, order);
-                    }
-                }
-                VariantPatFields::Struct(fields) => {
-                    for field in fields {
-                        self.walk_pattern(&field.pat, kind, block_depth, top, order);
-                    }
-                }
-            },
-            PatKind::Wild | PatKind::Lit(_) => {}
-        }
-    }
-
-    /// Build the destructuring for one place: the array pattern and the binding
-    /// each outermost index node is rewritten to.
-    fn build_destructure(
-        &self,
-        sequence: usize,
-        accesses: &[&Access],
-    ) -> Option<(String, Vec<(NodeId, String)>)> {
-        let lens = accesses.first()?.lens.clone();
-        if lens.is_empty() {
-            return None;
-        }
-        let mut tree = SlotTree::default();
-        let mut rewrites = Vec::new();
-        for access in accesses {
-            let chain = self.constant_chain(access)?;
-            if chain.is_empty() || chain.len() > lens.len() {
-                return None;
-            }
-            for (level, index) in chain.iter().enumerate() {
-                if *index >= lens[level] {
-                    return None;
-                }
-            }
-            tree.insert(&chain)?;
-            rewrites.push((access.node, element_binding(sequence, &chain)));
-        }
-        let mut pattern = String::new();
-        let mut path = Vec::new();
-        pattern_text(&tree, &lens, 0, sequence, &mut path, &mut pattern);
-        Some((pattern, rewrites))
-    }
-
-    /// The all-constant index chain of an access, if every level is a literal.
-    fn constant_chain(&self, access: &Access) -> Option<Vec<usize>> {
-        access.indices.iter().copied().collect()
-    }
-
-    /// True when two places share the same binder and one projection chain is a
-    /// prefix of the other (so moving one can affect the other).
-    fn places_overlap(a: &PlaceKey, b: &PlaceKey) -> bool {
-        a.binder == b.binder
-            && (a.projections.starts_with(&b.projections)
-                || b.projections.starts_with(&a.projections))
-    }
-
-    /// True when `use_site` is a whole use of `place` or of one of its ancestors
-    /// (the root binding included) at or after `top`.
-    ///
-    /// Destructuring a place partially moves it: the place itself and every
-    /// ancestor (up to the root binding) become unusable as a whole, while sibling
-    /// places and descendants stay usable. The checker rejects an ancestor use after
-    /// a *real* partial move (`E-OWN-PARTIAL-MOVE`), but this walk also treats some
-    /// borrowed positions as consumed (builtin arguments), so the guard is needed to
-    /// never emit a partial move for a program the checker accepts.
-    fn whole_use_blocks(place: &PlaceKey, use_site: &WholeUse, top: usize) -> bool {
-        use_site.top >= top
-            && use_site.place.binder == place.binder
-            && place.projections.starts_with(&use_site.place.projections)
-    }
-
-    /// The hoist anchor for an access: the statement of the binder's own block, or
-    /// for an expression-bodied `match` arm the arm body expression (the emitter
-    /// wraps that body in a block, see [`Emitter::arm_body_text`]).
-    fn hoist_anchor(&self, access: &Access, binder: &Binder) -> Option<(NodeId, usize)> {
-        if let Some((key, order)) =
-            access
-                .stmt_chain
-                .get(binder.block_depth)
-                .copied()
-                .and_then(|key| {
-                    self.statement_order
-                        .get(&key)
-                        .copied()
-                        .map(|order| (key, order))
-                })
-        {
-            if binder.order < order {
-                return Some((key, order));
-            }
-            return None;
-        }
-        if binder.kind == BinderKind::ArmPattern {
-            // The arm binding is declared at the arm body's block depth; with an
-            // expression body there is no statement there, so the whole body is
-            // wrapped in a block and the destructuring goes at its start.
-            return access.arm_body.map(|body| (body, usize::MAX));
-        }
-        None
-    }
-
-    /// Plan a place whose accesses include dynamic index levels: the constant
-    /// prefix of each access is destructured once (one slot per prefix), and each
-    /// dynamic access continues inline from its slot with the remaining levels
-    /// (`into_iter().nth(i)`).
-    fn plan_prefix_slots(
-        &self,
-        sequence: usize,
-        plan: &mut ArrayMovePlan,
-        place: &PlaceKey,
-        accesses: &[&Access],
-        first: &Access,
-        hoist_key: NodeId,
-    ) -> Option<()> {
-        let lens = &first.lens;
-        let mut tree = SlotTree::default();
-        let mut rewrites: Vec<(NodeId, String)> = Vec::new();
-        let mut chains: Vec<(NodeId, String, usize)> = Vec::new();
-        for access in accesses.iter().copied().filter(|a| a.top >= first.top) {
-            let Some(prefix) = access.indices.iter().position(|level| level.is_none()) else {
-                // A constant chain is destructured as usual.
-                let chain = self.constant_chain(access)?;
-                if chain.is_empty() || chain.len() > lens.len() {
-                    return None;
-                }
-                for (level, index) in chain.iter().enumerate() {
-                    if *index >= lens[level] {
-                        return None;
-                    }
-                }
-                tree.insert(&chain)?;
-                rewrites.push((access.node, element_binding(sequence, &chain)));
-                continue;
-            };
-            if prefix == 0 {
-                // A dynamic index at the first level would need the whole place
-                // bound, which conflicts with the destructuring below.
-                return None;
-            }
-            let chain: Vec<usize> = access.indices[..prefix]
-                .iter()
-                .copied()
-                .collect::<Option<Vec<usize>>>()?;
-            for (level, index) in chain.iter().enumerate() {
-                if *index >= lens[level] {
-                    return None;
-                }
-            }
-            // The prefix slot must stay bound as a whole: a deeper constant chain
-            // through it makes `insert` conflict, and the place then stays open.
-            tree.insert(&chain)?;
-            chains.push((access.node, element_binding(sequence, &chain), prefix));
-        }
-        let mut pattern = String::new();
-        let mut path = Vec::new();
-        pattern_text(&tree, lens, 0, sequence, &mut path, &mut pattern);
-        plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-            base: self.place_text(place),
-            pattern,
-        });
-        for (node, binding) in rewrites {
-            plan.rewrites.insert(node, binding);
-        }
-        for (node, slot, skip) in chains {
-            plan.single.insert(
-                node,
-                SingleMove::Chain {
-                    base: ChainBase::Slot { text: slot, skip },
-                },
-            );
-        }
-        Some(())
-    }
-
-    /// Plan one shared level-0 destructuring for descents that start with an
-    /// element move out of the same array place (`let x = a[0].0[1]; let
-    /// y = a[1].0[0];`, or a descent plus a read of another element). One hoist
-    /// binds every element, each descent continues from its slot, and the element
-    /// accesses of the same place are rewritten to their slots. A single descent
-    /// with no other use is left to the inline form (which needs no hoist).
-    fn plan_slot_groups(
-        &self,
-        plan: &mut ArrayMovePlan,
-        sequence: &mut usize,
-        handled: &mut BTreeSet<NodeId>,
-    ) {
-        // One group per place: the anchor is the *earliest* statement of the
-        // binder's own block among the descents' enclosing statements, so the
-        // destructuring is emitted immediately before it. It dominates every later
-        // statement of that block (and everything nested inside them), which covers
-        // descents in sibling branches of one `if`, several descents in one nested
-        // block, and plain sibling statements alike: the bindings live in the
-        // anchor's block, so all of them see them.
-        let mut groups: BTreeMap<PlaceKey, Vec<&Descent>> = BTreeMap::new();
-        for descent in &self.descents {
-            let Some(base) = &descent.base else { continue };
-            let Some(first_index) = descent.first_index else {
-                continue;
-            };
-            let binder = &self.binders[base.binder.0 as usize];
-            let Some(anchor) = descent.stmt_chain.get(binder.block_depth).copied() else {
-                continue;
-            };
-            let Some(order) = self.statement_order.get(&anchor).copied() else {
-                continue;
-            };
-            if binder.order >= order {
-                continue;
-            }
-            let Some(len) = descent.lens.first().copied() else {
-                continue;
-            };
-            if first_index >= len {
-                continue;
-            }
-            // A hoist inside a loop body would destructure the same place once per
-            // iteration and move it twice; those descents keep the inline lowering
-            // (or the loud plain form).
-            if descent.in_loop {
-                continue;
-            }
-            groups.entry(base.clone()).or_default().push(descent);
-        }
-        for (place, members) in groups {
-            let lens = members[0].lens.clone();
-            let binder = &self.binders[place.binder.0 as usize];
-            // A whole-binding write re-initialises the place, so a shared hoist
-            // would be invalidated by it (and accesses past it must not be
-            // rewritten). Those descents keep the inline or loud plain form.
-            if self
-                .whole_writes
-                .iter()
-                .any(|write| Self::places_overlap(&write.place, &place))
-            {
-                continue;
-            }
-            let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
-            let mut ordered: Vec<(usize, NodeId)> = members
-                .iter()
-                .map(|descent| {
-                    let key = descent.stmt_chain[binder.block_depth];
-                    (
-                        self.statement_order
-                            .get(&key)
-                            .copied()
-                            .unwrap_or(usize::MAX),
-                        key,
-                    )
-                })
-                .collect();
-            ordered.sort_by_key(|(order, _)| *order);
-            let Some((_, hoist_key)) = ordered.first().copied() else {
-                continue;
-            };
-            // Other uses of the place must be visible from the hoist and lowerable
-            // from the slots.
-            let mut ok = true;
-            let mut rewrites: Vec<(NodeId, String)> = Vec::new();
-            let mut chains: Vec<(NodeId, String, usize)> = Vec::new();
-            for access in &self.accesses {
-                if !Self::places_overlap(&access.place, &place) {
-                    continue;
-                }
-                // The access runs at or after the hoist when it is nested inside the
-                // anchor statement, or when it is a later statement of the anchor's
-                // block: the destructuring is a statement of that block, so its
-                // bindings are in scope for all of them. An access in an *earlier*
-                // statement of the same block still sees the intact place and must be
-                // left alone (a move there would be observed by the destructuring).
-                let Some(key) = access.stmt_chain.get(binder.block_depth).copied() else {
-                    ok = false;
-                    break;
-                };
-                let after = if key == hoist_key {
-                    true
-                } else {
-                    match (
-                        self.statement_order.get(&key).copied(),
-                        self.statement_order.get(&hoist_key).copied(),
-                    ) {
-                        (Some(access_order), Some(anchor_order)) => access_order > anchor_order,
-                        _ => false,
-                    }
-                };
-                if !after {
-                    if access.consumed {
-                        ok = false;
-                        break;
-                    }
-                    continue;
-                }
-                let Some(first) = access.indices.first().copied().flatten() else {
-                    ok = false;
-                    break;
-                };
-                if first >= lens[0] {
-                    ok = false;
-                    break;
-                }
-                let binding = element_binding(*sequence, &[first]);
-                if access.indices.len() == 1 {
-                    rewrites.push((access.node, binding));
-                } else {
-                    chains.push((access.node, binding, 1));
-                }
-            }
-            if !ok {
-                continue;
-            }
-            for use_site in &self.whole_uses {
-                if use_site.top >= hoist_top && Self::places_overlap(&use_site.place, &place) {
-                    ok = false;
-                    break;
-                }
-            }
-            // Descents handled outside this group cannot share the same place.
-            let group_nodes: BTreeSet<NodeId> = members.iter().map(|d| d.node).collect();
-            for other in &self.descents {
-                if group_nodes.contains(&other.node) {
-                    continue;
-                }
-                if other
-                    .base
-                    .as_ref()
-                    .is_some_and(|other_base| Self::places_overlap(other_base, &place))
-                {
-                    ok = false;
-                    break;
-                }
-            }
-            if !ok {
-                continue;
-            }
-            // A single descent with no conflicting use is already handled inline.
-            if members.len() == 1 {
-                let descent = members[0];
-                let conflicted = self.accesses.iter().any(|access| {
-                    Self::places_overlap(&access.place, &place)
-                        && (access.consumed || access.top >= descent.top)
-                }) || self.whole_uses.iter().any(|use_site| {
-                    Self::places_overlap(&use_site.place, &place) && use_site.top >= descent.top
-                });
-                if !conflicted {
-                    continue;
-                }
-            }
-            // Emit `let [mut e0, mut e1, ...] = <place>;` before the earliest member.
-            let mut pattern = String::new();
-            let mut path = Vec::new();
-            pattern_text(
-                &SlotTree::default(),
-                &lens,
-                0,
-                *sequence,
-                &mut path,
-                &mut pattern,
-            );
-            plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-                base: self.place_text(&place),
-                pattern,
-            });
-            for (node, binding) in rewrites {
-                plan.rewrites.insert(node, binding);
-            }
-            for (node, binding, skip) in chains {
-                plan.single.insert(
-                    node,
-                    SingleMove::Chain {
-                        base: ChainBase::Slot {
-                            text: binding,
-                            skip,
-                        },
-                    },
-                );
-            }
-
-            for descent in &members {
-                let Some(first_index) = descent.first_index else {
-                    continue;
-                };
-                plan.single.insert(
-                    descent.node,
-                    SingleMove::Chain {
-                        base: ChainBase::Slot {
-                            text: element_binding(*sequence, &[first_index]),
-                            skip: 1,
-                        },
-                    },
-                );
-                handled.insert(descent.node);
-            }
-            *sequence += 1;
-        }
-    }
-
     fn plan(&self) -> ArrayMovePlan {
+        // Places an element is moved out of somewhere in the body: only those can
+        // be partially moved when another of their elements is borrowed.
+        let moved_from: Vec<&ArrayPlace> = self
+            .accesses
+            .iter()
+            .filter(|access| access.consumed)
+            .filter_map(|access| access.place.as_ref())
+            .collect();
         let mut plan = ArrayMovePlan::default();
-        let mut by_place: BTreeMap<PlaceKey, Vec<&Access>> = BTreeMap::new();
         for access in &self.accesses {
-            by_place
-                .entry(access.place.clone())
-                .or_default()
-                .push(access);
-        }
-        let mut sequence = 0usize;
-        for (place, accesses) in &by_place {
-            // A whole-binding write (`a = ...`) re-initialises the place after
-            // the RHS: accesses after it must not be rewritten to the slots of
-            // a hoist that started before it.
-            let mut by_region: BTreeMap<usize, Vec<&Access>> = BTreeMap::new();
-            for access in accesses {
-                by_region
-                    .entry(self.region_of_access(access))
-                    .or_default()
-                    .push(*access);
-            }
-            for (region, accesses) in &by_region {
-                let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
-                    continue;
-                };
-                // Uses of the place itself or of an ancestor at/after the first move
-                // would observe the partial move (see `whole_use_blocks`).
-                let blocked = self.whole_uses.iter().any(|use_site| {
-                    Self::places_overlap(&use_site.place, place)
-                        && self.region_of_use(place, use_site) == *region
-                        && Self::whole_use_blocks(place, use_site, first.top)
-                });
-                let binder = &self.binders[place.binder.0 as usize];
-                let hoist = self.hoist_anchor(first, binder);
-                let has_dynamic = accesses
-                    .iter()
-                    .any(|access| access.indices.iter().any(|level| level.is_none()));
-                if let Some((hoist_key, _)) = hoist {
-                    if !blocked {
-                        if has_dynamic {
-                            if self
-                                .plan_prefix_slots(
-                                    sequence, &mut plan, place, accesses, first, hoist_key,
-                                )
-                                .is_some()
-                            {
-                                sequence += 1;
-                                continue;
-                            }
-                        } else {
-                            let rewritten: Vec<&Access> = accesses
-                                .iter()
-                                .copied()
-                                .filter(|access| access.top >= first.top)
-                                .collect();
-                            if let Some((pattern, rewrites)) =
-                                self.build_destructure(sequence, &rewritten)
-                            {
-                                plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-                                    base: self.place_text(place),
-                                    pattern,
-                                });
-                                for (node, binding) in rewrites {
-                                    plan.rewrites.insert(node, binding);
-                                }
-                                sequence += 1;
-                                continue;
-                            }
-                        }
-                    }
-                }
-                // Fallback: the first move can be lowered inline when every other use of
-                // the place is a read in an earlier statement (the place is still intact
-                // there) and no whole-place use blocks it. This keeps `match` arm
-                // payloads (an expression-bodied arm has no statement to hoist before),
-                // a single dynamic access, and reads followed by a dynamic move working.
-
-                let inline_ok = accesses.iter().all(|access| {
-                    access.node == first.node || (!access.consumed && access.top < first.top)
-                });
-                // A whole use inside the *same* statement does not invalidate the
-                // inline form: either it is evaluated before the access (a read
-                // whose borrow has ended), or it lives in a disjoint branch. A
-                // sequential whole use *after* the move would have been rejected
-                // by `check` (partial move), so the inline block is emitted at the
-                // access itself and cannot be observed by it.
-                let inline_blocked = self.whole_uses.iter().any(|use_site| {
-                    Self::places_overlap(&use_site.place, place)
-                        && self.region_of_use(place, use_site) == *region
-                        && use_site.top != first.top
-                        && Self::whole_use_blocks(place, use_site, first.top)
-                });
-                if inline_ok && !inline_blocked && first.consumed {
-                    let access = first;
-                    if let Some(chain) = self.constant_chain(access) {
-                        let base = self.place_text(place);
-                        if let Some((pattern, rewrites)) =
-                            self.build_destructure(sequence, &[access])
-                        {
-                            if let Some((_, binding)) = rewrites.into_iter().next() {
-                                plan.single.insert(
-                                    access.node,
-                                    SingleMove::Block {
-                                        base,
-                                        pattern,
-                                        binding,
-                                    },
-                                );
-                                sequence += 1;
-                                continue;
-                            }
-                        }
-                        let _ = chain;
-                    } else if access.indices.len() == 1 {
-                        // A flat place with one dynamic level keeps the dedicated
-                        // `into_iter().nth()` form (it does not need a materialized
-                        // root).
-                        plan.single.insert(
-                            access.node,
-                            SingleMove::Dynamic {
-                                base: self.place_text(place),
-                                len: access.lens.first().copied().unwrap_or(0),
-                            },
-                        );
-                    } else {
-                        // A deeper dynamic chain over a single-use place: materialize
-                        // the place once and walk the chain inline.
-                        plan.single.insert(
-                            access.node,
-                            SingleMove::Chain {
-                                base: ChainBase::Root,
-                            },
-                        );
-                    }
-                }
-            }
-        }
-        // Descents that move elements of the same place share one level-0
-        // destructuring; the others are lowered inline at their own access.
-        let mut handled: BTreeSet<NodeId> = BTreeSet::new();
-        self.plan_slot_groups(&mut plan, &mut sequence, &mut handled);
-        for (index, descent) in self.descents.iter().enumerate() {
-            if handled.contains(&descent.node) {
-                continue;
-            }
-            if let Some(base) = &descent.base {
-                // The descent moves the whole base place, so every other use of it
-                // (or of an overlapping place) at/after the access must be absent.
-                let overlaps = |place: &PlaceKey| {
-                    place.binder == base.binder
-                        && (place.projections.starts_with(&base.projections)
-                            || base.projections.starts_with(&place.projections))
-                };
-                let conflicted = self.accesses.iter().any(|access| {
-                    overlaps(&access.place) && (access.consumed || access.top >= descent.top)
-                }) || self
-                    .whole_uses
-                    .iter()
-                    .any(|use_site| use_site.top >= descent.top && overlaps(&use_site.place))
-                    || self
-                        .descents
-                        .iter()
-                        .enumerate()
-                        .any(|(other_index, other)| {
-                            other_index != index
-                                && other
-                                    .base
-                                    .as_ref()
-                                    .is_some_and(|other_base| overlaps(other_base))
-                        });
-                if conflicted {
+            let mode = if access.consumed {
+                PathMode::Move
+            } else {
+                let partially_moved = access
+                    .place
+                    .as_ref()
+                    .is_some_and(|place| moved_from.iter().any(|moved| moved.overlaps(place)));
+                if !(access.constant && partially_moved) {
                     continue;
                 }
-                let _ = base;
-            }
-            plan.single.insert(
-                descent.node,
-                SingleMove::Chain {
-                    base: ChainBase::Root,
-                },
-            );
+                if access.exclusive {
+                    PathMode::Exclusive
+                } else {
+                    PathMode::Shared
+                }
+            };
+            plan.paths.insert(access.node, mode);
+        }
+        for node in &self.reinits {
+            plan.paths.insert(*node, PathMode::Reinit);
         }
         plan
     }

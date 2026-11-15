@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-swap-in-block",
+  "mode": "run-pass",
+  "stdout_contains": "b\na\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): inside a nested block the array is assigned from its own elements (`a = [a[1], a[0]]`), then both elements are moved. Was check-pass / build-fail (rustc E0382)."
+}

@@ -3142,7 +3142,8 @@ fn main() {
 }
 
 /// OWN-5.4: moving an array element is legal when the aggregate is not reused.
-/// Rust cannot express `a[1]` as a move (E0508), so the backend destructures.
+/// Rust cannot express `a[1]` as a move (E0508), so the backend moves the element
+/// with a pattern that binds nothing else.
 #[test]
 fn audit_array_element_move_builds_and_runs() {
     if skip("audit_array_element_move_builds_and_runs") {
@@ -3161,8 +3162,12 @@ fn main() {
 "#,
     );
     assert!(
-        code.contains("let [mut __rv_el_"),
-        "the array element move is lowered to a hoisted destructuring:\n{code}"
+        code.contains("let [_, __rv_el_"),
+        "the array element move is lowered to a pattern at the access:\n{code}"
+    );
+    assert!(
+        !code.contains("mut __rv_el_"),
+        "no other element is bound, so none can go stale:\n{code}"
     );
     let built = must_compile(&code, "p0a-array-move");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -3240,13 +3245,135 @@ fn main() {
         "the Copy projection stays a plain read:\n{code}"
     );
     assert!(
-        code.matches("let [mut __rv_el_").count() >= 4,
-        "every partially-moved array is destructured once:\n{code}"
+        code.matches("= a; __rv_el_").count() >= 8,
+        "every element access of a partially-moved array has its own pattern:\n{code}"
+    );
+    assert!(
+        code.contains("ref __rv_el_"),
+        "reading another element of a partially-moved array borrows that element only:\n{code}"
     );
     let built = must_compile(&code, "p0a-array-multiple");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(
         stdout, "left\nright\nL\nR\n5\n2\n41\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// The per-access lowering must also reach elements whose array is not a local
+/// binding (a struct field, a tuple field, an element of a nested array, `self`),
+/// and a re-initialised element whose mobile field was moved. Probe of
+/// 2026-11-15 (`T2-FINDINGS.md` §29.4) made durable.
+#[test]
+fn audit_array_element_paths_under_aggregates_build_and_run() {
+    if skip("audit_array_element_paths_under_aggregates_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "p0a-array-aggregate-paths",
+        r#"struct Basket { items: [String; 2] }
+fn basket(x: &str, y: &str) -> Basket {
+    return Basket { items: [String::from(x), String::from(y)] };
+}
+
+fn field_reinit() {
+    let mut b = basket("a", "b");
+    let s: String = b.items[0];
+    b.items[0] = String::from("x");
+    io::println(s.as_str());
+    io::println(b.items[0].as_str());
+    io::println(b.items[1].as_str());
+}
+
+fn tuple_reinit() {
+    let mut t: ([String; 2], i32) = ([String::from("a"), String::from("b")], 1);
+    let s: String = t.0[0];
+    t.0[0] = String::from("x");
+    io::println(s.as_str());
+    io::println(t.0[0].as_str());
+    io::println(t.0[1].as_str());
+}
+
+fn nested_reinit() {
+    let mut a: [[String; 2]; 2] = [
+        [String::from("a"), String::from("b")],
+        [String::from("c"), String::from("d")],
+    ];
+    let s: String = a[0][0];
+    a[0][0] = String::from("x");
+    io::println(s.as_str());
+    io::println(a[0][1].as_str());
+    io::println(a[1][1].as_str());
+}
+
+struct Card { title: String, n: i32 }
+fn card(title: &str, n: i32) -> Card {
+    return Card { title: String::from(title), n: n };
+}
+
+fn element_field_reinit() {
+    let mut a: [Card; 2] = [card("a", 1), card("b", 2)];
+    let t: String = a[0].title;
+    a[0].title = String::from("x");
+    io::println(t.as_str());
+    io::println(a[0].title.as_str());
+    io::println(a[1].title.as_str());
+}
+
+struct Holder { items: [String; 2] }
+impl Holder {
+    fn first(self) -> String {
+        return self.items[0];
+    }
+}
+
+fn self_move() {
+    let h = basket("zero", "one");
+    let h = Holder { items: h.items };
+    io::println(h.first().as_str());
+}
+
+enum Bag { Items([String; 2]), Empty }
+fn from_bag(b: Bag) -> String {
+    match b {
+        Bag::Items(a) => {
+            let s: String = a[0];
+            return s;
+        }
+        Bag::Empty => {
+            return String::from("none");
+        }
+    }
+}
+
+fn match_move() {
+    let b = Bag::Items([String::from("zero"), String::from("one")]);
+    io::println(from_bag(b).as_str());
+}
+
+fn block_tail() -> String {
+    let mut a = [String::from("a"), String::from("b")];
+    let s: String = a[0];
+    a[0] = String::from("x");
+    s
+}
+
+fn main() {
+    field_reinit();
+    tuple_reinit();
+    nested_reinit();
+    element_field_reinit();
+    self_move();
+    match_move();
+    io::println(block_tail().as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "p0a-array-aggregate-paths");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "a\nx\nb\na\nx\nb\na\nb\nd\na\nx\nb\nzero\nzero\na\n",
         "stderr: {stderr}\n--- generated ---\n{code}"
     );
     assert_eq!(status, 0, "stderr: {stderr}");
@@ -3402,9 +3529,9 @@ fn main() {
 //     `E0508`; the tests below fail on the old emitter and pass now.
 // ---------------------------------------------------------------------------
 
-/// OWN-5.4 through a nested array: `a[0][1]` is destructured recursively
-/// (`let [[e00, e01], [e10, e11]] = a;`), and chains of different depths are
-/// consistent (`let [row, [e10, e11]] = a;` for `a[0]` + `a[1][1]`).
+/// OWN-5.4 through a nested array: `a[0][1]` is one nested pattern
+/// (`let [[_, e], ..] = a;`), and chains of different depths are independent
+/// (`a[0]` and `a[1][1]` each move their own element).
 #[test]
 fn audit_nested_array_element_moves_build_and_run() {
     if skip("audit_nested_array_element_moves_build_and_run") {
@@ -3446,8 +3573,8 @@ fn main() {
 "#,
     );
     assert!(
-        code.contains("[[mut __rv_el_"),
-        "a nested index chain is destructured recursively:\n{code}"
+        code.contains("let [[_, __rv_el_"),
+        "a nested index chain is one nested pattern:\n{code}"
     );
     let built = must_compile(&code, "p0a-nested-array");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -3541,7 +3668,7 @@ fn main() {
 
 /// Bindings are identified by declaration, not by name: a nested `let a` or a
 /// top-level rebinding no longer blocks moving an element of the outer array.
-/// A `for` binding is destructured inside the loop body, once per iteration.
+/// A `for` binding is moved from inside the loop body, once per iteration.
 #[test]
 fn audit_shadowed_array_bindings_move_build_and_run() {
     if skip("audit_shadowed_array_bindings_move_build_and_run") {
@@ -3585,8 +3712,8 @@ fn main() {
 "#,
     );
     assert!(
-        code.matches("let [mut __rv_el_").count() >= 3,
-        "each binding of the shadowed name is planned on its own:\n{code}"
+        code.contains("] = a; __rv_el_") && code.contains("] = row; __rv_el_"),
+        "each binding of the shadowed name is moved from on its own:\n{code}"
     );
     let built = must_compile(&code, "p0a-shadowed-array");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -4076,8 +4203,8 @@ fn main() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn audit_branch_and_nested_descent_hoists_build_and_run() {
-    if skip("audit_branch_and_nested_descent_hoists_build_and_run") {
+fn audit_branch_and_nested_descents_build_and_run() {
+    if skip("audit_branch_and_nested_descents_build_and_run") {
         return;
     }
     let code = generate_source(
@@ -4139,13 +4266,13 @@ fn main() {
 "#,
     );
     let pick_at = code.find("fn pick(c: bool").expect("fn pick is missing");
-    let hoist_at = code[pick_at..]
-        .find("let [mut __rv_el_")
-        .expect("no level-0 destructuring was emitted for the branched descents");
+    let move_at = code[pick_at..]
+        .find("__rv_el_")
+        .expect("no element pattern was emitted for the branched descents");
     let branch_at = code[pick_at..].find("if c {").expect("if c is missing");
     assert!(
-        hoist_at < branch_at,
-        "the destructuring must be hoisted before the `if`, not inside a branch:\n{code}"
+        branch_at < move_at,
+        "each branch moves its own element at the access; nothing is hoisted before the `if`:\n{code}"
     );
     let built = must_compile(&code, "p0a-branch-nested-descent");
     let (stdout, stderr, status) = run(&built.binary, &[]);

@@ -350,6 +350,18 @@ enum Access {
     BorrowExclusive,
 }
 
+/// Outcome of a write to a projection under an array index (OWN-5.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ElementWrite {
+    /// The write restores nothing: an ordinary element assignment.
+    Plain,
+    /// The write restores a moved place and the array can be rebuilt around it.
+    Reinit,
+    /// The write would restore a moved place, but the array cannot be rebuilt;
+    /// the span is the move that prevents it.
+    Blocked(Span),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PartialRel {
     Exact,
@@ -1542,6 +1554,16 @@ impl<'a> OwnChecker<'a> {
         if !self.check_availability(place, span, Access::Write) {
             return;
         }
+        match self.element_write(place) {
+            ElementWrite::Plain => {}
+            ElementWrite::Reinit => {
+                self.own.element_reinit.insert(node);
+            }
+            ElementWrite::Blocked(moved_span) => {
+                self.report_element_reinit(place, span, moved_span);
+                return;
+            }
+        }
         if place.steps.is_empty() {
             if let Some(st) = self.state.slots.get_mut(&place.slot) {
                 st.init = true;
@@ -1592,6 +1614,59 @@ impl<'a> OwnChecker<'a> {
             span,
         });
         true
+    }
+
+    /// Classify a write to a projection that sits under an array index
+    /// (OWN-5.4).
+    ///
+    /// Arrays are lowered to Rust arrays, where a moved element is only
+    /// re-initialised by assigning the whole array. A write that restores a
+    /// moved place under an index is therefore accepted only when the backend
+    /// can rebuild that array around the new value: every index of the target is
+    /// a literal and no *other* part of the array has been moved.
+    ///
+    /// Called after `check_availability` accepted the write, so no moved record
+    /// is an ancestor of the target here.
+    fn element_write(&self, place: &Place) -> ElementWrite {
+        let Some(first_index) = place
+            .steps
+            .iter()
+            .position(|step| matches!(step, Step::Index(_)))
+        else {
+            return ElementWrite::Plain;
+        };
+        let Some(st) = self.state.slots.get(&place.slot) else {
+            return ElementWrite::Plain;
+        };
+        let array = &place.steps[..first_index];
+        let mut restores: Option<Span> = None;
+        let mut sibling: Option<Span> = None;
+        for (moved, rec) in &st.partial {
+            match classify_partial(&place.steps, moved) {
+                PartialRel::Exact | PartialRel::Ancestor => {
+                    restores.get_or_insert(rec.span);
+                }
+                PartialRel::Disjoint => {
+                    if moved.len() > array.len() && prefix_compatible(array, moved) {
+                        sibling.get_or_insert(rec.span);
+                    }
+                }
+                PartialRel::Extension => {}
+            }
+        }
+        let Some(restored_span) = restores else {
+            return ElementWrite::Plain;
+        };
+        let opaque_index = place.steps[first_index..]
+            .iter()
+            .any(|step| matches!(step, Step::Index(IndexKey::Opaque)));
+        if opaque_index {
+            return ElementWrite::Blocked(restored_span);
+        }
+        match sibling {
+            Some(span) => ElementWrite::Blocked(span),
+            None => ElementWrite::Reinit,
+        }
     }
 
     /// Record a value use for the backend (RFC-OWN-FACTS-1, step A).
@@ -2027,6 +2102,24 @@ impl<'a> OwnChecker<'a> {
         );
     }
 
+    fn report_element_reinit(&mut self, place: &Place, span: Span, moved_span: Span) {
+        let name = self.display_place(place);
+        self.emit_diag(
+            E_PARTIAL_MOVE,
+            span,
+            format!(
+                "ré-initialisation de `{name}` impossible : le tableau a subi un autre                  déplacement partiel"
+            ),
+            vec![
+                ("déplacement partiel effectué ici".to_string(), Some(moved_span)),
+                (
+                    "ré-assigner le tableau entier pour le ré-initialiser".to_string(),
+                    None,
+                ),
+            ],
+        );
+    }
+
     fn report_move_indexed(&mut self, span: Span) {
         self.emit_diag(
             E_MOVE_INDEXED,
@@ -2237,6 +2330,13 @@ fn diverges_disjoint(a: &[Step], b: &[Step]) -> bool {
                 // Opaque/different kinds: cannot prove disjointness.
                 _ => false,
             };
+        }
+        // Two paths that agree on a non-literal index may denote the same
+        // element, and reaching anything through such an index uses the whole
+        // array at that level: a later divergence proves nothing (OWN-5.4).
+        if matches!(x, Step::Index(IndexKey::Opaque)) || matches!(y, Step::Index(IndexKey::Opaque))
+        {
+            return false;
         }
     }
     false
@@ -3255,6 +3355,111 @@ fn f(a: [String; 2]) -> usize {
         );
     }
 
+    // -- OWN-5.11/OWN-5.12: element re-initialisation and opaque indexes -----
+
+    #[test]
+    fn moved_array_element_can_be_reinitialised_when_siblings_are_initialised() {
+        accepted(
+            r#"
+fn f() -> usize {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    let s: String = a[0];
+    a[0] = String::from("x");
+    return a[1].len();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn moved_array_element_cannot_be_reinitialised_after_a_sibling_moved() {
+        rejected(
+            r#"
+fn f() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    let s: String = a[0];
+    let t: String = a[1];
+    a[0] = String::from("x");
+}
+"#,
+            "E-OWN-PARTIAL-MOVE",
+        );
+    }
+
+    #[test]
+    fn opaque_index_write_after_partial_move_is_rejected() {
+        rejected(
+            r#"
+fn f(i: usize) {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    let s: String = a[0];
+    a[i] = String::from("x");
+}
+"#,
+            "E-OWN-PARTIAL-MOVE",
+        );
+    }
+
+    #[test]
+    fn writing_an_initialised_element_after_a_sibling_moved_stays_allowed() {
+        accepted(
+            r#"
+fn f() -> usize {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    let s: String = a[0];
+    a[1] = String::from("x");
+    return s.len();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn array_element_under_a_field_can_be_reinitialised() {
+        accepted(
+            r#"
+struct Holder { items: [String; 2] }
+fn f() -> usize {
+    let mut h = Holder { items: [String::from("a"), String::from("b")] };
+    let s: String = h.items[0];
+    h.items[0] = String::from("x");
+    return h.items[1].len();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn array_element_under_a_tuple_can_be_reinitialised() {
+        accepted(
+            r#"
+fn f() -> usize {
+    let mut t: ([String; 2], i32) = ([String::from("a"), String::from("b")], 1);
+    let s: String = t.0[0];
+    t.0[0] = String::from("x");
+    return t.0[1].len();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn nested_array_element_can_be_reinitialised() {
+        accepted(
+            r#"
+fn f() -> usize {
+    let mut a: [[String; 2]; 2] = [
+        [String::from("a"), String::from("b")],
+        [String::from("c"), String::from("d")],
+    ];
+    let s: String = a[0][0];
+    a[0][0] = String::from("x");
+    return a[1][1].len();
+}
+"#,
+        );
+    }
+
     // -- Reference parameters / reborrows ------------------------------------
 
     #[test]
@@ -3489,6 +3694,7 @@ fn main() {
             checker.check_fn(item, f);
             own.use_kind.append(&mut per_fn.use_kind);
             own.place.append(&mut per_fn.place);
+            own.element_reinit.append(&mut per_fn.element_reinit);
         }
         own
     }

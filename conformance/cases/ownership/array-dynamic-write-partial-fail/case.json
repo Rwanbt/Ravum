@@ -1,0 +1,8 @@
+{
+  "id": "ownership/array-dynamic-write-partial-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-PARTIAL-MOVE"
+  ],
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): OWN-5.4: writing through a non-literal index uses the whole array, so it is refused while an element of that array is moved (the index may or may not denote the moved element). Was check-pass / build-fail (rustc E0508), and the checker wrongly treated the write as restoring the moved element."
+}

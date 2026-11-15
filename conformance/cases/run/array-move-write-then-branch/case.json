@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-then-branch",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned in a block, one element is moved in a nested `if`, another after it. Printed the stale `a b` with no error (silent wrong output)."
+}

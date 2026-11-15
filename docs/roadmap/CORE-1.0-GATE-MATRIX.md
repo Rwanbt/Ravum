@@ -17,8 +17,22 @@
 > documentaires). **Aucun gate n'est promu `PASS` par cette passe** : les
 > verdicts T0–T12 restent ceux du tableau §2, seules les preuves changent.
 >
-> **Chiffres courants (campagne de fermeture, `goal/consolidation-2`, mesurés
-> le 2026-11-14)** :
+> **Mise à jour E1 — fermeture de la divergence `check → build` (2026-11-15,
+> branche `goal/production-plan-2026-11-15`)** : la planification des moves
+> d'éléments de tableau est remplacée par un abaissement à l'accès
+> ([`RFC-OWN-ARRAY-ELEMENTS`](../rfc/RFC-OWN-ARRAY-ELEMENTS.md)) ; le cas
+> `run/power-array-move-write-region-nested` passe, 16 cas voisins entrent au
+> corpus. Mesure locale Windows 11 x64, `rustc 1.95.0` :
+> **503 cas : 502 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
+> `--verify-build`, `build_verified: true`, `perimeter=222/222`,
+> `verified=124`, `implicit=98`) ; **124 suites, 1740 passés / 0 échec / 8 ignorés** (`cargo test --workspace --no-fail-fast`) ;
+> **188/188** règles tracées, **188/188** satisfaites ; MUST **467/811**,
+> **344** non mappés. **Aucun gate n'est promu** : T2 reste `PARTIAL` pour la
+> traçabilité MUST ; T4/T12 restent humains. Ces chiffres ne sont pas encore
+> rejoués par la CI des trois OS.
+>
+> **Chiffres de la campagne de fermeture (`goal/consolidation-2`, 2026-11-14) —
+> historiques** :
 > **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** (conformance
 > `--verify-build`, `build_verified: true`, `perimeter=207/207`, `verified=124`) ;
 > **102 suites, 1660 passés / 0 échec / 7 ignorés** (workspace,
@@ -562,7 +576,7 @@ Le nouveau cas `types/control-as-value-fail` passe sur les deux plateformes
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C non implémentée** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PARTIAL` | **FeatureIds : 386 → 463 cas, 462 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` **mesuré et bloquant** (`--verify-build` : périmètre **200**, couverts 200, vérifiés 120, implicites 80, échoués 0), **aucune forme ouverte connue** (les familles trouvées pendant P0-A sont toutes fermées, `CONFORMANCE-BUILD-CONTRACT.md` §9-§11) et désormais **rejoué en CI sur Windows** (`qualification-evidence.yml`) | **La seconde métrique change le verdict** : 807 énoncés MUST, **463/807 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; l'exemption `F-META-006` est **approuvée** par le responsable (2026-11-12, réexamen 2027-02-12) mais reste sans oracle | Décision humaine sur le dénominateur MUST (D10) |
+| T2 | `PARTIAL` | **FeatureIds : 386 → 503 cas, 502 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; **188/188** FeatureIds tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` **mesuré et bloquant** (`--verify-build` : périmètre **222**, couverts 222, vérifiés 124, implicites 98, échoués 0), **aucune forme ouverte connue** (la divergence `power-array-move-write-region-nested` est fermée le 2026-11-15, `RFC-OWN-ARRAY-ELEMENTS.md`) et **rejoué en CI sur Windows** (`qualification-evidence.yml`) | **La seconde métrique change le verdict** : 811 énoncés MUST, **467/811 seulement** atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). Le critère `188/188` ne mesure donc pas la traçabilité des règles MUST ; l'exemption `F-META-006` est **approuvée** par le responsable (2026-11-12, réexamen 2027-02-12) mais reste sans oracle | Dette tracée (D10) : 344 MUST non mappés, pas un blocage de release |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, **fuzz complet rejoué (2 campagnes, 0 échec)**, **Miri Linux rejoué en CI sur `e05f3ff` (164 tests, 0 échec)** + **Miri Windows partiel 95 tests, tests FS `NOT_RUN`**, formateur idempotent, **8 défauts frontend corrigés** (`effects`, `pub test fn`, boucles-valeurs, cascade `lifetime`, place d'affectation, **type `!` nameable et divergent**, **tuples hétérogènes + exhaustivité tuple**, **boucles en position de valeur**) | — (les divergences de codes restantes sont traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, 106 cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke **43 PASS**) et Linux (CI antérieure `42809676443` sur `b7e5c5c`) ; WASI exécuté ; `build` publie une identité déterministe et un artefact atomique (`.ravum/build/<id16>/` → `.ravum/bin/<name>` + manifeste) | ABI stable non revendiquée ; sanitizers non exécutés ; CI **NOT_RUN** sur les commits de la passe 6 | — |
