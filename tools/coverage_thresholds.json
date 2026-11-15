@@ -35,6 +35,11 @@
       "lines": 80,
       "regions": 83,
       "note": "2026-11-15 (E4, P-6) — correction de périmètre, pas abaissement. `loader.rs` mesurait 85,31/88,09 avant la découpe, mais ce total comptait les 939 lignes du module `#[cfg(test)]` logé dans le même fichier. Le code de test est désormais dans `loader/tests.rs`, que llvm-cov ne mesure pas : en code produit seul — le périmètre S5 — le module mesure 80,65/83,15. Le plancher de fichier `loader.rs` (85/88) reste en place pour le modèle ; ce plancher de module couvre les dix sous-modules. E6 relève l'ensemble vers 100 %."
+    },
+    "crates/ravum-lang-sema/src/own/": {
+      "lines": 90,
+      "regions": 90,
+      "note": "2026-11-15 (E4, P-6): `own.rs` measured 92.47/90.75 before the split, a total that counted the 1433 lines of the inline #[cfg(test)] module. Measured on the CI artifact after the split, the four product files of the own module are 91.16/90.97 together. The old 92/90 file floor stays on `own.rs` for the model part; this aggregate guards the submodules. E6 raises the set toward 100 %."
     }
   },
   "files": {
@@ -67,11 +72,11 @@
       "note": "2026-11-13 (batch 1): raised from 90/88 to 100/98. Line coverage is complete: `type_from_str` now has tests for every compound form it accepts and for the malformed text it must refuse. Wave 3 re-measured 98.89 regions and kept the 98 floor; the gap is the `?` recovery edges, documented with proof in `tools/coverage_exemptions.json` (`E-LINE-BUILTINS-TO-STR-EDGES`)."
     },
     "crates/ravum-lang-sema/src/own.rs": {
-      "lines": 92,
-      "regions": 90,
-      "measured_lines": 92.47,
-      "measured_regions": 90.75,
-      "note": "2026-11-11: raised from 89/86 to 91/89. Wave 3 (2026-11-14): raised to 92/90 at the measured level after the entry-point contracts (`Option<String>` borrowed then consumed). The destructured-`let` path and the missing-signature fallback are documented unreachable (`E-LINE-OWN-DESTRUCTURED-LET`, `E-LINE-OWN-SIGNATURE-FALLBACK`)."
+      "lines": 96,
+      "regions": 95,
+      "measured_lines": 96.91,
+      "measured_regions": 95.3,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
     },
     "crates/ravum-lang-sema/src/check.rs": {
       "lines": 81,
@@ -331,6 +336,27 @@
       "measured_lines": 97.78,
       "measured_regions": 97.96,
       "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/own/checker_a.rs": {
+      "lines": 88,
+      "regions": 88,
+      "measured_lines": 88.38,
+      "measured_regions": 88.06,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/own/checker_b.rs": {
+      "lines": 93,
+      "regions": 92,
+      "measured_lines": 93.19,
+      "measured_regions": 92.45,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/own/state.rs": {
+      "lines": 89,
+      "regions": 93,
+      "measured_lines": 89.95,
+      "measured_regions": 93.53,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
     }
   }
 }
