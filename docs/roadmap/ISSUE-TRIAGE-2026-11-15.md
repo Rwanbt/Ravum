@@ -144,7 +144,7 @@ Les quatre critères de PASS de l'issue sont couverts, un par un :
 
 | Critère | Preuve mesurée |
 |---|---|
-| corpus hostile sans panique ni boucle | corpus de conformance **717 fichiers `.rv`**, **503 cas / 502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` |
+| corpus hostile sans panique ni boucle | corpus de conformance : **717 fichiers `.rv`** au total, dont **240** dans les familles de refus et de sécurité (`security`, `types`, `effects`, `ownership`), **503 cas / 502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` |
 | aller-retour du formateur | `crates/ravum-lang-syntax/src/fmt.rs::assert_idempotent` (idempotence + préservation du sens parsé) |
 | tests du parseur | **72** tests `ravum-lang-syntax` verts |
 | fuzz smoke | job CI bloquant « Fuzz smoke », vert sur `dev` |
