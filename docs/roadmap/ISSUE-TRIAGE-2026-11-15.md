@@ -138,6 +138,26 @@ C'est l'argument contre le tri par lot : la proposition « fermable après
 vérification » était une hypothèse, et la vérification l'a infirmée pour T0.
 T3, T5 et T7 doivent subir la même lecture avant toute clôture.
 
+## 3 ter. Vérification par issue : T3 (#91) — **fermée « completed »**
+
+Les quatre critères de PASS de l'issue sont couverts, un par un :
+
+| Critère | Preuve mesurée |
+|---|---|
+| corpus hostile sans panique ni boucle | corpus de conformance **717 fichiers `.rv`**, **503 cas / 502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` |
+| aller-retour du formateur | `crates/ravum-lang-syntax/src/fmt.rs::assert_idempotent` (idempotence + préservation du sens parsé) |
+| tests du parseur | **72** tests `ravum-lang-syntax` verts |
+| fuzz smoke | job CI bloquant « Fuzz smoke », vert sur `dev` |
+
+Le « Statut : PARTIAL » du corps de l'issue était **périmé** : il datait de la passe
+où le parseur et le formateur étaient en cours. Le verdict du gate est `PASS` dans
+la matrice §2 (T3), sur son périmètre mesuré — pas une preuve d'absence de bug sur
+tout programme `.rv`.
+
+Fermée avec un commentaire citant les commandes et les chiffres. **T5 (#93) et
+T7 (#95) restent à vérifier** de la même façon, et T0 (#88) reste ouverte : son
+rapport est lui-même marqué PARTIAL.
+
 ## 4. Ce que ce tri ne fait pas
 
 - Il ne ferme aucune issue : la clôture est un acte séparé, par issue, avec la preuve citée.
