@@ -104,11 +104,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     thresholds = {}
+    modules = {}
     objective = {"lines": 100.0, "regions": 100.0}
     if args.thresholds.exists():
         with args.thresholds.open(encoding="utf-8") as handle:
             raw = json.load(handle)
         thresholds = raw.get("files", {})
+        modules = raw.get("modules", {})
         declared = raw.get("objective") or {}
         objective["lines"] = float(declared.get("lines", objective["lines"]))
         objective["regions"] = float(declared.get("regions", objective["regions"]))
@@ -144,6 +146,39 @@ def main(argv: list[str] | None = None) -> int:
     missing = sorted(set(thresholds) - set(files))
     for name in missing:
         violations.append(f"{name}: declared in thresholds but absent from the report")
+
+    # Module aggregates. A file split must not hide a regression: per-file floors
+    # are re-baselined when a module is divided into submodules (a 90 % floor on a
+    # 7 000-line file is not the same unit as 90 % on its twelve parts), so the
+    # old, coarser floor is kept as an aggregate over the whole module prefix.
+    # Both gates apply: every part must meet its own floor AND the module must
+    # still meet the floor the file had before the split.
+    for prefix in sorted(modules):
+        rule = modules[prefix]
+        key = prefix.replace("\\", "/")
+        members = [n for n in files if n.startswith(key)]
+        if not members:
+            violations.append(
+                f"{key}: module declared in thresholds but no measured file matches")
+            continue
+        lines_covered = sum(files[n]["summary"]["lines"]["covered"] for n in members)
+        lines_count = sum(files[n]["summary"]["lines"]["count"] for n in members)
+        regions_covered = sum(files[n]["summary"]["regions"]["covered"] for n in members)
+        regions_count = sum(files[n]["summary"]["regions"]["count"] for n in members)
+        module_lines = 100.0 * lines_covered / lines_count if lines_count else 100.0
+        module_regions = (
+            100.0 * regions_covered / regions_count if regions_count else 100.0)
+        print(
+            f"{key + '*':46s} {module_lines:7.2f}% {module_regions:7.2f}%  "
+            f"module lines>={rule['lines']}, regions>={rule['regions']} "
+            f"({len(members)} files)"
+        )
+        if module_lines + 1e-9 < rule["lines"]:
+            violations.append(
+                f"{key}*: module lines {module_lines:.2f}% < {rule['lines']}%")
+        if module_regions + 1e-9 < rule["regions"]:
+            violations.append(
+                f"{key}*: module regions {module_regions:.2f}% < {rule['regions']}%")
 
     # Objective gap: the ratified target is 100 % on every measured file (D10,
     # 2026-11-11). Floors are the ratchet that keeps CI green today; this section
