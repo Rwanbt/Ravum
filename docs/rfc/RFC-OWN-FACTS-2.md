@@ -214,7 +214,7 @@ absente). Les tests de non-vacuité antérieurs sont conservés tels quels.
 
 | Preuve | Commande | Résultat |
 |---|---|---|
-| Tests des deux crates | `cargo test -p ravum-lang-sema -p ravum-lang-codegen` | voir le tableau de la PR (chiffres du run final) |
+| Tests des deux crates | `cargo test -p ravum-lang-sema -p ravum-lang-codegen` | `b98e680bbd32cb703b9b47fe39504be6141f9ed0` : **932 passés / 0 échec / 3 ignorés**, 26 groupes (dont les doctests), sortie 0 (rejeu du 2026-11-16) |
 | Garde non vide | tests `own_facts_guard` ci-dessus | chaque corruption est refusée |
 | S7 | `tools/s7_snapshot.sh <binaire> <dossier>` sur `dev` (`3c7adb2`), A et B | **522 cibles, 264 fichiers Rust émis, identiques octet pour octet** ; même liste de cibles construites ; sha256 du concaténé `f125ab3b97b4ba8c9b68b653df22d49e827c731676122dbb53b327035d2b0e8b` aux trois points |
 | `check ⇒ build` | `ravum-conformance run --verify-build` | **503 cas : 501 PASS / 0 FAIL / 2 SKIP / 0 NOT_RUN** sous Linux ; `perimeter=222 covered=222 verified=124 implicit=98 failed=0` ; `build_verified: true` (A et B) |
