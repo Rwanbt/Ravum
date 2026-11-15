@@ -13,21 +13,27 @@
   },
   "gate_targets": {
     "files": [
-      "crates/ravum-lang-sema/src/typeck.rs",
+      "crates/ravum-lang-sema/src/typeck/mod.rs",
       "crates/ravum-lang-sema/src/resolve.rs"
     ],
     "lines": 90,
     "regions": 85,
-    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Met on `typeck.rs` (93.53/93.11) and `resolve.rs` (93.26/93.45) — measured 2026-11-14 (wave 3). The codegen files were added as floors on 2026-11-11: `emit.rs` now meets the target too (90.61/90.69); `loader.rs` is still below it on lines (85.31/88.09) and is the thinnest remaining file of the set."
+    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Met on the `typeck` module (93.67/93.21) and on `resolve.rs` (93.26/93.45) — measured 2026-11-14, typeck re-measured 2026-11-15 after its E4 split. The codegen module was added as floors on 2026-11-11; `loader.rs` is still below the target on lines (85.31/88.09) and is the thinnest remaining file of the set."
   },
   "modules": {
     "crates/ravum-lang-codegen/src/emit/": {
       "lines": 84,
       "regions": 83,
       "note": "2026-11-15 (E4, P-6) — **correction de périmètre, pas abaissement**. Avant la découpe, `emit.rs` mesurait 91,45/90,78 ; mais ces totaux comptaient **2 588 lignes du module `#[cfg(test)]`** qui vivait dans le même fichier (vérifié : les totaux `ravum-lang-sema` sont identiques au bit près entre les deux rapports, et l'écart total du rapport vaut exactement ces 2 588 lignes). La découpe place ce code dans `emit/tests*.rs`, que llvm-cov ne mesure pas : la mesure comparable entre alors dans le périmètre que S5 a ratifié — « 100 % du CODE PRODUIT, hors modules `#[cfg(test)]` ». En code produit seul, le module mesure **84,89/83,54**. Le plancher est fixé là (partie entière) et s'applique au module entier ; les planchers par fichier ci-dessous s'y ajoutent. E6 relève l'ensemble vers l'objectif 100 %."
+    },
+    "crates/ravum-lang-sema/src/typeck/": {
+      "lines": 93,
+      "regions": 93,
+      "note": "2026-11-15 (E4, P-6): `typeck.rs` (93.62/93.21 measured pre-split) is divided into eleven submodules. The aggregate re-measures 93.67/93.21 on the CI artifact, so the split is coverage-neutral here (unlike `emit.rs`, whose pre-split total included an inline `#[cfg(test)]` module). The old 93/93 file floor is kept as this module floor."
     }
   },
-  "files": {    "crates/ravum-lang-sema/src/traps.rs": {
+  "files": {
+    "crates/ravum-lang-sema/src/traps.rs": {
       "lines": 97,
       "regions": 97,
       "measured_lines": 97.61,
@@ -82,13 +88,6 @@
       "measured_lines": 85.31,
       "measured_regions": 88.09,
       "note": "Wave 3 (2026-11-14): raised from 76/80 to 85/88 at the measured level, after the manifest-contract batch (`crates/ravum-lang-sema/tests/loader_manifest_contracts.rs`: strict sections/keys, TOML lexical errors, dependency shapes, both crate roots, module inlining, enum identifiers). Still below the 90/85 gate target on lines: it is the largest remaining product gap and the next file to attack."
-    },
-    "crates/ravum-lang-sema/src/typeck.rs": {
-      "lines": 93,
-      "regions": 93,
-      "measured_lines": 93.53,
-      "measured_regions": 93.11,
-      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-13 (batch 1): raised from 92/91 to 93/92. Wave 3 (2026-11-14): regions floor raised to 93 at the measured level. Gate target 90/85 met."
     },
     "crates/ravum-lang-sema/src/resolve.rs": {
       "lines": 93,
@@ -187,6 +186,83 @@
       "measured_lines": 100.0,
       "measured_regions": 100.0,
       "note": "New floor 2026-11-11 (100/97): the emitted runtime prelude is a string constant, fully covered by construction. Wave 3 (2026-11-14) re-measured 100/100 and raised the region floor from 97 to 100 at the measured level."
+    },
+    "crates/ravum-lang-sema/src/typeck/aggregates.rs": {
+      "lines": 96,
+      "regions": 95,
+      "measured_lines": 96.52,
+      "measured_regions": 95.44,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/calls.rs": {
+      "lines": 93,
+      "regions": 93,
+      "measured_lines": 93.72,
+      "measured_regions": 93.43,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/consts.rs": {
+      "lines": 90,
+      "regions": 91,
+      "measured_lines": 90.91,
+      "measured_regions": 91.69,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/control.rs": {
+      "lines": 96,
+      "regions": 94,
+      "measured_lines": 96.43,
+      "measured_regions": 94.76,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/core.rs": {
+      "lines": 96,
+      "regions": 94,
+      "measured_lines": 96.87,
+      "measured_regions": 94.73,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/coverage.rs": {
+      "lines": 81,
+      "regions": 84,
+      "measured_lines": 81.5,
+      "measured_regions": 84.72,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/expr.rs": {
+      "lines": 96,
+      "regions": 97,
+      "measured_lines": 96.79,
+      "measured_regions": 97.58,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/helpers.rs": {
+      "lines": 92,
+      "regions": 89,
+      "measured_lines": 92.88,
+      "measured_regions": 89.36,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/mod.rs": {
+      "lines": 92,
+      "regions": 88,
+      "measured_lines": 92.05,
+      "measured_regions": 88.1,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/places.rs": {
+      "lines": 93,
+      "regions": 95,
+      "measured_lines": 93.6,
+      "measured_regions": 95.44,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/static_str.rs": {
+      "lines": 90,
+      "regions": 90,
+      "measured_lines": 90.57,
+      "measured_regions": 90.37,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
     }
   }
 }
