@@ -116,11 +116,37 @@ pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> O
     // in the number of functions (25 758 ms of the 26 424 ms `check` at
     // 50 110 lines, `docs/reports/LANG-TIMINGS.md` §8).
     let mut own = OwnFacts::default();
+    // RFC-OWN-FACTS-2 step C1: the checker publishes its copy-ness decision once,
+    // for every resolved type node, so the backend never re-derives it.
+    publish_copy_type(&checked.facts, &mut own);
     for (item, f) in fns {
         let mut checker = OwnChecker::new(&checked.facts, diags, &mut own);
         checker.check_fn(item, f);
     }
     own
+}
+
+/// RFC-OWN-FACTS-2 step C1: publish, for every resolved type node, whether the
+/// ownership layer considers that type `Copy`.
+///
+/// This is the single place where copy-ness becomes a fact. It is a free
+/// function rather than a method on `check_ownership` so that the codegen
+/// fixtures, which assemble `Facts` by hand, publish exactly the same table as
+/// production code — the step-B guard then compares like with like instead of
+/// passing vacuously.
+pub fn copy_types(facts: &Facts) -> std::collections::BTreeSet<NodeId> {
+    let mut set = std::collections::BTreeSet::new();
+    for (id, ty) in &facts.type_nodes {
+        if is_copy_type(ty, facts) {
+            set.insert(*id);
+        }
+    }
+    set
+}
+
+/// Fill `OwnFacts::copy_type` from [`copy_types`].
+pub fn publish_copy_type(facts: &Facts, own: &mut OwnFacts) {
+    own.copy_type = copy_types(facts);
 }
 
 /// Walk every stored field type: struct fields and enum variant payloads.

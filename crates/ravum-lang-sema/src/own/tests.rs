@@ -1,6 +1,10 @@
-use super::{check_ownership, check_stored_reference_fields, collect_fns, OwnChecker};
+use super::{
+    check_ownership, check_stored_reference_fields, collect_fns, publish_copy_type, OwnChecker,
+};
+use crate::facts::Facts;
 use crate::facts::{CheckOptions, CheckResult, CheckedProgram, OwnFacts, Profile};
 use crate::loader::{load_package_with_options, LoadOptions};
+use crate::types::Type;
 use ravum_lang_syntax::ast::{FnItem, Item};
 use ravum_lang_syntax::diag::DiagnosticBag;
 use ravum_lang_syntax::parser;
@@ -84,6 +88,27 @@ fn rejected(src: &str, code: &str) {
 }
 
 // -- Use after move / double move / move through calls ------------------
+
+#[test]
+fn slices_are_mobile_because_own_2_1_does_not_list_them() {
+    // OWN-2.1: Copy = primitives, references, tuples/arrays of Copy, structs and
+    // enums whose fields are all Copy. OWN-2.2: everything else is mobile.
+    // A slice was classified Copy by this module while the backend classified it
+    // as mobile; the RFC-OWN-FACTS-2 step-C1 guard surfaced the drift.
+    let facts = Facts::default();
+    assert!(!super::is_copy_type(
+        &Type::Slice(Box::new(Type::I32)),
+        &facts
+    ));
+    // A reference to a slice stays Copy, so `&[i32]` keeps working.
+    assert!(super::is_copy_type(
+        &Type::Ref {
+            mutable: false,
+            inner: Box::new(Type::Slice(Box::new(Type::I32))),
+        },
+        &facts
+    ));
+}
 
 #[test]
 fn use_after_move_is_rejected() {
@@ -1161,6 +1186,7 @@ fn legacy_check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -
     let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
     collect_fns(&checked.program.root, &mut fns);
     let mut own = OwnFacts::default();
+    publish_copy_type(&checked.facts, &mut own);
     for (item, f) in fns {
         let mut per_fn = OwnFacts::default();
         let mut checker = OwnChecker::new(&checked.facts, diags, &mut per_fn);
@@ -1168,6 +1194,7 @@ fn legacy_check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -
         own.use_kind.append(&mut per_fn.use_kind);
         own.place.append(&mut per_fn.place);
         own.element_reinit.append(&mut per_fn.element_reinit);
+        own.copy_type.append(&mut per_fn.copy_type);
     }
     own
 }

@@ -227,6 +227,7 @@ impl Builder {
                 span: span(),
             },
         };
+        self.facts.own.copy_type = ravum_lang_sema::copy_types(&self.facts);
         CheckedProgram {
             program,
             facts: self.facts,
