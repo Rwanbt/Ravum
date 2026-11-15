@@ -108,12 +108,17 @@ pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> O
     check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
     let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
     collect_fns(&checked.program.root, &mut fns);
+    // The accumulator is shared by every function: each checker inserts its
+    // decisions directly, so the cost is one ordered-map insert per recorded
+    // expression. The previous shape gave every function its own table and
+    // merged it with `BTreeMap::append` after each `check_fn`; `append` moves
+    // the whole accumulated map on every call, which made the phase quadratic
+    // in the number of functions (25 758 ms of the 26 424 ms `check` at
+    // 50 110 lines, `docs/reports/LANG-TIMINGS.md` §8).
     let mut own = OwnFacts::default();
     for (item, f) in fns {
-        let mut checker = OwnChecker::new(&checked.facts, diags);
+        let mut checker = OwnChecker::new(&checked.facts, diags, &mut own);
         checker.check_fn(item, f);
-        own.use_kind.append(&mut checker.own.use_kind);
-        own.place.append(&mut checker.own.place);
     }
     own
 }
@@ -376,11 +381,12 @@ struct OwnChecker<'a> {
     /// `E-OWN-DOUBLE-MOVE` describes.
     call_depth: u32,
     /// Ownership decisions recorded for the backend (RFC-OWN-FACTS-1, step A).
-    own: OwnFacts,
+    /// Shared across the functions of one program (see `check_ownership`).
+    own: &'a mut OwnFacts,
 }
 
 impl<'a> OwnChecker<'a> {
-    fn new(facts: &'a Facts, diags: &'a mut DiagnosticBag) -> Self {
+    fn new(facts: &'a Facts, diags: &'a mut DiagnosticBag, own: &'a mut OwnFacts) -> Self {
         OwnChecker {
             facts,
             diags,
@@ -397,7 +403,7 @@ impl<'a> OwnChecker<'a> {
             budget_hit: false,
             too_deep: false,
             call_depth: 0,
-            own: OwnFacts::default(),
+            own,
         }
     }
 
@@ -2418,9 +2424,14 @@ impl Type {
 }
 #[cfg(test)]
 mod tests {
-    use crate::facts::{CheckOptions, CheckResult, Profile};
+    use super::{check_ownership, check_stored_reference_fields, collect_fns, OwnChecker};
+    use crate::facts::{CheckOptions, CheckResult, CheckedProgram, OwnFacts, Profile};
+    use crate::loader::{load_package_with_options, LoadOptions};
+    use ravum_lang_syntax::ast::{FnItem, Item};
+    use ravum_lang_syntax::diag::DiagnosticBag;
     use ravum_lang_syntax::parser;
     use ravum_lang_syntax::source::SourceMap;
+    use std::path::{Path, PathBuf};
 
     /// Parse and check a complete program. The parser/checker are real: parse
     /// errors are a test failure, and ownership diagnostics only exist when the
@@ -3455,6 +3466,292 @@ fn main() {
 }
 "#,
             "E-OWN-UNINIT",
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Fact-accumulation equivalence (wave 3, agent A)
+    // ------------------------------------------------------------------
+
+    /// The accumulation used before the 2026-11-14 fix, kept here as the oracle
+    /// of `own_facts_are_identical_to_the_append_accumulation`. Every function
+    /// records into its own `OwnFacts`; the program-wide tables are then rebuilt
+    /// with `BTreeMap::append` after each `check_fn`, which is what made the
+    /// phase quadratic. Test-only: nothing in the product calls this.
+    fn legacy_check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> OwnFacts {
+        check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
+        let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
+        collect_fns(&checked.program.root, &mut fns);
+        let mut own = OwnFacts::default();
+        for (item, f) in fns {
+            let mut per_fn = OwnFacts::default();
+            let mut checker = OwnChecker::new(&checked.facts, diags, &mut per_fn);
+            checker.check_fn(item, f);
+            own.use_kind.append(&mut per_fn.use_kind);
+            own.place.append(&mut per_fn.place);
+        }
+        own
+    }
+
+    /// Serialized form of an ownership decision set: the whole proof is a
+    /// string equality, so a difference is reported verbatim.
+    fn serialize_facts(facts: &OwnFacts) -> String {
+        format!("{facts:#?}")
+    }
+
+    /// Serialized form of the ownership diagnostics of one run.
+    fn serialize_diags(diags: &DiagnosticBag) -> String {
+        diags
+            .iter()
+            .map(|diag| format!("{diag:?}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn workspace_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crates/ravum-lang-sema must live two levels below the workspace root")
+            .to_path_buf()
+    }
+
+    /// A throwaway copy of one corpus package. The loader writes `ravum.lock`
+    /// next to the manifest, so the corpus itself is never touched.
+    struct TempPackage {
+        path: PathBuf,
+    }
+
+    impl TempPackage {
+        fn copy_of(source: &Path, label: &str) -> TempPackage {
+            static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let label: String = label
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect();
+            let path = std::env::temp_dir().join(format!(
+                "ravum-own-equivalence-{}-{unique}-{label}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            copy_tree(source, &path).expect("cannot copy the corpus package");
+            TempPackage { path }
+        }
+    }
+
+    impl Drop for TempPackage {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_tree(&entry.path(), &target)?;
+            } else {
+                std::fs::copy(entry.path(), &target)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Run the real loader + checker on a corpus package, then compare the two
+    /// accumulations on the accepted program: the ownership facts and the
+    /// ownership diagnostics must be byte-identical. Returns `true` when the
+    /// package recorded at least one fact (a few accepted programs, e.g. a bare
+    /// `println` of a literal, legitimately record none).
+    fn compare_package(label: &str, source: &Path, project: &str) -> Result<bool, String> {
+        let package = TempPackage::copy_of(source, label);
+        let loaded =
+            load_package_with_options(&package.path.join(project), &LoadOptions::default());
+        if loaded.diags.has_errors() {
+            return Err(format!(
+                "{label}: loader errors {:?}",
+                loaded
+                    .diags
+                    .iter()
+                    .map(|d| d.code.clone())
+                    .collect::<Vec<_>>()
+            ));
+        }
+        let Some(program) = loaded.program else {
+            return Err(format!("{label}: the loader produced no program"));
+        };
+        let result = crate::check::check(
+            &program,
+            &loaded.sources,
+            &CheckOptions {
+                profile: Profile::Core,
+                edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+            },
+        );
+        let Some(checked) = result.checked else {
+            return Err(format!(
+                "{label}: rejected by check {:?}",
+                result
+                    .diags
+                    .iter()
+                    .map(|d| d.code.clone())
+                    .collect::<Vec<_>>()
+            ));
+        };
+
+        let mut production_diags = DiagnosticBag::new();
+        let production = check_ownership(&checked, &mut production_diags);
+        let mut legacy_diags = DiagnosticBag::new();
+        let legacy = legacy_check_ownership(&checked, &mut legacy_diags);
+
+        let production_facts = serialize_facts(&production);
+        let legacy_facts = serialize_facts(&legacy);
+        if production_facts != legacy_facts {
+            return Err(format!(
+                "{label}: the recorded ownership facts differ from the append accumulation"
+            ));
+        }
+        let production_render = serialize_diags(&production_diags);
+        let legacy_render = serialize_diags(&legacy_diags);
+        if production_render != legacy_render {
+            return Err(format!(
+                "{label}: the ownership diagnostics differ from the append accumulation"
+            ));
+        }
+        Ok(!production.use_kind.is_empty() || !production.place.is_empty())
+    }
+
+    fn sorted_subdirs(dir: &Path) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+            .map(|entry| entry.expect("cannot read a directory entry").path())
+            .filter(|path| path.is_dir())
+            .collect();
+        dirs.sort();
+        dirs
+    }
+
+    /// Every `case.json` below `conformance/cases`, in walk order.
+    fn conformance_case_dirs(cases_root: &Path) -> Vec<PathBuf> {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+                .map(|entry| entry.expect("cannot read a directory entry").path())
+                .collect();
+            entries.sort();
+            if dir.join("case.json").is_file() {
+                out.push(dir.to_path_buf());
+                return;
+            }
+            for entry in entries {
+                if entry.is_dir() {
+                    walk(&entry, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(cases_root, &mut out);
+        out
+    }
+
+    fn case_mode_and_project(case_dir: &Path) -> (String, String) {
+        let text = std::fs::read_to_string(case_dir.join("case.json")).unwrap_or_else(|error| {
+            panic!("cannot read case.json of {}: {error}", case_dir.display())
+        });
+        let value: serde_json::Value =
+            serde_json::from_str(&text).expect("case.json must be valid JSON");
+        let mode = value
+            .get("mode")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("compile-pass")
+            .to_string();
+        let project = value
+            .get("project")
+            .and_then(serde_json::Value::as_str)
+            .filter(|project| !project.is_empty())
+            .unwrap_or(".")
+            .to_string();
+        (mode, project)
+    }
+
+    /// The ownership facts and diagnostics must not depend on how the per-file
+    /// decisions are accumulated: the quadratic `BTreeMap::append` loop and the
+    /// shared accumulator of today must produce the same serialized tables on
+    /// every accepted package of `examples/` and of the conformance corpus.
+    ///
+    /// Acceptance perimeter: the 10 examples and every `compile-pass` /
+    /// `run-pass` case (the two modes whose program must pass `check`); a case
+    /// that fails to load or to check is a failure of this test, not a skip, so
+    /// the comparison can never be silently vacuous.
+    #[test]
+    fn own_facts_are_identical_to_the_append_accumulation() {
+        let root = workspace_root();
+        let mut compared = 0usize;
+        let mut with_facts = 0usize;
+        let mut expected = 0usize;
+        let mut failures: Vec<String> = Vec::new();
+
+        for dir in sorted_subdirs(&root.join("examples")) {
+            // `package-demo` keeps its binary package under `app/`.
+            let project = if dir.join("ravum.toml").is_file() {
+                "."
+            } else {
+                "app"
+            };
+            let label = format!(
+                "example/{}",
+                dir.file_name().unwrap_or_default().to_string_lossy()
+            );
+            expected += 1;
+            match compare_package(&label, &dir, project) {
+                Ok(recorded) => {
+                    compared += 1;
+                    with_facts += usize::from(recorded);
+                }
+                Err(error) => failures.push(error),
+            }
+        }
+
+        for case_dir in conformance_case_dirs(&root.join("conformance").join("cases")) {
+            let (mode, project) = case_mode_and_project(&case_dir);
+            if mode != "compile-pass" && mode != "run-pass" {
+                continue;
+            }
+            let label = case_dir
+                .strip_prefix(root.join("conformance").join("cases"))
+                .unwrap_or(&case_dir)
+                .display()
+                .to_string()
+                .replace('\\', "/");
+            expected += 1;
+            match compare_package(&format!("conformance/{label}"), &case_dir, &project) {
+                Ok(recorded) => {
+                    compared += 1;
+                    with_facts += usize::from(recorded);
+                }
+                Err(error) => failures.push(error),
+            }
+        }
+
+        assert!(
+            failures.is_empty(),
+            "the shared accumulator changed {} of {} packages:\n{}",
+            failures.len(),
+            expected,
+            failures.join("\n")
+        );
+        assert_eq!(
+            compared, expected,
+            "every accepted corpus package must be compared (non-vacuity)"
+        );
+        assert!(
+            with_facts >= 150,
+            "the equivalence proof must compare non-empty fact tables, got {with_facts} of {compared} packages"
+        );
+        println!(
+            "own facts equivalence: {compared} packages compared, {with_facts} recorded facts, 0 difference"
         );
     }
 }

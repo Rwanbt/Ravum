@@ -1,0 +1,6 @@
+{
+  "id": "run/power-array-move-write-region-nested",
+  "mode": "run-pass",
+  "stdout_contains": "a\nb\n",
+  "notes": "Power test T2 (S6, 2026-11-14): reduced program produced by the type-directed generator under the inverse of the array-place lowering. An element move after a whole-binding self-assignment (`a = if c { a } else { ... }`) inside a nested block is left unlowered: check exits 0, build emits plain `a[0usize]`/`a[1usize]` and rustc fails with E0508. This case RECORDS a divergence measured on the reference tree; it must fail until the compiler is fixed."
+}

@@ -32,7 +32,7 @@
 use crate::prelude::PRELUDE;
 use crate::{CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, VariantKind,
+    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind, VariantKind,
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
@@ -105,6 +105,15 @@ fn pattern_contains_float(pat: &Pat) -> bool {
 /// Types the backend accepts at the C ABI boundary in Core 1.0, checked on the
 /// syntax tree so a hand-built `CheckedProgram` cannot smuggle an ABI-unsafe
 /// signature into the output.
+///
+/// The list is **closed** and mirrors the checker's `resolve::ffi_safe` exactly
+/// (C-FFI-1): `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`,
+/// `bool`, `()`. `i128`/`u128` are **not** admitted (S4, 2026-11-14; C-FFI-2):
+/// no portable C width covers them (MSVC has no `__int128`). The checker already
+/// refuses them (`E-FFI-TYPE`); this twin list is the backend's defence in depth
+/// so a hand-built `CheckedProgram` cannot reach the ABI with them either.
+/// `backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`
+/// is the non-vacuity test for this list.
 fn ast_ffi_safe(ty: &AstType) -> bool {
     match &ty.kind {
         TypeKind::Unit => true,
@@ -116,12 +125,10 @@ fn ast_ffi_safe(ty: &AstType) -> bool {
                     "i8" | "i16"
                         | "i32"
                         | "i64"
-                        | "i128"
                         | "u8"
                         | "u16"
                         | "u32"
                         | "u64"
-                        | "u128"
                         | "isize"
                         | "usize"
                         | "f32"
@@ -940,17 +947,6 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
     }
 }
 
-/// Builtin methods whose `self` receiver is consumed (STD-11.3: `Option::{unwrap,
-/// unwrap_or, ok_or}` and `Result::{unwrap, unwrap_or, ok, err}` take `self` by
-/// value, while the `is_*` predicates take `&self`).
-fn builtin_method_moves_receiver(owner: &str, method: &str) -> bool {
-    match owner {
-        "Option" => matches!(method, "unwrap" | "unwrap_or" | "ok_or"),
-        "Result" => matches!(method, "unwrap" | "unwrap_or" | "ok" | "err"),
-        _ => false,
-    }
-}
-
 /// Split a canonical builtin method path into `(owner, method)`.
 fn split_builtin_method(path: &str) -> Option<(&str, &str)> {
     let path = path.strip_prefix("std::").unwrap_or(path);
@@ -1182,6 +1178,26 @@ impl<'a> Emitter<'a> {
             steps.push(ravum_lang_sema::facts::Projection::Deref);
             ty = Some(inner);
         }
+    }
+
+    /// RFC-OWN-FACTS-1 step C: does the checker take the value of `node`?
+    ///
+    /// `own.rs` records `UseKind::Move` when it moves a place, `UseKind::Copy`
+    /// when it reads a `Copy` one, and `Borrow`/`BorrowMut` when it only borrows
+    /// it. "The value is taken" is therefore exactly `Move | Copy`; the backend
+    /// reads that decision instead of re-deriving it from types or from the
+    /// method signature, and it does so in **release builds too** (this helper
+    /// is not behind `debug_assertions`: for the migrated families there is no
+    /// second decision left to compare).
+    ///
+    /// An expression the checker recorded nothing for is not a place it took a
+    /// decision on (a call result, a literal, an aggregate): it is not consumed
+    /// here, and every caller already handles that case separately.
+    fn consumed_by_checker(&self, node: NodeId) -> bool {
+        matches!(
+            self.facts().own.use_kind.get(&node),
+            Some(UseKind::Move) | Some(UseKind::Copy)
+        )
     }
 
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
@@ -4328,20 +4344,32 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::Call { callee, args } => {
                 self.walk_expr(callee, false, top, block_depth);
-                let owned_args = self.call_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // RFC-OWN-FACTS-1 step C (family `arguments`): the checker records
+                // on the argument expression itself whether the call takes it by
+                // value (`Move`/`Copy`) or only borrows it (`Borrow`/`BorrowMut`).
+                // The backend no longer re-derives it from the callee signature's
+                // parameter types, nor from "a builtin takes bare values".
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
             ExprKind::MethodCall { receiver, args, .. } => {
-                // A `self` receiver is moved by the call; `&self`/`&mut self`
-                // borrow it. Builtin receiver kinds are not modelled by the backend,
-                // so they are treated as borrowed (a loud `E0508` when a lowering
-                // would have been required).
-                let receiver_owned = self.by_value_receiver(expr.id);
+                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker already
+                // decided whether the call takes its receiver by value. It
+                // records `Move`/`Copy` on the receiver expression when it
+                // consumes it (`self` by value, and the STD-11.3 consuming
+                // builtins `Option::{unwrap, unwrap_or, ok_or}` /
+                // `Result::{unwrap, unwrap_or, ok, err}`) and `Borrow`/
+                // `BorrowMut` when it only borrows it (`&self`, `&mut self`).
+                // The backend no longer inspects the signature or the builtin
+                // set itself.
+                let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
                 self.walk_expr(receiver, receiver_owned, top, block_depth);
-                let owned_args = self.method_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // Same decision, same source of truth, for the explicit arguments
+                // (family `arguments`): the recorded use of each argument node.
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
@@ -4507,73 +4535,6 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             },
             PatKind::Wild | PatKind::Lit(_) => {}
         }
-    }
-
-    /// True when the method takes `self` by value, so its receiver expression is
-    /// moved by the call: a user method whose signature receiver is `ByValue`, or
-    /// a builtin in the STD-11.3 consuming set (`Option`/`Result`).
-    fn by_value_receiver(&self, call: NodeId) -> bool {
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => self
-                .emitter
-                .facts()
-                .fn_sigs
-                .get(item)
-                .map(|signature| signature.receiver == Some(Receiver::ByValue))
-                .unwrap_or(false),
-            Some(MethodTarget::Builtin { path, .. }) => split_builtin_method(path)
-                .map(|(owner, method)| {
-                    builtin_method_moves_receiver(&normalize_owner(owner), method)
-                })
-                .unwrap_or(false),
-            _ => false,
-        }
-    }
-
-    /// Argument positions of a call that consume their value: a user function
-    /// parameter whose type is not `Copy`. A builtin receives its arguments by
-    /// value when Ravum passes a bare value (there is no implicit referencing in
-    /// the language), so builtin arguments are treated as consumed too; a builtin
-    /// that borrows internally still works, because the moved element is then a
-    /// plain local to borrow from.
-    fn call_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().calls.get(&call) {
-            Some(CallTarget::UserFn { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter()) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            Some(CallTarget::VariantCtor { .. }) | Some(CallTarget::BuiltinFn { .. }) => {
-                // Constructing a variant moves its payloads; a builtin receives a
-                // bare value by value.
-                out.fill(true);
-            }
-            _ => {}
-        }
-        out
-    }
-
-    fn method_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    // `params[0]` is the receiver; the remaining parameters map to
-                    // the explicit arguments in order.
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter().skip(1)) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            // Builtin method signatures are not modelled by the backend; a bare
-            // value argument is passed by value in Ravum (`v.push(a[0])`).
-            Some(MethodTarget::Builtin { .. }) => out.fill(true),
-            _ => {}
-        }
-        out
     }
 
     /// Build the destructuring for one place: the array pattern and the binding

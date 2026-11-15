@@ -1,9 +1,12 @@
 # RFC-DEV-TOOLS-1 — Outils de vérification locaux (Miri, cargo-mutants)
 
-> **Statut : `PROPOSED` — `PENDING_HUMAN_APPROVAL`.**
+> **Statut : `ACCEPTED` — approuvée par le responsable, 2026-11-14 (A4).**
+> Décision enregistrée dans
+> [`docs/decision/DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
 > Cette RFC ne modifie ni le langage, ni la sémantique, ni les gates. Elle
-> demande l'autorisation d'installer **localement** deux outils déjà utilisés par
-> la CI, pour rejouer localement les deux dernières qualifications `NOT_RUN`.
+> autorise l'installation **locale** de deux outils déjà utilisés par
+> la CI, pour rejouer localement les deux dernières qualifications `NOT_RUN` ;
+> ce sont des **outils de développement**, pas des dépendances.
 
 ## 1. Problème
 

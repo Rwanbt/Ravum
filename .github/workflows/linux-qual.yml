@@ -320,6 +320,9 @@ jobs:
       # (`loader::`, parse_examples, own_audit fixtures) are exercised natively
       # by the workspace job; running them under Miri adds tens of minutes
       # without new coverage. This exclusion is explicit, not a silent skip.
+      # Wave 3 adds one more filesystem-heavy library test: the OwnFacts
+      # equivalence loads 207 packages from disk and is hours under Miri; it is
+      # run natively by the workspace job, so the Miri scope stays bounded.
       - name: Run Miri on the language libraries
         env:
           MIRIFLAGS: -Zmiri-disable-isolation
@@ -334,7 +337,9 @@ jobs:
             --skip hostile_deep_nesting \
             --skip too_large_token_stream \
             --skip examples_are_idempotent_and_meaning_preserving
-          cargo +nightly miri test -p ravum-lang-sema --lib -- --skip loader::
+          cargo +nightly miri test -p ravum-lang-sema --lib -- \
+            --skip loader:: \
+            --skip own::tests::own_facts_are_identical_to_the_append_accumulation
 
       - name: Run Miri on the short sema fuzz test
         env:

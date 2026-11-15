@@ -1,10 +1,24 @@
-# Frontière `unsafe` / FFI de Core 1.0 — contrat proposé (D7)
+# Frontière `unsafe` / FFI de Core 1.0 — contrat de la frontière scalaire
 
-> **Statut : `PROPOSED` · `PENDING_HUMAN_APPROVAL` (D7) · 2026-11-12.**
-> Ce document **ne ratifie rien** et ne modifie ni `spec/language/`, ni
-> `crates/`, ni `conformance/`. Il fixe ce que « frontière sûre » doit vouloir
-> dire pour Core 1.0, ce que l'implémentation fait réellement au code `2b31d63`,
-> et ce qui doit être outillé et refusé avant une ratification.
+> **Statut : APPROUVÉ par le responsable, 2026-11-14.**
+> Les clauses C-FFI-1 à C-FFI-10 engagent la frontière scalaire de Core 1.0 :
+> `extern "C"` avec des types scalaires admis, appelable uniquement dans
+> `unsafe`. Cette décision (S4) **retire `i128` et `u128`** des types admis et
+> place **hors contrat** une fonction C qui déroule, `longjmp`, lève un signal
+> ou termine le processus (C-FFI-4 : obligation de l'appelant, non vérifiée).
+> Elle ne ratifie ni `D2`, ni `D4`, ni `T12` : aucun audit externe n'a couvert
+> la frontière, et aucun document ne peut écrire `PROVED` ni « production
+> ready ».
+>
+> État de l'implémentation : le vérificateur
+> (`crates/ravum-lang-sema/src/resolve.rs`, `ffi_safe`) et la liste jumelle du
+> backend (`crates/ravum-lang-codegen/src/emit.rs`, `ast_ffi_safe`) appliquent
+> la même liste approuvée ; le backend a été aligné au commit `30085ea`
+> (agent E), avec le test
+> `c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`. C-FFI-1 est
+> donc satisfaite des deux côtés : le vérificateur refuse avant le backend
+> (test C-FFI-1 côté sema) et le backend refuse aussi un `CheckedProgram`
+> construit à la main.
 > Inventaire détaillé, contradictions de spécification et tests proposés :
 > [`RFC-D7-FFI-EFFECTS.md`](../rfc/RFC-D7-FFI-EFFECTS.md).
 
@@ -23,41 +37,42 @@ processus.** Un programme Ravum peut donc être corrompu par du code que Ravum
 n'a pas analysé. C'est la phrase la plus importante de D7 : une ratification qui
 l'omettrait donnerait un `PASS` de forme sur une sûreté non démontrée.
 
-## 2. Surface réelle, vérifiée au code `2b31d63`
+## 2. Surface réelle (vérifiée sur le worktree de la vague 3, 2026-11-14)
 
 | Élément | État réel | Preuve |
 |---|---|---|
 | Déclaration `extern "C" { fn f(…) -> …; }` | acceptée, **module uniquement** | `parser.rs` (G-3.10/G-3.11) ; cas `unsupported/extern-fn` |
 | Définition `extern "C" fn f() { … }` | refusée `E-UNSUPPORTED-EXTERN` | parser ; cas `unsupported/extern-fn` |
 | ABI autre que `"C"` | refusée `E-UNSUPPORTED-ABI` | parser ; `unsupported.md` §3 |
-| Types admis | **exactement** `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool ()` | `resolve.rs:1943-1963` (`ffi_safe`) ; copie défensive côté backend `emit.rs:108-134` (`ast_ffi_safe`) |
-| `char`, `String`, `Vec`, `&T`, `&str`, `&mut T`, tuples, tableaux, structs/enums | refusés `E-FFI-TYPE` | `resolve.rs:1889`, `resolve.rs:1909` ; cas `types/ffi-bad-type` |
-| Appel `extern` hors `unsafe` | refusé `E-UNSAFE-CONTEXT` | `typeck.rs:2043` ; cas `types/ffi-outside-unsafe` |
+| Types admis | **exactement** `i8 i16 i32 i64 u8 u16 u32 u64 isize usize f32 f64 bool ()` ; `i128`/`u128` **retirés** (S4, 2026-11-14) et refusés `E-FFI-TYPE` | `resolve.rs` (`ffi_safe`) ; liste jumelle identique côté backend `emit.rs` (`ast_ffi_safe`), alignée au commit `30085ea` |
+| `char`, `i128`, `u128`, `String`, `Vec`, `&T`, `&str`, `&mut T`, tuples, tableaux, structs/enums | refusés `E-FFI-TYPE` | `resolve.rs` (`resolve_extern_block`) ; cas `types/ffi-bad-type`, `types/ffi-i128-param`, `types/ffi-u128-return` |
+| Appel `extern` hors `unsafe` | refusé `E-UNSAFE-CONTEXT` | `typeck.rs` (`E-UNSAFE-CONTEXT`) ; cas `types/ffi-outside-unsafe` |
 | `unsafe { … }` | accepté, transparent pour l'ownership | `own.rs` ; cas `ownership/unsafe-transparent` |
 | `unsafe fn`, `*const`/`*mut`, `&raw` | refusés `E-UNSUPPORTED-UNSAFE` | parser ; `unsupported.md` §3 |
 | `#[link]`, `#[no_mangle]`, `#[repr]` | refusés `E-UNSUPPORTED-ATTR` | `unsupported.md` §3 |
-| Effets | un `extern` porte `{unsafe, ffi}` ; un appel `extern` ajoute `ffi` | `resolve.rs:1930` ; `effects.rs:228` |
+| Effets | un `extern` porte `{unsafe, ffi}` ; un appel `extern` ajoute `ffi` | `resolve.rs` (`resolve_extern_block`) ; `effects.rs` (EFF-2.9) |
 | Confinement | `#![forbid(unsafe_code)]` sur `syntax`, `sema`, `codegen`, `lsp` ; le CLI porte `#![deny(unsafe_code)]` et **deux** `#[allow(unsafe_code)]` seulement, sur `commands::watch::signal` | inventaire : [`UNSAFE-INVENTORY.md`](UNSAFE-INVENTORY.md) ; vérifié par `tools/unsafe_audit.py` (CI `gate-contracts`) |
 | Profil `pure` + FFI | refusé `E-EFF-PROFILE` | `ffi.rs::unsafe_is_forbidden_by_the_pure_profile` ; cas `effects/pure-ffi-profile` |
-| Émission | `extern "C"` + un wrapper `#[allow(unsafe_code)]` ; l'entête passe de `#![forbid(unsafe_code)]` à `#![deny(unsafe_code)]` | `emit.rs:1008-1012`, `emit.rs:1256`, `emit.rs:1197` (`emit_extern_block`) |
+| Émission | `extern "C"` + un wrapper `#[allow(unsafe_code)]` ; l'entête passe de `#![forbid(unsafe_code)]` à `#![deny(unsafe_code)]` | `emit.rs` (`emit_extern_block`) |
 | Édition de liens | **aucune** : seul `#[link_name]` existe, donc seuls les symboles déjà liés par défaut (CRT/libm) sont atteignables | RFC-D7 §2.4 ; mesure `run/ffi-abs` (`abs` de la CRT) |
 
 **Ce qui n'est pas exprimable aujourd'hui** et qui ne doit pas être sous-entendu
 par le mot « FFI » : passer un tampon, une chaîne, une struct, un handle ; faire
 un callback ; charger une bibliothèque arbitraire ; garantir une ABI stable.
 
-## 3. Contrat proposé
+## 3. Contrat approuvé
 
-Les clauses ci-dessous sont des **propositions**, pas des règles ratifiées. Elles
-ne changent aucun comportement : elles nomment ce qui est déjà vrai et ce qui
-devra être refusé.
+Les clauses ci-dessous sont **APPROUVÉES par le responsable, 2026-11-14**
+(décision S4). Elles nomment ce qui est vrai et ce qui doit être refusé à la
+frontière scalaire ; elles ne prétendent pas à une sûreté mémoire de la
+bibliothèque C appelée.
 
 | ID | Clause |
 |---|---|
-| **C-FFI-1 — Types** | La liste admise est **fermée** et identique dans le vérificateur et dans le backend. Toute divergence entre `ffi_safe` et `ast_ffi_safe` est un défaut de sûreté : un test doit construire un `CheckedProgram` à la main et vérifier que le backend refuse. |
-| **C-FFI-2 — ABI** | Seul `"C"` est admis. Aucune ABI stable n'est revendiquée : la convention d'appel est celle de la cible. `i128`/`u128` traversent aujourd'hui sans contrat de largeur côté C (MSVC n'a pas `__int128`) : soit un test de largeur les couvre sur chaque cible, soit la spécification les retire — décision humaine, pas correctif d'agent. |
+| **C-FFI-1 — Types** | La liste admise est **fermée** : `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`, `bool`, `()`. `i128`/`u128` en sont **retirés** (S4, 2026-11-14 ; C-FFI-2). La liste est **identique** dans le vérificateur (`ffi_safe`) et dans le backend (`ast_ffi_safe`, aligné au commit `30085ea`). Le vérificateur refuse `i128`/`u128` **avant** le backend (test `c_ffi_1_verifier_refuses_i128_and_u128_before_the_backend`, et cas `types/ffi-i128-param` / `types/ffi-u128-return`) ; le backend aligné refuse en plus un `CheckedProgram` construit à la main (`backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`, paramètre `i128` et retour `u128`). |
+| **C-FFI-2 — ABI** | Seul `"C"` est admis. Aucune ABI stable n'est revendiquée : la convention d'appel est celle de la cible. `i128`/`u128` sont **retirés** des types admis (S4, 2026-11-14) : aucune largeur C portable ne les couvre (MSVC n'a pas `__int128`). Toute déclaration qui les utilise est refusée `E-FFI-TYPE`. |
 | **C-FFI-3 — Durées de vie et propriété** | Aucune référence ne traverse ; rien de possédé ne traverse. Il n'y a donc rien à libérer **aujourd'hui**. Dès qu'un pointeur sera admis, un tableau propriétaire/libérateur et une règle d'aliasing deviennent obligatoires. |
-| **C-FFI-4 — Déroulement et terminaison** | Une panique Ravum ne traverse pas la frontière (`panic=abort` dans les harnais concernés). Une fonction C qui `longjmp`, `abort()`, lève un signal ou termine le processus n'a **aucun** comportement spécifié vis-à-vis du hook de panic, du runner de tests ou du contrat de code de sortie de la CLI. À écrire et à tester. |
+| **C-FFI-4 — Déroulement et terminaison** | Une panique Ravum ne traverse pas la frontière (`panic=abort` dans les harnais concernés). Une fonction C qui déroule (exception C++/`longjmp`), `abort()`, lève un signal ou termine le processus est **hors contrat** (S4, 2026-11-14) : c'est une **obligation de l'appelant**, **non vérifiée** par la toolchain, et aucun comportement n'est spécifié vis-à-vis du hook de panic, du runner de tests ou du contrat de code de sortie de la CLI. |
 | **C-FFI-5 — Callbacks** | Inexprimables (pas de type fonction, pas de pointeur de fonction) : **hors périmètre 1.0**, à dire explicitement. |
 | **C-FFI-6 — Threads** | Core 1.0 n'expose ni threads ni `Send`/`Sync`. Une fonction C qui crée des threads est hors du modèle de concurrence du langage ; aucune garantie ne doit être promise. |
 | **C-FFI-7 — Effets** | `extern` ⇒ `{unsafe, ffi}` ; une déclaration `effects(...)` doit dominer l'inféré. La propagation à travers un wrapper non déclaré (EFF-2.9) est **testée depuis le 2026-11-13** (`effects/ffi-transitive-wrapper`, chaîne `main -> outer -> inner`). |
@@ -74,6 +89,8 @@ devra être refusé.
 | `extern "C" { fn f() -> String; }` | `E-FFI-TYPE` | couvert (`types/ffi-bad-type`) |
 | `extern "C" { fn f() -> &str; }` | `E-FFI-TYPE` | couvert (`types/ffi-str-rejected`, 2026-11-14) |
 | `extern "C" { fn f() -> char; }` | `E-FFI-TYPE` | couvert (`types/ffi-char-rejected`, 2026-11-13) |
+| `extern "C" { fn f(x: i128) -> i32; }` | `E-FFI-TYPE` | couvert (`types/ffi-i128-param`, 2026-11-14) |
+| `extern "C" { fn f() -> u128; }` | `E-FFI-TYPE` | couvert (`types/ffi-u128-return`, 2026-11-14) |
 | `extern "C" { fn f(x: &i32) -> i32; }` | `E-FFI-TYPE` | couvert (`types/ffi-reference-rejected`, 2026-11-13) |
 | appel `extern` hors `unsafe` | `E-UNSAFE-CONTEXT` | couvert |
 | `unsafe fn`, `*const`, `&raw` | `E-UNSUPPORTED-UNSAFE` | couvert (parser) ; pointeur **dans** `unsafe` couvert (`types/unsafe-does-not-unlock-pointers`) |
@@ -91,11 +108,22 @@ devra être refusé.
 **Vérifié par test ou par exécution réelle** : refus hors `unsafe`, acceptation
 dans `unsafe`, refus sous `pure` **et** sous `rt`, propagation transitive à
 travers deux wrappers, refus d'un type non scalaire (`String`, `char`, `&i32`,
-`&str`), `self` et paramètre dupliqué, `extern` dans un `impl`, pointeur brut
-refusé dans un `unsafe`, `deny` + un seul `allow` local, compilation et exécution
-réelles de `abs` (`run/ffi-abs`), passage réel d'un `i64`
-(`run/ffi-width-boundary`), admission + build d'un `bool`
-(`types/ffi-bool-boundary`), transparence de l'`unsafe` pour l'ownership.
+`&str`), refus de `i128`/`u128` (paramètre et retour, `E-FFI-TYPE` au
+vérificateur, sans `CheckedProgram` produit), `self` et paramètre dupliqué,
+`extern` dans un `impl`, pointeur brut refusé dans un `unsafe`, `deny` + un
+seul `allow` local, compilation et exécution réelles de `abs` (`run/ffi-abs`),
+passage réel d'un `i64` (`run/ffi-width-boundary`), admission + build d'un
+`bool` (`types/ffi-bool-boundary`), transparence de l'`unsafe` pour l'ownership.
+
+**Alignement des listes jumelles (2026-11-14)** : `emit.rs::ast_ffi_safe` a été
+aligné sur `resolve.rs::ffi_safe` au commit `30085ea` (agent E) ; les deux listes
+sont désormais exactement `i8 i16 i32 i64 u8 u16 u32 u64 isize usize f32 f64
+bool ()`. Le backend refuse un `CheckedProgram` construit à la main avec un
+paramètre `i128` ou un retour `u128`
+(`backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`),
+en plus du refus frontal (test C-FFI-1 côté sema et cas `types/ffi-i128-param` /
+`types/ffi-u128-return`). C-FFI-1 est satisfaite des deux côtés ; ce constat vaut
+pour le commit `30085ea` et doit être revérifié après intégration.
 
 **Confinement vérifié mécaniquement (2026-11-14)** : `python tools/unsafe_audit.py`
 → PASS. Les quatre crates du langage portent `#![forbid(unsafe_code)]` ; le CLI
@@ -105,11 +133,12 @@ L'inventaire complet est [`UNSAFE-INVENTORY.md`](UNSAFE-INVENTORY.md) ; le scrip
 tourne dans `gate-contracts.yml` et a 7 tests. Le lint du compilateur rend
 l'ajout d'un `unsafe` non listé impossible à compiler dans ces crates.
 
-**Non mesuré, et donc jamais présenté comme un `PASS`** : `i128`/`u128`/`isize`/
-`usize` à l'exécution (déclarations seules ; la largeur C de `i128`/`u128` est
-une décision ouverte, C-FFI-2), valeur `bool` traversante, unwinding/`longjmp`/
-signal, ABI multi-plateforme, toute fonction C qui touche la mémoire (impossible :
-aucun pointeur n'est admis). **Miri sur les cas FFI `NOT_RUN` par construction** :
+**Non mesuré, et donc jamais présenté comme un `PASS`** : `isize`/`usize` à
+l'exécution (déclarations seules), valeur `bool` traversante, unwinding/`longjmp`/
+signal (hors contrat, C-FFI-4), ABI multi-plateforme, toute fonction C qui touche
+la mémoire (impossible : aucun pointeur n'est admis). La largeur C de
+`i128`/`u128` n'est plus une question ouverte : ces types sont refusés (S4,
+2026-11-14). **Miri sur les cas FFI `NOT_RUN` par construction** :
 les cas exécutables appellent la vraie CRT (`abs`, `llabs`), que Miri ne peut pas
 interpréter ; Miri couvre les crates du langage hors appels C, pas la frontière.
 
@@ -119,31 +148,37 @@ interpréter ; Miri couvre les crates du langage hors appels C, pas la frontièr
 **Inconnue** : le comportement de la bibliothèque C appelée, par construction
 hors TCB.
 
-## 6. Ce qui bloque la ratification D7
+## 6. Ce qui reste hors de l'approbation (2026-11-14)
 
-1. **Contradictions de spécification** (RFC-D7 §3) : `abi.md` ABI-2.5 et ABI-3.3
+Les clauses C-FFI-1 à C-FFI-10 sont **APPROUVÉES par le responsable, 2026-11-14**
+(décision S4). Les points suivants ne sont **pas** couverts par cette
+approbation et ne doivent jamais être présentés comme des preuves :
+
+1. **Audit externe (`D4`)** : `NOT_RUN`. Aucun audit indépendant n'a couvert la
+   frontière C ; aucun document ne peut écrire `PROVED`, « auditée » ou
+   « production ready ».
+2. **Socle (`D2`)** : les documents `spec/language/` restent `DRAFT —
+   CANDIDATE`. L'approbation porte sur les clauses de ce document et sur la
+   liste de types FFI admis, pas sur une ratification du socle.
+3. **Contradictions de spécification** (RFC-D7 §3) : `abi.md` ABI-2.5 et ABI-3.3
    interdisent tout `unsafe`/`extern` généré, alors que G-3.10 et
    `unsupported.md` §3 acceptent `extern "C"` et que l'audit backend **exige** le
-   wrapper `unsafe`. ABI-3.1/3.2 refusent au parse ce que G-3.10 accepte. Un
-   `MUST` doit céder : c'est une décision humaine, pas un correctif.
-2. **Tests** : les neuf cas de RFC-D7 §5 sont écrits (2026-11-13, corpus
-   `effects/ffi-*`, `types/ffi-*`, `run/ffi-width-boundary`,
-   `types/unsafe-does-not-unlock-pointers`) ; `&str` est couvert depuis le
-   2026-11-14 (`types/ffi-str-rejected`). Restent l'extension `doctor`,
-   `i128`/`u128`/`isize`/`usize` à l'exécution (largeur C à trancher, C-FFI-2) et
-   unwinding/`longjmp`/signal (aucun comportement spécifié aujourd'hui).
-3. **Phrase de TCB** dans la documentation utilisateur (§1 et C-FFI-10).
-4. **Périmètre** : décider si « FFI scalaire seulement » justifie le mot « FFI »
-   dans la communication de Core 1.0.
+   wrapper `unsafe`. ABI-3.1/3.2 refusent au parse ce que G-3.10 accepte. La
+   résolution d'un `MUST` reste une décision humaine.
+4. **Go/No-Go (`T12`)** : non tranché.
+5. **`C-FFI-4`** : une fonction C qui déroule, `longjmp`, lève un signal ou
+   termine le processus est **hors contrat**, à la charge de l'appelant. Aucun
+   test ne peut l'établir pour une bibliothèque hors TCB.
 
-Tant que ces quatre points sont ouverts, la position recommandée reste
-**`OPEN`** et la FFI **expérimentale** — jamais « auditée », « sûre » ou
-« prête pour une bibliothèque native ».
+La FFI reste **expérimentale** (au sens de `D6`) : jamais « certifiée mémoire »,
+jamais admise par un profil `pure`/`rt`, jamais « prête pour une bibliothèque
+native ».
 
 ## 7. Ce que ce document ne fait pas
 
-- Il ne ratifie pas D7 et ne modifie aucune règle `MUST`.
-- Il ne présente aucun `NOT_RUN` comme un succès.
+- Il ne ratifie ni `D2`, ni `D4`, ni `T12` ; il enregistre l'approbation S4 des
+  clauses C-FFI-1 à C-FFI-10 et de la liste de types admis (2026-11-14).
+- Il ne présente aucun `NOT_RUN`, `SKIP`, `PARTIAL` ou `UNKNOWN` comme un succès.
 - Il ne prétend pas que la frontière est inutile : il mesure qu'elle est
   **étroite, scalaire et visible**, ce qui est précisément ce qui la rend
   auditable.
