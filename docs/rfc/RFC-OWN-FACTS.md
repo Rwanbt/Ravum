@@ -9,6 +9,14 @@
 | Portée | `crates/ravum-lang-sema/src/own.rs`, `facts.rs`, `crates/ravum-lang-codegen/src/emit.rs` |
 | Décision attendue | ratifier (ou refuser) l'ajout de `OwnFacts` à `CheckedProgram`, puis l'étape C (suppression du `MovePlanner` local d'`emit.rs`) |
 
+> **Amendement du 2026-11-14 (`goal/consolidation-2`).** Les exemples de §2
+> supposent un `NodeId` `u32` 8/24 bits ; le contrat courant est **`u64`
+> 32/32** (T4, non ratifié). La RFC reste `PROPOSED` et l'**étape C n'est pas
+> exécutée** : la suppression du `MovePlanner` d'`emit.rs` attend la
+> ratification et la preuve de sortie identique
+> ([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
+> `RFC-OWN-FACTS-1`).
+
 > **Ce que cette RFC n'est pas.** Elle ne change aucune règle de langage, aucun
 > code de diagnostic, aucun schéma JSON public et aucune sémantique d'ownership.
 > Elle déplace une **décision interne** (move / copie / emprunt / place) du

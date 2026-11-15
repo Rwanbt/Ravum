@@ -63,10 +63,26 @@ def file_lines(filename: str, cache: dict[str, list[str]]) -> list[str] | None:
 
 
 def test_module_start(lines: list[str]) -> int | None:
-    """1-based line of the first `#[cfg(test)]`, or None for a product-only file."""
+    """1-based line of the first `#[cfg(test)] mod ...` block, or None.
+
+    A file can carry `#[cfg(test)]` helpers *before* its test module
+    (`loader.rs` has two, around line 93). Taking the first attribute would
+    classify almost the whole file as test scaffolding -- the bug this function
+    exists to avoid. Only an attribute that introduces a `mod ... {` item is a
+    test-module boundary; test-only helpers declared earlier stay counted as
+    product (a documented, negligible limitation).
+    """
     for index, line in enumerate(lines, start=1):
-        if line.strip().startswith(TEST_ATTRIBUTE):
-            return index
+        stripped = line.strip()
+        if stripped != TEST_ATTRIBUTE and not stripped.startswith(TEST_ATTRIBUTE + " "):
+            continue
+        for following in lines[index : index + 4]:
+            text = following.strip()
+            if not text or text.startswith("//") or (text.startswith("#[") and text.endswith("]")):
+                continue
+            if text.startswith("mod ") and text.endswith("{"):
+                return index
+            break
     return None
 
 

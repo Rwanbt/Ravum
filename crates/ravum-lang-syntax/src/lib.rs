@@ -5,6 +5,8 @@
 //! orchestration crates: it can parse untrusted `.rv` input without touching the
 //! filesystem and without `rustc_private`.
 
+#![forbid(unsafe_code)]
+
 pub mod ast;
 pub mod diag;
 pub mod fmt;

@@ -529,6 +529,9 @@ struct Local {
     /// `let x: T;` sans initialiseur : l'affectation initiale est permise même
     /// sans `mut` (l'initialisation définie est vérifiée par `own`).
     deferred: bool,
+    /// Declaration span, mirroring `own.rs`'s slot identity (the `Pat` span for
+    /// a pattern binding, the enclosing item span for a parameter or `self`).
+    decl: Span,
 }
 
 /// Les variables d'inférence utilisent `Type::Param` avec un index réservé :
@@ -626,7 +629,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.scopes.pop();
     }
 
-    fn bind_local(&mut self, name: &str, ty: Type, mutable: bool, deferred: bool) {
+    fn bind_local(&mut self, name: &str, ty: Type, mutable: bool, deferred: bool, decl: Span) {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(
                 name.to_string(),
@@ -634,6 +637,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     ty,
                     mutable,
                     deferred,
+                    decl,
                 },
             );
         }
@@ -960,21 +964,21 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
         // Corps des fonctions de modules.
         let asts: Vec<&'p Module> = self.world.module_asts.clone();
-        let mut fns: Vec<(ModuleId, NodeId, &'p FnItem)> = Vec::new();
+        let mut fns: Vec<(ModuleId, NodeId, Span, &'p FnItem)> = Vec::new();
         for (module, ast) in asts.iter().enumerate() {
             for item in &ast.items {
                 if let ItemKind::Fn(f) = &item.kind {
-                    fns.push((module, item.id, f));
+                    fns.push((module, item.id, item.span, f));
                 }
             }
         }
-        for (module, id, f) in fns {
-            self.check_fn(module, id, f, None);
+        for (module, id, decl_span, f) in fns {
+            self.check_fn(module, id, decl_span, f, None);
         }
         // Méthodes d'impl.
         let impl_items: Vec<(ModuleId, &'p Item, &'p ast::ImplItem)> =
             self.world.impl_items.clone();
-        let mut methods: Vec<(ModuleId, NodeId, &'p FnItem, Type, Vec<String>)> = Vec::new();
+        let mut methods: Vec<(ModuleId, NodeId, Span, &'p FnItem, Type, Vec<String>)> = Vec::new();
         for (module, _, imp) in impl_items {
             let self_ty = self
                 .facts
@@ -985,12 +989,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             let generics: Vec<String> = imp.generics.iter().map(|g| g.name.name.clone()).collect();
             for member in &imp.items {
                 if let ItemKind::Fn(f) = &member.kind {
-                    methods.push((module, member.id, f, self_ty.clone(), generics.clone()));
+                    methods.push((
+                        module,
+                        member.id,
+                        member.span,
+                        f,
+                        self_ty.clone(),
+                        generics.clone(),
+                    ));
                 }
             }
         }
-        for (module, id, f, self_ty, generics) in methods {
-            self.check_fn(module, id, f, Some((self_ty, generics)));
+        for (module, id, decl_span, f, self_ty, generics) in methods {
+            self.check_fn(module, id, decl_span, f, Some((self_ty, generics)));
         }
         self.finalize_inference();
     }
@@ -1121,6 +1132,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         &mut self,
         module: ModuleId,
         item: NodeId,
+        decl_span: Span,
         f: &FnItem,
         impl_ctx: Option<(Type, Vec<String>)>,
     ) {
@@ -1153,7 +1165,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         for param in &sig.params {
             let mutable = param.mutable
                 || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
-            self.bind_local(&param.name, param.ty.clone(), mutable, false);
+            self.bind_local(&param.name, param.ty.clone(), mutable, false, decl_span);
         }
         let body_ty = self.check_block(&f.body, Some(&sig.ret));
         // DIAG-1.6: `W-OWN-UNUSED-VARIABLE` is one of the two warnings Core 1.0
@@ -1315,7 +1327,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     // L'ombrement est autorisé : on écrase la liaison.
                     let _ = existing;
                 }
-                self.bind_local(&name.name, ty.clone(), *mutable, deferred);
+                self.bind_local(&name.name, ty.clone(), *mutable, deferred, pat.span);
                 self.facts.pat_types.insert(pat.id, ty.clone());
             }
             _ => {
@@ -1592,6 +1604,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     Resolution::Local {
                         name: "self".to_string(),
                         mutable: local.mutable,
+                        decl: local.decl,
                     },
                 );
                 local.ty
@@ -1623,6 +1636,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     Resolution::Local {
                         name: name.clone(),
                         mutable: local.mutable,
+                        decl: local.decl,
                     },
                 );
                 return local.ty;
@@ -4388,7 +4402,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let ty = match &pat.kind {
             PatKind::Wild => expected.clone(),
             PatKind::Binding { mutable, name } => {
-                self.bind_local(&name.name, expected.clone(), *mutable, false);
+                self.bind_local(&name.name, expected.clone(), *mutable, false, pat.span);
                 expected.clone()
             }
             PatKind::Lit(lit) => self.check_lit_pattern(pat, lit, expected),

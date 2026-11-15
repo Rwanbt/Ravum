@@ -1,0 +1,111 @@
+name: 'Performance alarm (check latency, Windows)'
+
+# Why this workflow exists
+# -----------------------
+# R9 asks for published p50/p95 figures *and* a followed absence of regression.
+# The measurements exist (`docs/qualification/PERFORMANCE.md`,
+# `scripts/lang-timings.ps1`), but until now nothing turned them into a repeated
+# check: a document that says "1.3-8.1 ms" stays green forever after a 10x
+# regression.
+#
+# This job re-measures the `check` loop on a shared Windows runner and compares
+# the totals with the committed reference `docs/qualification/timings-baseline.json`.
+# The ceiling is deliberately coarse — max(200 ms, baseline * 3) — because a
+# GitHub runner is not the 16 GB reference machine. It is an **alarm**, not a
+# budget:
+#
+#   * a green job proves only "no order-of-magnitude regression on this runner";
+#   * `PERFORMANCE.md` remains the only place where a budget is discussed, and
+#     it publishes the machine, the command and the condition;
+#   * the JSON export is uploaded on every run so that a drift can be inspected
+#     before it becomes a hard failure.
+#
+# The gate does not run on every push: only when the compiler crates, the timing
+# script, the gate or its baseline change. A documentation-only PR does not pay
+# for it.
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'crates/ravum-lang-*/**'
+      - 'scripts/lang-timings.ps1'
+      - 'tools/timings_gate.py'
+      - 'docs/qualification/timings-baseline.json'
+      - '.github/workflows/performance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_BACKTRACE: '1'
+
+jobs:
+  check-latency:
+    name: check totals vs committed reference (coarse alarm)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show toolchain and machine
+        run: |
+          rustc -vV
+          cargo --version
+          python --version
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-perf-alarm-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-perf-alarm-
+            ${{ runner.os }}-mvp-
+
+      - name: Build the CLI (debug, as the timing script expects)
+        run: cargo build -p ravum-lang-cli --bin ravum-lang
+
+      - name: Measure the check loop (10 cold + 10 edit runs per example)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pwsh -NoProfile -File scripts/lang-timings.ps1 -CheckOnly -Runs 10 -Output target/lang-timings/ci.json
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::lang-timings exited $LASTEXITCODE"; exit 1 }
+          exit 0
+
+      - name: Apply the coarse ceilings (fail-closed)
+        shell: pwsh
+        run: |
+          python tools/timings_gate.py --baseline docs/qualification/timings-baseline.json --input target/lang-timings/ci.json --factor 3 --p50-floor-ms 100 --p95-floor-ms 500
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::performance alarm: at least one coarse ceiling is exceeded (see the table above)"; exit 1 }
+          exit 0
+
+      - name: Upload the measurement for trend inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lang-timings-ci
+          path: target/lang-timings/ci.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Scope notice
+        if: always()
+        run: |
+          echo "Coarse regression alarm on a shared runner: not the 16 GB reference machine, not a budget, not a proof of constant-time behaviour."
+          echo "Baseline and ceilings: docs/qualification/timings-baseline.json and docs/qualification/PERFORMANCE.md."

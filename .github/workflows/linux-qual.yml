@@ -24,7 +24,7 @@ name: Linux qualification (real ubuntu-latest runner)
 on:
   workflow_dispatch:
   push:
-    branches: [main, dev, 'feat/**', 'fix/**']
+    branches: [main, dev, 'goal/**', 'feat/**', 'fix/**']
 
 permissions:
   contents: read
@@ -266,6 +266,29 @@ jobs:
         if: ${{ hashFiles('scripts/install.sh') == '' }}
         run: |
           echo "::notice::NOT_RUN: scripts/install.sh is absent from this commit; the install gate has nothing to prove and is not reported as a pass."
+
+      # Public contract of the POSIX installer (docs/release/INSTALL-LINUX.md):
+      # manifest invariants (locked=true, git_commit, sha256, rustc, platform,
+      # arch, profile=release, installer), installed-vs-built SHA-256, a real
+      # --version run, uninstall idempotence and the installer's usage exit codes
+      # (unknown argument=2, --prefix without value=2, prefix=repo root=2,
+      # --remove-from-path without --uninstall=2, --skip-build without a
+      # binary=1). The release build is the exact command the --skip-build path
+      # requires; the previous install step already produced it, so this is a
+      # no-op in the normal path and a real failure if the build is broken.
+      # A missing file is reported as NOT_RUN by the next step, never as a pass.
+      - name: Public installer contract (manifest, sha256, uninstall, usage codes)
+        if: ${{ hashFiles('scripts/install.sh') != '' && hashFiles('scripts/install-contract.sh') != '' }}
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          cargo build -p ravum-lang-cli --release --locked
+          bash scripts/install-contract.sh --skip-build
+
+      - name: Record installer-contract absence honestly
+        if: ${{ hashFiles('scripts/install.sh') == '' || hashFiles('scripts/install-contract.sh') == '' }}
+        run: |
+          echo "::notice::NOT_RUN: scripts/install.sh or scripts/install-contract.sh is absent from this commit; the public Linux install contract is not exercised and is not reported as a pass."
 
   miri:
     name: Miri (nightly, syntax + sema)

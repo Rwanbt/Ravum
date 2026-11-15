@@ -9,6 +9,16 @@
 | Portée | `ravum-lang-syntax` (`NodeId`), `ravum-lang-sema` (`Facts`), LSP, futurs caches |
 | Décision attendue | ratifier la règle « aucun cache indexé par `FileId` » et le modèle d'identité ci-dessous |
 
+> **Amendement du 2026-11-14 (`goal/consolidation-2`).** Le layout décrit
+> ci-dessous (`u32`, 8 bits `FileId` + 24 bits compteur) est **historique** : le
+> contrat courant est `NodeId = u64`, **32 bits hauts `FileId` + 32 bits bas
+> compteur par fichier**, avec un plafond de **65 536** fichiers
+> (`crates/ravum-lang-syntax/src/ast.rs`, `parser.rs`, `loader.rs`). Ce
+> changement est implémenté et testé (T4) mais **non ratifié**
+> ([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md),
+> `D-2026-11-14-2`). La règle de cache du §4 n'est pas affectée ; les exemples
+> de §2 doivent être relus avec le layout u64 avant ratification.
+
 ## 1. Constat mesuré (phase 6.1)
 
 L'audit C5 soupçonnait des « `NodeId` globaux attribués dans l'ordre de lecture »,

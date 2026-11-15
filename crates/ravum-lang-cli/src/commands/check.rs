@@ -13,12 +13,13 @@ pub fn run(
     profile: Profile,
     locked: bool,
     request_timings: bool,
+    rt_entry: Option<&str>,
 ) -> i32 {
     let (frontend, timings) = if request_timings {
-        pipeline::analyze_with_timings(path, profile, locked)
+        pipeline::analyze_entry_with_timings(path, profile, locked, rt_entry)
     } else {
         (
-            pipeline::analyze(path, profile, locked),
+            pipeline::analyze_with_entry(path, profile, locked, rt_entry),
             AnalysisTimings::default(),
         )
     };

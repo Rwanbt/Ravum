@@ -202,6 +202,7 @@ fn fixture() -> (OwnFacts, Vec<(NodeId, Span)>, SourceMap) {
         &LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     assert!(

@@ -9,6 +9,8 @@
 //!   effect boundaries are decided by the checker, not by this backend;
 //! * output is deterministic for a given input and options.
 
+#![forbid(unsafe_code)]
+
 use ravum_lang_sema::facts::CheckedProgram;
 
 pub mod emit;

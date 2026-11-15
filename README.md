@@ -189,6 +189,7 @@ Interfaces propres au projet, adaptateurs externes remplaçables, aucun composan
 
 ## Documentation
 
+- [Guide de démarrage (Core 1.0 DRAFT)](docs/guide/GETTING-STARTED.md)
 - [Registre des 42 ADR originaux](docs/adr/README.md) — tous proposés.
 - [Charte, exigences et traçabilité](docs/specs/01-exigences-tracabilite.md)
 - [Plan directeur](docs/plan/00-plan-directeur.md)

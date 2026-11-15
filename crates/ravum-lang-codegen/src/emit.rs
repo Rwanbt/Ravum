@@ -1052,27 +1052,46 @@ impl<'a> Emitter<'a> {
             let Some(expr) = exprs.get(id) else {
                 continue;
             };
-            // A method receiver is auto-deref'd by the call, not by the receiver's
-            // own syntax (`text.len()` records `(*text).len()`); the receiver's
-            // adjusted place is out of scope for this syntactic comparison.
-            if method_receivers.contains(id) {
-                continue;
-            }
-            // Passing a reference-typed place to a reference parameter reborrows
-            // it with an implicit auto-deref (`compte(v)` with `v: &Vec`); that
-            // adjusted place is also out of scope here.
-            if reference_args.contains(id) {
-                continue;
-            }
+            // A method receiver is auto-deref'd by the call (`xs.len()` records
+            // `(*xs)`) and so is a reference-typed argument reborrowed for a
+            // reference parameter (`g(xs)` with `xs: &[i32]`). The callee
+            // signature is not part of that expression's syntax, so the adjusted
+            // place is accepted alongside the syntactic one; any projection
+            // beyond the implicit deref must still match.
+            let auto_deref = method_receivers.contains(id) || reference_args.contains(id);
             match self.syntactic_place(expr) {
-                Some(expected) if expected == recorded.steps => {}
                 Some(expected) => {
+                    let mut expected_after_deref = expected.clone();
+                    if auto_deref {
+                        self.push_auto_derefs(expr, &mut expected_after_deref.steps);
+                    }
+                    if recorded == &expected || (auto_deref && recorded == &expected_after_deref) {
+                        continue;
+                    }
+                    // Binding identity first: a place rooted at another binding
+                    // is not a projection mismatch.
+                    if recorded.binding != expected.binding {
+                        return Err(err(format!(
+                            "ownership facts disagree with the syntax for expression {id} ({}) at \
+                             {}: recorded binding {:?}, syntactic binding {:?}",
+                            self.expr_location(expr),
+                            self.expr_span_text(expr),
+                            recorded.binding,
+                            expected.binding
+                        )));
+                    }
+                    let suffix = if auto_deref {
+                        format!(", after auto-deref {:?}", expected_after_deref.steps)
+                    } else {
+                        String::new()
+                    };
                     return Err(err(format!(
                         "ownership facts disagree with the syntax for expression {id} ({}) at \
-                         {}: recorded place steps {:?}, syntactic place {expected:?}",
+                         {}: recorded place steps {:?}, syntactic place {:?}{suffix}",
                         self.expr_location(expr),
                         self.expr_span_text(expr),
-                        recorded.steps
+                        recorded.steps,
+                        expected.steps
                     )));
                 }
                 None => {
@@ -1088,46 +1107,56 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    /// Place projections described by the syntax alone (step B cross-check).
-    fn syntactic_place(&self, expr: &Expr) -> Option<Vec<ravum_lang_sema::facts::Projection>> {
-        use ravum_lang_sema::facts::{Projection as PlaceStep, ProjectionIndex};
+    /// Place described by the syntax alone, binding identity included (step B
+    /// cross-check). See `OwnPlace`.
+    fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
+        use ravum_lang_sema::facts::{OwnPlace, Projection as PlaceStep, ProjectionIndex};
         match &expr.kind {
-            ExprKind::SelfValue => Some(Vec::new()),
+            ExprKind::SelfValue => match self.checked.facts.resolutions.get(&expr.id) {
+                Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                    binding: *decl,
+                    steps: Vec::new(),
+                }),
+                _ => None,
+            },
             ExprKind::Path(path) if path.segments.len() == 1 => {
                 match self.checked.facts.resolutions.get(&path.id) {
-                    Some(Resolution::Local { .. }) => Some(Vec::new()),
+                    Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                        binding: *decl,
+                        steps: Vec::new(),
+                    }),
                     _ => None,
                 }
             }
             ExprKind::Field { base, name } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
-                steps.push(PlaceStep::Field(name.name.clone()));
-                Some(steps)
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Field(name.name.clone()));
+                Some(place)
             }
             ExprKind::TupleIndex { base, index } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
-                steps.push(PlaceStep::Tuple(*index));
-                Some(steps)
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Tuple(*index));
+                Some(place)
             }
             ExprKind::Index { base, index } => {
-                let mut steps = self.syntactic_place(base)?;
-                self.push_auto_derefs(base, &mut steps);
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
                 let index = match &index.kind {
                     ExprKind::Int { value, .. } => ProjectionIndex::Lit(*value),
                     _ => ProjectionIndex::Opaque,
                 };
-                steps.push(PlaceStep::Index(index));
-                Some(steps)
+                place.steps.push(PlaceStep::Index(index));
+                Some(place)
             }
             ExprKind::Unary {
                 op: UnOp::Deref,
                 expr,
             } => {
-                let mut steps = self.syntactic_place(expr)?;
-                steps.push(PlaceStep::Deref);
-                Some(steps)
+                let mut place = self.syntactic_place(expr)?;
+                place.steps.push(PlaceStep::Deref);
+                Some(place)
             }
             _ => None,
         }
@@ -3656,6 +3685,16 @@ struct Descent {
 struct WholeUse {
     place: PlaceKey,
     top: usize,
+    /// Walk order of the enclosing statement, used to bound a hoist to the
+    /// region between two whole-place writes.
+    order: usize,
+}
+
+/// A whole-binding assignment (`a = ...`): it re-initialises the place *after*
+/// the right-hand side is evaluated, so it ends the region of any hoist.
+struct WholeWrite {
+    place: PlaceKey,
+    order: usize,
 }
 
 /// `[len0, len1, ...]` of a (possibly nested) array type.
@@ -3896,6 +3935,8 @@ struct MovePlanner<'e, 'a> {
     binders: Vec<Binder>,
     accesses: Vec<Access>,
     whole_uses: Vec<WholeUse>,
+    /// Whole-binding assignments (`a = ...`), in walk order.
+    whole_writes: Vec<WholeWrite>,
     /// Accesses whose chain crosses an element move or starts at an rvalue.
     descents: Vec<Descent>,
     /// Innermost enclosing `match` arm body (see [`Access::arm_body`]).
@@ -3918,6 +3959,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             binders: Vec::new(),
             accesses: Vec::new(),
             whole_uses: Vec::new(),
+            whole_writes: Vec::new(),
             descents: Vec::new(),
             arm_anchor: None,
             loop_depth: 0,
@@ -4099,13 +4141,47 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
     }
 
     fn record_whole_place_use(&mut self, binder: BinderId, top: usize) {
+        let order = self.current_order().unwrap_or(0);
         self.whole_uses.push(WholeUse {
             place: PlaceKey {
                 binder,
                 projections: Vec::new(),
             },
             top,
+            order,
         });
+    }
+
+    /// Walk order of the statement being walked, when known.
+    fn current_order(&self) -> Option<usize> {
+        self.statement_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied())
+    }
+
+    /// Region of an access: the number of whole-place writes that happen
+    /// strictly before it. A hoist may only rewrite accesses of its own region:
+    /// after `a = ...`, the slots of a previous destructuring are stale.
+    fn region_of_order(&self, place: &PlaceKey, order: Option<usize>) -> usize {
+        let Some(order) = order else {
+            return 0;
+        };
+        self.whole_writes
+            .iter()
+            .filter(|write| write.order < order && Self::places_overlap(&write.place, place))
+            .count()
+    }
+
+    fn region_of_access(&self, access: &Access) -> usize {
+        let order = access
+            .stmt_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied());
+        self.region_of_order(&access.place, order)
+    }
+
+    fn region_of_use(&self, place: &PlaceKey, use_site: &WholeUse) -> usize {
+        self.region_of_order(place, Some(use_site.order))
     }
 
     /// `owned` is true when the *value* of `expr` is consumed by its parent
@@ -4156,7 +4232,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                         // A dynamic index before a constant one, or an index
                         // outside the array layers, cannot be lowered: make the
                         // whole place bail out (loud E0508).
-                        self.whole_uses.push(WholeUse { place, top });
+                        let order = self.current_order().unwrap_or(0);
+                        self.whole_uses.push(WholeUse { place, top, order });
                     }
                     for index in indices {
                         self.walk_expr(index, false, top, block_depth);
@@ -4223,7 +4300,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 if let Some((place, _)) = self.place_of(expr) {
                     // A whole use of this place (not an element access).
-                    self.whole_uses.push(WholeUse { place, top });
+                    let order = self.current_order().unwrap_or(0);
+                    self.whole_uses.push(WholeUse { place, top, order });
                     return;
                 }
                 // Element projection (`a[1].0`) over an index chain: a mobile
@@ -4269,7 +4347,24 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::Assign { target, value } => {
                 self.walk_expr(value, true, top, block_depth);
-                self.walk_expr(target, false, top, block_depth);
+                // A whole-binding target (`a = ...`) is written *after* the RHS
+                // is evaluated: it is not a read of the place, and the write
+                // re-initialises the binding, so it must not block a hoist the
+                // RHS needs when it moves an element of the same array
+                // (`a = [a[0], ...]`, measured `E0508` before this rule).
+                if matches!(target.kind, ExprKind::Path(_)) {
+                    // The place is re-initialised after the RHS: record the
+                    // write so a hoist stops rewriting accesses past it.
+                    if let Some((place, _)) = self.place_of(target) {
+                        if place.projections.is_empty() {
+                            let order = self.current_order().unwrap_or(0);
+                            self.whole_writes.push(WholeWrite { place, order });
+                        }
+                    }
+                    self.tick();
+                } else {
+                    self.walk_expr(target, false, top, block_depth);
+                }
             }
             ExprKind::AssignOp { target, value, .. } => {
                 self.walk_expr(value, true, top, block_depth);
@@ -4696,6 +4791,16 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         for (place, members) in groups {
             let lens = members[0].lens.clone();
             let binder = &self.binders[place.binder.0 as usize];
+            // A whole-binding write re-initialises the place, so a shared hoist
+            // would be invalidated by it (and accesses past it must not be
+            // rewritten). Those descents keep the inline or loud plain form.
+            if self
+                .whole_writes
+                .iter()
+                .any(|write| Self::places_overlap(&write.place, &place))
+            {
+                continue;
+            }
             let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
             let mut ordered: Vec<(usize, NodeId)> = members
                 .iter()
@@ -4866,102 +4971,129 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         }
         let mut sequence = 0usize;
         for (place, accesses) in &by_place {
-            let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
-                continue;
-            };
-            // Uses of the place itself or of an ancestor at/after the first move
-            // would observe the partial move (see `whole_use_blocks`).
-            let blocked = self
-                .whole_uses
-                .iter()
-                .any(|use_site| Self::whole_use_blocks(place, use_site, first.top));
-            let binder = &self.binders[place.binder.0 as usize];
-            let hoist = self.hoist_anchor(first, binder);
-            let has_dynamic = accesses
-                .iter()
-                .any(|access| access.indices.iter().any(|level| level.is_none()));
-            if let Some((hoist_key, _)) = hoist {
-                if !blocked {
-                    if has_dynamic {
-                        if self
-                            .plan_prefix_slots(
-                                sequence, &mut plan, place, accesses, first, hoist_key,
-                            )
-                            .is_some()
-                        {
-                            sequence += 1;
-                            continue;
-                        }
-                    } else {
-                        let rewritten: Vec<&Access> = accesses
-                            .iter()
-                            .copied()
-                            .filter(|access| access.top >= first.top)
-                            .collect();
-                        if let Some((pattern, rewrites)) =
-                            self.build_destructure(sequence, &rewritten)
-                        {
-                            plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-                                base: self.place_text(place),
-                                pattern,
-                            });
-                            for (node, binding) in rewrites {
-                                plan.rewrites.insert(node, binding);
+            // A whole-binding write (`a = ...`) re-initialises the place after
+            // the RHS: accesses after it must not be rewritten to the slots of
+            // a hoist that started before it.
+            let mut by_region: BTreeMap<usize, Vec<&Access>> = BTreeMap::new();
+            for access in accesses {
+                by_region
+                    .entry(self.region_of_access(access))
+                    .or_default()
+                    .push(*access);
+            }
+            for (region, accesses) in &by_region {
+                let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
+                    continue;
+                };
+                // Uses of the place itself or of an ancestor at/after the first move
+                // would observe the partial move (see `whole_use_blocks`).
+                let blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                let binder = &self.binders[place.binder.0 as usize];
+                let hoist = self.hoist_anchor(first, binder);
+                let has_dynamic = accesses
+                    .iter()
+                    .any(|access| access.indices.iter().any(|level| level.is_none()));
+                if let Some((hoist_key, _)) = hoist {
+                    if !blocked {
+                        if has_dynamic {
+                            if self
+                                .plan_prefix_slots(
+                                    sequence, &mut plan, place, accesses, first, hoist_key,
+                                )
+                                .is_some()
+                            {
+                                sequence += 1;
+                                continue;
                             }
-                            sequence += 1;
-                            continue;
+                        } else {
+                            let rewritten: Vec<&Access> = accesses
+                                .iter()
+                                .copied()
+                                .filter(|access| access.top >= first.top)
+                                .collect();
+                            if let Some((pattern, rewrites)) =
+                                self.build_destructure(sequence, &rewritten)
+                            {
+                                plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
+                                    base: self.place_text(place),
+                                    pattern,
+                                });
+                                for (node, binding) in rewrites {
+                                    plan.rewrites.insert(node, binding);
+                                }
+                                sequence += 1;
+                                continue;
+                            }
                         }
                     }
                 }
-            }
-            // Fallback: the first move can be lowered inline when every other use of
-            // the place is a read in an earlier statement (the place is still intact
-            // there) and no whole-place use blocks it. This keeps `match` arm
-            // payloads (an expression-bodied arm has no statement to hoist before),
-            // a single dynamic access, and reads followed by a dynamic move working.
+                // Fallback: the first move can be lowered inline when every other use of
+                // the place is a read in an earlier statement (the place is still intact
+                // there) and no whole-place use blocks it. This keeps `match` arm
+                // payloads (an expression-bodied arm has no statement to hoist before),
+                // a single dynamic access, and reads followed by a dynamic move working.
 
-            let inline_ok = accesses.iter().all(|access| {
-                access.node == first.node || (!access.consumed && access.top < first.top)
-            });
-            if inline_ok && !blocked && first.consumed {
-                let access = first;
-                if let Some(chain) = self.constant_chain(access) {
-                    let base = self.place_text(place);
-                    if let Some((pattern, rewrites)) = self.build_destructure(sequence, &[access]) {
-                        if let Some((_, binding)) = rewrites.into_iter().next() {
-                            plan.single.insert(
-                                access.node,
-                                SingleMove::Block {
-                                    base,
-                                    pattern,
-                                    binding,
-                                },
-                            );
-                            sequence += 1;
-                            continue;
+                let inline_ok = accesses.iter().all(|access| {
+                    access.node == first.node || (!access.consumed && access.top < first.top)
+                });
+                // A whole use inside the *same* statement does not invalidate the
+                // inline form: either it is evaluated before the access (a read
+                // whose borrow has ended), or it lives in a disjoint branch. A
+                // sequential whole use *after* the move would have been rejected
+                // by `check` (partial move), so the inline block is emitted at the
+                // access itself and cannot be observed by it.
+                let inline_blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && use_site.top != first.top
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                if inline_ok && !inline_blocked && first.consumed {
+                    let access = first;
+                    if let Some(chain) = self.constant_chain(access) {
+                        let base = self.place_text(place);
+                        if let Some((pattern, rewrites)) =
+                            self.build_destructure(sequence, &[access])
+                        {
+                            if let Some((_, binding)) = rewrites.into_iter().next() {
+                                plan.single.insert(
+                                    access.node,
+                                    SingleMove::Block {
+                                        base,
+                                        pattern,
+                                        binding,
+                                    },
+                                );
+                                sequence += 1;
+                                continue;
+                            }
                         }
+                        let _ = chain;
+                    } else if access.indices.len() == 1 {
+                        // A flat place with one dynamic level keeps the dedicated
+                        // `into_iter().nth()` form (it does not need a materialized
+                        // root).
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Dynamic {
+                                base: self.place_text(place),
+                                len: access.lens.first().copied().unwrap_or(0),
+                            },
+                        );
+                    } else {
+                        // A deeper dynamic chain over a single-use place: materialize
+                        // the place once and walk the chain inline.
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Chain {
+                                base: ChainBase::Root,
+                            },
+                        );
                     }
-                    let _ = chain;
-                } else if access.indices.len() == 1 {
-                    // A flat place with one dynamic level keeps the dedicated
-                    // `into_iter().nth()` form (it does not need a materialized
-                    // root).
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Dynamic {
-                            base: self.place_text(place),
-                            len: access.lens.first().copied().unwrap_or(0),
-                        },
-                    );
-                } else {
-                    // A deeper dynamic chain over a single-use place: materialize
-                    // the place once and walk the chain inline.
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Chain {
-                            base: ChainBase::Root,
-                        },
-                    );
                 }
             }
         }
@@ -5146,6 +5278,7 @@ mod tests {
                 Resolution::Local {
                     name: name.to_string(),
                     mutable: false,
+                    decl: span(),
                 },
             );
             self.expr(ExprKind::Path(path), ty)
@@ -5347,6 +5480,147 @@ mod tests {
         );
     }
 
+    /// Step B non-vacuity for method receivers: the guard now verifies the
+    /// auto-deref-adjusted place instead of skipping the receiver.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn method_receiver_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> usize { return xs.len(); }\n\
+                      fn main() { let a = [1, 2, 3]; let n = first(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *receivers
+            .iter()
+            .next()
+            .expect("the fixture must contain a method receiver");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the receiver's place must be recorded");
+        assert_eq!(
+            place.steps,
+            vec![Projection::Deref],
+            "the fixture must exercise the implicit auto-deref of `xs.len()`"
+        );
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted receiver place must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for reference arguments: a reborrowed `&[i32]`
+    /// argument records an auto-deref place and the guard now verifies it
+    /// instead of skipping the argument.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn reference_argument_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> i32 { return xs[0]; }\n\
+                      fn second(ys: &[i32]) -> i32 { return first(ys); }\n\
+                      fn main() { let a = [1, 2, 3]; let v = second(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "ys"
+                ) && checked
+                    .facts
+                    .own
+                    .place
+                    .get(id)
+                    .is_some_and(|place| place.steps == vec![Projection::Deref])
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record `ys` with its implicit auto-deref");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the argument's place must be recorded");
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default()).expect_err(
+            "a corrupted reference-argument place must be rejected by the step-B guard",
+        );
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for the binding identity: the guard compares the
+    /// declaration span recorded by `OwnFacts` with the resolved local's span.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn binding_identity_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::CheckOptions;
+        use ravum_lang_sema::syntax::span::Span;
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn main() { let a: i32 = 1; let b = a; }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "a"
+                ) && checked.facts.own.place.contains_key(id)
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record the place of `a`");
+        checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("place exists")
+            .binding = Span::dummy();
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted binding must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("binding"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
     /// Step B non-vacuity: a disagreement between `OwnFacts` and the backend's
     /// classification must be an error in debug builds, not a silent lowering.
     #[test]
@@ -5362,6 +5636,31 @@ mod tests {
             .insert(id, ravum_lang_sema::facts::UseKind::Copy);
         let error = crate::generate(&checked, &GenOptions::default())
             .expect_err("a Copy decision on a String must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("ownership facts disagree"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity, second direction: a Move decision on a **Copy** type
+    /// must also be rejected. The previous test only covers Copy-on-mobile; the
+    /// 2026-11-14 mutation campaign found that the `UseKind::Move if copies`
+    /// guard had no test, so replacing its `copies` condition with `false`
+    /// survived.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn ownership_facts_move_on_a_copy_type_is_rejected_in_debug_builds() {
+        let mut checked = build_program_d();
+        let id = 999_998;
+        checked.facts.expr_types.insert(id, STy::I32);
+        checked
+            .facts
+            .own
+            .use_kind
+            .insert(id, ravum_lang_sema::facts::UseKind::Move);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a Move decision on i32 must be rejected by the step-B guard");
         assert!(
             error.message.contains("ownership facts disagree"),
             "unexpected error: {}",

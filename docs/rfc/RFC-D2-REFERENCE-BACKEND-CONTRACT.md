@@ -7,6 +7,15 @@
 > vrai aujourd'hui, nomme ce qui manque, et propose les tests qui épinglent le
 > contrat. Aucun code, aucune spec, aucun test existant n'est modifié ici.
 
+> **Amendement du 2026-11-14 (`goal/consolidation-2`).** Le §5.1 affirme que
+> `--verify-build` n'existe pas : c'est **faux depuis le 2026-11-11**. L'option
+> existe et est **bloquante** en CI (`tools/conformance/src/main.rs`,
+> `.github/workflows/linux-qual.yml`, `qualification-evidence.yml`,
+> `scripts/evidence.ps1`) ; les six formes du §5.2 sont fermées (D-COERCE-1,
+> D13). Le §5.1 est conservé comme constat daté, pas comme contrat. La
+> ratification D2 reste ouverte
+> ([`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md)).
+
 ## 1. Décision proposée (énoncé ratifiable)
 
 **P2.1 — Backend de référence.** Pour Core 1.0, le backend de référence est la

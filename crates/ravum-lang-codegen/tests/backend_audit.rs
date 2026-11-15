@@ -158,6 +158,7 @@ impl B {
             Resolution::Local {
                 name: name.to_string(),
                 mutable: false,
+                decl: span(),
             },
         );
         self.e(ExprKind::Path(path), ty)
@@ -611,6 +612,7 @@ fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> Strin
         &ravum_lang_sema::loader::LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     assert!(

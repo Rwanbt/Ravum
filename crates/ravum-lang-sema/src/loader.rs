@@ -66,9 +66,10 @@ pub const MANIFEST_NAME: &str = "ravum.toml";
 /// Maximum size of any single file the loader will read (8 MiB).
 pub const MAX_FILE_SIZE: u64 = 8 * 1024 * 1024;
 /// Maximum number of source files registered in one [`SourceMap`]. `NodeId`
-/// carries the `FileId` in its high byte (see `syntax::parser`), and ids 0..=253
-/// are reserved for real files.
-pub const MAX_SOURCE_FILES: usize = 200;
+/// carries the `FileId` in its high 32 bits (see `syntax::parser`), so the
+/// bound is 2^32 - 1 in the type; the policy limit is 65 536 (it admits a
+/// package of 1 000 modules plus its manifest and dependency manifests).
+pub const MAX_SOURCE_FILES: usize = 65_536;
 /// Maximum dependency-graph depth (root = 0), matching the path-escape policy.
 pub const MAX_PACKAGE_DEPTH: usize = 8;
 /// Maximum number of path components accepted in a dependency `path`.
@@ -78,10 +79,31 @@ pub const MAX_PACKAGE_FILES: usize = 4096;
 /// Maximum size of an existing `ravum.lock` read for comparison.
 pub const MAX_LOCKFILE_SIZE: u64 = 1024 * 1024;
 
-/// High byte used for synthetic (`NodeId`, `Span`) values created by the loader
-/// for dependency wrapper modules. Real files use ids 0..=253, so this cannot
-/// collide with a parsed file.
-const SYNTHETIC_HIGH: u32 = 0xFE;
+/// File id used for synthetic (`NodeId`, `Span`) values created by the loader
+/// for dependency wrapper modules. Real files use ids below
+/// [`MAX_SOURCE_FILES`] (65 536), so `u32::MAX - 1` cannot collide with a parsed
+/// file. The previous marker was the high byte `0xFE` of a 32-bit `NodeId`,
+/// which *can* collide once 254 files are allowed.
+const SYNTHETIC_FILE: u32 = u32::MAX - 1;
+
+/// The effective source-file limit. Production uses [`MAX_SOURCE_FILES`]; the
+/// unit tests lower it (thread-locally) so the refusal path and its diagnostic
+/// can be exercised without creating 65 536 files.
+fn source_file_limit() -> usize {
+    #[cfg(test)]
+    {
+        if let Some(limit) = TEST_SOURCE_FILE_LIMIT.with(std::cell::Cell::get) {
+            return limit;
+        }
+    }
+    MAX_SOURCE_FILES
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_SOURCE_FILE_LIMIT: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -180,6 +202,16 @@ pub struct LoadOptions {
     /// file. An override never creates a file, never changes a digest of the
     /// package on disk, and is ignored for paths the loader does not load.
     pub overrides: BTreeMap<PathBuf, String>,
+    /// Append-only session table: canonical path -> `FileId` (T5).
+    ///
+    /// A language-server session reuses a file's `FileId` across reloads, even
+    /// when a file is added or removed in between: every `NodeId` embeds the
+    /// `FileId`, so a shifted id would invalidate the parse cache and renumber
+    /// the AST of files the user did not touch. The loader reuses the id found
+    /// here and assigns `max(id) + 1` to a path it has not seen yet; the
+    /// resulting table is returned in [`LoadedPackage::file_ids`] and must be
+    /// kept for the next load. `None` is the CLI: dense ids in load order.
+    pub file_ids: Option<BTreeMap<PathBuf, FileId>>,
 }
 
 /// Per-session parse cache (language server).
@@ -286,6 +318,12 @@ pub struct LoadedPackage {
     pub parse_time: Duration,
     /// Source files registered in `sources`, in load order (display paths).
     pub loaded_files: Vec<String>,
+    /// Canonical path -> `FileId` for every source registered by this load,
+    /// `ravum.toml` included, plus the entries of
+    /// [`LoadOptions::file_ids`] the load started from. Empty when the load
+    /// failed before registering anything. A language-server session merges
+    /// this into its table after every analysis.
+    pub file_ids: BTreeMap<PathBuf, FileId>,
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +393,7 @@ impl LoadedPackage {
             lockfile_state: LockfileState::NotApplicable,
             parse_time: Duration::ZERO,
             loaded_files: Vec::new(),
+            file_ids: BTreeMap::new(),
         }
     }
 }
@@ -402,8 +441,9 @@ fn load_single_file(path: &Path, options: &LoadOptions, cache: &mut ParseCache) 
 
     let mut sources = SourceMap::new();
     let mut diags = DiagnosticBag::new();
-    let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
-    let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut file_ids: BTreeMap<PathBuf, FileId> = options.file_ids.clone().unwrap_or_default();
+    let mut next_file_id = next_free_file_id(&file_ids);
+    let mut synthetic: u64 = ((SYNTHETIC_FILE as u64) << 32) | 1;
     let mut parse_time = Duration::ZERO;
 
     let program = {
@@ -417,6 +457,7 @@ fn load_single_file(path: &Path, options: &LoadOptions, cache: &mut ParseCache) 
             loaded: BTreeSet::new(),
             synthetic: &mut synthetic,
             parse_time: &mut parse_time,
+            next_file_id: &mut next_file_id,
             parse_cache: cache,
             overrides: &options.overrides,
         };
@@ -433,6 +474,7 @@ fn load_single_file(path: &Path, options: &LoadOptions, cache: &mut ParseCache) 
     }
     out.sources = sources;
     out.diags = diags;
+    out.file_ids = file_ids;
     out
 }
 
@@ -458,6 +500,8 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
 
     let mut sources = SourceMap::new();
     let mut diags = DiagnosticBag::new();
+    let mut file_ids: BTreeMap<PathBuf, FileId> = options.file_ids.clone().unwrap_or_default();
+    let mut next_file_id = next_free_file_id(&file_ids);
 
     // 1. Manifest (registered first so its diagnostics carry a real location).
     let manifest_path = root.join(MANIFEST_NAME);
@@ -511,7 +555,21 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
             return out;
         }
     };
-    let manifest_id = sources.add(MANIFEST_NAME, manifest_text.clone());
+    let manifest_id = match register_source(
+        &mut sources,
+        &mut file_ids,
+        &mut next_file_id,
+        &manifest_path,
+        MANIFEST_NAME.to_string(),
+        manifest_text.clone(),
+        &mut diags,
+    ) {
+        Some(id) => id,
+        None => {
+            out.diags = diags;
+            return out;
+        }
+    };
     let (manifest, manifest_diags) = parse_manifest(&manifest_text, manifest_id);
     diags.extend(manifest_diags);
     let Some(manifest) = manifest else {
@@ -535,6 +593,8 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
         &mut graph,
         &mut sources,
         &mut diags,
+        &mut file_ids,
+        &mut next_file_id,
     );
 
     if !graph.failed {
@@ -574,6 +634,8 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
             &mut parse_time,
             cache,
             options,
+            &mut file_ids,
+            &mut next_file_id,
         );
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
@@ -588,6 +650,7 @@ fn load_package_dir(input: &Path, options: &LoadOptions, cache: &mut ParseCache)
     out.parse_time = parse_time;
     out.sources = sources;
     out.diags = diags;
+    out.file_ids = file_ids;
     out
 }
 
@@ -1221,6 +1284,8 @@ fn collect_dependencies(
     graph: &mut DepGraph,
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
+    file_ids: &mut BTreeMap<PathBuf, FileId>,
+    next_file_id: &mut FileId,
 ) {
     for dep in &manifest.dependencies {
         let Some(dep_dir) = resolve_dependency_dir(dir, dep, diags) else {
@@ -1279,7 +1344,20 @@ fn collect_dependencies(
             continue;
         };
         let display = format!("{}/{}", dep.name, MANIFEST_NAME);
-        let file_id = sources.add(display, text.clone());
+        let canonical_manifest = fs::canonicalize(&target_manifest_path)
+            .unwrap_or_else(|_| target_manifest_path.clone());
+        let Some(file_id) = register_source(
+            sources,
+            file_ids,
+            next_file_id,
+            &canonical_manifest,
+            display,
+            text.clone(),
+            diags,
+        ) else {
+            graph.failed = true;
+            continue;
+        };
         let (target, target_diags) = parse_manifest(&text, file_id);
         diags.extend(target_diags);
         let Some(target) = target else {
@@ -1392,7 +1470,17 @@ fn collect_dependencies(
         graph.by_dir.insert(dep_dir.clone(), index);
         graph.by_name.insert(target.name.clone(), index);
         stack.push((target.name.clone(), dep_dir.clone()));
-        collect_dependencies(&dep_dir, &target, depth + 1, stack, graph, sources, diags);
+        collect_dependencies(
+            &dep_dir,
+            &target,
+            depth + 1,
+            stack,
+            graph,
+            sources,
+            diags,
+            file_ids,
+            next_file_id,
+        );
         stack.pop();
     }
 }
@@ -2067,9 +2155,12 @@ struct CrateCtx<'a> {
     sources: &'a mut SourceMap,
     diags: &'a mut DiagnosticBag,
     file_ids: &'a mut BTreeMap<PathBuf, FileId>,
+    /// Next id handed to a file the session table has not seen yet. Shared by
+    /// the crate and every dependency so ids stay unique across a load.
+    next_file_id: &'a mut FileId,
     // Files already included once in *this* crate (duplicate detection).
     loaded: BTreeSet<PathBuf>,
-    synthetic: &'a mut u32,
+    synthetic: &'a mut u64,
     /// Accumulated wall-clock time spent in the parser (see `parse_time`).
     parse_time: &'a mut Duration,
     /// Per-session parse cache (see [`ParseCache`]).
@@ -2086,6 +2177,8 @@ fn load_crates(
     parse_time: &mut Duration,
     parse_cache: &mut ParseCache,
     options: &LoadOptions,
+    file_ids: &mut BTreeMap<PathBuf, FileId>,
+    next_file_id: &mut FileId,
 ) -> (Option<Program>, Option<Program>, Option<CrateKind>) {
     let src = root.join("src");
     let main_path = src.join("main.rv");
@@ -2128,8 +2221,7 @@ fn load_crates(
         return (None, None, None);
     }
 
-    let mut file_ids: BTreeMap<PathBuf, FileId> = BTreeMap::new();
-    let mut synthetic: u32 = (SYNTHETIC_HIGH << 24) | 1;
+    let mut synthetic: u64 = ((SYNTHETIC_FILE as u64) << 32) | 1;
     let (root_file, kind) = if has_main {
         (&main_path, CrateKind::Bin)
     } else {
@@ -2142,7 +2234,8 @@ fn load_crates(
         graph,
         sources,
         diags,
-        &mut file_ids,
+        file_ids,
+        next_file_id,
         &mut synthetic,
         parse_time,
         parse_cache,
@@ -2160,7 +2253,8 @@ fn load_crate_program(
     sources: &mut SourceMap,
     diags: &mut DiagnosticBag,
     file_ids: &mut BTreeMap<PathBuf, FileId>,
-    synthetic: &mut u32,
+    next_file_id: &mut FileId,
+    synthetic: &mut u64,
     parse_time: &mut Duration,
     parse_cache: &mut ParseCache,
     options: &LoadOptions,
@@ -2175,6 +2269,7 @@ fn load_crate_program(
         loaded: BTreeSet::new(),
         synthetic,
         parse_time,
+        next_file_id,
         parse_cache,
         overrides: &options.overrides,
     };
@@ -2496,17 +2591,41 @@ fn resolve_module_file(
 }
 
 fn ensure_source(ctx: &mut CrateCtx<'_>, canonical: &Path) -> Option<FileId> {
-    if let Some(id) = ctx.file_ids.get(canonical) {
-        return Some(*id);
+    let display = format!(
+        "{}{}",
+        ctx.display_prefix,
+        display_relative(canonical, &ctx.display_base)
+    );
+    if let Some(id) = ctx.file_ids.get(canonical).copied() {
+        match ctx.sources.file(id) {
+            Some(file) if file.path == display => return Some(id),
+            Some(file) => {
+                let taken = file.path.clone();
+                err(
+                    ctx.diags,
+                    "E-IO",
+                    Span::dummy(),
+                    format!(
+                        "session file id {id} is already used by `{taken}`; the session file \
+                         table is inconsistent"
+                    ),
+                );
+                return None;
+            }
+            // A session entry for a path this load has not registered yet: the
+            // file is read below and registered under the same id.
+            None => {}
+        }
     }
-    if ctx.sources.len() >= MAX_SOURCE_FILES {
+    if ctx.sources.len() >= source_file_limit() {
+        let limit = source_file_limit();
         err(
             ctx.diags,
             "E-LIMIT-FILES",
             Span::dummy(),
             format!(
-                "more than {MAX_SOURCE_FILES} source files were loaded; the parser's NodeId \
-                 reserves the high byte for the FileId"
+                "more than {limit} source files were loaded; the parser's NodeId \
+                 reserves 32 bits for the FileId"
             ),
         );
         return None;
@@ -2534,13 +2653,81 @@ fn ensure_source(ctx: &mut CrateCtx<'_>, canonical: &Path) -> Option<FileId> {
         }
         None => read_text_limited(canonical, MAX_FILE_SIZE, "E-IO", ctx.diags)?,
     };
-    let display = format!(
-        "{}{}",
-        ctx.display_prefix,
-        display_relative(canonical, &ctx.display_base)
-    );
-    let id = ctx.sources.add(display, text);
-    ctx.file_ids.insert(canonical.to_path_buf(), id);
+    register_source(
+        ctx.sources,
+        ctx.file_ids,
+        ctx.next_file_id,
+        canonical,
+        display,
+        text,
+        ctx.diags,
+    )
+}
+
+/// Next id a session table has never handed out.
+fn next_free_file_id(table: &BTreeMap<PathBuf, FileId>) -> FileId {
+    table
+        .values()
+        .copied()
+        .max()
+        .map_or(0, |id| id.saturating_add(1))
+}
+
+/// Register `text` for `canonical` under the id the session table already chose,
+/// or under the next free id. See [`LoadOptions::file_ids`].
+///
+/// A table that maps one id to two files is a caller bug, not user input: the
+/// loader fails closed with `E-IO` instead of silently reusing the id, because
+/// every span already parsed for that id would point into the wrong file.
+#[allow(clippy::too_many_arguments)]
+fn register_source(
+    sources: &mut SourceMap,
+    file_ids: &mut BTreeMap<PathBuf, FileId>,
+    next: &mut FileId,
+    canonical: &Path,
+    display: String,
+    text: String,
+    diags: &mut DiagnosticBag,
+) -> Option<FileId> {
+    let id = match file_ids.get(canonical).copied() {
+        Some(id) => {
+            if let Some(file) = sources.file(id) {
+                if file.path == display {
+                    return Some(id);
+                }
+                let taken = file.path.clone();
+                err(
+                    diags,
+                    "E-IO",
+                    Span::dummy(),
+                    format!(
+                        "session file id {id} is already used by `{taken}`; the session file \
+                         table is inconsistent"
+                    ),
+                );
+                return None;
+            }
+            id
+        }
+        None => {
+            let id = *next;
+            *next = next.saturating_add(1);
+            id
+        }
+    };
+    if sources.add_at(id, display, text).is_none() {
+        err(
+            diags,
+            "E-IO",
+            Span::dummy(),
+            format!(
+                "session file id {id} is already registered; the session file table is \
+                 inconsistent"
+            ),
+        );
+        return None;
+    }
+    file_ids.insert(canonical.to_path_buf(), id);
     Some(id)
 }
 
@@ -2591,6 +2778,7 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
             loaded: BTreeSet::new(),
             synthetic: &mut *ctx.synthetic,
             parse_time: &mut *ctx.parse_time,
+            next_file_id: &mut *ctx.next_file_id,
             parse_cache: &mut *ctx.parse_cache,
             overrides: ctx.overrides,
         };
@@ -2611,11 +2799,11 @@ fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &mut CrateCt
     }
 }
 
-fn next_synthetic(counter: &mut u32) -> NodeId {
+fn next_synthetic(counter: &mut NodeId) -> NodeId {
     let id = *counter;
     *counter = counter.saturating_add(1);
-    if (*counter >> 24) >= 0xFF {
-        *counter = (SYNTHETIC_HIGH << 24) | 1;
+    if (*counter >> 32) != u64::from(SYNTHETIC_FILE) {
+        *counter = (u64::from(SYNTHETIC_FILE) << 32) | 1;
     }
     id
 }
@@ -3339,6 +3527,7 @@ mod tests {
         let options = LoadOptions {
             locked: false,
             overrides: std::iter::once((source.clone(), buffered.to_string())).collect(),
+            ..Default::default()
         };
         let loaded = load_package_with_options(&temp.path, &options);
         assert!(!loaded.diags.has_errors(), "{:?}", codes(&loaded.diags));
@@ -3372,6 +3561,7 @@ mod tests {
             locked: false,
             overrides: std::iter::once((source, "fn main() { let x = 2; }\n".to_string()))
                 .collect(),
+            ..Default::default()
         };
         let overridden = load_package_with_options(&temp.path, &options);
         // A package with no dependency has the empty digest either way; the
@@ -3396,6 +3586,7 @@ mod tests {
         let options = LoadOptions {
             locked: false,
             overrides: std::iter::once((source, huge)).collect(),
+            ..Default::default()
         };
         let loaded = load_package_with_options(&temp.path, &options);
         assert!(codes(&loaded.diags).contains(&"E-LIMIT-FILE-SIZE".to_string()));
@@ -3813,5 +4004,153 @@ mod tests {
         temp.file("src/main.rv", "fn main() { }\r\n");
         let crlf = package_digest(&temp.path, &mut DiagnosticBag::new()).unwrap();
         assert_eq!(lf, crlf);
+    }
+
+    /// T4: the source-file ceiling is exercised without creating 65 536 files.
+    /// The limit is lowered thread-locally, so no other test is affected.
+    #[test]
+    fn the_source_file_limit_is_refused_with_the_existing_diagnostic() {
+        let temp = TempDir::new("file-limit");
+        temp.file("ravum.toml", &manifest("file-limit", ""));
+        temp.file("src/main.rv", "mod a;\nmod b;\nfn main() { }\n");
+        temp.file("src/a.rv", "pub fn a() -> i32 { return 1; }\n");
+        temp.file("src/b.rv", "pub fn b() -> i32 { return 2; }\n");
+        TEST_SOURCE_FILE_LIMIT.with(|limit| limit.set(Some(3)));
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                locked: false,
+                overrides: std::collections::BTreeMap::new(),
+                ..Default::default()
+            },
+        );
+        TEST_SOURCE_FILE_LIMIT.with(|limit| limit.set(None));
+        let found = codes(&loaded.diags);
+        assert!(
+            found.iter().any(|code| code == "E-LIMIT-FILES"),
+            "expected E-LIMIT-FILES, got {found:?}"
+        );
+        let message = loaded
+            .diags
+            .iter()
+            .find(|diag| diag.code == "E-LIMIT-FILES")
+            .map(|diag| diag.message.clone())
+            .unwrap_or_default();
+        assert!(
+            message.contains("more than 3 source files"),
+            "the diagnostic must name the effective limit: {message}"
+        );
+    }
+
+    // --- T5: session file ids -------------------------------------------
+
+    #[test]
+    fn session_file_ids_survive_a_file_added_before_the_existing_ones() {
+        let temp = TempDir::new("session-ids");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file(
+            "src/main.rv",
+            "mod util;\nfn main() { let x: i32 = util::value(); }\n",
+        );
+        temp.file("src/util.rv", "pub fn value() -> i32 { return 1; }\n");
+        let main_path = fs::canonicalize(temp.path.join("src/main.rv")).expect("main");
+        let util_path = fs::canonicalize(temp.path.join("src/util.rv")).expect("util");
+        let manifest_path = fs::canonicalize(temp.path.join("ravum.toml")).expect("manifest");
+
+        let mut cache = ParseCache::new();
+        let first = load_package_with_parse_cache(
+            &temp.path,
+            &LoadOptions {
+                file_ids: Some(BTreeMap::new()),
+                ..Default::default()
+            },
+            &mut cache,
+        );
+        assert!(
+            !first.diags.has_errors(),
+            "loader errors: {:?}",
+            codes(&first.diags)
+        );
+        assert!(
+            first.file_ids.contains_key(&manifest_path),
+            "the manifest is a source file of the package"
+        );
+        let table = first.file_ids.clone();
+        let (manifest_id, main_id, util_id) =
+            (table[&manifest_path], table[&main_path], table[&util_path]);
+        let max_id = *table.values().max().expect("non-empty table");
+        assert_eq!(cache.misses(), 2, "main and util are parsed once");
+        assert_eq!(first.program.expect("program").file, main_id);
+
+        // `aa` is declared before `util`: a dense allocation would give it
+        // util's id and renumber every file after it.
+        temp.file("src/aa.rv", "pub fn extra() -> i32 { return 2; }\n");
+        temp.file(
+            "src/main.rv",
+            "mod aa;\nmod util;\nfn main() { let x: i32 = aa::extra() + util::value(); }\n",
+        );
+        let second = load_package_with_parse_cache(
+            &temp.path,
+            &LoadOptions {
+                file_ids: Some(table.clone()),
+                ..Default::default()
+            },
+            &mut cache,
+        );
+        assert!(
+            !second.diags.has_errors(),
+            "loader errors: {:?}",
+            codes(&second.diags)
+        );
+        let aa_path = fs::canonicalize(temp.path.join("src/aa.rv")).expect("aa");
+        assert_eq!(second.file_ids[&manifest_path], manifest_id);
+        assert_eq!(second.file_ids[&main_path], main_id);
+        assert_eq!(second.file_ids[&util_path], util_id);
+        assert_eq!(
+            second.file_ids[&aa_path],
+            max_id + 1,
+            "a new file takes the next id, it does not reuse or shift an old one"
+        );
+        assert_eq!(cache.hits(), 1, "util.rv is served from the cache");
+        assert_eq!(cache.misses(), 4, "main and aa are parsed");
+        assert_eq!(second.program.expect("program").file, main_id);
+        assert_eq!(
+            second.sources.file(util_id).expect("util").path,
+            "src/util.rv"
+        );
+    }
+
+    #[test]
+    fn a_session_table_that_maps_one_id_to_two_files_fails_closed() {
+        let temp = TempDir::new("session-conflict");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file(
+            "src/main.rv",
+            "mod util;\nfn main() { let x: i32 = util::value(); }\n",
+        );
+        temp.file("src/util.rv", "pub fn value() -> i32 { return 1; }\n");
+        let main_path = fs::canonicalize(temp.path.join("src/main.rv")).expect("main");
+        let util_path = fs::canonicalize(temp.path.join("src/util.rv")).expect("util");
+        // Both files claim id 1: every span parsed for id 1 would point into the
+        // wrong file, so the loader refuses instead of reusing the id.
+        let mut table = BTreeMap::new();
+        table.insert(main_path, 1);
+        table.insert(util_path, 1);
+        let loaded = load_package_with_options(
+            &temp.path,
+            &LoadOptions {
+                file_ids: Some(table),
+                ..Default::default()
+            },
+        );
+        let found = codes(&loaded.diags);
+        assert!(
+            found.iter().any(|code| code == "E-IO"),
+            "expected the fail-closed E-IO diagnostic, got {found:?}"
+        );
+        assert!(
+            loaded.program.is_none(),
+            "a rejected load hands no program to the checker"
+        );
     }
 }

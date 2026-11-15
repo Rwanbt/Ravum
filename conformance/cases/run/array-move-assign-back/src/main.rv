@@ -1,0 +1,16 @@
+fn main() {
+    let mut a: [String; 2] = [String::from("a"), String::from("b")];
+    a = [a[0], String::from("c")];
+    io::println(a[0].as_str());
+    io::println(a[1].as_str());
+
+    let mut b: [String; 2] = [String::from("x"), String::from("y")];
+    b = [b[1], b[0]];
+    io::println(b[0].as_str());
+    io::println(b[1].as_str());
+
+    let mut c: [i32; 3] = [1, 2, 3];
+    let first = c[0];
+    c = [4, 5, 6];
+    io::println((c[1] + first).to_string().as_str());
+}

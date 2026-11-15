@@ -1,0 +1,14 @@
+{
+  "id": "effects/rt-entry-missing",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt",
+    "--rt-entry",
+    "nope"
+  ],
+  "expect_codes": [
+    "E-TOOL"
+  ],
+  "notes": "T6 negative case: an `--rt-entry` that names no free function (module path) is a tooling error with exit 1, never a silently empty reachable set. E-TOOL is a tooling code, outside the language registry."
+}

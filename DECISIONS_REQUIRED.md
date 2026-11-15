@@ -43,7 +43,7 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
 
 - **Recommandation** : ne ratifier que les ADR dont les tests de conformance
   prouvent la règle ; garder `PROPOSED` le reste.
-- **Preuves** : `docs/adr/` (43 fichiers PROPOSED), `spec/language/` (DRAFT),
+- **Preuves** : `docs/adr/` (42 fichiers PROPOSED, ADR-000…ADR-041), `spec/language/` (DRAFT),
   `conformance/` (résultats réels).
 - **Sans décision** : toute sémantique reste « candidate », jamais « stable ».
 

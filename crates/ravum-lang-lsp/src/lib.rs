@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Ravum Core 1.0 language server.
 //!
 //! This crate is the *real* LSP implementation behind `ravum-lang lsp`: JSON-RPC

@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-assign-back",
+  "mode": "run-pass",
+  "stdout_contains": "a\nc\ny\nx\n6\n",
+  "notes": "OWN-5.x: a whole-binding assignment whose right-hand side moves elements of the same array (`a = [a[0], ...]`, `b = [b[1], b[0]]`) is accepted and runs. The write is not a read of the place: it must not block the hoist the RHS needs, and the hoist region ends at the write so later accesses read the re-initialised place. Previously check-pass/build-fail with rustc E0508 (and E0382 when a later access was rewritten to a stale slot)."
+}

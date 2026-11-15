@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "measured_on": "2026-11-14 (round 9), Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
+  "measured_on": "2026-11-14 (consolidation 2, re-mesure T6/T7), Windows 11 x86-64, rustc 1.95.0, cargo-llvm-cov 0.9.1",
   "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json",
   "checked_by": "python tools/coverage_report.py --input target/cov-all.json --check",
   "scope": "Two crates since 2026-11-11: `ravum-lang-sema` (frontend) and `ravum-lang-codegen` (the reference backend, which generates the safe Rust). Before that date only sema was measured, so the backend that actually emits code had no coverage gate at all. Including both crates in one instrumented build also means the sema figures now count the sema code exercised by the codegen integration tests.",
@@ -24,9 +24,9 @@
     "crates/ravum-lang-sema/src/traps.rs": {
       "lines": 97,
       "regions": 95,
-      "measured_lines": 98.66,
-      "measured_regions": 96.84,
-      "note": "New floor 2026-11-14 (round 10), first ratchet entry for the RFC-RT-TRAPS-1 module introduced in round 4: measured 98.66/96.84 after 13 unit tests. The remaining holes are defensive arms (`let` without initializer, non-integer shift operands, missing types) that the parser/checker cannot produce today; they stay defensive rather than removed."
+      "measured_lines": 97.61,
+      "measured_regions": 97.13,
+      "note": "Floor 97/95 since 2026-11-14 (round 10). The T6 bounded-index rewrite briefly took the file to 86.70/78.02; the consolidation re-measure is 97.61/97.13 after six coverage drivers that exercise the pure AST scan, the safe_loop refusals (including a synthetic open-end range), method bodies, unsafe blocks and the defensive type helpers. Remaining holes are defensive arms the parser/checker cannot produce today; they stay defensive rather than removed."
     },
     "crates/ravum-lang-sema/src/types.rs": {
       "lines": 100,

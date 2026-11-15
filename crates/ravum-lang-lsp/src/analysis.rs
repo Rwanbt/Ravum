@@ -21,6 +21,7 @@ use ravum_lang_sema::loader::{
 use ravum_lang_sema::{check, Profile};
 use ravum_lang_syntax::diag::Diagnostic;
 use ravum_lang_syntax::source::SourceMap;
+use ravum_lang_syntax::span::FileId;
 
 use crate::walk::AstIndex;
 
@@ -49,11 +50,55 @@ impl Analysis {
         profile: Profile,
         cache: &mut ParseCache,
     ) -> Self {
+        Self::analyse(
+            root,
+            &LoadOptions {
+                locked: false,
+                overrides,
+                file_ids: None,
+            },
+            profile,
+            cache,
+        )
+    }
+
+    /// `run_with_cache`, with the append-only `canonical path -> FileId` table
+    /// of one language-server session (T5).
+    ///
+    /// Every `NodeId` embeds the `FileId`, so a file the user did not touch must
+    /// keep its id when another file starts or stops being part of the package
+    /// (a new `mod` declared before the existing ones, a removed module). The
+    /// loader reuses the ids found in `file_ids` and returns the table it built
+    /// in [`ravum_lang_sema::loader::LoadedPackage::file_ids`]; this function
+    /// merges it back before returning, so the caller only has to keep the map
+    /// alive across analyses. A plain [`Self::run_with_cache`] call (tests, CLI
+    /// path) keeps the historical dense ids and is not affected.
+    pub fn run_with_cache_and_file_ids(
+        root: &Path,
+        overrides: BTreeMap<PathBuf, String>,
+        profile: Profile,
+        cache: &mut ParseCache,
+        file_ids: &mut BTreeMap<PathBuf, FileId>,
+    ) -> Self {
         let options = LoadOptions {
             locked: false,
             overrides,
+            file_ids: Some(file_ids.clone()),
         };
-        let mut package = load_package_with_parse_cache(root, &options, cache);
+        let analysis = Self::analyse(root, &options, profile, cache);
+        for (path, id) in &analysis.package.file_ids {
+            file_ids.insert(path.clone(), *id);
+        }
+        analysis
+    }
+
+    fn analyse(
+        root: &Path,
+        options: &LoadOptions,
+        profile: Profile,
+        cache: &mut ParseCache,
+    ) -> Self {
+        let mut package = load_package_with_parse_cache(root, options, cache);
         let mut diags = std::mem::take(&mut package.diags);
         let mut checked = None;
 
