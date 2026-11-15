@@ -647,7 +647,7 @@ mod fact_coverage_tests {
         for stmt in &block.stmts {
             match &stmt.kind {
                 StmtKind::Let(l) => {
-                    walk_pat(&l.pat, exprs, paths, pats, types);
+                    walk_pat(&l.pat, paths, pats);
                     if let Some(init) = &l.init {
                         walk_expr(init, exprs, paths, pats, types);
                     }
@@ -665,16 +665,14 @@ mod fact_coverage_tests {
 
     fn walk_pat(
         pat: &ravum_lang_syntax::ast::Pat,
-        exprs: &mut BTreeSet<NodeId>,
         paths: &mut BTreeSet<NodeId>,
         pats: &mut BTreeSet<NodeId>,
-        types: &mut BTreeSet<NodeId>,
     ) {
         pats.insert(pat.id);
         match &pat.kind {
             PatKind::Tuple(items) => {
                 for item in items {
-                    walk_pat(item, exprs, paths, pats, types);
+                    walk_pat(item, paths, pats);
                 }
             }
             PatKind::Path(p) => {
@@ -685,12 +683,12 @@ mod fact_coverage_tests {
                 match fields {
                     ravum_lang_syntax::ast::VariantPatFields::Tuple(items) => {
                         for item in items {
-                            walk_pat(item, exprs, paths, pats, types);
+                            walk_pat(item, paths, pats);
                         }
                     }
                     ravum_lang_syntax::ast::VariantPatFields::Struct(fields) => {
                         for field in fields {
-                            walk_pat(&field.pat, exprs, paths, pats, types);
+                            walk_pat(&field.pat, paths, pats);
                         }
                     }
                 }
@@ -765,7 +763,7 @@ mod fact_coverage_tests {
             }
             ExprKind::Loop { body } => walk_block(body, exprs, paths, pats, types),
             ExprKind::For { pat, iter, body } => {
-                walk_pat(pat, exprs, paths, pats, types);
+                walk_pat(pat, paths, pats);
                 walk_expr(iter, exprs, paths, pats, types);
                 walk_block(body, exprs, paths, pats, types);
             }
@@ -794,11 +792,7 @@ mod fact_coverage_tests {
                 }
             }
             ExprKind::Try(inner) => walk_expr(inner, exprs, paths, pats, types),
-            ExprKind::Return(v) => {
-                if let Some(v) = v {
-                    walk_expr(v, exprs, paths, pats, types);
-                }
-            }
+            ExprKind::Return(Some(v)) => walk_expr(v, exprs, paths, pats, types),
             _ => {}
         }
     }
@@ -810,7 +804,7 @@ mod fact_coverage_tests {
         pats: &mut BTreeSet<NodeId>,
         types: &mut BTreeSet<NodeId>,
     ) {
-        walk_pat(&arm.pat, exprs, paths, pats, types);
+        walk_pat(&arm.pat, paths, pats);
         walk_expr(&arm.body, exprs, paths, pats, types);
     }
 

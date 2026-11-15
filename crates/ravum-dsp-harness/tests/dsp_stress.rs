@@ -97,7 +97,7 @@ fn build(dir: &Path, fixture: &str) -> Built {
     }
 }
 
-/// Build a test-generated Rust source (written under 	arget/), through the same
+/// Build a test-generated Rust source (written under `target/`), through the same
 /// RustAdapter/rustc path as the repository fixtures. No repository file is added.
 fn build_source(dir: &Path, name: &str, source: &str) -> Built {
     std::fs::create_dir_all(dir).expect("source dir");
@@ -687,7 +687,7 @@ fn scenario_two_hosts_in_parallel(fx: &Fixtures, scale: Scale) -> Scenario {
     let host_b =
         BlockHost::bootstrap(ExpectedAbi::dsp(), artifact_path(&fx.iir_v1)).expect("bootstrap B");
     let _warm_a = warm_images(fx);
-    let _warm_b = vec![prepare(&fx.iir_v1), prepare(&fx.iir_v2)];
+    let _warm_b = [prepare(&fx.iir_v1), prepare(&fx.iir_v2)];
     let barrier = std::sync::Barrier::new(3);
     let iterations = scale.iterations;
     let (a_stats, b_stats) = std::thread::scope(|scope| {
@@ -1282,7 +1282,7 @@ fn publisher_loop(
                 "publisher (phase {phase}) gave up after {attempts} attempts for {activations} activations"
             ));
         }
-        let candidate = if (attempts + phase) % 2 == 0 {
+        let candidate = if (attempts + phase).is_multiple_of(2) {
             &fx.gain_v2
         } else {
             &fx.gain_v1
@@ -1477,7 +1477,7 @@ fn stress_evidence_campaign() {
     let scale = Scale::full();
     let suite_started = Instant::now();
     let rss_start = process_memory::working_set_bytes();
-    let scenarios = vec![
+    let scenarios = [
         scenario_ten_thousand_swaps(fx, scale),
         scenario_two_hosts_in_parallel(fx, scale),
         scenario_stop_start_cycles(fx, scale),

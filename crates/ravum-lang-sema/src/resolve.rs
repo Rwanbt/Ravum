@@ -138,7 +138,6 @@ pub(crate) struct SymRef {
 pub(crate) struct ModuleInfo {
     pub node: NodeId,
     pub parent: Option<ModuleId>,
-    pub name: String,
     /// Chemin Rust (`crate`, `crate::foo`).
     pub path: String,
     pub types: BTreeMap<String, ItemSym>,
@@ -155,8 +154,6 @@ pub(crate) struct MethodEntry {
     pub def_module: ModuleId,
     pub vis: Vis,
     pub receiver: Option<Receiver>,
-    /// Paramètres génériques de l'`impl`, dans l'ordre.
-    pub impl_generics: Vec<String>,
     /// Type cible de l'`impl`, avec `Type::Param { index }` pour ses génériques.
     pub self_ty: Type,
 }
@@ -223,7 +220,6 @@ impl<'a> World<'a> {
         world.modules.push(ModuleInfo {
             node: program.root.id,
             parent: None,
-            name: String::new(),
             path: "crate".to_string(),
             types: BTreeMap::new(),
             values: BTreeMap::new(),
@@ -300,7 +296,6 @@ impl<'a> World<'a> {
                     self.modules.push(ModuleInfo {
                         node: inner.id,
                         parent: Some(id),
-                        name: name.clone(),
                         path,
                         types: BTreeMap::new(),
                         values: BTreeMap::new(),
@@ -495,8 +490,8 @@ pub(crate) fn rust_ident(name: &str) -> String {
 /// Résultat d'une résolution de chemin de valeur.
 #[derive(Debug, Clone)]
 pub(crate) enum ValuePath {
-    Module(ModuleId),
-    BuiltinModule(&'static str),
+    Module,
+    BuiltinModule,
     /// Fonction ou constante utilisateur.
     Item(NodeId),
     /// Type utilisé comme valeur (erreur de typage).
@@ -721,8 +716,8 @@ pub(crate) fn resolve_value_path(
     loop {
         if index >= segments.len() {
             return match cursor {
-                Cursor::Module(m) => Ok(ValuePath::Module(m)),
-                Cursor::Builtin(p) => Ok(ValuePath::BuiltinModule(p)),
+                Cursor::Module(_) => Ok(ValuePath::Module),
+                Cursor::Builtin(_) => Ok(ValuePath::BuiltinModule),
                 Cursor::Type(t) => Ok(ValuePath::Type(t)),
             };
         }
@@ -773,8 +768,8 @@ pub(crate) fn resolve_value_path(
                         return Err(PathError::private(name));
                     }
                     return match sym.sym {
-                        Sym::Module(child) => Ok(ValuePath::Module(child)),
-                        Sym::BuiltinModule(p) => Ok(ValuePath::BuiltinModule(p)),
+                        Sym::Module(_) => Ok(ValuePath::Module),
+                        Sym::BuiltinModule(_) => Ok(ValuePath::BuiltinModule),
                         _ => Err(PathError::unknown(name)),
                     };
                 } else if let Some(sym) = world.lookup(m, Ns::Type, name) {
@@ -802,12 +797,7 @@ pub(crate) fn resolve_value_path(
                         return Ok(ValuePath::BuiltinFn(sig.path));
                     }
                     if builtins::is_builtin_module(&candidate) {
-                        let module = builtins::BUILTIN_MODULES
-                            .iter()
-                            .copied()
-                            .find(|m| *m == candidate)
-                            .unwrap_or(p);
-                        return Ok(ValuePath::BuiltinModule(module));
+                        return Ok(ValuePath::BuiltinModule);
                     }
                     return Err(PathError::unknown(name));
                 }
@@ -1182,13 +1172,6 @@ fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                     ),
                 );
             }
-            UseTarget::Variant => {
-                diags.error(
-                    "E-RES-UNKNOWN",
-                    use_item.span,
-                    format!("variant import `{display}` is not supported in Core 1.0"),
-                );
-            }
             UseTarget::Unknown => {
                 diags.error(
                     "E-RES-UNKNOWN",
@@ -1274,7 +1257,6 @@ enum UseTarget {
     /// MOD-3.2: a bare relative path resolves both in the current module and
     /// at the crate root, to two different entities.
     Ambiguous,
-    Variant,
     Unknown,
 }
 
@@ -2221,7 +2203,6 @@ fn resolve_impl(
             def_module: module,
             vis: member.vis,
             receiver: sig.receiver,
-            impl_generics: impl_generics.clone(),
             self_ty: target.clone(),
         });
         let _ = item;

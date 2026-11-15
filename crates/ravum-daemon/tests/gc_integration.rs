@@ -305,7 +305,7 @@ fn gc_is_idempotent() {
     assert_eq!(second.freed_bytes, 0, "nothing left to collect");
     assert_eq!(second.deleted.entry_count(), 0);
     assert_eq!(second.before, second.after);
-    assert_eq!(second.duration_ms < 60_000, true);
+    assert!(second.duration_ms < 60_000);
     let _ = std::fs::remove_dir_all(&work);
 }
 
@@ -508,7 +508,10 @@ fn one_shot_cli_gc_reports_json_and_exit_codes() {
     assert_eq!(report["kind"], "ravum-daemon-gc-report");
     assert_eq!(report["mode"], "one_shot");
     assert_eq!(report["dry_run"], true);
-    assert!(report["planned"]["cache_keys"].as_array().unwrap().len() >= 1);
+    assert!(!report["planned"]["cache_keys"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     assert_eq!(report["freed_bytes"], 0);
     assert!(work.join("cache").exists());
 

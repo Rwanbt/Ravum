@@ -186,6 +186,8 @@ garanties réellement imposées et du coût de maintenance.
 
 ```bash
 cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+cargo deny check
 cargo test --workspace --all-targets -- --test-threads=2
 cargo run -p ravum-conformance -- run --verify-build
 ```
@@ -200,9 +202,12 @@ cargo test -p ravum-lang-sema
 cargo test -p ravum-lang-codegen
 ```
 
-Le job CI `mvp` construit le workspace, exécute la suite de tests, les démos
-M1–M4 et la suite E2E navigateur. Le job de conformance exécute le corpus
-`check → build`.
+Le job CI `mvp` vérifie le formatage, exécute Clippy avec les avertissements
+refusés, valide la politique de chaîne d'approvisionnement avec `cargo-deny`,
+construit le workspace, exécute la suite de tests, les démos M1–M4 et la suite
+E2E navigateur. Le job de conformance exécute le corpus `check → build`.
+Dependabot met à jour les dépendances et les GitHub Actions chaque semaine ;
+`CODEOWNERS` définit la responsabilité de revue.
 
 ## Contribution
 
@@ -211,9 +216,11 @@ Le développement suit un workflow de branches courtes :
 1. Créer une branche depuis `dev`.
 2. Garder le changement ciblé et ajouter des tests pour le nouveau comportement
    et les refus.
-3. Exécuter le formatage, les tests pertinents et, le cas échéant, le corpus de
+3. Exécuter le formatage, Clippy avec les avertissements refusés,
+   `cargo deny check`, les tests pertinents et, le cas échéant, le corpus de
    conformance.
-4. Ouvrir une pull request vers `dev`. Le check requis `mvp` doit passer.
+4. Ajouter le changement visible dans [`CHANGELOG.md`](CHANGELOG.md).
+5. Ouvrir une pull request vers `dev`. Le check requis `mvp` doit passer.
 
 `main` est la branche par défaut et la référence documentaire. `dev` est la
 branche d'intégration. Les branches durables sont `main` et `dev` ; les branches

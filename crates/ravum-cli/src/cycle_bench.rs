@@ -333,8 +333,14 @@ enum AnalysisStage {
 
 /// Result of the codegen+link stage.
 enum BuildStage {
-    Built { build: BuildOutput, wall_ms: u64 },
-    Failed { stage: &'static str, detail: String },
+    Built {
+        build: Box<BuildOutput>,
+        wall_ms: u64,
+    },
+    Failed {
+        stage: &'static str,
+        detail: String,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -414,7 +420,7 @@ fn build_stage(pipeline: &Pipeline, snapshot: &SourceSnapshot) -> BuildStage {
     let begin = Instant::now();
     match pipeline.build(snapshot) {
         Ok(outcome) if outcome.success => BuildStage::Built {
-            build: outcome.build,
+            build: Box::new(outcome.build),
             wall_ms: begin.elapsed().as_millis() as u64,
         },
         Ok(_) => BuildStage::Failed {

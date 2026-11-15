@@ -169,7 +169,7 @@ fn run_campaign(
         revision += 1;
         let context_index = (index - 1) % 3;
         let crate_name = format!("soak_unit_{context_index}");
-        let (seed, content_text, context_name, expect_hit) = if index % 4 == 0 {
+        let (seed, content_text, context_name, expect_hit) = if index.is_multiple_of(4) {
             match &last_new {
                 Some((seed, content, context)) => (*seed, content.clone(), context.clone(), true),
                 None => {
@@ -226,7 +226,7 @@ fn run_campaign(
                 "success": report.success,
             }));
         }
-        if index % sample_every == 0 || index == 1 || index == requests {
+        if index.is_multiple_of(sample_every) || index == 1 || index == requests {
             let disk = dir_size(work_dir);
             if disk > disk_max {
                 disk_max = disk;

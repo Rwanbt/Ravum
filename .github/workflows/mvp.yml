@@ -22,6 +22,8 @@ jobs:
 
       - name: Install Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy, rustfmt
 
       - name: Show toolchain
         run: |
@@ -31,6 +33,20 @@ jobs:
 
       - name: Check formatting (rustfmt, pinned toolchain)
         run: cargo fmt --all -- --check
+
+      # P-3: warnings are errors, not advisory output. `--jobs 2` bounds the
+      # compiler's peak memory on the smaller runners.
+      - name: Clippy (all targets, warnings denied)
+        run: cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      # P-4: advisories, licenses, duplicate versions and unknown sources.
+      - name: Supply chain (cargo-deny)
+        run: cargo deny check
 
       - name: Cache cargo registry and target
         uses: actions/cache@v4
@@ -139,6 +155,8 @@ jobs:
 
       - name: Install Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy, rustfmt
 
       - name: Show toolchain
         run: |

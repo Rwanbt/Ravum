@@ -180,6 +180,8 @@ guarantees and maintenance cost.
 
 ```bash
 cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+cargo deny check
 cargo test --workspace --all-targets -- --test-threads=2
 cargo run -p ravum-conformance -- run --verify-build
 ```
@@ -193,9 +195,11 @@ cargo test -p ravum-lang-sema
 cargo test -p ravum-lang-codegen
 ```
 
-The `mvp` CI job builds the workspace, runs the test suite, executes the M1–M4
-demos and runs the browser E2E suite. The conformance job runs the
-`check → build` corpus.
+The `mvp` CI job checks formatting, runs Clippy with warnings denied, validates
+the supply-chain policy with `cargo-deny`, builds the workspace, runs the test
+suite, executes the M1–M4 demos and runs the browser E2E suite. The conformance
+job runs the `check → build` corpus. Dependencies and GitHub Actions are updated
+weekly by Dependabot; `CODEOWNERS` defines the review ownership.
 
 ## Contributing
 
@@ -203,9 +207,10 @@ Development follows a short-lived branch workflow:
 
 1. Branch from `dev`.
 2. Keep the change focused and include tests for new behavior and refusals.
-3. Run formatting, the relevant tests and, when applicable, the conformance
-   corpus.
-4. Open a pull request against `dev`. The required `mvp` check must pass.
+3. Run formatting, Clippy with warnings denied, `cargo deny check`, the relevant
+   tests and, when applicable, the conformance corpus.
+4. Add the user-visible change to [`CHANGELOG.md`](CHANGELOG.md).
+5. Open a pull request against `dev`. The required `mvp` check must pass.
 
 `main` is the default branch and the documentation reference. `dev` is the
 integration branch. Long-lived branches are `main` and `dev`; work branches are

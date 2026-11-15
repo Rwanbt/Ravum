@@ -243,7 +243,7 @@ fn client_thread(address: String, client: usize, deadline: Instant, pace_ms: u64
     let mut last: Option<u64> = None;
     while Instant::now() < deadline {
         index += 1;
-        let seed = if index % 4 == 0 {
+        let seed = if index.is_multiple_of(4) {
             last.unwrap_or(client as u64 * 1_000 + index)
         } else {
             client as u64 * 1_000_000 + index

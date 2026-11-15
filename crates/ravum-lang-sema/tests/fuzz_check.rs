@@ -243,8 +243,11 @@ struct DiagSnap {
     severity: &'static str,
     message: String,
     span: (u32, u32, u32),
-    notes: Vec<(String, Option<(u32, u32, u32)>)>,
+    notes: Vec<(String, NoteSpan)>,
 }
+
+/// A diagnostic note and its optional source span.
+type NoteSpan = Option<(u32, u32, u32)>;
 
 fn span_tuple(span: Span) -> (u32, u32, u32) {
     (span.file, span.start, span.end)
@@ -375,18 +378,27 @@ fn fail(seed: u64, iteration: usize, profile: Profile, src: &str, reason: &str) 
     )
 }
 
+/// The snapshot under review and the source it must belong to.
+struct SnapshotCheck<'a> {
+    diagnostics: &'a [DiagSnap],
+    file: u32,
+    src_len: usize,
+    phase: &'a str,
+}
+
 /// Valide les invariants d'un instantané de diagnostics : codes/messages non
 /// vides, spans dans le fichier (ou `Span::dummy()`).
 fn validate_snapshot(
-    diagnostics: &[DiagSnap],
-    file: u32,
-    src_len: usize,
+    check: &SnapshotCheck<'_>,
     seed: u64,
     iteration: usize,
     profile: Profile,
     src: &str,
-    phase: &str,
 ) {
+    let diagnostics = check.diagnostics;
+    let file = check.file;
+    let src_len = check.src_len;
+    let phase = check.phase;
     let check_span = |span: (u32, u32, u32), what: &str| {
         if span.0 == u32::MAX {
             return;
@@ -448,24 +460,28 @@ fn run_case(seed: u64, iteration: usize, profile: Profile, src: &str) {
         Err(_) => fail(seed, iteration, profile, src, "panic in parser or checker"),
     };
     validate_snapshot(
-        &first.parse_diags,
-        0,
-        src.len(),
+        &SnapshotCheck {
+            diagnostics: &first.parse_diags,
+            file: 0,
+            src_len: src.len(),
+            phase: "parse",
+        },
         seed,
         iteration,
         profile,
         src,
-        "parse",
     );
     validate_snapshot(
-        &first.check_diags,
-        0,
-        src.len(),
+        &SnapshotCheck {
+            diagnostics: &first.check_diags,
+            file: 0,
+            src_len: src.len(),
+            phase: "check",
+        },
         seed,
         iteration,
         profile,
         src,
-        "check",
     );
 
     // Déterminisme : même source => mêmes diagnostics et mêmes faits.
@@ -536,7 +552,7 @@ fn fuzz_check_short() {
 fn fuzz_check_long() {
     let budget = iterations(20_000);
     let started = std::time::Instant::now();
-    let (iterations, millis) = fuzz_round(0x0052_4156_554D_465A_4C, budget);
+    let (iterations, millis) = fuzz_round(0x0000_5241_5655_4D46_5A4C, budget);
     eprintln!(
         "fuzz_check_long: {iterations} iterations in {millis} ms ({:.0}/s)",
         iterations as f64 / (millis.max(1) as f64 / 1000.0)

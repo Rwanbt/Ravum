@@ -105,29 +105,21 @@ fn compute_angles(tokens: &[Token], sig: &[usize]) -> Vec<Angle> {
                     roles[ti] = Angle::Open;
                 }
             }
-            TokenKind::Punct(Punct::Gt) => {
-                if depth > 0 {
-                    depth -= 1;
-                    roles[ti] = Angle::Close;
-                }
+            TokenKind::Punct(Punct::Gt) if depth > 0 => {
+                depth -= 1;
+                roles[ti] = Angle::Close;
             }
-            TokenKind::Punct(Punct::Shr) => {
-                if depth > 0 {
-                    depth = (depth - 2).max(0);
-                    roles[ti] = Angle::CloseTwo;
-                }
+            TokenKind::Punct(Punct::Shr) if depth > 0 => {
+                depth = (depth - 2).max(0);
+                roles[ti] = Angle::CloseTwo;
             }
-            TokenKind::Punct(Punct::Ge) => {
-                if depth > 0 {
-                    depth = (depth - 1).max(0);
-                    roles[ti] = Angle::CloseEq;
-                }
+            TokenKind::Punct(Punct::Ge) if depth > 0 => {
+                depth = (depth - 1).max(0);
+                roles[ti] = Angle::CloseEq;
             }
-            TokenKind::Punct(Punct::ShrEq) => {
-                if depth > 0 {
-                    depth = (depth - 2).max(0);
-                    roles[ti] = Angle::CloseTwoEq;
-                }
+            TokenKind::Punct(Punct::ShrEq) if depth > 0 => {
+                depth = (depth - 2).max(0);
+                roles[ti] = Angle::CloseTwoEq;
             }
             _ => {}
         }

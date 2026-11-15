@@ -364,8 +364,8 @@ fn two_concurrent_builds_of_the_same_package_succeed() {
     let baseline = build_ok(&pkg);
     let identity = identity_line(&baseline);
 
-    let mut first = spawn_in(&pkg, &["build", "."]);
-    let mut second = spawn_in(&pkg, &["build", "."]);
+    let first = spawn_in(&pkg, &["build", "."]);
+    let second = spawn_in(&pkg, &["build", "."]);
     let first_output = first.wait_with_output().expect("wait first build");
     let second_output = second.wait_with_output().expect("wait second build");
 

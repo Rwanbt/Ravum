@@ -844,8 +844,10 @@ fn audit_generated_output_is_deterministic() {
     let third = gen_with(&sample.checked, &GenOptions::default());
     assert_eq!(first, third);
     // Marker placement is driven by options only.
-    let mut options = GenOptions::default();
-    options.source_comments = false;
+    let options = GenOptions {
+        source_comments: false,
+        ..Default::default()
+    };
     let without_markers = gen_with(&sample.checked, &options);
     assert!(!without_markers.contains("// rv:"));
     assert_eq!(without_markers, gen_with(&sample.checked, &options));
@@ -2060,17 +2062,16 @@ fn audit_drop_is_immediate_and_scope_order_is_unobservable() {
 fn panic_program(kind: PanicKind) -> CheckedProgram {
     let b = B::new();
     let main_id = b.id();
-    let statements;
-    match kind {
+    let statements = match kind {
         PanicKind::Assert => {
             let condition = b.boolean(false);
             let call = b.call_free("assert", vec![condition], "std::panic::assert");
-            statements = vec![b.stmt(call)];
+            vec![b.stmt(call)]
         }
         PanicKind::Panic => {
             let message = b.text("boom");
             let call = b.call_free("panic", vec![message], "std::panic::panic");
-            statements = vec![b.stmt(call)];
+            vec![b.stmt(call)]
         }
         PanicKind::OptionUnwrap => {
             let path = b.path(&["None"]);
@@ -2095,7 +2096,7 @@ fn panic_program(kind: PanicKind) -> CheckedProgram {
                 b.method_builtin(receiver, "unwrap", Vec::new(), "Option::unwrap", STy::I32);
             let unwrap_ty = i32_ty(&b);
             let unwrap_let = b.let_stmt("value", Some(unwrap_ty), unwrap);
-            statements = vec![none_let, unwrap_let];
+            vec![none_let, unwrap_let]
         }
         PanicKind::ResultUnwrap => {
             let error_call = b.call_free("Error::new", vec![b.text("x")], "Error::new");
@@ -2127,9 +2128,9 @@ fn panic_program(kind: PanicKind) -> CheckedProgram {
                 b.method_builtin(receiver, "unwrap", Vec::new(), "Result::unwrap", STy::I32);
             let unwrap_ty = i32_ty(&b);
             let unwrap_let = b.let_stmt("value", Some(unwrap_ty), unwrap);
-            statements = vec![result_let, unwrap_let];
+            vec![result_let, unwrap_let]
         }
-    }
+    };
     let tail = ok_unit(&b);
     let body = b.block(statements, Some(tail));
     let main_ret = result_unit_ret(&b);
@@ -2269,8 +2270,10 @@ fn audit_test_runner_format_summary_and_exit_codes() {
     if skip("audit_test_runner_format_summary_and_exit_codes") {
         return;
     }
-    let mut options = GenOptions::default();
-    options.test_mode = true;
+    let options = GenOptions {
+        test_mode: true,
+        ..Default::default()
+    };
     let code = gen_with(&test_runner_program(), &options);
     let built = must_compile(&code, "runner");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -2329,8 +2332,10 @@ fn audit_test_runner_all_pass_exits_zero() {
     ));
     let checked = b.finish(None, vec![first_id, second_id]);
 
-    let mut options = GenOptions::default();
-    options.test_mode = true;
+    let options = GenOptions {
+        test_mode: true,
+        ..Default::default()
+    };
     let code = gen_with(&checked, &options);
     let built = must_compile(&code, "runner-pass");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -2387,8 +2392,10 @@ fn audit_exit_inside_a_test_bypasses_the_runner() {
     ));
     let checked = b.finish(None, vec![quit_id, after_id]);
 
-    let mut options = GenOptions::default();
-    options.test_mode = true;
+    let options = GenOptions {
+        test_mode: true,
+        ..Default::default()
+    };
     let code = gen_with(&checked, &options);
     let built = must_compile(&code, "runner-exit");
     let (stdout, stderr, status) = run(&built.binary, &[]);
@@ -3481,8 +3488,10 @@ fn audit_test_runner_filter_and_summary_line() {
     if skip("audit_test_runner_filter_and_summary_line") {
         return;
     }
-    let mut options = GenOptions::default();
-    options.test_mode = true;
+    let options = GenOptions {
+        test_mode: true,
+        ..Default::default()
+    };
     let code = generate_source_with(
         "p0a-runner-filter",
         r#"test fn alpha_works() {

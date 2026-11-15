@@ -217,11 +217,11 @@ fn fixed_windows_0_50_100_and_adaptive_are_compared_on_one_trace() {
     // 200 ms entre les paquets (simule trois agents qui écrivent par rafales).
     let mut arrivals: Vec<u64> = Vec::new();
     let mut at = 0;
-    for burst in 0..4 {
+    for _ in 0..4 {
         for index in 0..3 {
             arrivals.push(at + index * 5);
         }
-        at += 200 + burst * 0;
+        at += 200;
     }
     let fixed0 = run_trace(BatchConfig::new(0, 8).unwrap(), &arrivals);
     let fixed50 = run_trace(BatchConfig::new(50, 8).unwrap(), &arrivals);

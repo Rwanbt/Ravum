@@ -943,9 +943,11 @@ mod tests {
 
     #[test]
     fn telemetry_no_loss_is_a_plain_invariant() {
-        let mut telemetry = BatchTelemetry::default();
-        telemetry.proposals_received = 3;
-        telemetry.items_reported = 3;
+        let mut telemetry = BatchTelemetry {
+            proposals_received: 3,
+            items_reported: 3,
+            ..Default::default()
+        };
         assert!(telemetry.no_loss());
         telemetry.items_reported = 2;
         assert!(!telemetry.no_loss());

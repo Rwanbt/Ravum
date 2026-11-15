@@ -969,15 +969,12 @@ impl<'a> Parser<'a> {
             }
         };
 
-        match kind {
-            Some(kind) => Some(Item {
-                id: self.id(),
-                vis,
-                kind,
-                span: self.span_from(start),
-            }),
-            None => None,
-        }
+        kind.map(|kind| Item {
+            id: self.id(),
+            vis,
+            kind,
+            span: self.span_from(start),
+        })
     }
 
     fn unsupported_item(&mut self, code: &str, what: &str) -> Option<ItemKind> {
@@ -3019,10 +3016,7 @@ impl<'a> Parser<'a> {
 
     fn parse_binary(&mut self, min_prec: u8, allow_struct: bool) -> Expr {
         let mut lhs = self.parse_cast(allow_struct);
-        loop {
-            let Some((op, prec, count)) = self.peek_binop() else {
-                break;
-            };
+        while let Some((op, prec, count)) = self.peek_binop() {
             if prec < min_prec {
                 break;
             }
@@ -4110,7 +4104,7 @@ mod tests {
         }
     }
 
-    fn let_init<'a>(f: &'a FnItem, index: usize) -> &'a Expr {
+    fn let_init(f: &FnItem, index: usize) -> &Expr {
         match &f.body.stmts[index].kind {
             StmtKind::Let(l) => l
                 .init
@@ -4120,7 +4114,7 @@ mod tests {
         }
     }
 
-    fn let_pat<'a>(f: &'a FnItem, index: usize) -> &'a Pat {
+    fn let_pat(f: &FnItem, index: usize) -> &Pat {
         match &f.body.stmts[index].kind {
             StmtKind::Let(l) => &l.pat,
             other => panic!("statement #{index} is not a let: {other:?}"),

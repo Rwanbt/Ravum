@@ -128,19 +128,15 @@ fn collect_static_str_candidates<'a>(
 ) {
     for item in &module.items {
         match &item.kind {
-            ItemKind::Fn(f) => {
-                if fn_sig_returns_static_str(item.id, f, facts) {
-                    out.push((f, item.id));
-                }
+            ItemKind::Fn(f) if fn_sig_returns_static_str(item.id, f, facts) => {
+                out.push((f, item.id));
             }
             ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
             ItemKind::Impl(imp) => {
                 for sub in &imp.items {
                     match &sub.kind {
-                        ItemKind::Fn(f) => {
-                            if fn_sig_returns_static_str(sub.id, f, facts) {
-                                out.push((f, sub.id));
-                            }
+                        ItemKind::Fn(f) if fn_sig_returns_static_str(sub.id, f, facts) => {
+                            out.push((f, sub.id));
                         }
                         ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
                         _ => {}
@@ -559,6 +555,9 @@ fn has_infer_var_rec(ty: &Type) -> bool {
     }
 }
 
+/// An inherent method queued for checking after its module's free functions.
+type PendingMethod<'p> = (ModuleId, NodeId, Span, &'p FnItem, Type, Vec<String>);
+
 struct TypeChecker<'p, 'w, 'f> {
     program: &'p ast::Program,
     facts: &'f mut Facts,
@@ -572,9 +571,9 @@ struct TypeChecker<'p, 'w, 'f> {
     scopes: Vec<BTreeMap<String, Local>>,
     loop_depth: usize,
     /// > 0 while checking a nested value position (argument, field, assignment
-    /// right-hand side, match arm/scrutinee, array repeat). EXPR-5.11/6.7/G-6.19
-    /// forbid `while`/`loop`/`for` as value expressions; only a direct statement
-    /// (or a `()`-block tail) may contain one.
+    /// > right-hand side, match arm/scrutinee, array repeat). EXPR-5.11/6.7/G-6.19
+    /// > forbid `while`/`loop`/`for` as value expressions; only a direct statement
+    /// > (or a `()`-block tail) may contain one.
     value_position: usize,
     /// Profondeur d'imbrication des blocs `unsafe` (>= 1 = contexte unsafe).
     unsafe_depth: usize,
@@ -683,10 +682,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if Self::compatible(&found, &expected) {
             return true;
         }
-        if self.has_infer_var(&found) || self.has_infer_var(&expected) {
-            if self.unify_pattern(&expected, &found, &mut BTreeMap::new()) {
-                return true;
-            }
+        if (self.has_infer_var(&found) || self.has_infer_var(&expected))
+            && self.unify_pattern(&expected, &found, &mut BTreeMap::new())
+        {
+            return true;
         }
         self.error(
             "E-TYP-MISMATCH",
@@ -978,7 +977,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         // Méthodes d'impl.
         let impl_items: Vec<(ModuleId, &'p Item, &'p ast::ImplItem)> =
             self.world.impl_items.clone();
-        let mut methods: Vec<(ModuleId, NodeId, Span, &'p FnItem, Type, Vec<String>)> = Vec::new();
+        let mut methods: Vec<PendingMethod<'p>> = Vec::new();
         for (module, _, imp) in impl_items {
             let self_ty = self
                 .facts
@@ -1231,7 +1230,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let ty = match &block.tail {
             Some(tail) => self.check_expr(tail, expected),
             None => match &last_type {
-                Some(t) if matches!(t, Type::Never) => Type::Never,
+                Some(Type::Never) => Type::Never,
                 _ => Type::Unit,
             },
         };
@@ -1690,8 +1689,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
             ValuePath::AssocFn(item) => Resolution::Item { item: *item },
-            ValuePath::Module(_) => Resolution::Module,
-            ValuePath::BuiltinModule(_) => Resolution::BuiltinModule,
+            ValuePath::Module => Resolution::Module,
+            ValuePath::BuiltinModule => Resolution::BuiltinModule,
             ValuePath::Type(_) => Resolution::Error,
         };
         self.facts.resolutions.insert(id, resolution);
@@ -1775,7 +1774,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
-            ValuePath::Module(_) | ValuePath::BuiltinModule(_) => {
+            ValuePath::Module | ValuePath::BuiltinModule => {
                 self.error(
                     "E-TYP-CALL",
                     expr.span,
@@ -1968,7 +1967,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 Type::Error
             }
-            ValuePath::Module(_) | ValuePath::BuiltinModule(_) => {
+            ValuePath::Module | ValuePath::BuiltinModule => {
                 self.error(
                     "E-TYP-CALL",
                     callee.span,
@@ -2918,7 +2917,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     return Type::Error;
                 };
                 self.check_field_visibility(&def, &field, span);
-                let subst = nominal_subst(self.world, &def, &args);
+                let subst = nominal_subst(self.world, &def, args);
                 substitute(&field.ty, &subst)
             }
             Type::Tuple(_) => {
@@ -3356,10 +3355,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     /// `Some(false)` = place immuable ; `Some(true)` = place mutable ; `None` =
     /// l'expression n'est pas une place (déjà rejetée par le parser).
     fn place_is_mutable(&self, expr: &Expr) -> bool {
-        match self.place_mutability(expr) {
-            Some(mutable) => mutable,
-            None => true,
-        }
+        self.place_mutability(expr).unwrap_or(true)
     }
 
     fn place_mutability(&self, expr: &Expr) -> Option<bool> {
@@ -4044,7 +4040,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
         let length = self.const_int_value(len);
         match length {
-            Some(n) if n == 0 => {
+            Some(0) => {
                 self.error(
                     "E-TYP-ARRAY-REPEAT",
                     len.span,
@@ -5235,9 +5231,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                             (ty.clone(), None)
                         }
                     }
-                } else if let (Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) = (&lhs, &rhs) {
-                    let _ = (a, b);
-                    (ty.clone(), None)
                 } else {
                     (ty.clone(), None)
                 }
@@ -5649,8 +5642,6 @@ fn cast_const_value(value: ConstValue, source: &Type, target: &Type) -> Option<C
         ConstValue::Int(v) => {
             if target.is_int() {
                 Some(ConstValue::Int(truncate_int(v, target)))
-            } else if matches!(target, Type::Bool) {
-                None
             } else {
                 None
             }
@@ -5751,14 +5742,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let pats: Vec<Option<&Pat>> = pats
             .iter()
             .copied()
-            .filter(|pat| pat.map_or(true, |pat| !pattern_contains_float(pat)))
+            .filter(|pat| pat.is_none_or(|pat| !pattern_contains_float(pat)))
             .collect();
         if pats.is_empty() {
             return false;
         }
         if pats
             .iter()
-            .any(|pat| pat.map_or(true, |pat| self.pattern_irrefutable_for(pat, ty)))
+            .any(|pat| pat.is_none_or(|pat| self.pattern_irrefutable_for(pat, ty)))
         {
             return true;
         }
@@ -5893,7 +5884,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if rows.iter().any(|row| {
             row.iter()
                 .zip(tys.iter())
-                .all(|(pat, ty)| pat.map_or(true, |pat| self.pattern_irrefutable_for(pat, ty)))
+                .all(|(pat, ty)| pat.is_none_or(|pat| self.pattern_irrefutable_for(pat, ty)))
         }) {
             return true;
         }

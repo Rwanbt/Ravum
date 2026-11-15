@@ -1079,9 +1079,7 @@ fn check_expected_files(spec: &CaseSpec, project: &Path) -> Option<String> {
 }
 
 fn check_json_schema(spec: &CaseSpec, stdout: &str) -> Option<String> {
-    let Some(want) = spec.expect_json_schema_version else {
-        return None;
-    };
+    let want = spec.expect_json_schema_version?;
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
         return Some("stdout is empty; expected a JSON report".to_string());
