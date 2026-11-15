@@ -326,6 +326,9 @@ impl B {
     fn finish(self, main: Option<NodeId>, tests: Vec<NodeId>) -> CheckedProgram {
         let root_id = self.id();
         let mut facts = self.facts.into_inner();
+        // RFC-OWN-FACTS-2 step C1: fixtures publish the same copy-ness table as
+        // production, so the step-B guard compares like with like.
+        facts.own.copy_type = ravum_lang_sema::copy_types(&facts);
         facts.main_fn = main;
         facts.test_fns = tests;
         let items = self.items.into_inner();

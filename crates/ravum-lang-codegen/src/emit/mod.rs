@@ -269,6 +269,20 @@ impl<'a> Emitter<'a> {
                 _ => {}
             }
         }
+        // RFC-OWN-FACTS-2 step C1: the checker now publishes copy-ness per type
+        // node. While `Emitter::is_copy_type` still exists it is compared against
+        // the table, so the two can never drift apart unnoticed; once every
+        // consumer reads the fact, the mirror is deleted (step C5).
+        for (id, ty) in &self.checked.facts.type_nodes {
+            let derived = self.is_copy_type(ty);
+            let recorded = self.checked.facts.own.copy_type.contains(id);
+            if derived != recorded {
+                return Err(err(format!(
+                    "ownership facts disagree with the backend for type {id}: the checker says \
+                     Copy={recorded}, the emitter classifies `{ty:?}` as Copy={derived}"
+                )));
+            }
+        }
         // Step B (extended): the recorded place must match the place the syntax
         // describes. The binding identity is not re-derived (the AST does not
         // carry the declaration span of a resolved local), but every projection

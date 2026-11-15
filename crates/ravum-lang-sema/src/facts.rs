@@ -363,6 +363,11 @@ pub struct OwnFacts {
     /// array element only by assigning the whole array, so the backend rebuilds
     /// the array at these targets (`spec/language/ownership.md` OWN-5.4).
     pub element_reinit: BTreeSet<NodeId>,
+    /// Step C1 of RFC-OWN-FACTS-2: the resolved types that are `Copy` at the
+    /// ownership level, keyed by type-syntax node id. The backend must read this
+    /// instead of re-deriving copy-ness from `Type`; while the derivation still
+    /// exists it is compared against this table by the step-B guard.
+    pub copy_type: BTreeSet<NodeId>,
 }
 
 #[derive(Debug, Clone, Default)]

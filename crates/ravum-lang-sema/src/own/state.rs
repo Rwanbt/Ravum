@@ -268,7 +268,10 @@ pub(crate) fn is_copy_type(ty: &Type, facts: &Facts) -> bool {
         Type::Ref { .. } => true,
         Type::Array { elem, .. } => is_copy_type(elem, facts),
         Type::Tuple(items) => items.iter().all(|t| is_copy_type(t, facts)),
-        Type::Slice(_) => true,
+        // OWN-2.1 lists the `Copy` types and OWN-2.2 makes everything else
+        // mobile; a slice is not in that list. The backend already classified
+        // it as mobile, and the step-C1 guard surfaced the disagreement.
+        Type::Slice(_) => false,
         Type::String | Type::Vec(_) => false,
         Type::Option(inner) => is_copy_type(inner, facts),
         Type::Result(ok, err) => is_copy_type(ok, facts) && is_copy_type(err, facts),
