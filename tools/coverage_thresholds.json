@@ -30,6 +30,11 @@
       "lines": 93,
       "regions": 93,
       "note": "2026-11-15 (E4, P-6): `typeck.rs` (93.62/93.21 measured pre-split) is divided into eleven submodules. The aggregate re-measures 93.67/93.21 on the CI artifact, so the split is coverage-neutral here (unlike `emit.rs`, whose pre-split total included an inline `#[cfg(test)]` module). The old 93/93 file floor is kept as this module floor."
+    },
+    "crates/ravum-lang-sema/src/loader/": {
+      "lines": 80,
+      "regions": 83,
+      "note": "2026-11-15 (E4, P-6) — correction de périmètre, pas abaissement. `loader.rs` mesurait 85,31/88,09 avant la découpe, mais ce total comptait les 939 lignes du module `#[cfg(test)]` logé dans le même fichier. Le code de test est désormais dans `loader/tests.rs`, que llvm-cov ne mesure pas : en code produit seul — le périmètre S5 — le module mesure 80,65/83,15. Le plancher de fichier `loader.rs` (85/88) reste en place pour le modèle ; ce plancher de module couvre les dix sous-modules. E6 relève l'ensemble vers 100 %."
     }
   },
   "files": {
@@ -263,6 +268,69 @@
       "measured_lines": 90.57,
       "measured_regions": 90.37,
       "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/loader/crates.rs": {
+      "lines": 80,
+      "regions": 81,
+      "measured_lines": 80.42,
+      "measured_regions": 81.71,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/digest.rs": {
+      "lines": 69,
+      "regions": 74,
+      "measured_lines": 69.01,
+      "measured_regions": 74.58,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/files.rs": {
+      "lines": 85,
+      "regions": 89,
+      "measured_lines": 85.98,
+      "measured_regions": 89.21,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/fsutil.rs": {
+      "lines": 65,
+      "regions": 67,
+      "measured_lines": 65.52,
+      "measured_regions": 67.88,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/graph.rs": {
+      "lines": 69,
+      "regions": 72,
+      "measured_lines": 69.45,
+      "measured_regions": 72.3,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/lockfile.rs": {
+      "lines": 71,
+      "regions": 71,
+      "measured_lines": 71.43,
+      "measured_regions": 71.84,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/sha256.rs": {
+      "lines": 100,
+      "regions": 100,
+      "measured_lines": 100.0,
+      "measured_regions": 100.0,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/toml.rs": {
+      "lines": 95,
+      "regions": 95,
+      "measured_lines": 95.1,
+      "measured_regions": 95.59,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/validate.rs": {
+      "lines": 97,
+      "regions": 97,
+      "measured_lines": 97.78,
+      "measured_regions": 97.96,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
     }
   }
 }
