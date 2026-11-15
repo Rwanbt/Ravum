@@ -283,6 +283,14 @@ impl<'a> Emitter<'a> {
                 )));
             }
         }
+        self.verify_ownership_tables()?;
+        let mut bodies: Vec<&Block> = Vec::new();
+        collect_fn_bodies(&self.checked.program.root, &mut bodies);
+        for body in bodies {
+            if let Some(message) = self.path_fact_disagreements(body).into_iter().next() {
+                return Err(err(message));
+            }
+        }
         // Step B (extended): the recorded place must match the place the syntax
         // describes. The binding identity is not re-derived (the AST does not
         // carry the declaration span of a resolved local), but every projection
@@ -361,6 +369,90 @@ impl<'a> Emitter<'a> {
                         self.expr_span_text(expr)
                     )));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// RFC-OWN-FACTS-2 steps C2–C4: the tables the checker publishes must agree
+    /// with each other and with the resolution facts.
+    ///
+    /// * `consumed` is exactly the set of expressions whose use is a `Move`;
+    /// * `consumed` is a subset of `owned_position`, and an owned position is a
+    ///   `Move` or a `Copy`, never a borrow;
+    /// * a binding identity names the binding the path resolves to.
+    fn verify_ownership_tables(&self) -> Result<(), CodegenError> {
+        let own = &self.checked.facts.own;
+        for (id, kind) in &own.use_kind {
+            let moved = matches!(kind, UseKind::Move);
+            if moved != own.consumed.contains(id) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: use kind \
+                     {kind:?}, consumed={}",
+                    own.consumed.contains(id)
+                )));
+            }
+        }
+        for id in &own.consumed {
+            if !own.owned_position.contains(id) || !own.use_kind.contains_key(id) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: consumed \
+                     outside an owned position"
+                )));
+            }
+        }
+        for id in &own.owned_position {
+            if !matches!(
+                own.use_kind.get(id),
+                Some(UseKind::Move) | Some(UseKind::Copy)
+            ) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: owned \
+                     position with use kind {:?}",
+                    own.use_kind.get(id)
+                )));
+            }
+        }
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut method_receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(
+            &self.checked.program.root,
+            &mut exprs,
+            &mut method_receivers,
+        );
+        let declarations: BTreeMap<_, _> = own
+            .bindings
+            .iter()
+            .map(|(declaration, id)| (*id, declaration))
+            .collect();
+        for (node, binding) in &own.binding_identity {
+            let Some(expr) = exprs.get(node) else {
+                continue;
+            };
+            let resolution = match &expr.kind {
+                ExprKind::Path(path) => self.checked.facts.resolutions.get(&path.id),
+                _ => self.checked.facts.resolutions.get(&expr.id),
+            };
+            let resolved = match resolution {
+                Some(Resolution::Local { name, decl, .. }) => Some((*decl, name.clone())),
+                Some(_) => None,
+                None => {
+                    return Err(err(format!(
+                        "missing resolution fact for expression {node} ({}): the checker \
+                         recorded a binding identity for it",
+                        self.expr_location(expr)
+                    )));
+                }
+            };
+            let recorded = declarations
+                .get(binding)
+                .map(|declaration| (**declaration).clone());
+            if resolved.is_none() || resolved != recorded {
+                return Err(err(format!(
+                    "ownership facts disagree with the resolution for expression {node} ({}): \
+                     recorded binding identity {recorded:?}, resolved binding {resolved:?}",
+                    self.expr_location(expr)
+                )));
             }
         }
         Ok(())
@@ -821,7 +913,7 @@ impl<'a> Emitter<'a> {
 
 mod paths;
 
-use paths::{collect_module_exprs, ArrayMovePlan, PathMode};
+use paths::{collect_fn_bodies, collect_module_exprs, ArrayMovePlan, PathMode};
 
 // ---------------------------------------------------------------------------
 // Tests.

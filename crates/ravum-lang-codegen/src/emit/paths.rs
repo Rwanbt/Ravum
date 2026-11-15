@@ -234,6 +234,24 @@ pub(super) fn collect_module_exprs<'a>(
     }
 }
 
+/// Collect the body of every function of a module (step-B path cross-check).
+pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Fn(function) => out.push(&function.body),
+            ItemKind::Impl(implementation) => {
+                for member in &implementation.items {
+                    if let ItemKind::Fn(function) = &member.kind {
+                        out.push(&function.body);
+                    }
+                }
+            }
+            ItemKind::Mod(inner) => collect_fn_bodies(inner, out),
+            _ => {}
+        }
+    }
+}
+
 pub(super) fn collect_block_exprs<'a>(
     block: &'a Block,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -397,6 +415,9 @@ pub(super) struct PathPlanner<'e, 'a> {
     emitter: &'e Emitter<'a>,
     accesses: Vec<PathAccess>,
     reinits: Vec<NodeId>,
+    /// Step-B guard (debug builds): decisions this walk derives from the syntax
+    /// that the checker's facts do not confirm.
+    disagreements: Vec<String>,
 }
 
 impl<'e, 'a> PathPlanner<'e, 'a> {
@@ -405,6 +426,61 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
             emitter,
             accesses: Vec::new(),
             reinits: Vec::new(),
+            disagreements: Vec::new(),
+        }
+    }
+
+    /// RFC-OWN-FACTS-2 steps C2–C4, equivalence guard: compare what this walk
+    /// derives for the place expression `expr` (rooted at `root`) with what the
+    /// checker recorded for it.
+    ///
+    /// * `consumed` must be equal: the walk moves the value out exactly when
+    ///   the checker did.
+    /// * `owned_position` must contain every position the walk calls owned. The
+    ///   converse does not hold and is not required: the checker also takes by
+    ///   value the `Copy` operands the walk does not track (`a[0] + 1`), which
+    ///   is why such a surplus position must never be `consumed`.
+    /// * the checker must have visited the place and given its root binding an
+    ///   identity.
+    fn cross_check(&mut self, expr: &Expr, root: &Expr, owned: bool) {
+        // A projection of a temporary (`make()[i]`) is no place: the checker
+        // records its value use, but neither a place nor a binding.
+        let is_place = self.emitter.syntactic_place(expr).is_some();
+        let own = &self.emitter.facts().own;
+        let recorded_owned = own.owned_position.contains(&expr.id);
+        let recorded_consumed = own.consumed.contains(&expr.id);
+        let derived_consumed = owned && self.emitter.is_owned_position(expr);
+        let location = self.emitter.expr_location(expr);
+        if is_place && !own.place.contains_key(&expr.id) {
+            // The backend lowers this place, so the checker must have decided
+            // something about it; an absent decision is not "not consumed".
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 checker recorded no decision for this place",
+                expr.id
+            ));
+        }
+        if derived_consumed != recorded_consumed {
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 checker says consumed={recorded_consumed}, the emitter derives \
+                 consumed={derived_consumed}",
+                expr.id
+            ));
+        }
+        if owned && !recorded_owned {
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 emitter derives an owned position the checker did not record",
+                expr.id
+            ));
+        }
+        if is_place && !own.binding_identity.contains_key(&root.id) {
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 checker recorded no binding identity for the root of this place",
+                expr.id
+            ));
         }
     }
 
@@ -452,6 +528,9 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
             if let PathStep::Index { index, .. } = step {
                 self.walk_expr(index, false, false);
             }
+        }
+        if cfg!(debug_assertions) {
+            self.cross_check(expr, root, owned);
         }
         let Some(path) = self.emitter.element_path(expr) else {
             return;
@@ -631,6 +710,14 @@ impl<'a> Emitter<'a> {
         let mut planner = PathPlanner::new(self);
         planner.walk_block(body, true);
         planner.plan()
+    }
+
+    /// Step-B guard: the disagreements between the syntactic walk of `body` and
+    /// the checker's facts (see [`PathPlanner::cross_check`]).
+    pub(super) fn path_fact_disagreements(&self, body: &Block) -> Vec<String> {
+        let mut planner = PathPlanner::new(self);
+        planner.walk_block(body, true);
+        planner.disagreements
     }
 
     pub(super) fn path_mode(&self, node: NodeId) -> Option<PathMode> {

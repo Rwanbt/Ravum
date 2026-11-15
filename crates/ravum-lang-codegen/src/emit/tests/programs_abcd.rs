@@ -80,7 +80,14 @@ pub(super) fn build_program_a() -> ProgramA {
 
     // impl Point { fn sum(&self) -> i32 { self.x + self.y } }
     let sum_id = b.id();
-    let self_value = b.expr(ExprKind::SelfValue, Some(point_ty.clone()));
+    let self_value = b.expr(
+        ExprKind::SelfValue,
+        // `&self`: as `typeck` records it, the receiver is a reference.
+        Some(STy::Ref {
+            mutable: false,
+            inner: Box::new(point_ty.clone()),
+        }),
+    );
     let self_x_name = b.ident("x");
     let self_x = b.expr(
         ExprKind::Field {
@@ -89,7 +96,14 @@ pub(super) fn build_program_a() -> ProgramA {
         },
         Some(STy::I32),
     );
-    let self_value = b.expr(ExprKind::SelfValue, Some(point_ty.clone()));
+    let self_value = b.expr(
+        ExprKind::SelfValue,
+        // `&self`: as `typeck` records it, the receiver is a reference.
+        Some(STy::Ref {
+            mutable: false,
+            inner: Box::new(point_ty.clone()),
+        }),
+    );
     let self_y_name = b.ident("y");
     let self_y = b.expr(
         ExprKind::Field {

@@ -66,6 +66,8 @@ impl<'a> OwnChecker<'a> {
         self.loop_stack.push(LoopCtx::default());
         if !self.diverged {
             self.analyze_block(body, false);
+        } else {
+            self.analyze_dead(|checker| checker.analyze_block(body, false));
         }
         let ctx = self.loop_stack.pop().unwrap_or_default();
 
@@ -309,6 +311,13 @@ impl<'a> OwnChecker<'a> {
             UseKind::Move
         };
         self.record_use(node, kind, place);
+        // RFC-OWN-FACTS-2 steps C2/C3: this is the single site where the
+        // checker takes the value of a place, so it is the single site that
+        // decides "owned position" and "consumed".
+        self.own.owned_position.insert(node);
+        if kind == UseKind::Move {
+            self.own.consumed.insert(node);
+        }
         if !self.check_availability(place, span, Access::Move) {
             return;
         }
@@ -317,6 +326,23 @@ impl<'a> OwnChecker<'a> {
             return;
         }
         self.perform_move(place, span);
+    }
+
+    /// The value of `expr` — a projection of a temporary (`make()[i]`,
+    /// `pair().0`), which is no place — is taken. There is no ownership state
+    /// to update, but the decision is the same one `consume_place` records, and
+    /// the backend needs it just as much (RFC-OWN-FACTS-2 steps C2/C3).
+    pub(super) fn consume_temporary(&mut self, expr: &Expr) {
+        let kind = if self.expr_type(expr).is_error_or_copy(self.facts) {
+            UseKind::Copy
+        } else {
+            UseKind::Move
+        };
+        self.own.use_kind.insert(expr.id, kind);
+        self.own.owned_position.insert(expr.id);
+        if kind == UseKind::Move {
+            self.own.consumed.insert(expr.id);
+        }
     }
 
     pub(super) fn read_place(&mut self, place: &Place, span: Span, node: NodeId) {
