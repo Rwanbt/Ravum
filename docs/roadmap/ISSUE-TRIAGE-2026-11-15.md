@@ -158,6 +158,22 @@ Fermée avec un commentaire citant les commandes et les chiffres. **T5 (#93) et
 T7 (#95) restent à vérifier** de la même façon, et T0 (#88) reste ouverte : son
 rapport est lui-même marqué PARTIAL.
 
+## 3 quater. Vérification par issue : T5 (#93) — **maintenue ouverte**
+
+Vérification point par point des quatre exigences de l'issue :
+
+| Exigence | Preuve | Verdict |
+|---|---|---|
+| backend B (Rust auditable) qualifié | `--emit-rust` (`args.rs`), oracle différentiel, S7 | couvert |
+| binaires natifs Windows et Linux | smoke 43 PASS (Windows), CI Linux | couvert |
+| parité debug/release | oracle `RAVUM_DIFF_RELEASE_EVERY`, **échantillonnée** | **partiel** |
+| ABI et limites documentées | `SAFETY.md` C-FFI-2, `spec/language/abi.md` ABI-2.5/3.3 | **partiel** : contradictions ouvertes |
+
+Conclusion : l'issue reste **ouverte**, son `Statut : PARTIAL` est juste. La matrice
+donne `T5 = PASS`, ce qui paraît trop généreux au regard de ces deux points. Reclasser
+T5 relève d'une décision de gate, donc humaine. Aucune clôture de T5 avant résolution
+de ABI-2.5/3.3 et de la parité debug/release exhaustive.
+
 ## 4. Ce que ce tri ne fait pas
 
 - Il ne ferme aucune issue : la clôture est un acte séparé, par issue, avec la preuve citée.
