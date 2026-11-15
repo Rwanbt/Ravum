@@ -1588,3 +1588,183 @@ fn per_function_budget_reports_e_own_limit_before_the_file_budget() {
         "the file budget must not be reached before the per-function limit: {codes:?}"
     );
 }
+
+// ===========================================================================
+// D13 — staticité prouvée (`docs/rfc/RFC-D13-STATICITY.md`)
+//
+// La règle 2 (aucun `&str` emprunté ne peut entrer dans un agrégat) est
+// vérifiée à chaque site de stockage ; elle rend la règle 1 vraie : un `&str`
+// lu *dans* un agrégat est `&'static str` par construction. Ces cas vérifient
+// les deux directions : les projections deviennent acceptées, les échappements
+// réels restent refusés.
+// ===========================================================================
+
+#[test]
+fn audit_d13_array_projection_is_returnable() {
+    accepted(
+        r#"
+fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_array_projection_is_bindable() {
+    accepted(
+        r#"
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    return s;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_struct_field_projection_is_returnable() {
+    accepted(
+        r#"
+struct Card {
+    text: &str,
+}
+
+fn label(c: Card) -> &str {
+    return c.text;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_option_payload_unwrap_is_static() {
+    accepted(
+        r#"
+fn pick(o: Option<&str>) -> &str {
+    return o.unwrap();
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_match_payload_is_static() {
+    accepted(
+        r#"
+fn pick(o: Option<&str>) -> &str {
+    match o {
+        Some(t) => { return t; }
+        None => { return "none"; }
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_nested_projection_out_of_an_array_of_structs() {
+    accepted(
+        r#"
+struct Card {
+    text: &str,
+}
+
+fn pick(cards: [Card; 2]) -> &str {
+    return cards[1].text;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_function_returning_a_projection_is_storable() {
+    // Interprocedural contract: the fixpoint must classify `pick`, otherwise
+    // the caller's `let` would be a false positive.
+    accepted(
+        r#"
+fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+
+fn f() -> &str {
+    let text = pick(["x", "y"]);
+    return text;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_string_as_str_stays_refused() {
+    rejected(
+        r#"
+fn f(s: String) -> &str {
+    return s.as_str();
+}
+"#,
+        "E-OWN-REF-ESCAPE",
+    );
+}
+
+#[test]
+fn audit_d13_borrowed_parameter_in_an_aggregate_stays_refused() {
+    rejected(
+        r#"
+fn bad(s: &str) -> (&str, i32) {
+    return (s, 1);
+}
+"#,
+        "E-OWN-REF-ESCAPE",
+    );
+}
+
+#[test]
+fn audit_d13_top_level_binding_is_still_borrowed() {
+    rejected(
+        r#"
+fn bad(s: &str) -> &str {
+    match s {
+        x => { return x; }
+    }
+}
+"#,
+        "E-OWN-REF-ESCAPE",
+    );
+}
+
+#[test]
+fn audit_d13_function_with_a_local_copy_is_storable() {
+    // The interprocedural contract must follow `let s = a[1]` (a copy of a
+    // static value is static), otherwise the caller's `let` is a false positive.
+    accepted(
+        r#"
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    return s;
+}
+
+fn f() -> &str {
+    let s = pick(["x", "y"]);
+    return s;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_d13_block_tail_copy_is_storable() {
+    accepted(
+        r#"
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    s
+}
+
+fn f() -> &str {
+    let s = pick(["x", "y"]);
+    return s;
+}
+"#,
+    );
+}

@@ -5,4 +5,4 @@ lockfile_version = 1
 [[package]]
 name = "dsp-gain-iir"
 version = "0.1.0"
-digest = "sha256:6f726d6e408ae78dec71e9ee5c3e859d878c80f1669c9bb6025fdfdf1c2560de"
+digest = "sha256:4be7022625f427960f69e043fb7d47afd2f73a9204d115deea2637e2d8477632"

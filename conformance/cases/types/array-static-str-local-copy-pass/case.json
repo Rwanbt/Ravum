@@ -1,0 +1,6 @@
+{
+  "id": "types/array-static-str-local-copy-pass",
+  "mode": "run-pass",
+  "stdout_contains": "y\n",
+  "notes": "D13 rules 1+2 combined across a function boundary: `pick` copies `a[1]` into a static local and returns it; the interprocedural contract follows the `let` (a copy of a static value is static), so the caller can store the result."
+}

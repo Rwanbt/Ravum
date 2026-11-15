@@ -63,10 +63,13 @@
 //! (`E-OWN-LIMIT`), aucune panique sur un AST incomplet (les faits manquants
 //! désactivent seulement la règle correspondante).
 
-use crate::facts::{CallTarget, CheckedProgram, Facts, MethodTarget, Resolution};
+use crate::facts::{
+    CallTarget, CheckedProgram, Facts, MethodTarget, OwnFacts, OwnPlace, Projection,
+    ProjectionIndex, Resolution, UseKind,
+};
 use crate::types::Type;
 use ravum_lang_syntax::ast::{
-    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, ParamKind, Pat,
+    BinOp, Block, Expr, ExprKind, FnItem, Item, ItemKind, MatchArm, Module, NodeId, ParamKind, Pat,
     PatKind, Receiver, Stmt, StmtKind, UnOp,
 };
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
@@ -97,7 +100,7 @@ const E_LIMIT: &str = "E-OWN-LIMIT";
 
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
 /// order by the caller; this function only pushes them.
-pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) {
+pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> OwnFacts {
     // OWN-6.1/6.2: a reference cannot be *stored* — a struct field or an enum
     // payload is such a storage. This is checked on the declaration because no
     // value could ever inhabit it: constructing one from a non-static reference
@@ -105,10 +108,19 @@ pub fn check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) {
     check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
     let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
     collect_fns(&checked.program.root, &mut fns);
+    // The accumulator is shared by every function: each checker inserts its
+    // decisions directly, so the cost is one ordered-map insert per recorded
+    // expression. The previous shape gave every function its own table and
+    // merged it with `BTreeMap::append` after each `check_fn`; `append` moves
+    // the whole accumulated map on every call, which made the phase quadratic
+    // in the number of functions (25 758 ms of the 26 424 ms `check` at
+    // 50 110 lines, `docs/reports/LANG-TIMINGS.md` §8).
+    let mut own = OwnFacts::default();
     for (item, f) in fns {
-        let mut checker = OwnChecker::new(&checked.facts, diags);
+        let mut checker = OwnChecker::new(&checked.facts, diags, &mut own);
         checker.check_fn(item, f);
     }
+    own
 }
 
 /// Walk every stored field type: struct fields and enum variant payloads.
@@ -162,6 +174,19 @@ fn report_stored_reference(
         "une référence ne peut pas être stockée dans un champ ou une charge utile d'énumération"
             .to_string(),
     );
+}
+
+/// `true` for the borrowed-text type `&str` (`Type::Ref { mutable: false,
+/// inner: Str }`). D13's staticity analysis only speaks about this type: it is
+/// the single reference type Core 1.0 lets cross an instruction boundary.
+fn is_borrowed_text(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Ref {
+            mutable: false,
+            inner,
+        } if matches!(**inner, Type::Str)
+    )
 }
 
 /// `true` when the type stores a reference that is not the `&str` of a string
@@ -229,6 +254,17 @@ struct Place {
     steps: Vec<Step>,
 }
 
+/// Convert an internal projection to the public fact representation.
+fn projection(step: &Step) -> Projection {
+    match step {
+        Step::Deref => Projection::Deref,
+        Step::Field(name) => Projection::Field(name.clone()),
+        Step::Tuple(index) => Projection::Tuple(*index),
+        Step::Index(IndexKey::Lit(value)) => Projection::Index(ProjectionIndex::Lit(*value)),
+        Step::Index(IndexKey::Opaque) => Projection::Index(ProjectionIndex::Opaque),
+    }
+}
+
 #[derive(Debug, Clone)]
 struct SlotInfo {
     name: String,
@@ -237,6 +273,22 @@ struct SlotInfo {
     /// or a copy of one), the only storable reference in Core 1.0.
     static_ref: bool,
     decl_span: Span,
+}
+
+/// One binding introduced by a pattern, with the information needed to decide
+/// whether a `&str` it receives is static (D13 rule 1).
+#[derive(Debug, Clone)]
+struct PatBinding {
+    name: String,
+    ty: Type,
+    span: Span,
+    /// `true` when the binding destructures a *component* of the matched value
+    /// (tuple element, enum payload, struct field) instead of copying the value
+    /// itself. A `&str` read out of an aggregate is static by construction:
+    /// OWN-6.1/3.3 forbid storing a borrowed `&str` in any aggregate, and every
+    /// storage site is checked (literals, struct literals, `Some`/`Ok`/`Err`,
+    /// `push`, assignment, `let`, `return`).
+    nested: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -328,10 +380,13 @@ struct OwnChecker<'a> {
     /// *usage* of the value, not the "second effective move" that
     /// `E-OWN-DOUBLE-MOVE` describes.
     call_depth: u32,
+    /// Ownership decisions recorded for the backend (RFC-OWN-FACTS-1, step A).
+    /// Shared across the functions of one program (see `check_ownership`).
+    own: &'a mut OwnFacts,
 }
 
 impl<'a> OwnChecker<'a> {
-    fn new(facts: &'a Facts, diags: &'a mut DiagnosticBag) -> Self {
+    fn new(facts: &'a Facts, diags: &'a mut DiagnosticBag, own: &'a mut OwnFacts) -> Self {
         OwnChecker {
             facts,
             diags,
@@ -348,6 +403,7 @@ impl<'a> OwnChecker<'a> {
             budget_hit: false,
             too_deep: false,
             call_depth: 0,
+            own,
         }
     }
 
@@ -581,15 +637,17 @@ impl<'a> OwnChecker<'a> {
         }
 
         // Destructuring pattern: the initialiser was consumed as a whole.
-        let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-        self.collect_pat_bindings(&l.pat, &mut bindings);
-        for (name, ty, span) in bindings {
-            if ty.is_reference() {
-                // Provenance of a reference extracted by a pattern cannot be
-                // proven static: refuse conservatively.
-                self.report_ref_escape(span, "stockée");
+        let mut bindings: Vec<PatBinding> = Vec::new();
+        self.collect_pat_bindings(&l.pat, false, &mut bindings);
+        for b in bindings {
+            // A `&str` extracted from a destructured aggregate is static by
+            // construction (D13 rule 1 + rule 2); every other reference keeps
+            // the Core 1.0 refusal.
+            let static_ref = b.nested && is_borrowed_text(&b.ty);
+            if b.ty.is_reference() && !static_ref {
+                self.report_ref_escape(b.span, "stockée");
             }
-            let slot = self.declare_slot(&name, ty, false, span);
+            let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
             let st = if has_init {
                 SlotState::initialised()
             } else {
@@ -599,7 +657,7 @@ impl<'a> OwnChecker<'a> {
         }
     }
 
-    fn collect_pat_bindings(&self, pat: &Pat, out: &mut Vec<(String, Type, Span)>) {
+    fn collect_pat_bindings(&self, pat: &Pat, nested: bool, out: &mut Vec<PatBinding>) {
         match &pat.kind {
             PatKind::Binding { name, .. } => {
                 let ty = self
@@ -608,22 +666,29 @@ impl<'a> OwnChecker<'a> {
                     .get(&pat.id)
                     .cloned()
                     .unwrap_or(Type::Error);
-                out.push((name.name.clone(), ty, pat.span));
+                out.push(PatBinding {
+                    name: name.name.clone(),
+                    ty,
+                    span: pat.span,
+                    nested,
+                });
             }
             PatKind::Tuple(items) => {
                 for item in items {
-                    self.collect_pat_bindings(item, out);
+                    // Every component of a destructured value is read *out* of
+                    // an aggregate (D13 rule 1, projection).
+                    self.collect_pat_bindings(item, true, out);
                 }
             }
             PatKind::Variant { fields, .. } => match fields {
                 ravum_lang_syntax::ast::VariantPatFields::Tuple(items) => {
                     for item in items {
-                        self.collect_pat_bindings(item, out);
+                        self.collect_pat_bindings(item, true, out);
                     }
                 }
                 ravum_lang_syntax::ast::VariantPatFields::Struct(fields) => {
                     for f in fields {
-                        self.collect_pat_bindings(&f.pat, out);
+                        self.collect_pat_bindings(&f.pat, true, out);
                     }
                 }
             },
@@ -648,12 +713,12 @@ impl<'a> OwnChecker<'a> {
             | ExprKind::Str(_) => {}
             ExprKind::SelfValue | ExprKind::Path(_) => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 }
             }
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
@@ -666,7 +731,7 @@ impl<'a> OwnChecker<'a> {
             }
             ExprKind::Index { base, index } => {
                 if let Some(place) = self.eval_place_expr(expr) {
-                    self.consume_place(&place, expr.span);
+                    self.consume_place(&place, expr.span, expr.id);
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
@@ -687,7 +752,7 @@ impl<'a> OwnChecker<'a> {
                 UnOp::RefMut => self.eval_borrow(inner, true, expr.span),
                 UnOp::Deref => {
                     if let Some(place) = self.eval_place_expr(expr) {
-                        self.consume_place(&place, expr.span);
+                        self.consume_place(&place, expr.span, expr.id);
                     } else {
                         let inner_ty = self.expr_type(inner);
                         self.eval_value(inner);
@@ -723,17 +788,17 @@ impl<'a> OwnChecker<'a> {
                     self.report_ref_escape(value.span, "stockée");
                 }
                 if let Some(place) = self.eval_place_expr(target) {
-                    self.write_place(&place, target.span);
+                    self.write_place(&place, target.span, target.id);
                 }
             }
             ExprKind::AssignOp { target, value, .. } => {
                 let place = self.eval_place_expr(target);
                 if let Some(p) = &place {
-                    self.read_place(p, target.span);
+                    self.read_place(p, target.span, target.id);
                 }
                 self.eval_value(value);
                 if let Some(p) = place {
-                    self.write_place(&p, target.span);
+                    self.write_place(&p, target.span, target.id);
                 }
             }
             ExprKind::Cast { expr: inner, .. } => self.eval_value(inner),
@@ -769,7 +834,7 @@ impl<'a> OwnChecker<'a> {
                         )],
                     );
                     if let Some(place) = self.eval_place_expr(value) {
-                        self.read_place(&place, value.span);
+                        self.read_place(&place, value.span, value.id);
                     } else {
                         self.eval_value(value);
                     }
@@ -842,7 +907,7 @@ impl<'a> OwnChecker<'a> {
 
     fn eval_borrow(&mut self, operand: &Expr, mutable: bool, span: Span) {
         if let Some(place) = self.eval_place_expr(operand) {
-            self.borrow_place(&place, span, mutable);
+            self.borrow_place(&place, span, mutable, operand.id);
         } else {
             // Borrow of a temporary rvalue: allowed, dies with the instruction.
             self.eval_value(operand);
@@ -979,14 +1044,19 @@ impl<'a> OwnChecker<'a> {
                 continue;
             }
             self.push_scope();
-            let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-            self.collect_pat_bindings(&arm.pat, &mut bindings);
+            let mut bindings: Vec<PatBinding> = Vec::new();
+            self.collect_pat_bindings(&arm.pat, false, &mut bindings);
             let mut arm_slots: Vec<SlotId> = Vec::new();
-            for (name, ty, span) in bindings {
-                if ty.is_reference() {
-                    self.report_ref_escape(span, "stockée");
+            for b in bindings {
+                // An arm binding of type `&str` either copies the scrutinee
+                // (top-level pattern: its own provenance decides) or reads a
+                // payload out of it (nested: static by rule 2).
+                let static_ref =
+                    is_borrowed_text(&b.ty) && (b.nested || self.is_static_ref(scrutinee));
+                if b.ty.is_reference() && !static_ref {
+                    self.report_ref_escape(b.span, "stockée");
                 }
-                let slot = self.declare_slot(&name, ty, false, span);
+                let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
                 arm_slots.push(slot);
                 self.state.slots.insert(slot, SlotState::initialised());
             }
@@ -1149,14 +1219,17 @@ impl<'a> OwnChecker<'a> {
         let iter_diverged = self.diverged;
 
         self.push_scope();
-        let mut bindings: Vec<(String, Type, Span)> = Vec::new();
-        self.collect_pat_bindings(pat, &mut bindings);
+        let mut bindings: Vec<PatBinding> = Vec::new();
+        self.collect_pat_bindings(pat, false, &mut bindings);
         let mut loop_slots: Vec<SlotId> = Vec::new();
-        for (name, ty, span) in &bindings {
-            if ty.is_reference() {
-                self.report_ref_escape(*span, "stockée");
+        for b in &bindings {
+            // A `for` item of type `&str` comes out of the iterable (a range or
+            // a container of static texts): static by rule 2.
+            let static_ref = is_borrowed_text(&b.ty);
+            if b.ty.is_reference() && !static_ref {
+                self.report_ref_escape(b.span, "stockée");
             }
-            let slot = self.declare_slot(name, ty.clone(), false, *span);
+            let slot = self.declare_slot(&b.name, b.ty.clone(), static_ref, b.span);
             loop_slots.push(slot);
         }
 
@@ -1376,7 +1449,7 @@ impl<'a> OwnChecker<'a> {
     fn borrow_receiver(&mut self, receiver: &Expr, mutable: bool) {
         if let Some(mut place) = self.eval_place_expr(receiver) {
             self.auto_deref(&mut place);
-            self.borrow_place(&place, receiver.span, mutable);
+            self.borrow_place(&place, receiver.span, mutable, receiver.id);
         } else {
             self.eval_value(receiver);
         }
@@ -1406,7 +1479,7 @@ impl<'a> OwnChecker<'a> {
                     // temporary consumed by the call.
                     if let Some(mut place) = self.eval_place_expr(arg) {
                         self.auto_deref(&mut place);
-                        self.borrow_place(&place, arg.span, *mutable);
+                        self.borrow_place(&place, arg.span, *mutable, arg.id);
                     } else {
                         self.eval_value(arg);
                     }
@@ -1435,7 +1508,13 @@ impl<'a> OwnChecker<'a> {
     // Place consumption, reads, writes, borrows
     // ------------------------------------------------------------------
 
-    fn consume_place(&mut self, place: &Place, span: Span) {
+    fn consume_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        let kind = if self.place_type(place).is_error_or_copy(self.facts) {
+            UseKind::Copy
+        } else {
+            UseKind::Move
+        };
+        self.record_use(node, kind, place);
         if !self.check_availability(place, span, Access::Move) {
             return;
         }
@@ -1446,13 +1525,20 @@ impl<'a> OwnChecker<'a> {
         self.perform_move(place, span);
     }
 
-    fn read_place(&mut self, place: &Place, span: Span) {
+    fn read_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        let kind = if self.place_type(place).is_error_or_copy(self.facts) {
+            UseKind::Copy
+        } else {
+            UseKind::Borrow
+        };
+        self.record_use(node, kind, place);
         if self.check_availability(place, span, Access::Read) {
             self.mark_used(place.slot);
         }
     }
 
-    fn write_place(&mut self, place: &Place, span: Span) {
+    fn write_place(&mut self, place: &Place, span: Span, node: NodeId) {
+        self.record_place(node, place);
         if !self.check_availability(place, span, Access::Write) {
             return;
         }
@@ -1481,7 +1567,16 @@ impl<'a> OwnChecker<'a> {
         }
     }
 
-    fn borrow_place(&mut self, place: &Place, span: Span, mutable: bool) -> bool {
+    fn borrow_place(&mut self, place: &Place, span: Span, mutable: bool, node: NodeId) -> bool {
+        self.record_use(
+            node,
+            if mutable {
+                UseKind::BorrowMut
+            } else {
+                UseKind::Borrow
+            },
+            place,
+        );
         let access = if mutable {
             Access::BorrowExclusive
         } else {
@@ -1497,6 +1592,26 @@ impl<'a> OwnChecker<'a> {
             span,
         });
         true
+    }
+
+    /// Record a value use for the backend (RFC-OWN-FACTS-1, step A).
+    fn record_use(&mut self, node: NodeId, kind: UseKind, place: &Place) {
+        self.own.use_kind.insert(node, kind);
+        self.own.place.insert(node, self.own_place(place));
+    }
+
+    /// Record a place without a value-use kind (writes).
+    fn record_place(&mut self, node: NodeId, place: &Place) {
+        self.own.place.insert(node, self.own_place(place));
+    }
+
+    fn own_place(&self, place: &Place) -> OwnPlace {
+        let binding = self
+            .slot_info(place.slot)
+            .map(|info| info.decl_span)
+            .unwrap_or_else(Span::dummy);
+        let steps = place.steps.iter().map(projection).collect();
+        OwnPlace { binding, steps }
     }
 
     fn mark_used(&mut self, slot: SlotId) {
@@ -1756,6 +1871,42 @@ impl<'a> OwnChecker<'a> {
                 self.facts.calls.get(&expr.id),
                 Some(CallTarget::UserFn { item }) if self.facts.static_str_fns.contains(item)
             ),
+            // D13 rule 1 — projection preserves provenance. A `&str` read out of
+            // an aggregate (`a[i]`, `s.champ`, `t.0`) is static *by
+            // construction*: OWN-6.1/3.3 forbid storing a borrowed `&str` inside
+            // an array, a tuple, a field, a `Vec` or an `Option`/`Result`, and
+            // every storage site is checked (array/tuple/struct literals,
+            // `Some`/`Ok`/`Err`, `push`/`insert`, assignment, `let`, `return`).
+            ExprKind::Field { .. } | ExprKind::TupleIndex { .. } | ExprKind::Index { .. } => {
+                is_borrowed_text(&self.expr_type(expr))
+            }
+            // D13 rule 1 — the payload of an `Option`/`Result` is read out of an
+            // aggregate (static by rule 2); `str::as_str` is the identity on a
+            // text reference. `String::as_str` stays refused: it borrows a local
+            // `String` (OWN-6.3).
+            ExprKind::MethodCall { receiver, args, .. } => {
+                match self.facts.methods.get(&expr.id) {
+                    Some(MethodTarget::Builtin { path, .. }) if path.as_str() == "str::as_str" => {
+                        self.is_static_ref(receiver)
+                    }
+                    Some(MethodTarget::Builtin { path, .. })
+                        if is_borrowed_text(&self.expr_type(expr)) =>
+                    {
+                        match path.as_str() {
+                            "Option::unwrap" | "Result::unwrap" => true,
+                            "Option::unwrap_or" | "Result::unwrap_or" => args
+                                .first()
+                                .map(|default| self.is_static_ref(default))
+                                .unwrap_or(false),
+                            _ => false,
+                        }
+                    }
+                    // A user method obeys the same verified contract as a user
+                    // function (its body proves every return static).
+                    Some(MethodTarget::User { item }) => self.facts.static_str_fns.contains(item),
+                    _ => false,
+                }
+            }
             _ => false,
         }
     }
@@ -2273,9 +2424,14 @@ impl Type {
 }
 #[cfg(test)]
 mod tests {
-    use crate::facts::{CheckOptions, CheckResult, Profile};
+    use super::{check_ownership, check_stored_reference_fields, collect_fns, OwnChecker};
+    use crate::facts::{CheckOptions, CheckResult, CheckedProgram, OwnFacts, Profile};
+    use crate::loader::{load_package_with_options, LoadOptions};
+    use ravum_lang_syntax::ast::{FnItem, Item};
+    use ravum_lang_syntax::diag::DiagnosticBag;
     use ravum_lang_syntax::parser;
     use ravum_lang_syntax::source::SourceMap;
+    use std::path::{Path, PathBuf};
 
     /// Parse and check a complete program. The parser/checker are real: parse
     /// errors are a test failure, and ownership diagnostics only exist when the
@@ -2703,6 +2859,136 @@ fn rec() -> &str { rec() }
 fn f() -> &str {
     let text = rec();
     return text;
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    // -- D13: projected text is static by construction -----------------------
+
+    #[test]
+    fn static_text_array_element_can_be_returned() {
+        // RFC-D13-STATICITY rule 1: the element of a `[&str; 2]` is a
+        // `&'static str` because rule 2 forbids storing a borrowed `&str` there.
+        accepted(
+            r#"
+fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_array_element_can_be_bound_then_returned() {
+        accepted(
+            r#"
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    return s;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_struct_field_can_be_returned() {
+        accepted(
+            r#"
+struct Card { text: &str }
+fn label(c: Card) -> &str {
+    return c.text;
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_vec_element_can_be_returned() {
+        accepted(
+            r#"
+fn pick(v: Vec<&str>) -> &str {
+    return v[0];
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_option_payload_can_be_unwrapped() {
+        accepted(
+            r#"
+fn pick(o: Option<&str>) -> &str {
+    return o.unwrap();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn static_text_match_payload_can_be_returned() {
+        accepted(
+            r#"
+fn pick(o: Option<&str>) -> &str {
+    match o {
+        Some(t) => { return t; }
+        None => { return "none"; }
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn str_as_str_identity_of_static_text_is_storable() {
+        // `str::as_str` is the identity on a `&str`, so a static receiver stays
+        // static (unlike `String::as_str`, which borrows a local `String`).
+        accepted(
+            r#"
+fn f() -> &str {
+    let t = "x";
+    return t.as_str();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn string_as_str_in_an_array_stays_refused() {
+        // Rule 2 (negative): the storage site that makes rule 1 true.
+        rejected(
+            r#"
+fn f(s: String) {
+    let a = [s.as_str()];
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    #[test]
+    fn borrowed_text_parameter_in_an_aggregate_stays_refused() {
+        rejected(
+            r#"
+fn bad(s: &str) -> (&str, i32) {
+    return (s, 1);
+}
+"#,
+            "E-OWN-REF-ESCAPE",
+        );
+    }
+
+    #[test]
+    fn top_level_match_binding_of_a_parameter_stays_refused() {
+        // A top-level binding copies the value; it is not a projection out of an
+        // aggregate, so a borrowed `&str` parameter stays non-static.
+        rejected(
+            r#"
+fn bad(s: &str) -> &str {
+    match s {
+        x => { return x; }
+    }
 }
 "#,
             "E-OWN-REF-ESCAPE",
@@ -3180,6 +3466,292 @@ fn main() {
 }
 "#,
             "E-OWN-UNINIT",
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Fact-accumulation equivalence (wave 3, agent A)
+    // ------------------------------------------------------------------
+
+    /// The accumulation used before the 2026-11-14 fix, kept here as the oracle
+    /// of `own_facts_are_identical_to_the_append_accumulation`. Every function
+    /// records into its own `OwnFacts`; the program-wide tables are then rebuilt
+    /// with `BTreeMap::append` after each `check_fn`, which is what made the
+    /// phase quadratic. Test-only: nothing in the product calls this.
+    fn legacy_check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -> OwnFacts {
+        check_stored_reference_fields(&checked.program.root, &checked.facts, diags);
+        let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
+        collect_fns(&checked.program.root, &mut fns);
+        let mut own = OwnFacts::default();
+        for (item, f) in fns {
+            let mut per_fn = OwnFacts::default();
+            let mut checker = OwnChecker::new(&checked.facts, diags, &mut per_fn);
+            checker.check_fn(item, f);
+            own.use_kind.append(&mut per_fn.use_kind);
+            own.place.append(&mut per_fn.place);
+        }
+        own
+    }
+
+    /// Serialized form of an ownership decision set: the whole proof is a
+    /// string equality, so a difference is reported verbatim.
+    fn serialize_facts(facts: &OwnFacts) -> String {
+        format!("{facts:#?}")
+    }
+
+    /// Serialized form of the ownership diagnostics of one run.
+    fn serialize_diags(diags: &DiagnosticBag) -> String {
+        diags
+            .iter()
+            .map(|diag| format!("{diag:?}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn workspace_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crates/ravum-lang-sema must live two levels below the workspace root")
+            .to_path_buf()
+    }
+
+    /// A throwaway copy of one corpus package. The loader writes `ravum.lock`
+    /// next to the manifest, so the corpus itself is never touched.
+    struct TempPackage {
+        path: PathBuf,
+    }
+
+    impl TempPackage {
+        fn copy_of(source: &Path, label: &str) -> TempPackage {
+            static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let label: String = label
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect();
+            let path = std::env::temp_dir().join(format!(
+                "ravum-own-equivalence-{}-{unique}-{label}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            copy_tree(source, &path).expect("cannot copy the corpus package");
+            TempPackage { path }
+        }
+    }
+
+    impl Drop for TempPackage {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_tree(&entry.path(), &target)?;
+            } else {
+                std::fs::copy(entry.path(), &target)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Run the real loader + checker on a corpus package, then compare the two
+    /// accumulations on the accepted program: the ownership facts and the
+    /// ownership diagnostics must be byte-identical. Returns `true` when the
+    /// package recorded at least one fact (a few accepted programs, e.g. a bare
+    /// `println` of a literal, legitimately record none).
+    fn compare_package(label: &str, source: &Path, project: &str) -> Result<bool, String> {
+        let package = TempPackage::copy_of(source, label);
+        let loaded =
+            load_package_with_options(&package.path.join(project), &LoadOptions::default());
+        if loaded.diags.has_errors() {
+            return Err(format!(
+                "{label}: loader errors {:?}",
+                loaded
+                    .diags
+                    .iter()
+                    .map(|d| d.code.clone())
+                    .collect::<Vec<_>>()
+            ));
+        }
+        let Some(program) = loaded.program else {
+            return Err(format!("{label}: the loader produced no program"));
+        };
+        let result = crate::check::check(
+            &program,
+            &loaded.sources,
+            &CheckOptions {
+                profile: Profile::Core,
+                edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+            },
+        );
+        let Some(checked) = result.checked else {
+            return Err(format!(
+                "{label}: rejected by check {:?}",
+                result
+                    .diags
+                    .iter()
+                    .map(|d| d.code.clone())
+                    .collect::<Vec<_>>()
+            ));
+        };
+
+        let mut production_diags = DiagnosticBag::new();
+        let production = check_ownership(&checked, &mut production_diags);
+        let mut legacy_diags = DiagnosticBag::new();
+        let legacy = legacy_check_ownership(&checked, &mut legacy_diags);
+
+        let production_facts = serialize_facts(&production);
+        let legacy_facts = serialize_facts(&legacy);
+        if production_facts != legacy_facts {
+            return Err(format!(
+                "{label}: the recorded ownership facts differ from the append accumulation"
+            ));
+        }
+        let production_render = serialize_diags(&production_diags);
+        let legacy_render = serialize_diags(&legacy_diags);
+        if production_render != legacy_render {
+            return Err(format!(
+                "{label}: the ownership diagnostics differ from the append accumulation"
+            ));
+        }
+        Ok(!production.use_kind.is_empty() || !production.place.is_empty())
+    }
+
+    fn sorted_subdirs(dir: &Path) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+            .map(|entry| entry.expect("cannot read a directory entry").path())
+            .filter(|path| path.is_dir())
+            .collect();
+        dirs.sort();
+        dirs
+    }
+
+    /// Every `case.json` below `conformance/cases`, in walk order.
+    fn conformance_case_dirs(cases_root: &Path) -> Vec<PathBuf> {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+                .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
+                .map(|entry| entry.expect("cannot read a directory entry").path())
+                .collect();
+            entries.sort();
+            if dir.join("case.json").is_file() {
+                out.push(dir.to_path_buf());
+                return;
+            }
+            for entry in entries {
+                if entry.is_dir() {
+                    walk(&entry, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(cases_root, &mut out);
+        out
+    }
+
+    fn case_mode_and_project(case_dir: &Path) -> (String, String) {
+        let text = std::fs::read_to_string(case_dir.join("case.json")).unwrap_or_else(|error| {
+            panic!("cannot read case.json of {}: {error}", case_dir.display())
+        });
+        let value: serde_json::Value =
+            serde_json::from_str(&text).expect("case.json must be valid JSON");
+        let mode = value
+            .get("mode")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("compile-pass")
+            .to_string();
+        let project = value
+            .get("project")
+            .and_then(serde_json::Value::as_str)
+            .filter(|project| !project.is_empty())
+            .unwrap_or(".")
+            .to_string();
+        (mode, project)
+    }
+
+    /// The ownership facts and diagnostics must not depend on how the per-file
+    /// decisions are accumulated: the quadratic `BTreeMap::append` loop and the
+    /// shared accumulator of today must produce the same serialized tables on
+    /// every accepted package of `examples/` and of the conformance corpus.
+    ///
+    /// Acceptance perimeter: the 10 examples and every `compile-pass` /
+    /// `run-pass` case (the two modes whose program must pass `check`); a case
+    /// that fails to load or to check is a failure of this test, not a skip, so
+    /// the comparison can never be silently vacuous.
+    #[test]
+    fn own_facts_are_identical_to_the_append_accumulation() {
+        let root = workspace_root();
+        let mut compared = 0usize;
+        let mut with_facts = 0usize;
+        let mut expected = 0usize;
+        let mut failures: Vec<String> = Vec::new();
+
+        for dir in sorted_subdirs(&root.join("examples")) {
+            // `package-demo` keeps its binary package under `app/`.
+            let project = if dir.join("ravum.toml").is_file() {
+                "."
+            } else {
+                "app"
+            };
+            let label = format!(
+                "example/{}",
+                dir.file_name().unwrap_or_default().to_string_lossy()
+            );
+            expected += 1;
+            match compare_package(&label, &dir, project) {
+                Ok(recorded) => {
+                    compared += 1;
+                    with_facts += usize::from(recorded);
+                }
+                Err(error) => failures.push(error),
+            }
+        }
+
+        for case_dir in conformance_case_dirs(&root.join("conformance").join("cases")) {
+            let (mode, project) = case_mode_and_project(&case_dir);
+            if mode != "compile-pass" && mode != "run-pass" {
+                continue;
+            }
+            let label = case_dir
+                .strip_prefix(root.join("conformance").join("cases"))
+                .unwrap_or(&case_dir)
+                .display()
+                .to_string()
+                .replace('\\', "/");
+            expected += 1;
+            match compare_package(&format!("conformance/{label}"), &case_dir, &project) {
+                Ok(recorded) => {
+                    compared += 1;
+                    with_facts += usize::from(recorded);
+                }
+                Err(error) => failures.push(error),
+            }
+        }
+
+        assert!(
+            failures.is_empty(),
+            "the shared accumulator changed {} of {} packages:\n{}",
+            failures.len(),
+            expected,
+            failures.join("\n")
+        );
+        assert_eq!(
+            compared, expected,
+            "every accepted corpus package must be compared (non-vacuity)"
+        );
+        assert!(
+            with_facts >= 150,
+            "the equivalence proof must compare non-empty fact tables, got {with_facts} of {compared} packages"
+        );
+        println!(
+            "own facts equivalence: {compared} packages compared, {with_facts} recorded facts, 0 difference"
         );
     }
 }

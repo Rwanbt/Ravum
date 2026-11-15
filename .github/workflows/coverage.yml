@@ -77,6 +77,16 @@ jobs:
         if: always()
         run: python tools/coverage_report.py --input target/cov-all.json || true
 
+      # The ratified objective is 100 % lines and regions on every measured file
+      # (D10, 2026-11-11). It is not a gate yet: this step publishes, file by file,
+      # the uncovered lines that still stand between the current state and the
+      # objective, so the work is visible instead of being a slogan. A file that
+      # reaches 100 % gets its floor raised to 100 in the thresholds file, so it
+      # can never go back down.
+      - name: Objective gap (100 % target, informative)
+        if: always()
+        run: python tools/coverage_report.py --input target/cov-all.json --gap || true
+
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4

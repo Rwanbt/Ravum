@@ -23,6 +23,9 @@ pub enum Command {
         json: bool,
         profile: Profile,
         locked: bool,
+        timings: bool,
+        /// `--rt-entry <chemin::de::fonction>`: the `rt` entry point (T6).
+        rt_entry: Option<String>,
     },
     Build {
         path: PathBuf,
@@ -30,6 +33,10 @@ pub enum Command {
         emit_rust: Option<PathBuf>,
         emit_ir: bool,
         target: BuildTarget,
+        timings: bool,
+        /// `--rt-entry <chemin::de::fonction>`: check the build with the `rt`
+        /// rules applied to the functions reachable from this entry (T6).
+        rt_entry: Option<String>,
     },
     Run {
         path: PathBuf,
@@ -163,19 +170,28 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut json = false;
     let mut profile = Profile::Core;
     let mut locked = false;
+    let mut timings = false;
+    let mut rt_entry: Option<String> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
             "--locked" => locked = true,
+            "--timings" => timings = true,
             "--profile" => {
                 let value = option_value(rest, &mut i, "--profile")?;
                 profile = parse_profile(&value)?;
             }
+            "--rt-entry" => {
+                rt_entry = Some(option_value(rest, &mut i, "--rt-entry")?);
+            }
             other if other.starts_with("--profile=") => {
                 let value = other.trim_start_matches("--profile=");
                 profile = parse_profile(value)?;
+            }
+            other if other.starts_with("--rt-entry=") => {
+                rt_entry = Some(other.trim_start_matches("--rt-entry=").to_string());
             }
             other if other.starts_with('-') && other != "-" => {
                 return Err(format!("unknown option `{other}` for `check`"))
@@ -184,11 +200,16 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if rt_entry.is_some() && profile != Profile::Rt {
+        return Err("`--rt-entry` requires `--profile rt`".to_string());
+    }
     Ok(Command::Check {
         path: path.unwrap_or_else(default_path),
         json,
         profile,
         locked,
+        timings,
+        rt_entry,
     })
 }
 
@@ -212,12 +233,15 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
     let mut emit_rust: Option<PathBuf> = None;
     let mut emit_ir = false;
     let mut target = BuildTarget::Native;
+    let mut timings = false;
+    let mut rt_entry: Option<String> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--release" => release = true,
             "--emit-ir" => emit_ir = true,
+            "--timings" => timings = true,
             "--emit-rust" => {
                 let value = option_value(rest, &mut i, "--emit-rust")?;
                 emit_rust = Some(PathBuf::from(value));
@@ -226,12 +250,18 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
                 let value = option_value(rest, &mut i, "--target")?;
                 target = parse_target(&value, "build")?;
             }
+            "--rt-entry" => {
+                rt_entry = Some(option_value(rest, &mut i, "--rt-entry")?);
+            }
             other if other.starts_with("--emit-rust=") => {
                 let value = other.trim_start_matches("--emit-rust=");
                 emit_rust = Some(PathBuf::from(value));
             }
             other if other.starts_with("--target=") => {
                 target = parse_target(other.trim_start_matches("--target="), "build")?;
+            }
+            other if other.starts_with("--rt-entry=") => {
+                rt_entry = Some(other.trim_start_matches("--rt-entry=").to_string());
             }
             other if other.starts_with('-') && other != "-" => {
                 return Err(format!("unknown option `{other}` for `build`"))
@@ -246,6 +276,8 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         emit_rust,
         emit_ir,
         target,
+        timings,
+        rt_entry,
     })
 }
 
@@ -474,9 +506,9 @@ USAGE:
 
 COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
-    check [PATH] [--json] [--profile core|pure|rt] [--locked]
+    check [PATH] [--json] [--profile core|pure|rt] [--rt-entry FN] [--locked] [--timings]
                                         Load, resolve and check a package or a `.rv` file
-    build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]
+    build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
     run [PATH] [--target TRIPLE] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
@@ -531,14 +563,21 @@ pub fn help_for(topic: &str) -> String {
                    Creates `ravum.toml`, `src/main.rv` (or `src/lib.rv` with --lib) and a\n\
                    `.gitignore` that ignores `.ravum/`. Refuses a non-empty directory\n\
                    unless --force is given; --force overwrites only the generated files.\n",
-        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] [--locked]\n\n\
+        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] \
+                    [--rt-entry FN] [--locked] [--timings]\n\n\
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\
-                    not fail unless a later lint --deny turns them into errors.\n",
+                    not fail unless a later lint --deny turns them into errors.\n\
+                    `--rt-entry <module::function>` (with `--profile rt`) applies the `rt`\n\
+                    rules (forbidden effects and traps) only to the functions reachable from\n\
+                    that entry (T6, RFC-RT-TRAPS-1, PENDING_HUMAN_APPROVAL); without it the\n\
+                    whole package keeps the historical `rt` check.\n",
         "build" => "USAGE: ravum-lang build [PATH] [--release] [--target TRIPLE] \
-                    [--emit-rust FILE] [--emit-ir]\n\n\
+                    [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]\n\n\
                     Checks the package, generates safe Rust and compiles it with\n\
                     `rustc --edition 2021 -C overflow-checks=on -C debuginfo=2`.\n\
+                    `--rt-entry <module::function>` checks the build with the `rt` profile\n\
+                    applied to the functions reachable from that entry (T6).\n\
                     Artifacts: `<package>/.ravum/gen/main.rs`, `<package>/.ravum/bin/<name>`\n\
                     (library packages: `.ravum/lib/<name>.rlib`).\n\
                     `--target wasm32-wasip1` writes `.ravum/bin/<name>.wasm`; it requires the\n\
@@ -646,6 +685,48 @@ mod tests {
     #[test]
     fn invalid_profile_is_usage_error() {
         assert!(parse(&args(&["check", "--profile", "fast"])).is_err());
+    }
+
+    #[test]
+    fn rt_entry_is_parsed_and_requires_the_rt_profile() {
+        assert!(
+            parse(&args(&["check", "--rt-entry", "process"])).is_err(),
+            "`--rt-entry` without `--profile rt` is a usage error"
+        );
+        assert!(
+            parse(&args(&[
+                "check",
+                "--profile",
+                "pure",
+                "--rt-entry",
+                "process"
+            ]))
+            .is_err(),
+            "only the `rt` profile takes an entry point"
+        );
+        match parse(&args(&[
+            "check",
+            "--profile",
+            "rt",
+            "--rt-entry",
+            "dsp::process",
+        ]))
+        .unwrap()
+        {
+            Invocation::Command(Command::Check {
+                profile, rt_entry, ..
+            }) => {
+                assert_eq!(profile, Profile::Rt);
+                assert_eq!(rt_entry.as_deref(), Some("dsp::process"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        match parse(&args(&["build", "pkg", "--rt-entry=process"])).unwrap() {
+            Invocation::Command(Command::Build { rt_entry, .. }) => {
+                assert_eq!(rt_entry.as_deref(), Some("process"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
     }
 
     #[test]

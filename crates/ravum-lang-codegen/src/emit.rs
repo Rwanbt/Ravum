@@ -32,7 +32,7 @@
 use crate::prelude::PRELUDE;
 use crate::{CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, VariantKind,
+    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind, VariantKind,
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
@@ -68,14 +68,20 @@ fn err(message: impl Into<String>) -> CodegenError {
 ///   reject a program the checker accepts (`fn g(s: &str)` called with
 ///   `text.as_str()` — the exact check-pass/build-fail class being fixed).
 ///
-/// `TypePos` carries that distinction through the whole type tree: a nested
-/// `&str` in `Option<&str>` follows the outer position, which matches Rust's
-/// elision rules for parameters.
+/// `TypePos` applies to the parameter's **own** `&str` only. A `&str` nested
+/// inside a container (`Option<&str>`, `[&str; 2]`, `Vec<&str>`, `(&str, i32)`)
+/// is always written `&'static str`, in `Value` position: the checker proves
+/// such texts static by construction (D13 rule 2 — no borrowed `&str` can be
+/// stored in an aggregate), and Rust needs the explicit lifetime for a
+/// projection out of the container to be usable as `&'static str`
+/// (`fn pick(a: [&str; 2]) -> &str` is emitted as `[&'static str; 2]`, otherwise
+/// `a[1]` is E0310).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TypePos {
     /// Owned/stored/returned/annotated position: `&str` is `&'static str`.
     Value,
-    /// Function parameter or foreign-function declaration: lifetime elided.
+    /// Function parameter or foreign-function declaration: the parameter's own
+    /// `&str` has its lifetime elided; nested text types stay [`TypePos::Value`].
     Param,
 }
 
@@ -99,6 +105,15 @@ fn pattern_contains_float(pat: &Pat) -> bool {
 /// Types the backend accepts at the C ABI boundary in Core 1.0, checked on the
 /// syntax tree so a hand-built `CheckedProgram` cannot smuggle an ABI-unsafe
 /// signature into the output.
+///
+/// The list is **closed** and mirrors the checker's `resolve::ffi_safe` exactly
+/// (C-FFI-1): `i8 i16 i32 i64`, `u8 u16 u32 u64`, `isize usize`, `f32 f64`,
+/// `bool`, `()`. `i128`/`u128` are **not** admitted (S4, 2026-11-14; C-FFI-2):
+/// no portable C width covers them (MSVC has no `__int128`). The checker already
+/// refuses them (`E-FFI-TYPE`); this twin list is the backend's defence in depth
+/// so a hand-built `CheckedProgram` cannot reach the ABI with them either.
+/// `backend_audit::c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program`
+/// is the non-vacuity test for this list.
 fn ast_ffi_safe(ty: &AstType) -> bool {
     match &ty.kind {
         TypeKind::Unit => true,
@@ -110,12 +125,10 @@ fn ast_ffi_safe(ty: &AstType) -> bool {
                     "i8" | "i16"
                         | "i32"
                         | "i64"
-                        | "i128"
                         | "u8"
                         | "u16"
                         | "u32"
                         | "u64"
-                        | "u128"
                         | "isize"
                         | "usize"
                         | "f32"
@@ -146,6 +159,7 @@ impl<'a> Generator<'a> {
             index,
             array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
         };
+        emitter.verify_ownership_facts()?;
         emitter.run()
     }
 }
@@ -840,6 +854,9 @@ fn builtin_const(path: &str) -> Option<String> {
 fn builtin_method_special(owner: &str, method: &str, receiver: &str, args: &str) -> Option<String> {
     let rendered = match (owner, method) {
         (_, "to_string") => format!("format!(\"{{}}\", {receiver})"),
+        // `str::as_str` (STD-11.4) is the identity on a text reference: the
+        // receiver is already a `&str`, and Rust's `str` has no such method.
+        ("str", "as_str") => format!("({receiver})"),
         ("String", "trim") | ("str", "trim") => format!("{receiver}.trim().to_string()"),
         ("String", "lines") | ("str", "lines") => {
             format!("{receiver}.lines().map(|rv_line| rv_line.to_string()).collect::<Vec<String>>()")
@@ -898,7 +915,25 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "abs", "sqrt", "floor", "ceil", "round", "powf", "min", "max", "sin", "cos", "tan", "exp",
         "ln", "log10",
     ];
-    const SIGNED: &[&str] = &["abs"];
+    const SIGNED: &[&str] = &[
+        "abs",
+        // RFC-RT-TRAPS-1 explicit forms (Rust methods exist on every integer
+        // type; `checked_*` returns `Option`, which the type checker enforced).
+        "wrapping_add",
+        "wrapping_sub",
+        "wrapping_mul",
+        "wrapping_neg",
+        "saturating_add",
+        "saturating_sub",
+        "saturating_mul",
+        "saturating_neg",
+        "checked_add",
+        "checked_sub",
+        "checked_mul",
+        "checked_div",
+        "checked_rem",
+        "checked_neg",
+    ];
     match owner {
         "String" => STRING.contains(&method),
         "str" => STR.contains(&method),
@@ -908,17 +943,6 @@ fn builtin_method_is_direct(owner: &str, method: &str) -> bool {
         "Result" => RESULT.contains(&method),
         "f32" | "f64" => FLOAT.contains(&method),
         "int" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => SIGNED.contains(&method),
-        _ => false,
-    }
-}
-
-/// Builtin methods whose `self` receiver is consumed (STD-11.3: `Option::{unwrap,
-/// unwrap_or, ok_or}` and `Result::{unwrap, unwrap_or, ok, err}` take `self` by
-/// value, while the `is_*` predicates take `&self`).
-fn builtin_method_moves_receiver(owner: &str, method: &str) -> bool {
-    match owner {
-        "Option" => matches!(method, "unwrap" | "unwrap_or" | "ok_or"),
-        "Result" => matches!(method, "unwrap" | "unwrap_or" | "ok" | "err"),
         _ => false,
     }
 }
@@ -964,6 +988,218 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
+    /// Step B of RFC-OWN-FACTS-1 (debug builds only): compare the backend's
+    /// copy/move classification with the checker's `OwnFacts`.
+    ///
+    /// The emitter mirrors `sema::own::is_copy_type` in [`Emitter::is_copy_type`]
+    /// — the duplication this RFC removes. In debug builds a disagreement is an
+    /// error instead of a silently different lowering. Release builds skip the
+    /// check (it is a test/audit guard, not a semantic rule).
+    fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
+        if !cfg!(debug_assertions) {
+            return Ok(());
+        }
+        for (id, kind) in &self.checked.facts.own.use_kind {
+            let Some(ty) = self.checked.facts.expr_types.get(id) else {
+                continue;
+            };
+            let copies = self.is_copy_type(ty);
+            match kind {
+                ravum_lang_sema::facts::UseKind::Copy if !copies => {
+                    return Err(err(format!(
+                        "ownership facts disagree with the backend for expression {id}: the \
+                         checker says Copy, the emitter classifies `{ty:?}` as mobile"
+                    )));
+                }
+                ravum_lang_sema::facts::UseKind::Move if copies => {
+                    return Err(err(format!(
+                        "ownership facts disagree with the backend for expression {id}: the \
+                         checker says Move, the emitter classifies `{ty:?}` as Copy"
+                    )));
+                }
+                _ => {}
+            }
+        }
+        // Step B (extended): the recorded place must match the place the syntax
+        // describes. The binding identity is not re-derived (the AST does not
+        // carry the declaration span of a resolved local), but every projection
+        // (`x.f`, `.0`, `[lit]`, `[*]`, deref) is checked independently.
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut method_receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(
+            &self.checked.program.root,
+            &mut exprs,
+            &mut method_receivers,
+        );
+        let mut reference_args: BTreeSet<NodeId> = BTreeSet::new();
+        for expr in exprs.values() {
+            if let ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } = &expr.kind {
+                for arg in args {
+                    if matches!(
+                        self.checked.facts.expr_types.get(&arg.id),
+                        Some(Type::Ref { .. })
+                    ) {
+                        reference_args.insert(arg.id);
+                    }
+                }
+            }
+        }
+        for (id, recorded) in &self.checked.facts.own.place {
+            let Some(expr) = exprs.get(id) else {
+                continue;
+            };
+            // A method receiver is auto-deref'd by the call (`xs.len()` records
+            // `(*xs)`) and so is a reference-typed argument reborrowed for a
+            // reference parameter (`g(xs)` with `xs: &[i32]`). The callee
+            // signature is not part of that expression's syntax, so the adjusted
+            // place is accepted alongside the syntactic one; any projection
+            // beyond the implicit deref must still match.
+            let auto_deref = method_receivers.contains(id) || reference_args.contains(id);
+            match self.syntactic_place(expr) {
+                Some(expected) => {
+                    let mut expected_after_deref = expected.clone();
+                    if auto_deref {
+                        self.push_auto_derefs(expr, &mut expected_after_deref.steps);
+                    }
+                    if recorded == &expected || (auto_deref && recorded == &expected_after_deref) {
+                        continue;
+                    }
+                    // Binding identity first: a place rooted at another binding
+                    // is not a projection mismatch.
+                    if recorded.binding != expected.binding {
+                        return Err(err(format!(
+                            "ownership facts disagree with the syntax for expression {id} ({}) at \
+                             {}: recorded binding {:?}, syntactic binding {:?}",
+                            self.expr_location(expr),
+                            self.expr_span_text(expr),
+                            recorded.binding,
+                            expected.binding
+                        )));
+                    }
+                    let suffix = if auto_deref {
+                        format!(", after auto-deref {:?}", expected_after_deref.steps)
+                    } else {
+                        String::new()
+                    };
+                    return Err(err(format!(
+                        "ownership facts disagree with the syntax for expression {id} ({}) at \
+                         {}: recorded place steps {:?}, syntactic place {:?}{suffix}",
+                        self.expr_location(expr),
+                        self.expr_span_text(expr),
+                        recorded.steps,
+                        expected.steps
+                    )));
+                }
+                None => {
+                    return Err(err(format!(
+                        "ownership facts recorded a place for expression {id} ({}) at {}, but \
+                         the expression has no syntactic place",
+                        self.expr_location(expr),
+                        self.expr_span_text(expr)
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Place described by the syntax alone, binding identity included (step B
+    /// cross-check). See `OwnPlace`.
+    fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
+        use ravum_lang_sema::facts::{OwnPlace, Projection as PlaceStep, ProjectionIndex};
+        match &expr.kind {
+            ExprKind::SelfValue => match self.checked.facts.resolutions.get(&expr.id) {
+                Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                    binding: *decl,
+                    steps: Vec::new(),
+                }),
+                _ => None,
+            },
+            ExprKind::Path(path) if path.segments.len() == 1 => {
+                match self.checked.facts.resolutions.get(&path.id) {
+                    Some(Resolution::Local { decl, .. }) => Some(OwnPlace {
+                        binding: *decl,
+                        steps: Vec::new(),
+                    }),
+                    _ => None,
+                }
+            }
+            ExprKind::Field { base, name } => {
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Field(name.name.clone()));
+                Some(place)
+            }
+            ExprKind::TupleIndex { base, index } => {
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                place.steps.push(PlaceStep::Tuple(*index));
+                Some(place)
+            }
+            ExprKind::Index { base, index } => {
+                let mut place = self.syntactic_place(base)?;
+                self.push_auto_derefs(base, &mut place.steps);
+                let index = match &index.kind {
+                    ExprKind::Int { value, .. } => ProjectionIndex::Lit(*value),
+                    _ => ProjectionIndex::Opaque,
+                };
+                place.steps.push(PlaceStep::Index(index));
+                Some(place)
+            }
+            ExprKind::Unary {
+                op: UnOp::Deref,
+                expr,
+            } => {
+                let mut place = self.syntactic_place(expr)?;
+                place.steps.push(PlaceStep::Deref);
+                Some(place)
+            }
+            _ => None,
+        }
+    }
+
+    /// Human location of an expression for a debug-guard error message.
+    fn expr_location(&self, expr: &Expr) -> String {
+        match self.checked.files.get(expr.span.file as usize) {
+            Some(file) => format!("{}:{}", file.path, file.line_of(expr.span.start)),
+            None => "unknown-file".to_string(),
+        }
+    }
+
+    fn expr_span_text(&self, expr: &Expr) -> String {
+        format!("{}..{}", expr.span.start, expr.span.end)
+    }
+
+    /// A field/tuple/index projection on a reference auto-derefs it: the checker
+    /// records one `Deref` step per reference layer before the projection.
+    fn push_auto_derefs(&self, base: &Expr, steps: &mut Vec<ravum_lang_sema::facts::Projection>) {
+        let mut ty = self.checked.facts.expr_types.get(&base.id);
+        while let Some(Type::Ref { inner, .. }) = ty {
+            steps.push(ravum_lang_sema::facts::Projection::Deref);
+            ty = Some(inner);
+        }
+    }
+
+    /// RFC-OWN-FACTS-1 step C: does the checker take the value of `node`?
+    ///
+    /// `own.rs` records `UseKind::Move` when it moves a place, `UseKind::Copy`
+    /// when it reads a `Copy` one, and `Borrow`/`BorrowMut` when it only borrows
+    /// it. "The value is taken" is therefore exactly `Move | Copy`; the backend
+    /// reads that decision instead of re-deriving it from types or from the
+    /// method signature, and it does so in **release builds too** (this helper
+    /// is not behind `debug_assertions`: for the migrated families there is no
+    /// second decision left to compare).
+    ///
+    /// An expression the checker recorded nothing for is not a place it took a
+    /// decision on (a call result, a literal, an aggregate): it is not consumed
+    /// here, and every caller already handles that case separately.
+    fn consumed_by_checker(&self, node: NodeId) -> bool {
+        matches!(
+            self.facts().own.use_kind.get(&node),
+            Some(UseKind::Move) | Some(UseKind::Copy)
+        )
+    }
+
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
         &self.checked.facts
     }
@@ -2410,13 +2646,14 @@ impl<'a> Emitter<'a> {
                 Ok(format!(
                     "&{}{}",
                     if *mutable { "mut " } else { "" },
-                    self.syntactic_type_pos(inner, pos)?
+                    // See `fmt_type_pos`: nested text types are static (D13).
+                    self.syntactic_type_pos(inner, TypePos::Value)?
                 ))
             }
             TypeKind::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.syntactic_type_pos(item, pos)?);
+                    rendered.push(self.syntactic_type_pos(item, TypePos::Value)?);
                 }
                 if rendered.len() == 1 {
                     Ok(format!("({},)", rendered[0]))
@@ -2426,11 +2663,14 @@ impl<'a> Emitter<'a> {
             }
             TypeKind::Array { elem, len } => Ok(format!(
                 "[{}; {}]",
-                self.syntactic_type_pos(elem, pos)?,
+                self.syntactic_type_pos(elem, TypePos::Value)?,
                 self.array_length(len)?
             )),
-            TypeKind::Slice(inner) => Ok(format!("[{}]", self.syntactic_type_pos(inner, pos)?)),
-            TypeKind::Path(path) => self.syntactic_path_type(path, pos),
+            TypeKind::Slice(inner) => Ok(format!(
+                "[{}]",
+                self.syntactic_type_pos(inner, TypePos::Value)?
+            )),
+            TypeKind::Path(path) => self.syntactic_path_type(path),
             TypeKind::Infer => Err(err(format!(
                 "missing resolved type for inferred type node {}",
                 ty.id
@@ -2450,7 +2690,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn syntactic_path_type(&self, path: &Path, pos: TypePos) -> Result<String, CodegenError> {
+    fn syntactic_path_type(&self, path: &Path) -> Result<String, CodegenError> {
         if path.root != PathRoot::Plain {
             return Err(err(format!(
                 "missing resolved type for rooted type path `{}`",
@@ -2472,7 +2712,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in &segment.args {
-                        rendered.push(self.syntactic_type_pos(argument, pos)?);
+                        rendered.push(self.syntactic_type_pos(argument, TypePos::Value)?);
                     }
                     Ok(format!("{builtin}<{}>", rendered.join(", ")))
                 }
@@ -2547,17 +2787,20 @@ impl<'a> Emitter<'a> {
                 format!(
                     "&{}{}",
                     if *mutable { "mut " } else { "" },
-                    self.fmt_type_pos(inner, pos)?
+                    // A text type nested under another type constructor is
+                    // always static (D13); only the parameter's own `&str` may
+                    // be the elided, instruction-scoped view.
+                    self.fmt_type_pos(inner, TypePos::Value)?
                 )
             }
             Type::Array { elem, len } => {
-                format!("[{}; {len}]", self.fmt_type_pos(elem, pos)?)
+                format!("[{}; {len}]", self.fmt_type_pos(elem, TypePos::Value)?)
             }
-            Type::Slice(inner) => format!("[{}]", self.fmt_type_pos(inner, pos)?),
+            Type::Slice(inner) => format!("[{}]", self.fmt_type_pos(inner, TypePos::Value)?),
             Type::Tuple(items) => {
                 let mut rendered = Vec::new();
                 for item in items {
-                    rendered.push(self.fmt_type_pos(item, pos)?);
+                    rendered.push(self.fmt_type_pos(item, TypePos::Value)?);
                 }
                 if rendered.len() == 1 {
                     format!("({},)", rendered[0])
@@ -2565,13 +2808,13 @@ impl<'a> Emitter<'a> {
                     format!("({})", rendered.join(", "))
                 }
             }
-            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type_pos(inner, pos)?),
-            Type::Option(inner) => format!("Option<{}>", self.fmt_type_pos(inner, pos)?),
+            Type::Vec(inner) => format!("Vec<{}>", self.fmt_type_pos(inner, TypePos::Value)?),
+            Type::Option(inner) => format!("Option<{}>", self.fmt_type_pos(inner, TypePos::Value)?),
             Type::Result(ok, error) => {
                 format!(
                     "Result<{}, {}>",
-                    self.fmt_type_pos(ok, pos)?,
-                    self.fmt_type_pos(error, pos)?
+                    self.fmt_type_pos(ok, TypePos::Value)?,
+                    self.fmt_type_pos(error, TypePos::Value)?
                 )
             }
             Type::Nominal { def, name, args } => {
@@ -2581,7 +2824,7 @@ impl<'a> Emitter<'a> {
                 } else {
                     let mut rendered = Vec::new();
                     for argument in args {
-                        rendered.push(self.fmt_type_pos(argument, pos)?);
+                        rendered.push(self.fmt_type_pos(argument, TypePos::Value)?);
                     }
                     format!("{base}<{}>", rendered.join(", "))
                 }
@@ -3458,6 +3701,16 @@ struct Descent {
 struct WholeUse {
     place: PlaceKey,
     top: usize,
+    /// Walk order of the enclosing statement, used to bound a hoist to the
+    /// region between two whole-place writes.
+    order: usize,
+}
+
+/// A whole-binding assignment (`a = ...`): it re-initialises the place *after*
+/// the right-hand side is evaluated, so it ends the region of any hoist.
+struct WholeWrite {
+    place: PlaceKey,
+    order: usize,
 }
 
 /// `[len0, len1, ...]` of a (possibly nested) array type.
@@ -3541,6 +3794,143 @@ fn pattern_text(
     out.push(']');
 }
 
+/// Collect every expression node of a module (step B place cross-check).
+fn collect_module_exprs<'a>(
+    module: &'a Module,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Fn(function) => collect_block_exprs(&function.body, out, receivers),
+            ItemKind::Impl(implementation) => {
+                for member in &implementation.items {
+                    if let ItemKind::Fn(function) = &member.kind {
+                        collect_block_exprs(&function.body, out, receivers);
+                    }
+                }
+            }
+            ItemKind::Mod(inner) => collect_module_exprs(inner, out, receivers),
+            _ => {}
+        }
+    }
+}
+
+fn collect_block_exprs<'a>(
+    block: &'a Block,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    for statement in &block.stmts {
+        match &statement.kind {
+            StmtKind::Let(let_statement) => {
+                if let Some(init) = &let_statement.init {
+                    collect_expr(init, out, receivers);
+                }
+            }
+            StmtKind::Expr { expr, .. } => collect_expr(expr, out, receivers),
+        }
+    }
+    if let Some(tail) = &block.tail {
+        collect_expr(tail, out, receivers);
+    }
+}
+
+fn collect_expr<'a>(
+    expr: &'a Expr,
+    out: &mut BTreeMap<NodeId, &'a Expr>,
+    receivers: &mut BTreeSet<NodeId>,
+) {
+    out.insert(expr.id, expr);
+    match &expr.kind {
+        ExprKind::Call { callee, args } => {
+            collect_expr(callee, out, receivers);
+            for arg in args {
+                collect_expr(arg, out, receivers);
+            }
+        }
+        ExprKind::MethodCall { receiver, args, .. } => {
+            receivers.insert(receiver.id);
+            collect_expr(receiver, out, receivers);
+            for arg in args {
+                collect_expr(arg, out, receivers);
+            }
+        }
+        ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
+            collect_expr(base, out, receivers);
+        }
+        ExprKind::Index { base, index } => {
+            collect_expr(base, out, receivers);
+            collect_expr(index, out, receivers);
+        }
+        ExprKind::Unary { expr, .. } | ExprKind::Cast { expr, .. } => {
+            collect_expr(expr, out, receivers);
+        }
+        ExprKind::Binary { lhs, rhs, .. } => {
+            collect_expr(lhs, out, receivers);
+            collect_expr(rhs, out, receivers);
+        }
+        ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+            collect_expr(target, out, receivers);
+            collect_expr(value, out, receivers);
+        }
+        ExprKind::If {
+            cond,
+            then_block,
+            else_branch,
+        } => {
+            collect_expr(cond, out, receivers);
+            collect_block_exprs(then_block, out, receivers);
+            if let Some(else_branch) = else_branch {
+                collect_expr(else_branch, out, receivers);
+            }
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            collect_expr(scrutinee, out, receivers);
+            for arm in arms {
+                collect_expr(&arm.body, out, receivers);
+            }
+        }
+        ExprKind::While { cond, body } => {
+            collect_expr(cond, out, receivers);
+            collect_block_exprs(body, out, receivers);
+        }
+        ExprKind::Loop { body } => collect_block_exprs(body, out, receivers),
+        ExprKind::For { iter, body, .. } => {
+            collect_expr(iter, out, receivers);
+            collect_block_exprs(body, out, receivers);
+        }
+        ExprKind::Block(block) | ExprKind::Unsafe(block) => {
+            collect_block_exprs(block, out, receivers);
+        }
+        ExprKind::Tuple(items) | ExprKind::Array(items) => {
+            for item in items {
+                collect_expr(item, out, receivers);
+            }
+        }
+        ExprKind::ArrayRepeat { value, len } => {
+            collect_expr(value, out, receivers);
+            collect_expr(len, out, receivers);
+        }
+        ExprKind::StructLit { fields, .. } => {
+            for field in fields {
+                collect_expr(&field.value, out, receivers);
+            }
+        }
+        ExprKind::Range { start, end, .. } => {
+            if let Some(start) = start {
+                collect_expr(start, out, receivers);
+            }
+            if let Some(end) = end {
+                collect_expr(end, out, receivers);
+            }
+        }
+        ExprKind::Try(inner) => collect_expr(inner, out, receivers),
+        ExprKind::Return(Some(value)) => collect_expr(value, out, receivers),
+        _ => {}
+    }
+}
+
 /// True when a `let` pattern consumes its initializer by value.
 fn pattern_consumes_value(pat: &Pat) -> bool {
     match &pat.kind {
@@ -3561,6 +3951,8 @@ struct MovePlanner<'e, 'a> {
     binders: Vec<Binder>,
     accesses: Vec<Access>,
     whole_uses: Vec<WholeUse>,
+    /// Whole-binding assignments (`a = ...`), in walk order.
+    whole_writes: Vec<WholeWrite>,
     /// Accesses whose chain crosses an element move or starts at an rvalue.
     descents: Vec<Descent>,
     /// Innermost enclosing `match` arm body (see [`Access::arm_body`]).
@@ -3583,6 +3975,7 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             binders: Vec::new(),
             accesses: Vec::new(),
             whole_uses: Vec::new(),
+            whole_writes: Vec::new(),
             descents: Vec::new(),
             arm_anchor: None,
             loop_depth: 0,
@@ -3764,13 +4157,47 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
     }
 
     fn record_whole_place_use(&mut self, binder: BinderId, top: usize) {
+        let order = self.current_order().unwrap_or(0);
         self.whole_uses.push(WholeUse {
             place: PlaceKey {
                 binder,
                 projections: Vec::new(),
             },
             top,
+            order,
         });
+    }
+
+    /// Walk order of the statement being walked, when known.
+    fn current_order(&self) -> Option<usize> {
+        self.statement_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied())
+    }
+
+    /// Region of an access: the number of whole-place writes that happen
+    /// strictly before it. A hoist may only rewrite accesses of its own region:
+    /// after `a = ...`, the slots of a previous destructuring are stale.
+    fn region_of_order(&self, place: &PlaceKey, order: Option<usize>) -> usize {
+        let Some(order) = order else {
+            return 0;
+        };
+        self.whole_writes
+            .iter()
+            .filter(|write| write.order < order && Self::places_overlap(&write.place, place))
+            .count()
+    }
+
+    fn region_of_access(&self, access: &Access) -> usize {
+        let order = access
+            .stmt_chain
+            .last()
+            .and_then(|id| self.statement_order.get(id).copied());
+        self.region_of_order(&access.place, order)
+    }
+
+    fn region_of_use(&self, place: &PlaceKey, use_site: &WholeUse) -> usize {
+        self.region_of_order(place, Some(use_site.order))
     }
 
     /// `owned` is true when the *value* of `expr` is consumed by its parent
@@ -3821,7 +4248,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
                         // A dynamic index before a constant one, or an index
                         // outside the array layers, cannot be lowered: make the
                         // whole place bail out (loud E0508).
-                        self.whole_uses.push(WholeUse { place, top });
+                        let order = self.current_order().unwrap_or(0);
+                        self.whole_uses.push(WholeUse { place, top, order });
                     }
                     for index in indices {
                         self.walk_expr(index, false, top, block_depth);
@@ -3888,7 +4316,8 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 if let Some((place, _)) = self.place_of(expr) {
                     // A whole use of this place (not an element access).
-                    self.whole_uses.push(WholeUse { place, top });
+                    let order = self.current_order().unwrap_or(0);
+                    self.whole_uses.push(WholeUse { place, top, order });
                     return;
                 }
                 // Element projection (`a[1].0`) over an index chain: a mobile
@@ -3915,26 +4344,55 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             }
             ExprKind::Call { callee, args } => {
                 self.walk_expr(callee, false, top, block_depth);
-                let owned_args = self.call_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // RFC-OWN-FACTS-1 step C (family `arguments`): the checker records
+                // on the argument expression itself whether the call takes it by
+                // value (`Move`/`Copy`) or only borrows it (`Borrow`/`BorrowMut`).
+                // The backend no longer re-derives it from the callee signature's
+                // parameter types, nor from "a builtin takes bare values".
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
             ExprKind::MethodCall { receiver, args, .. } => {
-                // A `self` receiver is moved by the call; `&self`/`&mut self`
-                // borrow it. Builtin receiver kinds are not modelled by the backend,
-                // so they are treated as borrowed (a loud `E0508` when a lowering
-                // would have been required).
-                let receiver_owned = self.by_value_receiver(expr.id);
+                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker already
+                // decided whether the call takes its receiver by value. It
+                // records `Move`/`Copy` on the receiver expression when it
+                // consumes it (`self` by value, and the STD-11.3 consuming
+                // builtins `Option::{unwrap, unwrap_or, ok_or}` /
+                // `Result::{unwrap, unwrap_or, ok, err}`) and `Borrow`/
+                // `BorrowMut` when it only borrows it (`&self`, `&mut self`).
+                // The backend no longer inspects the signature or the builtin
+                // set itself.
+                let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
                 self.walk_expr(receiver, receiver_owned, top, block_depth);
-                let owned_args = self.method_argument_positions(expr.id, args.len());
-                for (arg, owned) in args.iter().zip(owned_args) {
+                // Same decision, same source of truth, for the explicit arguments
+                // (family `arguments`): the recorded use of each argument node.
+                for arg in args {
+                    let owned = self.emitter.consumed_by_checker(arg.id);
                     self.walk_expr(arg, owned, top, block_depth);
                 }
             }
             ExprKind::Assign { target, value } => {
                 self.walk_expr(value, true, top, block_depth);
-                self.walk_expr(target, false, top, block_depth);
+                // A whole-binding target (`a = ...`) is written *after* the RHS
+                // is evaluated: it is not a read of the place, and the write
+                // re-initialises the binding, so it must not block a hoist the
+                // RHS needs when it moves an element of the same array
+                // (`a = [a[0], ...]`, measured `E0508` before this rule).
+                if matches!(target.kind, ExprKind::Path(_)) {
+                    // The place is re-initialised after the RHS: record the
+                    // write so a hoist stops rewriting accesses past it.
+                    if let Some((place, _)) = self.place_of(target) {
+                        if place.projections.is_empty() {
+                            let order = self.current_order().unwrap_or(0);
+                            self.whole_writes.push(WholeWrite { place, order });
+                        }
+                    }
+                    self.tick();
+                } else {
+                    self.walk_expr(target, false, top, block_depth);
+                }
             }
             ExprKind::AssignOp { target, value, .. } => {
                 self.walk_expr(value, true, top, block_depth);
@@ -4077,73 +4535,6 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
             },
             PatKind::Wild | PatKind::Lit(_) => {}
         }
-    }
-
-    /// True when the method takes `self` by value, so its receiver expression is
-    /// moved by the call: a user method whose signature receiver is `ByValue`, or
-    /// a builtin in the STD-11.3 consuming set (`Option`/`Result`).
-    fn by_value_receiver(&self, call: NodeId) -> bool {
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => self
-                .emitter
-                .facts()
-                .fn_sigs
-                .get(item)
-                .map(|signature| signature.receiver == Some(Receiver::ByValue))
-                .unwrap_or(false),
-            Some(MethodTarget::Builtin { path, .. }) => split_builtin_method(path)
-                .map(|(owner, method)| {
-                    builtin_method_moves_receiver(&normalize_owner(owner), method)
-                })
-                .unwrap_or(false),
-            _ => false,
-        }
-    }
-
-    /// Argument positions of a call that consume their value: a user function
-    /// parameter whose type is not `Copy`. A builtin receives its arguments by
-    /// value when Ravum passes a bare value (there is no implicit referencing in
-    /// the language), so builtin arguments are treated as consumed too; a builtin
-    /// that borrows internally still works, because the moved element is then a
-    /// plain local to borrow from.
-    fn call_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().calls.get(&call) {
-            Some(CallTarget::UserFn { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter()) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            Some(CallTarget::VariantCtor { .. }) | Some(CallTarget::BuiltinFn { .. }) => {
-                // Constructing a variant moves its payloads; a builtin receives a
-                // bare value by value.
-                out.fill(true);
-            }
-            _ => {}
-        }
-        out
-    }
-
-    fn method_argument_positions(&self, call: NodeId, count: usize) -> Vec<bool> {
-        let mut out = vec![false; count];
-        match self.emitter.facts().methods.get(&call) {
-            Some(MethodTarget::User { item }) => {
-                if let Some(signature) = self.emitter.facts().fn_sigs.get(item) {
-                    // `params[0]` is the receiver; the remaining parameters map to
-                    // the explicit arguments in order.
-                    for (slot, param) in out.iter_mut().zip(signature.params.iter().skip(1)) {
-                        *slot = !self.emitter.is_copy_type(&param.ty);
-                    }
-                }
-            }
-            // Builtin method signatures are not modelled by the backend; a bare
-            // value argument is passed by value in Ravum (`v.push(a[0])`).
-            Some(MethodTarget::Builtin { .. }) => out.fill(true),
-            _ => {}
-        }
-        out
     }
 
     /// Build the destructuring for one place: the array pattern and the binding
@@ -4361,6 +4752,16 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         for (place, members) in groups {
             let lens = members[0].lens.clone();
             let binder = &self.binders[place.binder.0 as usize];
+            // A whole-binding write re-initialises the place, so a shared hoist
+            // would be invalidated by it (and accesses past it must not be
+            // rewritten). Those descents keep the inline or loud plain form.
+            if self
+                .whole_writes
+                .iter()
+                .any(|write| Self::places_overlap(&write.place, &place))
+            {
+                continue;
+            }
             let hoist_top = members.iter().map(|descent| descent.top).min().unwrap_or(0);
             let mut ordered: Vec<(usize, NodeId)> = members
                 .iter()
@@ -4531,102 +4932,129 @@ impl<'e, 'a> MovePlanner<'e, 'a> {
         }
         let mut sequence = 0usize;
         for (place, accesses) in &by_place {
-            let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
-                continue;
-            };
-            // Uses of the place itself or of an ancestor at/after the first move
-            // would observe the partial move (see `whole_use_blocks`).
-            let blocked = self
-                .whole_uses
-                .iter()
-                .any(|use_site| Self::whole_use_blocks(place, use_site, first.top));
-            let binder = &self.binders[place.binder.0 as usize];
-            let hoist = self.hoist_anchor(first, binder);
-            let has_dynamic = accesses
-                .iter()
-                .any(|access| access.indices.iter().any(|level| level.is_none()));
-            if let Some((hoist_key, _)) = hoist {
-                if !blocked {
-                    if has_dynamic {
-                        if self
-                            .plan_prefix_slots(
-                                sequence, &mut plan, place, accesses, first, hoist_key,
-                            )
-                            .is_some()
-                        {
-                            sequence += 1;
-                            continue;
-                        }
-                    } else {
-                        let rewritten: Vec<&Access> = accesses
-                            .iter()
-                            .copied()
-                            .filter(|access| access.top >= first.top)
-                            .collect();
-                        if let Some((pattern, rewrites)) =
-                            self.build_destructure(sequence, &rewritten)
-                        {
-                            plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
-                                base: self.place_text(place),
-                                pattern,
-                            });
-                            for (node, binding) in rewrites {
-                                plan.rewrites.insert(node, binding);
+            // A whole-binding write (`a = ...`) re-initialises the place after
+            // the RHS: accesses after it must not be rewritten to the slots of
+            // a hoist that started before it.
+            let mut by_region: BTreeMap<usize, Vec<&Access>> = BTreeMap::new();
+            for access in accesses {
+                by_region
+                    .entry(self.region_of_access(access))
+                    .or_default()
+                    .push(*access);
+            }
+            for (region, accesses) in &by_region {
+                let Some(first) = accesses.iter().find(|access| access.consumed).copied() else {
+                    continue;
+                };
+                // Uses of the place itself or of an ancestor at/after the first move
+                // would observe the partial move (see `whole_use_blocks`).
+                let blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                let binder = &self.binders[place.binder.0 as usize];
+                let hoist = self.hoist_anchor(first, binder);
+                let has_dynamic = accesses
+                    .iter()
+                    .any(|access| access.indices.iter().any(|level| level.is_none()));
+                if let Some((hoist_key, _)) = hoist {
+                    if !blocked {
+                        if has_dynamic {
+                            if self
+                                .plan_prefix_slots(
+                                    sequence, &mut plan, place, accesses, first, hoist_key,
+                                )
+                                .is_some()
+                            {
+                                sequence += 1;
+                                continue;
                             }
-                            sequence += 1;
-                            continue;
+                        } else {
+                            let rewritten: Vec<&Access> = accesses
+                                .iter()
+                                .copied()
+                                .filter(|access| access.top >= first.top)
+                                .collect();
+                            if let Some((pattern, rewrites)) =
+                                self.build_destructure(sequence, &rewritten)
+                            {
+                                plan.hoists.entry(hoist_key).or_default().push(HoistPlan {
+                                    base: self.place_text(place),
+                                    pattern,
+                                });
+                                for (node, binding) in rewrites {
+                                    plan.rewrites.insert(node, binding);
+                                }
+                                sequence += 1;
+                                continue;
+                            }
                         }
                     }
                 }
-            }
-            // Fallback: the first move can be lowered inline when every other use of
-            // the place is a read in an earlier statement (the place is still intact
-            // there) and no whole-place use blocks it. This keeps `match` arm
-            // payloads (an expression-bodied arm has no statement to hoist before),
-            // a single dynamic access, and reads followed by a dynamic move working.
+                // Fallback: the first move can be lowered inline when every other use of
+                // the place is a read in an earlier statement (the place is still intact
+                // there) and no whole-place use blocks it. This keeps `match` arm
+                // payloads (an expression-bodied arm has no statement to hoist before),
+                // a single dynamic access, and reads followed by a dynamic move working.
 
-            let inline_ok = accesses.iter().all(|access| {
-                access.node == first.node || (!access.consumed && access.top < first.top)
-            });
-            if inline_ok && !blocked && first.consumed {
-                let access = first;
-                if let Some(chain) = self.constant_chain(access) {
-                    let base = self.place_text(place);
-                    if let Some((pattern, rewrites)) = self.build_destructure(sequence, &[access]) {
-                        if let Some((_, binding)) = rewrites.into_iter().next() {
-                            plan.single.insert(
-                                access.node,
-                                SingleMove::Block {
-                                    base,
-                                    pattern,
-                                    binding,
-                                },
-                            );
-                            sequence += 1;
-                            continue;
+                let inline_ok = accesses.iter().all(|access| {
+                    access.node == first.node || (!access.consumed && access.top < first.top)
+                });
+                // A whole use inside the *same* statement does not invalidate the
+                // inline form: either it is evaluated before the access (a read
+                // whose borrow has ended), or it lives in a disjoint branch. A
+                // sequential whole use *after* the move would have been rejected
+                // by `check` (partial move), so the inline block is emitted at the
+                // access itself and cannot be observed by it.
+                let inline_blocked = self.whole_uses.iter().any(|use_site| {
+                    Self::places_overlap(&use_site.place, place)
+                        && self.region_of_use(place, use_site) == *region
+                        && use_site.top != first.top
+                        && Self::whole_use_blocks(place, use_site, first.top)
+                });
+                if inline_ok && !inline_blocked && first.consumed {
+                    let access = first;
+                    if let Some(chain) = self.constant_chain(access) {
+                        let base = self.place_text(place);
+                        if let Some((pattern, rewrites)) =
+                            self.build_destructure(sequence, &[access])
+                        {
+                            if let Some((_, binding)) = rewrites.into_iter().next() {
+                                plan.single.insert(
+                                    access.node,
+                                    SingleMove::Block {
+                                        base,
+                                        pattern,
+                                        binding,
+                                    },
+                                );
+                                sequence += 1;
+                                continue;
+                            }
                         }
+                        let _ = chain;
+                    } else if access.indices.len() == 1 {
+                        // A flat place with one dynamic level keeps the dedicated
+                        // `into_iter().nth()` form (it does not need a materialized
+                        // root).
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Dynamic {
+                                base: self.place_text(place),
+                                len: access.lens.first().copied().unwrap_or(0),
+                            },
+                        );
+                    } else {
+                        // A deeper dynamic chain over a single-use place: materialize
+                        // the place once and walk the chain inline.
+                        plan.single.insert(
+                            access.node,
+                            SingleMove::Chain {
+                                base: ChainBase::Root,
+                            },
+                        );
                     }
-                    let _ = chain;
-                } else if access.indices.len() == 1 {
-                    // A flat place with one dynamic level keeps the dedicated
-                    // `into_iter().nth()` form (it does not need a materialized
-                    // root).
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Dynamic {
-                            base: self.place_text(place),
-                            len: access.lens.first().copied().unwrap_or(0),
-                        },
-                    );
-                } else {
-                    // A deeper dynamic chain over a single-use place: materialize
-                    // the place once and walk the chain inline.
-                    plan.single.insert(
-                        access.node,
-                        SingleMove::Chain {
-                            base: ChainBase::Root,
-                        },
-                    );
                 }
             }
         }
@@ -4811,6 +5239,7 @@ mod tests {
                 Resolution::Local {
                     name: name.to_string(),
                     mutable: false,
+                    decl: span(),
                 },
             );
             self.expr(ExprKind::Path(path), ty)
@@ -4971,6 +5400,233 @@ mod tests {
             }),
             span: span(),
         }
+    }
+
+    /// Step B non-vacuity for places: corrupting a recorded projection must be
+    /// rejected in debug builds.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn place_facts_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn main() { let a = [1, 2, 3]; let x = a[1]; }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let id = *checked
+            .facts
+            .own
+            .place
+            .iter()
+            .find(|(_, place)| matches!(place.steps.first(), Some(Projection::Index(_))))
+            .map(|(id, _)| id)
+            .expect("the fixture must record the index place `a[1]`");
+        checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("place exists")
+            .steps
+            .push(Projection::Deref);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted place must be rejected by the step-B place guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for method receivers: the guard now verifies the
+    /// auto-deref-adjusted place instead of skipping the receiver.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn method_receiver_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> usize { return xs.len(); }\n\
+                      fn main() { let a = [1, 2, 3]; let n = first(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *receivers
+            .iter()
+            .next()
+            .expect("the fixture must contain a method receiver");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the receiver's place must be recorded");
+        assert_eq!(
+            place.steps,
+            vec![Projection::Deref],
+            "the fixture must exercise the implicit auto-deref of `xs.len()`"
+        );
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted receiver place must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for reference arguments: a reborrowed `&[i32]`
+    /// argument records an auto-deref place and the guard now verifies it
+    /// instead of skipping the argument.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn reference_argument_place_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::{CheckOptions, Projection};
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn first(xs: &[i32]) -> i32 { return xs[0]; }\n\
+                      fn second(ys: &[i32]) -> i32 { return first(ys); }\n\
+                      fn main() { let a = [1, 2, 3]; let v = second(&a); }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "ys"
+                ) && checked
+                    .facts
+                    .own
+                    .place
+                    .get(id)
+                    .is_some_and(|place| place.steps == vec![Projection::Deref])
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record `ys` with its implicit auto-deref");
+        let place = checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("the argument's place must be recorded");
+        place.steps.push(Projection::Field("nope".to_string()));
+        let error = crate::generate(&checked, &GenOptions::default()).expect_err(
+            "a corrupted reference-argument place must be rejected by the step-B guard",
+        );
+        assert!(
+            error.message.contains("syntactic place"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity for the binding identity: the guard compares the
+    /// declaration span recorded by `OwnFacts` with the resolved local's span.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn binding_identity_disagreement_is_rejected_in_debug_builds() {
+        use ravum_lang_sema::facts::CheckOptions;
+        use ravum_lang_sema::syntax::span::Span;
+        use ravum_lang_sema::syntax::{parser, source::SourceMap};
+
+        let source = "fn main() { let a: i32 = 1; let b = a; }";
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+        let mut checked = result.checked.expect("the fixture program must check");
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(&checked.program.root, &mut exprs, &mut receivers);
+        let id = *exprs
+            .iter()
+            .find(|(id, expr)| {
+                matches!(
+                    &expr.kind,
+                    ExprKind::Path(path)
+                        if path.segments.len() == 1 && path.segments[0].name.name == "a"
+                ) && checked.facts.own.place.contains_key(id)
+            })
+            .map(|(id, _)| id)
+            .expect("the fixture must record the place of `a`");
+        checked
+            .facts
+            .own
+            .place
+            .get_mut(&id)
+            .expect("place exists")
+            .binding = Span::dummy();
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a corrupted binding must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("binding"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity: a disagreement between `OwnFacts` and the backend's
+    /// classification must be an error in debug builds, not a silent lowering.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn ownership_facts_disagreement_is_rejected_in_debug_builds() {
+        let mut checked = build_program_d();
+        let id = 999_999;
+        checked.facts.expr_types.insert(id, STy::String);
+        checked
+            .facts
+            .own
+            .use_kind
+            .insert(id, ravum_lang_sema::facts::UseKind::Copy);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a Copy decision on a String must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("ownership facts disagree"),
+            "unexpected error: {}",
+            error.message
+        );
+    }
+
+    /// Step B non-vacuity, second direction: a Move decision on a **Copy** type
+    /// must also be rejected. The previous test only covers Copy-on-mobile; the
+    /// 2026-11-14 mutation campaign found that the `UseKind::Move if copies`
+    /// guard had no test, so replacing its `copies` condition with `false`
+    /// survived.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn ownership_facts_move_on_a_copy_type_is_rejected_in_debug_builds() {
+        let mut checked = build_program_d();
+        let id = 999_998;
+        checked.facts.expr_types.insert(id, STy::I32);
+        checked
+            .facts
+            .own
+            .use_kind
+            .insert(id, ravum_lang_sema::facts::UseKind::Move);
+        let error = crate::generate(&checked, &GenOptions::default())
+            .expect_err("a Move decision on i32 must be rejected by the step-B guard");
+        assert!(
+            error.message.contains("ownership facts disagree"),
+            "unexpected error: {}",
+            error.message
+        );
     }
 
     fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {

@@ -35,6 +35,10 @@ pub struct JsonEnvelope {
     pub dependencies_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lockfile_stale: Option<bool>,
+    /// Additive (`--timings`): wall-clock durations per phase. Absent when the
+    /// flag is not passed; `schema_version` does not change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timings: Option<Value>,
     pub summary: Value,
     pub diagnostics: Vec<JsonDiagnostic>,
 }
@@ -270,9 +274,22 @@ pub fn envelope(
         profile: meta.profile,
         dependencies_digest: meta.dependencies_digest,
         lockfile_stale: meta.lockfile_stale,
+        timings: None,
         summary,
         diagnostics,
     }
+}
+
+/// `envelope`, plus the additive `timings` object (`--timings` only).
+pub fn envelope_with_timings(
+    meta: ReportMeta,
+    diagnostics: Vec<JsonDiagnostic>,
+    summary: Value,
+    timings: Option<Value>,
+) -> JsonEnvelope {
+    let mut envelope = envelope(meta, diagnostics, summary);
+    envelope.timings = timings;
+    envelope
 }
 
 pub fn print(envelope: &JsonEnvelope) {

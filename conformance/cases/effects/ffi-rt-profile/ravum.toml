@@ -1,0 +1,4 @@
+[package]
+name = "effects-ffi-rt-profile"
+version = "0.1.0"
+edition = "core-1.0"

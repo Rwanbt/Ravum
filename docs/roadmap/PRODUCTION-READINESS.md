@@ -7,11 +7,24 @@
 > ligne ci-dessous n'est cochée sans la commande, le SHA et la sortie qui la
 > ferment.
 >
-> **État au commit `0c2ceb8`** (Windows 11 x64, `rustc 1.95.0`) : conformance
-> **456 cas : 455 PASS / 0 FAIL / 1 SKIP**, périmètre build **195/195**,
-> `build_verified: true` ; workspace **113 suites, 1537 passés / 0 échec** ;
-> **0 forme `check`-pass / `build`-fail connue** ; gates **4 PASS / 7 PARTIAL /
-> 2 BLOCKED**.
+> **État au 2026-11-13** (Windows 11 x64, `rustc 1.95.0`, passe 11 + lot 1
+> couverture) : conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**, périmètre
+> build **202/202**, `build_verified: true` ; workspace **113 suites, 1 574
+> passés / 0 échec** ; **0 forme `check`-pass / `build`-fail connue** ; gates
+> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Couverture : mesure du 2026-11-13
+> **89,08 % lignes / 88,39 % régions** (sema + codegen), **86,41 % du seul code
+> produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
+> — écart, causes et plan par fichier en §7 bis.
+>
+> **Mise à jour du 2026-11-14 (campagne de fermeture, branche
+> `goal/consolidation-2`)** : voir §10 et
+> [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+> Chiffres courants : conformance **484 (483 PASS)**, workspace **1 660** tests
+> (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**), mutation
+> ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest **identique
+> sur deux runners distincts**, alarme de performance CI verte. Cette ligne date
+> l'état ; les gates restent ceux du §10 et de
+> [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -46,7 +59,7 @@ Chaque critère a une preuve attendue. Tant qu'elle manque, le critère est
 | **R5** | Frontière FFI sûre | programme D7 ci-dessous : contrats écrits + refus outillés + tests négatifs + `pure` qui la refuse |
 | **R6** | Code généré sûr | `#![forbid(unsafe_code)]` dans tout fichier généré (déjà) ; aucun `unsafe` hors du module d'interop audité ; revue du prélude runtime |
 | **R7** | Reproductibilité inter-machines | même digest sur **deux runners distincts** (aujourd'hui : local et CI diffèrent, c'est documenté et non revendiqué) |
-| **R8** | Qualité mesurable | couverture de **tous** les crates à logique + seuils ratchet ; mutation sur `sema/own.rs`, `sema/typeck.rs`, `codegen/emit.rs` |
+| **R8** | Qualité mesurable | couverture de **tous** les crates à logique + seuils ratchet ; mutation sur `sema/own.rs`, `sema/typeck.rs`, `codegen/emit.rs` ; objectif redéfini par S5 (2026-11-14) : voir §11 |
 | **R9** | Performance sous budget | `check`/`build`/`watch` sur machine de référence 16 Go, au repos, p50/p95 publiés, absence de régression suivie |
 | **R10** | Interfaces stables | CLI `--help` = contrat, schémas JSON versionnés, registre de codes figé, LSP testé ; politique de dépréciation écrite |
 | **R11** | Distribution | installateur Windows **et** Linux, désinstallation propre, provenance + SBOM attachés à l'artefact |
@@ -56,22 +69,33 @@ Chaque critère a une preuve attendue. Tant qu'elle manque, le critère est
 
 ## 3. État mesuré, critère par critère
 
+**Plateformes (D5, 2026-11-11)** : Tier 1 = **Windows x86-64 + Linux x86-64**
+(`ubuntu-latest`). **macOS a désormais son job, et il est vert** : `.github/workflows/macos-qual.yml`
+(`macos-latest`, Apple Silicon arm64) — tests workspace + conformance
+build-vérifiée **456 cas : 454 PASS / 0 FAIL / 2 SKIP**, `build_verified: true`
+(run `43132064512`, 2026-11-12). Niveau **Tier 2**, informatif, non requis pour
+fusionner ; promotion en Tier 1 après 30 jours de CI verte rattachée aux SHA.
+Deux tests de stress DSP sont marqués `ignore` sur macOS uniquement (fixture
+cdylib `no_std` qui exige libSystem : `ld` refuse le dylib) et restent
+enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
+`NOT_RUN`.
+
 | Critère | État | Preuve / manque |
 |---|---|---|
-| R1 | `PARTIAL` | 43 ADR `PROPOSED` ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | 456 cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
+| R1 | `PARTIAL` | **42** ADR `PROPOSED` (ADR-000…ADR-041, comptés par `tools/validate_repo_docs.py`) ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
+| R2 | **fait sur le périmètre** | **484** cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
 | R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
-| R5 | **ouvert** | inventaire FFI réel (`RFC-D7`), aucun contrat ABI/lifetime/unwinding écrit, tests négatifs partiels |
+| R5 | **`PARTIAL`** | frontière scalaire **confinée et inventoriée** (2026-11-14) : `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` + 2 `allow` audités sur le CLI (`docs/ffi/UNSAFE-INVENTORY.md`, `tools/unsafe_audit.py` en CI), `&str` refusé (`types/ffi-str-rejected`) ; contrats ABI/lifetime/unwinding **écrits mais non ratifiés** (`SAFETY.md`, RFC-D7) ; `i128`/`u128` (largeur C), unwinding/`longjmp`/signal et Miri FFI restent `NOT_RUN` ou humains |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
-| R7 | `PARTIAL` | local `847DF0D1…` ≠ runner `C281A035…` : digest lié à l'environnement, non revendiqué |
-| R8 | `PARTIAL` | couverture **sema + codegen** depuis le 2026-11-11 (88,54/87,86 totaux ; `emit.rs` 87,02/86,02) avec seuils ratchet par fichier ; mutation ciblée (passe 5) non rejouée ; mutation.yml non déclenchable |
-| R9 | `PARTIAL` | mesures de `RFC-D2` sous charge déclarée ; pas de campagne au repos |
-| R10 | `PARTIAL` | CLI et JSON documentés et testés ; politique de dépréciation absente |
-| R11 | `PARTIAL` | installateur Windows CI 16/16 ; Linux installé par la CI de qualification mais pas de contrat d'installateur public |
+| R7 | **fait sur le périmètre** | même digest sur **deux runners distincts** de même image et même toolchain épinglée : `9b7f16cc…cdf`, run [43622599083](https://github.com/Rwanbt/Ravum/actions/runs/43622599083) (2026-11-14) ; la différence local Windows ≠ runner Linux reste documentée et non revendiquée ; ni inter-OS ni inter-toolchain |
+| R8 | `PARTIAL` | couverture **90,44 % lignes / 89,88 % régions** (19 237/21 271, 2026-11-14) ; code produit **88,55 %** (1 557 lignes non couvertes / 13 598, outil de split corrigé) ; `loader.rs` **83,46/86,70** (+4,61/+4,51 pts par 25 tests de contrat) ; **objectif ratifié 100 %** toujours non atteint (**10 fichiers**), détail et causes §7 bis ; mutation ciblée en CI le 2026-11-14 (run [43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110) : **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` 36/30/6) ; seuils ratchet tenus, aucun abaissé. Objectif redéfini par S5 (2026-11-14) : voir §11 |
+| R9 | `PARTIAL` | p50/p95 `check`/`build` publiés ; **alarme de non-régression CI** (`performance.yml` + `tools/timings_gate.py`, plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)`, runs [43622599048](https://github.com/Rwanbt/Ravum/actions/runs/43622599048) puis [43629691517](https://github.com/Rwanbt/Ravum/actions/runs/43629691517) PASS) ; ni `build`, ni `watch`, ni LSP sous gate, et une alarme n'est pas un budget. Cible LSP de S8 (2026-11-14, refusée telle que proposée) : voir §11 |
+| R10 | `PARTIAL` | CLI, JSON et LSP documentés et testés ; **politique de dépréciation écrite** ([`DEPRECATION-POLICY.md`](../release/DEPRECATION-POLICY.md), `PROPOSED`, 2026-11-14) ; restent : ratification humaine, canal d'avertissement outillé (aucun `W-*` de dépréciation, aucun CHANGELOG) |
+| R11 | `PARTIAL` | installateur Windows CI 16/16 ; **contrat Linux public écrit** ([`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md), `PROPOSED`) et `scripts/install-contract.sh` exécuté par `linux-qual.yml` (manifeste, SHA-256, désinstallation, codes d'usage) ; restent : artefact distribuable (SBOM + manifeste attachés), signature D9 |
 | R12 | **différé** | mécanisme qualifié (refus d'un binaire altéré) ; **aucune clé** (D9 différée) |
-| R13 | `BLOCKED` | trois revues LLM reçues (Claude, ChatGPT, DeepSeek) mais non versées au dépôt ; un audit humain indépendant reste requis |
-| R14 | `PARTIAL` | quarante affirmations fausses corrigées en passe 8 ; guide utilisateur absent |
+| R13 | `BLOCKED` | quatre revues LLM (Claude, ChatGPT, DeepSeek, + la revue interne) reçues et triées dans `docs/audit/2026-11-reviews/TRIAGE.md` (16 constats vérifiés, verdicts CONFIRMÉ/FAUX/HISTORIQUE) ; un audit humain indépendant reste requis |
+| R14 | `PARTIAL` | guide utilisateur ([`GETTING-STARTED.md`](../guide/GETTING-STARTED.md)) et notes de version DRAFT créés le 2026-11-14 ; corrections de véracité (42 ADR, T9, brief d'audit) ; audit de véracité exhaustif non rejoué |
 
 ## 4. Plan de travail, par ordre de dépendance
 
@@ -136,10 +160,39 @@ bibliothèques C appelées. Nous pouvons rendre la **frontière** explicite,
 minimale, auditée et refusante ; nous ne pouvons pas prouver la mémoire d'un code
 que nous ne compilons pas. Cette limite doit être écrite dans la doc utilisateur.
 
-**Livrables** : `docs/ffi/SAFETY.md` (contrats + limites), refus outillés au
-`check`, tests négatifs (pointeur, buffer, callback, unwinding, ABI fausse),
-`// SAFETY:` obligatoire sur chaque `unsafe` du runtime, revue du module
-d'interop, et une passe Miri sur les cas FFI exécutables.
+**Comment Rust fait — et pourquoi la solution existe quand même.** Rust prouve la
+mémoire **à l'intérieur de Rust** : le borrow checker est une preuve locale sur du
+code qu'il voit. À la frontière FFI, Rust ne prouve rien du C : `unsafe` signifie
+exactement « le compilateur délègue l'obligation de preuve au programmeur ». La
+solution n'est donc pas de prouver le C, elle est de **rendre la frontière
+étroite, contractuelle et auditable**, ce que la bibliothèque standard fait avec
+des wrappers documentés (`// SAFETY:`) et ce que les projets sérieux complètent
+par de l'**isolation** quand le contrat ne peut pas être tenu. Le programme D7
+suit ce modèle en quatre étages :
+
+1. **Confinement** : `unsafe` et `extern "C"` seulement dans des modules marqués
+   `trusted`, listés dans un inventaire versionné ; la CI compare l'inventaire à
+   chaque PR. Aucun `unsafe` ailleurs (le code généré porte déjà
+   `#![forbid(unsafe_code)]`).
+2. **Contrat d'effets** : un `extern` déclare ses effets (`effects(net)`), et un
+   appel FFI produit `{unsafe, ffi}` **∪** les effets déclarés — sinon il est
+   refusé hors du profil `core`. C'est ce qui empêche une FFI de contourner le
+   système d'effets (constat des quatre revues).
+3. **Wrappers sûrs** : une fonction sûre encapsule l'`unsafe`, porte les effets
+   déclarés mais **plus** `unsafe` : l'`unsafe` est encapsulable et non
+   contagieux, ce qui rend l'audit tractable (une bibliothèque = un module
+   wrapper, aucun type Ravum brut à la frontière).
+4. **Isolation** : pour les bibliothèques dont le contrat ne peut pas être borné
+   ou revu (callbacks incontrôlables, effets inconnus), l'exécution dans un
+   composant isolé (processus séparé ou WASM) fait porter la sûreté mémoire à la
+   frontière d'isolation au lieu de l'analyse statique. C'est le seul moyen de
+   tenir une garantie quand la preuve locale est impossible.
+
+**Livrables** : `docs/ffi/SAFETY.md` (contrats + limites, **premier jet écrit le
+2026-11-12, `PROPOSED`/D7**), refus outillés au `check`, tests négatifs (pointeur,
+buffer, callback, unwinding, ABI fausse), `// SAFETY:` obligatoire sur chaque
+`unsafe` du runtime, revue du module d'interop, et une passe Miri sur les cas FFI
+exécutables.
 
 ## 6. Programme D4 — ce que les revues LLM peuvent et ne peuvent pas
 
@@ -183,12 +236,192 @@ Deux mesures différentes, souvent confondues :
 
 Fait le 2026-11-11 : le **codegen est mesuré et sous seuil** (première mesure :
 87,04 % lignes / 86,05 % régions ; totaux sema+codegen **88,54/87,86**), et
-`coverage.yml` couvre désormais les deux crates. Reste : étendre la mesure à
-`ravum-lang-syntax`, `ravum-lang-cli` et `tools/conformance`, remonter les
-seuils sema vers la cible 90/85 (la marge la plus mince est `check.rs` à
-80,26 % pour un seuil à 80), et compléter par la **mutation** (mesure plus
-honnête pour un compilateur, car un `match` géant peut être « couvert » sans
-être testé).
+`coverage.yml` couvre désormais les deux crates. **Objectif ratifié le
+2026-11-11 : 100 % de lignes ET de régions sur chaque fichier mesuré.** Le
+mécanisme est en place : `tools/coverage_thresholds.json` porte l'objectif, et
+`python tools/coverage_report.py --input target/cov-all.json --gap` liste, fichier
+par fichier, les lignes non couvertes. État de départ : **11 fichiers sous
+l'objectif, ~2 100 lignes** — `emit.rs` 757, `loader.rs` 581, `typeck.rs` 274,
+`own.rs` 182, `resolve.rs` 138, `check.rs` 131, `builtins.rs` 35, `facts.rs` 28,
+`effects.rs` 25, `types.rs` 9, `lib.rs` 3. **État courant et plan à jour : §7
+bis** (2026-11-13 : 89,08/88,39, 10 fichiers, 1 715 lignes de code produit).
+La trajectoire : fermer les écarts
+module par module, et **relever le seuil du fichier à 100 dès qu'il l'atteint**,
+pour que la couverture ne puisse plus redescendre. Reste aussi à étendre la mesure
+à `ravum-lang-syntax`, `ravum-lang-cli` et `tools/conformance`. Et à compléter
+par la **mutation** (mesure plus honnête pour un compilateur, car un `match`
+géant peut être « couvert » sans être testé) : 100 % de couverture ne prouve pas
+100 % de correction.
+
+**Objectif officiel redéfini (S5, décision du responsable, 2026-11-14)** :
+**100 % des lignes et des régions du CODE PRODUIT**, hors modules
+`#[cfg(test)]` et hors chemins inatteignables **documentés un par un** ; la
+**mutation ciblée** est la **seconde métrique** ; les **344 MUST non mappés**
+sont une **dette tracée**, pas un blocage. Détail et impacts : §11.
+
+## 7 bis. Plan de fermeture mesuré de la couverture (2026-11-13, lot 1)
+
+> Mesure de référence : `target/cov-batch1.json`, export `cargo llvm-cov -p
+> ravum-lang-sema -p ravum-lang-codegen --json` du 2026-11-13 sur `432c663` +
+> lot 1 (`rustc 1.95.0`, `cargo-llvm-cov 0.9.1`, Windows 11 x64) :
+> **89,08 % lignes (17 264/19 380) / 88,39 % régions**, contre **88,54 %
+> (17 091/19 303) / 87,81 %** au lot 0. Le même commit mesure **89,12 % /
+> 88,44 % (17 288/19 398)** sur le runner Linux de `coverage.yml` : l'écart est
+> le `#[cfg(unix)]` de `loader.rs`, et **les deux passent tous les seuils**.
+> Cinq seuils relevés, **aucun abaissé** (voir « Clôtures » plus bas).
+>
+> **Deux chiffres, deux supports, ils ne s'additionnent pas :**
+>
+> - `python tools/coverage_report.py --gap` — le gate CI lit l'export **par
+>   instanciation de compilation** : **2 098** lignes non couvertes, **10**
+>   fichiers sous l'objectif ;
+> - `python tools/coverage_product_split.py` — **fusionne** les instanciations
+>   et sépare le code produit du code de test : **1 715** lignes produit non
+>   couvertes sur 12 621 (**86,41 %**) et **201** lignes dans les modules
+>   `#[cfg(test)]`.
+>
+> **Correction d'analyse (2026-11-13, lot 0).** Le plan du 2026-11-12 attribuait
+> les écarts par *fonction* sans fusionner les instanciations : l'export contient
+> `sema` **deux fois** (seul, puis comme dépendance de `codegen`), donc une
+> fonction exercée par les tests de `sema` apparaissait « 100 % non couverte »
+> dans la copie liée aux tests de `codegen`. Exemple : `check_const_expr` était
+> annoncé 207/207, il est en réalité **16/207** ; `plan_slot_groups` 210/217,
+> il est en réalité **40/217**. Les chiffres **par fichier** n'étaient pas
+> affectés (les lignes ne sont pas dupliquées), mais les cibles par fonction
+> l'étaient.
+
+### Le code de test n'est pas un trou de couverture
+
+Sur les 2 098 lignes que `--gap` liste, **201** sont dans un module
+`#[cfg(test)]` et ne peuvent pas être couvertes par une exécution verte : le
+message d'un `assert!` ne s'exécute que si le test échoue, un `panic!` de
+diagnostic de test ne s'exécute jamais, et les bras de `match` des *walkers* ne
+s'exécutent que si un programme de test utilise la construction correspondante.
+
+| Fichier | Lignes non couvertes dans `#[cfg(test)]` | Nature |
+|---|---|---|
+| `check.rs` | 143 | `assert!`/`panic!` des helpers et bras AST inutilisés de `fact_coverage_tests` |
+| `emit.rs` | 37 | messages d'échec des tests du backend |
+| `own.rs` | 13 | idem |
+| `loader.rs` | 8 | idem |
+
+Conséquence pratique : **`check.rs` est à 100 % de son code produit** (46
+lignes) alors que `--gap` le classe à 80,26 %. Le chasser revient à écrire des
+tests qui testent des tests. Le script de séparation est versionné
+(`tools/coverage_product_split.py`) pour que le chiffre soit reproductible et
+discutable, pas asserté.
+
+### Le code mort n'est pas un trou de couverture non plus
+
+Le compilateur le signale (`dead_code`). Le lot 1 a supprimé **neuf éléments
+sans appelant**, vérifiés par recherche sur tout le dépôt :
+
+| Élément | Fichier | Note |
+|---|---|---|
+| `collect_generic_args` | `typeck.rs` | aucun appelant (annoncé comme cible de test dans le plan du lot 0 : c'était du code mort) |
+| `check_expr_list` | `typeck.rs` | remplacé par `check_tuple_items` depuis la refonte des tuples |
+| `check_tuple` | `typeck.rs` | idem ; les tuples sont typés par `check_tuple_items` |
+| `EffectSet::pure` | `facts.rs` | aucun appelant (`EffectSet::default()` utilisé) |
+| `EffectSet::is_subset_of` | `facts.rs` | aucun appelant |
+| `facts::expr_type` | `facts.rs` | aucun appelant ; `codegen` et `lsp` lisent `facts.expr_types` directement |
+| `builtin_assoc_fn_effects` | `builtins.rs` | aucun appelant ; `effects::add_builtin_path` lit `sig.effects` |
+| `effects::empty` | `effects.rs` | aucun appelant (sa doc disait « utile aux tests unitaires » : aucun test ne l'utilisait) |
+| `World::module` | `resolve.rs` | accesseur jamais appelé |
+
+**Cinq avertissements `dead_code` restent, volontairement**, parce que les
+supprimer effacerait un fait plutôt qu'un coût :
+
+| Reste | Nature du fait |
+|---|---|
+| `ModuleInfo::name` jamais lu | l'information existe en double (`World::modules[..].path`) |
+| `MethodEntry::impl_generics` jamais lu | copie redondante : les génériques d'`impl` sont bien utilisés via `impl_ctx` (`resolve.rs` 1687) |
+| `Resolved::Module(ModuleId)` — charge jamais lue | le `ModuleId` est ignoré par tous les `match` |
+| `Resolved::BuiltinModule(&'static str)` — charge jamais lue | idem |
+| `UseTarget::Variant` jamais construit | **défaut latent** : le message « variant import … is not supported in Core 1.0 » (`resolve.rs` 1189) ne peut pas s'exécuter ; `use E::V;` sort aujourd'hui en `E-RES-UNKNOWN` « unknown import path » |
+
+### Ce qui reste, en code produit
+
+| Fichier | Lignes produit non couvertes / totales | Produit % |
+|---|---|---|
+| `codegen/emit.rs` | 608 / 2 874 | 78,84 % |
+| `sema/loader.rs` | 537 / 1 773 | 69,71 % |
+| `sema/typeck.rs` | 243 / 3 831 | 93,66 % |
+| `sema/own.rs` | 165 / 1 487 | 88,90 % |
+| `sema/resolve.rs` | 137 / 1 855 | 92,61 % |
+| `sema/effects.rs` | 22 / 281 | 92,17 % |
+| `codegen/lib.rs` | 3 / 13 | 76,92 % |
+| `sema/builtins.rs` | **0** / 212 | **100 %** |
+| `sema/facts.rs` | **0** / 118 | **100 %** |
+| `sema/types.rs` | **0** / 131 | **100 %** |
+| `sema/check.rs` | **0** / 46 | **100 %** |
+| **Total** | **1 715 / 12 621** | **86,41 %** |
+
+### Quatre causes distinctes, quatre traitements
+
+1. **Périmètre de mesure incomplet** — `coverage.yml` mesure `cargo test`, alors
+   que la conformance exécute le vrai corpus. Les chemins `MovePlanner`,
+   `fmt_type_pos` et une partie de `typeck` sont exercés par les cas
+   `array-move-*` mais comptés comme non couverts. **Décision proposée** :
+   garder la mesure sur `cargo test` et fermer par des tests in-crate ; mesurer
+   l'exécution du corpus demanderait d'instrumenter le binaire *enfant* que le
+   harnais lance, ce qui est un chantier séparé (profils `--no-report`,
+   `LLVM_PROFILE_FILE` hérité, `llvm-profdata merge`). Rien n'est appliqué ici.
+2. **Instanciations dupliquées** — `sema` est compilé deux fois dans la même
+   mesure. Toute analyse par fonction doit fusionner (meilleure instanciation) ;
+   sinon elle double les cibles et fabrique de faux « 0 % ».
+3. **Code de test et code mort comptés comme code** — traités ci-dessus : le
+   premier ne se ferme pas par des tests, le second se supprime. Les deux
+   sortent du dénominateur utile sans qu'aucun seuil ne bouge.
+4. **Vrais trous** — `loader.rs` (dépendances, manifeste, lockfile),
+   `emit.rs` hors moves, `eval_value` (D13), `resolve_type_path`,
+   `check_struct_lit`, `check_return`, `check_const_expr`.
+
+### Ordre proposé (mis à jour après le lot 1)
+
+1. **Lots `emit.rs` et `loader.rs`** : 1 145 des 1 715 lignes produit restantes
+   (67 %) sont dans deux fichiers, tous deux sous 80 %. `emit.rs` est le code
+   qui décide de la forme du Rust généré ; `loader.rs` est le chargeur de
+   packages, jamais exercé par `cargo test` sur ses chemins d'erreur
+   (manifeste invalide, dépendance manquante, cycle, lockfile divergent).
+   Ce sont les deux lots à ouvrir ensemble : le second produit des fixtures
+   réutilisées par le premier.
+2. **`typeck.rs` / `own.rs` / `resolve.rs`** (545 lignes) : zones où des
+   régressions ont déjà été trouvées par les passes 6–10
+   (`check_struct_lit`, `check_return`, `check_const_expr`, `eval_value`,
+   `resolve_type_path`).
+3. **`effects.rs`** (22 lignes) : dont 14 **structurellement inaccessibles**
+   aujourd'hui — la branche « entrées = `test_fns` » (`effects.rs` 128-141)
+   exige un programme sans `main` dont les `#[test]` sont acceptés, alors que
+   `#[test]` est refusé en `E-UNSUPPORTED-ATTR` et qu'un programme sans `main`
+   est une erreur. Elle sera couverte le jour où les attributs de test
+   entreront ; d'ici là c'est une dette assumée, pas une cible.
+4. **Helpers de test** (`check.rs`) : dernière priorité, et seulement pour les
+   bras qui correspondent à des constructions réellement supportées.
+
+**Règle de clôture** : un fichier qui atteint 100 % de lignes et de régions
+relève son plancher à 100 dans `tools/coverage_thresholds.json`, dans le même
+commit, avec le SHA de mesure. Aucun test n'est ajouté « pour la ligne » : il
+asserte un comportement, et les cas négatifs portent le code exact.
+
+### Clôtures du lot 1 (2026-11-13)
+
+| Fichier | Plancher avant | Plancher après | Mesure | Fermé par |
+|---|---|---|---|---|
+| `facts.rs` | 81 / 76 | **100 / 100** | 100 / 100 | 3 suppressions + 8 tests de contrat (round trip des noms d'effet, `display`/`extend`/`difference`, `Profile::parse`/`name`/`forbidden`, `FileInfo::line_of`, `file_infos`) |
+| `builtins.rs` | 90 / 88 | **100 / 98** | 100 / 98,42 | `type_from_str` : formes composées (`&`, `&mut`, `[T]`, `(A, B)`, `Vec`/`Option`/`Result`) et refus fermé du texte malformé (12 chaînes) |
+| `typeck.rs` | 92 / 91 | **93 / 92** | 93,47 / 93,01 | 3 suppressions de code mort |
+| `effects.rs` | 91 / 93 | **92 / 94** | 93,29 / 95,02 | 1 suppression de code mort |
+| `resolve.rs` | 92 / 92 | **93 / 93** | 93,26 / 93,45 | 1 suppression de code mort |
+
+### Constat hors couverture, à trancher
+
+`impl<T> Holder<T>` **fonctionne** mais **aucun cas de conformance ne le
+couvre** (recherche `impl\s*<` sur `conformance/cases` : zéro). Sonde locale du
+2026-11-13 (`ravum-lang run`, 7 lignes, hors corpus) : `check` passe, le binaire
+s'exécute, `value_of(self) -> T` rend bien `41` puis `42` (`OK42`). C'est une
+forme supportée non verrouillée par le corpus : à ajouter comme cas
+`run-pass` en même temps qu'un incrément du compte de cas (471 → 472), donc pas
+dans ce lot.
 
 ## 8. Ce que ce document ne prétend pas
 
@@ -199,3 +432,102 @@ honnête pour un compilateur, car un `match` géant peut être « couvert » san
   critères de sortie, pas des tâches d'agent.
 - Les estimations de durée sont volontairement absentes : elles n'ont pas été
   mesurées, et un chiffre inventé vaut moins que pas de chiffre.
+
+## 9. Passe 12 — mesures du GOAL (2026-11-13)
+
+> Section **datée**. Elle ne change aucun verdict de gate ; elle met à jour les
+> preuves disponibles pour chaque critère et renvoie au rapport complet
+> [`GOAL-PRODUCTION-READINESS-REPORT.md`](../reports/GOAL-PRODUCTION-READINESS-REPORT.md)
+> et au registre inchangé [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+
+| Critère | État au SHA final | Preuve ajoutée / manque |
+|---|---|---|
+| R1 | `PARTIAL` | ADR toujours `PROPOSED` ; aucune ratification |
+| R2 | `PARTIAL` | 476 cas 0 FAIL ; oracle **40 200 exécutions** de **42 gabarits d'instructions indépendantes, sans composition** (4 campagnes, dont le nominal 30 000), 0 divergence — aucune garantie au-delà de ces ~42 formes |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; tête de gondole MUST : **463/807** (D10) |
+| R4 | `BLOCKED` | audit externe absent ; Miri `NOT_RUN` cette session |
+| R5 | `PARTIAL` | FFI scalaire, contrats ABI non écrits (D7) |
+| R6 | fait | gardes `forbid`/wrapper prouvées rouges puis vertes |
+| R7 | `PARTIAL` | deux racines identiques (`98852115…`, round 13) sur une seule machine |
+| R8 | `PARTIAL` | couverture **89,07/88,43**, seuils tenus ; 100 % non atteint ; mutation `NOT_RUN` |
+| R9 | `PARTIAL` | p50/p95 par phase publiés ; pas de campagne sous charge |
+| R10 | `PARTIAL` | politique de dépréciation toujours absente |
+| R11 | `PARTIAL` | installateur Windows non rejoué cette session |
+| R12 | différé | aucune clé (D9) |
+| R13 | `BLOCKED` | audit humain indépendant requis |
+| R14 | `PARTIAL` | gouvernance corrigée ; guide utilisateur absent |
+
+Mesures principales : workspace **100 groupes / 1 605 passés / 0 échec /
+5 ignorés** (et **1 603 / 0 / 5** en profil release) ; conformance **476 / 475 PASS / 0 FAIL / 1 SKIP**,
+`build_verified: true` ; `check` p95 froid **1,3-8,1 ms**, édition
+**11,0-49,8 ms** ; `build` p50 **179-331 ms** dont `rustc` **97,1-99,3 %** ;
+cache de parse LSP p95 **1,362 ms** (analyse) et **2,826 ms** de bout en bout
+(transport inclus, 20 éditions d'une ligne). Fuzz long rejoué :
+249 054 entrées / 0 échec et 100 000 itérations / 0 échec (rejoué après la
+passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
+**89,47/88,87**, seuils tenus, `codegen/lib.rs` à **100/100**, `traps.rs` à
+98,66/96,84. **Miri rejoué vert en CI Linux** sur `878e212` (syntax 65, sema
+134, fuzz court) ; **mutation rejouée en CI** (183 mutants / 150 tués / 24
+survivants triés / 9 non viables, portée ciblée). Miri et mutation locaux
+absents. `OwnFacts` : étape A livrée (faits enregistrés,
+2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
+600 programmes + 476 cas), étape C `NOT_RUN`.
+Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
+entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
+(`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste
+`NOT_RUN` (RFC écrite, aucune implémentation partielle).
+
+## 10. Passe 13 — campagne de fermeture des chantiers techniques (2026-11-14)
+
+> Section **datée**, branche `goal/consolidation-2`. Rapport détaillé :
+> [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+> Elle met à jour les **preuves** ci-dessus ; elle ne promeut aucun gate et ne
+> remplace ni D4/R13 ni T12.
+
+| Critère | État | Preuve ajoutée / ce qui reste |
+|---|---|---|
+| R1 | `PARTIAL` | 42 ADR comptés (correction du « 43 ») ; toujours `PROPOSED`, aucune ratification |
+| R2 | fait sur le périmètre | 484 cas (483 PASS), 0 FAIL ; oracle nominal **6 000 programmes, 0 divergence** ; ne prouve pas les formes inconnues |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 ouverte |
+| R4 | `BLOCKED` | Miri Linux vert en CI ; audit humain absent |
+| R5 | `PARTIAL` | confinement `unsafe` mécanique + inventaire ; `&str` refusé ; D7 non ratifiée, `i128`/`u128`/unwinding/miri FFI ouverts |
+| R6 | fait | gardes `forbid`/wrapper ; le code généré reste sans `unsafe` hors wrapper |
+| R7 | **fait sur le périmètre** | deux runners distincts, digest `9b7f16cc…cdf` ; pas d'inter-OS/toolchain |
+| R8 | `PARTIAL` | couverture **90,44/89,88**, produit **88,55 %** ; 10 fichiers sous l'objectif ; mutation **219/180/30/9** dont `emit.rs` |
+| R9 | `PARTIAL` | alarme CI `check` (run 43622599048) ; `build`/`watch`/LSP non gatés |
+| R10 | `PARTIAL` | politique de dépréciation écrite (`PROPOSED`) ; aucun avertissement outillé |
+| R11 | `PARTIAL` | contrat Linux écrit + CI ; artefact distribuable et signature absents |
+| R12 | différé | aucune clé (D9) |
+| R13 | `BLOCKED` | audit humain indépendant requis |
+| R14 | `PARTIAL` | guide + notes de version DRAFT ; audit de véracité non exhaustif |
+
+**Décisions humaines** : le dossier unique est
+[`HUMAN-DECISIONS-REQUIRED.md`](../reports/HUMAN-DECISIONS-REQUIRED.md)
+(21 fiches, daté 2026-11-14). Aucune n'est tranchée par cette passe.
+
+## 11. Décisions du responsable du 2026-11-14 — objectifs et cibles
+
+> Section **datée**. Elle enregistre les décisions S1–S8 et A1–A5 qui touchent
+> les critères de ce document ; texte intégral dans
+> [`DECISIONS-2026-11-14.md`](../decision/DECISIONS-2026-11-14.md).
+> **Aucun état de critère n'est changé ici** : un `PARTIAL` reste `PARTIAL` tant
+> qu'une commande de la vague 3 ne prouve pas autre chose.
+
+| Décision | Ce qui change dans ce document | Critères concernés |
+|---|---|---|
+| **S5** | L'objectif de couverture est **défini** : **100 % des lignes et des régions du CODE PRODUIT**, hors modules `#[cfg(test)]` et hors chemins inatteignables **documentés un par un** ; la **mutation ciblée** est la **seconde métrique** ; les **344 MUST non mappés** sont une **dette tracée**, pas un blocage. Le dénominateur MUST reste **807** | **R3** et **R8** restent `PARTIAL` ; **aucun seuil abaissé** |
+| **S8** | Cible LSP : **REFUSÉE telle que proposée** — la cible n'est pas assouplie pour absorber un défaut algorithmique. Cible retenue : **p95 < 50 ms jusqu'à 1 000 lignes** ; **p95 ≤ 150 ms à 5 110 lignes en profil release** ; **contrôle de linéarité en CI** ; incrémentalité sémantique = chantier 1.x | **R9** reste `PARTIAL` ; T7 inchangé |
+| **S7** | Comparaison du Rust généré : identité **après normalisation limitée** aux motifs `__rv_root_<id>` et `rvm_ffi_<id>` ; **toute autre différence = échec** | Item T4 du GOAL ; **R1/R6** inchangés |
+| **A2** | Bloc DSP (phase 8, `RFC-RV-DSP-BLOCK-1`) **reporté à la 1.1**, hors périmètre 1.0, ne pas l'implémenter | T8 et T9 restent `PARTIAL` **avec cette mention** |
+| **A3** | Voie C **hors 1.0** ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | T1 reste `PARTIAL` |
+| **S1–S4, S6, A1, A4, A5** | Enregistrées (mandat, `NodeId` u64, profil `rt`, frontière FFI scalaire, méthode du test de puissance, `OwnFacts` étape C, outils locaux, `rule_id`) | **Aucun état de critère changé** |
+
+**Ce que cette section ne prouve pas.** Les seules commandes exécutées pour cet
+enregistrement sont documentaires (`validate_repo_docs.py`,
+`report_consistency.py`, `must_audit.py`) ; elles ne mesurent ni la performance,
+ni la couverture, ni la mutation. `must_audit.py` mesure **807** énoncés MUST,
+**463/807** atteignables et **344** non mappés après la renumérotation A5 et le
+réalignement des citations `features.md` (`F-SYN-008` → `G-5.14`, `F-SYN-031` →
+`G-6.41, G-6.48`, `G-6.40` rattaché à `F-EFF-009`) ; le faux positif historique
+de la plage `G-6.40–6.41` est expliqué dans `Q-GRAM-11`.
+

@@ -48,14 +48,15 @@
 use ravum_lang_codegen::{generate, GenOptions, GENERATOR_VERSION};
 use ravum_lang_sema::facts::{CheckOptions, CheckedProgram};
 use ravum_lang_sema::loader::{load_package_with_options, CrateKind, LoadOptions};
-use ravum_lang_sema::{check, LoadedPackage, Profile};
-use ravum_lang_syntax::ast::{ItemKind, Module, Program};
-use ravum_lang_syntax::diag::DiagnosticBag;
+use ravum_lang_sema::{check_entry_with_timings, LoadedPackage, PhaseTimings, Profile};
+use ravum_lang_syntax::ast::{ItemKind, Module, NodeId, Program};
+use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::source::SourceMap;
+use ravum_lang_syntax::span::Span;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::util;
 
@@ -93,14 +94,100 @@ impl Frontend {
 
 /// Load a package and run the checker on every crate root it contains.
 pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
+    analyze_with_entry(path, profile, locked, None)
+}
+
+/// `analyze`, with the explicit `rt` entry function of T6 (`--rt-entry`).
+///
+/// The name is a module path (`dsp::process`, or `process` at the crate root);
+/// it must name a free function of the primary crate root. Methods of an
+/// `impl` are not addressable and are reported as an unknown entry.
+pub fn analyze_with_entry(
+    path: &Path,
+    profile: Profile,
+    locked: bool,
+    rt_entry: Option<&str>,
+) -> Frontend {
+    analyze_entry_with_timings(path, profile, locked, rt_entry).0
+}
+
+/// Wall-clock durations of one analysis, for `ravum-lang --timings`.
+///
+/// `load` excludes `parse`: `parse` is the time spent inside the parser while
+/// loading (all files, dependencies included), so `load + parse + resolve +
+/// typeck + effects + own` is the analysis total without double counting.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AnalysisTimings {
+    pub load: Duration,
+    pub parse: Duration,
+    pub resolve: Duration,
+    pub typeck: Duration,
+    pub effects: Duration,
+    pub own: Duration,
+}
+
+impl AnalysisTimings {
+    pub fn total(&self) -> Duration {
+        self.load + self.parse + self.resolve + self.typeck + self.effects + self.own
+    }
+
+    /// JSON object, additive (`schema_version` unchanged). Milliseconds with
+    /// three decimals; deterministic field order.
+    pub fn json(&self) -> serde_json::Value {
+        json!({
+            "load_ms": ms(self.load),
+            "parse_ms": ms(self.parse),
+            "resolve_ms": ms(self.resolve),
+            "typeck_ms": ms(self.typeck),
+            "effects_ms": ms(self.effects),
+            "own_ms": ms(self.own),
+            "total_ms": ms(self.total()),
+        })
+    }
+}
+
+/// `check`, plus the analysis timings and the `--rt-entry` function of T6.
+pub fn analyze_entry_with_timings(
+    path: &Path,
+    profile: Profile,
+    locked: bool,
+    rt_entry: Option<&str>,
+) -> (Frontend, AnalysisTimings) {
+    let mut timings = AnalysisTimings::default();
+    let load_started = Instant::now();
     let mut pkg = load_package_with_options(
         path,
         &LoadOptions {
             locked,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
+    let load_total = load_started.elapsed();
+    timings.parse = pkg.parse_time;
+    timings.load = load_total.saturating_sub(timings.parse);
     let mut diags = std::mem::take(&mut pkg.diags);
+    let entry = match rt_entry {
+        Some(name) => match pkg
+            .program
+            .as_ref()
+            .and_then(|program| find_function(program, name))
+        {
+            Some(id) => Some(id),
+            None => {
+                diags.push(Diagnostic::error(
+                    "E-TOOL",
+                    Span::dummy(),
+                    format!(
+                        "`--rt-entry`: no free function named `{name}` in this package; pass \
+                         its module path (for example `dsp::process`)"
+                    ),
+                ));
+                None
+            }
+        },
+        None => None,
+    };
     let options = CheckOptions {
         profile,
         edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
@@ -110,24 +197,146 @@ pub fn analyze(path: &Path, profile: Profile, locked: bool) -> Frontend {
 
     if !diags.has_errors() {
         if let Some(program) = &pkg.program {
-            let result = check(program, &pkg.sources, &options);
+            let (result, phase) = check_entry_with_timings(program, &pkg.sources, &options, entry);
+            add_phases(&mut timings, phase);
             diags.extend(result.diags);
             checked = result.checked;
         }
         if let Some(program) = &pkg.lib_program {
-            let result = check(program, &pkg.sources, &options);
+            let (result, phase) = check_entry_with_timings(program, &pkg.sources, &options, entry);
+            add_phases(&mut timings, phase);
             diags.extend(result.diags);
             lib_checked = result.checked;
         }
     }
 
     diags.sort();
-    Frontend {
+    let frontend = Frontend {
         target: path.to_path_buf(),
         pkg,
         checked,
         lib_checked,
         diags,
+    };
+    (frontend, timings)
+}
+
+/// Free function named by `--rt-entry`, addressed by module path.
+fn find_function(program: &Program, name: &str) -> Option<NodeId> {
+    fn walk(module: &Module, prefix: &str, wanted: &str) -> Option<NodeId> {
+        for item in &module.items {
+            match &item.kind {
+                ItemKind::Fn(function) => {
+                    let full = if prefix.is_empty() {
+                        function.name.name.clone()
+                    } else {
+                        format!("{prefix}::{}", function.name.name)
+                    };
+                    if full == wanted {
+                        return Some(item.id);
+                    }
+                }
+                ItemKind::Mod(inner) => {
+                    let module_name = inner
+                        .name
+                        .as_ref()
+                        .map(|ident| ident.name.as_str())
+                        .unwrap_or("");
+                    let next = if prefix.is_empty() {
+                        module_name.to_string()
+                    } else if module_name.is_empty() {
+                        prefix.to_string()
+                    } else {
+                        format!("{prefix}::{module_name}")
+                    };
+                    if let Some(id) = walk(inner, &next, wanted) {
+                        return Some(id);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+    walk(&program.root, "", name)
+}
+
+fn add_phases(total: &mut AnalysisTimings, phase: PhaseTimings) {
+    total.resolve += phase.resolve;
+    total.typeck += phase.typeck;
+    total.effects += phase.effects;
+    total.own += phase.own;
+}
+
+pub(crate) fn ms(duration: Duration) -> f64 {
+    (duration.as_secs_f64() * 1000.0 * 1000.0).round() / 1000.0
+}
+
+/// `-C incremental` directory for a debug build, or `None`.
+///
+/// **Opt-in, disabled by default.** The measured gain was null or negative on
+/// the reference machine (phase 3.4: an 800-function program took 868 ms of
+/// `rustc` with incremental against 785 ms without, cold and after a one-line
+/// edit), so the flag is enabled only with `RAVUM_INCREMENTAL=1`. Release and
+/// test builds never receive it.
+///
+/// The directory is keyed by a **session** identity (crate name/kind, target,
+/// opt level, rustc and generator versions) and deliberately **not** by the
+/// source digest: keying it by the source digest would create a fresh directory
+/// on every edit and make incremental compilation useless. The directory is
+/// derived data: it is not part of the build identity, the published artifact or
+/// its digest, and `ravum-lang cache clean` removes `<package>/.ravum/` entirely.
+fn incremental_dir(
+    cache: &Path,
+    identity: &BuildIdentity,
+    options: &BuildOptions,
+) -> Option<PathBuf> {
+    if options.release || options.test_mode {
+        return None;
+    }
+    let enabled = std::env::var("RAVUM_INCREMENTAL")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !enabled {
+        return None;
+    }
+    let session = format!(
+        "{}|{}|{}|{}|{}|{}",
+        identity.crate_name,
+        identity.crate_kind,
+        identity.opt_level,
+        identity.target,
+        identity.rustc,
+        identity.generator,
+    );
+    let key = fnv1a64(session.as_bytes());
+    Some(cache.join("incr").join(format!("{key:016x}")))
+}
+
+/// FNV-1a 64: short, dependency-free and deterministic cache key (not a
+/// cryptographic hash; the incremental directory is derived data).
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// Durations of the build stages that happen after the frontend.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BuildTimings {
+    pub codegen: Duration,
+    pub rustc: Duration,
+}
+
+impl BuildTimings {
+    pub fn json(&self) -> serde_json::Value {
+        json!({
+            "codegen_ms": ms(self.codegen),
+            "rustc_ms": ms(self.rustc),
+        })
     }
 }
 
@@ -486,6 +695,7 @@ fn current_snapshot_digest(frontend: &Frontend) -> Result<String, String> {
         &LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     if reloaded.diags.has_errors() {
@@ -647,6 +857,16 @@ pub fn compile_program(
     frontend: &Frontend,
     options: &BuildOptions,
 ) -> Result<Artifacts, BuildError> {
+    let mut timings = BuildTimings::default();
+    compile_program_with_timings(frontend, options, &mut timings)
+}
+
+/// Build one program, collecting the codegen and `rustc` durations.
+pub fn compile_program_with_timings(
+    frontend: &Frontend,
+    options: &BuildOptions,
+    timings: &mut BuildTimings,
+) -> Result<Artifacts, BuildError> {
     let checked = frontend.checked.as_ref().ok_or(BuildError::NoProgram)?;
     let root = frontend.root();
     let cache = util::ensure_cache_dir(&root).map_err(BuildError::Cache)?;
@@ -685,8 +905,10 @@ pub fn compile_program(
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
     };
+    let codegen_started = Instant::now();
     let rust =
         generate(checked, &gen_options).map_err(|error| BuildError::Codegen(error.message))?;
+    timings.codegen = codegen_started.elapsed();
 
     // Intermediate generated Rust: inside the identity directory. Its bytes are
     // deterministic for the identity, so two concurrent writers agree and the
@@ -731,6 +953,17 @@ pub fn compile_program(
     if is_library {
         command.arg("--crate-type").arg("lib");
     }
+    // Incremental compilation, debug builds only (phase 3.3). The directory is
+    // derived data: it is not part of the build identity, the published
+    // artifact or its digest, and `ravum-lang cache clean` removes it with the
+    // rest of `<package>/.ravum/`. `RAVUM_NO_INCREMENTAL=1` disables it (used
+    // for the before/after measurement and as a kill switch).
+    if let Some(incremental) = incremental_dir(&cache, &identity, options) {
+        let _ = std::fs::create_dir_all(&incremental);
+        command
+            .arg("-C")
+            .arg(format!("incremental={}", incremental.display()));
+    }
     // Never hand a Windows verbatim (`\\?\`) path to rustc: it forwards the
     // output/object paths to `link.exe`, which fails with
     // "LNK1181: cannot open input file '.obj'" on some path shapes. The cache
@@ -740,7 +973,10 @@ pub fn compile_program(
         .arg(util::strip_verbatim(&intermediate_artifact))
         .arg(util::strip_verbatim(&intermediate));
 
-    match command.output() {
+    let rustc_started = Instant::now();
+    let rustc_output = command.output();
+    timings.rustc = rustc_started.elapsed();
+    match rustc_output {
         Ok(output) if output.status.success() => {}
         Ok(output) => {
             let mut text = String::new();

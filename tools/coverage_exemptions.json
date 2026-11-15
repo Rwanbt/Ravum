@@ -6,9 +6,214 @@
       "rule": "F-META-006",
       "reason": "La ligne declare elle-meme « pass : aucun (oracle absent) » et sa colonne Conformance vaut NOT_COVERED. La machine abstraite du noyau pur n'a aucune forme executable : MACH-1.4 fixe son etat a NOT_IMPLEMENTED et interdit de citer un resultat machine comme preuve. Inventer un cas reviendrait a inventer un oracle, ce qui est precisement le faux PASS que T2 doit interdire.",
       "normative_reference": "spec/language/core-machine.md MACH-1.4 ; spec/language/features.md F-META-006 (Conformance = NOT_COVERED)",
-      "review_condition": "Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption.",
-      "approved_by": "Définition du gate T2 (docs/roadmap/CORE-1.0-GATE-MATRIX.md, 187/187 règles testables) — claim interne, non ratifié par un humain",
-      "date": "2026-11-10"
+      "review_condition": "Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption. Reexamen obligatoire au plus tard le 2027-02-12 (90 jours apres l'approbation humaine du 2026-11-12).",
+      "approved_by": "Rwanbt (responsable du projet) — approbation explicite en session le 2026-11-12, reponse « 1 - ok » a la demande d'approbation de l'exemption F-META-006.",
+      "date": "2026-11-12"
     }
-  ]
+  ],
+  "line_coverage_exemptions": {
+    "schema_version": 1,
+    "owner_decision": "S5, APPROUVÉ par le responsable, 2026-11-14 : « Objectif de couverture : 100 % lignes et régions du CODE PRODUIT, hors modules #[cfg(test)] et hors chemins inatteignables documentés un par un. » Ce bloc est la liste « un par un ». ",
+    "policy": "Une entrée n'est admise que si AUCUNE entrée de programme acceptée n'emprunte la ligne, et chaque entrée porte la preuve (test qui exécute le refus, mesure, ou argument statique sur le parseur/checker). Une entrée n'est PAS une auto-approbation : elle reste `PENDING_HUMAN_APPROVAL`, n'est jamais défalquée du chiffre brut, et le chiffre « objectif S5 » est publié séparément. Une entrée sans preuve est interdite ; une ligne inatteignable non listée reste une dette de couverture comptée. Ce fichier ne modifie aucun seuil (`tools/coverage_thresholds.json`).",
+    "measured_on": "2026-11-14 (vague 3, agent F), branche goal/wave-3 + branche wave3/f-coverage-mutation",
+    "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json ; python tools/coverage_product_split.py --input target/cov-all.json ; python tools/coverage_report.py --input target/cov-all.json --gap",
+    "entries": [
+      {
+        "id": "E-LINE-EMIT-BUILTIN-FN-VALUE",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[2461, 2497]],
+        "summary": "`builtin_fn_value` — the emitter's rendering of a builtin function used as a value.",
+        "why_unreachable": "`Emitter::value_path` reaches it only for `Resolution::BuiltinFn`, which the checker records for a builtin *call*; a builtin path in value position is refused before any fact is produced. The `Call` arm of the emitter consumes `facts.calls`, never `value_path`, for a builtin callee.",
+        "proof": "Two measured refusals: `io::println` as a value yields `E-TYP-CALL: builtin function `std::io::println` must be called`; `Option::Some` as a value yields `E-TYP-CALL: variant constructor `Option::Some` requires arguments`.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test emit_constructs a_builtin_function_used_as_a_value_is_refused_by_the_checker",
+          "cargo test -p ravum-lang-codegen --test emit_constructs a_prelude_constructor_used_as_a_value_is_refused_by_the_checker",
+          "crates/ravum-lang-sema/src/typeck.rs: ValuePath::BuiltinFn is rejected with E-TYP-CALL outside a call position"
+        ],
+        "review_condition": "Toute évolution qui accepterait une fonction builtin en position de valeur, ou qui ferait passer un builtin par `value_path` pour un appel.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PANIC-ARITY",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[3070, 3077]],
+        "summary": "`panic()` without an argument (default text) and the `panic` arity-error arm.",
+        "why_unreachable": "`std::panic::panic` is declared with exactly one argument; the checker refuses any other arity with `E-TYP-ARITY` before facts are produced, so the emitter only ever sees a one-argument call (the covered arm).",
+        "proof": "Measured: `panic()` in a `-> !` function yields `E-TYP-ARITY: `std::panic::panic` expects 1 argument(s), found 0`.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test emit_constructs panic_without_a_message_is_refused_by_the_checker"
+        ],
+        "review_condition": "Une signature de `panic` qui accepterait zéro ou plusieurs arguments.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-ASSERT-ARITY",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[3085, 3110]],
+        "summary": "`assert(condition, message)` (message form) and the `assert`/`assert_eq` arity-error arms.",
+        "why_unreachable": "`std::panic::assert` takes exactly one argument and `std::panic::assert_eq` exactly two; every other arity is `E-TYP-ARITY` in the checker, so the emitter's message form and its two error arms have no accepted program behind them.",
+        "proof": "Measured: `assert(true, \"message\")` → `E-TYP-ARITY: `std::panic::assert` expects 1 argument(s)`; `assert_eq(1)` → `E-TYP-ARITY: `assert_eq` expects 2 arguments`.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test emit_constructs a_two_argument_assert_is_refused_by_the_checker",
+          "cargo test -p ravum-lang-codegen --test emit_constructs the_checker_pins_the_assertion_arities_before_codegen"
+        ],
+        "review_condition": "Une signature d'`assert`/`assert_eq` qui accepterait une autre arité (par exemple un message optionnel).",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-BUILTIN-CONST",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[813, 842]],
+        "summary": "`builtin_const` arms for `math::PI`/`E`/`TAU` and the primitive `MIN`/`MAX`/`EPSILON` parsing.",
+        "why_unreachable": "The resolver produces exactly one builtin constant, `Resolution::BuiltinConst(\"Option::None\")` (resolve.rs `\"None\" => ...`); `math::PI` and the primitive associated constants are not resolved at all, so those arms cannot be selected. The reachable `Option::None` arm is covered.",
+        "proof": "Measured: `let pi = math::PI;` → `E-RES-UNKNOWN: unknown name `PI``. Code: crates/ravum-lang-sema/src/resolve.rs maps only `None` to `ValuePath::BuiltinConst`.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test emit_constructs prelude_constants_that_the_checker_does_not_expose_are_refused",
+          "crates/ravum-lang-sema/src/resolve.rs: `\"None\" => return Ok(ValuePath::BuiltinConst(\"Option::None\"))`"
+        ],
+        "review_condition": "L'exposition d'une constante builtin autre que `Option::None` (par exemple `math::PI`).",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-TO-STRING-FALLBACK",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[3300, 3304]],
+        "summary": "Second `to_string` branch of `builtin_method_call`, after `builtin_method_special`.",
+        "why_unreachable": "`builtin_method_special` returns `Some(...)` for `(_, \"to_string\")` — its first match arm, for every owner — and `builtin_method_call` returns early when it is `Some`. The later `if method == \"to_string\"` can therefore never be true.",
+        "proof": "Static proof: crates/ravum-lang-codegen/src/emit.rs `fn builtin_method_special` first arm `(_, \"to_string\") => format!(...)`; the caller executes `if let Some(special) = ... { return Ok(special); }` before the branch in question.",
+        "evidence": [
+          "crates/ravum-lang-codegen/src/emit.rs:847-871 (builtin_method_special)",
+          "crates/ravum-lang-codegen/src/emit.rs:3296-3304 (call site)"
+        ],
+        "review_condition": "Toute modification de `builtin_method_special` ou de son appel (ordre, ensemble d'owners).",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[1002, 1005]],
+        "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
+        "why_unreachable": "RFC-OWN-FACTS-1 step B is a debug-only audit guard: the branch is compiled out in release builds and is never executed in a debug build. Coverage is measured on a debug build (`cargo llvm-cov` without `--release`), so the line cannot be covered by any test in the measured profile.",
+        "proof": "The guard is `if !cfg!(debug_assertions) { return Ok(()); }`; the instrumented profile is the default debug profile. The *other* direction (a disagreement between `OwnFacts` and the emitter) is covered by the crate's own unit test.",
+        "evidence": [
+          "crates/ravum-lang-codegen/src/emit.rs:1002-1005",
+          "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
+        ],
+        "review_condition": "Une mesure de couverture en profil release, ou la suppression de la garde de debug.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-MOD-DECL",
+        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "lines": [[1490, 1500]],
+        "summary": "`ItemKind::ModDecl` refusal arm of the item emitter.",
+        "why_unreachable": "The package loader resolves every `mod foo;` declaration and rewrites the item into an inline `ItemKind::Mod`; a program that still carries a `ModDecl` is refused by the checker (`checked == None`), so the code generator never receives one.",
+        "proof": "Measured: a package with `mod inner;` + `src/inner.rv` loads with one `ItemKind::Mod` and zero `ItemKind::ModDecl`; a bare program with `mod inner;` is refused fail-closed (no `CheckedProgram`).",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --test loader_manifest_contracts module_declarations_are_inlined_into_module_items",
+          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_mod_declaration_that_the_loader_did_not_inline_is_refused"
+        ],
+        "review_condition": "Un mode de chargement qui laisserait des `ModDecl` dans le programme vérifié.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-RESOLVE-PLAIN-ROOT-ARMS",
+        "file": "crates/ravum-lang-sema/src/resolve.rs",
+        "lines": [[1314, 1332], [2426, 2436], [2544, 2572]],
+        "summary": "`PathRoot::Plain` arms comparing the first segment to `crate`/`self`/`super`, the `levels` loops for `super::super`, and the `Self` prefix test.",
+        "why_unreachable": "`parser::parse_path` consumes `crate`/`self`/`super` as a `PathRoot` before segmentation, and `Self` is the keyword `Kw::SelfType` (it can never be an `Ident` segment). A plain path therefore never starts with those words, and `super::super` is itself a parse error.",
+        "proof": "Measured: `use crate::…` / `use self::…` parse into `PathRoot::Crate`/`SelfMod` (no `E-PARSE-EXPECTED`); `use super::super::Something;` is refused with `E-PARSE-EXPECTED: expected path segment, found keyword `super``. Same argument as MUTATION-EQUIVALENCE.md §9.2 (E2), re-measured here.",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --test checker_entry_contracts use_forms_with_an_explicit_root_are_accepted",
+          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_double_super_path_is_a_parse_error",
+          "docs/qualification/MUTATION-EQUIVALENCE.md §9.2 E2"
+        ],
+        "review_condition": "Un parseur qui accepterait `crate`/`self`/`super`/`Self` comme segments ordinaires, ou `super::super::…` comme chemin.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-OWN-DESTRUCTURED-LET",
+        "file": "crates/ravum-lang-sema/src/own.rs",
+        "lines": [[639, 657]],
+        "summary": "Ownership bookkeeping for a destructuring `let` pattern (`let (a, b) = …`).",
+        "why_unreachable": "Core 1.0 `let` binds exactly one identifier: a destructuring pattern reaches the checker and is refused fail-closed (`E-PARSE-EXPECTED`, « `let` binds exactly one identifier in Core 1.0 ») before ownership analysis runs.",
+        "proof": "Measured: `let (text, number): (&str, i32) = (\"abc\", 1);` → `E-PARSE-EXPECTED` with that message; no `CheckedProgram` is produced.",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_destructuring_let_is_refused_by_the_checker"
+        ],
+        "review_condition": "L'acceptation d'un motif de `let` autre qu'une liaison simple.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-OWN-SIGNATURE-FALLBACK",
+        "file": "crates/ravum-lang-sema/src/own.rs",
+        "lines": [[441, 469]],
+        "summary": "AST fallback of `own::check_fn` when `Facts::fn_sigs` has no signature for the function.",
+        "why_unreachable": "`own` runs inside `check`, after `resolve`/`typeck` filled `fn_sigs` for every function of the program, and a `CheckedProgram` is only produced when no diagnostic error was reported (fail-closed). A function without a signature therefore cannot be reached by ownership analysis.",
+        "proof": "Static invariant: `check_entry_with_timings` returns `checked: None` as soon as a phase reported an error; `resolve::World::build_module` records a `Sym::Fn` (hence a `FnSig`) for every `ItemKind::Fn`.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/check.rs (fail-closed sequence)",
+          "crates/ravum-lang-sema/src/resolve.rs (fn_sigs registration)"
+        ],
+        "review_condition": "Un appel direct d'`own` sur un programme partiellement vérifié, ou une signature manquante possible après `typeck`.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-DISPLAY-FMT-ERROR",
+        "file": "crates/ravum-lang-sema/src/types.rs",
+        "lines": [[215, 250]],
+        "summary": "`fmt::Error` recovery edges (`?`) of the `impl Display` for semantic types (also documented in docs/qualification/COVERAGE-100-OBJECTIVE.md §2). METRIC: regions — the file is at 100 % lines; the lines below are the llvm-cov region-entry lines of those error edges, reported by `coverage_report.py --gap`.",
+        "why_unreachable": "These regions execute only when the `Formatter` returns `Err`. Every formatter a test or a caller can build through `std` (`format!`, `to_string`, `assert_eq!` on a `String`, `write!` into a `String`) is infallible (`fmt::Write for String` always returns `Ok`), and `std::fmt::Formatter` cannot be constructed with a failing sink from outside the formatting machinery. Replacing `write!(…)?` by an ignored result would delete the region, not prove it.",
+        "proof": "Same measured argument as COVERAGE-100-OBJECTIVE.md §2 (llvm-cov segments show the nominal path executed and only the `?` edges at zero). Line coverage of this file is 100 %: the uncovered *segments* are these error edges.",
+        "evidence": [
+          "docs/qualification/COVERAGE-100-OBJECTIVE.md §2",
+          "python tools/coverage_report.py --gap (types.rs: lines 219-244)"
+        ],
+        "review_condition": "Un `Display` qui écrirait vers une source de sortie faillible, ou un test qui construit un `Formatter` en échec (nouvelle API de test).",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-BUILTINS-TO-STR-EDGES",
+        "file": "crates/ravum-lang-sema/src/builtins.rs",
+        "lines": [[70, 80], [944, 950], [974, 990]],
+        "summary": "`fmt::Error` and parse-recovery edges of `builtins.rs` (display of effect names, malformed type text). METRIC: regions — the file is at 100 % lines; the lines below are the region-entry lines of the error edges (75-76, 948, 977-985).",
+        "why_unreachable": "The `?` edges of the `Display` impls cannot fail for the same reason as E-LINE-DISPLAY-FMT-ERROR; the recovery edges of `type_from_str` are reached only by malformed spec text that the checked-in specification does not contain (and the strict parser refuses it rather than recovering).",
+        "proof": "Line coverage of `builtins.rs` is 100 %: only the error regions of the `?` operators remain at zero (COVERAGE-100-OBJECTIVE.md §2).",
+        "evidence": [
+          "docs/qualification/COVERAGE-100-OBJECTIVE.md §2",
+          "python tools/coverage_report.py --gap (builtins.rs regions)"
+        ],
+        "review_condition": "Un formateur faillible, ou une entrée de spécification malformée ajoutée au dépôt.",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-LOADER-TOML-VALUE-SHAPE",
+        "file": "crates/ravum-lang-sema/src/loader.rs",
+        "lines": [[1046, 1056], [1155, 1164]],
+        "summary": "`package.<key> must be a string` and `dependency path must be a string` branches of `parse_manifest`.",
+        "why_unreachable": "The manifest TOML reader only produces `TomlValue::Str` and `TomlValue::Table`; a bare integer/bool is refused earlier with `E-MOD-MANIFEST: unsupported TOML value`, and an inline-table entry must be a quoted string. `parse_manifest` therefore never sees a non-string scalar.",
+        "proof": "Measured: `name = 5` → `E-MOD-MANIFEST: unsupported TOML value `5``; `dep = { path = 5 }` → `E-MOD-MANIFEST: inline table entry `path = 5` must be `key = \"value\"``.",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --test loader_manifest_contracts package_required_keys_and_value_kinds_are_enforced",
+          "cargo test -p ravum-lang-sema --test loader_manifest_contracts dependency_entries_are_strict"
+        ],
+        "review_condition": "Un lecteur TOML qui produirait d'autres types de valeurs (entiers, booléens, tableaux).",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-LOADER-CHECKED-ABOVE",
+        "file": "crates/ravum-lang-sema/src/loader.rs",
+        "lines": [[1058, 1062], [1668, 1672]],
+        "summary": "`unreachable!()` / `unreachable!(\"checked above\")` arms after an exhaustive `match` on the same key.",
+        "why_unreachable": "Both arms are guarded by an immediately preceding `match` on the same value (`key` is one of `name`/`version`/`edition`; a path component was already classified as `Normal`/`CurDir`/`ParentDir`). Reaching them would require the two matches to disagree, which no input can cause.",
+        "proof": "Static proof: the arm bodies are `unreachable!()` / `unreachable!(\"checked above\")` directly under the exhaustive match that establishes the invariant.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/loader.rs:1047-1062 (package key match)",
+          "crates/ravum-lang-sema/src/loader.rs:1655-1672 (path component match)"
+        ],
+        "review_condition": "Toute modification des deux `match` qui romprait l'invariant « checked above ».",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      }
+    ]
+  }
 }

@@ -1,0 +1,15 @@
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+
+fn inner() -> i32 {
+    return unsafe { abs(-1) };
+}
+
+fn outer() -> i32 {
+    return inner();
+}
+
+fn main() {
+    let value = outer();
+}

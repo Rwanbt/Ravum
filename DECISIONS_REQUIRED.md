@@ -2,8 +2,9 @@
 
 > Ces décisions **n'appartiennent pas** aux agents. Ce dossier les rend explicites,
 > avec recommandation, preuves disponibles, alternatives et conséquence d'une
-> non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-11
-> (passe 9 : D12 close, `P0-A` vert sur son périmètre mesuré).
+> non-décision. Aucune n'est prise ici. Dernière mise à jour : 2026-11-14
+> (vague 3 : décisions S1–S8 et A1–A5 du responsable enregistrées ; `D2`, `D4`,
+> `D9`, `T12`, `D-2026-11-14-6` et `D-2026-11-14-7` restent ouvertes).
 
 ## 0. Réponses du responsable — 2026-11-11 (soirée)
 
@@ -16,14 +17,42 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
 |---|---|---|
 | **D2** | Cible **production ready**, pas MVP | `docs/roadmap/PRODUCTION-READINESS.md` (14 critères, état mesuré, plan) ; **ratification** du backend + socle normatif encore à signer |
 | **D3** | **Fusion dans `main` autorisée**, aucune release | **Exécutée le 2026-11-12** : `dev` = `a2b8db5` (fusion de la PR #101), `main` = `94f3ac4` (fusion de la PR #104). Commits de fusion, aucun squash, **aucun tag, aucune release, aucune signature** ; rollback = `git revert -m 1 94f3ac4` |
-| **D4** | Trois revues LLM déjà faites ; ne doit pas bloquer le code | **Aucun blocage de code** ; les trois textes doivent être versés dans `docs/audit/2026-11-reviews/` pour triage ; un audit **humain** reste requis pour le label production |
-| **D5** | Tests sur **Windows et Linux**, pas de macOS | D5 **close** : Tier 1 = Windows x86-64 + Linux x86-64 (`ubuntu-latest`) ; macOS/ARM/Android/iOS `NOT_RUN` |
+| **D4** | Quatre revues LLM fournies le 2026-11-11 ; ne doit pas bloquer le code | **Triées et vérifiées** dans `docs/audit/2026-11-reviews/TRIAGE.md` : 16 constats, verdicts CONFIRMÉ / FAUX (preuve) / HISTORIQUE. Deux critiques déjà corrigées (code de sortie d'un crash, builds concurrents), une vraie (`F-META-006` auto-approuvée → marquée `PENDING_HUMAN_APPROVAL`). **Aucun blocage de code** ; un audit **humain** reste requis pour le label production |
+| **D5** | Tests sur **Windows et Linux** ; puis « mets les runners `macos-latest` » | Tier 1 = Windows x86-64 + Linux x86-64 ; **`macos-qual.yml` ajouté** (`macos-latest`, Apple Silicon arm64 : tests workspace + conformance build-vérifiée), **Tier 2 non requis**. Promotion en Tier 1 après 30 jours de CI verte rattachée aux SHA |
 | **D6** | OK — périmètre gelé | Périmètre écrit (`PRODUCTION-READINESS.md` §6) ; extension = 1.x |
-| **D7** | « Il faut la rendre safe » | Programme de durcissement FFI (`PRODUCTION-READINESS.md` §5) : contrats ABI/lifetime/unwinding/callbacks/ressources, refus outillés, tests négatifs |
+| **D7** | « Rust prouve bien la mémoire, la solution existe » | **Modèle en 4 étages** (`PRODUCTION-READINESS.md` §5) : confinement `trusted`, effets déclarés sur l'`extern`, wrappers sûrs (`unsafe` encapsulable), isolation (processus/WASM) quand le contrat C n'est pas bornable. Même modèle que Rust : preuve locale + frontière contractuelle + isolation |
 | **D9** | Sans intérêt avant la mise en production | **DIFFÉRÉE** : aucune clé générée, aucun mécanisme bloqué ; T11 reste `PARTIAL` sur ce seul point |
-| **D10** | Pas bloquant ; travailler la couverture | Deux métriques adoptées ; couverture **étendue au codegen** (première mesure 87,04/86,05 ; seuils ajoutés) ; plan dans `PRODUCTION-READINESS.md` §7 |
+| **D10** | « Je vise une couverture de 100 % » | **Objectif 100 % lignes ET régions** inscrit dans `tools/coverage_thresholds.json` ; `coverage_report.py --gap` liste les lignes non couvertes : **11 fichiers, ~2 100 lignes** au départ. Deux métriques de traçabilité adoptées ; couverture étendue au codegen (87,04/86,05, seuils ajoutés) |
 | **D11** | OK | **Appliqué** : `effects.md` 9→10, `features.md` FEAT-12.5 6→8, collisions `G-5.11`/`G-6.40` documentées (`Q-GRAM-11`) |
-| **D13** | Explication demandée | Explication refaite avec programmes concrets (`ANSWER-SHEET` §5) ; **arbitrage A/B encore attendu** |
+| **D13** | « Une preuve déterministe ? A/B me semblent bancales » | **Réponse : oui, et ce n'est ni A ni B.** `docs/rfc/RFC-D13-STATICITY.md` : règle d'origine (treillis littéral/copie/projection/agrégat) + règle de stockage déjà outillée ⇒ tout `&str` lu dans un agrégat est statique **par construction**. **Implémentée le 2026-11-12** (« 2- ok ») : `return a[1]`, `let s = a[1]`, champ de struct, payload de `match`, `Option::unwrap` acceptés ; `String::as_str()` toujours refusé. Preuves : 6 cas de conformance, 10 tests unitaires, 10 tests d'audit, 3 tests backend ; conformance **462 cas, 461 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` |
+
+### Réponses du responsable — 2026-11-14 (vague 3)
+
+Décisions du responsable, **transmises le 2026-11-14** ; le texte intégral est
+recopié mot pour mot dans
+[`docs/decision/DECISIONS-2026-11-14.md`](docs/decision/DECISIONS-2026-11-14.md).
+Elles font autorité ; elles ne ratifient ni `D2`, ni `D4`, ni `D9`, ni `T12`.
+
+| ID | Décision | Suite appliquée |
+|---|---|---|
+| **S1** | `AGENTS.md` : révision du 2026-11-13 | **APPROUVÉE** — bandeau `PENDING_HUMAN_APPROVAL` retiré, renvoi vers le fichier d'enregistrement |
+| **S2** | `NodeId = u64` (32 bits `FileId` + 32 bits index), plafond 65 536 fichiers ; `modules/file-limit` requalifié `compile-pass` | **APPROUVÉ** — fiche `D-2026-11-14-2` tranchée ; `RFC-NODE-ID` : le modèle d'identité est ratifié, la règle de cache §4 reste `PENDING_HUMAN_APPROVAL` |
+| **S3** | `RFC-RT-TRAPS-1` et son amendement `--rt-entry` (portée par point d'entrée, deux formes d'indexation bornée) | **APPROUVÉS** — `RFC-RT-TRAPS` passe `ACCEPTED` ; fiches `RFC-RT-TRAPS-1` et `D-2026-11-14-3` tranchées |
+| **S4** | `docs/ffi/SAFETY.md`, clauses C-FFI-1 à C-FFI-10, contrat de la frontière scalaire ; `i128`/`u128` retirés des types FFI admis ; C-FFI-4 hors contrat | **APPROUVÉ** — fiche `D7` tranchée pour la frontière scalaire ; l'audit externe (D4) reste requis |
+| **S5** | Objectif de couverture : 100 % lignes et régions du **code produit**, hors modules `#[cfg(test)]` et hors chemins inatteignables documentés un par un ; mutation ciblée en seconde métrique ; 344 MUST non mappés = dette tracée | **APPROUVÉ** — fiche `D10` tranchée, objectif inscrit dans `PRODUCTION-READINESS.md` §11 |
+| **S6** | Test de puissance T2 : inverse de chaque correctif historique, **exiger** qu'un test existant échoue, puis 3 graines × 2 000 programmes ; score sur 13 | **APPROUVÉ** — fiche `D-2026-11-14-1` tranchée (méthode durcie) |
+| **S7** | Comparaison du Rust généré : identité après normalisation limitée aux motifs `__rv_root_<id>` et `rvm_ffi_<id>` ; toute autre différence = échec | **APPROUVÉ** — fiche `D-2026-11-14-4` tranchée |
+| **S8** | Cible LSP : **REFUSÉ tel que proposé** ; cible retenue p95 < 50 ms jusqu'à 1 000 lignes, p95 ≤ 150 ms à 5 110 lignes en release, contrôle de linéarité en CI | **REFUSÉ** — fiche `D-2026-11-14-5` tranchée, cible écrite dans `PRODUCTION-READINESS.md` §11 |
+| **A1** | `RFC-OWN-FACTS-1`, étape C comprise, aux conditions de l'agent E | **APPROUVÉE** — `RFC-OWN-FACTS` passe `ACCEPTED` ; fiche `RFC-OWN-FACTS-1` tranchée |
+| **A2** | Bloc DSP (phase 8, `RFC-RV-DSP-BLOCK-1`) reporté à la 1.1, hors périmètre 1.0 ; ne pas l'implémenter | **REPORTÉ** — `RFC-RV-DSP-BLOCK` passe `DEFERRED` ; T8/T9 restent `PARTIAL` avec la mention |
+| **A3** | Voie C hors 1.0 ; T1 évalué sur « voies A et B comparées, B retenue pour 1.0 » | **TRANCHÉ** — `RFC-BACKEND-NATIF-VOIE-C` passe `DEFERRED` ; fiche `D2-VOIE-C` tranchée |
+| **A4** | `RFC-DEV-TOOLS-1` : `cargo-mutants` et Miri installables localement ; outils de développement, pas dépendances | **APPROUVÉE** — `RFC-DEV-TOOLS` passe `ACCEPTED` |
+| **A5** | D11 : premier `rule_id` dupliqué inchangé, second renuméroté et consigné dans `Q-GRAM-11` ; barres verticales non échappées corrigées | **APPLIQUÉ** — `G-5.14` et `G-6.48` attribués, `grammar.md` corrigé |
+
+**Non tranché au 2026-11-14** (aucune de ces décisions ne les couvre) : `D2`
+(ratification du socle et de `RFC-D2`), `D4` (audit externe), `D9` (clé de
+signature), `T12` (Go/No-Go), `D-2026-11-14-6` (clôture T6/T9) et
+`D-2026-11-14-7` (politique de dépréciation et installateur Linux).
 
 ## D1 — Licence du code et gouvernance (#34) — **RÉSOLUE**
 
@@ -43,7 +72,7 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
 
 - **Recommandation** : ne ratifier que les ADR dont les tests de conformance
   prouvent la règle ; garder `PROPOSED` le reste.
-- **Preuves** : `docs/adr/` (43 fichiers PROPOSED), `spec/language/` (DRAFT),
+- **Preuves** : `docs/adr/` (42 fichiers PROPOSED, ADR-000…ADR-041), `spec/language/` (DRAFT),
   `conformance/` (résultats réels).
 - **Sans décision** : toute sémantique reste « candidate », jamais « stable ».
 
@@ -101,6 +130,15 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   `cases/types/ffi-bad-type`, `cases/types/ffi-outside-unsafe`.
 - **Sans décision** : FFI utilisable en interne, jamais présentée comme certifiée
   mémoire, jamais dans un profil `pure`/`rt`.
+- **Mise à jour du 2026-11-14 (S4) — frontière scalaire approuvée, audit non
+  fait** : `docs/ffi/SAFETY.md` est **APPROUVÉ par le responsable, 2026-11-14**
+  comme **contrat de la frontière scalaire** (clauses C-FFI-1 à C-FFI-10) ;
+  `i128` et `u128` sont **retirés** des types FFI admis ; **C-FFI-4** déclare
+  hors contrat une fonction C qui déroule, `longjmp`, lève un signal ou termine
+  le processus (obligation de l'appelant, **non vérifiée**). Cela ne ratifie ni
+  les ADR, ni `RFC-D7-FFI-EFFECTS` en tant que document, et ne remplace pas
+  l'audit externe (`D4`). Enregistrement :
+  [`docs/decision/DECISIONS-2026-11-14.md`](docs/decision/DECISIONS-2026-11-14.md).
 
 ## D8 — Codes de diagnostic hors spécification — **RÉSOLUE (auto-corrigée)**
 
@@ -177,7 +215,7 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   `--verify-build` 424 cas, 0 FAIL ; seuls `examples/` et le corpus ont été
   balayés (433 paquets) et un seul programme a changé de verdict.
 
-## D10 — Dénominateur de la traçabilité (FeatureIds vs MUST) — **OUVERTE**
+## D10 — Dénominateur de la traçabilité (FeatureIds vs MUST) — **RÉSOLUE (2026-11-14, S5)**
 
 - **Constat mesuré (2026-11-11)** : `features_coverage.py --strict` donne
   **188/188** FeatureIds ; `tools/must_audit.py` compte **807 énoncés MUST**
@@ -192,8 +230,17 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   344 ; (b) périmètre écrit qui exclut les 344 ; (c) traçabilité complète.
 - **Conséquence d'une non-décision** : T2 reste `PARTIAL` ; la phrase
   « 188/188 règles tracées » doit être lue comme « 188/188 FeatureIds ».
+- **Mise à jour du 2026-11-14 (S5) — objectif défini** : l'objectif officiel est
+  **100 % des lignes et des régions du CODE PRODUIT**, hors modules
+  `#[cfg(test)]` et hors **chemins inatteignables documentés un par un** ; la
+  **mutation ciblée** devient la **seconde métrique** ; les **344 MUST non
+  mappés** sont une **dette tracée**, pas un blocage. Le dénominateur MUST reste
+  **807**. Voir [`PRODUCTION-READINESS.md`](docs/roadmap/PRODUCTION-READINESS.md)
+  §11 et [`docs/decision/DECISIONS-2026-11-14.md`](docs/decision/DECISIONS-2026-11-14.md).
+  Le verdict T2 reste `PARTIAL` tant qu'une commande de la vague ne prouve pas le
+  contraire.
 
-## D11 — Contradictions internes de spécification — **OUVERTE**
+## D11 — Contradictions internes de spécification — **RÉSOLUE (2026-11-14, A5)**
 
 | Point | Contradiction mesurée |
 |---|---|
@@ -205,6 +252,26 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   renuméroter un `rule_id` modifie un identifiant contractuel (Q-DIAG-4) et
   FEAT-12.5 est une liste MUST qui définit ce qui peut changer sans édition
   majeure. Un agent ne peut pas trancher.
+- **Mise à jour du 2026-11-14 (A5) — renumérotation faite** : pour chaque
+  `rule_id` dupliqué de `grammar.md`, la **première** règle garde son numéro, la
+  **seconde** reçoit un numéro neuf inutilisé, consigné dans `Q-GRAM-11` :
+  - `G-5.11` : la règle du **type `!`** (première, table des types) garde
+    `G-5.11` ; la règle **`const_expr`** (table des constantes) devient
+    **`G-5.14`** ;
+  - `G-6.40` : la règle du **bloc `unsafe`** (première, table des expressions)
+    garde `G-6.40` ; le **raccourci de champ `E::V { champ }`** (table des
+    patterns) devient **`G-6.48`**.
+  Dans `grammar.md`, les `|` non échappés des lignes de table `G-6.8`, `G-6.33`
+  et `G-6.39` sont échappés. Les deux autres lignes fautives relevées par
+  `tools/must_audit.py` (`core-machine.md:88`, `expressions.md:254`) sont hors du
+  périmètre documentaire de la vague et restent signalées. Les citations
+  `features.md` sont **réalignées** (autorisation de l'orchestrateur,
+  2026-11-14) : `F-SYN-008` cite **`G-5.14`** (`const_expr`), `F-SYN-031` cite
+  **`G-6.41` et `G-6.48`**, et **`G-6.40`** (bloc `unsafe`) est rattaché à
+  **`F-EFF-009`** — corrigeant le faux positif historique qui traçait cet
+  énoncé vers une feature de patterns. Mesure après réalignement :
+  `python tools/must_audit.py` → **463/807**, **344** non mappés (voir
+  `Q-GRAM-11`).
 
 ## D12 — Disposition des divergences `check → build` sur les moves de tableau — **RÉSOLUE (option (a), 2026-11-11)**
 
@@ -236,7 +303,19 @@ arbitrages du 2026-11-11 ; la feuille de suite détaillée est
   mesuré** (l'invariant général reste une observation outillée, pas une preuve).
   Détail : `CONFORMANCE-BUILD-CONTRACT.md` §9-§9 ter, `T2-FINDINGS.md` §23-§24.
 
-## D13 — Provenance de `&'static str` à travers les agrégats — **OUVERTE**
+## D13 — Provenance de `&'static str` à travers les agrégats — **RÉSOLUE et IMPLÉMENTÉE (2026-11-12)**
+
+> **Décision du responsable (2026-11-12) : « 2 - ok » → implémente.** La réponse
+> retenue n'est ni A (hypothèse) ni B (refus conservateur) : c'est **prouver**.
+> OWN-6.1/6.2 restent inchangées ; le vérificateur décide désormais la staticité
+> par la **règle d'origine** (littéral, copie, projection d'agrégat, agrégat de
+> statiques, appel dont tous les retours sont statiques), et la preuve tient
+> parce que la **règle de stockage** (aucun `&str` emprunté ne peut entrer dans
+> un agrégat) est déjà outillée à chaque site. Conséquences mesurées :
+> `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`
+> et `str::as_str` sur un texte statique sont acceptés ; `String::as_str()`
+> reste refusé. Détail : `docs/rfc/RFC-D13-STATICITY.md` §6. Dossier
+> d'instruction ci-dessous, conservé tel quel.
 
 - **Question** : `let s = a[1];` et `fn f(a: [&str; 2]) -> &str { return a[1]; }`
   passent-ils en Core 1.0 ? Aujourd'hui non : `E-OWN-REF-ESCAPE` (règle visée

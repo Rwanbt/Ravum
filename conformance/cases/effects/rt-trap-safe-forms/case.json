@@ -1,0 +1,9 @@
+{
+  "id": "effects/rt-trap-safe-forms",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "rt"
+  ],
+  "notes": "RFC-RT-TRAPS-1 positive case: literal in-bounds array indices, float arithmetic, literal division and the explicit integer forms are accepted in `rt` (PENDING_HUMAN_APPROVAL)."
+}

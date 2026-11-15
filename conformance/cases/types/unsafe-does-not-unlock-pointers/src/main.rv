@@ -1,0 +1,6 @@
+fn main() {
+    let x = unsafe {
+        let p: *const i32 = 0;
+        p
+    };
+}

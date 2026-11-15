@@ -1,0 +1,6 @@
+extern "C" {
+    fn take_128(x: i128) -> i32;
+}
+
+fn main() {
+}

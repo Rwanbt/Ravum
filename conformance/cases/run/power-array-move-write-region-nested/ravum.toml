@@ -1,0 +1,4 @@
+[package]
+name = "run-power-array-move-write-region-nested"
+version = "0.1.0"
+edition = "core-1.0"

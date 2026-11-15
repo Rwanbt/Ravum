@@ -1,0 +1,9 @@
+{
+  "id": "types/unsafe-does-not-unlock-pointers",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-UNSAFE"
+  ],
+  "unsupported": true,
+  "notes": "An unsafe block grants no extra capability: raw pointer types stay refused inside it. Distinct from unsupported/raw-pointer, which declares a pointer without any unsafe block."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "effects/rt-entry-bound-too-large",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "rt",
+    "--rt-entry",
+    "process"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "T6 negative case: `for i in 0..K` justifies `a[i]` only when the literal `K` is no larger than the array length; `0..9usize` over `[i32; 4]` is still a trap."
+}

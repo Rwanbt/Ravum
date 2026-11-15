@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-14T22:50:43.9524423Z",
+  "git_sha": "6b25ce60508d52560bfd2065c23843fdf97526ba",
+  "git_sha_short": "6b25ce60508d",
+  "git_branch": "goal/wave-3",
+  "git_dirty": true,
+  "os": "Microsoft Windows 11 Professionnel",
+  "os_version": "10.0.26100",
+  "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+  "ram_bytes": 16868962304,
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "metrics": {
+    "build.failed": 0,
+    "build.perimeter": 208,
+    "build.verified": 124,
+    "build.implicit": 83,
+    "conformance.not_run": 0,
+    "conformance.pass": 485,
+    "conformance.skip": 1,
+    "conformance.fail": 1,
+    "conformance.cases": 487,
+    "build.covered": 207,
+    "registry.unregistered": 0,
+    "registry.emitted": 126,
+    "registry.never_emitted": 0,
+    "registry.declared": 108,
+    "features.total": 188,
+    "features.covered": 188,
+    "must.total": 809,
+    "must.mapped": 465,
+    "must.unmapped": 344,
+    "python_tests.count": 73
+  },
+  "controls": [
+    {
+      "name": "fmt",
+      "command": "cargo fmt --all -- --check",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 1280.916,
+      "numbers": {},
+      "output_tail": ""
+    },
+    {
+      "name": "conformance",
+      "command": "cargo run -q -p ravum-conformance -- run --verify-build",
+      "result": "FAIL",
+      "exit_code": 1,
+      "wall_ms": 73611.38,
+      "numbers": {
+        "build.failed": 0,
+        "build.perimeter": 208,
+        "build.verified": 124,
+        "build.implicit": 83,
+        "conformance.not_run": 0,
+        "conformance.pass": 485,
+        "conformance.skip": 1,
+        "conformance.fail": 1,
+        "conformance.cases": 487,
+        "build.covered": 207
+      },
+      "output_tail": "       For more information about this error, try `rustc --explain E0508`.\n       \nsummary: total=487 pass=485 fail=1 skip=1 not_run=0\nbuild: perimeter=208 covered=207 verified=124 implicit=83 failed=0 environment=0 not_measured=1\nbuild_verified: false (build dimension only — check `summary` for the rest of the run)\nnote: SKIP and NOT_RUN are never PASS; a green run is an observation on this corpus, host and commit, not a proof"
+    },
+    {
+      "name": "registry",
+      "command": "python tools/registry_audit.py",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 585.952,
+      "numbers": {
+        "registry.unregistered": 0,
+        "registry.emitted": 126,
+        "registry.never_emitted": 0,
+        "registry.declared": 108
+      },
+      "output_tail": "registry codes : 108\ncodes emitted  : 126\nunregistered   : 0 (language codes emitted but absent from �3)\nignored        : 18 prefix/tooling literals\nnever emitted  : 0 (declared in �3, produced by no source literal)\nclosed W list  : 0 extra warning code(s) outside DIAG-1.6"
+    },
+    {
+      "name": "features",
+      "command": "python tools/features_coverage.py --strict",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 158.243,
+      "numbers": {
+        "features.total": 188,
+        "features.covered": 188
+      },
+      "output_tail": "STD           32      32       0         0        0\nSYN           35      35       0         0        0\nTYP           27      27       0         0        0\nUNS           19      19       0         0        0\nexempt      F-META-006   review: Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption. Reexamen obligatoire au plus tard le 2027-02-12 (90 jours apres l'approbation humaine du 2026-11-12).\nstrict traceability: 188/188 rules satisfied (1 justified exemption)"
+    },
+    {
+      "name": "must",
+      "command": "python tools/must_audit.py",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 170.362,
+      "numbers": {
+        "must.total": 809,
+        "must.mapped": 465,
+        "must.unmapped": 344
+      },
+      "output_tail": "  unsupported.md:194   UNS-9.2\n  unsupported.md:195   UNS-9.3\n  unsupported.md:196   UNS-9.4\n  unsupported.md:197   UNS-9.5\nproblem: core-machine.md:88: rule row has an unescaped `|` (5 cells); counted, text may be truncated\nproblem: expressions.md:254: rule row has an unescaped `|` (4 cells); counted, text may be truncated"
+    },
+    {
+      "name": "python_tools",
+      "command": "python -m unittest discover -s tools/tests",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 792.72,
+      "numbers": {
+        "python_tests.count": 73
+      },
+      "output_tail": ".................\nwrote C:\\Users\\barat\\AppData\\Local\\Temp\\tmpj61g1pu0\\out\\audit.json\n........................................................\n----------------------------------------------------------------------\nRan 73 tests in 0.607s\nOK"
+    },
+    {
+      "name": "report_consistency",
+      "command": "python tools/report_consistency.py",
+      "result": "PASS",
+      "exit_code": 0,
+      "wall_ms": 149.802,
+      "numbers": {},
+      "output_tail": "  ok     conformance  483 PASS / 0 FAIL / 1 SKIP\n  ok     tests        102 suites\n  ok     tests        1660 pass�s\n  ok     strict       188/188\n  ok     registry     108 codes\nreport-consistency: PASS � the report carries the register figures"
+    }
+  ]
+}

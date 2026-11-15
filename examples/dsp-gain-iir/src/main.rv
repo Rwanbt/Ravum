@@ -1,44 +1,49 @@
-// DSP offline : gain et filtre IIR d'ordre 1, calcul dans des buffers.
-// Le profil `rt` n'est PAS certifié par cet exemple : il calcule hors callback.
+// DSP offline : gain et filtre IIR d'ordre 1, calcul dans des buffers fixes.
+// Le traitement (`process`) est vérifiable en profil `rt` :
+//   ravum-lang check . --profile rt --rt-entry process
+// `main` (affichage) reste hors du point d'entrée : l'`io` n'appartient pas au
+// chemin temps réel. Voir RFC-RT-TRAPS-1 §6 (PENDING_HUMAN_APPROVAL).
 use std::io;
 
-fn gain(samples: &[f64], g: f64) -> Vec<f64> {
-    let mut out = Vec::with_capacity(samples.len());
-    let mut i: usize = 0;
-    while i < samples.len() {
-        out.push(samples[i] * g);
-        i += 1;
+fn gain(samples: &[f64; 4], g: f64) -> [f64; 4] {
+    let mut out: [f64; 4] = [0.0; 4];
+    for i in 0..4usize {
+        out[i] = samples[i] * g;
     }
     out
 }
 
-fn iir(samples: &[f64], a: f64, b: f64) -> Vec<f64> {
-    let mut out = Vec::with_capacity(samples.len());
+fn iir(samples: &[f64; 4], a: f64, b: f64) -> [f64; 4] {
+    let mut out: [f64; 4] = [0.0; 4];
     let mut y = 0.0;
-    let mut i: usize = 0;
-    while i < samples.len() {
+    for i in 0..4usize {
         y = a * y + b * samples[i];
-        out.push(y);
-        i += 1;
+        out[i] = y;
     }
     out
+}
+
+fn process(input: &[f64; 4]) -> ([f64; 4], [f64; 4]) {
+    let boosted = gain(input, 2.0);
+    let filtered = iir(input, 0.8, 0.2);
+    (boosted, filtered)
 }
 
 fn main() -> Result<(), Error> {
     let input = [1.0, 0.5, -0.25, 0.0];
-    let boosted = gain(&input, 2.0);
-    let filtered = iir(&input, 0.8, 0.2);
+    let results = process(&input);
+    let boosted = results.0;
+    let filtered = results.1;
     let mut i: usize = 0;
-    while i < boosted.len() {
+    while i < 4 {
         io::println(&boosted[i].to_string());
         i += 1;
     }
     io::println("---");
     i = 0;
-    while i < filtered.len() {
+    while i < 4 {
         io::println(&filtered[i].to_string());
         i += 1;
     }
     Ok(())
 }
-

@@ -1,0 +1,6 @@
+{
+  "id": "types/array-static-str-element-return-pass",
+  "mode": "run-pass",
+  "stdout_contains": "y\n",
+  "notes": "D13 rule 1: `a[1]` on a `[&str; 2]` is a `&'static str` by construction (OWN-6.1/3.3 forbid storing a borrowed `&str` in the array), so the projection can be returned. Measured: check + build + run (the parameter is emitted `[&'static str; 2]`)."
+}

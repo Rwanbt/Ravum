@@ -376,10 +376,6 @@ impl<'a> World<'a> {
         }
     }
 
-    pub fn module(&self, id: ModuleId) -> &ModuleInfo {
-        &self.modules[id]
-    }
-
     /// Recherche un nom dans un espace de noms (item local ou import).
     pub fn lookup(&self, module: ModuleId, ns: Ns, name: &str) -> Option<SymRef> {
         if let Some(item) = self.table(module, ns).get(name) {
@@ -1889,7 +1885,7 @@ fn resolve_extern_block(
                                 "E-FFI-TYPE",
                                 ty.span,
                                 format!(
-                                    "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be integers, floats, `bool` or `()`",
+                                    "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool` or `()` (i128/u128 are not admitted)",
                                     resolved.display()
                                 ),
                             );
@@ -1909,7 +1905,7 @@ fn resolve_extern_block(
                     "E-FFI-TYPE",
                     f.ret.span,
                     format!(
-                        "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be integers, floats, `bool` or `()`",
+                        "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool` or `()` (i128/u128 are not admitted)",
                         ret.display()
                     ),
                 );
@@ -1940,6 +1936,13 @@ fn resolve_extern_block(
 /// Types acceptés à la frontière FFI en Core 1.0. Volontairement restrictif :
 /// pas de références, pas de `String`/`Vec`, pas de types nominaux, pas de
 /// `char` (largeur C non portable).
+///
+/// `i128`/`u128` sont retirés de la liste (décision du responsable S4,
+/// 2026-11-14 ; C-FFI-2) : aucune largeur C portable ne les couvre. Une
+/// déclaration `extern` qui les utilise est refusée `E-FFI-TYPE` dès la
+/// résolution, donc avant que le backend ne voie la signature. La liste jumelle
+/// du backend (`emit.rs::ast_ffi_safe`) doit encore être alignée (agent E) ;
+/// d'ici là, `ffi_safe` est la seule barrière et le test C-FFI-1 le vérifie.
 fn ffi_safe(ty: &Type) -> bool {
     matches!(
         ty,
@@ -1947,12 +1950,10 @@ fn ffi_safe(ty: &Type) -> bool {
             | Type::I16
             | Type::I32
             | Type::I64
-            | Type::I128
             | Type::U8
             | Type::U16
             | Type::U32
             | Type::U64
-            | Type::U128
             | Type::Isize
             | Type::Usize
             | Type::F32

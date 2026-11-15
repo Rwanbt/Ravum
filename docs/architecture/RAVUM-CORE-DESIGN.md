@@ -22,11 +22,30 @@ Après comparaison des trois voies sur le corpus gelé `fixtures/m5/` (harness
 | **B** | frontend Ravum propre → faits typés → **Rust généré auditable** → `rustc` CLI | **retenue** (chaîne réelle, sémantique vérifiée avant émission) |
 | C | frontend Ravum → IR propre → Cranelift | **expérimentale**, non qualifiée ; interface backend réservée |
 
-Le backend de référence est donc **B** : `rustc` est utilisé comme *générateur de
-code machine*, jamais comme vérificateur de sémantique. Interdits : API privées
-`rustc_*`, génération qui contourne le checker, « Rust caché » (le code généré est
-lisible via `ravum-lang build --emit-rust`). Le checker Ravum est l'autorité :
-il refuse avant émission ; le code émis est un sous-ensemble Rust dont la
+Le backend de référence est donc **B**. La base de confiance réelle est
+**`rustc` + le prélude runtime (≈ 280 lignes de Rust sûr) + les wrappers FFI
+générés** :
+
+- **`rustc` est le filet de sûreté mémoire de la voie B.** Le fichier généré
+  porte `#![forbid(unsafe_code)]` ; tout programme sans `extern` est donc du Rust
+  sûr, dont la sûreté mémoire est vérifiée par `rustc` à chaque build. Un
+  programme avec `extern` porte `#![deny(unsafe_code)]` et le seul `unsafe` est
+  le wrapper généré autour de la déclaration `extern "C"` (§3.7 bis), audité
+  localement. Le prélude fait partie de cette base de confiance.
+- **Le checker Ravum reste l'autorité des diagnostics Ravum** : c'est lui qui
+  décide les codes, les règles d'ownership, d'effets et de profils ; `rustc` ne
+  connaît pas ces règles et ne les vérifie pas. Il ne « valide » donc pas la
+  sémantique Ravum ; il valide la **sûreté mémoire du Rust émis**.
+- **Conséquence assumée : Ravum ne peut pas accepter un programme que `rustc`
+  refuse sur cette voie.** Une erreur du checker ou du backend se manifeste par
+  un build cassé, bruyant, jamais par une faille mémoire silencieuse — tant que
+  `forbid(unsafe_code)` tient. C'est précisément pourquoi la voie C (Cranelift)
+  reste gelée tant que T4 n'est pas levé : elle ferait de `own.rs` l'unique
+  gardien mémoire.
+
+Interdits : API privées `rustc_*`, génération qui contourne le checker, « Rust
+caché » (le code généré est lisible via `ravum-lang build --emit-rust`). Le
+checker refuse avant émission ; le code émis est un sous-ensemble Rust dont la
 sémantique est spécifiée ici.
 
 Durée des builds : `rustc` est invoqué directement (pas de projet Cargo généré),

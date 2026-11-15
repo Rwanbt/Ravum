@@ -1,0 +1,5 @@
+{
+  "id": "types/ffi-bool-boundary",
+  "mode": "compile-pass",
+  "notes": "bool is admitted by ffi_safe and the generated wrapper compiles and links. Runtime limitation: no CRT symbol takes a C _Bool, so no value crosses here; the case proves admission and lowering, not the ABI value."
+}

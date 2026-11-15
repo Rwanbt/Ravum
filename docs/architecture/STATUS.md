@@ -1,13 +1,22 @@
-# Statut architectural — Ravum (mise à jour intégration `dev`, 9 novembre 2026)
+# Statut architectural — Ravum (mise à jour 2026-11-13)
 
 > **Deux lignes de travail, deux statuts — ne pas mélanger leurs chiffres.**
-> Ce document décrit la **ligne plateforme Rust** (`dev`, MVP-0a/b/c/d) : boucle
-> analyse → build → vérification → hot patch. Le **noyau de langage
-> expérimental** vit sur `feat/lang-core-1.0-rc` : c'est un sous-ensemble Core
-> 1.0 **DRAFT**, mesuré par le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md)
-> et [l'état du langage](../reports/LANGUAGE-CORE-STATUS.md). Il n'est ni ratifié
-> par un ADR, ni un compilateur complet, ni une preuve générale — et il ne
-> contredit pas les limites de ce document, qui porte sur l'autre ligne.
+>
+> 1. **Plateforme Rust** (`ravum`, `dev`, MVP-0a/b/c/d) : boucle analyse →
+>    build → vérification → hot patch sur du code Rust. C'est l'objet principal
+>    des lignes ci-dessous.
+> 2. **Langage Core 1.0** (`crates/ravum-lang-*`) : compilateur réel, **fusionné
+>    dans `main` le 2026-11-12** (PR #101 → `dev` `a2b8db5`, puis PR #104 →
+>    `main` `94f3ac4`), cible décidée **D2 « production ready »**. Il ne vit plus
+>    sur une branche séparée. État mesuré le 2026-11-13 (phase 0 du GOAL,
+>    `c931fdf`) : conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**,
+>    `build_verified: true`, workspace **1574 passés / 0 échec / 2 ignorés**.
+>    C'est un sous-ensemble Core 1.0 **DRAFT** : aucun ADR ratifié, aucun tag,
+>    aucune release, et l'audit externe (T4) comme le Go/No-Go (T12) restent
+>    humains. Registre canonique :
+>    [CORE-1.0-GATE-MATRIX.md](../roadmap/CORE-1.0-GATE-MATRIX.md) ; chiffres de
+>    référence et seuils de non-régression :
+>    [GOAL-BASELINE.md](../reports/GOAL-BASELINE.md).
 
 > **Document de situation, non un certificat de réalisation.** Ce qui est marqué
 > « mesuré » l'a été sur la machine de référence locale, avec les limites publiées dans
@@ -24,7 +33,7 @@
 | MVP-0d / Lot B — overlays | **Prototype testé, partiel** : `BaseSnapshot` content-adressée, overlays privés, intégration tout ou rien, CAS de base, conflits de chemin refusés, 9 tests dont concurrence 8 threads ; stockage mesuré −92,0 % vs 8 copies complètes ; **publication Git non branchée**, campagne A/B/C/D non exécutée — [MVP-0d-overlays](../mvp/MVP-0d-overlays.md) |
 | MVP-0d / Lot C — groupement adaptatif | **Implémenté et mesuré** (trace synthétique) : fenêtre bornée 10–100 ms, croissance sur densité, rétrécissement sur rareté ; fixe 0/50/100 = 12/4/4 lots, attente 200/360/510 ms ; adaptative = 4 lots / 450 ms — [MVP-0d-batch-window](../mvp/MVP-0d-batch-window.md) |
 | MVP-0d / Lot D — projets représentatifs | **`NOT_RUN`** : aucun corpus externe exécuté pendant ce cycle — [rapport](../mvp/MVP-0d-REPORT.md) |
-| Compilateur Ravum / frontend / runtime | **Hors périmètre de ce document** (ligne plateforme `dev`) : le noyau de langage expérimental est sur `feat/lang-core-1.0-rc`, décrit par [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md) et le [registre des gates](../roadmap/CORE-1.0-GATE-MATRIX.md) — sous-ensemble DRAFT, pas d'ADR ratifié, pas de `PROVED` |
+| Langage Core 1.0 (`ravum-lang`) | **Intégré à `main` depuis le 2026-11-12** : lexer/parser, résolution, typage, ownership, effets, codegen Rust, CLI, LSP, 471 cas de conformance. Mesures du 2026-11-13 (`c931fdf`) : 470 PASS / 0 FAIL / 1 SKIP, `build_verified: true` (périmètre 202/202), smoke 43/0/0. Sous-ensemble **DRAFT** : ADR non ratifiés, audit externe et Go/No-Go humains absents, aucun `PROVED`, aucune release. Détail : [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md), [GOAL-BASELINE](../reports/GOAL-BASELINE.md) |
 | Outil Rust MVP-0a (M1) | **Implémenté, expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
 | MVP-0b / L0 — audit et baseline | **Fait** : 139/139 tests reproduits, démonstrations M1–M4 reproduites, risques R1–R10 publiés — [MVP-0b-audit.md](../mvp/MVP-0b-audit.md) |
@@ -73,6 +82,10 @@
   ([audio réel](../mvp/MVP-0b-audio-host.md)).
 - Cible P0-A « diagnostic p95 < 50 ms sur code modifié » **non atteinte** ; cible
   « petit patch p95 < 500 ms » non re-mesurée de bout en bout.
+- Côté **langage** (`ravum-lang`), aucune mesure de latence par phase n'existe
+  aujourd'hui (ni `--timings`, ni p50/p95) : la cible P0-A n'est donc **ni
+  atteinte ni mesurée** pour un programme `.rv`. La mesure est planifiée par la
+  phase 3 du chantier `goal/production-ready`.
 - Aucune preuve que le workspace partagé est plus productif que les worktrees avec de
   vrais agents LLM (S8 utilise des éditeurs scriptés ; tokens non mesurés).
 - Le regroupement adaptatif de patches est **implémenté et mesuré** (MVP-0d, Lot C) ; le

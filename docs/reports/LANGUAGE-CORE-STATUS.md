@@ -1,4 +1,166 @@
+# Ravum Core 1.0 — état du langage (état courant + annexe historique)
+
+> **Document de situation, pas un certificat.** Chaque chiffre est lié à une
+> commande exécutée sur une machine et un SHA. Le registre canonique des gates
+> est [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md) ;
+> les chiffres de référence et les seuils de non-régression sont dans
+> [`GOAL-BASELINE.md`](GOAL-BASELINE.md). Aucun `PROVED`, aucune maturité
+> « production » n'est revendiquée.
+>
+> **Dernière mesure : 2026-11-14**, branche `goal/consolidation-2` @
+> `b172248` (campagne de fermeture, soir), Windows 11 x64, `rustc 1.95.0`. Les
+> lignes workspace, conformance, couverture, mutation et contrats Python ont été
+> rejouées à ce SHA ; les lignes smoke, Miri et LSP sans mention contraire
+> datent des mesures T9/T3 et ne sont pas rejouées ici. Les chiffres de la
+> **phase 0** (`c931fdf`) restent dans [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
+> L'historique des passes (du 2026-11-09 au 2026-11-14) est déplacé **tel quel**
+> en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
+> passe, pas ceux du HEAD.
+
+## 1. État courant
+
+### 1.1 Ce que dit la mesure (état au 2026-11-14)
+
+| Mesure | Commande | Résultat exact |
+|---|---|---|
+| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **102 groupes `test result` : 1 660 passés / 0 échec / 7 ignorés**, exit 0 |
+| Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **non rejoué depuis le round 17** (`ed60f72`) : 100 groupes, 1 603 passés / 0 échec / 5 ignorés (2 tests debug-only) |
+| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 711 passés / 0 échec / 1 ignoré**, exit 0 |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=207 covered=207 verified=124 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
+| Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
+| Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
+| Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |
+| Contrats Python | `python -m unittest discover -s tools/tests` | **60 tests OK**, exit 0 |
+| Formatage | `cargo fmt --all -- --check` | exit 0 |
+
+**Note de comptage.** Les rapports antérieurs annoncent « 113 suites » pour le
+workspace. La commande ci-dessus produit **102** groupes `test result` (un par
+binaire de test, +1 depuis l'ajout des 25 tests loader) ; la phase 0 en
+produisait 94 pour 1 574 tests. La méthode qui donne 113 n'est pas reproduite ;
+l'écart est consigné dans `GOAL-BASELINE.md` §4.2 et aucun chiffre n'est
+recopié sans sa commande.
+
+### 1.3 Preuves ajoutées depuis la phase 0 (session GOAL)
+
+| Preuve | Résultat | Détail |
+|---|---|---|
+| Oracle différentiel | **6 000 programmes nominaux (3 × 2 000), 0 divergence** ; cumul **46 200** exécutions de gabarits (nominal 30 000 + 6 000 + garde de places) | [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](GOAL-CLOSING-CAMPAIGN-2026-11-14.md) §2 |
+| Couverture sema+codegen | **90,44 / 89,88** ; produit **88,55 %** (1 557/13 598) ; `loader.rs` **83,46/86,70** (+4,61/+4,51 par 25 tests) ; seuils tenus (exit 0) | [`COVERAGE-100-OBJECTIVE.md`](../qualification/COVERAGE-100-OBJECTIVE.md) §6 |
+| Fuzz long | syntaxe 249 054 entrées / 0 échec ; sema **100 000 / 0 échec, 4 327/s** (rejoué à HEAD, `1b76926`) | [`FUZZ-MIRI-SEMA.md`](../qualification/FUZZ-MIRI-SEMA.md) |
+| LSP | analyse p95 **1,362 ms** (cache) ; bout en bout p95 **2,826 ms** (2 fichiers), **337,6 ms** debug et **163,5 ms** release à 5 110 lignes — cible 50 ms non tenue à cette échelle | [`LSP.md`](../qualification/LSP.md) §7 |
+| Miri | rejoué **vert en CI Linux** sur `e58ed35` (syntax + sema, 9 min 23) ; Windows partiel ; local absent | rapport `GOAL-CONSOLIDATION-2-REPORT.md` §7 |
+| Mutation | rejouée en CI le 2026-11-14 (run 43622868110) : **219 / 180 / 30 / 9**, dont la première campagne `emit.rs` (36/30/6) ; 24 survivants historiques triés + 6 nouveaux triés (§12) | [`MUTATION-EQUIVALENCE.md`](../qualification/MUTATION-EQUIVALENCE.md) §12 |
+| Reproductibilité | Deux runners **distincts**, même digest `9b7f16cc…cdf` (run 43622599083) ; local Windows ≠ Linux reste documenté | [`REPRODUCIBILITY.md`](../qualification/REPRODUCIBILITY.md) §« deux runners » |
+| Performance | Alarme CI `check` verte, plafonds `p50 max(100 ms, ×3)` / `p95 max(500 ms, ×3)` (runs 43622599048 puis 43629691517 après correction) | [`PERFORMANCE.md`](../qualification/PERFORMANCE.md) §5 |
+| Sécurité `unsafe` | `forbid` sur 4 crates, `deny` + 2 `allow` inventoriés sur le CLI ; `tools/unsafe_audit.py` en CI (7 tests) | [`UNSAFE-INVENTORY.md`](../ffi/UNSAFE-INVENTORY.md) |
+| Qualification Linux | 7 jobs verts sur `878e212` (workspace, conformance, smoke, Miri, fuzz, installateur, wasm32) ; contrat installateur élargi ajouté le 2026-11-14 (CI) | rapport §4.5 et [`INSTALL-LINUX.md`](../release/INSTALL-LINUX.md) |
+
+Aucun de ces résultats n'est un `PROVED` ; ils sont liés à leur SHA et à leur
+machine (ou au runner CI pour Linux/Miri/mutation).
+
+### 1.2 Composants (état réel, sans chiffre non mesuré)
+
+- `crates/ravum-lang-syntax` : lexer, AST, parser récursif descendant avec
+  récupération, formateur. `NodeId` est un **`u64`** : 32 bits hauts `FileId`
+  + 32 bits bas compteur **par fichier** (`parser.rs`), plafond 65 536 fichiers
+  (T4, contrat non ratifié) ; les identifiants restent stables par fichier
+  (vérifié en phase 6 du GOAL).
+- `crates/ravum-lang-sema` : résolution de modules/visibilité, table builtins,
+  typechecker, exhaustivité, effets transitifs et profils `core`/`pure`/`rt`,
+  borrow checker conservateur (init, moves, move partiel, prêts, non-échappement,
+  drop, provenance `&'static str`), faits typés (`CheckedProgram`), `OwnFacts`
+  (usages et places, RFC-OWN-FACTS-1) et gate de traps du profil `rt`
+  (RFC-RT-TRAPS-1).
+- `crates/ravum-lang-codegen` : un fichier Rust autonome et auditable par
+  programme, prélude sûr, `#![forbid(unsafe_code)]` **sans** `extern`, et
+  `#![deny(unsafe_code)]` + `#[allow(unsafe_code)]` local au wrapper généré
+  **avec** `extern` (FFI scalaire expérimentale) ; garde de cohérence des faits
+  d'ownership en debug (étape B, projections comparées à la syntaxe).
+- `crates/ravum-lang-cli` : `ravum-lang` (`init`, `check`, `build`, `run`,
+  `watch`/`dev`, `test`, `fmt`, `lint`, `doc`, `cache`, `doctor`, `lsp`), loader
+  de packages, JSON versionné (`schema_version: 1`), codes de sortie stables.
+- `crates/ravum-lang-lsp` : serveur LSP réel sur stdio (diagnostics, hover,
+  definition, references, rename, completion, symboles, formatage), partiel.
+- `tools/conformance` + `conformance/` : harnais indépendant (std only) et
+  corpus déclaratif, dont la vérification `check ⇒ build`.
+- `spec/language/` : spécification **DRAFT**, non ratifiée ; les ADR restent
+  `PROPOSED`.
+- `examples/` : dix verticales `.rv` (dont FFI et DSP hors-ligne).
+
+### 1.3 Gates (selon le registre, non re-mesurés dans cette phase)
+
+Le registre du 2026-11-13 donne **4 PASS / 7 PARTIAL / 2 BLOCKED**. Les deux
+`BLOCKED` sont **humains** : T4 (audit externe du borrow checker) et T12
+(Go/No-Go). Aucun agent ne peut les lever. Les états et leurs preuves vivent
+dans [`CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md) §2.
+
+### 1.4 Limites structurelles à ne pas oublier
+
+- La sûreté mémoire du code émis repose sur **`rustc` sous `forbid(unsafe_code)`**
+  (voie B), pas sur une preuve formelle Ravum. Conséquence : Ravum ne peut pas
+  accepter un programme que `rustc` refuse sur cette voie (voir design §1 mis à
+  jour).
+- Le modèle d'emprunt est volontairement conservateur (pas de références
+  stockées/retournées en général, pas de lifetimes explicites).
+- La FFI est scalaire et **expérimentale** ; les bibliothèques C appelées ne sont
+  pas prouvées. Le profil `pure` la refuse.
+- Le profil `pure` ne suit pas les traps intrinsèques (overflow, division, index) ;
+  le profil `rt` ne les exclut pas encore (phase 5 du GOAL).
+- Pas de backend natif direct (Cranelift gelé), pas de traits/closures/async/
+  threads, hot reload du langage = redémarrage (pas encore de bloc DSP `.rv`).
+- Une seule machine locale (Windows) ; Linux dépend de la CI, les autres cibles
+  ne sont pas annoncées.
+
+---
+
+## 2. Annexe — historique des passes (déplacé tel quel, non mis à jour)
+
+> Les sections ci-dessous sont reproduites **telles quelles** ; leurs chiffres sont ceux de leur passe. Le corps original commence par la mention « snapshot de travail ».
+
 # Ravum Core 1.0 — état réel du langage (snapshot de travail)
+
+> **Mise à jour lot couverture 1 — 2026-11-13.** Aucune ligne du compilateur
+> changée : **neuf éléments de code mort supprimés** (aucun appelant vérifié par
+> recherche sur tout le dépôt), tests de contrat ajoutés sur `facts.rs` et
+> `builtins::type_from_str`, et **la façon de compter l'écart de couverture
+> corrigée** — 201 des lignes « non couvertes » étaient du code de test, et cinq
+> des « cibles » annoncées n'avaient aucun appelant. Mesures : **113 suites,
+> 1574 passés / 0 échec / 2 ignorés** ; couverture **89,08 % lignes / 88,39 %
+> régions** (sema + codegen), **86,41 % du seul code produit** (1 715 lignes
+> restantes) ; `facts.rs` **100/100**, `builtins.rs` **100/98,42**,
+> `types.rs` 100/98,10 ; **cinq seuils relevés, aucun abaissé**. Conformance
+> **471 cas, 470 PASS / 0 FAIL / 1 SKIP**, build **202/202** (121 vérifiés,
+> 81 implicites). D7 reste `OPEN`, `T2` reste `PARTIAL` (D10), gates
+> **4 PASS / 7 PARTIAL / 2 BLOCKED**. Le bloc passe 11 ci-dessous est historique.
+
+> **Mise à jour passe 11 — 2026-11-13.** Huit cas de conformance FFI ajoutés
+> (RFC-D7 §5) sans toucher au compilateur : `rt` + FFI et propagation
+> transitive des effets (**EFF-4.7**, **EFF-2.9**, jusqu'ici non testés),
+> `char` et `&i32` refusés à la frontière, `bool` admis (compile-pass), `i64`
+> traversant réellement via `llabs`, `extern` dans un `impl` refusé, pointeur
+> brut refusé **dans** un bloc `unsafe`. Mesures : **471 cas, 470 PASS / 0 FAIL
+> / 1 SKIP**, build **202/202** (121 vérifiés, 81 implicites, 0 échec),
+> `build_verified: true`. Couverture re-mesurée : **88,54 % lignes / 87,81 %
+> régions**, plan par fonction corrigé (`PRODUCTION-READINESS.md` §7 bis).
+> D7 reste `OPEN`, `T2` reste `PARTIAL` (D10), gates **4 PASS / 7 PARTIAL /
+> 2 BLOCKED**. Le bloc passe 10 ci-dessous est historique.
+
+> **Mise à jour passe 10 — 2026-11-12.** **D13 implémentée** : `return a[1]`,
+> `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str`
+> statique et les copies locales à travers un appel sont acceptés **par
+> preuve** (règle d'origine + règle de stockage,
+> [`RFC-D13-STATICITY.md`](../rfc/RFC-D13-STATICITY.md) §6) ; `String::as_str()`
+> reste refusé. Deux divergences backend fermées : un `&str` imbriqué dans un
+> paramètre est émis `&'static str` (sinon `rustc` `E0310` sur `return a[1]`),
+> et `str::as_str` est abaissé en identité. Mesures : **113 suites,
+> 1562 passés / 0 échec / 2 ignorés** ; conformance **463 cas, 462 PASS /
+> 0 FAIL / 1 SKIP**, build vérifié **200/200** (120 vérifiés, 80 implicites,
+> 0 échec), `build_verified: true`. Exemption `F-META-006` approuvée par le
+> responsable (2026-11-12, réexamen 2027-02-12) : **188/188** reste valide.
+> Couverture, reproductibilité, SBOM et mutation **non re-mesurés** dans cette
+> passe. Registre **108 codes / 126 émis**, **MUST 463/807** (T2 `PARTIAL`,
+> D10). Gates : **4 PASS / 7 PARTIAL / 2 BLOCKED**. **Aucune forme ouverte
+> connue.**
 
 > **Mise à jour passe 9 — 2026-11-11, commit `21cf7d4`.** Les **deux dernières
 > variantes `check`-pass / `build`-fail connues** sont **fermées** : descentes de

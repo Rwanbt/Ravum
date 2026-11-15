@@ -158,6 +158,7 @@ impl B {
             Resolution::Local {
                 name: name.to_string(),
                 mutable: false,
+                decl: span(),
             },
         );
         self.e(ExprKind::Path(path), ty)
@@ -611,6 +612,7 @@ fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> Strin
         &ravum_lang_sema::loader::LoadOptions {
             locked: false,
             overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
         },
     );
     assert!(
@@ -2820,6 +2822,219 @@ fn audit_ffi_rejects_non_ffi_safe_types() {
     );
 }
 
+/// Resolved type of the scalar names this audit needs at the FFI boundary.
+fn scalar_type(b: &B, name: &str) -> (AstType, STy) {
+    let resolved = match name {
+        "i32" => STy::I32,
+        "i128" => STy::I128,
+        "u128" => STy::U128,
+        other => panic!("scalar_type: unhandled type `{other}`"),
+    };
+    (b.named_ty(name, Some(resolved.clone())), resolved)
+}
+
+/// A hand-built program with one `extern "C"` declaration, driven straight into
+/// the backend (no checker in between). `main` never calls the symbol: only the
+/// declaration is audited, so no ABI mismatch is ever executed.
+fn extern_program_with_types(param: Option<&str>, ret: &str) -> CheckedProgram {
+    let b = B::new();
+    let extern_id = b.id();
+    let params = match param {
+        Some(name) => {
+            let (ty, _) = scalar_type(&b, name);
+            vec![make_param(&b, "value", ty)]
+        }
+        None => Vec::new(),
+    };
+    let (ret_ty, _) = scalar_type(&b, ret);
+    let extern_fn = ExternFn {
+        id: extern_id,
+        name: b.ident("foreign"),
+        params,
+        ret: ret_ty,
+        span: span(),
+    };
+    b.items.borrow_mut().push(Item {
+        id: b.id(),
+        vis: Vis::Public(span()),
+        kind: ItemKind::Extern(ExternBlock {
+            abi: b.ident("C"),
+            fns: vec![extern_fn],
+            span: span(),
+        }),
+        span: span(),
+    });
+    b.facts
+        .borrow_mut()
+        .extern_symbols
+        .insert(extern_id, "foreign".to_string());
+
+    let main_id = b.id();
+    let body = b.block(vec![println_text(&b, "declared")], None);
+    let main_ret = unit_ret(&b);
+    let main_item = make_fn(
+        &b,
+        main_id,
+        "main",
+        Vis::Private,
+        false,
+        Vec::new(),
+        main_ret,
+        body,
+    );
+    b.items.borrow_mut().push(main_item);
+    b.finish(Some(main_id), Vec::new())
+}
+
+/// C-FFI-1 (S4, 2026-11-14): the backend's admitted-type list is **closed** and
+/// identical to the checker's. `i128`/`u128` are withdrawn (C-FFI-2): the checker
+/// refuses them before the backend, and this test is the defence-in-depth proof
+/// for the backend's own twin list, on a `CheckedProgram` built by hand (no
+/// checker run, so only `ast_ffi_safe` can refuse).
+#[test]
+fn c_ffi_1_backend_refuses_i128_and_u128_in_a_hand_built_program() {
+    for (label, param, ret) in [
+        ("i128 parameter", Some("i128"), "i32"),
+        ("u128 return", None, "u128"),
+    ] {
+        let checked = extern_program_with_types(param, ret);
+        let error = gen_err(&checked);
+        assert!(
+            error.message.contains("non-FFI-safe"),
+            "{label}: the backend must refuse the ABI-unsafe signature, got: {}",
+            error.message
+        );
+    }
+
+    // Control: the very same hand-built shape with admitted types still
+    // generates, so the refusal above is about the withdrawn types and not the
+    // fixture.
+    let checked = extern_program_with_types(Some("i32"), "i32");
+    let code = gen(&checked);
+    assert!(
+        code.contains("extern \"C\" {"),
+        "admitted scalar types must still reach the ABI:\n{code}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 16 bis. Trust-base guards (design §1 and §3.7 bis, FFI-6).
+//
+// The memory-safety net of the B path is `rustc` under `forbid(unsafe_code)`:
+// a program without `extern` must keep the crate-level `forbid`, even when the
+// Ravum source uses an `unsafe { ... }` block (it lowers to a plain Rust block).
+// A program with `extern` relaxes it to `deny` and must contain exactly one
+// generated `unsafe` construct per wrapper, never one outside those wrappers.
+// ---------------------------------------------------------------------------
+
+/// Lines that contain a real `unsafe` construct (`unsafe {` or `unsafe fn`)
+/// outside a generated `rvm_ffi_wrap_*` function body. Attribute lines such as
+/// `#![deny(unsafe_code)]` / `#[allow(unsafe_code)]` are not constructs.
+fn unsafe_constructs_outside_generated_wrappers(code: &str) -> Vec<String> {
+    let mut in_wrapper = false;
+    let mut depth: i32 = 0;
+    let mut offenders = Vec::new();
+    for line in code.lines() {
+        if line.contains("fn rvm_ffi_wrap_") {
+            in_wrapper = true;
+        }
+        let is_construct = line.contains("unsafe {") || line.contains("unsafe fn");
+        if is_construct && !in_wrapper {
+            offenders.push(line.trim().to_string());
+        }
+        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+        if in_wrapper && depth <= 0 {
+            in_wrapper = false;
+            depth = 0;
+        }
+    }
+    offenders
+}
+
+#[test]
+fn audit_no_unsafe_construct_outside_the_generated_ffi_wrapper() {
+    if skip("audit_no_unsafe_construct_outside_the_generated_ffi_wrapper") {
+        return;
+    }
+    let code = generate_source(
+        "ffi-wrapper-guard",
+        r#"use std::io;
+extern "C" {
+    fn abs(x: i32) -> i32;
+}
+fn apply(x: i32) -> i32 {
+    let first = unsafe { abs(x) };
+    let second = unsafe { abs(first) };
+    return second;
+}
+fn main() {
+    let n = apply(-9);
+    io::println(&n.to_string());
+}
+"#,
+    );
+    assert!(
+        code.contains("#![deny(unsafe_code)]"),
+        "an FFI program keeps the crate-level deny:\n{code}"
+    );
+    assert!(
+        !code.contains("#![allow(unsafe_code)]"),
+        "the allow must stay local to the wrapper:\n{code}"
+    );
+    let wrappers = code.matches("fn rvm_ffi_wrap_").count();
+    assert_eq!(wrappers, 1, "one extern function => one wrapper:\n{code}");
+    assert_eq!(
+        code.matches("unsafe {").count(),
+        wrappers,
+        "one wrapper => one unsafe construct, no more:\n{code}"
+    );
+    let offenders = unsafe_constructs_outside_generated_wrappers(&code);
+    assert!(
+        offenders.is_empty(),
+        "unsafe construct(s) outside the generated wrapper: {offenders:?}\n{code}"
+    );
+    let built = must_compile(&code, "ffi-wrapper-guard");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "9\n", "stderr: {stderr}\n--- generated ---\n{code}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_unsafe_block_without_extern_keeps_forbid_and_emits_no_unsafe() {
+    if skip("audit_unsafe_block_without_extern_keeps_forbid_and_emits_no_unsafe") {
+        return;
+    }
+    let code = generate_source(
+        "unsafe-no-extern",
+        r#"use std::io;
+fn main() {
+    let n = unsafe { 40 + 2 };
+    io::println(&n.to_string());
+}
+"#,
+    );
+    assert!(
+        code.contains("#![forbid(unsafe_code)]"),
+        "a program without `extern` must keep `#![forbid(unsafe_code)]`:\n{code}"
+    );
+    assert!(
+        !code.contains("#![deny(unsafe_code)]"),
+        "forbid must not be relaxed without `extern`:\n{code}"
+    );
+    assert_eq!(
+        code.matches("unsafe {").count(),
+        0,
+        "a Ravum `unsafe` block without FFI lowers to a plain Rust block:\n{code}"
+    );
+    let built = must_compile(&code, "unsafe-no-extern");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(
+        stdout, "42\n",
+        "stderr: {stderr}\n--- generated ---\n{code}"
+    );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
 // ---------------------------------------------------------------------------
 // 16. P0-A divergences: `&str` positions, `mut` parameters, array-element moves.
 //     Each test drives the *real* frontend (loader + checker) so the input is a
@@ -3938,5 +4153,93 @@ fn main() {
         stdout, "x1\ny0\ny0\nx1\nx1\n2\n2\nx1\n2\n",
         "stderr: {stderr}\n--- generated ---\n{code}"
     );
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+// ---------------------------------------------------------------------------
+// D13 — staticité prouvée : la position du type `&str` dans le Rust généré
+//
+// La règle 1 (projection d'agrégat = `&'static str`) n'est utile que si le
+// backend écrit `&'static str` là où Rust l'exige : un `&str` *imbriqué* dans un
+// conteneur (`[&str; 2]`, `Option<&str>`, `Vec<&str>`) est toujours statique,
+// seul le `&str` propre au paramètre garde sa durée de vie élidée.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn audit_d13_array_projection_emits_static_parameter_and_runs() {
+    if skip("audit_d13_array_projection_emits_static_parameter_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "d13-array-projection",
+        r#"fn pick(a: [&str; 2]) -> &str {
+    return a[1];
+}
+
+fn main() {
+    io::println(pick(["x", "y"]));
+}
+"#,
+    );
+    assert!(
+        code.contains("[&'static str; 2]"),
+        "a `&str` nested in a parameter container must be emitted `&'static str`:\n{code}"
+    );
+    assert!(
+        !code.contains("[&str; 2]"),
+        "the elided form must never appear inside a container:\n{code}"
+    );
+    let built = must_compile(&code, "d13-array-projection");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "y\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_d13_top_level_str_parameter_stays_elided() {
+    if skip("audit_d13_top_level_str_parameter_stays_elided") {
+        return;
+    }
+    let code = generate_source(
+        "d13-param-elision",
+        r#"fn g(s: &str) {
+    io::println(s);
+}
+
+fn main() {
+    let t = String::from("x");
+    g(t.as_str());
+}
+"#,
+    );
+    assert!(
+        code.contains("fn g(s: &str)"),
+        "a parameter's own `&str` must keep the elided lifetime (it receives \
+`String::as_str`):\n{code}"
+    );
+    let built = must_compile(&code, "d13-param-elision");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "x\n", "stderr: {stderr}");
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_d13_str_as_str_identity_compiles_and_runs() {
+    if skip("audit_d13_str_as_str_identity_compiles_and_runs") {
+        return;
+    }
+    // Before D13 the generator had no lowering for `str::as_str` (a checker
+    // acceptance with no backend support). It is the identity on a `&str`.
+    let code = generate_source(
+        "d13-str-as-str",
+        r#"fn main() {
+    let t = "x";
+    io::println(t.as_str());
+}
+"#,
+    );
+    let built = must_compile(&code, "d13-str-as-str");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(stdout, "x\n", "stderr: {stderr}");
     assert_eq!(status, 0, "stderr: {stderr}");
 }

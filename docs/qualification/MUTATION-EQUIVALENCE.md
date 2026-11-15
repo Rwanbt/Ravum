@@ -423,3 +423,219 @@ Les équivalences E1–E6 dépendent de propriétés qui peuvent changer :
 
 
 
+
+## 10. Première campagne CI (2026-11-13, run `43326219422`)
+
+Le workflow `mutation.yml` est désormais sur `main` ; il a été déclenché une
+première fois (`workflow_dispatch`, 2026-11-12 23:08 UTC) sur `e6ca298`
+(code `2b31d63`), `ubuntu-latest`, `rustc 1.95.0`, `cargo-mutants 27.1.0`,
+`--no-shuffle -j 8`, mêmes `--file`/`-F` que §9.
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---|---|---|---|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| **Total** | **183** | **150** | **24** | **9** |
+
+**Reproductibilité observée** : la campagne CI retrouve **exactement** les
+totaux de la campagne locale de §9 (`1376449`, 2026-11-11), alors que les passes
+8 à 10 ont déplacé les lignes et ajouté du code dans `typeck.rs`/`own.rs`. Les
+24 survivants appartiennent donc aux mêmes familles E1–E6 déjà triées en §9.1 ;
+aucun nouveau survivant n'est apparu, et aucun tri supplémentaire n'est requis.
+
+**Défaut trouvé par ce premier run** : l'étape « Summarize outcomes » lisait
+`outcomes.json` comme une **liste**, alors que `cargo-mutants` 27.x écrit un
+**objet** `{"outcomes": […], "total_mutants": N, "missed": M, …}`. Le script
+levait `AttributeError: 'str' object has no attribute 'get'` et le run
+apparaissait rouge **alors que les trois campagnes avaient réussi**. Corrigé
+dans la branche `fix/mutation-summary` : lecture du bon schéma, impression
+nominative de chaque survivant (`MISSED <mutant>`), comportement non bloquant
+conservé (les survivants sont triés, pas fatals).
+
+**Ce que cette campagne ne prouve pas** : 150/183 est un chiffre **ciblé** sur
+trois ensembles de fonctions, pas un score de crate ; le tri E1–E6 reste une
+revue statique ; la campagne n'ajoute aucun test. Preuves : artefact
+`mutants-targeted` (rétention 90 jours) du run
+[43326219422](https://github.com/Rwanbt/Ravum/actions/runs/43326219422).
+
+## 11. Campagne CI du 2026-11-14 (run [43565189293](https://github.com/Rwanbt/Ravum/actions/runs/43565189293))
+
+Dispatch manuel de `mutation.yml` sur la branche `goal/production-ready`
+(SHA `b5298db`, code identique à `878e212`), après les phases 4-5
+(`OwnFacts`, `traps.rs`, garde de places dans `emit.rs`) :
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---:|---:|---:|---:|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| **Total** | **183** | **150** | **24** | **9** |
+
+**Reproductibilité** : les totaux sont **identiques** à ceux de §9 et de la
+première campagne CI (§10), malgré les changements de code des phases 4-5
+(les fichiers mutés ne sont pas ceux qui ont changé). Aucun nouveau survivant ;
+le tri E1–E6 de §9.1 reste valable. Preuve : artefact `mutants-targeted` du run.
+
+Ce que cela ne prouve pas : portée **ciblée** (trois ensembles de fonctions,
+`-F`), pas un score de crate ; survivants **triés**, pas éliminés ; aucun test
+ajouté.
+
+## 12. Campagne CI du 2026-11-14 — reproduction des trois campagnes et première campagne `emit.rs`
+
+Dispatch manuel de `mutation.yml` sur `goal/consolidation-2` (HEAD `6b6edd7`,
+workflow de la branche), run
+[43622868110](https://github.com/Rwanbt/Ravum/actions/runs/43622868110),
+artefact `mutants-targeted` téléchargé et recompté localement.
+
+| Fichier | Mutants | Tués | Survivants | Non viables |
+|---|---:|---:|---:|---:|
+| `own.rs` | 32 | 31 | 1 | 0 |
+| `resolve.rs` | 57 | 40 | 15 | 2 |
+| `typeck.rs` | 94 | 79 | 8 | 7 |
+| `emit.rs` (**nouveau**) | 36 | 30 | **6** | 0 |
+| **Total** | **219** | **180** | **30** | **9** |
+
+**Reproduction des campagnes historiques.** Les trois premières lignes sont
+**identiques** à §11 (mêmes noms de survivants : `check_availability` `&&`,
+bras `crate`/`self`/`super` de `resolve_use_target` et `resolve_type_path`,
+`type_is_copy`, `check_struct_lit`, `check_const_expr`,
+`pattern_contains_float`) malgré les changements T4–T7 : le tri E1–E6 de §9.1
+reste valable. Aucune régression de test.
+
+**Triage des 6 survivants `emit.rs` :**
+
+| # | Mutant | Classe | Justification |
+|---|---|---|---|
+| E7.1 | `emit_extern_block` 1465 : `-=` → `/=`, `-=` → `+=` | **équivalent (formatage)** | `indent` est un `usize` ; `/= 1` est un no-op littéral, `+= 1` ne change que l'indentation de la ligne `}` émise. Le Rust émis compile et se comporte pareil ; aucun test n'asserte l'indentation (il ne doit pas). |
+| E7.2 | idem 1478 : `-=` → `/=`, `-=` → `+=` | **équivalent (formatage)** | même raison, second bloc de l'`extern`. |
+| E7.3 | `builtin_method_moves_receiver` (947) → `true` | **lacune de test, non fermée** | marquerait `Option::is_some()`/`Result::is_ok()` comme consommant le receiver. Un test discriminatoire demande un `Option<String>` non-`Copy` utilisé **après** un appel d'emprunt ; aucun test actuel ne le fait. Le mutant est équivalent sur les programmes testés (receiver non réutilisé), **pas** prouvé équivalent en général. Lacune assumée, pas convertie en `PASS`. |
+| E7.4 | `verify_ownership_facts` 1018 : `copies` → `false` | **lacune de test, fermée depuis** | désactivait la branche `UseKind::Move if copies` (disaccord Move-sur-Copy). Test ajouté : `emit::tests::ownership_facts_move_on_a_copy_type_is_rejected_in_debug_builds`, vérifié vert localement. Le prochain run devrait tuer ce mutant ; ce n'est pas encore **observé**, donc la ligne reste « fermée depuis », pas « tuée ». |
+
+Ce que cela ne prouve pas : un score sur le crate `codegen` (36 mutants sur un
+ensemble ciblé de six fonctions), ni que les survivants E7.3/E7.4 soient
+équivalents en général ; la portée reste celle de `-F`.
+
+> **Mise à jour du 2026-11-14 (vague 3, §13).** E7.3 est **fermé et observé
+> tué** : la campagne ciblée `-F builtin_method_moves_receiver` sur l'arbre
+> contenant le nouveau contrat de comportement donne 4 mutants / 4 tués /
+> 0 survivant. **E7.4 est aussi observé tué** : la sous-campagne
+> `-F verify_ownership_facts` donne 13 mutants / 13 tués / 0 survivant, dont
+> le mutant de la ligne 1018 (`copies` → `false`). Les lignes ci-dessus
+> restent comme trace des campagnes qui les avaient laissés ouverts.
+
+## 13. Campagne « vague 3 » du 2026-11-14 (agent F, décision S5)
+
+**Contexte.** Branche `wave3/f-coverage-mutation` créée de `goal/wave-3` au SHA
+`3ca4d0e`, Windows 11 x86-64, `rustc 1.95.0`, `cargo-mutants 27.1.0` installé
+localement (A4, APPROUVÉE par le responsable le 2026-11-14). La portée est
+**exactement** celle de `.github/workflows/mutation.yml`, sans élargissement ni
+réduction : mêmes `--file`/`-F`, `--no-shuffle`. Seul `-j` diffère (`-j 4` au
+lieu de `-j 8`) pour respecter le budget de la machine (16 Go, agents en
+parallèle). Commandes :
+
+```
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/own.rs \
+  -F 'borrow_place|check_availability|place_mutability'
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/resolve.rs \
+  -F 'resolve_type_path|resolve_imports|resolve_use_target|type_is_copy|nominal_is_copy'
+cargo mutants --no-shuffle -j 4 --file crates/ravum-lang-sema/src/typeck.rs \
+  -F 'check_struct_lit|check_variant_call|check_for|check_lit_pattern|cover_pattern|negative_value_fits|pattern_contains_float|check_const_expr'
+```
+
+**Résultats mesurés (arbre `3ca4d0e`, avant l'ajout des tests de cette passe).**
+
+| Fichier | Mutants | Tués | Survivants | Non viables | Durée |
+|---|---:|---:|---:|---:|---|
+| `own.rs` | 32 | 31 | 1 | 0 | 4 min |
+| `resolve.rs` | 57 | 40 | 15 | 2 | 6 min |
+| `typeck.rs` | 94 | 79 | 8 | 7 | 9 min |
+| **Total** | **183** | **150** | **24** | **9** | **19 min** |
+
+Ces totaux sont **identiques** à ceux publiés en §9, §10, §11 et §12 (183/150/24/9) :
+la reproductibilité annoncée est confirmée à nouveau, et les survivants
+sont les mêmes familles, aux lignes déplacées par les passes 8-12. Preuves
+locales : `D:\App\ravum-target-f\mutants\{own,resolve,typeck}\mutants.out\`
+(`outcomes.json`, `caught.txt`, `missed.txt`, `unviable.txt`), hors dépôt.
+
+**Tri des survivants (24) — inchangé, aucune nouvelle classe.**
+
+| Classe | Mutants | Emplacement courant | Argument (référence) |
+|---|---:|---|---|
+| E1 | 1 | `own.rs:1640:35` `&&`→`\|\|` dans `check_availability` | garde de balayage sans effet observable sur le verdict (§9.2 E1, revérifié) |
+| E2 | 14 | `resolve.rs` : bras `"crate"`/`"self"`/`"super"` de `resolve_use_target` (l. 1317-1322) et de `resolve_type_path` (l. 2547-2558), boucles `levels`, tests `Self` (l. 2427-2428) | segments produits par le parseur comme `PathRoot`, `Self` = `Kw::SelfType`, `super::super` = erreur de parse (§9.2 E2). **Preuve dynamique ajoutée cette passe** : `a_double_super_path_is_a_parse_error` et `use_forms_with_an_explicit_root_are_accepted` (`crates/ravum-lang-sema/tests/checker_entry_contracts.rs`). Les mêmes lignes sont déclarées inatteignables dans `tools/coverage_exemptions.json` (`E-LINE-RESOLVE-PLAIN-ROOT-ARMS`). |
+| E3 | 1 | `resolve.rs:2954:52` `\|\|`→`&&` dans `type_is_copy` | `Error` est le seul nominal sans genre ; les deux opérandes y sont vrais (§9.2 E3) |
+| E4 | 3 | `typeck.rs:4192` `check_struct_lit` (`delete !`, `&&`→`\|\|`, `==`→`!=`) | `args` toujours vide (§9.2 E4) |
+| E5 | 1 | `typeck.rs:5022:44` `&&`→`\|\|` dans `check_const_expr` | la valeur mutante n'existe que dans un `check` déjà en échec (§9.2 E5) |
+| E6 | 4 | `typeck.rs:6155-6158` `pattern_contains_float` (→ `false`, bras `Tuple`, `Float`, `Variant`) | filtre redondant depuis la matrice de couverture récursive (§9.2 E6) |
+
+**Lacunes de test résiduelles sur cette portée : 0.** Aucun test n'a été ajouté
+pour ces 24 survivants : un test qui ne peut pas échouer sur le code muté serait
+un faux PASS (règle du §1). Les équivalences E1-E6 restent des **revues
+statiques**, pas des preuves vérifiées par un outil, et leurs conditions de
+réexamen (§9.3) sont inchangées.
+
+**Campagne `emit.rs` : non terminée localement, budget mesuré.** La portée
+`emit.rs` de `mutation.yml` (36 mutants) a été lancée le 2026-11-14 ; la
+baseline non mutée de la crate `ravum-lang-codegen` prend **10 s de build +
+252 s de tests** par mutant sur cette machine (308 s avec les 65 tests ajoutés cette passe), car le harnais exécute toute la
+suite de la crate (dont `tests/differential_oracle.rs`, qui compile le Rust
+généré). 36 mutants coûtent donc ≈ 2 h 40 à 3 h, au-delà du budget de la vague ; la
+campagne a été arrêtée et **aucun chiffre `emit.rs` n'est publié ici**. Le
+tableau de §12 reste la référence `emit.rs` (36/30/6/0) et n'est pas contredit
+par cette passe : il n'a pas été rejoué. Ce n'est pas une réduction de portée
+pour obtenir un vert, c'est une campagne non exécutée, et elle est déclarée
+comme telle.
+
+**Vérification ciblée du seul survivant `emit.rs` non trié (E7.3).** Le
+survivant §12 E7.3 (`builtin_method_moves_receiver` → `true`, ligne 947) était
+la seule lacune ouverte de `emit.rs`. Un contrat de comportement a été ajouté
+(`a_borrowing_builtin_receiver_is_not_planned_as_a_move`,
+`crates/ravum-lang-codegen/tests/emit_constructs.rs`) : un récepteur d'emprunt
+(`Option::is_some` sur `holder.items[0]`, STD-11.3) ne doit pas être planifié
+comme un déplacement, sinon le planificateur destructure le tableau pour en
+sortir l'élément. La campagne ciblée `-F 'builtin_method_moves_receiver'`
+(4 mutants, même harnais) a été relancée sur l'arbre **contenant** ce contrat ;
+son résultat est consigné ci-dessous.
+
+```
+cargo mutants --no-shuffle -j 1 --file crates/ravum-lang-codegen/src/emit.rs \
+  -F 'builtin_method_moves_receiver'
+```
+
+Résultat mesuré : **4 mutants testés, 4 tués, 0 survivant, 0 non viable (11 min)**.
+Preuve : `D:\App\ravum-target-f\mutants\emit-guard2\mutants.out\` (`caught.txt`
+nomme les quatre mutants, `missed.txt` est vide). Le contrat de comportement
+tue donc la classe E7.3, y compris le mutant `corps → true` qui était le
+survivant publié en §12. **E7.3 est fermé et observé tué** ; la ligne §12 reste
+comme trace de la campagne qui l'avait laissé ouvert.
+
+**Complément mesuré — cluster `verify_ownership_facts` (même harnais).**
+```
+cargo mutants --no-shuffle -j 2 --file crates/ravum-lang-codegen/src/emit.rs \
+  -F 'verify_ownership_facts'
+```
+Résultat : **13 mutants testés, 13 tués, 0 survivant (6 min)** ; preuve
+`D:\App\ravum-target-f\mutants\emit-facts\mutants.out\`. Le survivant E7.4
+(ligne 1018, `copies` → `false`) est donc **observé tué** — le test qui le vise
+existait depuis la passe précédente, il est maintenant confirmé par une
+campagne.
+
+**Portée complète `emit.rs` (36 mutants) : exécution interrompue.** La commande
+canonique de `mutation.yml` (`-F 'builtin_method_moves_receiver|is_copy_type|is_owned_position|plan_array_moves|verify_ownership_facts|emit_extern_block'`)
+a été relancée sur l'arbre ; elle a été **interrompue par un incident de
+workflow** avant son résumé final. Les artefacts
+(`D:\App\ravum-target-f\mutants\emit-full\mutants.out\`) montrent
+**32 mutants testés, 32 tués, 0 survivant** ; les **4 mutants non testés** sont
+exactement les quatre mutants d'indentation de `emit_extern_block`
+(l. 1465/1472/1478), c'est-à-dire la classe **E7.1/E7.2 déclarée équivalente
+(formatage)** en §12 — aucun d'eux ne change le Rust observable. Aucun chiffre
+de campagne complète n'est publié (pas de `outcomes.json` final) ; ce qui est
+publié est le décompte des artefacts : **32/32 tués sur les 32 testés**, plus
+**17/17 tués** sur les deux clusters ciblés.
+
+**Ce que cette campagne ne prouve pas.** Elle ne donne aucun score de crate :
+150/183 est un chiffre **ciblé** sur trois ensembles de fonctions (§1). Rien
+n'est prouvé sur `emit.rs` au-delà des 32 mutants testés sur 36 (les 4 non
+testés sont les équivalents de formatage E7.1/E7.2), ni sur les autres crates. Les survivants sont triés, pas éliminés ; les classes E1-E6 sont
+des revues, pas des preuves.

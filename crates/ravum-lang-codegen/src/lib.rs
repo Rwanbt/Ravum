@@ -9,6 +9,8 @@
 //!   effect boundaries are decided by the checker, not by this backend;
 //! * output is deterministic for a given input and options.
 
+#![forbid(unsafe_code)]
+
 use ravum_lang_sema::facts::CheckedProgram;
 
 pub mod emit;
@@ -56,4 +58,20 @@ impl std::error::Error for CodegenError {}
 /// Generate a complete Rust source file (prelude included).
 pub fn generate(checked: &CheckedProgram, options: &GenOptions) -> Result<String, CodegenError> {
     Generator::new(checked, options).generate()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CodegenError;
+
+    #[test]
+    fn codegen_error_displays_its_message() {
+        let error = CodegenError {
+            message: "unsupported builtin method".to_string(),
+        };
+        assert_eq!(error.to_string(), "unsupported builtin method");
+        // The `std::error::Error` impl is empty; this asserts it is usable.
+        let as_error: &dyn std::error::Error = &error;
+        assert_eq!(as_error.to_string(), "unsupported builtin method");
+    }
 }

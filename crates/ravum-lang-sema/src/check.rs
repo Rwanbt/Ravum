@@ -16,9 +16,56 @@ use ravum_lang_syntax::ast::Program;
 use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::source::SourceMap;
 use ravum_lang_syntax::span::Span;
+use std::time::{Duration, Instant};
+
+/// Wall-clock durations of the checker phases, for `ravum-lang --timings`.
+///
+/// Additive measurement only: no phase changes behaviour when timings are
+/// collected. `profile` is folded into `effects` (the profile gate runs inside
+/// `effects::infer_and_check`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PhaseTimings {
+    pub resolve: Duration,
+    pub typeck: Duration,
+    pub effects: Duration,
+    pub own: Duration,
+}
 
 /// Vérifie un programme analysé par le frontend.
 pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> CheckResult {
+    check_with_entry(program, sources, options, None)
+}
+
+/// `check`, with an explicit `rt` entry function (T6, `--rt-entry`).
+///
+/// The `rt` effects and trap rules apply to the functions reachable from
+/// `rt_entry` instead of `main`; `None` is the historical whole-`main` behaviour.
+pub fn check_with_entry(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> CheckResult {
+    check_entry_with_timings(program, sources, options, rt_entry).0
+}
+
+/// `check`, plus the wall-clock duration of each phase.
+pub fn check_with_timings(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+) -> (CheckResult, PhaseTimings) {
+    check_entry_with_timings(program, sources, options, None)
+}
+
+/// `check_with_timings`, with the explicit `rt` entry function of T6.
+pub fn check_entry_with_timings(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> (CheckResult, PhaseTimings) {
+    let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
     if !edition_supported(&options.edition) {
         diags.push(Diagnostic::error(
@@ -31,24 +78,28 @@ pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> 
             ),
         ));
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
     let program = program.clone();
     let mut world = World::build(&program);
     let mut facts = Facts::default();
 
+    let started = Instant::now();
     let resolved = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
+    timings.resolve = started.elapsed();
     if !resolved || diags.has_errors() {
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
+    let started = Instant::now();
     let typed =
         typeck::typecheck_with_world(&program, &mut facts, &world, Some(sources), &mut diags);
+    timings.typeck = started.elapsed();
     if !typed || diags.has_errors() {
         diags.sort();
-        return CheckResult::failed(diags);
+        return (CheckResult::failed(diags), timings);
     }
 
     // Le monde emprunte le programme : il doit disparaître avant le déplacement
@@ -62,22 +113,42 @@ pub fn check(program: &Program, sources: &SourceMap, options: &CheckOptions) -> 
         profile: options.profile,
     };
 
-    effects::infer_and_check(
+    let started = Instant::now();
+    let call_graph = effects::infer_and_check(
         &checked.program,
         &mut checked.facts,
         options.profile,
+        rt_entry,
         &mut diags,
     );
-    own::check_ownership(&checked, &mut diags);
+    timings.effects = started.elapsed();
+
+    let started = Instant::now();
+    let own_facts = own::check_ownership(&checked, &mut diags);
+    checked.facts.own = own_facts;
+    timings.own = started.elapsed();
+
+    // RFC-RT-TRAPS-1: intrinsic traps are checked for the `rt` profile only.
+    // `core` and `pure` are unchanged (deliberate asymmetry, see the RFC).
+    // With `--rt-entry` (T6) only the functions reachable from the entry are
+    // checked: setup code (allocation, I/O) outside the real-time path stays
+    // legal.
+    if options.profile == crate::facts::Profile::Rt {
+        let reachable = rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
+        crate::traps::check_rt_traps(&checked, &mut diags, reachable.as_ref());
+    }
 
     diags.sort();
     if diags.has_errors() {
-        CheckResult::failed(diags)
+        (CheckResult::failed(diags), timings)
     } else {
-        CheckResult {
-            checked: Some(checked),
-            diags,
-        }
+        (
+            CheckResult {
+                checked: Some(checked),
+                diags,
+            },
+            timings,
+        )
     }
 }
 
@@ -483,9 +554,9 @@ fn main() { let s = m::make(); let x = s.secret; }
 #[cfg(test)]
 mod fact_coverage_tests {
     use super::check;
-    use crate::facts::{CheckOptions, Profile};
+    use crate::facts::CheckOptions;
     use ravum_lang_syntax::ast::{
-        Expr, ExprKind, ItemKind, MatchArm, Module, PatKind, Program, StmtKind,
+        Expr, ExprKind, ItemKind, MatchArm, Module, NodeId, PatKind, Program, StmtKind,
     };
     use ravum_lang_syntax::parser;
     use ravum_lang_syntax::source::SourceMap;
@@ -493,7 +564,12 @@ mod fact_coverage_tests {
 
     fn collect_ids(
         program: &Program,
-    ) -> (BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>, BTreeSet<u32>) {
+    ) -> (
+        BTreeSet<NodeId>,
+        BTreeSet<NodeId>,
+        BTreeSet<NodeId>,
+        BTreeSet<NodeId>,
+    ) {
         let mut exprs = BTreeSet::new();
         let mut paths = BTreeSet::new();
         let mut pats = BTreeSet::new();
@@ -504,10 +580,10 @@ mod fact_coverage_tests {
 
     fn walk_module(
         module: &Module,
-        exprs: &mut BTreeSet<u32>,
-        paths: &mut BTreeSet<u32>,
-        pats: &mut BTreeSet<u32>,
-        types: &mut BTreeSet<u32>,
+        exprs: &mut BTreeSet<NodeId>,
+        paths: &mut BTreeSet<NodeId>,
+        pats: &mut BTreeSet<NodeId>,
+        types: &mut BTreeSet<NodeId>,
     ) {
         for item in &module.items {
             match &item.kind {
@@ -563,10 +639,10 @@ mod fact_coverage_tests {
 
     fn walk_block(
         block: &ravum_lang_syntax::ast::Block,
-        exprs: &mut BTreeSet<u32>,
-        paths: &mut BTreeSet<u32>,
-        pats: &mut BTreeSet<u32>,
-        types: &mut BTreeSet<u32>,
+        exprs: &mut BTreeSet<NodeId>,
+        paths: &mut BTreeSet<NodeId>,
+        pats: &mut BTreeSet<NodeId>,
+        types: &mut BTreeSet<NodeId>,
     ) {
         for stmt in &block.stmts {
             match &stmt.kind {
@@ -589,10 +665,10 @@ mod fact_coverage_tests {
 
     fn walk_pat(
         pat: &ravum_lang_syntax::ast::Pat,
-        exprs: &mut BTreeSet<u32>,
-        paths: &mut BTreeSet<u32>,
-        pats: &mut BTreeSet<u32>,
-        types: &mut BTreeSet<u32>,
+        exprs: &mut BTreeSet<NodeId>,
+        paths: &mut BTreeSet<NodeId>,
+        pats: &mut BTreeSet<NodeId>,
+        types: &mut BTreeSet<NodeId>,
     ) {
         pats.insert(pat.id);
         match &pat.kind {
@@ -625,10 +701,10 @@ mod fact_coverage_tests {
 
     fn walk_expr(
         expr: &Expr,
-        exprs: &mut BTreeSet<u32>,
-        paths: &mut BTreeSet<u32>,
-        pats: &mut BTreeSet<u32>,
-        types: &mut BTreeSet<u32>,
+        exprs: &mut BTreeSet<NodeId>,
+        paths: &mut BTreeSet<NodeId>,
+        pats: &mut BTreeSet<NodeId>,
+        types: &mut BTreeSet<NodeId>,
     ) {
         exprs.insert(expr.id);
         match &expr.kind {
@@ -729,10 +805,10 @@ mod fact_coverage_tests {
 
     fn walk_match_arm(
         arm: &MatchArm,
-        exprs: &mut BTreeSet<u32>,
-        paths: &mut BTreeSet<u32>,
-        pats: &mut BTreeSet<u32>,
-        types: &mut BTreeSet<u32>,
+        exprs: &mut BTreeSet<NodeId>,
+        paths: &mut BTreeSet<NodeId>,
+        pats: &mut BTreeSet<NodeId>,
+        types: &mut BTreeSet<NodeId>,
     ) {
         walk_pat(&arm.pat, exprs, paths, pats, types);
         walk_expr(&arm.body, exprs, paths, pats, types);
@@ -761,23 +837,23 @@ mod fact_coverage_tests {
             ),
         };
         let (exprs, paths, pats, types) = collect_ids(&parsed.program);
-        let missing_exprs: Vec<u32> = exprs
+        let missing_exprs: Vec<NodeId> = exprs
             .iter()
             .copied()
             .filter(|id| !checked.facts.expr_types.contains_key(id))
             .collect();
-        let missing_paths: Vec<(u32, String)> = paths
+        let missing_paths: Vec<(NodeId, String)> = paths
             .iter()
             .copied()
             .filter(|id| !checked.facts.resolutions.contains_key(id))
             .map(|id| (id, "?".to_string()))
             .collect();
-        let missing_pats: Vec<u32> = pats
+        let missing_pats: Vec<NodeId> = pats
             .iter()
             .copied()
             .filter(|id| !checked.facts.pat_types.contains_key(id))
             .collect();
-        let missing_types: Vec<u32> = types
+        let missing_types: Vec<NodeId> = types
             .iter()
             .copied()
             .filter(|id| !checked.facts.type_nodes.contains_key(id))

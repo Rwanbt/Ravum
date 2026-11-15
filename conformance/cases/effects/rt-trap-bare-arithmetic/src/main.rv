@@ -1,0 +1,4 @@
+fn process(x: i32) -> i32 effects() { return x + 1; }
+
+fn main() { let v = process(1); }
+

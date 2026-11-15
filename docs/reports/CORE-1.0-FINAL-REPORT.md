@@ -6,11 +6,142 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 sexies** ci-dessous porte la passe du
-> **2026-11-11 (passe 9, SHA `21cf7d4`)** et **prévaut pour les chiffres
-> courants** ; la section 0 quinquies est la passe 8 (`7696e2a`), la section
-> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6
-> (`5d88ecb` → `9da9b12`).
+> (SHA `a277b86`). La **section 0 octies** ci-dessous porte la passe du
+> **2026-11-13 (passe 11, cas FFI)** et **prévaut pour les chiffres courants** ;
+> la section 0 septies est la passe 10 (D13, `2b31d63`), la section 0 sexies la
+> passe 9 (`21cf7d4`), la section 0 quinquies la passe 8 (`7696e2a`), la section
+> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6 (`5d88ecb` →
+> `9da9b12`).
+
+## 0 decies. Campagne de fermeture des chantiers techniques (2026-11-14, soir)
+
+Cette section **prévaut sur toutes les précédentes** pour les chiffres courants.
+Branche `goal/consolidation-2`, rapport détaillé :
+[`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
+
+| Mesure | Résultat courant |
+|---|---|
+| Conformance (`run --verify-build`) | **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=207/207`, `verified=124`, `build_verified: true` |
+| Tests workspace | **102 suites, 1660 passés / 0 échec / 7 ignorés** (exit 0) |
+| Traçabilité | **188/188** règles tracées, **188/188** satisfaites ; registre **108 codes** déclarés, 126 émis |
+| Couverture | **90,44 %** lignes / **89,88 %** régions ; code produit **88,55 %** (1 557/13 598) ; 10 fichiers sous l'objectif 100 % |
+| Mutation ciblée | **219 mutants / 180 tués / 30 survivants triés / 9 non viables**, dont la première campagne `emit.rs` (36/30/6) |
+| Reproductibilité | digest **identique sur deux runners distincts** (`9b7f16cc…cdf`, run 43622599083) — même image, même toolchain |
+| Autres preuves | alarme de performance CI verte (43622599048) ; oracle nominal 6 000 programmes / 0 divergence ; confinement `unsafe` outillé ; 25 tests loader ; contrat installateur Linux + politique de dépréciation + guide utilisateur |
+
+Aucun gate n'est promu `PASS` par cette campagne ; les statuts restent ceux de
+la matrice §2, et le dossier des décisions humaines est
+[`HUMAN-DECISIONS-REQUIRED.md`](HUMAN-DECISIONS-REQUIRED.md).
+
+## 0 nonies. Addendum lot couverture 1 — code mort, contrats, mesure honnête (2026-11-13)
+
+Cette section **prévaut sur 0 octies et sur toutes les suivantes** pour les
+chiffres courants. Elle ne change **aucune ligne du compilateur** : elle supprime
+du code sans appelant, ajoute des tests de contrat, et **corrige la façon de
+compter** l'écart de couverture.
+
+| Mesure | Résultat |
+|---|---|
+| Conformance (`run --verify-build`) | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **202/202**, **121** vérifiés, **81** implicites, `build_verified: true` — inchangé par ce lot |
+| Tests workspace | **113 suites, 1574 passés / 0 échec / 2 ignorés** (exit 0) — **+12** tests |
+| Couverture (`cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen`) | **89,08 % lignes (17 264/19 380) / 88,39 % régions** (Windows 11 x64 ; **89,12 / 88,44** sur le runner Linux, écart dû au `#[cfg(unix)]` de `loader.rs`), contre **88,54 / 87,81** au lot 0 ; **aucun seuil abaissé** |
+| Écart réel | **1 715** lignes de code **produit** non couvertes sur 12 621 (**86,41 %**), **201** lignes non couvertes dans des modules `#[cfg(test)]` (asserts, `panic!` de test, bras inutilisés des walkers), **2 098** lignes au total dans la lecture `--gap` par instanciation |
+| Fichiers fermés à 100 % lignes | `facts.rs` (**100/100** lignes et régions), `builtins.rs` (**100/98,42**), `types.rs` (100/98,10), et le code **produit** de `check.rs` (46 lignes) |
+| Seuils relevés | `facts.rs` 81/76 → **100/100** ; `builtins.rs` 90/88 → **100/98** ; `typeck.rs` 92/91 → **93/92** ; `effects.rs` 91/93 → **92/94** ; `resolve.rs` 92/92 → **93/93** |
+| Code mort supprimé | **9 éléments sans appelant** : `typeck::collect_generic_args`, `typeck::check_expr_list`, `typeck::check_tuple`, `EffectSet::pure`, `EffectSet::is_subset_of`, `facts::expr_type`, `builtins::builtin_assoc_fn_effects`, `effects::empty`, `World::module` |
+
+Ce que ce lot change, et ce qu'il ne prouve pas :
+
+* **Le dénominateur de l'objectif 100 % était faux dans les deux sens.** Il
+  comptait du **code de test** que rien ne peut couvrir (201 lignes : le message
+  d'un `assert!` ne s'exécute que si le test échoue) et il ignorait que cinq des
+  « fonctions non couvertes » citées comme cibles n'avaient **aucun appelant**.
+  Le plan §7 bis de `PRODUCTION-READINESS.md` est réécrit en conséquence, avec
+  `tools/coverage_product_split.py` versionné pour que la séparation
+  produit/test soit reproductible et discutable.
+* **Cinq avertissements `dead_code` sont conservés volontairement**, parce qu'ils
+  documentent un fait et non un coût : `ModuleInfo::name` et
+  `MethodEntry::impl_generics` (informations redondantes), deux charges de
+  `Resolved` jamais lues, et **`UseTarget::Variant` jamais construit — défaut
+  latent** : le message « variant import … is not supported in Core 1.0 »
+  (`resolve.rs`) ne peut pas s'exécuter, `use E::V;` sort aujourd'hui en
+  `E-RES-UNKNOWN` « unknown import path ».
+* **Constat hors couverture** : `impl<T> Holder<T>` **fonctionne** (sonde
+  locale : `check` passe, le binaire s'exécute, `value_of(self) -> T` rend
+  `41 → 42`, `OK42`) mais **aucun cas de conformance ne le couvre**. C'est une
+  forme supportée non verrouillée par le corpus ; l'ajouter change le compte de
+  cas (471 → 472) et donc tous les chiffres publiés, ce qui en fait un lot
+  séparé.
+* **Ce que cela ne prouve pas** : la couverture reste à **86,41 % du code
+  produit**, et **67 %** de l'écart restant est concentré dans deux fichiers
+  (`emit.rs` 608 lignes, `loader.rs` 537). Un fichier à 100 % de lignes n'est
+  pas un fichier correct : la mutation (183 mutants, 150 tués, 24 survivants
+  triés) reste la mesure de correction, et elle porte sur trois fichiers
+  seulement.
+
+## 0 octies. Addendum passe 11 — huit cas de conformance FFI (2026-11-13)
+
+Cette section **prévaut sur 0 septies et sur toutes les suivantes** pour les
+chiffres courants. Elle ne change **aucune ligne du compilateur** : elle outille
+en corpus les contrats FFI de RFC-D7 §5 et re-mesure la couverture.
+
+| Mesure | Résultat |
+|---|---|
+| Conformance (`run --verify-build`) | **471 cas : 470 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **202/202** couverts, **121** vérifiés, **81** implicites, **0 échec**, `build_verified: true` |
+| Tests workspace | **113 suites, 1562 passés / 0 échec / 2 ignorés** (exit 0) |
+| Cas ajoutés | `effects/ffi-rt-profile`, `effects/ffi-transitive-wrapper` (`E-EFF-PROFILE`) ; `types/ffi-char-rejected`, `types/ffi-reference-rejected` (`E-FFI-TYPE`) ; `types/ffi-bool-boundary` (`compile-pass`) ; `run/ffi-width-boundary` (`run-pass`, `llabs` en `i64`) ; `types/ffi-extern-in-impl` (`E-UNSUPPORTED-EXTERN`) ; `types/unsafe-does-not-unlock-pointers` (`E-UNSUPPORTED-UNSAFE`) |
+| Effets couverts pour la première fois | **EFF-4.7** (`rt` + FFI) et **EFF-2.9** (propagation `unsafe`/`ffi` à travers deux wrappers) n'avaient aucun test |
+| Couverture | **re-mesurée le 2026-11-13** : **88,54 % lignes / 87,81 % régions** (sema + codegen), **2 189** lignes non couvertes ; planchers tenus, aucun seuil abaissé. Le plan par fonction est **corrigé** dans `PRODUCTION-READINESS.md` §7 bis (les cibles de la veille comptaient deux fois les instanciations de `sema`) |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `T2` reste `PARTIAL` (dénominateur MUST, D10), `T4`/`T12` restent `BLOCKED`, **D7 reste `OPEN`** |
+
+Ce que cette passe change, et ce qu'elle ne prouve pas :
+
+* **Deux MUST d'effets passent de « spécifiés, non testés » à « testés »** :
+  `rt` + FFI et la propagation transitive. Les refus `char`/`&i32`, l'admission
+  de `bool`, le passage réel d'un `i64` (`llabs`), le refus d'`extern` dans un
+  `impl` et le refus d'un pointeur **dans** un `unsafe` sont verrouillés.
+* **Deux écarts avec la RFC sont assumés et écrits** : `extern` dans un `impl`
+  rend `E-UNSUPPORTED-EXTERN` (observé) et non `E-PARSE-EXPECTED` (proposé) ;
+  `bool` et `usize`/`u64`/`isize` n'ont pas de symbole CRT portable, donc `bool`
+  est seulement `compile-pass` et seul `i64` traverse à l'exécution.
+* **Ce que cela ne prouve pas** : la FFI reste scalaire et expérimentale ; les
+  callbacks, pointeurs, unwinding et l'ABI multi-plateforme restent hors
+  surface ; « 0 FAIL » vaut pour le corpus mesuré, pas comme absence de
+  divergence ; la couverture reste à 88,5 %, l'objectif 100 % n'est pas atteint.
+
+## 0 septies. Addendum passe 10 — D13 : la staticité est prouvée (2026-11-12)
+
+Cette section **prévaut sur 0 sexies et sur toutes les suivantes** pour les
+chiffres courants. Elle porte sur trois choses : D13 (provenance de
+`&'static str` à travers les agrégats), deux divergences backend fermées, et
+l'approbation humaine de l'exemption `F-META-006`.
+
+| Mesure | Résultat |
+|---|---|
+| `cargo test --workspace` | **113 suites, 1562 passés / 0 échec / 2 ignorés** (exit 0) |
+| Conformance (`run --verify-build`) | **463 cas : 462 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; build **200/200** couverts, **120** vérifiés, **80** implicites, **0 échec**, `build_verified: true` |
+| Formes `check`-pass / `build`-fail ouvertes connues | **0** (la forme trouvée par cette passe — positions de type `&str` imbriquées — est fermée et verrouillée par deux tests backend) |
+| D13 | **implémentée** : `return a[1]`, `let s = a[1]`, `c.text`, payload de `match`, `Option::unwrap`, `str::as_str` statique et copies locales à travers un appel acceptés par preuve ; `String::as_str()` reste refusé |
+| Tests ajoutés | **12 tests d'audit**, **10 tests unitaires**, **3 tests backend** (compilation + exécution réelles), **7 cas de corpus** (5 `run-pass`, 2 `compile-fail`) |
+| Traçabilité FeatureId | **188/188** (inchangée) ; `F-META-006` **approuvée** par le responsable (2026-11-12, réexamen 2027-02-12) |
+| Registre des codes | **108** codes enregistrés / **126** émis / 0 hors registre |
+| Couverture | **non re-mesurée** dans cette passe ; dernière mesure **88,54 % lignes / 87,86 % régions** (`21cf7d4`, sema + codegen) ; la CI la rejoue |
+| Gates | **4 PASS / 7 PARTIAL / 2 BLOCKED** — inchangé ; `P0-A` vert sur son périmètre mesuré (463 cas), `T2` reste `PARTIAL` pour la raison indépendante D10, `T4`/`T12` restent `BLOCKED` |
+
+Ce qui a changé, et ce que cela ne prouve pas :
+
+* **La preuve, pas l'hypothèse** : la règle de stockage (aucun `&str` emprunté
+  dans un agrégat) était déjà outillée à chaque site ; elle rend la règle
+  d'origine (littéral, copie, projection, agrégat de statiques, appel vérifié)
+  vraie par construction. C'est une analyse locale, sans lifetimes ni solveur.
+* **La divergence backend a été trouvée par le contrôle de build** : un `&str`
+  imbriqué dans un paramètre était émis `[&str; 2]` ; dès que `return a[1]` est
+  devenu accepté, `rustc` l'a refusé (`E0310`). La position `Param` ne s'applique
+  plus qu'au `&str` propre du paramètre. `str::as_str`, accepté par le
+  vérificateur mais sans abaissement, est désormais une identité.
+* **Ce que cette passe ne prouve pas** : la preuve est locale (I-STR), pas une
+  certification ; pas d'audit externe (D4); couverture, reproductibilité,
+  mutation et performance ne sont pas re-mesurées ici.
 
 ## 0 sexies. Addendum passe 9 — les deux dernières divergences de move sont fermées (2026-11-11, SHA `21cf7d4`)
 

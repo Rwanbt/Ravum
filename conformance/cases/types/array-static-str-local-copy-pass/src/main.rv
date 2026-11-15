@@ -1,0 +1,9 @@
+fn pick(a: [&str; 2]) -> &str {
+    let s = a[1];
+    return s;
+}
+
+fn main() {
+    let s = pick(["x", "y"]);
+    io::println(s);
+}

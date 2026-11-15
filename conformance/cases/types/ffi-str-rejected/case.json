@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-str-rejected",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "&str is a borrowed reference and can never cross the C boundary in Core 1.0; the refusal was named in docs/ffi/SAFETY.md §4 but had no corpus case."
+}

@@ -1,0 +1,4 @@
+[package]
+name = "effects-rt-entry-bounded-index"
+version = "0.1.0"
+edition = "core-1.0"

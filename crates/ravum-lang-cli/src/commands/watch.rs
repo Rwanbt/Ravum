@@ -603,22 +603,32 @@ fn say(line: &str) {
 // ---------------------------------------------------------------------------
 
 #[cfg(windows)]
+#[allow(unsafe_code)]
 mod signal {
     use super::STOP;
     use std::sync::atomic::Ordering;
 
     type HandlerRoutine = unsafe extern "system" fn(u32) -> i32;
 
+    // SAFETY (declaration): `SetConsoleCtrlHandler` is a Win32 API whose
+    // documented signature is `(Option<HandlerRoutine>, i32) -> i32`; the Rust
+    // declaration below reproduces it exactly. Installation is best-effort: on
+    // failure the default console behaviour applies and no memory is involved.
     unsafe extern "system" {
         fn SetConsoleCtrlHandler(handler: Option<HandlerRoutine>, add: i32) -> i32;
     }
 
+    // SAFETY: a console control handler must only do async-signal-safe work.
+    // This one stores `true` in an atomic and returns TRUE; it never allocates,
+    // locks, unwinds or calls back into Rust.
     unsafe extern "system" fn handler(_control_type: u32) -> i32 {
         STOP.store(true, Ordering::SeqCst);
         1 // TRUE: handled; the poll loop exits and reaps the child.
     }
 
     pub fn install() {
+        // SAFETY: `handler` has the exact `HandlerRoutine` signature and has
+        // static lifetime; the return value is ignored on purpose (best-effort).
         unsafe {
             SetConsoleCtrlHandler(Some(handler), 1);
         }
@@ -626,19 +636,27 @@ mod signal {
 }
 
 #[cfg(not(windows))]
+#[allow(unsafe_code)]
 mod signal {
     use super::STOP;
     use std::sync::atomic::Ordering;
 
+    // SAFETY (declaration): `signal(2)` takes an `int` and a function pointer;
+    // passing the pointer as `usize` matches the platform ABI used by this
+    // binding. Only SIGINT (2) is installed.
     unsafe extern "C" {
         fn signal(sig: i32, handler: usize) -> usize;
     }
 
+    // SAFETY: a signal handler must only do async-signal-safe work. This one
+    // stores `true` in an atomic and returns; it never allocates or locks.
     unsafe extern "C" fn handler(_sig: i32) {
         STOP.store(true, Ordering::SeqCst);
     }
 
     pub fn install() {
+        // SAFETY: `handler` is a valid function pointer for `signal`; the call
+        // is best-effort and the previous handler's result is ignored.
         unsafe {
             signal(2, handler as usize); // SIGINT
         }

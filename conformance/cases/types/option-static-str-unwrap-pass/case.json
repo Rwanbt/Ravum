@@ -1,0 +1,6 @@
+{
+  "id": "types/option-static-str-unwrap-pass",
+  "mode": "run-pass",
+  "stdout_contains": "x\n",
+  "notes": "D13 rule 1, payload: `Option<&str>::unwrap` reads a `&'static str` out of the aggregate; `Some(s.as_str())` is refused by rule 2, so the payload is static by construction."
+}

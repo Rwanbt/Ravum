@@ -1,0 +1,7 @@
+extern "C" {
+    fn ffi_identity_bool(x: bool) -> bool;
+}
+
+fn main() {
+    let value = 1;
+}
