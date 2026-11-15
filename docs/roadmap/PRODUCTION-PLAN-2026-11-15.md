@@ -80,7 +80,7 @@ sortie, SHA, CI verte.
   positifs `rustc`-vérifiés ; sondage des variantes voisines (écriture
   conditionnelle, accès hors du bloc de l'écriture, boucle) ; conformance
   `--verify-build` 0 FAIL sur trois OS.
-- [ ] **E2 — Garde-fous manquants (P-3, P-4, P-5, P-11).** Clippy `-D warnings`,
+- [x] **E2 — Garde-fous manquants (P-3, P-4, P-5, P-11).** Clippy `-D warnings`,
   `cargo-deny`, Dependabot, `CODEOWNERS`, `CHANGELOG.md`, `rust-version`.
 - [ ] **E3 — Véracité documentaire (P-12).** Archivage des sections datées,
   chiffres courants re-mesurés, `START_HERE.md`/`STATUS.md` corrigés.
@@ -107,3 +107,4 @@ sortie, SHA, CI verte.
 | 2026-11-15 | E1 (contrôle final) | Aucun gate promu ; la campagne nominale T2 reste E7 ; le cas rouge reste dans le corpus sans `expected-fail` | PR #119 | Attendre la CI ; fusionner seulement si les trois OS sont verts, puis E2 |
 | 2026-11-15 | **E1 terminé** | PR [#119](https://github.com/Rwanbt/Ravum/pull/119) fusionnée dans `dev` (`b38491e`, merge commit `b38491eb06e5b27a7e31696825821c6815951af2`) ; issue [#118](https://github.com/Rwanbt/Ravum/issues/118) fermée par le merge ; trois OS verts | CI `dev` sur `b38491e` : **8/8 runs verts** — Linux `43706785627`, MVP `43706785645`, macOS `43706785683`, Windows evidence `43706785653`, coverage `43706785754`, contracts `43706785667`, docs `43706785657`, VS Code `43706785699` | **E2** : garde-fous (clippy, cargo-deny, Dependabot, CODEOWNERS, CHANGELOG, MSRV) |
 | 2026-11-15 | E2 (vérification locale terminée) | Clippy `--workspace --all-targets -D warnings` passe (un seul `allow` ciblé, justifié, sur le constructeur de fixture `make_fn`) ; `deny.toml` (RustSec, licences, doublons, sources) passe ; Dependabot hebdomadaire, `CODEOWNERS`, `CHANGELOG.md` ; `rust-version = "1.95.0"` ; tests **1 740 / 0 / 8** | `target/e2-clippy22.err.log` exit 0 ; `cargo deny check` : advisories/bans/licenses/sources ok ; tests `target/e2-tests.log` | Conformance, `cargo fmt`, commit, PR, CI |
+| 2026-11-15 | **E2 terminé** | PR [#122](https://github.com/Rwanbt/Ravum/pull/122) fusionnée dans `dev` (`e163b2f`) ; le job requis `mvp` exécute désormais Clippy `-D warnings` et `cargo-deny` (les deux ont passé en CI) ; Dependabot, `CODEOWNERS`, `CHANGELOG.md`, MSRV 1.95.0 ; conformance **503 / 502 / 0 / 1** | CI `dev` sur `e163b2f` : **8/8 runs verts** — Linux `43715199284`, MVP `43715199582`, macOS `43715199455`, Windows evidence `43715199240`, coverage `43715199241`, contracts `43715199237`, docs `43715199349`, VS Code `43715199327` | **E3** : véracité documentaire (archivage des sections datées, chiffres courants, `START_HERE.md`/`STATUS.md`) |
