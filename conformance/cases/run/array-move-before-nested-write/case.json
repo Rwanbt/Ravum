@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-before-nested-write",
+  "mode": "run-pass",
+  "stdout_contains": "a\nc\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): an element is moved, then the array is assigned inside a nested block and both elements are moved there. Was check-pass / build-fail (rustc E0382)."
+}

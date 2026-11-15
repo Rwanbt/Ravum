@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-two-writes",
+  "mode": "run-pass",
+  "stdout_contains": "c\nf\ne\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned twice inside a nested block, with element moves after each assignment. Was check-pass / build-fail (rustc E0382)."
+}

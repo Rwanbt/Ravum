@@ -36,17 +36,17 @@ continuous-development ideas to existing Rust code.
 | Language | Core 1.0 **DRAFT** subset; compiler and CLI implemented under `crates/ravum-lang-*` |
 | Toolchain | `check`, `build`, `run`, `watch`, `test`, `fmt`, `lint`, `doc`, `cache`, `lsp`, `doctor` |
 | Targets | Native Windows/Linux; `wasm32-wasip1` through Node.js WASI |
-| Conformance | **487 cases: 485 PASS / 1 FAIL / 1 SKIP** on the reference machine; one known failure; `build_verified: false` |
-| Workspace tests | **1,732 passed / 0 failed / 8 ignored** |
+| Conformance | **503 cases: 502 PASS / 0 FAIL / 1 SKIP** on the reference machine; `build_verified: true` |
+| Workspace tests | **1,740 passed / 0 failed / 8 ignored** |
 | Coverage | **91.65 % lines / 91.32 % regions** (sema + codegen); **90.37 % product code** (1,305 uncovered / 13,548); the 100 % target is **not met** |
 | Performance | `own` phase exponent **1.9803 → 0.8372**; `check` at 50,110 lines **602.6 ms** (debug); LSP p95 **19.551 ms** at 1,025 lines and **80.283 ms** at 5,110 lines (release, clean machine) |
 | Release | No tag, no release, no signed artifact and no external audit |
 
-> Reference environment: Windows 11 x64, `rustc 1.95.0`, code commit `5fd54b8`
-> (2026-11-14). These figures are tied to the cited commands and SHA; they are
-> not portable guarantees. Reproduce them with the commands in
-> [Development](#development); the detailed protocol is in the
-> [qualification report](docs/reports/GOAL-WAVE-3-REPORT.md).
+> Reference environment: Windows 11 x64, `rustc 1.95.0`, code state of
+> 2026-11-15 (production-readiness step E1). These figures are tied to the cited
+> commands and revision; they are not portable guarantees. Reproduce them with
+> the commands in [Development](#development); the detailed protocol is in
+> [`T2-FINDINGS.md` §29](docs/qualification/T2-FINDINGS.md#295-vérification-e1-2026-11-15).
 
 ## Quick start
 
@@ -112,19 +112,21 @@ The C FFI is deliberately small: only a documented scalar ABI is accepted.
 that unwind, call `longjmp`, raise a signal or terminate the process are outside
 the contract and remain the caller's responsibility.
 
-## Known conformance failure
+## Conformance status
 
-`conformance/cases/run/power-array-move-write-region-nested` currently fails.
-`check` accepts the program, but `build` emits `a[0]`/`a[1]` without lowering the
-move and `rustc` rejects the result with `error[E0508]: cannot move out of type
-[String; 2]`. This is a real `check → build` divergence in array move planning.
+`conformance/cases/run/power-array-move-write-region-nested` was a real
+`check → build` divergence: `check` accepted the program, but the backend emitted
+plain `a[0]`/`a[1]` accesses and `rustc` rejected them with
+`error[E0508]: cannot move out of type [String; 2]`. It is now fixed in the
+compiler: array-element moves are lowered at the access instead of being hoisted
+through a planner, and the case remains in the regression corpus. The reference
+run reports **503 cases: 502 PASS / 0 FAIL / 1 SKIP** and
+`build_verified: true`.
 
-The case is part of the regression corpus and is not skipped. Consequently the
-conformance command exits 1 and reports `build_verified: false`; the Linux,
-Windows and macOS conformance CI jobs report the same failure. The required
-`mvp` check covers the workspace build, tests and demos; the conformance jobs are
-a separate signal. Do not disable the case to make CI pass; a fix must change the
-compiler, not the test.
+`build_verified` covers the build dimension only. The corpus is bounded and does
+not prove that no unknown form exists; it is not a formal proof. The
+`--verify-build` command, its perimeter and its limits are documented in
+[`CONFORMANCE-BUILD-CONTRACT.md`](docs/qualification/CONFORMANCE-BUILD-CONTRACT.md).
 
 ## Current limitations
 
@@ -182,9 +184,9 @@ cargo test --workspace --all-targets -- --test-threads=2
 cargo run -p ravum-conformance -- run --verify-build
 ```
 
-The conformance command currently exits 1 because of the known case above. That
-failure is expected and visible in CI; it is not suppressed. Focused checks are
-also available per crate, for example:
+The conformance command exits 0 when the corpus and the `check → build`
+dimension are both green; a `SKIP` is reported separately and is never counted
+as a pass. Focused checks are also available per crate, for example:
 
 ```bash
 cargo test -p ravum-lang-sema

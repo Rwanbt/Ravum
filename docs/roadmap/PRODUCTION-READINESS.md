@@ -83,8 +83,8 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | **42** ADR `PROPOSED` (ADR-000…ADR-041, comptés par `tools/validate_repo_docs.py`) ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | **484** cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
-| R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
+| R2 | **fait sur le périmètre** | **503** cas, **502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` (2026-11-15, branche E1) ; la divergence `power-array-move-write-region-nested` est fermée ; ne prouve pas l'absence de formes inconnues |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; **467/811** MUST, **344** non mappés ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
 | R5 | **`PARTIAL`** | frontière scalaire **confinée et inventoriée** (2026-11-14) : `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` + 2 `allow` audités sur le CLI (`docs/ffi/UNSAFE-INVENTORY.md`, `tools/unsafe_audit.py` en CI), `&str` refusé (`types/ffi-str-rejected`) ; contrats ABI/lifetime/unwinding **écrits mais non ratifiés** (`SAFETY.md`, RFC-D7) ; `i128`/`u128` (largeur C), unwinding/`longjmp`/signal et Miri FFI restent `NOT_RUN` ou humains |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |

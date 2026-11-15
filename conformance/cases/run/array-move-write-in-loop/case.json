@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-in-loop",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\nc\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): each iteration of a loop assigns an array declared outside the loop and moves both elements. Was check-pass / build-fail (rustc E0382)."
+}

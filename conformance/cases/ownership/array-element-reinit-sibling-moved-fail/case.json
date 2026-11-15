@@ -1,0 +1,8 @@
+{
+  "id": "ownership/array-element-reinit-sibling-moved-fail",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-PARTIAL-MOVE"
+  ],
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): OWN-5.4: a moved array element can be assigned again only while every other element of the array is initialised (the array is rebuilt around the new value). With two elements moved, `a[0] = ...` is E-OWN-PARTIAL-MOVE; assigning the whole array restores it. Was check-pass / build-fail (rustc E0508)."
+}

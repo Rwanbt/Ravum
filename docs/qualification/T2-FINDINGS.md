@@ -1729,3 +1729,96 @@ fiche n'est **pas exécutée** (`NOT_RUN`).
   vérifiés sur le message rustc attendu (`E0508`/`E0382`) et sur la forme réduite.
 - La divergence nouvelle est une observation liée à ce SHA, un seul OS, une seule
   toolchain ; elle n'est ni corrigée, ni close.
+
+## 29. Passe 16 — la divergence de la passe 15 était la forme bruyante d'une miscompilation silencieuse (2026-11-15)
+
+> Branche `goal/production-plan-2026-11-15`, Windows 11 x64, `rustc 1.95.0`.
+> Mesures locales ; aucun `PROVED`. Décision et conception :
+> [`RFC-OWN-ARRAY-ELEMENTS.md`](../rfc/RFC-OWN-ARRAY-ELEMENTS.md).
+
+### 29.1 Constat
+
+`run/power-array-move-write-region-nested` (§28.4) laissait `main` et `dev`
+rouges sur les trois OS (runs `43669217867`, `43669218045`, `43669218085`). Avant
+de le corriger, deux sondages manuels ont varié la même situation — un tableau
+de `String` ré-assigné, des éléments déplacés avant, pendant et après, dans un
+bloc, une branche ou une boucle : **32 programmes, dont 30 acceptés par
+`check`** (les deux autres étaient déjà refusés).
+
+| Verdict sur l'arbre `581f0f6` | Nombre | Formes |
+|---|---|---|
+| **sortie fausse, exit 0, aucun diagnostic** | **6** | écriture dans un bloc imbriqué puis move après le bloc ; écriture + move dans une branche puis move après le `if` ; lecture entre l'écriture et les moves ; deux blocs frères ; écriture dans un bloc interne ; écriture puis move dans un `if` imbriqué |
+| `check` exit 0, `rustc` `E0382` | 6 | move avant l'écriture imbriquée ; `a = [a[1], a[0]]` dans un bloc ; écriture dans une boucle ; deux écritures ; écriture dans les deux branches ; move, écriture, moves |
+| `check` exit 0, `rustc` `E0508` | 5 | la forme de §28.4 ; ré-initialisation de deux éléments puis emprunt du tableau ; ré-initialisation puis emprunt ; écriture par index non littéral dans un tableau partiellement déplacé ; ré-initialisation dans les deux branches |
+| correct | 13 | — |
+| refusé au `check` | 2 | lecture par index non littéral après un move (`E-OWN-USE-AFTER-MOVE`) ; `a.len()` sur un tableau (`E-RES-UNKNOWN`, sans rapport) |
+
+Soit **17 programmes défaillants sur 30 acceptés**. Les six premières sont plus graves que tout ce que les passes 6 à 15 avaient
+mesuré : le programme compile, s'exécute et **affiche les anciennes valeurs**
+(`a b` au lieu de `c d`). Cause unique : le déstructurage hissé avant
+l'instruction du bloc de la liaison copie les éléments *avant* l'écriture, et les
+accès situés *après* l'écriture lisent ces copies.
+
+Le vérificateur avait un défaut indépendant : `a[i] = e` (index non littéral)
+effaçait l'enregistrement de déplacement de `a[0]`, comme si l'écriture le
+restaurait à coup sûr.
+
+### 29.2 Correctif
+
+Le hissage est supprimé. Chaque accès est abaissé à l'accès par un motif Rust,
+et `rustc` suit lui-même les moves par élément (détail dans la RFC). Deux règles
+précisent ce que le modèle sait exprimer : `OWN-5.11` (ré-initialisation d'un
+élément) et `OWN-5.12` (index non littéral).
+
+### 29.3 Mesure après correctif
+
+| Verdict | Nombre |
+|---|---|
+| sortie attendue | 28 |
+| refusé au `check` (`OWN-5.11`, `OWN-5.12`, `OWN-5.1` ; un `E-RES-UNKNOWN` sans rapport) | 4 |
+| sortie fausse | 0 |
+| `check` accepte, `rustc` refuse | 0 |
+
+Seize cas rejoignent le corpus : quatorze `run-pass`
+(`run/array-move-write-*`, `run/array-move-before-nested-write`,
+`run/array-move-swap-in-block`, `run/array-move-two-writes`,
+`run/array-move-then-write-in-block`, `run/array-element-reinit-*`) et deux
+`compile-fail` (`ownership/array-element-reinit-sibling-moved-fail`,
+`ownership/array-dynamic-write-partial-fail`). Le cas de §28.4 passe.
+
+### 29.4 Ce que cette passe ne prouve pas
+
+- Le sondage est manuel et borné à un tableau de deux `String` ; les formes
+  voisines (tableaux imbriqués, champs de struct, tuples) passent par le même
+  code mais n'ont pas chacune leur campagne.
+- Les six sorties fausses n'avaient été trouvées ni par le corpus, ni par
+  l'oracle différentiel, ni par le test de puissance : le générateur ne compose
+  pas une écriture du tableau entier avec des moves répartis sur plusieurs
+  blocs. C'est une lacune de l'oracle, à combler (plan de production, étape E7).
+- « Aucune forme ouverte connue » reste une observation sur ce que le corpus et
+  ces sondages contiennent.
+
+### 29.5 Vérification E1 (2026-11-15)
+
+Mesures locales, branche `goal/production-plan-2026-11-15`, Windows 11 x64,
+`rustc 1.95.0` ; aucune n'est un `PROVED` et la CI des trois OS n'a pas encore
+rejoué cette passe.
+
+| Commande | Résultat |
+|---|---|
+| `cargo fmt --all -- --check` | exit 0 |
+| `cargo test --workspace --no-fail-fast` | **124 groupes, 1 740 passés / 0 échec / 8 ignorés**, exit 0 |
+| `cargo run -p ravum-conformance -- run --verify-build` | **503 cas : 502 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=222 covered=222 verified=124 implicit=98 failed=0` ; `build_verified: true` |
+| `cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast` | **3 graines × 200 programmes, 0 divergence** (la campagne nominale 3 × 2 000 reste l'étape E7) |
+| `python tools/must_audit.py` | **811 MUST / 467 mappés / 344 non mappés** ; 188/188 FeatureIds |
+
+Tests ajoutés pour verrouiller les formes voisines : sept tests unitaires dans
+`own.rs` (ré-initialisation d'un élément avec ou sans voisin déplacé, index non
+littéral, champ de struct, tuple, tableau imbriqué) et un test backend qui
+compile et exécute des chemins d'éléments sous champ de struct, champ de tuple,
+tableau imbriqué, `self` et liaison de `match`. Le corpus gagne les 16 cas
+`run/array-*` et `ownership/array-*` listés en §29.3 ; le cas de §28.4 passe.
+
+Reste hors de cette mesure : la conformance et le workspace sur Linux/macOS, la
+campagne nominale T2 (E7), la couverture 100 % et la mutation (E6), ainsi que
+l'audit externe. La passe ne prouve donc pas l'absence de formes inconnues.

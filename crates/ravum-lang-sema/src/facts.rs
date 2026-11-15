@@ -358,6 +358,11 @@ pub struct OwnFacts {
     pub use_kind: BTreeMap<NodeId, UseKind>,
     /// For every expression that is a place: binding + projections.
     pub place: BTreeMap<NodeId, OwnPlace>,
+    /// Assignment targets that re-initialise a moved place located under an
+    /// array index (`a[0] = e` after `a[0]` was moved). Rust re-initialises an
+    /// array element only by assigning the whole array, so the backend rebuilds
+    /// the array at these targets (`spec/language/ownership.md` OWN-5.4).
+    pub element_reinit: BTreeSet<NodeId>,
 }
 
 #[derive(Debug, Clone, Default)]

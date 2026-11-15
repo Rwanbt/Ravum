@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-inner-block",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned in an inner block and its elements are moved in the enclosing block. Printed the stale `a b` with no error (silent wrong output)."
+}

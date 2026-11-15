@@ -1,0 +1,6 @@
+{
+  "id": "run/array-element-reinit-in-branches",
+  "mode": "run-pass",
+  "stdout_contains": "z\na\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): a moved element is assigned again in both branches of an `if`, then the whole array is borrowed. Was check-pass / build-fail (rustc E0508)."
+}

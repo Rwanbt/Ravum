@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-conditional",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned and an element moved inside an `if` branch, another element is moved after the `if`. Printed the stale `a b` with no error (silent wrong output)."
+}
