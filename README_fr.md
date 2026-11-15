@@ -4,140 +4,57 @@
 # Ravum
 
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=for-the-badge" alt="Read in English"></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/English-2f81f7?style=for-the-badge" alt="Read in English"></a>
 </p>
 
-> **Projet de recherche et d'ingénierie — Core 1.0 DRAFT, non publié.**
-> Un compilateur Ravum expérimental existe et exécute un sous-ensemble Core 1.0
-> documenté : lexer/parser, résolution de noms, vérification de types, profils
-> d'effets, vérification d'ownership et d'emprunts, contrôles de traps, génération
-> de Rust, CLI, LSP, corpus de conformance, cibles natives Windows/Linux et
-> `wasm32-wasip1`. Il n'est **ni stable, ni audité à l'extérieur, ni
-> « production ready »**. Les ADR restent **PROPOSED**, et il n'existe aucun tag,
-> aucune release, aucune signature. Le registre canonique des gates est
-> [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](docs/roadmap/CORE-1.0-GATE-MATRIX.md).
+**Ravum** est un langage de programmation universel expérimental et un
+environnement de développement continu. Il vise à raccourcir le chemin entre une
+édition de source — humaine ou générée par une IA — et un programme vérifié et
+exécutable, grâce à l'analyse incrémentale, la compilation ciblée et une
+prévisualisation fail-closed.
 
-**Ravum** est un projet exploratoire de **langage de programmation universel** et
-d'**environnement de développement continu**. L'objectif à long terme est de
-raccourcir le temps entre une édition — humaine ou générée par une IA — et un
-livrable vérifié et exécutable, du frontend au backend, jusqu'au DSP temps réel,
-aux applications natives et aux systèmes embarqués.
+> **État du projet — Core 1.0 DRAFT.** Un compilateur et un serveur de langage
+> existent et prennent en charge un sous-ensemble documenté. Il n'existe ni
+> release stable, ni audit externe, ni revendication de maturité « production
+> ready ». Les ADR restent des propositions.
 
-Le projet explore une boucle fail-closed : une édition déclenche une analyse
-ciblée, une vérification, une compilation focalisée et une prévisualisation
-actualisée. Si une modification est incomplète ou incorrecte, la dernière version
-valide reste active. Une affirmation doit être adossée à une commande, un SHA,
-une toolchain et une plateforme ; elle n'est jamais déduite d'une démo verte.
+## Aperçu
 
-## Principes fondateurs (P0)
+Ravum s'articule autour de neuf invariants de travail : fluidité, performances,
+sécurité mémoire, vérification honnête, feedback IA natif, profils temps réel,
+universalité, sobriété des ressources et productivité de bout en bout. Ce sont
+des exigences d'ingénierie, pas des arguments marketing. L'ensemble est maintenu
+dans
+[`docs/architecture/PROJECT_INVARIANTS.md`](docs/architecture/PROJECT_INVARIANTS.md).
 
-| ID | Objectif non négociable |
-|---|---|
-| **P0-A** | **Fluidité** — feedback rapide pendant la frappe ou la génération par IA ; compilation et preview incrémentales. |
-| **P0-B** | **Performances** — natif, faible overhead, code compact, SIMD, multicœur, sans GC obligatoire. |
-| **P0-C** | **Sécurité mémoire** — ownership et emprunts, frontières `unsafe` explicites. |
-| **P0-D** | **Vérification honnête** — contrats, preuves ciblées, tests déterministes et statuts explicites. |
-| **P0-E** | **IA native** — diagnostics structurés, contre-exemples, conservation des contrats et correction automatisable. |
-| **P0-F** | **Temps réel** — profils vérifiables d'effets/ressources, notamment pour l'audio DSP et les plugins VST3/CLAP. |
-| **P0-G** | **Universalité** — web, serveur, base de données, desktop, mobile, embarqué, outils système, calcul/GPU. |
-| **P0-H** | **Sobriété** — compilateur permanent avec budgets CPU/RAM ; machine de référence initiale de 16 Go. |
-| **P0-I** | **Productivité globale** — mesurer le temps jusqu'à un **livrable vérifié**, pas seulement les microbenchmarks de compilation. |
+Le dépôt contient actuellement une implémentation expérimentale du langage
+Core 1.0 et une plateforme Rust séparée. Le langage est la cible à long terme ;
+la plateforme est une stratégie expérimentale pour appliquer les mêmes idées de
+développement continu à du code Rust existant.
 
-« Universel » ne signifie **pas** qu'on peut prouver automatiquement tout
-programme, garantir zéro bug ou crash, migrer arbitrairement toutes les
-structures en hot swap, ou garantir une échéance hard real-time sur tout OS/CPU.
-Les garanties doivent mentionner leurs hypothèses, versions, plateformes et
-frontières de confiance. Les statuts `TESTED`, `ASSUMED`, `UNKNOWN`, `PENDING`,
-`STALE`, `TIMEOUT` et `UNSUPPORTED` ne sont **jamais** présentés comme `PROVED`.
+## État
 
-## Stratégie : apprendre avant de figer
-
-**F — stratégie expérimentale :** construire une petite plateforme utilisable sur
-Rust existant : snapshots immuables, diagnostics, orchestration, patch ABI
-contrôlé et métrologie. Elle doit apporter une valeur autonome.
-
-**D — architecture cible conditionnelle :** si les expériences le justifient,
-développer la sémantique propre à Ravum, des IR vérifiables et des backends
-natifs. Le projet Rust outillé reste la baseline et une alternative légitime.
-
-La décision de construire un frontend autonome appartient au gate **M5**, sur
-résultats reproductibles : compilation incrémentale de définition, temps
-éditer→preview, coûts CPU/RAM, correction IA sur syntaxe nouvelle, garanties
-réellement imposées et coût de maintenance.
-
-## État en un coup d'œil
-
-Le **2026-11-15**, le dépôt ne conserve que deux branches : `main` et `dev`.
-Elles sont synchronisées après la fusion de la vague 3 (PR #111 à #113), et aucune
-PR de travail n'est laissée ouverte.
-
-| Domaine | État actuel |
+| Composant | État actuel |
 |---|---|
 | Langage | Sous-ensemble Core 1.0 **DRAFT** ; compilateur et CLI implémentés dans `crates/ravum-lang-*` |
-| Pipeline | `.rv` → loader/parser → résolution → type check → effets → ownership → traps → `CheckedProgram` → `emit.rs` → Rust → `rustc 1.95.0` |
-| CLI | `check`, `build`, `run`, `watch`, `test`, `fmt`, `lint`, `doc`, `cache`, `lsp`, `doctor` |
+| Outillage | `check`, `build`, `run`, `watch`, `test`, `fmt`, `lint`, `doc`, `cache`, `lsp`, `doctor` |
 | Cibles | Natives Windows/Linux ; `wasm32-wasip1` via Node.js WASI |
-| Conformance | **487 cas : 485 PASS / 1 FAIL / 1 SKIP** sur la machine de référence ; l'échec est un cas connu, volontairement rouge ; `build_verified: false` |
+| Conformance | **487 cas : 485 PASS / 1 FAIL / 1 SKIP** sur la machine de référence ; un échec connu ; `build_verified: false` |
 | Tests du workspace | **1 732 passés / 0 échec / 8 ignorés** |
-| Couverture | **91,65 % lignes / 91,32 % régions** (sema + codegen) ; **90,37 % de code produit** (1 305 non couvertes / 13 548) ; la cible S5 de 100 % n'est **pas atteinte** |
+| Couverture | **91,65 % lignes / 91,32 % régions** (sema + codegen) ; **90,37 % de code produit** (1 305 non couvertes / 13 548) ; la cible de 100 % n'est **pas atteinte** |
 | Performance | Exposant de la phase `own` **1,9803 → 0,8372** ; `check` à 50 110 lignes **602,6 ms** (debug) ; LSP p95 **19,551 ms** à 1 025 lignes et **80,283 ms** à 5 110 lignes (release, machine calme) |
-| Gates | `PASS` : T0, T3, T5, T7 — `PARTIAL` : T1, T2, T6, T8, T9, T10, T11 — `BLOCKED` : T4, T12 |
-| Release | Aucun tag, release, artefact signé, audit externe ni décision Go/No-Go |
+| Release | Aucun tag, aucune release, aucun artefact signé, aucun audit externe |
 
-> Chiffres de référence : Windows 11 x64, `rustc 1.95.0`, commit de code
-> `5fd54b8` (2026-11-14), fusionné en `400336b` dans `dev` et `20e65d2` dans
-> `main` le 2026-11-15. Le premier run CI Linux après la fusion de la vague 3 a
-> mesuré 484 PASS / 1 FAIL / 2 SKIP ; le FAIL est le même cas connu et le skip
-> supplémentaire dépend de l'environnement. Ces chiffres sont locaux et liés à
-> la CI ; ce ne sont pas des garanties portables. Voir le
-> [rapport de la vague 3](docs/reports/GOAL-WAVE-3-REPORT.md).
-
-## Ce qui fonctionne réellement
-
-- **Compiler et exécuter de vrais programmes.** Paquets `.rv` avec `ravum.toml`,
-  exemples multi-fichiers, `check`, `build`, `run`, `watch`, `test`, `fmt`,
-  `lint`, `doc`, `cache` et `doctor` exécutent le vrai pipeline. Une étape du
-  frontend encore incomplète émet un diagnostic stable et sort en erreur ; elle
-  ne rapporte jamais un faux succès. La CLI le documente explicitement.
-- **Un vrai serveur de langage.** LSP 3.17 sur stdio : diagnostics, hover,
-  définition, références, renommage, complétion, symboles et formatage. Il est
-  exercé par un test client intégré et par une vraie session VS Code via
-  l'extension `tools/vscode-ravum`.
-- **Une frontière FFI contrainte.** Seule une ABI C scalaire documentée est
-  acceptée ; `i128` et `u128` sont refusés par **le vérificateur et le backend**.
-  Les fonctions qui déroulent, `longjmp`, lèvent un signal ou terminent le
-  processus sont hors contrat (C-FFI-4). `unsafe` est confiné et audité.
-- **Un outillage de preuve reproductible.** Le runner de conformance vérifie le
-  contrat `check → build`, la suite smoke exerce les exemples, et les scripts de
-  `tools/` auditent la couverture, les résultats de mutation, les codes de
-  registre, la traçabilité des features (`188/188`), la couverture MUST
-  (`809 / 465 / 344`) et `unsafe`.
-- **La ligne plateforme Rust.** Les crates `ravum-*` séparées fournissent la
-  plateforme expérimentale pour du code Rust : analyse incrémentale, daemon
-  persistant, publication Git transactionnelle, ABI de hot patch, traitement DSP
-  par blocs et application de référence full-stack `ravum-todo`. MVP-0a/0b/0c
-  sont intégrés ; MVP-0d est partiel.
-
-## Cas de conformance rouge connu
-
-> **Le gate de conformance n'est pas vert, et c'est délibéré.**
->
-> `conformance/cases/run/power-array-move-write-region-nested` enregistre une
-> vraie divergence `check → build`. `check` sort à 0 ; `build` sort à 1 avec
-> `error[E0508]: cannot move out of type [String; 2]`. Le cas reste rouge
-> jusqu'au correctif du planificateur de moves de tableau. C'est un
-> **résultat**, pas un incident de gate, et il n'est ni ignoré ni supprimé.
->
-> Sur l'arbre de la fusion de la vague 3 (`400336b`), le check requis `mvp`, la
-> couverture, les contrats de gate, la documentation et VS Code passent. Les
-> jobs de conformance Linux, Windows et macOS échouent sur ce seul cas, et
-> `Qualification evidence` échoue par conséquence. Aucune assertion, aucun cas
-> de test ni aucun seuil n'a été affaibli pour obtenir du vert.
+> Environnement de référence : Windows 11 x64, `rustc 1.95.0`, commit de code
+> `5fd54b8` (2026-11-14). Ces chiffres sont liés aux commandes et au SHA cités ;
+> ce ne sont pas des garanties portables. Ces chiffres se reproduisent avec les
+> commandes de la section [Développement](#développement) ; le protocole détaillé
+> est dans le [rapport de qualification](docs/reports/GOAL-WAVE-3-REPORT.md).
 
 ## Démarrage rapide
 
 Prérequis : Rust `1.95.0` (épinglé par `rust-toolchain.toml`), `rustc` sur le
-`PATH`, et Node.js uniquement pour la cible WASI ou les harnais VS Code/navigateur.
+`PATH`, et Node.js uniquement pour la cible WASI ou les harnais éditeur/navigateur.
 
 ```bash
 cargo build -p ravum-lang-cli --bin ravum-lang
@@ -145,45 +62,170 @@ cargo build -p ravum-lang-cli --bin ravum-lang
 ./target/debug/ravum-lang run examples/hello
 ```
 
-Sous Windows, le binaire est `target\debug\ravum-lang.exe`.
+Sous Windows, le binaire est `target\debug\ravum-lang.exe`. Une exécution
+réussie affiche `hello, ravum`.
 
-Autres commandes utiles :
+## Outillage
 
-```bash
-./target/debug/ravum-lang check examples/calculator
-./target/debug/ravum-lang test examples/tests-demo
-./target/debug/ravum-lang lsp
+### Pipeline du compilateur
 
-cargo test --workspace --all-targets -- --test-threads=2
-cargo run -p ravum-conformance -- run --verify-build
+```text
+.rv → loader/parser → résolution de noms → vérification de types → effets
+    → ownership et emprunts → contrôles de traps → CheckedProgram
+    → emit.rs → Rust → rustc 1.95.0
 ```
 
-La commande de conformance sort à 1 tant que le cas rouge connu existe : le
-résultat de référence est 487 cas, 485 PASS / 1 FAIL / 1 SKIP, avec
-`build_verified: false`. Le FAIL est attendu et documenté ci-dessus.
+Le compilateur émet du Rust et délègue la génération d'objets à `rustc`. Il n'y a
+ni interpréteur caché ni repli qui rapporte un succès lorsqu'une étape est
+indisponible.
+
+### Interface en ligne de commande
+
+```text
+ravum-lang init <dir> [--lib] [--force]
+ravum-lang check [PATH] [--json] [--profile core|pure|rt] [--rt-entry FN]
+ravum-lang build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE]
+ravum-lang run   [PATH] [--target TRIPLE] [-- ARGS...]
+ravum-lang watch [PATH] [--run] [--release]
+ravum-lang test  [PATH] [--filter TEXT] [--json]
+ravum-lang fmt   [PATH] [--check]
+ravum-lang lint  [PATH] [--deny CODE]...
+ravum-lang doc   [PATH] [--out DIR]
+ravum-lang cache status|clean [PATH]
+ravum-lang lsp
+ravum-lang doctor [--json]
+```
+
+Les chemins sont relatifs au répertoire courant par défaut. Un répertoire doit
+contenir `ravum.toml` ; un fichier `.rv` seul est vérifié comme programme
+autonome. Une sortie JSON versionnée est disponible pour `check`, `test` et
+`doctor`.
+
+### Serveur de langage
+
+`ravum-lang lsp` implémente LSP 3.17 sur stdio : diagnostics, hover, définition,
+références, renommage, complétion, symboles de document et formatage. Le client
+est couvert par des tests d'intégration et par l'extension VS Code
+[`tools/vscode-ravum`](tools/vscode-ravum).
+
+### Cibles et FFI
+
+Les binaires natifs sont la cible par défaut ; les builds `wasm32-wasip1`
+s'exécutent via Node.js WASI. La FFI C est volontairement réduite : seule une ABI
+scalaire documentée est acceptée. `i128` et `u128` sont refusés par le
+vérificateur et par le backend. Les fonctions qui déroulent, appellent
+`longjmp`, lèvent un signal ou terminent le processus sont hors contrat et
+restent de la responsabilité de l'appelant.
+
+## Échec de conformance connu
+
+`conformance/cases/run/power-array-move-write-region-nested` échoue actuellement.
+`check` accepte le programme, mais `build` émet `a[0]`/`a[1]` sans abaisser le
+move et `rustc` rejette le résultat avec `error[E0508]: cannot move out of type
+[String; 2]`. C'est une vraie divergence `check → build` dans la planification
+des moves de tableau.
+
+Le cas fait partie du corpus de régression et n'est pas ignoré. En conséquence,
+la commande de conformance sort à 1 et rapporte `build_verified: false` ; les
+jobs CI de conformance Linux, Windows et macOS rapportent le même échec. Le check
+requis `mvp` couvre la compilation du workspace, les tests et les démos ; les jobs
+de conformance sont un signal séparé. Ne désactivez pas ce cas pour faire passer
+la CI : un correctif doit modifier le compilateur, pas le test.
+
+## Limites actuelles
+
+- **Couverture.** Le code produit est à 90,37 % contre un objectif de 100 % ;
+  1 305 lignes restent non couvertes.
+- **Aucune garantie de release.** Il n'existe ni contrat stable pour la CLI, le
+  JSON ou le LSP, ni artefact signé, ni audit externe, ni décision Go/No-Go.
+- **Vérification bornée.** Le ledger de preuves couvre des domaines finis
+  explicitement énumérés ; il n'existe ni moteur de preuve Ravum général ni
+  `PROVED` général.
+- **Capacités runtime partielles.** Il n'y a ni hot reload préservant l'état ni
+  ABI de patch stable. MVP-0d (incrémentalité et collaboration) est partiel.
+- **Couverture du test de puissance partielle.** La campagne T2 a exercé 9 des
+  13 formes historiques ; 4 formes inverses n'ont pas été exécutées.
+- **Performances liées à la machine.** Les temps publiés proviennent d'une seule
+  machine de référence Windows. Aucune garantie hard real-time n'est revendiquée.
 
 ## Organisation du dépôt
 
 | Chemin | Contenu |
 |---|---|
 | `crates/ravum-lang-*` | Compilateur Core 1.0 : syntaxe, analyse sémantique, effets, ownership, codegen, LSP et CLI |
-| `crates/ravum-*` | Ligne plateforme Rust : daemon, coordinateur, patch host, snapshots, harnais DSP, ledger de preuves, cœur full-stack |
-| `conformance/` | Cas `.rv` positifs et négatifs, dont la divergence volontairement rouge |
+| `crates/ravum-*` | Plateforme Rust : daemon, coordinateur, patch host, snapshots, harnais DSP, ledger de preuves, cœur full-stack |
+| `conformance/` | Cas `.rv` positifs et négatifs, dont le cas actuellement en échec |
 | `spec/language/` | Core 1.0 DRAFT normatif : grammaire, ABI, features, core machine |
 | `tools/` | Gates de couverture, mutation, registre, MUST, timings et evidence |
-| `docs/` | Décisions, matrice des gates, production readiness, RFC, architecture, rapports de qualification |
+| `docs/` | Architecture, matrice des gates, production readiness, RFC, rapports de qualification |
 | `examples/` | Programmes et paquets `.rv` compilables |
 | `scripts/` | Scripts smoke, démo, timings et evidence |
-| `apps/ravum-todo` | Application de référence full-stack utilisée par MVP-0a/0b/0c |
+| `apps/ravum-todo` | Application de référence full-stack utilisée par la plateforme Rust |
 | `.github/workflows/` | CI Linux/macOS, MVP, couverture, performance, reproductibilité, VS Code et conformance |
 
-## Gates, readiness et preuves
+## Architecture
 
-La matrice des gates est la source unique pour T0–T12. Le document de production
-readiness suit R1–R14 par rapport à la cible D2 (« production ready »). Un `PASS`
-n'est jamais écrit sans commande exécutée, SHA et contexte reproductible ; `SKIP`
-et `NOT_RUN` ne sont jamais convertis en `PASS`, et aucun `PROVED` général
-n'existe.
+Ravum comporte deux lignes d'implémentation séparées :
+
+- **Langage Core 1.0** (`crates/ravum-lang-*`) : parser, résolveur, vérificateur
+  de types, profils d'effets, analyse d'ownership, contrôles de traps, génération
+  de Rust, CLI et LSP. C'est le chemin vers un outillage Ravum natif.
+- **Plateforme Rust** (`crates/ravum-*`) : snapshots, analyse incrémentale,
+  daemon persistant, publication Git transactionnelle, ABI de patch et traitement
+  DSP par blocs pour du code Rust. Elle a une valeur autonome et sert de baseline
+  au travail sur le langage.
+
+La plateforme est la stratégie expérimentale **F**. Un backend Ravum natif est la
+cible conditionnelle **D** ; la décision appartient au gate M5 et dépend de
+mesures reproductibles du temps éditer→preview, de l'usage des ressources, des
+garanties réellement imposées et du coût de maintenance.
+
+## Développement
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-targets -- --test-threads=2
+cargo run -p ravum-conformance -- run --verify-build
+```
+
+La commande de conformance sort actuellement à 1 à cause du cas connu ci-dessus.
+Cet échec est attendu et visible en CI ; il n'est pas masqué. Des vérifications
+ciblées sont aussi disponibles par crate, par exemple :
+
+```bash
+cargo test -p ravum-lang-sema
+cargo test -p ravum-lang-codegen
+```
+
+Le job CI `mvp` construit le workspace, exécute la suite de tests, les démos
+M1–M4 et la suite E2E navigateur. Le job de conformance exécute le corpus
+`check → build`.
+
+## Contribution
+
+Le développement suit un workflow de branches courtes :
+
+1. Créer une branche depuis `dev`.
+2. Garder le changement ciblé et ajouter des tests pour le nouveau comportement
+   et les refus.
+3. Exécuter le formatage, les tests pertinents et, le cas échéant, le corpus de
+   conformance.
+4. Ouvrir une pull request vers `dev`. Le check requis `mvp` doit passer.
+
+`main` est la branche par défaut et la référence documentaire. `dev` est la
+branche d'intégration. Les branches durables sont `main` et `dev` ; les branches
+de travail sont supprimées après fusion.
+
+Les tests, cas de conformance, assertions et seuils font partie du contrat. Ne
+les supprimez pas, ne les ignorez pas et ne les affaiblissez pas pour obtenir du
+vert. Rapportez les échecs avec la commande, le SHA, la toolchain et la plateforme
+qui les ont produits. Les contributions automatisées sont bienvenues selon les
+mêmes règles de revue.
+
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour le processus complet et
+[AGENTS.md](AGENTS.md) pour les règles applicables aux agents IA.
+
+## Gates de qualité
 
 | Statut | Gates |
 |---|---|
@@ -191,76 +233,32 @@ n'existe.
 | `PARTIAL` | T1, T2, T6, T8, T9, T10, T11 |
 | `BLOCKED` | T4 (audit externe), T12 (Go/No-Go) |
 
-La vague 3 n'a changé aucun verdict de gate. R2 est `PARTIAL` car la divergence
-ci-dessus est un cas ouvert connu ; R4 et R13 sont `BLOCKED` par l'audit externe ;
-R12 est `DIFFÉRÉ` par la décision sur la clé de signature ; les autres critères
-sont `PARTIAL` ou `TESTED`.
-
-Preuves principales :
-
-- [Matrice des gates T0–T12](docs/roadmap/CORE-1.0-GATE-MATRIX.md)
-- [Production readiness R1–R14](docs/roadmap/PRODUCTION-READINESS.md)
-- [Rapport et chiffres de la vague 3](docs/reports/GOAL-WAVE-3-REPORT.md)
-- [Décisions du responsable du 2026-11-14](docs/decision/DECISIONS-2026-11-14.md)
-- [Décisions humaines encore requises](docs/reports/HUMAN-DECISIONS-REQUIRED.md)
-- [Résultats du test de puissance T2](docs/qualification/T2-FINDINGS.md)
-- [Qualification LSP](docs/qualification/LSP.md)
-- [Objectif de couverture et écarts](docs/qualification/COVERAGE-100-OBJECTIVE.md)
+Les critères R1–R14 sont suivis séparément. R4 et R13 sont bloqués par l'audit
+externe, R12 est différé, et les autres critères sont `PARTIAL` ou `TESTED`.
+Aucun gate n'est promu sans commande, SHA et contexte enregistré. Le registre
+canonique est la [matrice des gates](docs/roadmap/CORE-1.0-GATE-MATRIX.md) ; le
+plan d'écart est [production readiness](docs/roadmap/PRODUCTION-READINESS.md).
 
 ## Feuille de route
 
-| Piste | Maintenant | Prochaine décision ou preuve |
-|---|---|---|
-| Langage Core 1.0 | Compilateur DRAFT, LSP, conformance et backend Rust dans `main`/`dev` | Fermer T4 (audit indépendant) et T12 (Go/No-Go) ; corriger la divergence connue des moves de tableau |
-| Ligne plateforme Rust | MVP-0a/0b/0c intégrés ; MVP-0d partiel | Corpus de projets externes pour MVP-0d ; migration d'état et ABI de patch formelle pour le DSP |
-| Qualité | Couverture 90,37 % du code produit ; campagne de mutation partielle | Ratifier ou rejeter les 14 exemptions de couverture ; terminer la campagne de mutation `emit.rs` |
-| Confiance | Compilations reproductibles sur deux runners ; contrat d'installateur Linux | Artefacts signés (D9) ; audit externe (D4) |
+| Piste | Prochain jalon |
+|---|---|
+| Langage Core 1.0 | Corriger la divergence des moves de tableau ; fermer T4 (audit externe) et T12 (Go/No-Go) |
+| Plateforme Rust | Terminer le corpus externe MVP-0d ; ajouter la migration d'état et une ABI de patch stable pour le DSP |
+| Qualité | Remonter la couverture produit vers 100 % ; terminer la campagne de mutation `emit.rs` |
+| Distribution | Produire des artefacts signés et vérifier la provenance (R12) |
 
-Aucune date de livraison n'est promise. La cible du langage est un sous-ensemble
-Core 1.0 documenté et fail-closed — pas une affirmation que des programmes
-arbitraires sont sûrs ou vérifiés.
-
-## En attente de décisions humaines
-
-Décisions ouvertes : **D2** (ratifier le socle normatif et RFC-D2), **D4** (audit
-indépendant), **D9** (clé de signature), **T12** (Go/No-Go),
-**D-2026-11-14-6** et **D-2026-11-14-7**.
-
-La vague 3 laisse aussi ces décisions : garder le cas rouge connu dans le gate ou
-le tenir hors gate jusqu'au correctif ; ratifier ou rejeter les 14 exemptions de
-couverture (140 lignes) ; autoriser une extension du schéma `OwnFacts` pour les
-cinq familles bloquées ; décider la campagne complète de mutation `emit.rs` en
-CI ; décider la capacité du runner LSP ; mettre à jour les documents aux chiffres
-périmés. La dette MUST préexistante est de 344 énoncés non mappés (deux lignes contenant
-un `|` non échappé subsistent dans la spec).
-
-## Branches et contributions
-
-- **`main`** est la branche par défaut et la référence documentaire, pas une
-  affirmation de maturité. **`dev`** est la branche d'intégration. Le travail part
-  de `dev`, passe par une PR vers `dev`, et les branches courtes sont supprimées
-  après fusion.
-- `mvp` est un check requis sur les deux branches. Les force pushes et la
-  suppression de branches sont désactivés sur `main` et `dev`.
-- Ne supprimez, n'ignorez ni n'affaiblissez jamais des tests, cas de conformance,
-  assertions ou seuils pour obtenir du vert. Rapporter les échecs honnêtement.
-- Les propositions d'IA sont bienvenues, mais aucun agent n'accepte un ADR, ne
-  modifie un contrat normatif ou n'affaiblit un gate sans décision humaine
-  explicite.
-- Voir [CONTRIBUTING.md](CONTRIBUTING.md) et [AGENTS.md](AGENTS.md).
+Aucune date de livraison n'est promise. La cible est un sous-ensemble Core 1.0
+documenté et fail-closed, pas une affirmation que des programmes arbitraires sont
+sûrs ou vérifiés.
 
 ## Documentation
 
-Les pages de statut sont datées. En cas de chiffre dupliqué, la matrice des gates
-et le rapport de la vague 3 prévalent sur les pages de statut plus anciennes.
-
 - [Démarrage avec Core 1.0 DRAFT](docs/guide/GETTING-STARTED.md)
-- [Statut architectural — deux lignes séparées](docs/architecture/STATUS.md)
+- [Invariants du projet](docs/architecture/PROJECT_INVARIANTS.md)
 - [Matrice des gates Core 1.0](docs/roadmap/CORE-1.0-GATE-MATRIX.md)
 - [Production readiness et plan d'écart](docs/roadmap/PRODUCTION-READINESS.md)
-- [Rapport de campagne de la vague 3](docs/reports/GOAL-WAVE-3-REPORT.md)
-- [Décisions du responsable du 2026-11-14](docs/decision/DECISIONS-2026-11-14.md)
-- [Décisions humaines requises](docs/reports/HUMAN-DECISIONS-REQUIRED.md)
+- [Dernier rapport de qualification](docs/reports/GOAL-WAVE-3-REPORT.md)
 - [Index des RFC](docs/rfc/README.md)
 - [Registre des ADR originaux](docs/adr/README.md) — tous proposés
 - [Intégration MVP-0a/0b/0c](docs/mvp/INTEGRATION-0abc.md)
