@@ -1098,3 +1098,86 @@ fn a_session_table_that_maps_one_id_to_two_files_fails_closed() {
         "a rejected load hands no program to the checker"
     );
 }
+
+#[test]
+fn bounded_text_read_rejects_missing_directories_and_invalid_utf8() {
+    let temp = TempDir::new("bounded-read");
+    let invalid = temp.path().join("invalid.rv");
+    fs::write(&invalid, [0xff]).unwrap();
+
+    for (path, diagnostic, message) in [
+        (temp.path().join("missing.rv"), "E-IO", "does not exist"),
+        (temp.path().to_path_buf(), "E-IO", "not a regular file"),
+        (invalid, "E-UNSUPPORTED-TOKEN", "not valid UTF-8"),
+    ] {
+        let mut diags = DiagnosticBag::new();
+        assert_eq!(read_text_limited(&path, 32, "E-IO", &mut diags), None);
+        assert_eq!(codes(&diags), [diagnostic]);
+        assert!(diags.iter().any(|diag| diag.message.contains(message)));
+    }
+}
+
+#[test]
+fn atomic_write_cleans_its_temporary_file_when_rename_fails() {
+    let temp = TempDir::new("atomic-rename");
+    let destination = temp.path().join("ravum.lock");
+    fs::create_dir(&destination).unwrap();
+    fs::write(destination.join("sentinel"), b"preserved").unwrap();
+
+    assert!(atomic_write(&destination, b"replacement").is_err());
+    assert_eq!(
+        fs::read(destination.join("sentinel")).unwrap(),
+        b"preserved"
+    );
+    let entries = fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(entries, [destination]);
+}
+
+#[cfg(unix)]
+#[test]
+fn path_guards_report_inspection_errors_beneath_regular_files() {
+    let temp = TempDir::new("path-guard-io");
+    let file = temp.file("regular.rv", "fn main() {}");
+    let target = file.join("child.rv");
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(read_text_limited(&target, 32, "E-IO", &mut diags), None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+    assert!(diags
+        .iter()
+        .any(|diag| diag.message.contains("cannot inspect")));
+
+    let mut diags = DiagnosticBag::new();
+    assert!(!check_lexical_no_symlinks(temp.path(), &target, &mut diags));
+    assert_eq!(codes(&diags), ["E-IO"]);
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(
+        check_path_no_symlinks(temp.path(), &target, &mut diags),
+        None
+    );
+    assert_eq!(codes(&diags), ["E-IO"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn path_guards_refuse_symlink_components_even_inside_the_base() {
+    let temp = TempDir::new("path-guard-link");
+    let source = temp.file("actual/main.rv", "fn main() {}");
+    let link = temp.path().join("alias");
+    std::os::unix::fs::symlink(source.parent().unwrap(), &link).unwrap();
+    let target = link.join("main.rv");
+
+    let mut diags = DiagnosticBag::new();
+    assert!(!check_lexical_no_symlinks(temp.path(), &target, &mut diags));
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(
+        check_path_no_symlinks(temp.path(), &target, &mut diags),
+        None
+    );
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+}

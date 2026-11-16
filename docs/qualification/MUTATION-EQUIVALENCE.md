@@ -639,3 +639,27 @@ publié est le décompte des artefacts : **32/32 tués sur les 32 testés**, plu
 n'est prouvé sur `emit.rs` au-delà des 32 mutants testés sur 36 (les 4 non
 testés sont les équivalents de formatage E7.1/E7.2), ni sur les autres crates. Les survivants sont triés, pas éliminés ; les classes E1-E6 sont
 des revues, pas des preuves.
+
+## 14. E6 — Campagne complète du module `emit`
+
+La [campagne GitHub Actions](https://github.com/Rwanbt/Ravum/actions/runs/43780206534)
+a exécuté les douze lots sur Linux avec Rust 1.95.0 et cargo-mutants 27.1.0.
+La tête de PR est `a97b5b833746a896f8d8cb2a1896786cbb3f131d`. Le journal de
+checkout du lot 0 identifie l'arbre testé par le commit de fusion temporaire
+`eb21125fd6d44d5b3cce1bffe2edfcef90ef4d2d`.
+Chaque job a comparé son inventaire avec les résultats de
+`cargo mutants --no-shuffle --sharding round-robin --shard <lot>/12 --jobs 2
+--test-package ravum-lang-codegen`, limité aux sources de production sous
+`crates/ravum-lang-codegen/src/emit/`.
+
+Les lignes `Emit shard complete` des journaux totalisent **650 mutants**
+dont **436 détectés**, **198 survivants**, **16 non viables** et **0 timeout**.
+Le score parmi les mutants viables exécutés est **436/634 (68,77 %)**.
+Les survivants restent à examiner individuellement avant de conclure à la
+présence d'une lacune ou à l'équivalence. Les rapports de chaque lot sont
+disponibles dans les artefacts du run.
+
+Le [rapport CI de couverture](https://github.com/Rwanbt/Ravum/actions/runs/43780206540)
+sur la même tête donne **91,48 % des lignes du code produit** et **1 135 lignes
+découvertes** avec `tools/coverage_product_split.py`. Le ratchet passe et
+l'objectif E6 de couverture reste ouvert.
