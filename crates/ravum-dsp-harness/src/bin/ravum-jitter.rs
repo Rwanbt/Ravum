@@ -56,14 +56,15 @@ fn stats(mut values: Vec<u64>) -> serde_json::Value {
     })
 }
 
+#[cfg(windows)]
 struct TimerGuard {
     active: bool,
     period_ms: u32,
 }
 
+#[cfg(windows)]
 impl Drop for TimerGuard {
     fn drop(&mut self) {
-        #[cfg(windows)]
         if self.active {
             // SAFETY: matches the timeBeginPeriod call below.
             unsafe {
@@ -80,18 +81,13 @@ fn main() {
     let timer_period_ms = arg_u64(&args, "--timer-period-ms", 1).clamp(1, 16) as u32;
 
     #[cfg(windows)]
-    let timer = {
+    let _timer = {
         // SAFETY: documented Win32 multimedia timer call, released by TimerGuard.
         let rc = unsafe { timeBeginPeriod(timer_period_ms) };
         TimerGuard {
             active: rc == 0,
             period_ms: timer_period_ms,
         }
-    };
-    #[cfg(not(windows))]
-    let timer = TimerGuard {
-        active: false,
-        period_ms: timer_period_ms,
     };
 
     // Warm up the scheduler path before measuring.
@@ -144,7 +140,6 @@ fn main() {
             "this is not a hard real-time qualification"
         ],
     });
-    let _ = timer;
     println!(
         "{}",
         serde_json::to_string_pretty(&payload).unwrap_or_default()
