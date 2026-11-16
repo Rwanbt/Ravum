@@ -1360,3 +1360,111 @@ fn dependency_graph_refuses_a_directory_as_a_library_source() {
         diag.code == "E-MOD-DEPENDENCY" && diag.message.contains("is not a regular file")
     }));
 }
+
+#[test]
+fn package_supports_module_directory_without_a_sibling_file() {
+    let temp = TempDir::new("module-directory");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/main.rv", "mod util; fn main() {}");
+    temp.file("src/util/mod.rv", "pub fn helper() -> i32 { 1 }");
+
+    let loaded = load_package(temp.path());
+    assert!(!loaded.diags.has_errors(), "{:?}", loaded.diags);
+    let program = loaded.program.unwrap();
+    assert!(program.root.items.iter().any(|item| {
+        matches!(&item.kind, ItemKind::Mod(module)
+            if module.name.as_ref().is_some_and(|name| name.name == "util"))
+    }));
+    assert!(loaded
+        .loaded_files
+        .iter()
+        .any(|path| path == "src/util/mod.rv"));
+}
+
+#[test]
+fn package_refuses_a_directory_as_a_library_root() {
+    let temp = TempDir::new("directory-library-root");
+    temp.file("ravum.toml", &manifest("app", ""));
+    fs::create_dir_all(temp.path().join("src/lib.rv")).unwrap();
+
+    let loaded = load_package(temp.path());
+    assert!(loaded.program.is_none());
+    assert!(loaded
+        .diags
+        .iter()
+        .any(|diag| { diag.code == "E-IO" && diag.message.contains("is not a regular file") }));
+}
+
+#[cfg(unix)]
+#[test]
+fn module_discovery_reports_inspection_errors_for_both_source_layouts() {
+    for (source, obstruction, expected_path) in [
+        (
+            "mod outer { mod leaf; } fn main() {}",
+            "src/outer",
+            "outer/leaf.rv",
+        ),
+        ("mod leaf; fn main() {}", "src/leaf", "leaf/mod.rv"),
+    ] {
+        let temp = TempDir::new("module-inspection");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file("src/main.rv", source);
+        temp.file(obstruction, "regular file blocking a directory path");
+
+        let loaded = load_package(temp.path());
+        assert!(loaded.program.is_none());
+        assert!(loaded.diags.iter().any(|diag| {
+            diag.code == "E-IO"
+                && diag.message.contains("cannot inspect")
+                && diag.message.contains(expected_path)
+        }));
+    }
+}
+
+#[test]
+fn source_loaders_report_disappearing_inputs_at_canonicalization() {
+    let temp = TempDir::new("disappeared-input");
+    let missing = temp.path().join("missing.rv");
+    let options = LoadOptions::default();
+    let mut cache = ParseCache::default();
+    for loaded in [
+        load_single_file(&missing, &options, &mut cache),
+        load_package_dir(&missing, &options, &mut cache),
+    ] {
+        assert!(loaded.program.is_none());
+        assert_eq!(codes(&loaded.diags), ["E-IO"]);
+        assert!(loaded
+            .diags
+            .iter()
+            .any(|diag| diag.message.contains("cannot canonicalize")));
+    }
+}
+
+#[test]
+fn registering_a_source_twice_preserves_its_original_identity_and_text() {
+    let temp = TempDir::new("source-registration");
+    let path = temp.path().join("test.rv");
+    let mut sources = SourceMap::new();
+    let mut ids = BTreeMap::new();
+    let mut next = 0;
+    let mut diags = DiagnosticBag::new();
+    let mut register = |display: &str, text: &str| {
+        register_source(
+            &mut sources,
+            &mut ids,
+            &mut next,
+            &path,
+            display.to_string(),
+            text.to_string(),
+            &mut diags,
+        )
+    };
+
+    let id = register("test.rv", "original").unwrap();
+    assert_eq!(register("test.rv", "replacement"), Some(id));
+    assert_eq!(register("different.rv", "unrelated"), None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+    assert_eq!(sources.file(id).unwrap().text, "original");
+}
+
+mod filesystem_contracts;

@@ -2667,3 +2667,45 @@ fn f(x: i32) -> i32 {
         "E-TYP-MISMATCH",
     );
 }
+
+#[test]
+fn nested_generic_enum_payloads_must_cover_each_boolean_in_a_product() {
+    let source = r#"
+enum Choice<T> { Tuple(T), Named { value: T }, Empty }
+fn choose(input: (Option<Choice<bool>>, bool)) -> i32 {
+    match input {
+        (Some(Choice::Tuple(true)), _) => 1,
+        (Some(Choice::Tuple(false)), _) => 2,
+        (Some(Choice::Named { value: true }), _) => 3,
+        (Some(Choice::Named { value: false }), _) => 4,
+        (Some(Choice::Empty), _) => 5,
+        (Option::None, true) => 6,
+        (Option::None, false) => 7,
+    }
+}
+"#;
+    accept(source);
+    let incomplete = source.replace(
+        "        (Some(Choice::Named { value: false }), _) => 4,\n",
+        "",
+    );
+    expect_code(&incomplete, "E-TYP-NONEXHAUSTIVE");
+}
+
+#[test]
+fn result_payloads_in_product_patterns_must_cover_each_inner_variant() {
+    let source = r#"
+fn choose(input: (Result<Option<bool>, bool>, bool)) -> i32 {
+    match input {
+        (Ok(Some(true)), _) => 1,
+        (Ok(Some(false)), _) => 2,
+        (Ok(Option::None), _) => 3,
+        (Err(true), _) => 4,
+        (Err(false), _) => 5,
+    }
+}
+"#;
+    accept(source);
+    let incomplete = source.replace("        (Err(false), _) => 5,\n", "");
+    expect_code(&incomplete, "E-TYP-NONEXHAUSTIVE");
+}
