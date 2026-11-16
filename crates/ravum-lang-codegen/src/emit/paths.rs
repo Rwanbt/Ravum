@@ -234,6 +234,24 @@ pub(super) fn collect_module_exprs<'a>(
     }
 }
 
+/// Collect the body of every function of a module (step-B path cross-check).
+pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>) {
+    for item in &module.items {
+        match &item.kind {
+            ItemKind::Fn(function) => out.push(&function.body),
+            ItemKind::Impl(implementation) => {
+                for member in &implementation.items {
+                    if let ItemKind::Fn(function) = &member.kind {
+                        out.push(&function.body);
+                    }
+                }
+            }
+            ItemKind::Mod(inner) => collect_fn_bodies(inner, out),
+            _ => {}
+        }
+    }
+}
+
 pub(super) fn collect_block_exprs<'a>(
     block: &'a Block,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -349,23 +367,12 @@ pub(super) fn collect_expr<'a>(
     }
 }
 
-/// True when a `let` pattern consumes its initializer by value.
-pub(super) fn pattern_consumes_value(pat: &Pat) -> bool {
-    match &pat.kind {
-        // Binding by value moves (or drops, for `_`) the initializer.
-        PatKind::Binding { .. } | PatKind::Wild => true,
-        // A tuple/variant pattern destructures the initializer.
-        PatKind::Tuple(_) | PatKind::Variant { .. } => true,
-        // Literal and constant patterns only compare the value.
-        PatKind::Lit(_) | PatKind::Path(_) => false,
-    }
-}
-
-/// An array place: a local binding, identified by its declaration, and the
-/// field/tuple projections that lead to the array (`a`, `h.items`, `t.0`).
+/// An array place: a local binding, identified by the identity the checker
+/// gave it (`OwnFacts::binding_identity`), and the field/tuple projections that
+/// lead to the array (`a`, `h.items`, `t.0`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ArrayPlace {
-    binding: Span,
+    binding: BindingId,
     lead: Vec<String>,
 }
 
@@ -392,11 +399,17 @@ pub(super) struct PathAccess {
     constant: bool,
 }
 
-/// Syntactic walk of one function body that classifies its element paths.
+/// Walk of one function body that classifies its element paths. The walk only
+/// *finds* the paths: whether a path is moved out of, and which binding it is
+/// rooted at, are the checker's decisions, read from `OwnFacts`
+/// (RFC-OWN-FACTS-2).
 pub(super) struct PathPlanner<'e, 'a> {
     emitter: &'e Emitter<'a>,
     accesses: Vec<PathAccess>,
     reinits: Vec<NodeId>,
+    /// Step-B guard (debug builds): decisions this walk derives from the syntax
+    /// that the checker's facts do not confirm.
+    disagreements: Vec<String>,
 }
 
 impl<'e, 'a> PathPlanner<'e, 'a> {
@@ -405,30 +418,72 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
             emitter,
             accesses: Vec::new(),
             reinits: Vec::new(),
+            disagreements: Vec::new(),
         }
     }
 
-    fn walk_block(&mut self, block: &Block, owned_tail: bool) {
+    /// Step-B guard (debug builds): the backend lowers the path `expr` (rooted
+    /// at `root`), so the checker must have decided something about it. An
+    /// absent decision is not "not consumed": it is a missing fact.
+    ///
+    /// * a place (`a[0]`, `p.items[1]`) carries a recorded place and a binding
+    ///   identity for its root;
+    /// * a projection of a temporary (`make()[i]`) is no place, and carries the
+    ///   use the checker recorded when it took its value.
+    fn cross_check(&mut self, expr: &Expr, root: &Expr) {
+        let own = &self.emitter.facts().own;
+        let location = self.emitter.expr_location(expr);
+        if self.emitter.syntactic_place(expr).is_none() {
+            if !own.use_kind.contains_key(&expr.id) {
+                self.disagreements.push(format!(
+                    "ownership facts disagree with the backend for expression {} ({location}): \
+                     the checker recorded no decision for this projection of a temporary",
+                    expr.id
+                ));
+            }
+            return;
+        }
+        if !own.place.contains_key(&expr.id) {
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 checker recorded no decision for this place",
+                expr.id
+            ));
+        }
+        if !own.binding_identity.contains_key(&root.id) {
+            self.disagreements.push(format!(
+                "ownership facts disagree with the backend for expression {} ({location}): the \
+                 checker recorded no binding identity for the root of this place",
+                expr.id
+            ));
+        }
+    }
+
+    fn walk_block(&mut self, block: &Block) {
         for statement in &block.stmts {
             match &statement.kind {
                 StmtKind::Let(declaration) => {
                     if let Some(init) = &declaration.init {
-                        let owned = pattern_consumes_value(&declaration.pat);
-                        self.walk_expr(init, owned, false);
+                        self.walk_expr(init, false);
                     }
                 }
-                StmtKind::Expr { expr, .. } => self.walk_expr(expr, false, false),
+                StmtKind::Expr { expr, .. } => self.walk_expr(expr, false),
             }
         }
         if let Some(tail) = &block.tail {
-            self.walk_expr(tail, owned_tail, false);
+            self.walk_expr(tail, false);
         }
     }
 
     /// The array place of a path rooted at a local binding through field/tuple
     /// projections only.
     fn array_place(&self, path: &ElementPath<'_>) -> Option<ArrayPlace> {
-        let binding = self.emitter.syntactic_place(path.root)?.binding;
+        let binding = *self
+            .emitter
+            .facts()
+            .own
+            .binding_identity
+            .get(&path.root.id)?;
         let mut lead = Vec::new();
         for step in &path.steps[..path.first] {
             match step {
@@ -442,138 +497,124 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
 
     /// Record `expr` (a field, tuple-index or index expression) when it is an
     /// element path, and walk the expressions evaluated inside it.
-    fn walk_path(&mut self, expr: &Expr, owned: bool, exclusive: bool) {
+    fn walk_path(&mut self, expr: &Expr, exclusive: bool) {
         let mut steps = Vec::new();
         let root = collect_path_steps(expr, &mut steps);
         if !matches!(root.kind, ExprKind::Path(_) | ExprKind::SelfValue) {
-            self.walk_expr(root, false, false);
+            self.walk_expr(root, false);
         }
         for step in &steps {
             if let PathStep::Index { index, .. } = step {
-                self.walk_expr(index, false, false);
+                self.walk_expr(index, false);
             }
+        }
+        if cfg!(debug_assertions) {
+            self.cross_check(expr, root);
         }
         let Some(path) = self.emitter.element_path(expr) else {
             return;
         };
-        let borrowed_mutably = matches!(
-            self.emitter.facts().own.use_kind.get(&expr.id),
-            Some(UseKind::BorrowMut)
-        );
+        let own = &self.emitter.facts().own;
+        let borrowed_mutably = matches!(own.use_kind.get(&expr.id), Some(UseKind::BorrowMut));
         self.accesses.push(PathAccess {
             node: expr.id,
             place: self.array_place(&path),
-            consumed: owned && self.emitter.is_owned_position(expr),
+            // RFC-OWN-FACTS-2 step C3: the checker decided, where it evaluated
+            // this expression, whether its value is moved out.
+            consumed: own.consumed.contains(&expr.id),
             exclusive: exclusive || borrowed_mutably,
             constant: !path.slots.is_empty(),
         });
     }
 
-    /// `owned` is true when the *value* of `expr` is consumed by its parent
-    /// (returned, bound by value, moved into an aggregate, ...); `exclusive` is
-    /// true when `expr` is assigned or mutably borrowed.
-    fn walk_expr(&mut self, expr: &Expr, owned: bool, exclusive: bool) {
+    /// `exclusive` is true when `expr` is assigned or mutably borrowed.
+    fn walk_expr(&mut self, expr: &Expr, exclusive: bool) {
         match &expr.kind {
             ExprKind::Field { .. } | ExprKind::TupleIndex { .. } | ExprKind::Index { .. } => {
-                self.walk_path(expr, owned, exclusive);
+                self.walk_path(expr, exclusive);
             }
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
-                // Constructing an aggregate moves its elements.
                 for item in items {
-                    self.walk_expr(item, true, false);
+                    self.walk_expr(item, false);
                 }
             }
             ExprKind::StructLit { fields, .. } => {
                 for field in fields {
-                    self.walk_expr(&field.value, true, false);
+                    self.walk_expr(&field.value, false);
                 }
             }
             ExprKind::Call { callee, args } => {
-                self.walk_expr(callee, false, false);
-                // RFC-OWN-FACTS-1 step C (family `arguments`): the checker records
-                // on the argument expression itself whether the call takes it by
-                // value (`Move`/`Copy`) or only borrows it.
+                self.walk_expr(callee, false);
                 for arg in args {
-                    let owned = self.emitter.consumed_by_checker(arg.id);
-                    self.walk_expr(arg, owned, false);
+                    self.walk_expr(arg, false);
                 }
             }
             ExprKind::MethodCall { receiver, args, .. } => {
-                // RFC-OWN-FACTS-1 step C (family `receiver`): the checker records
-                // `Move`/`Copy` on a receiver the call takes by value (`self`, and
-                // the STD-11.3 consuming builtins) and `Borrow`/`BorrowMut` when
-                // the call only borrows it.
-                let receiver_owned = self.emitter.consumed_by_checker(receiver.id);
-                self.walk_expr(receiver, receiver_owned, false);
+                self.walk_expr(receiver, false);
                 for arg in args {
-                    let owned = self.emitter.consumed_by_checker(arg.id);
-                    self.walk_expr(arg, owned, false);
+                    self.walk_expr(arg, false);
                 }
             }
             ExprKind::Assign { target, value } => {
-                self.walk_expr(value, true, false);
-                self.walk_expr(target, false, true);
+                self.walk_expr(value, false);
+                self.walk_expr(target, true);
                 if self.emitter.facts().own.element_reinit.contains(&target.id) {
                     self.reinits.push(target.id);
                 }
             }
             ExprKind::AssignOp { target, value, .. } => {
-                self.walk_expr(value, true, false);
-                self.walk_expr(target, false, true);
+                self.walk_expr(value, false);
+                self.walk_expr(target, true);
             }
-            ExprKind::Return(Some(value)) => self.walk_expr(value, true, false),
+            ExprKind::Return(Some(value)) => self.walk_expr(value, false),
             ExprKind::If {
                 cond,
                 then_block,
                 else_branch,
             } => {
-                self.walk_expr(cond, false, false);
-                self.walk_block(then_block, owned);
+                self.walk_expr(cond, false);
+                self.walk_block(then_block);
                 if let Some(else_branch) = else_branch {
-                    self.walk_expr(else_branch, owned, false);
+                    self.walk_expr(else_branch, false);
                 }
             }
-            ExprKind::Block(block) | ExprKind::Unsafe(block) => self.walk_block(block, owned),
+            ExprKind::Block(block) | ExprKind::Unsafe(block) => self.walk_block(block),
             ExprKind::Match { scrutinee, arms } => {
-                // The checker decides whether the arms take the scrutinee by
-                // value (OWN-5.9) and records it on the scrutinee expression.
-                let scrutinee_owned = self.emitter.consumed_by_checker(scrutinee.id);
-                self.walk_expr(scrutinee, scrutinee_owned, false);
+                self.walk_expr(scrutinee, false);
                 for arm in arms {
-                    self.walk_expr(&arm.body, owned, false);
+                    self.walk_expr(&arm.body, false);
                 }
             }
             ExprKind::While { cond, body } => {
-                self.walk_expr(cond, false, false);
-                self.walk_block(body, false);
+                self.walk_expr(cond, false);
+                self.walk_block(body);
             }
-            ExprKind::Loop { body } => self.walk_block(body, false),
+            ExprKind::Loop { body } => self.walk_block(body),
             ExprKind::For { iter, body, .. } => {
-                self.walk_expr(iter, false, false);
-                self.walk_block(body, false);
+                self.walk_expr(iter, false);
+                self.walk_block(body);
             }
             ExprKind::ArrayRepeat { value, len } => {
-                // `[value; len]` copies `value`: it never moves an element out.
-                self.walk_expr(value, false, false);
-                self.walk_expr(len, false, false);
+                self.walk_expr(value, false);
+                self.walk_expr(len, false);
             }
             ExprKind::Range { start, end, .. } => {
                 if let Some(start) = start {
-                    self.walk_expr(start, false, false);
+                    self.walk_expr(start, false);
                 }
                 if let Some(end) = end {
-                    self.walk_expr(end, false, false);
+                    self.walk_expr(end, false);
                 }
             }
             ExprKind::Unary { op, expr: inner } => {
-                self.walk_expr(inner, false, matches!(op, UnOp::RefMut));
+                self.walk_expr(inner, matches!(op, UnOp::RefMut));
             }
             ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) => {
-                self.walk_expr(inner, false, false);
+                self.walk_expr(inner, false);
             }
             ExprKind::Binary { lhs, rhs, .. } => {
-                self.walk_expr(lhs, false, false);
-                self.walk_expr(rhs, false, false);
+                self.walk_expr(lhs, false);
+                self.walk_expr(rhs, false);
             }
             ExprKind::Return(None)
             | ExprKind::Break
@@ -629,8 +670,16 @@ impl<'a> Emitter<'a> {
     /// Plan the array-element paths of one function body (see [`ArrayMovePlan`]).
     pub(super) fn plan_array_moves(&self, body: &Block) -> ArrayMovePlan {
         let mut planner = PathPlanner::new(self);
-        planner.walk_block(body, true);
+        planner.walk_block(body);
         planner.plan()
+    }
+
+    /// Step-B guard: the disagreements between the syntactic walk of `body` and
+    /// the checker's facts (see [`PathPlanner::cross_check`]).
+    pub(super) fn path_fact_disagreements(&self, body: &Block) -> Vec<String> {
+        let mut planner = PathPlanner::new(self);
+        planner.walk_block(body);
+        planner.disagreements
     }
 
     pub(super) fn path_mode(&self, node: NodeId) -> Option<PathMode> {

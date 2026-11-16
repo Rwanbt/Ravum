@@ -350,8 +350,16 @@ pub struct OwnPlace {
     pub steps: Vec<Projection>,
 }
 
+/// Opaque identity of one binding (parameter, `self`, `let`, match or `for`
+/// binding), unique within a checked program (RFC-OWN-FACTS-2 step C4).
+///
+/// Two parameters of the same function have different identities, and a
+/// shadowing binding is a new identity, never a reuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BindingId(pub u32);
+
 /// Ownership decisions taken by `own.rs`, recorded for the backend
-/// (RFC-OWN-FACTS-1, step A). Nothing reads them yet.
+/// (RFC-OWN-FACTS-1 step A, extended by RFC-OWN-FACTS-2 step C).
 #[derive(Debug, Clone, Default)]
 pub struct OwnFacts {
     /// For every expression with a value use: move, copy, or borrow.
@@ -368,6 +376,34 @@ pub struct OwnFacts {
     /// instead of re-deriving copy-ness from `Type`; while the derivation still
     /// exists it is compared against this table by the step-B guard.
     pub copy_type: BTreeSet<NodeId>,
+    /// Step C2: place expressions whose *value* the checker takes (the
+    /// expression is evaluated by value, not borrowed, not assigned). A member
+    /// is either moved (`consumed`) or copied.
+    pub owned_position: BTreeSet<NodeId>,
+    /// Step C3: place expressions the checker effectively moves out of (an
+    /// owned position of a non-`Copy` type). The decision is recorded wherever
+    /// the checker evaluates the expression: direct flow, `if` branch, `match`
+    /// arm, block tail or loop body alike.
+    pub consumed: BTreeSet<NodeId>,
+    /// Step C4: the binding every local path expression (`x`, `self`) refers
+    /// to, as the checker resolved it through its scopes.
+    pub binding_identity: BTreeMap<NodeId, BindingId>,
+    /// Declaration (span, name) of every binding identity. The span alone is
+    /// not an identity: the parameters of one function share the item span.
+    pub bindings: BTreeMap<(Span, String), BindingId>,
+}
+
+impl OwnFacts {
+    /// The identity of the binding `name` declared at `decl`, created on first
+    /// use. Idempotent, so the silent fixpoint passes of a loop and its final
+    /// pass agree on the identity of the bindings declared in the body.
+    pub fn intern_binding(&mut self, decl: Span, name: &str) -> BindingId {
+        let next = BindingId(u32::try_from(self.bindings.len()).unwrap_or(u32::MAX));
+        *self
+            .bindings
+            .entry((decl, name.to_string()))
+            .or_insert(next)
+    }
 }
 
 #[derive(Debug, Clone, Default)]

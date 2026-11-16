@@ -123,6 +123,7 @@ impl<'a> OwnChecker<'a> {
     ) -> SlotId {
         let id = self.next_slot;
         self.next_slot = self.next_slot.saturating_add(1);
+        let binding = self.own.intern_binding(span, name);
         self.slots.insert(
             id,
             SlotInfo {
@@ -130,6 +131,7 @@ impl<'a> OwnChecker<'a> {
                 ty,
                 static_ref,
                 decl_span: span,
+                binding,
             },
         );
         if let Some(scope) = self.scopes.last_mut() {
@@ -198,11 +200,13 @@ impl<'a> OwnChecker<'a> {
         }
         self.push_scope();
         self.loans.clear();
+        let mut reached = 0;
         for stmt in &block.stmts {
             if self.diverged {
                 break;
             }
             self.analyze_stmt(stmt);
+            reached += 1;
         }
         if !self.diverged {
             if let Some(tail) = &block.tail {
@@ -213,9 +217,45 @@ impl<'a> OwnChecker<'a> {
                 }
                 self.loans.clear();
             }
+        } else {
+            // The rest of the block is unreachable, but the backend still emits
+            // it: its ownership decisions are recorded like any other.
+            self.analyze_dead(|checker| {
+                for stmt in &block.stmts[reached..] {
+                    checker.diverged = false;
+                    checker.analyze_stmt(stmt);
+                }
+                if let Some(tail) = &block.tail {
+                    checker.diverged = false;
+                    checker.loans.clear();
+                    checker.eval_value(tail);
+                }
+            });
         }
         self.pop_scope();
         self.leave();
+    }
+
+    /// Record the ownership decisions of unreachable code (RFC-OWN-FACTS-2).
+    ///
+    /// Code after a `return`, `break` or `continue` has no effect on the
+    /// ownership state and reports no diagnostic, but the backend lowers it like
+    /// any other code and reads the same facts. `analyze` therefore runs
+    /// silently on a scratch copy of the state, and the checker comes back
+    /// exactly as it was, still diverged.
+    pub(super) fn analyze_dead(&mut self, analyze: impl FnOnce(&mut Self)) {
+        let state = self.state.clone();
+        let loans = self.loans.clone();
+        let loop_stack = self.loop_stack.clone();
+        let emit = self.emit;
+        self.emit = false;
+        self.diverged = false;
+        analyze(self);
+        self.state = state;
+        self.loans = loans;
+        self.loop_stack = loop_stack;
+        self.emit = emit;
+        self.diverged = true;
     }
 
     pub(super) fn analyze_stmt(&mut self, stmt: &Stmt) {
@@ -347,6 +387,7 @@ impl<'a> OwnChecker<'a> {
                 } else {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
+                    self.consume_temporary(expr);
                     if base_ty.is_reference() && !self.expr_type(expr).is_error_or_copy(self.facts)
                     {
                         // Moving a field/index out of a borrowed temporary.
@@ -361,6 +402,7 @@ impl<'a> OwnChecker<'a> {
                     let base_ty = self.expr_type(base);
                     self.eval_value(base);
                     self.eval_value(index);
+                    self.consume_temporary(expr);
                     if base_ty.is_reference() {
                         if !self.expr_type(expr).is_error_or_copy(self.facts) {
                             self.report_move_borrowed(expr.span);
@@ -381,6 +423,7 @@ impl<'a> OwnChecker<'a> {
                     } else {
                         let inner_ty = self.expr_type(inner);
                         self.eval_value(inner);
+                        self.consume_temporary(expr);
                         if inner_ty.is_reference()
                             && !self.expr_type(expr).is_error_or_copy(self.facts)
                         {
@@ -545,14 +588,22 @@ impl<'a> OwnChecker<'a> {
             return None;
         }
         let result = match &expr.kind {
-            ExprKind::SelfValue => Some(Place {
-                slot: self.lookup("self")?,
-                steps: Vec::new(),
-            }),
-            ExprKind::Path(_) => self.path_local_slot(expr).map(|slot| Place {
-                slot,
-                steps: Vec::new(),
-            }),
+            ExprKind::SelfValue | ExprKind::Path(_) => {
+                let slot = match &expr.kind {
+                    ExprKind::SelfValue => self.lookup("self"),
+                    _ => self.path_local_slot(expr),
+                };
+                // RFC-OWN-FACTS-2 step C4: the scope lookup above is the only
+                // place where a path becomes a binding; publish its outcome.
+                if let Some(info) = slot.and_then(|slot| self.slot_info(slot)) {
+                    let binding = info.binding;
+                    self.own.binding_identity.insert(expr.id, binding);
+                }
+                slot.map(|slot| Place {
+                    slot,
+                    steps: Vec::new(),
+                })
+            }
             ExprKind::Field { base, name } => {
                 if let Some(mut place) = self.eval_place_expr(base) {
                     self.auto_deref(&mut place);
@@ -623,6 +674,8 @@ impl<'a> OwnChecker<'a> {
         self.diverged = cond_diverged;
         if !self.diverged {
             self.analyze_block(then_block, false);
+        } else {
+            self.analyze_dead(|checker| checker.analyze_block(then_block, false));
         }
         if !self.diverged {
             states.push(self.state.clone());
@@ -633,6 +686,8 @@ impl<'a> OwnChecker<'a> {
         if let Some(branch) = else_branch {
             if !self.diverged {
                 self.eval_value(branch);
+            } else {
+                self.analyze_dead(|checker| checker.eval_value(branch));
             }
         }
         if !self.diverged {
@@ -666,25 +721,16 @@ impl<'a> OwnChecker<'a> {
             self.state = base.clone();
             self.diverged = base_diverged;
             if self.diverged {
+                self.analyze_dead(|checker| {
+                    checker.push_scope();
+                    checker.declare_arm_bindings(arm, scrutinee);
+                    checker.eval_value(&arm.body);
+                    checker.pop_scope();
+                });
                 continue;
             }
             self.push_scope();
-            let mut bindings: Vec<PatBinding> = Vec::new();
-            self.collect_pat_bindings(&arm.pat, false, &mut bindings);
-            let mut arm_slots: Vec<SlotId> = Vec::new();
-            for b in bindings {
-                // An arm binding of type `&str` either copies the scrutinee
-                // (top-level pattern: its own provenance decides) or reads a
-                // payload out of it (nested: static by rule 2).
-                let static_ref =
-                    is_borrowed_text(&b.ty) && (b.nested || self.is_static_ref(scrutinee));
-                if b.ty.is_reference() && !static_ref {
-                    self.report_ref_escape(b.span, "stockée");
-                }
-                let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
-                arm_slots.push(slot);
-                self.state.slots.insert(slot, SlotState::initialised());
-            }
+            let arm_slots = self.declare_arm_bindings(arm, scrutinee);
             self.eval_value(&arm.body);
             if !self.diverged {
                 let mut st = self.state.clone();
@@ -706,6 +752,26 @@ impl<'a> OwnChecker<'a> {
                 self.diverged = true;
             }
         }
+    }
+
+    /// Declare the bindings of a `match` arm, initialised, in the current scope.
+    fn declare_arm_bindings(&mut self, arm: &MatchArm, scrutinee: &Expr) -> Vec<SlotId> {
+        let mut bindings: Vec<PatBinding> = Vec::new();
+        self.collect_pat_bindings(&arm.pat, false, &mut bindings);
+        let mut arm_slots: Vec<SlotId> = Vec::new();
+        for b in bindings {
+            // An arm binding of type `&str` either copies the scrutinee
+            // (top-level pattern: its own provenance decides) or reads a
+            // payload out of it (nested: static by rule 2).
+            let static_ref = is_borrowed_text(&b.ty) && (b.nested || self.is_static_ref(scrutinee));
+            if b.ty.is_reference() && !static_ref {
+                self.report_ref_escape(b.span, "stockée");
+            }
+            let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
+            arm_slots.push(slot);
+            self.state.slots.insert(slot, SlotState::initialised());
+        }
+        arm_slots
     }
 
     pub(super) fn eval_while(&mut self, cond: &Expr, body: &Block) {
@@ -753,6 +819,8 @@ impl<'a> OwnChecker<'a> {
         self.loop_stack.push(LoopCtx::default());
         if !cond_diverged {
             self.analyze_block(body, false);
+        } else {
+            self.analyze_dead(|checker| checker.analyze_block(body, false));
         }
         let ctx = self.loop_stack.pop().unwrap_or_default();
 

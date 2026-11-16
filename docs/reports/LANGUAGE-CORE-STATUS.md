@@ -71,7 +71,8 @@ machine (ou au runner CI pour Linux/Miri/mutation).
   typechecker, exhaustivité, effets transitifs et profils `core`/`pure`/`rt`,
   borrow checker conservateur (init, moves, move partiel, prêts, non-échappement,
   drop, provenance `&'static str`), faits typés (`CheckedProgram`), `OwnFacts`
-  (usages et places, RFC-OWN-FACTS-1) et gate de traps du profil `rt`
+  (usages et places, RFC-OWN-FACTS-1 ; positions possédées, consommations et
+  identités de liaison, RFC-OWN-FACTS-2) et gate de traps du profil `rt`
   (RFC-RT-TRAPS-1).
 - `crates/ravum-lang-codegen` : un fichier Rust autonome et auditable par
   programme, prélude sûr, `#![forbid(unsafe_code)]` **sans** `extern`, et

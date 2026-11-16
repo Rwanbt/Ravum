@@ -1053,3 +1053,21 @@ fn the_checker_pins_the_assertion_arities_before_codegen() {
         );
     }
 }
+
+#[test]
+fn deferred_initialization_emits_an_explicit_type_and_no_placeholder() {
+    let rust = compile_source(
+        "deferred-init",
+        r#"
+fn main() {
+    let mut count: i32;
+    count = 4;
+    io::println(count.to_string().as_str());
+}
+"#,
+    )
+    .expect("a typed local may be assigned before its first read");
+
+    assert!(rust.contains("let mut count: i32;"), "{rust}");
+    assert!(rust.contains("count = 4i32"), "{rust}");
+}

@@ -480,7 +480,8 @@ passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
 survivants triés / 9 non viables, portée ciblée). Miri et mutation locaux
 absents. `OwnFacts` : étape A livrée (faits enregistrés,
 2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
-600 programmes + 476 cas), étape C `NOT_RUN`.
+600 programmes + 476 cas) ; étape C **faite le 2026-11-15**
+(`RFC-OWN-FACTS-2` §6 : le backend ne re-dérive plus les décisions d'ownership).
 Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
 entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
 (`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste

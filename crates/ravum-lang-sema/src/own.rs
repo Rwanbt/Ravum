@@ -64,7 +64,7 @@
 //! désactivent seulement la règle correspondante).
 
 use crate::facts::{
-    CallTarget, CheckedProgram, Facts, MethodTarget, OwnFacts, OwnPlace, Projection,
+    BindingId, CallTarget, CheckedProgram, Facts, MethodTarget, OwnFacts, OwnPlace, Projection,
     ProjectionIndex, Resolution, UseKind,
 };
 use crate::types::Type;
@@ -303,6 +303,8 @@ pub(super) struct SlotInfo {
     /// or a copy of one), the only storable reference in Core 1.0.
     pub(super) static_ref: bool,
     pub(super) decl_span: Span,
+    /// Program-wide identity of the binding (RFC-OWN-FACTS-2 step C4).
+    pub(super) binding: BindingId,
 }
 
 /// One binding introduced by a pattern, with the information needed to decide
@@ -430,7 +432,7 @@ pub(super) struct OwnChecker<'a> {
 mod checker_a;
 mod checker_b;
 mod state;
-pub(crate) use state::is_copy_type;
+pub use state::is_copy_type;
 use state::*;
 
 #[cfg(test)]

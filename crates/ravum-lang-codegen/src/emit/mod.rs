@@ -32,7 +32,8 @@
 use crate::prelude::PRELUDE;
 use crate::{CodegenError, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind, VariantKind,
+    BindingId, CallTarget, CheckedProgram, ConstValue, MethodTarget, Resolution, UseKind,
+    VariantKind,
 };
 use ravum_lang_sema::types::Type;
 use ravum_lang_syntax::ast::{
@@ -237,13 +238,16 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
-    /// Step B of RFC-OWN-FACTS-1 (debug builds only): compare the backend's
-    /// copy/move classification with the checker's `OwnFacts`.
+    /// Step B of RFC-OWN-FACTS-1 (debug builds only): check that the ownership
+    /// facts the backend reads are coherent.
     ///
-    /// The emitter mirrors `sema::own::is_copy_type` in [`Emitter::is_copy_type`]
-    /// — the duplication this RFC removes. In debug builds a disagreement is an
-    /// error instead of a silently different lowering. Release builds skip the
-    /// check (it is a test/audit guard, not a semantic rule).
+    /// Since RFC-OWN-FACTS-2 step C5 the emitter has no copy/move classifier of
+    /// its own: `ravum_lang_sema::is_copy_type` is the single implementation,
+    /// and it is called here only to check that the published tables still
+    /// match the types they were computed from (a stale or hand-assembled
+    /// table). In debug builds an incoherence is an error instead of a silently
+    /// different lowering. Release builds skip the check (it is a test/audit
+    /// guard, not a semantic rule).
     fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
         if !cfg!(debug_assertions) {
             return Ok(());
@@ -252,7 +256,7 @@ impl<'a> Emitter<'a> {
             let Some(ty) = self.checked.facts.expr_types.get(id) else {
                 continue;
             };
-            let copies = self.is_copy_type(ty);
+            let copies = ravum_lang_sema::is_copy_type(ty, &self.checked.facts);
             match kind {
                 ravum_lang_sema::facts::UseKind::Copy if !copies => {
                     return Err(err(format!(
@@ -269,18 +273,24 @@ impl<'a> Emitter<'a> {
                 _ => {}
             }
         }
-        // RFC-OWN-FACTS-2 step C1: the checker now publishes copy-ness per type
-        // node. While `Emitter::is_copy_type` still exists it is compared against
-        // the table, so the two can never drift apart unnoticed; once every
-        // consumer reads the fact, the mirror is deleted (step C5).
+        // RFC-OWN-FACTS-2 step C1: copy-ness is published per type node; the
+        // table must be the one the single classifier yields for these types.
         for (id, ty) in &self.checked.facts.type_nodes {
-            let derived = self.is_copy_type(ty);
+            let derived = ravum_lang_sema::is_copy_type(ty, &self.checked.facts);
             let recorded = self.checked.facts.own.copy_type.contains(id);
             if derived != recorded {
                 return Err(err(format!(
-                    "ownership facts disagree with the backend for type {id}: the checker says \
-                     Copy={recorded}, the emitter classifies `{ty:?}` as Copy={derived}"
+                    "ownership facts disagree with the backend for type {id}: the table says \
+                     Copy={recorded}, the classifier says Copy={derived} for `{ty:?}`"
                 )));
+            }
+        }
+        self.verify_ownership_tables()?;
+        let mut bodies: Vec<&Block> = Vec::new();
+        collect_fn_bodies(&self.checked.program.root, &mut bodies);
+        for body in bodies {
+            if let Some(message) = self.path_fact_disagreements(body).into_iter().next() {
+                return Err(err(message));
             }
         }
         // Step B (extended): the recorded place must match the place the syntax
@@ -366,6 +376,90 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    /// RFC-OWN-FACTS-2 steps C2–C4: the tables the checker publishes must agree
+    /// with each other and with the resolution facts.
+    ///
+    /// * `consumed` is exactly the set of expressions whose use is a `Move`;
+    /// * `consumed` is a subset of `owned_position`, and an owned position is a
+    ///   `Move` or a `Copy`, never a borrow;
+    /// * a binding identity names the binding the path resolves to.
+    fn verify_ownership_tables(&self) -> Result<(), CodegenError> {
+        let own = &self.checked.facts.own;
+        for (id, kind) in &own.use_kind {
+            let moved = matches!(kind, UseKind::Move);
+            if moved != own.consumed.contains(id) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: use kind \
+                     {kind:?}, consumed={}",
+                    own.consumed.contains(id)
+                )));
+            }
+        }
+        for id in &own.consumed {
+            if !own.owned_position.contains(id) || !own.use_kind.contains_key(id) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: consumed \
+                     outside an owned position"
+                )));
+            }
+        }
+        for id in &own.owned_position {
+            if !matches!(
+                own.use_kind.get(id),
+                Some(UseKind::Move) | Some(UseKind::Copy)
+            ) {
+                return Err(err(format!(
+                    "ownership facts disagree with each other for expression {id}: owned \
+                     position with use kind {:?}",
+                    own.use_kind.get(id)
+                )));
+            }
+        }
+        let mut exprs: BTreeMap<NodeId, &Expr> = BTreeMap::new();
+        let mut method_receivers: BTreeSet<NodeId> = BTreeSet::new();
+        collect_module_exprs(
+            &self.checked.program.root,
+            &mut exprs,
+            &mut method_receivers,
+        );
+        let declarations: BTreeMap<_, _> = own
+            .bindings
+            .iter()
+            .map(|(declaration, id)| (*id, declaration))
+            .collect();
+        for (node, binding) in &own.binding_identity {
+            let Some(expr) = exprs.get(node) else {
+                continue;
+            };
+            let resolution = match &expr.kind {
+                ExprKind::Path(path) => self.checked.facts.resolutions.get(&path.id),
+                _ => self.checked.facts.resolutions.get(&expr.id),
+            };
+            let resolved = match resolution {
+                Some(Resolution::Local { name, decl, .. }) => Some((*decl, name.clone())),
+                Some(_) => None,
+                None => {
+                    return Err(err(format!(
+                        "missing resolution fact for expression {node} ({}): the checker \
+                         recorded a binding identity for it",
+                        self.expr_location(expr)
+                    )));
+                }
+            };
+            let recorded = declarations
+                .get(binding)
+                .map(|declaration| (**declaration).clone());
+            if resolved.is_none() || resolved != recorded {
+                return Err(err(format!(
+                    "ownership facts disagree with the resolution for expression {node} ({}): \
+                     recorded binding identity {recorded:?}, resolved binding {resolved:?}",
+                    self.expr_location(expr)
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// Place described by the syntax alone, binding identity included (step B
     /// cross-check). See `OwnPlace`.
     fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
@@ -441,26 +535,6 @@ impl<'a> Emitter<'a> {
             steps.push(ravum_lang_sema::facts::Projection::Deref);
             ty = Some(inner);
         }
-    }
-
-    /// RFC-OWN-FACTS-1 step C: does the checker take the value of `node`?
-    ///
-    /// `own.rs` records `UseKind::Move` when it moves a place, `UseKind::Copy`
-    /// when it reads a `Copy` one, and `Borrow`/`BorrowMut` when it only borrows
-    /// it. "The value is taken" is therefore exactly `Move | Copy`; the backend
-    /// reads that decision instead of re-deriving it from types or from the
-    /// method signature, and it does so in **release builds too** (this helper
-    /// is not behind `debug_assertions`: for the migrated families there is no
-    /// second decision left to compare).
-    ///
-    /// An expression the checker recorded nothing for is not a place it took a
-    /// decision on (a call result, a literal, an aggregate): it is not consumed
-    /// here, and every caller already handles that case separately.
-    fn consumed_by_checker(&self, node: NodeId) -> bool {
-        matches!(
-            self.facts().own.use_kind.get(&node),
-            Some(UseKind::Move) | Some(UseKind::Copy)
-        )
     }
 
     fn facts(&self) -> &ravum_lang_sema::facts::Facts {
@@ -821,7 +895,7 @@ impl<'a> Emitter<'a> {
 
 mod paths;
 
-use paths::{collect_module_exprs, ArrayMovePlan, PathMode};
+use paths::{collect_fn_bodies, collect_module_exprs, ArrayMovePlan, PathMode};
 
 // ---------------------------------------------------------------------------
 // Tests.

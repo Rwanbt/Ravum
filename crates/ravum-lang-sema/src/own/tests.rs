@@ -1188,13 +1188,23 @@ fn legacy_check_ownership(checked: &CheckedProgram, diags: &mut DiagnosticBag) -
     let mut own = OwnFacts::default();
     publish_copy_type(&checked.facts, &mut own);
     for (item, f) in fns {
-        let mut per_fn = OwnFacts::default();
+        // The binding interner is program-wide by definition (an identity is
+        // unique per program): it is threaded through, everything else is
+        // per-function and appended.
+        let mut per_fn = OwnFacts {
+            bindings: std::mem::take(&mut own.bindings),
+            ..OwnFacts::default()
+        };
         let mut checker = OwnChecker::new(&checked.facts, diags, &mut per_fn);
         checker.check_fn(item, f);
         own.use_kind.append(&mut per_fn.use_kind);
         own.place.append(&mut per_fn.place);
         own.element_reinit.append(&mut per_fn.element_reinit);
         own.copy_type.append(&mut per_fn.copy_type);
+        own.owned_position.append(&mut per_fn.owned_position);
+        own.consumed.append(&mut per_fn.consumed);
+        own.binding_identity.append(&mut per_fn.binding_identity);
+        own.bindings = per_fn.bindings;
     }
     own
 }

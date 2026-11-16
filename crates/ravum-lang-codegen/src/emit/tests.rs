@@ -71,6 +71,17 @@ impl Builder {
         if let Some(ty) = ty {
             self.facts.expr_types.insert(id, ty);
         }
+        if matches!(kind, ExprKind::SelfValue) {
+            // As `typeck` does (`check_self_value`): `self` resolves to a local.
+            self.facts.resolutions.insert(
+                id,
+                Resolution::Local {
+                    name: "self".to_string(),
+                    mutable: false,
+                    decl: span(),
+                },
+            );
+        }
         Expr {
             id,
             kind,
@@ -227,13 +238,14 @@ impl Builder {
                 span: span(),
             },
         };
-        self.facts.own.copy_type = ravum_lang_sema::copy_types(&self.facts);
-        CheckedProgram {
+        let mut checked = CheckedProgram {
             program,
             facts: self.facts,
             files: self.files,
             profile: Profile::Core,
-        }
+        };
+        fixture_facts::publish_ownership_facts(&mut checked);
+        checked
     }
 }
 
@@ -521,6 +533,9 @@ fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
     crate::generate(checked, options).expect("code generation must succeed")
 }
 
+mod emitter_value_contracts;
+mod fixture_facts;
+mod own_facts_guard;
 mod programs_abcd;
 mod programs_e;
 
