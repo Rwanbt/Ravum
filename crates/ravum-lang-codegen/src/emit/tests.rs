@@ -538,6 +538,7 @@ mod emitter_value_contracts;
 mod fixture_facts;
 mod name_contracts;
 mod own_facts_guard;
+mod path_walk_contracts;
 mod programs_abcd;
 mod programs_e;
 
