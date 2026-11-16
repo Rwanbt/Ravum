@@ -511,6 +511,7 @@ fn main() {
     io::println("out");
     io::print("out");
     io::eprintln("err");
+    let input = io::read_line();
 }
 "#;
     let code = emitted(source);
@@ -520,6 +521,7 @@ fn main() {
             "crate::rv_println(",
             "crate::rv_print(",
             "crate::rv_eprintln(",
+            "crate::rv_read_line()",
         ],
         source,
     );

@@ -100,3 +100,47 @@ fn generation_rejects_a_file_module_that_survived_loading() {
         error.message
     );
 }
+
+#[test]
+fn constant_lowering_checks_the_value_type_and_missing_facts() {
+    let mut builder = Builder::new();
+    let integer = builder.int(255, Some(STy::U8));
+    let string = builder.text("constant text");
+    let boolean = builder.expr(ExprKind::Bool(false), Some(STy::Bool));
+    let character = builder.expr(ExprKind::Char('\t'), Some(STy::Char));
+    let unit = builder.unit();
+    let checked = builder.finish(None, vec![]);
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: Default::default(),
+    };
+
+    assert_eq!(
+        emitter
+            .const_value(&STy::Bool, &ConstValue::Bool(false))
+            .unwrap(),
+        "false"
+    );
+    let mismatch = emitter
+        .const_value(&STy::Bool, &ConstValue::Int(1))
+        .unwrap_err();
+    assert!(mismatch.message.contains("non-integer type"));
+    let owned = emitter
+        .const_value(&STy::String, &ConstValue::Str("text".into()))
+        .unwrap_err();
+    assert!(owned.message.contains("declare the constant as `&str`"));
+
+    for (expr, expected) in [
+        (&integer, "255u8"),
+        (&string, r#""constant text""#),
+        (&boolean, "false"),
+        (&character, "'\\t'"),
+    ] {
+        assert_eq!(emitter.literal_const_expr(expr).unwrap(), expected);
+    }
+    let missing = emitter.literal_const_expr(&unit).unwrap_err();
+    assert!(missing.message.contains("missing `Facts::consts` entry"));
+}

@@ -1768,3 +1768,61 @@ fn f() -> &str {
 "#,
     );
 }
+
+#[test]
+fn audit_conditional_loop_breaks_join_with_the_zero_iteration_path() {
+    for header in ["while flag", "for index in 0i32..2i32"] {
+        let source = format!(
+            r#"
+fn take(value: String) {{}}
+fn probe(flag: bool, value: String) {{
+    {header} {{
+        take(value);
+        break;
+    }}
+    take(value);
+}}
+"#
+        );
+        rejected(&source, "E-OWN-USE-AFTER-MOVE");
+    }
+}
+
+#[test]
+fn audit_unconditional_loop_joins_all_break_exits() {
+    rejected(
+        r#"
+fn take(value: String) {}
+fn probe(flag: bool, value: String) {
+    loop {
+        if flag {
+            take(value);
+            break;
+        } else {
+            break;
+        }
+    }
+    take(value);
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
+fn audit_short_circuit_with_diverging_rhs_preserves_the_continuing_state() {
+    accepted(
+        r#"
+fn stop(value: String) -> ! { panic("stopped"); }
+fn take(value: String) {}
+fn and_rhs(flag: bool, value: String) {
+    let ignored = flag && { stop(value); false };
+    take(value);
+}
+fn or_rhs(flag: bool, value: String) {
+    let ignored = flag || { stop(value); true };
+    take(value);
+}
+"#,
+    );
+}

@@ -539,6 +539,7 @@ mod fixture_facts;
 mod name_contracts;
 mod own_facts_guard;
 mod path_walk_contracts;
+mod pattern_contracts;
 mod programs_abcd;
 mod programs_e;
 

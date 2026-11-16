@@ -81,3 +81,71 @@ fn explicit_crate_loading_refuses_a_missing_root_or_one_outside_src() {
         assert_eq!(codes(&diags), [code]);
     }
 }
+
+#[test]
+fn dependency_cannot_displace_a_local_module() {
+    let temp = TempDir::new("module-dependency-collision");
+    temp.file(
+        "app/ravum.toml",
+        &manifest("app", "\n[dependencies]\nutil = { path = \"../util\" }\n"),
+    );
+    temp.file("app/src/main.rv", "mod util {} fn main() {}");
+    temp.file("util/ravum.toml", &manifest("util", ""));
+    temp.file("util/src/lib.rv", "pub fn value() -> i32 { 1 }");
+
+    let loaded = load_package(&temp.path().join("app"));
+    assert!(loaded.program.is_none());
+    assert_eq!(codes(&loaded.diags), ["E-MOD-DUPLICATE"]);
+    assert!(loaded
+        .diags
+        .iter()
+        .any(|diag| diag.message.contains("collides with a local module")));
+}
+
+#[cfg(unix)]
+#[test]
+fn package_module_discovery_refuses_each_symlink_layout() {
+    use std::os::unix::fs::symlink;
+
+    for (link, target, contents) in [
+        ("src/util.rv", "real/lib.rv", "mod util; fn main() {}"),
+        ("src/util/mod.rv", "real/lib.rv", "mod util; fn main() {}"),
+        ("src/outer", "real", "mod outer { mod lib; } fn main() {}"),
+    ] {
+        let temp = TempDir::new("package-module-symlink");
+        temp.file("ravum.toml", &manifest("app", ""));
+        temp.file("src/main.rv", contents);
+        temp.file("real/lib.rv", "pub fn value() -> i32 { 1 }");
+        let link = temp.path().join(link);
+        fs::create_dir_all(link.parent().unwrap()).unwrap();
+        symlink(temp.path().join(target), &link).unwrap();
+
+        let loaded = load_package(temp.path());
+        assert!(loaded.program.is_none());
+        assert_eq!(codes(&loaded.diags), ["E-MOD-PATH"], "{}", link.display());
+    }
+}
+
+#[test]
+fn source_registration_refuses_an_occupied_allocation_slot() {
+    let mut sources = SourceMap::new();
+    let mut ids = BTreeMap::new();
+    let mut diags = DiagnosticBag::new();
+    let mut next = 4;
+    assert!(sources.add_at(next, "old.rv", "old").is_some());
+    assert_eq!(
+        register_source(
+            &mut sources,
+            &mut ids,
+            &mut next,
+            Path::new("new.rv"),
+            "new.rv".into(),
+            "new".into(),
+            &mut diags,
+        ),
+        None
+    );
+    assert!(ids.is_empty());
+    assert_eq!(sources.file(4).unwrap().text, "old");
+    assert_eq!(codes(&diags), ["E-IO"]);
+}
