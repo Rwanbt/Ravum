@@ -12,6 +12,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  clippy-linux:
+    name: Clippy (Linux, all targets, warnings denied)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy
+      - name: Lint the Linux workspace
+        run: cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+
   mvp:
     runs-on: windows-latest
     timeout-minutes: 40

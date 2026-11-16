@@ -74,15 +74,22 @@
 #![recursion_limit = "256"]
 
 use serde_json::{json, Value};
+#[cfg(windows)]
 use std::path::Path;
+#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(windows)]
 use std::sync::Arc;
+#[cfg(windows)]
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
 use ravum_dsp_harness::{
     allocations_on_this_thread, deallocations_on_this_thread, reset_thread_counters,
 };
+#[cfg(windows)]
 use ravum_patch_host::{BlockHost, ExpectedAbi};
+#[cfg(windows)]
 use ravum_protocol::{BuildOutput, DspState};
 
 const TOOL: &str = "ravum-audio-probe";
@@ -90,7 +97,9 @@ const TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Amplitude of the generated sine. The signal is never audible: it is computed and
 /// discarded (only digital silence is submitted to the driver).
+#[cfg(windows)]
 const SINE_AMPLITUDE: f32 = 0.5;
+#[cfg(windows)]
 const SINE_FREQUENCY_HZ: f32 = 440.0;
 
 const MIN_SECONDS: u64 = 1;
@@ -98,9 +107,11 @@ const MAX_SECONDS: u64 = 10;
 
 /// `WaitForSingleObject` timeout once the first buffer has completed. Wakes up the
 /// render thread often enough to observe a stop request, even if no buffer completes.
+#[cfg(windows)]
 const WAIT_TIMEOUT_MS: u32 = 20;
 /// Longer timeout for the very first completion: opening a device takes longer than one
 /// period and a short timeout there would only invent "missed events".
+#[cfg(windows)]
 const FIRST_WAIT_TIMEOUT_MS: u32 = 250;
 
 // ---------------------------------------------------------------------------------------
@@ -176,6 +187,7 @@ impl ThreadPriorityChoice {
     }
 
     /// `SetThreadPriority` value (`THREAD_PRIORITY_*`).
+    #[cfg(windows)]
     fn win32_value(&self) -> i32 {
         match self {
             Self::Normal => 0,        // THREAD_PRIORITY_NORMAL
@@ -185,6 +197,7 @@ impl ThreadPriorityChoice {
         }
     }
 
+    #[cfg(windows)]
     fn win32_name(&self) -> &'static str {
         match self {
             Self::Normal => "THREAD_PRIORITY_NORMAL",
@@ -474,6 +487,7 @@ output is computed, measured (work, lateness, sample-to-sample delta), and disca
 // Statistics helpers (shared by every platform)
 // ---------------------------------------------------------------------------------------
 
+#[cfg(windows)]
 fn percentile_u64(sorted: &[u64], percentile: f64) -> u64 {
     if sorted.is_empty() {
         return 0;
@@ -482,6 +496,7 @@ fn percentile_u64(sorted: &[u64], percentile: f64) -> u64 {
     sorted[rank.saturating_sub(1).min(sorted.len() - 1)]
 }
 
+#[cfg(windows)]
 fn percentile_i64(sorted: &[i64], percentile: f64) -> i64 {
     if sorted.is_empty() {
         return 0;
@@ -491,6 +506,7 @@ fn percentile_i64(sorted: &[i64], percentile: f64) -> i64 {
 }
 
 /// Empty samples are reported as `null`, never as a measured `0`.
+#[cfg(windows)]
 fn stats_u64(values: &[u64]) -> Value {
     if values.is_empty() {
         return json!({"count": 0, "min": null, "p50": null, "p95": null, "p99": null, "max": null});
@@ -507,6 +523,7 @@ fn stats_u64(values: &[u64]) -> Value {
     })
 }
 
+#[cfg(windows)]
 fn stats_i64(values: &[i64]) -> Value {
     if values.is_empty() {
         return json!({"count": 0, "min": null, "p50": null, "p95": null, "p99": null, "max": null});
@@ -1020,6 +1037,7 @@ fn field_f32(value: &Value, field: &str) -> String {
 /// absorbs frame/clock rounding and must stay far below one period. `wall_expected_frames`
 /// must be derived from the same monotonic clock as `position_frames`'s start point; the
 /// constant offset between the two is captured by the baseline.
+#[cfg(any(windows, test))]
 #[derive(Debug, Clone, Copy)]
 struct MissedPeriodCounter {
     period_frames: u64,
@@ -1033,6 +1051,7 @@ struct MissedPeriodCounter {
     regressions: u64,
 }
 
+#[cfg(any(windows, test))]
 impl MissedPeriodCounter {
     fn new(period_frames: u64, tolerance_frames: u64) -> Self {
         Self {
@@ -1137,6 +1156,7 @@ impl MissedPeriodCounter {
         }
     }
 
+    #[cfg(windows)]
     fn baseline_stall_frames(&self) -> Option<i64> {
         if self.baseline_set {
             Some(self.baseline_stall_frames)
@@ -1145,6 +1165,7 @@ impl MissedPeriodCounter {
         }
     }
 
+    #[cfg(windows)]
     fn baseline_played_frames(&self) -> Option<i64> {
         if self.baseline_set {
             Some(self.baseline_played_frames)
@@ -1153,6 +1174,7 @@ impl MissedPeriodCounter {
         }
     }
 
+    #[cfg(windows)]
     fn observations(&self) -> u64 {
         self.observations
     }
@@ -1162,123 +1184,10 @@ impl MissedPeriodCounter {
     }
 }
 
-#[cfg(test)]
-mod xrun_arithmetic_tests {
-    use super::MissedPeriodCounter;
-
-    #[test]
-    fn healthy_stream_counts_nothing() {
-        // Constant device latency (100 frames) and lockstep progress: no deficit.
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 100);
-        for step in 1..=100u64 {
-            assert_eq!(counter.observe(step * 480, step * 480, 100 + step * 480), 0);
-        }
-        assert_eq!(counter.missed_periods(), 0);
-        assert_eq!(counter.missed_frames(), 0);
-    }
-
-    #[test]
-    fn one_missed_period_is_counted_once() {
-        // The device played 960 frames while only 480 were supplied: the shared-mode
-        // engine rendered a period of silence it never received.
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 0);
-        assert_eq!(counter.observe(960, 480, 960), 480);
-        assert_eq!(counter.missed_periods(), 1);
-        assert_eq!(counter.observe(960, 480, 960), 0);
-        assert_eq!(counter.missed_periods(), 1);
-        assert_eq!(counter.observe(1440, 1440, 1440), 0);
-        assert_eq!(counter.missed_periods(), 1);
-    }
-
-    #[test]
-    fn stalled_clock_is_detected() {
-        // Some exclusive-mode drivers freeze the playback clock on an underrun instead of
-        // rendering silence: the wall clock runs but the position does not.
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 0);
-        assert_eq!(counter.observe(480, 480, 480), 0);
-        // Position frozen at 480 while wall time says 1 440 frames should have played.
-        assert_eq!(counter.observe(480, 960, 1440), 960);
-        assert_eq!(counter.missed_periods(), 2);
-    }
-
-    #[test]
-    fn partial_deficits_accumulate_into_periods() {
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 0);
-        assert_eq!(counter.observe(300, 0, 300), 300);
-        assert_eq!(counter.missed_periods(), 0);
-        assert_eq!(counter.observe(600, 100, 600), 200);
-        assert_eq!(counter.missed_frames(), 500);
-        assert_eq!(counter.missed_periods(), 1);
-        assert_eq!(counter.remainder_frames(), 20);
-    }
-
-    #[test]
-    fn tolerance_absorbs_rounding_but_not_a_period() {
-        let mut counter = MissedPeriodCounter::new(480, 8);
-        counter.set_baseline(0, 0, 0);
-        // 8 frames of clock noise: below tolerance, no false positive.
-        assert_eq!(counter.observe(488, 480, 480), 0);
-        assert_eq!(counter.missed_periods(), 0);
-        // 9 frames ahead: one frame beyond tolerance, still not a whole period.
-        assert_eq!(counter.observe(489, 480, 481), 1);
-        assert_eq!(counter.missed_periods(), 0);
-        // A real missing period is still detected.
-        assert_eq!(counter.observe(969, 480, 960), 480);
-        assert_eq!(counter.missed_periods(), 1);
-    }
-
-    #[test]
-    fn unknown_period_never_divides_by_zero() {
-        let mut counter = MissedPeriodCounter::new(0, 0);
-        counter.set_baseline(0, 0, 0);
-        counter.observe(10, 0, 10);
-        assert_eq!(counter.missed_periods(), 0);
-        assert_eq!(counter.remainder_frames(), 10);
-    }
-
-    #[test]
-    fn clock_going_backwards_is_not_a_missed_period() {
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 0);
-        assert_eq!(counter.observe(960, 480, 960), 480);
-        // Position wraps or the driver resets: raw deficits shrink, never negative counts.
-        assert_eq!(counter.observe(10, 4096, 10), 0);
-        assert_eq!(counter.regressions(), 1);
-        assert_eq!(counter.missed_periods(), 1);
-    }
-
-    #[test]
-    fn sub_period_jitter_never_becomes_a_missed_period() {
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(0, 0, 0);
-        // Clock sampling phase makes both raw deficits oscillate by a few frames; no full
-        // period is ever reached, so no missed period is claimed.
-        for step in 1..=2000u64 {
-            let jitter = step % 9;
-            counter.observe(step * 480 + jitter, step * 480, step * 480);
-            assert_eq!(counter.missed_periods(), 0);
-        }
-    }
-
-    #[test]
-    fn baseline_excludes_startup_deficit() {
-        // The engine rendered 1 000 frames before measurement started; that startup bias
-        // is recorded as baseline, not counted as a missed period.
-        let mut counter = MissedPeriodCounter::new(480, 0);
-        counter.set_baseline(1000, 0, 1000);
-        assert_eq!(counter.missed_periods(), 0);
-        assert_eq!(counter.observe(2000, 1000, 2000), 0);
-        assert_eq!(counter.observe(2500, 1500, 2500), 0);
-        assert_eq!(counter.missed_periods(), 0);
-    }
-}
-
+#[cfg(windows)]
 const WAVEOUT_UNDERRUN_METHOD: &str = "missed periods = increments of max(0, waveOutGetPosition(TIME_SAMPLES) - frames supplied). waveOutGetPosition is treated as frames: on this driver the observed position drift stays far below one buffer period, which rules out a channel-count interpretation. Granularity is one buffer period; the driver exposes no XRUN counter, so this is a lower-bound detector of real underruns, not a driver XRUN count. A non-zero value proves at least this many periods were not serviced in time; zero does not prove the stream never glitched below one-period resolution.";
 
+#[cfg(windows)]
 const WASAPI_UNDERRUN_METHOD: &str = "missed periods = increments of max(0, IAudioClock::GetPosition(frames played) - frames supplied to IAudioRenderClient), counted once as the deficit grows. In shared mode the engine's event period is used as period_frames; in exclusive mode the app-owned buffer duration is used. Cross-check: GetCurrentPadding is recorded at every wake and padding==0 with a growing deficit is the starvation proxy; a full padding with no deficit is not an underrun. WASAPI exposes no official XRUN counter, so this is a lower-bound detector with one-period granularity: a non-zero value proves real missed periods, zero does not prove the absence of glitches below that resolution.";
 
 // ---------------------------------------------------------------------------------------
@@ -6367,5 +6276,120 @@ mod win {
 
         let exit_code = if status == "ok" { 0 } else { 1 };
         (report, exit_code)
+    }
+}
+
+#[cfg(test)]
+mod xrun_arithmetic_tests {
+    use super::MissedPeriodCounter;
+
+    #[test]
+    fn healthy_stream_counts_nothing() {
+        // Constant device latency (100 frames) and lockstep progress: no deficit.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 100);
+        for step in 1..=100u64 {
+            assert_eq!(counter.observe(step * 480, step * 480, 100 + step * 480), 0);
+        }
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.missed_frames(), 0);
+    }
+
+    #[test]
+    fn one_missed_period_is_counted_once() {
+        // The device played 960 frames while only 480 were supplied: the shared-mode
+        // engine rendered a period of silence it never received.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(960, 480, 960), 480);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.observe(960, 480, 960), 0);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.observe(1440, 1440, 1440), 0);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn stalled_clock_is_detected() {
+        // Some exclusive-mode drivers freeze the playback clock on an underrun instead of
+        // rendering silence: the wall clock runs but the position does not.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(480, 480, 480), 0);
+        // Position frozen at 480 while wall time says 1 440 frames should have played.
+        assert_eq!(counter.observe(480, 960, 1440), 960);
+        assert_eq!(counter.missed_periods(), 2);
+    }
+
+    #[test]
+    fn partial_deficits_accumulate_into_periods() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(300, 0, 300), 300);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.observe(600, 100, 600), 200);
+        assert_eq!(counter.missed_frames(), 500);
+        assert_eq!(counter.missed_periods(), 1);
+        assert_eq!(counter.remainder_frames(), 20);
+    }
+
+    #[test]
+    fn tolerance_absorbs_rounding_but_not_a_period() {
+        let mut counter = MissedPeriodCounter::new(480, 8);
+        counter.set_baseline(0, 0, 0);
+        // 8 frames of clock noise: below tolerance, no false positive.
+        assert_eq!(counter.observe(488, 480, 480), 0);
+        assert_eq!(counter.missed_periods(), 0);
+        // 9 frames ahead: one frame beyond tolerance, still not a whole period.
+        assert_eq!(counter.observe(489, 480, 481), 1);
+        assert_eq!(counter.missed_periods(), 0);
+        // A real missing period is still detected.
+        assert_eq!(counter.observe(969, 480, 960), 480);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn unknown_period_never_divides_by_zero() {
+        let mut counter = MissedPeriodCounter::new(0, 0);
+        counter.set_baseline(0, 0, 0);
+        counter.observe(10, 0, 10);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.remainder_frames(), 10);
+    }
+
+    #[test]
+    fn clock_going_backwards_is_not_a_missed_period() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        assert_eq!(counter.observe(960, 480, 960), 480);
+        // Position wraps or the driver resets: raw deficits shrink, never negative counts.
+        assert_eq!(counter.observe(10, 4096, 10), 0);
+        assert_eq!(counter.regressions(), 1);
+        assert_eq!(counter.missed_periods(), 1);
+    }
+
+    #[test]
+    fn sub_period_jitter_never_becomes_a_missed_period() {
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(0, 0, 0);
+        // Clock sampling phase makes both raw deficits oscillate by a few frames; no full
+        // period is ever reached, so no missed period is claimed.
+        for step in 1..=2000u64 {
+            let jitter = step % 9;
+            counter.observe(step * 480 + jitter, step * 480, step * 480);
+            assert_eq!(counter.missed_periods(), 0);
+        }
+    }
+
+    #[test]
+    fn baseline_excludes_startup_deficit() {
+        // The engine rendered 1 000 frames before measurement started; that startup bias
+        // is recorded as baseline, not counted as a missed period.
+        let mut counter = MissedPeriodCounter::new(480, 0);
+        counter.set_baseline(1000, 0, 1000);
+        assert_eq!(counter.missed_periods(), 0);
+        assert_eq!(counter.observe(2000, 1000, 2000), 0);
+        assert_eq!(counter.observe(2500, 1500, 2500), 0);
+        assert_eq!(counter.missed_periods(), 0);
     }
 }
