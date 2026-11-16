@@ -1181,3 +1181,182 @@ fn path_guards_refuse_symlink_components_even_inside_the_base() {
     );
     assert_eq!(codes(&diags), ["E-MOD-PATH"]);
 }
+
+#[test]
+fn lockfile_rejects_directories_and_oversized_files() {
+    let temp = TempDir::new("lockfile-shape");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/main.rv", "fn main() {}");
+    let path = temp.path().join(LOCKFILE_NAME);
+    fs::create_dir(&path).unwrap();
+
+    let loaded = load_package(temp.path());
+    assert_eq!(loaded.lockfile_state, LockfileState::Invalid);
+    assert!(codes(&loaded.diags).contains(&"E-MOD-LOCK".to_string()));
+    assert!(path.is_dir());
+
+    fs::remove_dir(&path).unwrap();
+    fs::File::create(&path)
+        .unwrap()
+        .set_len(MAX_LOCKFILE_SIZE + 1)
+        .unwrap();
+    let loaded = load_package(temp.path());
+    assert_eq!(loaded.lockfile_state, LockfileState::Invalid);
+    assert!(codes(&loaded.diags).contains(&"E-LIMIT-FILE-SIZE".to_string()));
+    assert_eq!(fs::metadata(path).unwrap().len(), MAX_LOCKFILE_SIZE + 1);
+}
+
+#[test]
+fn lockfile_reports_create_and_update_failures_without_replacing_existing_data() {
+    let temp = TempDir::new("lockfile-write");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/main.rv", "fn main() {}");
+    let blocked = temp
+        .path()
+        .join(format!(".{LOCKFILE_NAME}.tmp-{}", std::process::id()));
+    fs::create_dir(&blocked).unwrap();
+
+    let loaded = load_package(temp.path());
+    assert_eq!(loaded.lockfile_state, LockfileState::Invalid);
+    assert!(loaded
+        .diags
+        .iter()
+        .any(|d| d.code == "E-MOD-LOCK" && d.message.contains("cannot write")));
+    let lockfile = temp.path().join(LOCKFILE_NAME);
+    assert!(!lockfile.exists());
+
+    let stale = "lockfile_version = 1\n";
+    fs::write(&lockfile, stale).unwrap();
+    let loaded = load_package(temp.path());
+    assert_eq!(loaded.lockfile_state, LockfileState::Invalid);
+    assert!(loaded
+        .diags
+        .iter()
+        .any(|d| d.code == "E-MOD-LOCK" && d.message.contains("cannot update")));
+    assert_eq!(fs::read_to_string(lockfile).unwrap(), stale);
+}
+
+#[cfg(unix)]
+#[test]
+fn lockfile_symlink_is_refused_without_touching_its_target() {
+    let temp = TempDir::new("lockfile-link");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/main.rv", "fn main() {}");
+    let original = "must not be rewritten";
+    let target = temp.file("other.lock", original);
+    let link = temp.path().join(LOCKFILE_NAME);
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let loaded = load_package(temp.path());
+    assert_eq!(loaded.lockfile_state, LockfileState::Invalid);
+    assert!(codes(&loaded.diags).contains(&"E-MOD-PATH".to_string()));
+    assert_eq!(fs::read_link(link).unwrap(), target);
+    assert_eq!(fs::read_to_string(target).unwrap(), original);
+}
+
+#[test]
+fn package_refuses_a_directory_as_a_crate_root() {
+    let temp = TempDir::new("directory-crate-root");
+    temp.file("ravum.toml", &manifest("app", ""));
+    fs::create_dir_all(temp.path().join("src/main.rv")).unwrap();
+
+    let loaded = load_package(temp.path());
+    assert!(loaded.program.is_none());
+    assert!(loaded
+        .diags
+        .iter()
+        .any(|diag| { diag.code == "E-IO" && diag.message.contains("is not a regular file") }));
+}
+
+#[test]
+fn package_refuses_reserved_inline_module_directory_components() {
+    let temp = TempDir::new("reserved-inline-module");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/main.rv", "mod CON { mod child; } fn main() {}");
+
+    let loaded = load_package(temp.path());
+    assert!(loaded.diags.iter().any(|diag| {
+        diag.code == "E-MOD-RESERVED-NAME" && diag.message.contains("inline module path component")
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn crate_root_probe_refuses_links_and_reports_inspection_errors() {
+    let temp = TempDir::new("crate-root-probe");
+    let source = temp.file("real.rv", "fn main() {}");
+    let link = temp.path().join("linked.rv");
+    std::os::unix::fs::symlink(&source, &link).unwrap();
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(regular_file(&link, &mut diags), Err(()));
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(regular_file(&source.join("child.rv"), &mut diags), Err(()));
+    assert_eq!(codes(&diags), ["E-IO"]);
+}
+
+#[test]
+fn dependency_graph_rejects_chains_beyond_the_package_depth_limit() {
+    let temp = TempDir::new("dependency-graph-depth");
+    for depth in 0..=MAX_PACKAGE_DEPTH + 1 {
+        let name = format!("pkg{depth}");
+        let deps = if depth <= MAX_PACKAGE_DEPTH {
+            let next = format!("pkg{}", depth + 1);
+            format!("[dependencies]\n{next} = {{ path = \"../{next}\" }}\n")
+        } else {
+            String::new()
+        };
+        temp.file(&format!("{name}/ravum.toml"), &manifest(&name, &deps));
+        temp.file(&format!("{name}/src/lib.rv"), "pub fn value() -> i32 { 1 }");
+    }
+
+    let loaded = load_package(&temp.path().join("pkg0"));
+    assert!(loaded.program.is_none());
+    assert!(loaded.diags.iter().any(|diag| {
+        diag.code == "E-MOD-PATH-ESCAPE" && diag.message.contains("dependency graph deeper")
+    }));
+}
+
+#[test]
+fn dependency_graph_rejects_an_alias_of_an_already_loaded_package() {
+    let temp = TempDir::new("dependency-shared-alias");
+    temp.file(
+        "app/ravum.toml",
+        &manifest(
+            "app",
+            "[dependencies]\na = { path = \"../a\" }\nz = { path = \"../a\" }\n",
+        ),
+    );
+    temp.file("app/src/main.rv", "fn main() {}");
+    temp.file("a/ravum.toml", &manifest("a", ""));
+    temp.file("a/src/lib.rv", "pub fn value() -> i32 { 1 }");
+
+    let loaded = load_package(&temp.path().join("app"));
+    assert!(loaded.program.is_none());
+    assert!(loaded.diags.iter().any(|diag| {
+        diag.code == "E-MOD-DEPENDENCY"
+            && diag
+                .message
+                .contains("dependency key `z` resolves to package `a`")
+    }));
+}
+
+#[test]
+fn dependency_graph_refuses_a_directory_as_a_library_source() {
+    let temp = TempDir::new("dependency-library-shape");
+    temp.file(
+        "app/ravum.toml",
+        &manifest("app", "[dependencies]\na = { path = \"../a\" }\n"),
+    );
+    temp.file("app/src/main.rv", "fn main() {}");
+    temp.file("a/ravum.toml", &manifest("a", ""));
+    fs::create_dir_all(temp.path().join("a/src/lib.rv")).unwrap();
+
+    let loaded = load_package(&temp.path().join("app"));
+    assert!(loaded.program.is_none());
+    assert!(loaded.diags.iter().any(|diag| {
+        diag.code == "E-MOD-DEPENDENCY" && diag.message.contains("is not a regular file")
+    }));
+}
