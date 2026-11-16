@@ -789,6 +789,124 @@ fn digest_encoding_is_stable_for_crlf() {
     assert_eq!(lf, crlf);
 }
 
+#[test]
+fn digest_hashes_nested_ravum_files_in_relative_path_order() {
+    let temp = TempDir::new("digest-order");
+    temp.file("ravum.toml", "manifest\n");
+    temp.file("src/z.rv", "z\n");
+    temp.file("src/module/a.rv", "a\n");
+    temp.file("src/module/notes.txt", "ignored");
+    let mut diags = DiagnosticBag::new();
+    let digest = package_digest(temp.path(), &mut diags).expect("package digest");
+    let encoded = concat!(
+        "ravum.toml\0",
+        "9\0manifest\n",
+        "src/module/a.rv\0",
+        "2\0a\n",
+        "src/z.rv\0",
+        "2\0z\n",
+    );
+    let expected = sha256_hex(encoded.as_bytes());
+    assert_eq!(digest, format!("sha256:{expected}"));
+    assert!(!diags.has_errors());
+}
+
+#[test]
+fn digest_reports_missing_manifest_and_non_directory_source() {
+    let temp = TempDir::new("digest-io");
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src", "not a directory");
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+}
+
+#[test]
+fn digest_refuses_oversized_manifest_and_source() {
+    let temp = TempDir::new("digest-file-size");
+    let manifest = temp.file("ravum.toml", &manifest("app", ""));
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&manifest)
+        .unwrap()
+        .set_len(MAX_FILE_SIZE + 1)
+        .unwrap();
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-LIMIT-FILE-SIZE"]);
+    fs::write(manifest, "[package]\n").unwrap();
+
+    fs::File::create(temp.file("src/main.rv", ""))
+        .unwrap()
+        .set_len(MAX_FILE_SIZE + 1)
+        .unwrap();
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-LIMIT-FILE-SIZE"]);
+}
+
+#[test]
+fn digest_refuses_a_package_above_its_ravum_file_limit() {
+    let temp = TempDir::new("digest-file-count");
+    temp.file("ravum.toml", &manifest("app", ""));
+    let source = temp.path().join("src");
+    fs::create_dir(&source).unwrap();
+    for index in 0..=MAX_PACKAGE_FILES {
+        fs::write(source.join(format!("{index}.rv")), b"").unwrap();
+    }
+
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-LIMIT-FILES"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn digest_refuses_symlinks_at_each_package_boundary() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new("digest-symlinks");
+    let other = TempDir::new("digest-symlink-targets");
+    let manifest_target = other.file("alternate.toml", &manifest("app", ""));
+    let source_target = other.file("payload/real.rv", "fn main() {}");
+    let manifest_link = temp.path().join("ravum.toml");
+    let source_link = temp.path().join("src");
+    symlink(&manifest_target, &manifest_link).unwrap();
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+
+    fs::remove_file(manifest_link).unwrap();
+    temp.file("ravum.toml", &manifest("app", ""));
+    symlink(source_target.parent().unwrap(), &source_link).unwrap();
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+
+    fs::remove_file(&source_link).unwrap();
+    fs::create_dir(&source_link).unwrap();
+    symlink(source_target, source_link.join("entry.rv")).unwrap();
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-MOD-PATH"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn digest_refuses_reserved_windows_names_inside_nested_sources() {
+    let temp = TempDir::new("digest-portability");
+    temp.file("ravum.toml", &manifest("app", ""));
+    temp.file("src/nested/CON.rv", "");
+    let mut diags = DiagnosticBag::new();
+    assert_eq!(package_digest(temp.path(), &mut diags), None);
+    assert_eq!(codes(&diags), ["E-MOD-RESERVED-NAME"]);
+}
+
 /// T4: the source-file ceiling is exercised without creating 65 536 files.
 /// The limit is lowered thread-locally, so no other test is affected.
 #[test]
