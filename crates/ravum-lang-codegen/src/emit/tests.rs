@@ -536,6 +536,7 @@ fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
 mod emitter_type_contracts;
 mod emitter_value_contracts;
 mod fixture_facts;
+mod name_contracts;
 mod own_facts_guard;
 mod programs_abcd;
 mod programs_e;
