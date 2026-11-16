@@ -172,6 +172,9 @@ impl<'a> OwnChecker<'a> {
         }
         self.loans.truncate(snapshot);
         self.call_depth = self.call_depth.saturating_sub(1);
+        if self.facts.expr_types.get(&expr.id) == Some(&Type::Never) {
+            self.diverged = true;
+        }
     }
 
     pub(super) fn eval_method_call(&mut self, expr: &Expr, receiver: &Expr, args: &[Expr]) {
@@ -235,6 +238,9 @@ impl<'a> OwnChecker<'a> {
         }
         self.loans.truncate(snapshot);
         self.call_depth = self.call_depth.saturating_sub(1);
+        if self.facts.expr_types.get(&expr.id) == Some(&Type::Never) {
+            self.diverged = true;
+        }
     }
 
     pub(super) fn borrow_receiver(&mut self, receiver: &Expr, mutable: bool) {

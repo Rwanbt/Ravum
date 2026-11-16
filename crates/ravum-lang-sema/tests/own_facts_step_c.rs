@@ -238,3 +238,57 @@ fn a_loop_body_binding_keeps_one_identity_across_fixpoint_passes() {
         .count();
     assert_eq!(steps, 1);
 }
+
+#[test]
+fn diverging_conditions_still_publish_facts_for_dead_bodies() {
+    let checked = checked(
+        r#"
+fn main() {
+    let a = [String::from("then"), String::from("else")];
+    if panic("condition") { let left = a[0]; } else { let right = a[1]; }
+    let b = [String::from("loop")];
+    while panic("loop condition") { let body = b[0]; }
+}
+"#,
+    );
+    let own = &checked.facts.own;
+    assert_eq!(rendered(own, &own.consumed), ["a[0]", "a[1]", "b[0]"]);
+    assert!(own.consumed.is_subset(&own.owned_position));
+}
+
+#[test]
+fn a_diverging_match_scrutinee_still_publishes_arm_facts() {
+    let checked = checked(
+        r#"
+fn main() {
+    let a = [String::from("arm")];
+    match panic("scrutinee") { _ => { let arm = a[0]; } }
+}
+"#,
+    );
+    let own = &checked.facts.own;
+    assert_eq!(rendered(own, &own.consumed), ["a[0]"]);
+    assert!(own.consumed.is_subset(&own.owned_position));
+}
+
+#[test]
+fn a_never_returning_method_makes_subsequent_moves_unreachable() {
+    let checked = checked(
+        r#"
+struct Stop {}
+impl Stop {
+    fn stop(&self) -> ! { panic("stop") }
+}
+fn main() {
+    let stopper = Stop {};
+    let a = [String::from("value")];
+    let first = a[0];
+    stopper.stop();
+    let dead = a[0];
+}
+"#,
+    );
+    let own = &checked.facts.own;
+    assert_eq!(rendered(own, &own.consumed), ["a[0]", "a[0]"]);
+    assert!(own.consumed.is_subset(&own.owned_position));
+}
