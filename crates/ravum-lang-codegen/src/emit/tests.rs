@@ -533,6 +533,7 @@ fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
     crate::generate(checked, options).expect("code generation must succeed")
 }
 
+mod emitter_type_contracts;
 mod emitter_value_contracts;
 mod fixture_facts;
 mod own_facts_guard;

@@ -11,7 +11,10 @@ impl<'a> Emitter<'a> {
                     None => self.plain_path_text(path),
                 }
             }
-            Some(Resolution::BuiltinFn { path }) => self.builtin_fn_value(path),
+            Some(Resolution::BuiltinFn { path: builtin }) => Err(err(format!(
+                "builtin function `{builtin}` must be called (path node {})",
+                path.id
+            ))),
             Some(Resolution::BuiltinConst { path }) => builtin_const(path).ok_or_else(|| {
                 err(format!(
                     "unsupported builtin constant `{path}` (path node {})",
@@ -34,43 +37,6 @@ impl<'a> Emitter<'a> {
                 path.id
             ))),
         }
-    }
-
-    pub(super) fn builtin_fn_value(&self, path: &str) -> Result<String, CodegenError> {
-        Ok(match builtin_free(path) {
-            Some(FreeBuiltin::Println) => "crate::rv_println".to_string(),
-            Some(FreeBuiltin::Print) => "crate::rv_print".to_string(),
-            Some(FreeBuiltin::Eprintln) => "crate::rv_eprintln".to_string(),
-            Some(FreeBuiltin::Eprint) => "crate::rv_eprint".to_string(),
-            Some(FreeBuiltin::ReadLine) => "crate::rv_read_line".to_string(),
-            Some(FreeBuiltin::Args) => "crate::rv_args".to_string(),
-            Some(FreeBuiltin::EnvVar) => "crate::rv_env_var".to_string(),
-            Some(FreeBuiltin::FsReadToString) => "crate::rv_fs_read_to_string".to_string(),
-            Some(FreeBuiltin::FsWriteString) => "crate::rv_fs_write_string".to_string(),
-            Some(FreeBuiltin::FsExists) => "crate::rv_fs_exists".to_string(),
-            Some(FreeBuiltin::Exit) => "crate::rv_exit".to_string(),
-            Some(FreeBuiltin::Panic) => "crate::rv_panic".to_string(),
-            Some(FreeBuiltin::Assert) => "crate::rv_assert".to_string(),
-            Some(FreeBuiltin::AssertEq) => "crate::rv_assert_eq".to_string(),
-            Some(FreeBuiltin::Drop) => "drop".to_string(),
-            Some(FreeBuiltin::StringFrom) => "String::from".to_string(),
-            Some(FreeBuiltin::ErrorNew) => "crate::Error::new".to_string(),
-            Some(FreeBuiltin::RustPath(name)) => name.to_string(),
-            Some(FreeBuiltin::ParseI64) | Some(FreeBuiltin::ParseF64) => {
-                return Err(err(format!(
-                    "builtin `{path}` is only supported when called directly"
-                )));
-            }
-            Some(FreeBuiltin::MathUnary(method)) => format!("f64::{method}"),
-            Some(FreeBuiltin::MathBinary(method)) => format!("f64::{method}"),
-            Some(FreeBuiltin::VariantCtor) => {
-                let segments: Vec<&str> = path.split("::").collect();
-                segments[segments.len() - 1].to_string()
-            }
-            None => {
-                return Err(err(format!("unsupported builtin function `{path}`")));
-            }
-        })
     }
 
     /// Path of a nominal type used as a value (`Point`, `E::V`, `Ok`).

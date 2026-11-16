@@ -19,48 +19,6 @@
     "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json ; python tools/coverage_product_split.py --input target/cov-all.json ; python tools/coverage_report.py --input target/cov-all.json --gap",
     "entries": [
       {
-        "id": "E-LINE-EMIT-BUILTIN-FN-VALUE",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[2461, 2497]],
-        "summary": "`builtin_fn_value` — the emitter's rendering of a builtin function used as a value.",
-        "why_unreachable": "`Emitter::value_path` reaches it only for `Resolution::BuiltinFn`, which the checker records for a builtin *call*; a builtin path in value position is refused before any fact is produced. The `Call` arm of the emitter consumes `facts.calls`, never `value_path`, for a builtin callee.",
-        "proof": "Two measured refusals: `io::println` as a value yields `E-TYP-CALL: builtin function `std::io::println` must be called`; `Option::Some` as a value yields `E-TYP-CALL: variant constructor `Option::Some` requires arguments`.",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test emit_constructs a_builtin_function_used_as_a_value_is_refused_by_the_checker",
-          "cargo test -p ravum-lang-codegen --test emit_constructs a_prelude_constructor_used_as_a_value_is_refused_by_the_checker",
-          "crates/ravum-lang-sema/src/typeck.rs: ValuePath::BuiltinFn is rejected with E-TYP-CALL outside a call position"
-        ],
-        "review_condition": "Toute évolution qui accepterait une fonction builtin en position de valeur, ou qui ferait passer un builtin par `value_path` pour un appel.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PANIC-ARITY",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[3070, 3077]],
-        "summary": "`panic()` without an argument (default text) and the `panic` arity-error arm.",
-        "why_unreachable": "`std::panic::panic` is declared with exactly one argument; the checker refuses any other arity with `E-TYP-ARITY` before facts are produced, so the emitter only ever sees a one-argument call (the covered arm).",
-        "proof": "Measured: `panic()` in a `-> !` function yields `E-TYP-ARITY: `std::panic::panic` expects 1 argument(s), found 0`.",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test emit_constructs panic_without_a_message_is_refused_by_the_checker"
-        ],
-        "review_condition": "Une signature de `panic` qui accepterait zéro ou plusieurs arguments.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-ASSERT-ARITY",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[3085, 3110]],
-        "summary": "`assert(condition, message)` (message form) and the `assert`/`assert_eq` arity-error arms.",
-        "why_unreachable": "`std::panic::assert` takes exactly one argument and `std::panic::assert_eq` exactly two; every other arity is `E-TYP-ARITY` in the checker, so the emitter's message form and its two error arms have no accepted program behind them.",
-        "proof": "Measured: `assert(true, \"message\")` → `E-TYP-ARITY: `std::panic::assert` expects 1 argument(s)`; `assert_eq(1)` → `E-TYP-ARITY: `assert_eq` expects 2 arguments`.",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test emit_constructs a_two_argument_assert_is_refused_by_the_checker",
-          "cargo test -p ravum-lang-codegen --test emit_constructs the_checker_pins_the_assertion_arities_before_codegen"
-        ],
-        "review_condition": "Une signature d'`assert`/`assert_eq` qui accepterait une autre arité (par exemple un message optionnel).",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-EMIT-BUILTIN-CONST",
         "file": "crates/ravum-lang-codegen/src/emit.rs",
         "lines": [[813, 842]],
@@ -86,20 +44,6 @@
           "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
         ],
         "review_condition": "Une mesure de couverture en profil release, ou la suppression de la garde de debug.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-MOD-DECL",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[1490, 1500]],
-        "summary": "`ItemKind::ModDecl` refusal arm of the item emitter.",
-        "why_unreachable": "The package loader resolves every `mod foo;` declaration and rewrites the item into an inline `ItemKind::Mod`; a program that still carries a `ModDecl` is refused by the checker (`checked == None`), so the code generator never receives one.",
-        "proof": "Measured: a package with `mod inner;` + `src/inner.rv` loads with one `ItemKind::Mod` and zero `ItemKind::ModDecl`; a bare program with `mod inner;` is refused fail-closed (no `CheckedProgram`).",
-        "evidence": [
-          "cargo test -p ravum-lang-sema --test loader_manifest_contracts module_declarations_are_inlined_into_module_items",
-          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_mod_declaration_that_the_loader_did_not_inline_is_refused"
-        ],
-        "review_condition": "Un mode de chargement qui laisserait des `ModDecl` dans le programme vérifié.",
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {

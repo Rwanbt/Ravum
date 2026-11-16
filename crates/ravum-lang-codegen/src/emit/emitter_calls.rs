@@ -112,40 +112,21 @@ impl<'a> Emitter<'a> {
                 self.str_arg(first, indent)?
             )),
             FreeBuiltin::Exit => Ok(format!("crate::rv_exit({rendered})")),
-            FreeBuiltin::Panic => match args.len() {
-                0 => Ok("crate::rv_panic(\"panic\")".to_string()),
-                1 => Ok(format!("crate::rv_panic({})", self.str_arg(first, indent)?)),
-                _ => Err(err(format!(
-                    "`panic` takes at most one argument (call node {})",
-                    expr.id
-                ))),
-            },
-            FreeBuiltin::Assert => match args.len() {
-                1 => Ok(format!(
+            FreeBuiltin::Panic => {
+                self.expect_arity(path, args, 1)?;
+                Ok(format!("crate::rv_panic({})", self.str_arg(first, indent)?))
+            }
+            FreeBuiltin::Assert => {
+                self.expect_arity(path, args, 1)?;
+                Ok(format!(
                     "crate::rv_assert({}, {}, {})",
                     self.expr(&args[0], indent)?,
                     string_literal(&file),
                     line
-                )),
-                2 => Ok(format!(
-                    "crate::rv_assert_msg({}, {}, {}, {})",
-                    self.expr(&args[0], indent)?,
-                    self.str_arg(args.get(1), indent)?,
-                    string_literal(&file),
-                    line
-                )),
-                _ => Err(err(format!(
-                    "`assert` takes one or two arguments (call node {})",
-                    expr.id
-                ))),
-            },
+                ))
+            }
             FreeBuiltin::AssertEq => {
-                if args.len() != 2 {
-                    return Err(err(format!(
-                        "`assert_eq` takes exactly two arguments (call node {})",
-                        expr.id
-                    )));
-                }
+                self.expect_arity(path, args, 2)?;
                 // Ravum compares text values of different Rust types (`String`
                 // versus `&str`); Rust's cross `PartialEq` impls cover that with
                 // the `_cross` helper. Same types keep the simple `Debug` form.

@@ -635,8 +635,7 @@ fn main() {
 
 #[test]
 fn a_builtin_function_used_as_a_value_is_refused_by_the_checker() {
-    // The emitter has a `Resolution::BuiltinFn` path (free builtins as values),
-    // but the checker refuses it with `E-TYP-CALL` before code generation.
+    // The checker diagnoses a bare builtin before lowering to Rust.
     let message = match compile_source("emit", "fn main() {\n    let write = io::println;\n}\n") {
         Ok(_) => panic!("a builtin used as a value must be refused by the checker"),
         Err(message) => message,
