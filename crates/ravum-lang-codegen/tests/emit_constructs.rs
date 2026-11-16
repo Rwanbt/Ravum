@@ -1071,3 +1071,25 @@ fn main() {
     assert!(rust.contains("let mut count: i32;"), "{rust}");
     assert!(rust.contains("count = 4i32"), "{rust}");
 }
+
+#[test]
+fn nested_extern_is_discovered_without_weakening_unsafe_elsewhere() {
+    let code = compile_source(
+        "nested-extern",
+        r#"
+mod platform {
+    mod native {
+        extern "C" {
+            fn abs(value: i32) -> i32;
+        }
+    }
+}
+fn main() {}
+"#,
+    )
+    .expect("nested module with a scalar extern should compile");
+    assert!(code.contains("#![deny(unsafe_code)]"), "{code}");
+    assert!(!code.contains("#![forbid(unsafe_code)]"), "{code}");
+    assert_eq!(code.matches("#[allow(unsafe_code)]").count(), 1);
+    assert_eq!(code.matches("unsafe {").count(), 1);
+}

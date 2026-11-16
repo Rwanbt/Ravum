@@ -663,3 +663,19 @@ Le [rapport CI de couverture](https://github.com/Rwanbt/Ravum/actions/runs/43780
 sur la même tête donne **91,48 % des lignes du code produit** et **1 135 lignes
 découvertes** avec `tools/coverage_product_split.py`. Le ratchet passe et
 l'objectif E6 de couverture reste ouvert.
+
+Le tri des lignes `MISSED` donne 34 survivants dans `emit/mod.rs`, 33 dans
+`names.rs`, 33 dans `paths.rs`, 21 dans `emitter_expr.rs`, 19 dans
+`builtins.rs`, 15 dans `emitter_calls.rs`, 15 dans `emitter_types.rs`,
+12 dans `emitter_items.rs`, 9 dans `index.rs`, 6 dans `emitter_value.rs`
+et 1 dans `emitter_patterns.rs`.
+
+Le [lot 0](https://github.com/Rwanbt/Ravum/actions/runs/43780206534/job/133015530740)
+signale la suppression du bras `ItemKind::Mod(inner) => scan(inner)` dans
+`program_uses_extern`. Sur Linux x86_64, Rust 1.95.0, tête de départ
+`8ad59bbc611053be100a57a26eb101ed311505ec`, le nouveau contrat s'exécute avec
+`cargo test -p ravum-lang-codegen --test emit_constructs nested_extern_is_discovered_without_weakening_unsafe_elsewhere`.
+Il passe sur le backend intact et échoue sur l'arbre temporaire avec ce seul
+bras supprimé (0 réussite, 1 échec). La comparaison porte sur la directive
+`unsafe_code` et l'unicité du wrapper. Le score de la campagne publiée
+reste associé à son propre SHA.
