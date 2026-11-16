@@ -75,20 +75,6 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-EMIT-TO-STRING-FALLBACK",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[3300, 3304]],
-        "summary": "Second `to_string` branch of `builtin_method_call`, after `builtin_method_special`.",
-        "why_unreachable": "`builtin_method_special` returns `Some(...)` for `(_, \"to_string\")` — its first match arm, for every owner — and `builtin_method_call` returns early when it is `Some`. The later `if method == \"to_string\"` can therefore never be true.",
-        "proof": "Static proof: crates/ravum-lang-codegen/src/emit.rs `fn builtin_method_special` first arm `(_, \"to_string\") => format!(...)`; the caller executes `if let Some(special) = ... { return Ok(special); }` before the branch in question.",
-        "evidence": [
-          "crates/ravum-lang-codegen/src/emit.rs:847-871 (builtin_method_special)",
-          "crates/ravum-lang-codegen/src/emit.rs:3296-3304 (call site)"
-        ],
-        "review_condition": "Toute modification de `builtin_method_special` ou de son appel (ordre, ensemble d'owners).",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD",
         "file": "crates/ravum-lang-codegen/src/emit.rs",
         "lines": [[1002, 1005]],
@@ -156,20 +142,6 @@
           "crates/ravum-lang-sema/src/resolve.rs (fn_sigs registration)"
         ],
         "review_condition": "Un appel direct d'`own` sur un programme partiellement vérifié, ou une signature manquante possible après `typeck`.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-DISPLAY-FMT-ERROR",
-        "file": "crates/ravum-lang-sema/src/types.rs",
-        "lines": [[215, 250]],
-        "summary": "`fmt::Error` recovery edges (`?`) of the `impl Display` for semantic types (also documented in docs/qualification/COVERAGE-100-OBJECTIVE.md §2). METRIC: regions — the file is at 100 % lines; the lines below are the llvm-cov region-entry lines of those error edges, reported by `coverage_report.py --gap`.",
-        "why_unreachable": "These regions execute only when the `Formatter` returns `Err`. Every formatter a test or a caller can build through `std` (`format!`, `to_string`, `assert_eq!` on a `String`, `write!` into a `String`) is infallible (`fmt::Write for String` always returns `Ok`), and `std::fmt::Formatter` cannot be constructed with a failing sink from outside the formatting machinery. Replacing `write!(…)?` by an ignored result would delete the region, not prove it.",
-        "proof": "Same measured argument as COVERAGE-100-OBJECTIVE.md §2 (llvm-cov segments show the nominal path executed and only the `?` edges at zero). Line coverage of this file is 100 %: the uncovered *segments* are these error edges.",
-        "evidence": [
-          "docs/qualification/COVERAGE-100-OBJECTIVE.md §2",
-          "python tools/coverage_report.py --gap (types.rs: lines 219-244)"
-        ],
-        "review_condition": "Un `Display` qui écrirait vers une source de sortie faillible, ou un test qui construit un `Formatter` en échec (nouvelle API de test).",
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {

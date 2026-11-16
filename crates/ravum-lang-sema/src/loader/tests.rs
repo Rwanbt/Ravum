@@ -907,6 +907,50 @@ fn digest_refuses_reserved_windows_names_inside_nested_sources() {
     assert_eq!(codes(&diags), ["E-MOD-RESERVED-NAME"]);
 }
 
+#[test]
+fn digest_fails_closed_when_a_source_cannot_be_read_or_inspected() {
+    use std::io::{Error, ErrorKind};
+
+    let temp = TempDir::new("digest-source-io");
+    temp.file("ravum.toml", &manifest("app", ""));
+    let source = temp.file("src/main.rv", "fn main() {}");
+
+    let mut diags = DiagnosticBag::new();
+    let read_failure = package_digest_with(
+        temp.path(),
+        &mut diags,
+        |path| {
+            if path == source {
+                Err(Error::from(ErrorKind::PermissionDenied))
+            } else {
+                fs::read(path)
+            }
+        },
+        |path| fs::symlink_metadata(path),
+    );
+    assert_eq!(read_failure, None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+    assert!(diags
+        .iter()
+        .any(|diag| diag.message.contains("cannot read")));
+
+    let mut diags = DiagnosticBag::new();
+    let inspect_failure = package_digest_with(
+        temp.path(),
+        &mut diags,
+        |path| fs::read(path),
+        |path| {
+            assert_eq!(path, source);
+            Err(Error::from(ErrorKind::NotFound))
+        },
+    );
+    assert_eq!(inspect_failure, None);
+    assert_eq!(codes(&diags), ["E-IO"]);
+    assert!(diags
+        .iter()
+        .any(|diag| diag.message.contains("cannot inspect")));
+}
+
 /// T4: the source-file ceiling is exercised without creating 65 536 files.
 /// The limit is lowered thread-locally, so no other test is affected.
 #[test]

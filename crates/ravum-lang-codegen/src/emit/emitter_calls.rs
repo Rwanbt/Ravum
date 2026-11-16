@@ -362,9 +362,6 @@ impl<'a> Emitter<'a> {
 
         // Direct pass-through only for the methods the Core 1.0 stdlib actually
         // provides on this owner. No hidden clone, no hidden conversion.
-        if method == "to_string" {
-            return Ok(format!("format!(\"{{}}\", {receiver})"));
-        }
         if builtin_method_is_direct(&owner, method) {
             return Ok(format!("{receiver}.{}({rendered})", mangle_ident(method)));
         }
