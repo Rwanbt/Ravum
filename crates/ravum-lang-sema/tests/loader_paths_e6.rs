@@ -316,3 +316,75 @@ fn an_uninspectable_dependency_crate_root_is_an_io_error() {
     let loaded = load_package(&app);
     assert_fail_closed(&loaded, "E-IO", "cannot inspect dependency `util`");
 }
+
+fn manifest_messages(tag: &str, text: &str) -> Vec<String> {
+    let temp = TempDir::new(tag);
+    temp.file("ravum.toml", text);
+    temp.file("src/main.rv", "fn main() { }\n");
+    let loaded = load_package(temp.path());
+    loaded
+        .diags
+        .iter()
+        .map(|diag| format!("{}: {}", diag.code, diag.message))
+        .collect()
+}
+
+const PACKAGE: &str = "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n";
+
+/// Basic-string escapes are decoded (`\"`, `\\`, `\n`, `\t`, `\r`) before the
+/// value is judged; the strict schema then names the key, not the escape.
+#[test]
+fn manifest_string_escapes_are_decoded_before_the_value_is_judged() {
+    let found = manifest_messages(
+        "escapes",
+        &format!("{PACKAGE}description = \"say \\\"hi\\\" \\\\ \\n \\t \\r\"\n"),
+    );
+    assert_eq!(
+        found,
+        ["E-MOD-MANIFEST: unknown key `package.description` (Core 1.0 manifest is strict)"]
+    );
+    let found = manifest_messages(
+        "escaped-quote",
+        "[package]\nname = \"a\\\"pp\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    );
+    assert_eq!(
+        found,
+        ["E-MOD-MANIFEST: invalid package name `a\"pp`: expected `[a-z][a-z0-9_-]*`"]
+    );
+}
+
+/// A quoted key is not a bare key, even when it hides an `=` behind an escaped
+/// quote: the key/value split skips the string.
+#[test]
+fn a_quoted_key_with_an_escaped_quote_is_refused_as_a_key() {
+    let found = manifest_messages(
+        "quoted-key",
+        &format!("{PACKAGE}\"we\\\"ird=key\" = \"x\"\n"),
+    );
+    assert_eq!(
+        found,
+        ["E-MOD-MANIFEST: invalid key `\"we\\\"ird=key\"` on line 5"]
+    );
+}
+
+/// Empty entries of an inline table (a leading or trailing comma) are ignored,
+/// and an escape inside a dependency path is decoded.
+#[test]
+fn empty_inline_table_entries_are_ignored() {
+    let temp = TempDir::new("inline-commas");
+    library_package(&temp, "util", "util");
+    temp.file(
+        "app/ravum.toml",
+        &manifest(
+            "app",
+            "\n[dependencies]\nutil = { , path = \"../util\", }\n",
+        ),
+    );
+    temp.file("app/src/main.rv", "fn main() { }\n");
+    assert_accepted(&load_package(&temp.path().join("app")));
+
+    let temp = TempDir::new("escaped-path");
+    let app = app_with_dependency(&temp, "util", "../u\\tl");
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-MOD-DEPENDENCY", "path `../u\tl` does not exist");
+}
