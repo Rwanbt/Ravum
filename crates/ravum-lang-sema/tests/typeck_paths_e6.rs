@@ -1031,3 +1031,20 @@ fn non_exhaustive_mixed_rows_are_refused() {
         ],
     );
 }
+
+#[test]
+fn a_struct_variant_pattern_with_a_bad_path_still_checks_its_fields() {
+    assert_errors(
+        "enum E { A { f: bool }, B }\n\
+         struct P { f: bool }\n\
+         fn g(e: E, n: i32) {\n\
+             match e { E::Z { f: x } => { } _ => { } }\n\
+             match e { P { f: y } => { } _ => { } }\n\
+         }\n\
+         fn main() { }",
+        &[
+            ("E-RES-UNKNOWN", "unknown name `Z`"),
+            ("E-RES-UNKNOWN", "pattern does not name a variant"),
+        ],
+    );
+}

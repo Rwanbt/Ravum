@@ -123,7 +123,6 @@ pub(super) fn cast_allowed(source: &Type, target: &Type) -> bool {
         (Type::Never, _) => true,
         (s, t) if s.is_int() && t.is_int() => true,
         (s, Type::F32) | (s, Type::F64) if s.is_int() || s == &Type::F32 || s == &Type::F64 => true,
-        (Type::F32, Type::F64) | (Type::F64, Type::F32) => true,
         (Type::F32 | Type::F64, t) if t.is_int() => true,
         (Type::Bool, t) if t.is_int() => true,
         (Type::Char, t) if t.is_int() => true,
