@@ -2709,3 +2709,37 @@ fn choose(input: (Result<Option<bool>, bool>, bool)) -> i32 {
     let incomplete = source.replace("        (Err(false), _) => 5,\n", "");
     expect_code(&incomplete, "E-TYP-NONEXHAUSTIVE");
 }
+
+#[test]
+fn static_text_non_static_returns_taint_every_enclosing_form() {
+    // TYP-6.4: a non-static `return` nested in a `let` initialiser, an `if`
+    // value or a block tail makes the function non-static; OWN-6.2 then
+    // refuses the escaping reference.
+    for src in [
+        "fn f(b: bool) -> &str { let x = if b { return String::from(\"a\").as_str(); } else { \"b\" }; return x; }",
+        "fn f(b: bool) -> &str { return if b { return String::from(\"a\").as_str(); } else { \"b\" }; }",
+        "fn f(b: bool) -> &str { let x = { if b { return String::from(\"a\").as_str(); } \"b\" }; return x; }",
+        "struct S { n: i32 }\nimpl S { fn g(&self) -> &str { let s = String::from(\"a\"); return s.as_str(); } fn f(&self) -> &str { return self.g(); } }",
+        "mod m { pub const C: &str = \"a\"; }\nfn f() -> &str { return m::C; }",
+    ] {
+        expect_code(src, "E-OWN-REF-ESCAPE");
+    }
+}
+
+#[test]
+fn static_text_analysis_survives_a_refused_destructuring_let() {
+    // A `let` with a non-identifier pattern is refused by the parser; the
+    // checker still walks the recovered statement without crashing.
+    for src in [
+        "fn f() -> &str { let (a, b) = (\"a\", 1); return a; }",
+        "fn f() -> &str { let (a, b): (&str, i32); return \"a\"; }",
+    ] {
+        expect_code(src, "E-PARSE-EXPECTED");
+    }
+}
+
+#[test]
+fn static_text_non_text_return_is_a_type_error() {
+    // TYP-6.4: an arithmetic value is never static text; the return is refused.
+    expect_code("fn f() -> &str { return 1 + 2; }", "E-TYP-RETURN");
+}

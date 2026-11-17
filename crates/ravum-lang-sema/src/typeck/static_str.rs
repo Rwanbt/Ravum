@@ -40,7 +40,8 @@ pub(super) fn collect_static_str_candidates<'a>(
                         ItemKind::Fn(f) if fn_sig_returns_static_str(sub.id, f, facts) => {
                             out.push((f, sub.id));
                         }
-                        ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
+                        // The parser refuses `mod` inside an `impl` block
+                        // (E-PARSE-UNEXPECTED), so only methods are visited.
                         _ => {}
                     }
                 }
@@ -314,7 +315,6 @@ pub(super) fn is_static_text_expr(expr: &Expr, facts: &Facts, env: &BTreeSet<Str
         ExprKind::Path(path) => path_local_name(path)
             .map(|name| env.contains(name))
             .unwrap_or(false),
-        ExprKind::SelfValue => false,
         // Interprocedural propagation: only user functions classified by the
         // fixpoint; never a builtin (`as_str` and friends must stay non-static).
         ExprKind::Call { .. } => matches!(
