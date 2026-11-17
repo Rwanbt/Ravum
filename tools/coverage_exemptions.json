@@ -724,20 +724,20 @@
         "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
         "lines": [
           [
-            359,
-            359
+            351,
+            351
           ],
           [
-            362,
-            362
+            354,
+            354
           ],
           [
-            609,
-            609
+            601,
+            601
           ],
           [
-            612,
-            612
+            604,
+            604
           ]
         ],
         "summary": "Path collection of a range without a start or an end.",
@@ -772,6 +772,113 @@
           "conformance/cases/types/for-bounds-mismatch-fail"
         ],
         "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-DEBUG-CROSS-CHECK",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            510,
+            510
+          ]
+        ],
+        "summary": "Skipping the debug-only cross-check of element paths (`if cfg!(debug_assertions)`).",
+        "why_unreachable": "The branch that skips `cross_check` is taken only in a release build; coverage is measured on the default debug profile, where `cfg!(debug_assertions)` is always true.",
+        "proof": "`if cfg!(debug_assertions) { self.cross_check(expr, root); }` in `walk_path`; same reasoning as E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD.",
+        "evidence": [
+          "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
+        ],
+        "review_condition": "Une mesure de couverture en profil release.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            714,
+            714
+          ],
+          [
+            729,
+            729
+          ]
+        ],
+        "summary": "`slot_of` on a tuple or field step whose base is not a tuple or a struct.",
+        "why_unreachable": "`slot_of` is only asked about the steps after the first fixed-size array index, while each previous step still had a slot. The base of such a step is then an array element, a tuple item or a struct field, and typeck types `x.0` / `x.f` only on a tuple / struct or a reference to one. A reference cannot be stored in an array, tuple or struct in Core (E-OWN-REF-ESCAPE), so the base is the tuple or struct itself.",
+        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `element_path`; crates/ravum-lang-sema/src/typeck/places.rs; E-OWN-REF-ESCAPE in crates/ravum-lang-sema/src/own/checker_a.rs.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test backend_audit audit_element_paths_through_references_and_vec_indexes_run"
+        ],
+        "review_condition": "Des références stockables dans un agrégat.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-PLANNED-NOT-ELEMENT",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            779,
+            779
+          ],
+          [
+            783,
+            783
+          ]
+        ],
+        "summary": "`planned_path` on a node that is not an element path.",
+        "why_unreachable": "A node gets a `PathMode` only from `plan`: a move or borrow access is recorded by `walk_path` after `element_path(expr)` returned `Some`, and `planned_path` calls the same pure function on the same expression and facts. A re-initialisation target is recorded only when `OwnFacts::element_reinit` holds it, which `element_write` sets only for a place with an array index, and that index is on a fixed-size array (a `Vec` element cannot be moved out, E-OWN-PARTIAL-MOVE).",
+        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `walk_path`, `plan`; crates/ravum-lang-sema/src/own/checker_b.rs `element_write`.",
+        "evidence": [
+          "crates/ravum-lang-codegen/tests/backend_audit.rs"
+        ],
+        "review_condition": "Un mode de chemin attribué hors de `walk_path`.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-MOVE-NON-ARRAY-INDEX",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            853,
+            853
+          ]
+        ],
+        "summary": "Moving out through an index of something that is not a fixed-size array.",
+        "why_unreachable": "Past the first fixed-size array index the moved value is consumed step by step; an index of a `Vec` or a slice there would move a `Vec` element out, which the ownership checker refuses (E-OWN-PARTIAL-MOVE \"déplacement d'un élément de `Vec` par indexation interdit\").",
+        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs (E-OWN-PARTIAL-MOVE on a `Vec` index).",
+        "evidence": [
+          "ravum-lang build of `let x = a[0].v[0];` with `v: Vec<String>`: E-OWN-PARTIAL-MOVE"
+        ],
+        "review_condition": "Le déplacement hors d'un `Vec` par indexation.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-REINIT-NOT-CONSTANT",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            926,
+            926
+          ],
+          [
+            929,
+            932
+          ]
+        ],
+        "summary": "A re-initialised element whose path goes past the constant run.",
+        "why_unreachable": "`element_write` records a re-initialisation only when no opaque index follows the first array index, and a `Vec` element is never moved out (E-OWN-PARTIAL-MOVE). Field and tuple steps always have a slot (E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE), so the constant run stops only at a literal index past the end of a fixed-size array, which the branch just above lowers to a run-time panic.",
+        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs `element_write` (`opaque_index` returns Blocked).",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test backend_audit audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time"
+        ],
+        "review_condition": "Une réinitialisation à travers un index non constant.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
       }
