@@ -112,6 +112,7 @@ fn trees_refused_by_the_type_checker_are_walked_without_a_diagnostic() {
         "fn g() -> i32 { 1 }\nfn f() { let a = g()(); }",
         "fn f() -> i32 { while (return 1) { break; } 2 }",
         "fn f() -> i32 { for i in (return 1) { break; } 2 }",
+        "fn f(s: &str) { let (a, b) = (s, s); let _ = a; let x: &i32; }",
         "struct S { n: i32 }\nimpl S { fn a(self) -> i32 { self.n } fn b(&self) -> i32 { self.n } \
          fn c(&mut self) { self.n = 1; } }",
     ] {

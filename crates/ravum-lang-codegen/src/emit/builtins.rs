@@ -2,8 +2,6 @@
 //!
 //! Extracted from `emit` by E4 (P-6), no behaviour change.
 
-use super::*;
-
 /// A free function of the Ravum standard library and how it is emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FreeBuiltin {
@@ -100,36 +98,14 @@ pub(super) fn is_option_or_result_ctor(path: &str) -> bool {
         )
 }
 
+/// The Rust spelling of a builtin constant. The resolver produces exactly one,
+/// `Option::None` (resolve/paths.rs); `math::PI` and the primitive associated
+/// constants are `E-RES-UNKNOWN` in Core 1.0, so any other path is a defect
+/// upstream and the caller refuses it.
 pub(super) fn builtin_const(path: &str) -> Option<String> {
-    let path = path.strip_prefix("std::").unwrap_or(path);
-    let direct = match path {
-        "math::PI" | "math::pi" => Some("std::f64::consts::PI"),
-        "math::E" | "math::e" => Some("std::f64::consts::E"),
-        "math::TAU" | "math::tau" => Some("std::f64::consts::TAU"),
-        // `Option::None` is a constant, not a constructor call: the canonical
-        // representation decided by the checker.
-        "Option::None" | "None" => Some("None"),
+    match path.strip_prefix("std::").unwrap_or(path) {
+        "Option::None" | "None" => Some("None".to_string()),
         _ => None,
-    };
-    if let Some(found) = direct {
-        return Some(found.to_string());
-    }
-    // `<primitive>::MIN` / `MAX` / `EPSILON` ... are already valid Rust paths.
-    let mut segments = path.split("::");
-    let owner = segments.next()?;
-    let member = segments.next()?;
-    if segments.next().is_some() {
-        return None;
-    }
-    let owner_ok = builtin_type_name(owner).is_some();
-    let member_ok = matches!(
-        member,
-        "MIN" | "MAX" | "EPSILON" | "NAN" | "INFINITY" | "NEG_INFINITY" | "DIGITS" | "BITS"
-    );
-    if owner_ok && member_ok {
-        Some(format!("{owner}::{member}"))
-    } else {
-        None
     }
 }
 

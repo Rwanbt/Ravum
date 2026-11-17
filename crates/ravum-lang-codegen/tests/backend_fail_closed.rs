@@ -11,7 +11,7 @@
 
 use ravum_lang_codegen::{generate, GenOptions};
 use ravum_lang_sema::facts::{
-    CallTarget, CheckOptions, CheckedProgram, MethodTarget, OwnPlace, Profile,
+    CallTarget, CheckOptions, CheckedProgram, MethodTarget, OwnPlace, Profile, Resolution,
 };
 use ravum_lang_sema::syntax::ast::{Expr, ExprKind, ItemKind, StmtKind};
 use ravum_lang_sema::types::Type;
@@ -237,6 +237,24 @@ fn a_test_function_with_an_unreportable_return_type_is_refused() {
     let message = refusal(&program, &options);
     assert!(
         message.contains("must return `()` or `Result<(), Error>`"),
+        "{message}"
+    );
+}
+
+#[test]
+fn a_builtin_constant_other_than_none_is_refused() {
+    let mut program = checked(
+        "fn main() { let o: Option<i32> = None; drop(o); }\n",
+        Profile::Core,
+    );
+    for resolution in program.facts.resolutions.values_mut() {
+        if let Resolution::BuiltinConst { path } = resolution {
+            *path = "math::PI".to_string();
+        }
+    }
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("unsupported builtin constant `math::PI`"),
         "{message}"
     );
 }

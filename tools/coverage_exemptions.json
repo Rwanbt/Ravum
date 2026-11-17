@@ -19,59 +19,22 @@
     "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json ; python tools/coverage_product_split.py --input target/cov-all.json ; python tools/coverage_report.py --input target/cov-all.json --gap",
     "entries": [
       {
-        "id": "E-LINE-EMIT-BUILTIN-CONST",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [
-          [
-            813,
-            842
-          ]
-        ],
-        "summary": "`builtin_const` arms for `math::PI`/`E`/`TAU` and the primitive `MIN`/`MAX`/`EPSILON` parsing.",
-        "why_unreachable": "The resolver produces exactly one builtin constant, `Resolution::BuiltinConst(\"Option::None\")` (resolve.rs `\"None\" => ...`); `math::PI` and the primitive associated constants are not resolved at all, so those arms cannot be selected. The reachable `Option::None` arm is covered.",
-        "proof": "Measured: `let pi = math::PI;` → `E-RES-UNKNOWN: unknown name `PI``. Code: crates/ravum-lang-sema/src/resolve.rs maps only `None` to `ValuePath::BuiltinConst`.",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test emit_constructs prelude_constants_that_the_checker_does_not_expose_are_refused",
-          "crates/ravum-lang-sema/src/resolve.rs: `\"None\" => return Ok(ValuePath::BuiltinConst(\"Option::None\"))`"
-        ],
-        "review_condition": "L'exposition d'une constante builtin autre que `Option::None` (par exemple `math::PI`).",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD",
-        "file": "crates/ravum-lang-codegen/src/emit.rs",
+        "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
         "lines": [
           [
-            1002,
-            1005
+            252,
+            254
           ]
         ],
         "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
         "why_unreachable": "RFC-OWN-FACTS-1 step B is a debug-only audit guard: the branch is compiled out in release builds and is never executed in a debug build. Coverage is measured on a debug build (`cargo llvm-cov` without `--release`), so the line cannot be covered by any test in the measured profile.",
         "proof": "The guard is `if !cfg!(debug_assertions) { return Ok(()); }`; the instrumented profile is the default debug profile. The *other* direction (a disagreement between `OwnFacts` and the emitter) is covered by the crate's own unit test.",
         "evidence": [
-          "crates/ravum-lang-codegen/src/emit.rs:1002-1005",
+          "crates/ravum-lang-codegen/src/emit/mod.rs:252-254",
           "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
         ],
         "review_condition": "Une mesure de couverture en profil release, ou la suppression de la garde de debug.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-OWN-DESTRUCTURED-LET",
-        "file": "crates/ravum-lang-sema/src/own.rs",
-        "lines": [
-          [
-            639,
-            657
-          ]
-        ],
-        "summary": "Ownership bookkeeping for a destructuring `let` pattern (`let (a, b) = …`).",
-        "why_unreachable": "Core 1.0 `let` binds exactly one identifier: a destructuring pattern reaches the checker and is refused fail-closed (`E-PARSE-EXPECTED`, « `let` binds exactly one identifier in Core 1.0 ») before ownership analysis runs.",
-        "proof": "Measured: `let (text, number): (&str, i32) = (\"abc\", 1);` → `E-PARSE-EXPECTED` with that message; no `CheckedProgram` is produced.",
-        "evidence": [
-          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_destructuring_let_is_refused_by_the_checker"
-        ],
-        "review_condition": "L'acceptation d'un motif de `let` autre qu'une liaison simple.",
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
@@ -99,48 +62,6 @@
           "python tools/coverage_report.py --gap (builtins.rs regions)"
         ],
         "review_condition": "Un formateur faillible, ou une entrée de spécification malformée ajoutée au dépôt.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-LOADER-TOML-VALUE-SHAPE",
-        "file": "crates/ravum-lang-sema/src/loader/toml.rs",
-        "lines": [
-          [
-            499,
-            504
-          ]
-        ],
-        "summary": "The dependency `path` is present but its value is not a string.",
-        "why_unreachable": "parse_toml_value builds inline tables exclusively from entries with TomlValue::Str values. A table is allowed as a top-level manifest value, including under package, so package fields rejected as non-strings are a separate, reachable path.",
-        "proof": "The inline-table reader rejects an unquoted entry value before constructing the table. For every successfully parsed entry it inserts TomlValue::Str.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/loader/toml.rs:181-246 (inline table reader)",
-          "cargo test -p ravum-lang-sema --test loader_manifest_contracts dependency_entries_are_strict"
-        ],
-        "review_condition": "Un lecteur TOML qui accepterait une valeur non textuelle dans une table en ligne.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-LOADER-CHECKED-ABOVE",
-        "file": "crates/ravum-lang-sema/src/loader.rs",
-        "lines": [
-          [
-            1058,
-            1062
-          ],
-          [
-            1668,
-            1672
-          ]
-        ],
-        "summary": "`unreachable!()` / `unreachable!(\"checked above\")` arms after an exhaustive `match` on the same key.",
-        "why_unreachable": "Both arms are guarded by an immediately preceding `match` on the same value (`key` is one of `name`/`version`/`edition`; a path component was already classified as `Normal`/`CurDir`/`ParentDir`). Reaching them would require the two matches to disagree, which no input can cause.",
-        "proof": "Static proof: the arm bodies are `unreachable!()` / `unreachable!(\"checked above\")` directly under the exhaustive match that establishes the invariant.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/loader.rs:1047-1062 (package key match)",
-          "crates/ravum-lang-sema/src/loader.rs:1655-1672 (path component match)"
-        ],
-        "review_condition": "Toute modification des deux `match` qui romprait l'invariant « checked above ».",
         "approval": "PENDING_HUMAN_APPROVAL"
       }
     ]

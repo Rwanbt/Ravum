@@ -315,28 +315,10 @@ impl<'a> OwnChecker<'a> {
                 SlotState::default()
             };
             self.state.slots.insert(slot, st);
-            return;
         }
-
-        // Destructuring pattern: the initialiser was consumed as a whole.
-        let mut bindings: Vec<PatBinding> = Vec::new();
-        self.collect_pat_bindings(&l.pat, false, &mut bindings);
-        for b in bindings {
-            // A `&str` extracted from a destructured aggregate is static by
-            // construction (D13 rule 1 + rule 2); every other reference keeps
-            // the Core 1.0 refusal.
-            let static_ref = b.nested && is_borrowed_text(&b.ty);
-            if b.ty.is_reference() && !static_ref {
-                self.report_ref_escape(b.span, "stockée");
-            }
-            let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
-            let st = if has_init {
-                SlotState::initialised()
-            } else {
-                SlotState::default()
-            };
-            self.state.slots.insert(slot, st);
-        }
+        // Any other pattern: the type checker refused it ("`let` binds exactly
+        // one identifier in Core 1.0", typeck/core.rs), so ownership never
+        // runs on it in a check; walked without facts, it declares nothing.
     }
 
     pub(super) fn collect_pat_bindings(&self, pat: &Pat, nested: bool, out: &mut Vec<PatBinding>) {
