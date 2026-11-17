@@ -558,6 +558,21 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             (l, r)
         };
 
+        self.binary_result_type(expr, op, l_ty, r_ty, rhs)
+    }
+
+    /// Type of `lhs op rhs` from the operand types (TYP-7, EXPR-3/4), shared by
+    /// expressions and constant initialisers; reports the refusal and answers
+    /// `Type::Error` for operands the operator does not accept.
+    pub(super) fn binary_result_type(
+        &mut self,
+        expr: &Expr,
+        op: ast::BinOp,
+        l_ty: Type,
+        r_ty: Type,
+        rhs: &Expr,
+    ) -> Type {
+        use ast::BinOp as B;
         match op {
             B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
                 if (l_ty.is_int() && r_ty.is_int()) || (l_ty.is_float() && r_ty.is_float()) {
@@ -825,7 +840,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_assign_op(
         &mut self,
         expr: &Expr,
-        op: ast::BinOp,
+        op: ast::CompoundOp,
         target: &Expr,
         value: &Expr,
     ) -> Type {
@@ -835,7 +850,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         // fois : c'est l'affectation composée du Rust émis (`place op= e`) qui
         // le garantit ; le vérificateur de types ne contrôle donc que les
         // types des opérandes et la mutabilité de la place.
-        use ast::BinOp as B;
+        use ast::CompoundOp as B;
         let sym = format!("{}=", op.as_str());
         let target_ty = self.check_expr(target, None);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
@@ -898,16 +913,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         ),
                     );
                 }
-            }
-            // Le parseur ne construit un `AssignOp` qu'avec l'un des dix
-            // opérateurs ci-dessus (G-6.8) ; ce bras n'est donc pas atteignable,
-            // mais un refus typé vaut mieux qu'un silence.
-            B::And | B::Or | B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge => {
-                self.error(
-                    "E-TYP-MISMATCH",
-                    expr.span,
-                    format!("`{sym}` is not a compound assignment operator"),
-                );
             }
         }
         if !matches!(target_ty, Type::Error) && !self.place_is_mutable(target) {

@@ -102,6 +102,8 @@ fn constant_shifts_are_bounded() {
         &[
             ("E-TYP-CONST", "constant evaluation overflow"),
             ("E-TYP-CONST", "constant evaluation overflow"),
+            // EXPR-3.4: a negative literal shift amount, as in an expression.
+            ("E-TYP-SHIFT", "shift amount must not be negative"),
         ],
     );
 }

@@ -183,8 +183,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ExprKind::Binary { op, lhs, rhs } => {
                 let (l_ty, l_val) = self.check_const_expr(lhs, expected);
                 let (r_ty, r_val) = self.check_const_expr(rhs, Some(&l_ty));
-                let _ = r_ty;
-                self.const_binary(expr, *op, &l_ty, l_val, r_val)
+                if matches!(l_ty, Type::Error) || matches!(r_ty, Type::Error) {
+                    (Type::Error, None)
+                } else {
+                    // The operand rules of an expression apply unchanged: an
+                    // ill-typed constant used to be accepted with no value and
+                    // failed in code generation.
+                    let result = self.binary_result_type(expr, *op, l_ty.clone(), r_ty, rhs);
+                    if matches!(result, Type::Error) {
+                        (Type::Error, None)
+                    } else {
+                        self.const_binary(expr, *op, &l_ty, l_val, r_val)
+                    }
+                }
             }
             ExprKind::Cast { expr: operand, ty } => {
                 let (source_ty, source_val) = self.check_const_expr(operand, None);
@@ -233,118 +244,121 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         rhs: Option<ConstValue>,
     ) -> (Type, Option<ConstValue>) {
         use ast::BinOp as B;
+        let ints = match (&lhs, &rhs) {
+            (Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) => Some((*a, *b)),
+            _ => None,
+        };
+        let bools = match (&lhs, &rhs) {
+            (Some(ConstValue::Bool(a)), Some(ConstValue::Bool(b))) => Some((*a, *b)),
+            _ => None,
+        };
+        // `==`/`!=` on every constant kind, `<`.. on integers and `char`
+        // (TYP-7.3/7.4); typing already refused any other pair.
+        let equal = match (&lhs, &rhs) {
+            (Some(a), Some(b)) => Some(a == b),
+            _ => None,
+        };
+        let ordering = match (&lhs, &rhs) {
+            (Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) => Some(a.cmp(b)),
+            (Some(ConstValue::Char(a)), Some(ConstValue::Char(b))) => Some(a.cmp(b)),
+            _ => None,
+        };
+        let compare = |f: fn(std::cmp::Ordering) -> bool| {
+            (Type::Bool, ordering.map(|o| ConstValue::Bool(f(o))))
+        };
+        let shift = |a: i128, b: i128, f: fn(i128, u32) -> Option<i128>| {
+            if !(0..128).contains(&b) {
+                None
+            } else {
+                f(a, b as u32)
+            }
+        };
         match op {
-            B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
-                if let (Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) = (&lhs, &rhs) {
-                    let result = match op {
-                        B::Add => a.checked_add(*b),
-                        B::Sub => a.checked_sub(*b),
-                        B::Mul => a.checked_mul(*b),
-                        B::Div => {
-                            if *b == 0 {
-                                self.error(
-                                    "E-TYP-CONST",
-                                    expr.span,
-                                    "division by zero in constant".to_string(),
-                                );
-                                None
-                            } else {
-                                a.checked_div(*b)
-                            }
-                        }
-                        B::Rem => {
-                            if *b == 0 {
-                                self.error(
-                                    "E-TYP-CONST",
-                                    expr.span,
-                                    "remainder by zero in constant".to_string(),
-                                );
-                                None
-                            } else {
-                                a.checked_rem(*b)
-                            }
-                        }
-                        _ => None,
-                    };
-                    match result {
-                        Some(v) if int_i128_fits(v, ty) => (ty.clone(), Some(ConstValue::Int(v))),
-                        Some(_) => {
-                            self.error("E-TYP-CONST", expr.span, "constant overflow".to_string());
-                            (ty.clone(), None)
-                        }
-                        None => {
-                            self.error(
-                                "E-TYP-CONST",
-                                expr.span,
-                                "constant evaluation overflow".to_string(),
-                            );
-                            (ty.clone(), None)
-                        }
-                    }
-                } else {
-                    (ty.clone(), None)
-                }
-            }
-            B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge | B::And | B::Or => {
-                let value = match (op, &lhs, &rhs) {
-                    (B::And, Some(ConstValue::Bool(a)), Some(ConstValue::Bool(b))) => {
-                        Some(ConstValue::Bool(*a && *b))
-                    }
-                    (B::Or, Some(ConstValue::Bool(a)), Some(ConstValue::Bool(b))) => {
-                        Some(ConstValue::Bool(*a || *b))
-                    }
-                    (_, Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) => {
-                        let b = match op {
-                            B::Eq => a == b,
-                            B::Ne => a != b,
-                            B::Lt => a < b,
-                            B::Le => a <= b,
-                            B::Gt => a > b,
-                            B::Ge => a >= b,
-                            _ => false,
+            B::Add => self.const_arith(expr, ty, ints.map(|(a, b)| a.checked_add(b))),
+            B::Sub => self.const_arith(expr, ty, ints.map(|(a, b)| a.checked_sub(b))),
+            B::Mul => self.const_arith(expr, ty, ints.map(|(a, b)| a.checked_mul(b))),
+            B::Div | B::Rem => {
+                let result = ints.map(|(a, b)| {
+                    if b == 0 {
+                        let what = if op == B::Div {
+                            "division"
+                        } else {
+                            "remainder"
                         };
-                        Some(ConstValue::Bool(b))
+                        self.error(
+                            "E-TYP-CONST",
+                            expr.span,
+                            format!("{what} by zero in constant"),
+                        );
+                        None
+                    } else if op == B::Div {
+                        a.checked_div(b)
+                    } else {
+                        a.checked_rem(b)
                     }
-                    _ => None,
-                };
-                (Type::Bool, value)
+                });
+                self.const_arith(expr, ty, result)
             }
-            B::BitAnd | B::BitOr | B::BitXor | B::Shl | B::Shr => {
-                if let (Some(ConstValue::Int(a)), Some(ConstValue::Int(b))) = (&lhs, &rhs) {
-                    let result = match op {
-                        B::BitAnd => Some(a & b),
-                        B::BitOr => Some(a | b),
-                        B::BitXor => Some(a ^ b),
-                        B::Shl => {
-                            if *b < 0 || *b >= 128 {
-                                None
-                            } else {
-                                a.checked_shl(*b as u32)
-                            }
-                        }
-                        B::Shr => {
-                            if *b < 0 || *b >= 128 {
-                                None
-                            } else {
-                                a.checked_shr(*b as u32)
-                            }
-                        }
-                        _ => None,
-                    };
-                    match result {
-                        Some(v) if int_i128_fits(v, ty) => (ty.clone(), Some(ConstValue::Int(v))),
-                        _ => {
-                            self.error(
-                                "E-TYP-CONST",
-                                expr.span,
-                                "constant evaluation overflow".to_string(),
-                            );
-                            (ty.clone(), None)
-                        }
-                    }
-                } else {
-                    (ty.clone(), None)
-                }
+            B::Eq => (Type::Bool, equal.map(ConstValue::Bool)),
+            B::Ne => (Type::Bool, equal.map(|e| ConstValue::Bool(!e))),
+            B::Lt => compare(|o| o.is_lt()),
+            B::Le => compare(|o| o.is_le()),
+            B::Gt => compare(|o| o.is_gt()),
+            B::Ge => compare(|o| o.is_ge()),
+            B::And => (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a && b))),
+            B::Or => (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a || b))),
+            B::BitAnd => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a & b))),
+            B::BitOr => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a | b))),
+            B::BitXor => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a ^ b))),
+            B::Shl => self.const_bits(expr, ty, ints.map(|(a, b)| shift(a, b, i128::checked_shl))),
+            B::Shr => self.const_bits(expr, ty, ints.map(|(a, b)| shift(a, b, i128::checked_shr))),
+        }
+    }
+
+    /// Outcome of `+ - * / %` on two integer constants: `None` when an operand
+    /// is not a known integer, `Some(None)` when the operation failed.
+    fn const_arith(
+        &mut self,
+        expr: &Expr,
+        ty: &Type,
+        result: Option<Option<i128>>,
+    ) -> (Type, Option<ConstValue>) {
+        match result {
+            None => (ty.clone(), None),
+            Some(Some(v)) if int_i128_fits(v, ty) => (ty.clone(), Some(ConstValue::Int(v))),
+            Some(Some(_)) => {
+                self.error("E-TYP-CONST", expr.span, "constant overflow".to_string());
+                (ty.clone(), None)
+            }
+            Some(None) => {
+                self.error(
+                    "E-TYP-CONST",
+                    expr.span,
+                    "constant evaluation overflow".to_string(),
+                );
+                (ty.clone(), None)
+            }
+        }
+    }
+
+    /// Outcome of `& | ^ << >>` on two integer constants (same encoding as
+    /// [`Self::const_arith`]); every failure is an evaluation overflow.
+    fn const_bits(
+        &mut self,
+        expr: &Expr,
+        ty: &Type,
+        result: Option<Option<i128>>,
+    ) -> (Type, Option<ConstValue>) {
+        match result {
+            None => (ty.clone(), None),
+            Some(Some(v)) if int_i128_fits(v, ty) => (ty.clone(), Some(ConstValue::Int(v))),
+            Some(_) => {
+                self.error(
+                    "E-TYP-CONST",
+                    expr.span,
+                    "constant evaluation overflow".to_string(),
+                );
+                (ty.clone(), None)
             }
         }
     }

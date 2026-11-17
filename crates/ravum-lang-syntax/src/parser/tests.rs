@@ -601,12 +601,12 @@ fn cast_and_assignment_operators() {
         other => panic!("expected expression statement, got {other:?}"),
     }
     match &stmt_expr(&f.body.stmts[1]).0.kind {
-        ExprKind::AssignOp { op, .. } => assert_eq!(*op, BinOp::Add),
+        ExprKind::AssignOp { op, .. } => assert_eq!(*op, CompoundOp::Add),
         other => panic!("expected +=, got {other:?}"),
     }
     // `>>=` is lexed as one token and split internally; it must stay Shr.
     match &stmt_expr(&f.body.stmts[2]).0.kind {
-        ExprKind::AssignOp { op, .. } => assert_eq!(*op, BinOp::Shr),
+        ExprKind::AssignOp { op, .. } => assert_eq!(*op, CompoundOp::Shr),
         other => panic!("expected >>=, got {other:?}"),
     }
 }

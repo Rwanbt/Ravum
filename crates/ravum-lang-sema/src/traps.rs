@@ -166,7 +166,7 @@ impl Ctx<'_> {
                 // Compound assignment is the same trap as the corresponding
                 // binary operation: `x += 1` is `x + 1` (RFC-RT-TRAPS-1).
                 let ty = expr_type(self.checked, target);
-                self.binary(expr.span, *op, target, value, ty);
+                self.binary(expr.span, op.bin_op(), target, value, ty);
                 self.expr(target);
                 self.expr(value);
             }

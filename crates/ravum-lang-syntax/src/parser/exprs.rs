@@ -98,23 +98,23 @@ impl<'a> Parser<'a> {
     }
 
     /// Assignment operators are the lowest precedence level, right-associative.
-    pub(super) fn peek_assign(&self) -> Option<(Option<BinOp>, usize)> {
+    pub(super) fn peek_assign(&self) -> Option<(Option<CompoundOp>, usize)> {
         match self.kind() {
             TokenKind::Punct(Punct::Eq) => Some((None, 1)),
-            TokenKind::Punct(Punct::PlusEq) => Some((Some(BinOp::Add), 1)),
-            TokenKind::Punct(Punct::MinusEq) => Some((Some(BinOp::Sub), 1)),
-            TokenKind::Punct(Punct::StarEq) => Some((Some(BinOp::Mul), 1)),
-            TokenKind::Punct(Punct::SlashEq) => Some((Some(BinOp::Div), 1)),
-            TokenKind::Punct(Punct::PercentEq) => Some((Some(BinOp::Rem), 1)),
-            TokenKind::Punct(Punct::AmpEq) => Some((Some(BinOp::BitAnd), 1)),
-            TokenKind::Punct(Punct::PipeEq) => Some((Some(BinOp::BitOr), 1)),
-            TokenKind::Punct(Punct::CaretEq) => Some((Some(BinOp::BitXor), 1)),
-            TokenKind::Punct(Punct::ShlEq) => Some((Some(BinOp::Shl), 1)),
+            TokenKind::Punct(Punct::PlusEq) => Some((Some(CompoundOp::Add), 1)),
+            TokenKind::Punct(Punct::MinusEq) => Some((Some(CompoundOp::Sub), 1)),
+            TokenKind::Punct(Punct::StarEq) => Some((Some(CompoundOp::Mul), 1)),
+            TokenKind::Punct(Punct::SlashEq) => Some((Some(CompoundOp::Div), 1)),
+            TokenKind::Punct(Punct::PercentEq) => Some((Some(CompoundOp::Rem), 1)),
+            TokenKind::Punct(Punct::AmpEq) => Some((Some(CompoundOp::BitAnd), 1)),
+            TokenKind::Punct(Punct::PipeEq) => Some((Some(CompoundOp::BitOr), 1)),
+            TokenKind::Punct(Punct::CaretEq) => Some((Some(CompoundOp::BitXor), 1)),
+            TokenKind::Punct(Punct::ShlEq) => Some((Some(CompoundOp::Shl), 1)),
             // `>>=` is split into `>` `>` `=`.
             TokenKind::Punct(Punct::Gt)
                 if self.peek_punct(1, Punct::Gt) && self.peek_punct(2, Punct::Eq) =>
             {
-                Some((Some(BinOp::Shr), 3))
+                Some((Some(CompoundOp::Shr), 3))
             }
             _ => None,
         }

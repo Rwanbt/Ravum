@@ -5275,3 +5275,30 @@ fn main() {
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");
 }
+
+/// Every constant comparison is evaluated: `true == true`, `'a' < 'b'` and
+/// `"a" == "a"` used to be accepted by `check` with no value, and code
+/// generation then stopped on a missing `Facts::consts` entry.
+#[test]
+fn audit_constant_comparisons_of_every_kind_build_and_run() {
+    if skip("audit_constant_comparisons_of_every_kind_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "constant-comparisons",
+        r#"const A: bool = true == true;
+const B: bool = 'a' < 'b';
+const C: bool = "a" == "a";
+const D: bool = 1 != 1;
+const E: bool = 'z' <= 'a';
+const F: bool = false != true;
+fn main() {
+    if A && B && C && !D && !E && F { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "constant-comparisons");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
