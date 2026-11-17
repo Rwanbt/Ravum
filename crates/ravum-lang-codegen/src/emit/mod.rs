@@ -195,11 +195,10 @@ impl Buf {
         self.out.push('\n');
     }
 
+    /// Append text that already ends with a newline (the prelude; see
+    /// `tests::the_prelude_ends_with_a_newline`).
     fn raw(&mut self, text: &str) {
         self.out.push_str(text);
-        if !text.ends_with('\n') {
-            self.out.push('\n');
-        }
     }
 
     fn finish(self) -> String {

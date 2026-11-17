@@ -1484,3 +1484,10 @@ fn e2e_tests_demo_runner() {
     );
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+/// `Buf::raw` appends the prelude as is: the next generated line must start on
+/// a line of its own.
+#[test]
+fn the_prelude_ends_with_a_newline() {
+    assert!(PRELUDE.ends_with('\n'));
+}
