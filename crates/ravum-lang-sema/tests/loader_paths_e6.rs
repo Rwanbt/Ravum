@@ -412,3 +412,16 @@ fn a_file_used_as_a_directory_in_a_dependency_is_an_io_error() {
     let loaded = load_package(&app);
     assert_fail_closed(&loaded, "E-IO", "cannot inspect dependency `util`");
 }
+
+/// A path that is neither a file nor a directory (a character device) is a
+/// manifest error, not an I/O crash.
+#[cfg(unix)]
+#[test]
+fn a_device_path_is_neither_a_package_nor_a_source_file() {
+    let loaded = load_package(Path::new("/dev/null"));
+    assert_fail_closed(
+        &loaded,
+        "E-MOD-MANIFEST",
+        "is neither a file nor a directory",
+    );
+}

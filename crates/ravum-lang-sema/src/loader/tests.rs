@@ -1550,4 +1550,48 @@ mod loader_after_digest {
     }
 }
 
+/// The pure path helpers of the loader, on the shapes a load rarely builds.
+mod path_helpers {
+    use super::*;
+    use crate::loader::fsutil::{
+        check_path_no_symlinks, display_relative, next_synthetic, path_to_slash,
+    };
+
+    #[test]
+    fn a_path_outside_its_base_is_displayed_whole_with_every_component() {
+        assert_eq!(
+            display_relative(Path::new("/a/./b/../c"), Path::new("/elsewhere")),
+            "/a/b/../c"
+        );
+        assert_eq!(
+            display_relative(Path::new("/base/x/y"), Path::new("/base")),
+            "x/y"
+        );
+        assert_eq!(path_to_slash(Path::new("./x")), "x");
+    }
+
+    #[test]
+    fn a_target_outside_the_base_has_no_link_to_check() {
+        let mut diags = DiagnosticBag::new();
+        assert_eq!(
+            check_path_no_symlinks(Path::new("/base"), Path::new("/other/file"), &mut diags),
+            Some(())
+        );
+        assert!(diags.is_empty());
+    }
+
+    #[test]
+    fn the_synthetic_counter_stays_in_the_synthetic_file_range() {
+        let start = u64::from(SYNTHETIC_FILE) << 32;
+        let mut counter = start | 7;
+        assert_eq!(next_synthetic(&mut counter), start | 7);
+        assert_eq!(counter, start | 8);
+        // A counter outside the range (fresh or overflowed) is reset to the
+        // first synthetic id.
+        let mut counter = 0;
+        assert_eq!(next_synthetic(&mut counter), 0);
+        assert_eq!(counter, start | 1);
+    }
+}
+
 mod filesystem_contracts;
