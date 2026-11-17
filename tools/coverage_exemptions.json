@@ -21,7 +21,12 @@
       {
         "id": "E-LINE-EMIT-BUILTIN-CONST",
         "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[813, 842]],
+        "lines": [
+          [
+            813,
+            842
+          ]
+        ],
         "summary": "`builtin_const` arms for `math::PI`/`E`/`TAU` and the primitive `MIN`/`MAX`/`EPSILON` parsing.",
         "why_unreachable": "The resolver produces exactly one builtin constant, `Resolution::BuiltinConst(\"Option::None\")` (resolve.rs `\"None\" => ...`); `math::PI` and the primitive associated constants are not resolved at all, so those arms cannot be selected. The reachable `Option::None` arm is covered.",
         "proof": "Measured: `let pi = math::PI;` → `E-RES-UNKNOWN: unknown name `PI``. Code: crates/ravum-lang-sema/src/resolve.rs maps only `None` to `ValuePath::BuiltinConst`.",
@@ -35,7 +40,12 @@
       {
         "id": "E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD",
         "file": "crates/ravum-lang-codegen/src/emit.rs",
-        "lines": [[1002, 1005]],
+        "lines": [
+          [
+            1002,
+            1005
+          ]
+        ],
         "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
         "why_unreachable": "RFC-OWN-FACTS-1 step B is a debug-only audit guard: the branch is compiled out in release builds and is never executed in a debug build. Coverage is measured on a debug build (`cargo llvm-cov` without `--release`), so the line cannot be covered by any test in the measured profile.",
         "proof": "The guard is `if !cfg!(debug_assertions) { return Ok(()); }`; the instrumented profile is the default debug profile. The *other* direction (a disagreement between `OwnFacts` and the emitter) is covered by the crate's own unit test.",
@@ -47,24 +57,14 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-RESOLVE-PLAIN-ROOT-ARMS",
-        "file": "crates/ravum-lang-sema/src/resolve.rs",
-        "lines": [[1314, 1332], [2426, 2436], [2544, 2572]],
-        "summary": "`PathRoot::Plain` arms comparing the first segment to `crate`/`self`/`super`, the `levels` loops for `super::super`, and the `Self` prefix test.",
-        "why_unreachable": "`parser::parse_path` consumes `crate`/`self`/`super` as a `PathRoot` before segmentation, and `Self` is the keyword `Kw::SelfType` (it can never be an `Ident` segment). A plain path therefore never starts with those words, and `super::super` is itself a parse error.",
-        "proof": "Measured: `use crate::…` / `use self::…` parse into `PathRoot::Crate`/`SelfMod` (no `E-PARSE-EXPECTED`); `use super::super::Something;` is refused with `E-PARSE-EXPECTED: expected path segment, found keyword `super``. Same argument as MUTATION-EQUIVALENCE.md §9.2 (E2), re-measured here.",
-        "evidence": [
-          "cargo test -p ravum-lang-sema --test checker_entry_contracts use_forms_with_an_explicit_root_are_accepted",
-          "cargo test -p ravum-lang-sema --test checker_entry_contracts a_double_super_path_is_a_parse_error",
-          "docs/qualification/MUTATION-EQUIVALENCE.md §9.2 E2"
-        ],
-        "review_condition": "Un parseur qui accepterait `crate`/`self`/`super`/`Self` comme segments ordinaires, ou `super::super::…` comme chemin.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-OWN-DESTRUCTURED-LET",
         "file": "crates/ravum-lang-sema/src/own.rs",
-        "lines": [[639, 657]],
+        "lines": [
+          [
+            639,
+            657
+          ]
+        ],
         "summary": "Ownership bookkeeping for a destructuring `let` pattern (`let (a, b) = …`).",
         "why_unreachable": "Core 1.0 `let` binds exactly one identifier: a destructuring pattern reaches the checker and is refused fail-closed (`E-PARSE-EXPECTED`, « `let` binds exactly one identifier in Core 1.0 ») before ownership analysis runs.",
         "proof": "Measured: `let (text, number): (&str, i32) = (\"abc\", 1);` → `E-PARSE-EXPECTED` with that message; no `CheckedProgram` is produced.",
@@ -75,23 +75,22 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-OWN-SIGNATURE-FALLBACK",
-        "file": "crates/ravum-lang-sema/src/own.rs",
-        "lines": [[441, 469]],
-        "summary": "AST fallback of `own::check_fn` when `Facts::fn_sigs` has no signature for the function.",
-        "why_unreachable": "`own` runs inside `check`, after `resolve`/`typeck` filled `fn_sigs` for every function of the program, and a `CheckedProgram` is only produced when no diagnostic error was reported (fail-closed). A function without a signature therefore cannot be reached by ownership analysis.",
-        "proof": "Static invariant: `check_entry_with_timings` returns `checked: None` as soon as a phase reported an error; `resolve::World::build_module` records a `Sym::Fn` (hence a `FnSig`) for every `ItemKind::Fn`.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/check.rs (fail-closed sequence)",
-          "crates/ravum-lang-sema/src/resolve.rs (fn_sigs registration)"
-        ],
-        "review_condition": "Un appel direct d'`own` sur un programme partiellement vérifié, ou une signature manquante possible après `typeck`.",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-BUILTINS-TO-STR-EDGES",
         "file": "crates/ravum-lang-sema/src/builtins.rs",
-        "lines": [[70, 80], [944, 950], [974, 990]],
+        "lines": [
+          [
+            70,
+            80
+          ],
+          [
+            944,
+            950
+          ],
+          [
+            974,
+            990
+          ]
+        ],
         "summary": "`fmt::Error` and parse-recovery edges of `builtins.rs` (display of effect names, malformed type text). METRIC: regions — the file is at 100 % lines; the lines below are the region-entry lines of the error edges (75-76, 948, 977-985).",
         "why_unreachable": "The `?` edges of the `Display` impls cannot fail for the same reason as E-LINE-DISPLAY-FMT-ERROR; the recovery edges of `type_from_str` are reached only by malformed spec text that the checked-in specification does not contain (and the strict parser refuses it rather than recovering).",
         "proof": "Line coverage of `builtins.rs` is 100 %: only the error regions of the `?` operators remain at zero (COVERAGE-100-OBJECTIVE.md §2).",
@@ -105,7 +104,12 @@
       {
         "id": "E-LINE-LOADER-TOML-VALUE-SHAPE",
         "file": "crates/ravum-lang-sema/src/loader/toml.rs",
-        "lines": [[499, 504]],
+        "lines": [
+          [
+            499,
+            504
+          ]
+        ],
         "summary": "The dependency `path` is present but its value is not a string.",
         "why_unreachable": "parse_toml_value builds inline tables exclusively from entries with TomlValue::Str values. A table is allowed as a top-level manifest value, including under package, so package fields rejected as non-strings are a separate, reachable path.",
         "proof": "The inline-table reader rejects an unquoted entry value before constructing the table. For every successfully parsed entry it inserts TomlValue::Str.",
@@ -119,7 +123,16 @@
       {
         "id": "E-LINE-LOADER-CHECKED-ABOVE",
         "file": "crates/ravum-lang-sema/src/loader.rs",
-        "lines": [[1058, 1062], [1668, 1672]],
+        "lines": [
+          [
+            1058,
+            1062
+          ],
+          [
+            1668,
+            1672
+          ]
+        ],
         "summary": "`unreachable!()` / `unreachable!(\"checked above\")` arms after an exhaustive `match` on the same key.",
         "why_unreachable": "Both arms are guarded by an immediately preceding `match` on the same value (`key` is one of `name`/`version`/`edition`; a path component was already classified as `Normal`/`CurDir`/`ParentDir`). Reaching them would require the two matches to disagree, which no input can cause.",
         "proof": "Static proof: the arm bodies are `unreachable!()` / `unreachable!(\"checked above\")` directly under the exhaustive match that establishes the invariant.",
