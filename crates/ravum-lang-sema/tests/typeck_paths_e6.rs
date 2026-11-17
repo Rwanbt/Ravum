@@ -853,3 +853,41 @@ fn a_method_of_a_user_type_used_without_a_call_is_not_a_field() {
         &[("E-TYP-FIELD", "no field `m` on type `P`")],
     );
 }
+
+/// D13: a function in a module returning only literals returns static text.
+#[test]
+fn a_static_text_function_inside_a_module_is_recognised() {
+    assert_errors(
+        "mod m { pub fn f() -> &str { \"x\" } }\n\
+         fn main() { io::println(m::f()); }",
+        &[],
+    );
+}
+
+/// Text reached through `self` is a borrow, never static.
+#[test]
+fn text_returned_through_self_is_not_static() {
+    assert_errors(
+        "struct S { n: String }\n\
+         impl S { fn f(&self) -> &str { \"x\" } fn g(&self) -> &str { self.f() } fn h(&self) -> &str { self.n.as_str() } }\n\
+         fn main() { }",
+        &[
+            ("E-OWN-REF-ESCAPE", "une référence ne peut pas être retournée en Core 1.0"),
+        ],
+    );
+}
+
+/// `typeck::typecheck` is the public re-entry point: it rebuilds the world and
+/// types a program whose resolution facts are already filled.
+#[test]
+fn the_public_typecheck_entry_types_a_resolved_program() {
+    let source = "fn f(a: i32) -> i32 { a + 1 }\nfn main() { let x = f(1); drop(x); }";
+    let mut sources = SourceMap::new();
+    let file = sources.add("main.rv", source);
+    let parsed = parser::parse_file(file, source);
+    let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+    let mut checked = result.checked.expect("the fixture checks");
+    let mut diags = ravum_lang_sema::syntax::diag::DiagnosticBag::new();
+    assert!(ravum_lang_sema::typeck::typecheck(&mut checked, &mut diags));
+    assert!(!diags.has_errors());
+}

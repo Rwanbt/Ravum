@@ -4786,6 +4786,49 @@ fn audit_a_type_nested_one_hundred_levels_builds_and_runs() {
     assert_eq!(stdout, "ok\n");
 }
 
+/// Expression shapes no corpus program generated: a one-element tuple, an
+/// exponent float literal, a unit variant called with `()`, and a valueless
+/// `return` as the `else` value of an `if` expression.
+#[test]
+fn audit_rare_expression_shapes_build_and_run() {
+    if skip("audit_rare_expression_shapes_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "rare-expression-shapes",
+        r#"enum E { A, B(i32) }
+
+fn g(c: bool) {
+    let y = if c { 1 } else { return };
+    drop(y);
+}
+
+fn main() {
+    let t = (1,);
+    let x = 1.5;
+    let y = 2e3;
+    let e = E::A();
+    match e {
+        E::A => { io::println("a"); }
+        E::B(n) => { drop(n); }
+    }
+    g(false);
+    assert_eq(t.0, 1);
+    assert(x < y);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("(1i32,)"),
+        "a one-element tuple keeps its comma"
+    );
+    let built = must_compile(&code, "rare-expression-shapes");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "a\nok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.
