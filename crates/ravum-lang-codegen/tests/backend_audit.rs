@@ -4722,6 +4722,44 @@ fn main() {
     assert_eq!(stdout, "ok\n");
 }
 
+/// Projections after a computed index (`a[i].t.0`, `l[i][1]`) consume the
+/// array and keep projecting the selected value; a borrow through an element
+/// of a partially moved array (`b[1].t.0`) keeps its trailing projections.
+#[test]
+fn audit_projections_after_a_computed_index_and_a_partial_move_run_correctly() {
+    if skip("audit_projections_after_a_computed_index_and_a_partial_move_run_correctly") {
+        return;
+    }
+    let code = generate_source(
+        "element-path-computed-projections",
+        r#"struct S { n: String, t: (String, i32) }
+
+fn main() {
+    let i: usize = 1;
+    let a = [S { n: String::from("x"), t: (String::from("y"), 1) }, S { n: String::from("z"), t: (String::from("ww"), 2) }];
+    let m = a[i].t.0;
+    assert_eq(m.len(), 2);
+    let l = [[String::from("p"), String::from("q")], [String::from("r"), String::from("sss")]];
+    let j = l[i][1];
+    assert_eq(j.len(), 3);
+    let b = [S { n: String::from("xxxx"), t: (String::from("y"), 1) }, S { n: String::from("z"), t: (String::from("vvvvv"), 2) }];
+    let k = b[0].n;
+    assert_eq(b[1].t.0.len(), 5);
+    assert_eq(k.len(), 4);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("into_iter().nth("),
+        "a computed index is lowered"
+    );
+    let built = must_compile(&code, "element-path-computed-projections");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.
