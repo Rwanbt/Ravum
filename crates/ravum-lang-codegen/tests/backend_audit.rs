@@ -4905,6 +4905,43 @@ fn main() {
     assert_eq!(stdout, "ok\n");
 }
 
+/// A borrow through an element of a partially moved array, followed by a
+/// `Vec` index (computed and literal): the steps after the constant run are
+/// applied to the `ref` binding.
+#[test]
+fn audit_borrow_of_a_partially_moved_element_followed_by_a_vec_index_runs() {
+    if skip("audit_borrow_of_a_partially_moved_element_followed_by_a_vec_index_runs") {
+        return;
+    }
+    let code = generate_source(
+        "partially-moved-element-vec-index",
+        r#"struct S { n: String, v: Vec<String> }
+fn len_of(s: &String) -> usize { s.len() }
+fn main() {
+    let mut v0: Vec<String> = Vec::new();
+    v0.push(String::from("q"));
+    let mut v1: Vec<String> = Vec::new();
+    v1.push(String::from("rrr"));
+    let b = [S { n: String::from("x"), v: v0 }, S { n: String::from("y"), v: v1 }];
+    let k = b[0].n;
+    let i: usize = 0;
+    assert_eq(len_of(&b[1].v[i]), 3);
+    assert_eq(b[1].v[0].len(), 3);
+    assert_eq(k.len(), 1);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("ref __rv_el_"),
+        "the element is borrowed by a ref binding"
+    );
+    let built = must_compile(&code, "partially-moved-element-vec-index");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.
