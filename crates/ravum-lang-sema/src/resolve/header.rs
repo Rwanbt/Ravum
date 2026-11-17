@@ -818,28 +818,8 @@ pub(crate) fn resolve_type_path(
         return Type::Error;
     }
 
-    // Cas `Self`.
-    if path.root == PathRoot::Plain && segments[0].name.name == "Self" {
-        if segments.len() != 1 {
-            diags.error(
-                "E-RES-UNKNOWN",
-                path.span,
-                "`Self` cannot be used as a module prefix".to_string(),
-            );
-            return Type::Error;
-        }
-        return match self_ty {
-            Some(t) => t.clone(),
-            None => {
-                diags.error(
-                    "E-RES-SELF-OUTSIDE-IMPL",
-                    path.span,
-                    "`Self` is only valid inside an `impl`".to_string(),
-                );
-                Type::Error
-            }
-        };
-    }
+    // `Self` is the keyword `Kw::SelfType`: the parser builds `TypeKind::SelfType`
+    // for it, never a path segment, so a type path cannot start with it.
 
     // Segment unique non qualifié : paramètre générique, `str`, type local,
     // type prélude.
