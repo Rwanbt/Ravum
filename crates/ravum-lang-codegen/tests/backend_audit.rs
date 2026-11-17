@@ -5326,3 +5326,28 @@ fn audit_one_element_tuple_patterns_and_exponent_floats_run() {
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");
 }
+
+/// `& | ^` on two `bool` constants are evaluated: they used to be accepted
+/// by `check` with no value, and code generation stopped on a missing
+/// `Facts::consts` entry.
+#[test]
+fn audit_boolean_bitwise_constants_build_and_run() {
+    if skip("audit_boolean_bitwise_constants_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "boolean-bitwise-constants",
+        r#"const A: bool = true & false;
+const B: bool = true | false;
+const C: bool = true ^ true;
+const D: bool = (6 & 3) == 2;
+fn main() {
+    if !A && B && !C && D { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "boolean-bitwise-constants");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}

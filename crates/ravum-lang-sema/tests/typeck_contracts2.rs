@@ -2805,3 +2805,24 @@ fn constant_operands_follow_the_expression_operator_rules() {
     expect_code("const A: bool = \"a\" < \"b\";", "E-TYP-CMP");
     accept("const A: bool = 'a' < 'b';\nconst B: bool = true == false;\nconst C: bool = \"x\" != \"y\";");
 }
+
+#[test]
+fn a_variant_pattern_on_an_ill_typed_scrutinee_adds_no_pattern_error() {
+    // TYP-10: the scrutinee is already refused; its arms are not reported again.
+    let src =
+        "enum E { A(i32), B }\nfn f() -> i32 { match (1 + true) { E::A(x) => 0, E::B => 1 } }";
+    let result = run(src);
+    assert!(
+        codes(&result).iter().any(|c| c == "E-TYP-MISMATCH"),
+        "{}",
+        describe(&result)
+    );
+    assert!(
+        !result
+            .diags
+            .iter()
+            .any(|d| d.message.contains("variant pattern")),
+        "{}",
+        describe(&result)
+    );
+}

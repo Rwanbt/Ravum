@@ -129,11 +129,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     let (operand_ty, operand_value) = self.check_const_expr(operand, expected);
                     match operand_value {
                         Some(ConstValue::Int(v)) => {
-                            let ty = if operand_ty.is_int() {
-                                operand_ty.clone()
-                            } else {
-                                Type::I32
-                            };
+                            // An integer value always comes with an integer type.
+                            let ty = operand_ty.clone();
                             match v.checked_neg() {
                                 Some(neg) if int_i128_fits(neg, &ty) => {
                                     (ty, Some(ConstValue::Int(neg)))
@@ -307,6 +304,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             B::Ge => compare(|o| o.is_ge()),
             B::And => (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a && b))),
             B::Or => (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a || b))),
+            // TYP-7: `& | ^` also combine two `bool` (typing refused any other pair).
+            B::BitAnd if bools.is_some() => {
+                (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a & b)))
+            }
+            B::BitOr if bools.is_some() => {
+                (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a | b)))
+            }
+            B::BitXor if bools.is_some() => {
+                (Type::Bool, bools.map(|(a, b)| ConstValue::Bool(a ^ b)))
+            }
             B::BitAnd => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a & b))),
             B::BitOr => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a | b))),
             B::BitXor => self.const_bits(expr, ty, ints.map(|(a, b)| Some(a ^ b))),

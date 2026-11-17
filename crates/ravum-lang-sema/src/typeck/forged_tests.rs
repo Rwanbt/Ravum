@@ -108,9 +108,7 @@ fn a_constant_without_a_recorded_path_gets_its_module_path() {
 fn typeck_survives_a_callee_without_its_signature() {
     // Only the called function and methods lose their signature, so the
     // bodies that call them are still typed.
-    let _ = typecheck_broken(|facts| {
-        facts
-            .fn_sigs
-            .retain(|_, sig| !matches!(sig.name.as_str(), "f" | "get" | "make"));
-    });
+    for callee in ["f", "get", "make"] {
+        let _ = typecheck_broken(|facts| facts.fn_sigs.retain(|_, sig| sig.name != callee));
+    }
 }
