@@ -3,7 +3,7 @@ use super::*;
 impl<'a> OwnChecker<'a> {
     pub(super) fn eval_for(&mut self, pat: &Pat, iter_expr: &Expr, body: &Block) {
         self.eval_value(iter_expr);
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let after_iter = self.state.clone();
         let iter_diverged = self.diverged;
 
@@ -32,7 +32,7 @@ impl<'a> OwnChecker<'a> {
                 self.state.slots.insert(*slot, SlotState::initialised());
             }
             self.diverged = iter_diverged;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.loop_stack.push(LoopCtx::default());
             if !self.diverged {
                 self.analyze_block(body, false);
@@ -62,7 +62,7 @@ impl<'a> OwnChecker<'a> {
             self.state.slots.insert(*slot, SlotState::initialised());
         }
         self.diverged = iter_diverged;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.loop_stack.push(LoopCtx::default());
         if !self.diverged {
             self.analyze_block(body, false);

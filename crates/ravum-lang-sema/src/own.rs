@@ -409,6 +409,10 @@ pub(super) struct OwnChecker<'a> {
     pub(super) scopes: Vec<Vec<(String, SlotId)>>,
     pub(super) state: State,
     pub(super) loans: Vec<Loan>,
+    /// Loans taken by the expressions that enclose the construct under
+    /// analysis (a call whose earlier argument borrows, for instance). A nested
+    /// block, branch or loop ends its own temporaries, never these.
+    pub(super) loan_floor: usize,
     pub(super) next_slot: SlotId,
     /// Diagnostics are emitted only when this is true (false during the silent
     /// fixpoint passes of loops).

@@ -13,6 +13,7 @@ impl<'a> OwnChecker<'a> {
             scopes: Vec::new(),
             state: State::default(),
             loans: Vec::new(),
+            loan_floor: 0,
             next_slot: 0,
             emit: true,
             depth: 0,
@@ -34,7 +35,7 @@ impl<'a> OwnChecker<'a> {
         self.state = State::default();
         self.slots.clear();
         self.scopes.clear();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.next_slot = 0;
         self.emit = true;
         self.depth = 0;
@@ -94,7 +95,7 @@ impl<'a> OwnChecker<'a> {
         self.analyze_block(&f.body, true);
 
         self.pop_scope();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
     }
 
     // ------------------------------------------------------------------
@@ -199,7 +200,7 @@ impl<'a> OwnChecker<'a> {
             return;
         }
         self.push_scope();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let mut reached = 0;
         for stmt in &block.stmts {
             if self.diverged {
@@ -210,12 +211,12 @@ impl<'a> OwnChecker<'a> {
         }
         if !self.diverged {
             if let Some(tail) = &block.tail {
-                self.loans.clear();
+                self.loans.truncate(self.loan_floor);
                 self.eval_value(tail);
                 if fn_body && self.is_nonstatic_ref(tail) {
                     self.report_ref_escape(tail.span, "retournée");
                 }
-                self.loans.clear();
+                self.loans.truncate(self.loan_floor);
             }
         } else {
             // The rest of the block is unreachable, but the backend still emits
@@ -227,7 +228,7 @@ impl<'a> OwnChecker<'a> {
                 }
                 if let Some(tail) = &block.tail {
                     checker.diverged = false;
-                    checker.loans.clear();
+                    checker.loans.truncate(checker.loan_floor);
                     checker.eval_value(tail);
                 }
             });
@@ -262,12 +263,12 @@ impl<'a> OwnChecker<'a> {
         if !self.enter() {
             return;
         }
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         match &stmt.kind {
             StmtKind::Let(l) => self.check_let(l, stmt.span),
             StmtKind::Expr { expr, .. } => self.eval_value(expr),
         }
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.leave();
     }
 
@@ -364,6 +365,17 @@ impl<'a> OwnChecker<'a> {
     // ------------------------------------------------------------------
     // Expressions
     // ------------------------------------------------------------------
+
+    /// Analyse a construct that owns statements (block, branch, loop). The
+    /// loans active on entry belong to the enclosing expression and stay in
+    /// force inside; the construct only ends the temporaries it creates.
+    fn nested(&mut self, analyse: impl FnOnce(&mut Self)) {
+        let outer = self.loan_floor;
+        self.loan_floor = self.loans.len();
+        analyse(self);
+        self.loans.truncate(self.loan_floor);
+        self.loan_floor = outer;
+    }
 
     pub(super) fn eval_value(&mut self, expr: &Expr) {
         if !self.enter() {
@@ -474,13 +486,13 @@ impl<'a> OwnChecker<'a> {
                 cond,
                 then_block,
                 else_branch,
-            } => self.eval_if(cond, then_block, else_branch.as_deref()),
-            ExprKind::Match { scrutinee, arms } => self.eval_match(scrutinee, arms),
-            ExprKind::While { cond, body } => self.eval_while(cond, body),
-            ExprKind::Loop { body } => self.eval_loop(body),
-            ExprKind::For { pat, iter, body } => self.eval_for(pat, iter, body),
-            ExprKind::Block(block) => self.analyze_block(block, false),
-            ExprKind::Unsafe(block) => self.analyze_block(block, false),
+            } => self.nested(|c| c.eval_if(cond, then_block, else_branch.as_deref())),
+            ExprKind::Match { scrutinee, arms } => self.nested(|c| c.eval_match(scrutinee, arms)),
+            ExprKind::While { cond, body } => self.nested(|c| c.eval_while(cond, body)),
+            ExprKind::Loop { body } => self.nested(|c| c.eval_loop(body)),
+            ExprKind::For { pat, iter, body } => self.nested(|c| c.eval_for(pat, iter, body)),
+            ExprKind::Block(block) => self.nested(|c| c.analyze_block(block, false)),
+            ExprKind::Unsafe(block) => self.nested(|c| c.analyze_block(block, false)),
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
                 for item in items {
                     self.eval_value(item);
@@ -665,7 +677,7 @@ impl<'a> OwnChecker<'a> {
         self.eval_value(cond);
         // Condition borrows/temporaries end before the branches execute; branch
         // statements are distinct instructions.
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let after_cond = self.state.clone();
         let cond_diverged = self.diverged;
 
@@ -712,7 +724,7 @@ impl<'a> OwnChecker<'a> {
         // that a subsequent `match v.pop() { ... v.push(..) }` stays accepted.
         // Any reference that could escape from the scrutinee would already be
         // rejected as a ref escape.
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let base = self.state.clone();
         let base_diverged = self.diverged;
 
@@ -783,9 +795,9 @@ impl<'a> OwnChecker<'a> {
             self.emit = false;
             self.state = entry.clone();
             self.diverged = false;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.eval_value(cond);
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             let cond_diverged = self.diverged;
             self.loop_stack.push(LoopCtx::default());
             if !cond_diverged {
@@ -811,9 +823,9 @@ impl<'a> OwnChecker<'a> {
         self.emit = saved_emit;
         self.state = entry;
         self.diverged = false;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.eval_value(cond);
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let cond_diverged = self.diverged;
         let after_cond = self.state.clone();
         self.loop_stack.push(LoopCtx::default());
@@ -858,7 +870,7 @@ impl<'a> OwnChecker<'a> {
             self.emit = false;
             self.state = entry.clone();
             self.diverged = false;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.loop_stack.push(LoopCtx::default());
             self.analyze_block(body, false);
             let ctx = self.loop_stack.pop().unwrap_or_default();
@@ -880,7 +892,7 @@ impl<'a> OwnChecker<'a> {
         self.emit = saved_emit;
         self.state = entry;
         self.diverged = false;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.loop_stack.push(LoopCtx::default());
         self.analyze_block(body, false);
         let ctx = self.loop_stack.pop().unwrap_or_default();
