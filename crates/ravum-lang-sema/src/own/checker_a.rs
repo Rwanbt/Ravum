@@ -167,13 +167,16 @@ impl<'a> OwnChecker<'a> {
 
     pub(super) fn path_local_slot(&self, path: &crate::syntax::ast::Path) -> Option<SlotId> {
         // Typeck keys a local's resolution by the `Path` node (typeck/expr.rs).
-        // Without that fact, a single-segment path is still looked up by name.
-        if let Some(Resolution::Local { name, .. }) = self.facts.resolutions.get(&path.id) {
-            return self.lookup(name);
-        }
-        match path.segments.as_slice() {
-            [segment] => self.lookup(&segment.name.name),
-            _ => None,
+        // A path resolved to anything else (`crate::T` naming a constant while
+        // a local `T` is in scope) is not a local. Without a resolution fact, a
+        // plain single-segment path is still looked up by name.
+        match self.facts.resolutions.get(&path.id) {
+            Some(Resolution::Local { name, .. }) => self.lookup(name),
+            Some(_) => None,
+            None => match (&path.root, path.segments.as_slice()) {
+                (crate::syntax::ast::PathRoot::Plain, [segment]) => self.lookup(&segment.name.name),
+                _ => None,
+            },
         }
     }
 

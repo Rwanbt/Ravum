@@ -438,3 +438,16 @@ fn self_passed_on_as_a_reference_argument_checks() {
         Vec::<String>::new()
     );
 }
+
+/// `crate::T` names the constant even while a local `T` is in scope: reading
+/// it after the local was moved is not a use after move.
+#[test]
+fn a_qualified_path_to_a_constant_is_not_the_local_of_the_same_name() {
+    assert_eq!(
+        errors(
+            "const T: i32 = 3;\n\
+             fn main() { let T = String::from(\"a\"); let u = T; let n = crate::T; }"
+        ),
+        Vec::<String>::new()
+    );
+}
