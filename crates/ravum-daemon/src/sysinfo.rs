@@ -332,6 +332,12 @@ mod platform {
     }
 }
 
+/// Non-Windows builds do not observe foreign-process memory.
+#[cfg(not(windows))]
+pub fn process_working_set(_pid: u32) -> Option<u64> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,10 +368,4 @@ mod tests {
         let samples = spawn_calibration(&rustc, 2);
         assert_eq!(samples.len(), 2);
     }
-}
-
-/// Non-Windows builds do not observe foreign-process memory.
-#[cfg(not(windows))]
-pub fn process_working_set(_pid: u32) -> Option<u64> {
-    None
 }

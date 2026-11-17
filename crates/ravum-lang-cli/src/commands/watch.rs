@@ -658,7 +658,7 @@ mod signal {
         // SAFETY: `handler` is a valid function pointer for `signal`; the call
         // is best-effort and the previous handler's result is ignored.
         unsafe {
-            signal(2, handler as usize); // SIGINT
+            signal(2, handler as *const () as usize); // SIGINT
         }
     }
 }
