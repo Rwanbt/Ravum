@@ -303,3 +303,22 @@ fn a_loop_cannot_bind_references_taken_out_of_a_vector() {
     let codes = errors("fn f(v: Vec<&i32>) { for r in v { } }\nfn main() { }");
     assert_eq!(codes, ["E-OWN-REF-ESCAPE"]);
 }
+
+/// OWN-6.2: a reference place handed to a generic parameter or a variant
+/// payload would be stored; only a `&'static str` literal or a fresh `&` borrow
+/// of the call's duration is accepted.
+#[test]
+fn a_reference_place_passed_by_value_to_a_generic_or_a_variant_is_refused() {
+    for source in [
+        "enum W<T> { A(T), B }\nfn f(s: &String) { drop(W::A(s)); }\nfn main() { }",
+        "fn id<T>(x: T) { }\nfn f(s: &String) { id(s); }\nfn main() { }",
+    ] {
+        assert_eq!(errors(source), ["E-OWN-REF-ESCAPE"], "{source}");
+    }
+    for source in [
+        "fn id<T>(x: T) { }\nfn main() { id(\"lit\"); }",
+        "fn id<T>(x: T) { }\nfn f(s: &String) { id(&s); }\nfn main() { }",
+    ] {
+        assert!(errors(source).is_empty(), "{source}");
+    }
+}
