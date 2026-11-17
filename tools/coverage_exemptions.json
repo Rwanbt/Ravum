@@ -67,158 +67,6 @@
         "metric": "regions"
       },
       {
-        "id": "E-LINE-OWN-OPEN-RANGE",
-        "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
-        "lines": [
-          [
-            536,
-            536
-          ],
-          [
-            539,
-            539
-          ]
-        ],
-        "summary": "Ownership walk of a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-TRAPS-OPEN-RANGE",
-        "file": "crates/ravum-lang-sema/src/traps.rs",
-        "lines": [
-          [
-            225,
-            225
-          ],
-          [
-            228,
-            228
-          ]
-        ],
-        "summary": "Trap scan of a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EFFECTS-OPEN-RANGE",
-        "file": "crates/ravum-lang-sema/src/effects.rs",
-        "lines": [
-          [
-            385,
-            385
-          ],
-          [
-            388,
-            388
-          ]
-        ],
-        "summary": "Effect walk of a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-TYP-OPEN-RANGE",
-        "file": "crates/ravum-lang-sema/src/typeck/control.rs",
-        "lines": [
-          [
-            195,
-            195
-          ],
-          [
-            198,
-            198
-          ]
-        ],
-        "summary": "`check_range` on a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PATHS-OPEN-RANGE",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            351,
-            351
-          ],
-          [
-            354,
-            354
-          ],
-          [
-            601,
-            601
-          ],
-          [
-            604,
-            604
-          ]
-        ],
-        "summary": "Path collection of a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-OPEN-RANGE",
-        "file": "crates/ravum-lang-codegen/src/emit/emitter_expr.rs",
-        "lines": [
-          [
-            187,
-            187
-          ],
-          [
-            191,
-            191
-          ]
-        ],
-        "summary": "Emission of a range without a start or an end.",
-        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
-        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
-        "evidence": [
-          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
-          "conformance/cases/types/for-bounds-mismatch-fail"
-        ],
-        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-OWN-EMPTY-SCOPE-STACK",
         "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
         "lines": [
@@ -1222,16 +1070,12 @@
         "file": "crates/ravum-lang-sema/src/typeck/calls.rs",
         "lines": [
           [
-            184,
-            187
+            186,
+            186
           ],
           [
-            570,
-            573
-          ],
-          [
-            578,
-            578
+            572,
+            572
           ]
         ],
         "summary": "A called function or enum variant without its signature or enum entry.",
@@ -1268,64 +1112,6 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-TYP-MISSING-FACTS-EXPR",
-        "file": "crates/ravum-lang-sema/src/typeck/expr.rs",
-        "lines": [
-          [
-            343,
-            343
-          ],
-          [
-            347,
-            347
-          ]
-        ],
-        "summary": "A variant path whose enum or variant entry is missing.",
-        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/check.rs"
-        ],
-        "review_condition": "Idem.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-TYP-MISSING-FACTS-AGGREGATES",
-        "file": "crates/ravum-lang-sema/src/typeck/aggregates.rs",
-        "lines": [
-          [
-            69,
-            69
-          ],
-          [
-            109,
-            109
-          ],
-          [
-            113,
-            113
-          ],
-          [
-            584,
-            584
-          ],
-          [
-            588,
-            588
-          ]
-        ],
-        "summary": "A struct literal or variant pattern whose struct, enum or variant entry is missing.",
-        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/check.rs"
-        ],
-        "review_condition": "Idem.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-TYP-RETURN-TRY-IN-CONST",
         "file": "crates/ravum-lang-sema/src/typeck/control.rs",
         "lines": [
@@ -1349,33 +1135,6 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-TYP-MISSING-FACTS-CORE",
-        "file": "crates/ravum-lang-sema/src/typeck/core.rs",
-        "lines": [
-          [
-            484,
-            484
-          ],
-          [
-            511,
-            511
-          ],
-          [
-            552,
-            552
-          ]
-        ],
-        "summary": "A test, `main` or function body without its signature.",
-        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
-        "evidence": [
-          "crates/ravum-lang-sema/src/check.rs"
-        ],
-        "review_condition": "Idem.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-TYP-IMPL-NON-FN-MEMBER",
         "file": "crates/ravum-lang-sema/src/typeck/core.rs",
         "lines": [
@@ -1391,6 +1150,158 @@
           "conformance/cases/types/ffi-extern-in-impl"
         ],
         "review_condition": "Des `const` associées.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-OWN-OPEN-RANGE",
+        "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
+        "lines": [
+          [
+            536,
+            536
+          ],
+          [
+            539,
+            539
+          ]
+        ],
+        "summary": "Ownership walk of a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TRAPS-OPEN-RANGE",
+        "file": "crates/ravum-lang-sema/src/traps.rs",
+        "lines": [
+          [
+            225,
+            225
+          ],
+          [
+            228,
+            228
+          ]
+        ],
+        "summary": "Trap scan of a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EFFECTS-OPEN-RANGE",
+        "file": "crates/ravum-lang-sema/src/effects.rs",
+        "lines": [
+          [
+            390,
+            390
+          ],
+          [
+            393,
+            393
+          ]
+        ],
+        "summary": "Effect walk of a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-OPEN-RANGE",
+        "file": "crates/ravum-lang-sema/src/typeck/control.rs",
+        "lines": [
+          [
+            195,
+            195
+          ],
+          [
+            198,
+            198
+          ]
+        ],
+        "summary": "`check_range` on a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-OPEN-RANGE",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            351,
+            351
+          ],
+          [
+            354,
+            354
+          ],
+          [
+            601,
+            601
+          ],
+          [
+            604,
+            604
+          ]
+        ],
+        "summary": "Path collection of a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-OPEN-RANGE",
+        "file": "crates/ravum-lang-codegen/src/emit/emitter_expr.rs",
+        "lines": [
+          [
+            187,
+            187
+          ],
+          [
+            191,
+            191
+          ]
+        ],
+        "summary": "Emission of a range without a start or an end.",
+        "why_unreachable": "After a parse without error the only range in a program is the outermost expression of a `for` iterator: `parse_range` consumes `in_for_iter`, so every other range (nested in the iterator, an operand, anywhere else) is E-UNSUPPORTED-RANGE (parser/exprs.rs, parser/primary.rs). `check_for_range` then refuses a range without both bounds (E-TYP-RANGE, typeck/control.rs), and ownership, effects, traps and the back end only run on a program that checked. The implicit `None` side of `if let Some(start|end)` is therefore never taken past typeck.",
+        "proof": "crates/ravum-lang-syntax/src/parser/exprs.rs `parse_range`; crates/ravum-lang-sema/src/typeck/control.rs `check_for_range`.",
+        "evidence": [
+          "cargo test -p ravum-lang-syntax --lib a_range_nested_in_a_for_iterator_is_refused",
+          "conformance/cases/types/for-bounds-mismatch-fail"
+        ],
+        "review_condition": "Des plages ouvertes (`a..`, `..b`) acceptées par Core.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
       }

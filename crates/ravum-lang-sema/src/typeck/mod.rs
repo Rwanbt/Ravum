@@ -254,4 +254,6 @@ fn path_pattern_kind(path: &Path) -> PatternKind {
 }
 
 #[cfg(test)]
+mod forged_tests;
+#[cfg(test)]
 mod helper_tests;
