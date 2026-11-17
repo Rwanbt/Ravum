@@ -891,3 +891,78 @@ fn the_public_typecheck_entry_types_a_resolved_program() {
     assert!(ravum_lang_sema::typeck::typecheck(&mut checked, &mut diags));
     assert!(!diags.has_errors());
 }
+
+#[test]
+fn a_builtin_module_called_with_arguments_is_not_callable() {
+    assert_errors(
+        "fn main() { std::io(1); }",
+        &[("E-TYP-CALL", "a module is not callable")],
+    );
+}
+
+#[test]
+fn a_private_associated_function_is_refused_from_outside_its_module() {
+    assert_errors(
+        "pub mod m { pub struct S { } impl S { fn new() -> S { S { } } } }\n\
+         fn main() { let s = m::S::new(); drop(s); }",
+        &[("E-RES-PRIVATE", "function `new` is private")],
+    );
+}
+
+#[test]
+fn an_associated_function_of_another_type_does_not_take_the_expected_type() {
+    assert_errors(
+        "struct A { }\n\
+         struct B { }\n\
+         impl A { fn new() -> A { A { } } }\n\
+         fn main() { let b: B = A::new(); drop(b); }",
+        &[("E-TYP-MISMATCH", "let: expected `B`, found `A`")],
+    );
+}
+
+#[test]
+fn an_open_range_in_for_is_refused() {
+    assert_errors(
+        "fn main() { for i in ..3 { drop(i); } for j in ..=3 { drop(j); } }",
+        &[
+            (
+                "E-TYP-RANGE",
+                "`for` requires an explicit `start..end` range",
+            ),
+            (
+                "E-TYP-RANGE",
+                "`for` requires an explicit `start..end` range",
+            ),
+            (
+                "E-TYP-RANGE",
+                "inclusive ranges (`..=`) are not supported in Core 1.0",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_generic_unit_variant_without_context_is_ambiguous() {
+    assert_errors(
+        "enum O<T> { N, S(T) }\n\
+         fn main() { let o = O::N(); drop(o); }",
+        &[(
+            "E-TYP-AMBIGUOUS",
+            "cannot infer this type; add an explicit type annotation",
+        )],
+    );
+}
+
+#[test]
+fn ok_without_its_argument_is_an_arity_error() {
+    assert_errors(
+        "fn main() { let r: Result<i32, i32> = Ok(); drop(r); }",
+        &[
+            ("E-TYP-ARITY", "`Result::Ok` expects exactly 1 argument"),
+            (
+                "E-TYP-MISMATCH",
+                "let: expected `Result<i32, i32>`, found `Result<<error>, i32>`",
+            ),
+        ],
+    );
+}

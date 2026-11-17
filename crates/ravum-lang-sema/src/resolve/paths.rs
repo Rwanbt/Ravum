@@ -73,20 +73,13 @@ pub(crate) fn resolve_value_path(
             "Some" => {
                 return Ok(ValuePath::BuiltinCtor {
                     path: "Option::Some",
-                    unit: false,
                 })
             }
             "None" => return Ok(ValuePath::BuiltinConst("Option::None")),
-            "Ok" => {
-                return Ok(ValuePath::BuiltinCtor {
-                    path: "Result::Ok",
-                    unit: false,
-                })
-            }
+            "Ok" => return Ok(ValuePath::BuiltinCtor { path: "Result::Ok" }),
             "Err" => {
                 return Ok(ValuePath::BuiltinCtor {
                     path: "Result::Err",
-                    unit: false,
                 })
             }
             _ => {}
@@ -339,19 +332,14 @@ pub(crate) fn resolve_associated(
         Type::Option(_) => match name {
             "Some" => Ok(ValuePath::BuiltinCtor {
                 path: "Option::Some",
-                unit: false,
             }),
             "None" => Ok(ValuePath::BuiltinConst("Option::None")),
             _ => Err(PathError::unknown(name)),
         },
         Type::Result(_, _) => match name {
-            "Ok" => Ok(ValuePath::BuiltinCtor {
-                path: "Result::Ok",
-                unit: false,
-            }),
+            "Ok" => Ok(ValuePath::BuiltinCtor { path: "Result::Ok" }),
             "Err" => Ok(ValuePath::BuiltinCtor {
                 path: "Result::Err",
-                unit: false,
             }),
             _ => Err(PathError::unknown(name)),
         },

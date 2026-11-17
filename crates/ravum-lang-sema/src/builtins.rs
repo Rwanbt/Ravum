@@ -1091,6 +1091,21 @@ pub fn method_ret_type(sig: &BuiltinMethodSig, env: &[(&str, Type)]) -> Type {
 mod tests {
     use super::*;
 
+    /// The resolver produces `ValuePath::BuiltinFn` only from a `BUILTIN_FNS`
+    /// entry (`sig.path`) or from `prelude_value_path`; every such path has a
+    /// signature, so typeck's "unknown builtin function" arm cannot be taken.
+    #[test]
+    fn every_resolvable_builtin_function_path_has_a_signature() {
+        for name in PRELUDE_VALUES {
+            if let Some(path) = prelude_value_path(name) {
+                assert!(builtin_fn(path).is_some(), "prelude `{name}` -> `{path}`");
+            }
+        }
+        for sig in BUILTIN_FNS {
+            assert!(builtin_fn(sig.path).is_some(), "{}", sig.path);
+        }
+    }
+
     #[test]
     fn every_builtin_fn_parses() {
         for sig in BUILTIN_FNS {

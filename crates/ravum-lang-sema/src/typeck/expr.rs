@@ -287,17 +287,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::BuiltinConst(path) => Resolution::BuiltinConst {
                 path: (*path).to_string(),
             },
-            ValuePath::BuiltinCtor { path, unit } => {
-                if *unit {
-                    Resolution::BuiltinConst {
-                        path: (*path).to_string(),
-                    }
-                } else {
-                    Resolution::BuiltinFn {
-                        path: (*path).to_string(),
-                    }
-                }
-            }
+            ValuePath::BuiltinCtor { path } => Resolution::BuiltinFn {
+                path: (*path).to_string(),
+            },
             ValuePath::AssocFn(item) => Resolution::Item { item: *item },
             ValuePath::Module => Resolution::Module,
             ValuePath::BuiltinModule => Resolution::BuiltinModule,
@@ -335,10 +327,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
-            ValuePath::BuiltinCtor { path, unit } => {
-                if *unit {
-                    return self.builtin_unit_variant_type(expr, path, expected);
-                }
+            ValuePath::BuiltinCtor { path } => {
                 self.error(
                     "E-TYP-CALL",
                     expr.span,

@@ -330,10 +330,9 @@ pub(crate) enum ValuePath {
     /// Constante builtin (`Option::None`).
     BuiltinConst(&'static str),
     /// Constructeur de variante builtin (`Option::Some`, `Result::Ok`, ...).
+    /// Its only unit variant, `None`, is a `BuiltinConst`.
     BuiltinCtor {
         path: &'static str,
-        /// `true` pour une variante unitaire.
-        unit: bool,
     },
     /// Fonction associée utilisateur (`Type::new`).
     AssocFn(NodeId),
