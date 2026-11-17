@@ -387,6 +387,89 @@ fn partial_item_facts_fall_back_on_the_syntax() {
     assert!(code.contains("fn t"), "{code}");
 }
 
+#[test]
+fn a_struct_literal_or_rooted_path_without_resolution_is_refused() {
+    let mut program = checked(
+        "struct P { n: i32 }\nfn main() { let p = P { n: 1 }; drop(p); }\n",
+        Profile::Core,
+    );
+    let mut literal_path = None;
+    for item in &program.program.root.items {
+        if let ItemKind::Fn(f) = &item.kind {
+            if let StmtKind::Let(l) = &f.body.stmts[0].kind {
+                if let Some(Expr {
+                    kind: ExprKind::StructLit { path, .. },
+                    ..
+                }) = &l.init
+                {
+                    literal_path = Some(path.id);
+                }
+            }
+        }
+    }
+    program
+        .facts
+        .resolutions
+        .remove(&literal_path.expect("the fixture has a struct literal"));
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("missing resolution fact for struct literal path `P`"),
+        "{message}"
+    );
+
+    // A rooted literal path whose resolution is not a struct falls back on
+    // the written path, which a rooted path cannot be.
+    let mut program = checked(
+        "struct P { n: i32 }\nfn main() { let p = crate::P { n: 1 }; drop(p); }\n",
+        Profile::Core,
+    );
+    let mut literal_path = None;
+    for item in &program.program.root.items {
+        if let ItemKind::Fn(f) = &item.kind {
+            if let StmtKind::Let(l) = &f.body.stmts[0].kind {
+                if let Some(Expr {
+                    kind: ExprKind::StructLit { path, .. },
+                    ..
+                }) = &l.init
+                {
+                    literal_path = Some(path.id);
+                }
+            }
+        }
+    }
+    program.facts.resolutions.insert(
+        literal_path.expect("the fixture has a struct literal"),
+        Resolution::Module,
+    );
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("cannot emit rooted path `crate::P`"),
+        "{message}"
+    );
+}
+
+/// Ownership facts recorded on a node the program does not contain are
+/// ignored by the debug guard (they cannot disagree with any emitted code).
+#[test]
+fn ownership_facts_on_unknown_nodes_are_ignored() {
+    let mut program = checked(
+        "fn main() { let s = String::from(\"a\"); let t = s; drop(t); }\n",
+        Profile::Core,
+    );
+    let stray = u64::MAX - 7;
+    program.facts.own.place.insert(
+        stray,
+        OwnPlace {
+            binding: Span::dummy(),
+            steps: Vec::new(),
+        },
+    );
+    if let Some(binding) = program.facts.own.binding_identity.values().next().cloned() {
+        program.facts.own.binding_identity.insert(stray, binding);
+    }
+    generate(&program, &GenOptions::default()).expect("stray facts are ignored");
+}
+
 // ---------------------------------------------------------------------------
 // Reachable output shapes.
 // ---------------------------------------------------------------------------

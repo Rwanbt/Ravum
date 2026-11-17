@@ -4871,6 +4871,40 @@ fn main() {
     assert_eq!(stdout, "ok\n");
 }
 
+/// A constant used as a `match` pattern, and a builtin text parser called on
+/// a borrowed `String`.
+#[test]
+fn audit_constant_patterns_and_borrowed_string_arguments_run() {
+    if skip("audit_constant_patterns_and_borrowed_string_arguments_run") {
+        return;
+    }
+    let code = generate_source(
+        "constant-patterns",
+        r#"const C: i32 = 1;
+
+fn k(n: i32) -> i32 {
+    match n {
+        C => { 10 }
+        _ => { 20 }
+    }
+}
+
+fn main() {
+    assert_eq(k(1), 10);
+    assert_eq(k(2), 20);
+    let s = String::from("4");
+    let t = string::parse_i64(&s);
+    drop(t);
+    io::println("ok");
+}
+"#,
+    );
+    let built = must_compile(&code, "constant-patterns");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.
