@@ -75,24 +75,24 @@
             65
           ],
           [
-            138,
-            138
+            131,
+            131
           ],
           [
-            180,
-            180
+            173,
+            173
           ],
           [
-            203,
-            205
+            196,
+            198
           ],
           [
-            216,
-            216
+            209,
+            209
           ],
           [
-            294,
-            294
+            287,
+            287
           ]
         ],
         "summary": "Fallback arms after a namespace lookup in the value-path resolver (`is a struct, not a value`, `unknown` for a non-module in `Ns::Module`).",
@@ -182,8 +182,8 @@
             40
           ],
           [
-            161,
-            164
+            154,
+            157
           ]
         ],
         "summary": "A value path with no segment, and a path that ends while the cursor is still on a module or a type.",
@@ -228,8 +228,8 @@
             58
           ],
           [
-            132,
-            132
+            125,
+            125
           ]
         ],
         "summary": "Privacy refusal of the first segment of a value path, looked up in the current module.",
@@ -267,12 +267,12 @@
         "file": "crates/ravum-lang-sema/src/resolve/paths.rs",
         "lines": [
           [
-            305,
-            305
+            298,
+            298
           ],
           [
-            308,
-            308
+            301,
+            301
           ]
         ],
         "summary": "`find_unqualified_variant` answering `Option`/`Result` for `Some`/`None`/`Ok`/`Err`.",
@@ -290,20 +290,20 @@
         "file": "crates/ravum-lang-sema/src/resolve/paths.rs",
         "lines": [
           [
-            332,
-            332
+            325,
+            325
           ],
           [
-            469,
-            469
+            457,
+            457
           ],
           [
-            476,
-            476
+            464,
+            464
           ],
           [
-            484,
-            484
+            472,
+            472
           ]
         ],
         "summary": "`fill_item_paths` skipping a non-item symbol of a module table, and an enum known to `nominal_kind` but missing from `world.enums`.",
