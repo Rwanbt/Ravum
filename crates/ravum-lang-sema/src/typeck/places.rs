@@ -493,6 +493,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             UnOp::Ref | UnOp::RefMut => {
                 let inner_ty = self.check_expr(operand, None);
+                // `&mut` of a place needs a mutable place (rustc E0596). A
+                // value that is not a place is a temporary and may be borrowed.
+                if op == UnOp::RefMut
+                    && !matches!(inner_ty, Type::Error)
+                    && self.names_a_place(operand)
+                    && self.place_mutability(operand) == Some(false)
+                {
+                    self.error(
+                        "E-OWN-IMMUTABLE",
+                        operand.span,
+                        "cannot borrow an immutable place as `&mut`".to_string(),
+                    );
+                }
                 Type::Ref {
                     mutable: op == UnOp::RefMut,
                     inner: Box::new(inner_ty),
@@ -710,7 +723,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 format!("cannot assign `{value_ty}` to a place of type `{target_ty}`"),
             );
         }
-        if !matches!(target_ty, Type::Error) && !self.place_is_mutable(target) {
+        // A binding declared without an initialiser (`let x: T;`) receives its
+        // value by one plain assignment of the whole binding; the ownership
+        // phase checks that it happens at most once on every path. Nothing
+        // else about it is mutable.
+        if !matches!(target_ty, Type::Error)
+            && !self.place_is_mutable(target)
+            && !self.is_deferred_binding(target)
+        {
             self.error(
                 "E-OWN-IMMUTABLE",
                 target.span,
@@ -718,6 +738,37 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         Type::Unit
+    }
+
+    /// The expression is a place rooted at a local binding or at `self` (not a
+    /// constant, a function or a temporary).
+    fn names_a_place(&self, expr: &Expr) -> bool {
+        match &expr.kind {
+            ExprKind::Path(path) => {
+                path.root == PathRoot::Plain
+                    && path.segments.len() == 1
+                    && self.lookup_local(&path.segments[0].name.name).is_some()
+            }
+            ExprKind::SelfValue => true,
+            ExprKind::Field { base, .. }
+            | ExprKind::TupleIndex { base, .. }
+            | ExprKind::Index { base, .. } => self.names_a_place(base),
+            ExprKind::Unary {
+                op: UnOp::Deref, ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    fn is_deferred_binding(&self, expr: &Expr) -> bool {
+        let ExprKind::Path(path) = &expr.kind else {
+            return false;
+        };
+        path.root == PathRoot::Plain
+            && path.segments.len() == 1
+            && self
+                .lookup_local(&path.segments[0].name.name)
+                .is_some_and(|local| local.deferred)
     }
 
     /// `Some(false)` = place immuable ; `Some(true)` = place mutable ; `None` =
@@ -732,7 +783,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 if path.root == PathRoot::Plain && path.segments.len() == 1 {
                     let name = &path.segments[0].name.name;
                     if let Some(local) = self.lookup_local(name) {
-                        return Some(local.mutable || local.deferred);
+                        return Some(local.mutable);
                     }
                 }
                 Some(false)

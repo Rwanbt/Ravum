@@ -51,6 +51,7 @@ pub(super) fn join_slot(a: &SlotState, b: &SlotState) -> SlotState {
         move_span: a.move_span.or(b.move_span),
         used_since: a.used_since || b.used_since,
         partial,
+        maybe_assigned: a.maybe_assigned || b.maybe_assigned,
     }
 }
 

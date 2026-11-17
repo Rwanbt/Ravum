@@ -245,3 +245,157 @@ fn a_single_name_import_must_name_something_importable() {
         ],
     );
 }
+
+#[test]
+fn self_type_is_only_valid_inside_an_impl() {
+    assert_errors(
+        "struct P { n: i32 }\n\
+         fn f(x: Self) { }\n\
+         impl P { fn g(self, other: Self) -> Self { other } }\n\
+         fn main() { }",
+        &[(
+            "E-RES-SELF-OUTSIDE-IMPL",
+            "`Self` is only valid inside an `impl`",
+        )],
+    );
+}
+
+#[test]
+fn self_type_is_not_a_module_prefix() {
+    assert_errors(
+        "struct P { n: i32 }\n\
+         impl P { fn g(x: Self::Q) { } }\n\
+         fn main() { }",
+        &[(
+            "E-UNSUPPORTED-ASSOC-TYPE",
+            "associated types on `Self` are not supported in Ravum Core 1.0",
+        )],
+    );
+}
+
+#[test]
+fn a_private_type_cannot_be_named_from_outside_its_module() {
+    assert_errors(
+        "mod a { struct S { n: i32 } pub struct T { n: i32 } }\n\
+         fn f(x: a::S) { }\n\
+         fn g(x: a::T) { }\n\
+         fn main() { }",
+        &[("E-RES-PRIVATE", "type `S` is private")],
+    );
+}
+
+#[test]
+fn a_type_path_walks_modules_and_stops_on_a_type() {
+    assert_errors(
+        "mod a { pub struct S { n: i32 } pub mod b { pub struct T { n: i32 } } }\n\
+         fn ok(x: a::S, y: a::b::T) { }\n\
+         fn main() { }",
+        &[],
+    );
+}
+
+#[test]
+fn a_type_path_through_a_type_is_refused() {
+    assert_errors(
+        "mod a { pub struct S { n: i32 } }\n\
+         fn f(z: a::S::U) { }\n\
+         fn main() { }",
+        &[("E-RES-UNKNOWN", "unknown module `S`")],
+    );
+}
+
+#[test]
+fn a_type_path_through_a_missing_module_is_refused() {
+    assert_errors(
+        "mod a { pub struct S { n: i32 } }\n\
+         fn f(w: a::nothing::T) { }\n\
+         fn main() { }",
+        &[("E-RES-UNKNOWN", "unknown module `nothing`")],
+    );
+}
+
+#[test]
+fn a_module_is_not_a_type() {
+    assert_errors(
+        "mod a { pub struct S { n: i32 } }\n\
+         fn f(v: a) { }\n\
+         fn g(s: std::io) { }\n\
+         fn main() { }",
+        &[
+            ("E-RES-UNKNOWN", "`a` is a module, not a type"),
+            ("E-RES-UNKNOWN", "`std::io` is not a type"),
+        ],
+    );
+}
+
+#[test]
+fn a_type_is_not_a_module_prefix() {
+    assert_errors(
+        "struct P { n: i32 }\n\
+         fn f(u: i32::X) { }\n\
+         fn g(q: P::X) { }\n\
+         fn main() { }",
+        &[
+            ("E-RES-UNKNOWN", "`i32` is a type, not a module"),
+            ("E-RES-UNKNOWN", "`P` is a type, not a module"),
+        ],
+    );
+}
+
+#[test]
+fn an_unknown_first_segment_of_a_type_path_is_reported() {
+    assert_errors(
+        "fn f(t: zz::Y) { }\n\
+         fn main() { }",
+        &[("E-RES-UNKNOWN", "unknown type `zz`")],
+    );
+}
+
+#[test]
+fn a_builtin_module_exposes_no_such_type() {
+    assert_errors(
+        "fn f(r: std::io::X) { }\n\
+         fn g(r: io::X) { }\n\
+         fn main() { }",
+        &[
+            ("E-RES-UNKNOWN", "`std::io` is not a type"),
+            ("E-RES-UNKNOWN", "`std::io::X` is not a type"),
+        ],
+    );
+}
+
+#[test]
+fn generic_arity_is_checked_on_builtin_types() {
+    assert_errors(
+        "fn f(a: Option<i32, i32>, b: Vec, c: i32<i32>, d: Result<i32>) { }\n\
+         fn main() { }",
+        &[
+            (
+                "E-TYP-ARITY",
+                "type `Option` expects 1 generic argument(s), found 2",
+            ),
+            (
+                "E-TYP-ARITY",
+                "type `Vec` expects 1 generic argument(s), found 0",
+            ),
+            ("E-TYP-ARITY", "type `i32` takes no generic arguments"),
+            (
+                "E-TYP-ARITY",
+                "type `Result` expects 2 generic argument(s), found 1",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_module_qualified_generic_struct_takes_its_arguments() {
+    assert_errors(
+        "mod a { pub struct W<T> { v: T } }\n\
+         fn f(x: a::W<i32>, y: a::W, z: a::W<i32, i32>) { }\n\
+         fn main() { }",
+        &[
+            ("E-TYP-ARITY", "type expects 1 generic argument(s), found 0"),
+            ("E-TYP-ARITY", "type expects 1 generic argument(s), found 2"),
+        ],
+    );
+}

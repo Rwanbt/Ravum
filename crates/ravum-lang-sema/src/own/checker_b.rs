@@ -379,7 +379,28 @@ impl<'a> OwnChecker<'a> {
             }
         }
         if place.steps.is_empty() {
+            let assign_once = self
+                .slot_info(place.slot)
+                .is_some_and(|info| info.assign_once);
+            let assigned_before = self
+                .state
+                .slots
+                .get(&place.slot)
+                .is_some_and(|st| st.maybe_assigned);
+            if assign_once && assigned_before {
+                let name = self.display_place(place);
+                self.emit_diag(
+                    E_IMMUTABLE,
+                    span,
+                    format!("seconde affectation de la liaison immuable `{name}`"),
+                    vec![(
+                        "une liaison sans `mut` reçoit sa valeur une seule fois".to_string(),
+                        None,
+                    )],
+                );
+            }
             if let Some(st) = self.state.slots.get_mut(&place.slot) {
+                st.maybe_assigned = true;
                 st.init = true;
                 st.moved = false;
                 st.maybe_moved = false;

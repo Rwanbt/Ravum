@@ -133,6 +133,7 @@ impl<'a> OwnChecker<'a> {
                 static_ref,
                 decl_span: span,
                 binding,
+                assign_once: false,
             },
         );
         if let Some(scope) = self.scopes.last_mut() {
@@ -290,7 +291,7 @@ impl<'a> OwnChecker<'a> {
             init_static = self.is_static_ref(init);
         }
 
-        if let PatKind::Binding { name, .. } = &l.pat.kind {
+        if let PatKind::Binding { name, mutable } = &l.pat.kind {
             let ty = self
                 .facts
                 .pat_types
@@ -303,6 +304,11 @@ impl<'a> OwnChecker<'a> {
                 self.report_ref_escape(stmt_span, "stockée");
             }
             let slot = self.declare_slot(&name.name, ty, static_ref, l.pat.span);
+            if !has_init && !*mutable {
+                if let Some(info) = self.slots.get_mut(&slot) {
+                    info.assign_once = true;
+                }
+            }
             let st = if has_init {
                 SlotState::initialised()
             } else {

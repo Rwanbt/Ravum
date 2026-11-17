@@ -468,6 +468,26 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.facts
                     .resolutions
                     .insert(path.id, Resolution::Variant { enum_item, variant });
+                // A bare path only matches a unit variant: `E::B` for a variant
+                // that carries a payload is not a pattern (rustc E0532/E0533).
+                let payload = self.facts.enums.get(&enum_item).and_then(|info| {
+                    let found = info.variants.get(variant)?;
+                    let fields = match found.kind {
+                        crate::facts::VariantKind::Unit => return None,
+                        crate::facts::VariantKind::Tuple => found.tuple_types.len(),
+                        crate::facts::VariantKind::Struct => found.fields.len(),
+                    };
+                    Some((info.name.clone(), found.name.clone(), fields))
+                });
+                if let Some((enum_name, variant_name, fields)) = payload {
+                    self.error(
+                        "E-TYP-ARITY",
+                        pat.span,
+                        format!(
+                            "variant `{enum_name}::{variant_name}` expects {fields} field(s), found 0"
+                        ),
+                    );
+                }
                 self.pattern_enum_ty(pat.span, enum_item, expected)
             }
             Ok(ValuePath::BuiltinConst(ctor_path)) => {

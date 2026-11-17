@@ -4622,3 +4622,45 @@ fn main() {
     let (_, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+/// A place reached through an explicit dereference is rooted at that
+/// dereference. The ownership guard asked the checker for a binding identity
+/// on the dereference itself and refused to generate code for a program that
+/// `check` accepts: `(*q)[0]`, `(*q).n`.
+#[test]
+fn audit_places_under_an_explicit_dereference_are_generated_and_run() {
+    if skip("audit_places_under_an_explicit_dereference_are_generated_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "explicit-deref-places",
+        r#"struct P { n: i32 }
+
+fn bump(a: &mut i32) {
+    *a = *a + 1;
+}
+
+fn through_array(q: &mut [i32; 2]) -> i32 {
+    (*q)[0] = 5;
+    bump(&mut (*q)[1]);
+    return (*q)[0] + (*q)[1];
+}
+
+fn through_struct(q: &mut P) -> i32 {
+    (*q).n = 7;
+    bump(&mut (*q).n);
+    return (*q).n;
+}
+
+fn main() {
+    let mut a = [1, 2];
+    assert_eq(through_array(&mut a), 8);
+    let mut p = P { n: 1 };
+    assert_eq(through_struct(&mut p), 8);
+}
+"#,
+    );
+    let built = must_compile(&code, "explicit-deref-places");
+    let (_stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+}

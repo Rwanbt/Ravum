@@ -1094,7 +1094,7 @@ fn audit_move_field_during_its_own_borrow_conflicts() {
         r#"
 struct D { titre: String }
 fn h(a: &mut String, b: String) {}
-fn f(d: D) {
+fn f(mut d: D) {
     h(&mut d.titre, d.titre);
 }
 "#,
@@ -1128,7 +1128,7 @@ fn audit_whole_mut_borrow_after_partial_move_is_rejected() {
         r#"
 struct D { titre: String, n: i32 }
 fn h(x: &mut D) {}
-fn f(d: D) {
+fn f(mut d: D) {
     let t = d.titre;
     h(&mut d);
 }

@@ -103,6 +103,7 @@ pub(super) const E_BORROW_CONFLICT: &str = "E-OWN-BORROW-CONFLICT";
 pub(super) const E_REF_ESCAPE: &str = "E-OWN-REF-ESCAPE";
 pub(super) const E_NOT_COPY: &str = "E-TYP-ARRAY-REPEAT";
 pub(super) const E_LIMIT: &str = "E-OWN-LIMIT";
+pub(super) const E_IMMUTABLE: &str = "E-OWN-IMMUTABLE";
 
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
 /// order by the caller; this function only pushes them.
@@ -311,6 +312,9 @@ pub(super) struct SlotInfo {
     pub(super) decl_span: Span,
     /// Program-wide identity of the binding (RFC-OWN-FACTS-2 step C4).
     pub(super) binding: BindingId,
+    /// Declared without `mut` and without an initialiser: the binding takes
+    /// its value from one assignment, and may not be assigned again.
+    pub(super) assign_once: bool,
 }
 
 /// One binding introduced by a pattern, with the information needed to decide
@@ -350,6 +354,9 @@ pub(super) struct SlotState {
     pub(super) used_since: bool,
     /// Projections that may have been partially moved, with their move record.
     pub(super) partial: BTreeMap<Vec<Step>, PartialMove>,
+    /// Assigned on at least one path since its declaration (only tracked for
+    /// the bindings that may be assigned once).
+    pub(super) maybe_assigned: bool,
 }
 
 impl SlotState {

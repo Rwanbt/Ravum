@@ -450,7 +450,12 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 expr.id
             ));
         }
-        if !own.binding_identity.contains_key(&root.id) {
+        // A place reached through an explicit dereference (`(*r)[0]`) is rooted
+        // at that dereference, not at a binding: the planner tracks no array
+        // place for it (`array_place` finds no identity and stops), so only a
+        // root that names a binding owes one.
+        let rooted_at_a_binding = matches!(root.kind, ExprKind::Path(_) | ExprKind::SelfValue);
+        if rooted_at_a_binding && !own.binding_identity.contains_key(&root.id) {
             self.disagreements.push(format!(
                 "ownership facts disagree with the backend for expression {} ({location}): the \
                  checker recorded no binding identity for the root of this place",
