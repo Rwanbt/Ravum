@@ -384,7 +384,11 @@ fn empty_inline_table_entries_are_ignored() {
     assert_accepted(&load_package(&temp.path().join("app")));
 
     let temp = TempDir::new("escaped-path");
-    let app = app_with_dependency(&temp, "util", "../u\\tl");
+    let app = app_with_dependency(&temp, "util", "../u\\\\tl");
     let loaded = load_package(&app);
-    assert_fail_closed(&loaded, "E-MOD-DEPENDENCY", "path `../u\tl` does not exist");
+    assert_fail_closed(
+        &loaded,
+        "E-MOD-DEPENDENCY",
+        "path `../u\\tl` does not exist",
+    );
 }
