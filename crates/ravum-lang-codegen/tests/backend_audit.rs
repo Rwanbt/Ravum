@@ -5248,3 +5248,30 @@ fn main() {
     assert!(code.contains("N_rv_local_"), "{code}");
     assert_eq!(stdout, "1\n6\n9\n7\n3\n40\n8\n");
 }
+
+/// A generic argument checked before its type parameter is bound is expected
+/// as an inference variable: `g(Some(7), 1)` for `g<T>(Option<T>, T)` and
+/// `h(Vec::new(), 5)` for `h<T>(Vec<T>, T)` used to be refused with
+/// E-TYP-MISMATCH (`Option<i32>` against a bare `Option<T>`).
+#[test]
+fn audit_a_generic_argument_before_its_parameter_is_bound_builds_and_runs() {
+    if skip("audit_a_generic_argument_before_its_parameter_is_bound_builds_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "generic-argument-before-binding",
+        r#"fn g<T>(a: Option<T>, b: T) -> T { match a { Some(x) => x, None => b } }
+fn h<T>(a: Vec<T>, b: T) -> usize { let mut v = a; v.push(b); return v.len(); }
+fn main() {
+    let x = g(Some(7), 1);
+    let y = g(None, 3);
+    let n = h(Vec::new(), 5);
+    if x == 7 && y == 3 && n == 1 { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "generic-argument-before-binding");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
