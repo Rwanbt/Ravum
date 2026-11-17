@@ -805,3 +805,51 @@ fn a_unit_variant_called_without_arguments_is_accepted() {
         &[],
     );
 }
+
+/// OWN-7.4: `self` taken by value without `mut` is an immutable place.
+#[test]
+fn a_by_value_self_cannot_be_borrowed_mutably() {
+    assert_errors(
+        "struct P { }\n\
+         impl P { fn f(self) { let r = &mut self; } }\n\
+         fn main() { }",
+        &[(
+            "E-OWN-IMMUTABLE",
+            "cannot borrow an immutable place as `&mut`",
+        )],
+    );
+}
+
+/// A constant, local or reached through a module, is never a mutable place.
+#[test]
+fn a_constant_is_not_an_assignable_place() {
+    assert_errors(
+        "const C: i32 = 1;\n\
+         mod m { pub const D: i32 = 1; }\n\
+         fn main() { C = 2; m::D = 2; }",
+        &[
+            ("E-OWN-IMMUTABLE", "cannot assign to an immutable place"),
+            ("E-OWN-IMMUTABLE", "cannot assign to an immutable place"),
+        ],
+    );
+}
+
+#[test]
+fn assigning_through_an_unknown_dereference_reports_only_the_unknown_name() {
+    assert_errors(
+        "fn main() { *nothing = 1; }",
+        &[("E-RES-UNKNOWN", "unknown name `nothing`")],
+    );
+}
+
+/// The hint "is a method, call it" exists for builtin methods only; a user
+/// method used without a call is reported as a missing field.
+#[test]
+fn a_method_of_a_user_type_used_without_a_call_is_not_a_field() {
+    assert_errors(
+        "struct P { }\n\
+         impl P { fn m(&self) { } }\n\
+         fn main() { let p = P { }; let x = p.m; }",
+        &[("E-TYP-FIELD", "no field `m` on type `P`")],
+    );
+}

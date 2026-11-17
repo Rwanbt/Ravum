@@ -301,13 +301,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 // value: `s.parse_i64` is a resolution failure (STD-9.10,
                 // F-STD-021), which is a different diagnostic from "unknown
                 // field" and points the user at the fix.
+                // A user type never reaches this arm (the `Nominal` arm above
+                // answers "no field"), so only builtin methods are looked up.
                 let is_method = method_self_kind(&ty)
                     .and_then(|kind| builtins::builtin_method(kind, name))
-                    .is_some()
-                    || matches!(
-                        &ty,
-                        Type::Nominal { def, .. } if self.world.method(*def, name, false).is_some()
-                    );
+                    .is_some();
                 if is_method {
                     self.error(
                         "E-RES-UNKNOWN",
