@@ -180,7 +180,8 @@ impl<'a> Emitter<'a> {
         for item in &implementation.items {
             match &item.kind {
                 ItemKind::Fn(fun) => self.emit_fn(buf, item, fun)?,
-                ItemKind::Const(constant) => self.emit_const(buf, item, constant)?,
+                // The checker accepts only functions inside an `impl`
+                // (E-RES-IMPL-UNKNOWN); anything else is refused here too.
                 _ => {
                     return Err(err(format!(
                         "unsupported item inside `impl` (item node {})",

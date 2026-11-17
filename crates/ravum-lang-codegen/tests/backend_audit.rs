@@ -4664,3 +4664,134 @@ fn main() {
     let (_stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
 }
+
+/// Array-element paths followed by more projections, while another element
+/// of the same array is moved: a field or tuple field moved out of an element,
+/// a field of an element borrowed exclusively and read, a nested constant
+/// index, a nested computed index. Each lowering is checked by running it.
+#[test]
+fn audit_element_paths_with_trailing_projections_run_correctly() {
+    if skip("audit_element_paths_with_trailing_projections_run_correctly") {
+        return;
+    }
+    let code = generate_source(
+        "element-path-projections",
+        r#"struct P { name: String, n: i32 }
+
+fn take(s: String) -> usize {
+    return s.len();
+}
+
+fn bump(n: &mut i32) {
+    *n = *n + 1;
+}
+
+fn main() {
+    let mut a = [P { name: String::from("ab"), n: 1 }, P { name: String::from("cde"), n: 2 }];
+    let moved = a[0].name;
+    bump(&mut a[1].n);
+    assert_eq(a[1].name.len(), 3);
+    assert_eq(take(moved), 2);
+    assert_eq(a[1].n, 3);
+    let t = [(String::from("x"), String::from("yy")), (String::from("z"), String::from("w"))];
+    let u = t[1].1;
+    assert_eq(take(u), 1);
+    let g = [[String::from("p"), String::from("qq")], [String::from("r"), String::from("s")]];
+    let h = g[1][1];
+    assert_eq(g[0][1].len(), 2);
+    assert_eq(take(h), 1);
+    let i: usize = 1;
+    let m = [[String::from("aaa"), String::from("b")], [String::from("c"), String::from("dd")]];
+    let n = m[0][i];
+    assert_eq(take(n), 1);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("ref mut __rv_el_"),
+        "an exclusive element borrow is lowered"
+    );
+    assert!(
+        code.contains("into_iter().nth("),
+        "a computed nested index is lowered"
+    );
+    let built = must_compile(&code, "element-path-projections");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// Item shapes no other in-process test generated: an empty struct, an extern
+/// function without a return value, test functions inside and outside a
+/// module. The program runs, then its test runner runs both tests.
+#[test]
+fn audit_empty_struct_unit_extern_and_module_tests_run() {
+    if skip("audit_empty_struct_unit_extern_and_module_tests_run") {
+        return;
+    }
+    let source = r#"struct Empty {}
+
+struct P { n: i32 }
+
+impl P {
+    fn k(&self) -> i32 {
+        return self.n + 4;
+    }
+}
+
+extern "C" {
+    fn srand(seed: u32);
+    fn abs(x: i32) -> i32;
+}
+
+mod inner {
+    test fn inner_test() {
+        assert_eq(1 + 1, 2);
+    }
+}
+
+test fn outer_test() {
+    assert_eq(2, 2);
+}
+
+fn main() {
+    let e = Empty {};
+    drop(e);
+    let p = P { n: 1 };
+    assert_eq(p.k(), 5);
+    unsafe {
+        srand(7);
+    };
+    let a = unsafe { abs(-3) };
+    assert_eq(a, 3);
+    io::println("ok");
+}
+"#;
+    let code = generate_source("item-shapes", source);
+    assert!(
+        code.contains("struct Empty {}"),
+        "the empty struct is emitted as such"
+    );
+    let built = must_compile(&code, "item-shapes");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+
+    let tests = generate_source_with(
+        "item-shapes-tests",
+        source,
+        &GenOptions {
+            test_mode: true,
+            ..GenOptions::default()
+        },
+    );
+    assert!(
+        tests.contains("inner::inner_test"),
+        "a module test is named by its path"
+    );
+    let built = must_compile(&tests, "item-shapes-tests");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "both tests pass: {stdout}{stderr}");
+    assert!(stdout.contains("2 passed"), "{stdout}");
+}
