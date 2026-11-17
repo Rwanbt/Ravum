@@ -403,6 +403,225 @@
         "review_condition": "Idem.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-UNKNOWN-BUILTIN-CALLS",
+        "file": "crates/ravum-lang-sema/src/typeck/calls.rs",
+        "lines": [
+          [
+            98,
+            106
+          ],
+          [
+            773,
+            781
+          ]
+        ],
+        "summary": "Unknown builtin function or constructor path at a call.",
+        "why_unreachable": "The resolver builds `ValuePath::BuiltinFn` only from a `BUILTIN_FNS` entry or from `prelude_value_path`, `BuiltinCtor` only for `Option::Some`, `Result::Ok`, `Result::Err`, and `BuiltinConst` only for `Option::None` (resolve/paths.rs); test `builtins::tests::every_resolvable_builtin_function_path_has_a_signature` checks the first table.",
+        "proof": "The resolver builds `ValuePath::BuiltinFn` only from a `BUILTIN_FNS` entry or from `prelude_value_path`, `BuiltinCtor` only for `Option::Some`, `Result::Ok`, `Result::Err`, and `BuiltinConst` only for `Option::None` (resolve/paths.rs); test `builtins::tests::every_resolvable_builtin_function_path_has_a_signature` checks the first table.",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --lib every_resolvable_builtin_function_path_has_a_signature"
+        ],
+        "review_condition": "Un nouveau chemin builtin produit par le résolveur sans signature.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-MISSING-FACTS-CALLS",
+        "file": "crates/ravum-lang-sema/src/typeck/calls.rs",
+        "lines": [
+          [
+            184,
+            187
+          ],
+          [
+            562,
+            565
+          ],
+          [
+            570,
+            570
+          ]
+        ],
+        "summary": "A called function or enum variant without its signature or enum entry.",
+        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/check.rs"
+        ],
+        "review_condition": "Un item résolu sans entrée de faits.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-IMPL-TARGET-NOMINAL",
+        "file": "crates/ravum-lang-sema/src/typeck/calls.rs",
+        "lines": [
+          [
+            286,
+            286
+          ],
+          [
+            293,
+            293
+          ]
+        ],
+        "summary": "`bind_impl_generics` on an impl whose target is not nominal, or whose argument is not a parameter.",
+        "why_unreachable": "`resolve_impl` returns (E-RES-IMPL-SELF-TYPE) unless the target is a nominal type of the package, and refuses (E-RES-IMPL-TARGET) unless its arguments are exactly the impl parameters in order; a method entry is only recorded after both checks.",
+        "proof": "crates/ravum-lang-sema/src/resolve/header.rs `resolve_impl`.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/resolve/header.rs"
+        ],
+        "review_condition": "Des `impl` sur des types non nominaux ou partiellement instanciés.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-UNKNOWN-BUILTIN-CONST",
+        "file": "crates/ravum-lang-sema/src/typeck/expr.rs",
+        "lines": [
+          [
+            429,
+            434
+          ]
+        ],
+        "summary": "Unknown builtin constant.",
+        "why_unreachable": "The resolver builds `ValuePath::BuiltinFn` only from a `BUILTIN_FNS` entry or from `prelude_value_path`, `BuiltinCtor` only for `Option::Some`, `Result::Ok`, `Result::Err`, and `BuiltinConst` only for `Option::None` (resolve/paths.rs); test `builtins::tests::every_resolvable_builtin_function_path_has_a_signature` checks the first table.",
+        "proof": "The resolver builds `ValuePath::BuiltinFn` only from a `BUILTIN_FNS` entry or from `prelude_value_path`, `BuiltinCtor` only for `Option::Some`, `Result::Ok`, `Result::Err`, and `BuiltinConst` only for `Option::None` (resolve/paths.rs); test `builtins::tests::every_resolvable_builtin_function_path_has_a_signature` checks the first table.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/resolve/paths.rs"
+        ],
+        "review_condition": "Une constante builtin autre que `Option::None`.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-MISSING-FACTS-EXPR",
+        "file": "crates/ravum-lang-sema/src/typeck/expr.rs",
+        "lines": [
+          [
+            342,
+            342
+          ],
+          [
+            346,
+            346
+          ]
+        ],
+        "summary": "A variant path whose enum or variant entry is missing.",
+        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/check.rs"
+        ],
+        "review_condition": "Idem.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-MISSING-FACTS-AGGREGATES",
+        "file": "crates/ravum-lang-sema/src/typeck/aggregates.rs",
+        "lines": [
+          [
+            66,
+            66
+          ],
+          [
+            111,
+            111
+          ],
+          [
+            115,
+            115
+          ],
+          [
+            589,
+            589
+          ],
+          [
+            593,
+            593
+          ]
+        ],
+        "summary": "A struct literal or variant pattern whose struct, enum or variant entry is missing.",
+        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/check.rs"
+        ],
+        "review_condition": "Idem.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-RETURN-TRY-IN-CONST",
+        "file": "crates/ravum-lang-sema/src/typeck/control.rs",
+        "lines": [
+          [
+            277,
+            282
+          ],
+          [
+            325,
+            333
+          ]
+        ],
+        "summary": "`?` and `return` outside a function or inside a constant.",
+        "why_unreachable": "`check_const_expr` types a constant initialiser itself and refuses every form that is not a constant expression (`_` arm: E-TYP-CONST, blocks: E-TYP-CONST) without handing it to `check_expr`; `return` and `?` therefore never reach `check_return`/`check_try` with `in_const` set, and every function body sets `current_fn`.",
+        "proof": "`check_const_expr` types a constant initialiser itself and refuses every form that is not a constant expression (`_` arm: E-TYP-CONST, blocks: E-TYP-CONST) without handing it to `check_expr`; `return` and `?` therefore never reach `check_return`/`check_try` with `in_const` set, and every function body sets `current_fn`. Measured: `const C: i32 = return 1;` and `const C: i32 = Some(1)?;` report `E-TYP-CONST: this expression is not allowed in a constant`.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/typeck/consts.rs `check_const_expr`"
+        ],
+        "review_condition": "Des expressions de constante typées par `check_expr`.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-MISSING-FACTS-CORE",
+        "file": "crates/ravum-lang-sema/src/typeck/core.rs",
+        "lines": [
+          [
+            484,
+            484
+          ],
+          [
+            511,
+            511
+          ],
+          [
+            552,
+            552
+          ]
+        ],
+        "summary": "A test, `main` or function body without its signature.",
+        "why_unreachable": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "proof": "`resolve` fills `facts.fn_sigs`, `facts.structs` and `facts.enums` for every function, struct and enum item of the world (`resolve/header.rs`), and `check` runs typeck only when resolution reported no error (check.rs: `if !resolved || diags.has_errors()` returns). Every id typeck looks up comes from a resolution of the same world, so the lookup cannot miss.",
+        "evidence": [
+          "crates/ravum-lang-sema/src/check.rs"
+        ],
+        "review_condition": "Idem.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-IMPL-NON-FN-MEMBER",
+        "file": "crates/ravum-lang-sema/src/typeck/core.rs",
+        "lines": [
+          [
+            412,
+            412
+          ]
+        ],
+        "summary": "A non-function member of an `impl` skipped when collecting methods.",
+        "why_unreachable": "`resolve_impl` reports E-RES-IMPL-UNKNOWN for every non-`fn` member and typeck does not run after a resolution error.",
+        "proof": "crates/ravum-lang-sema/src/resolve/header.rs `resolve_impl`; check.rs.",
+        "evidence": [
+          "conformance/cases/types/ffi-extern-in-impl"
+        ],
+        "review_condition": "Des `const` associées.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
       }
     ]
   }
