@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_assign(allow_struct);
         self.depth -= 1;
         expr
@@ -23,7 +23,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_assign_inner(allow_struct);
         self.depth -= 1;
         expr
@@ -220,7 +220,9 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_binary(&mut self, min_prec: u8, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
         let mut lhs = self.parse_cast(allow_struct);
+        let mut spine = self.reach;
         while let Some((op, prec, count)) = self.peek_binop() {
             if prec < min_prec {
                 break;
@@ -237,7 +239,12 @@ impl<'a> Parser<'a> {
             }
             let start = lhs.span;
             self.bump_n(count);
+            self.reach = self.depth;
             let rhs = self.parse_binary(prec + 1, allow_struct);
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
             let span = start.join(rhs.span);
             let id = self.id();
             lhs = Expr {
@@ -250,15 +257,23 @@ impl<'a> Parser<'a> {
                 span,
             };
         }
+        self.reach = outer.max(spine);
         lhs
     }
 
     pub(super) fn parse_cast(&mut self, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
         let mut expr = self.parse_unary(allow_struct);
+        let mut spine = self.reach;
         while self.at_kw(Kw::As) {
             let start = expr.span;
             self.bump();
+            self.reach = self.depth;
             let ty = self.parse_type();
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
             let span = start.join(ty.span);
             let id = self.id();
             expr = Expr {
@@ -270,6 +285,7 @@ impl<'a> Parser<'a> {
                 span,
             };
         }
+        self.reach = outer.max(spine);
         expr
     }
 
@@ -281,7 +297,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_unary_inner(allow_struct);
         self.depth -= 1;
         expr

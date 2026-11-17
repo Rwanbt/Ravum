@@ -77,7 +77,13 @@ use ravum_lang_syntax::span::Span;
 use std::collections::BTreeMap;
 
 /// Bornes de robustesse / performance (P0-H).
-pub(super) const MAX_DEPTH: u32 = 256;
+///
+/// The analysis enters up to three levels per syntactic nesting level (block,
+/// statement, expression; an operand read as a place then as a value), and the
+/// parser bounds the tree height at `ravum_lang_syntax::parser::MAX_DEPTH`
+/// (256). Four times that bound cannot be reached by a parsed program; a tree
+/// that reaches it anyway is refused with `E-OWN-LIMIT`, never skipped.
+pub(super) const MAX_DEPTH: u32 = 1024;
 pub(super) const MAX_FIXPOINT: u32 = 16;
 /// Per-function borrow-error bound. It **must** stay strictly below the
 /// per-file diagnostic budget (`ravum_lang_syntax::diag::DIAGNOSTIC_BUDGET`,

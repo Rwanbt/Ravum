@@ -2,12 +2,15 @@ use super::*;
 
 impl<'a> Parser<'a> {
     pub(super) fn parse_postfix(&mut self, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
         let mut expr = self.parse_primary(allow_struct);
+        let mut spine = self.reach;
         loop {
             if self.fatal {
                 break;
             }
             let before = self.pos;
+            self.reach = self.depth;
             if self.at(Punct::LParen) {
                 let start = expr.span;
                 let opener = self.cur_span();
@@ -174,7 +177,12 @@ impl<'a> Parser<'a> {
             if self.pos == before {
                 break;
             }
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
         }
+        self.reach = outer.max(spine);
         expr
     }
 

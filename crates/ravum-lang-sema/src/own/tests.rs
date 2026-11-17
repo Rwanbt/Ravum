@@ -1468,3 +1468,31 @@ fn own_facts_are_identical_to_the_append_accumulation() {
             "own facts equivalence: {compared} packages compared, {with_facts} recorded facts, 0 difference"
         );
 }
+
+/// The parser bounds the tree height well below the analysis' own depth
+/// guard, so no parsed program reaches it. If a tree does anyway, the
+/// function is refused: the guard used to skip what lay below in silence,
+/// which accepted a double move the generated Rust then failed on (E0382).
+#[test]
+fn the_depth_guard_refuses_the_function_instead_of_skipping_it() {
+    let result = run("fn f(s: String) -> usize { let t = s; t.len() }\n");
+    let checked = result.checked.expect("the fixture checks");
+    let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
+    collect_fns(&checked.program.root, &mut fns);
+    let (_, f) = fns[0];
+
+    let mut diags = DiagnosticBag::new();
+    let mut own = OwnFacts::default();
+    let mut checker = OwnChecker::new(&checked.facts, &mut diags, &mut own);
+    checker.depth = super::MAX_DEPTH;
+    // Every entry point of the recursion refuses, and reports once.
+    checker.analyze_block(&f.body, true);
+    checker.analyze_stmt(&f.body.stmts[0]);
+    let tail = f.body.tail.as_ref().expect("the fixture has a tail");
+    checker.eval_value(tail);
+    assert!(checker.eval_place_expr(tail).is_none());
+    assert!(checker.too_deep);
+
+    let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(codes, ["E-OWN-LIMIT"]);
+}

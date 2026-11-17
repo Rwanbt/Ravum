@@ -168,6 +168,11 @@ struct Parser<'a> {
     ids: NodeIds,
     node_count: u32,
     depth: u32,
+    /// Deepest nesting reached by the expression being parsed, counting one
+    /// level per link of a left-associative chain (`a + b + c`, `x.f.g`).
+    /// Those chains are parsed by loops, so `depth` alone does not bound the
+    /// height of the tree they build.
+    reach: u32,
     fatal: bool,
     depth_reported: bool,
     nodes_reported: bool,

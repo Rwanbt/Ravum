@@ -64,8 +64,16 @@ impl<'a> Parser<'a> {
         let mut else_branch = None;
         if self.eat_kw(Kw::Else) {
             if self.at_kw(Kw::If) {
-                let nested = self.parse_if_expr();
-                else_branch = Some(Box::new(nested));
+                // An `else if` chain nests one `if` per link: it counts
+                // against the nesting limit like any other nesting.
+                if self.depth >= MAX_DEPTH {
+                    self.fail_depth();
+                } else {
+                    self.descend();
+                    let nested = self.parse_if_expr();
+                    self.depth -= 1;
+                    else_branch = Some(Box::new(nested));
+                }
             } else if self.at(Punct::LBrace) {
                 let block = self.parse_block();
                 let span = block.span;

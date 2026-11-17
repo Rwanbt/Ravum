@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.infer_type(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let ty = self.parse_type_inner();
         self.depth -= 1;
         ty

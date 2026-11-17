@@ -182,9 +182,19 @@ impl<'a> OwnChecker<'a> {
     // Block / statement / CFG
     // ------------------------------------------------------------------
 
-    pub(super) fn enter(&mut self) -> bool {
+    pub(super) fn enter(&mut self, span: Span) -> bool {
         if self.depth >= MAX_DEPTH {
-            self.too_deep = true;
+            // Fail closed: what lies below is not analysed, so the function
+            // cannot be accepted. Reported once per function, even during a
+            // silent fixpoint pass.
+            if !self.too_deep {
+                self.too_deep = true;
+                self.diags.push(Diagnostic::error(
+                    E_LIMIT,
+                    span,
+                    "imbrication trop profonde pour l'analyse d'ownership ; analyse interrompue",
+                ));
+            }
             return false;
         }
         self.depth += 1;
@@ -196,7 +206,7 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn analyze_block(&mut self, block: &Block, fn_body: bool) {
-        if !self.enter() {
+        if !self.enter(block.span) {
             return;
         }
         self.push_scope();
@@ -260,7 +270,7 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn analyze_stmt(&mut self, stmt: &Stmt) {
-        if !self.enter() {
+        if !self.enter(stmt.span) {
             return;
         }
         self.loans.truncate(self.loan_floor);
@@ -378,7 +388,7 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn eval_value(&mut self, expr: &Expr) {
-        if !self.enter() {
+        if !self.enter(expr.span) {
             return;
         }
         match &expr.kind {
@@ -596,7 +606,7 @@ impl<'a> OwnChecker<'a> {
 
     /// Evaluate an expression as a place without consuming it.
     pub(super) fn eval_place_expr(&mut self, expr: &Expr) -> Option<Place> {
-        if !self.enter() {
+        if !self.enter(expr.span) {
             return None;
         }
         let result = match &expr.kind {

@@ -1346,3 +1346,80 @@ fn hostile_bizarre_inputs_never_panic() {
         // lexically odd. The contract is "no panic, no hang".
     }
 }
+
+/// Source of `fn f() { <body> }` where `body` repeats `link` `count` times
+/// after `head`.
+fn chained(head: &str, link: &str, count: usize, tail: &str) -> String {
+    format!("fn f() {{ {head}{}{tail} }}", link.repeat(count))
+}
+
+/// Left-associative chains are parsed by loops, so they nest the tree without
+/// nesting the parser. Every later phase recurses on that tree: a chain is
+/// bounded like any other nesting, and a hostile one is refused, not followed
+/// until the stack overflows (100 000 links aborted the compiler).
+#[test]
+fn hostile_chains_report_depth_without_overflow() {
+    let shapes: [(&str, &str, &str); 8] = [
+        ("let r = 1", " + 0", ";"),
+        ("let r = c", " && c", ";"),
+        ("let r = 1", " as i32", ";"),
+        ("let r = v", ".a", ";"),
+        ("let r = v", "[0]", ";"),
+        ("let r = v", ".m()", ";"),
+        ("let r = v", "?", ";"),
+        ("if c { }", " else if c { }", " else { }"),
+    ];
+    for (head, link, tail) in shapes {
+        for count in [300, 20_000] {
+            let result = parse(&chained(head, link, count, tail));
+            assert!(
+                result.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"),
+                "`{link}` x {count}: expected E-PARSE-DEPTH, got:\n{}",
+                dump_diags(&result)
+            );
+        }
+    }
+}
+
+/// The bound is the nesting limit, not a small constant: chains of two
+/// hundred links parse cleanly in every shape.
+#[test]
+fn long_chains_below_the_nesting_limit_parse() {
+    let shapes: [(&str, &str, &str); 8] = [
+        ("let r = 1", " + 0", ";"),
+        ("let r = c", " && c", ";"),
+        ("let r = 1", " as i32", ";"),
+        ("let r = v", ".a", ";"),
+        ("let r = v", "[0]", ";"),
+        ("let r = v", ".m()", ";"),
+        ("let r = v", "?", ";"),
+        ("if c { }", " else if c { }", " else { }"),
+    ];
+    for (head, link, tail) in shapes {
+        let result = parse(&chained(head, link, 200, tail));
+        assert!(
+            result.diags.is_empty(),
+            "`{link}` x 200 must parse, got:\n{}",
+            dump_diags(&result)
+        );
+    }
+}
+
+/// A chain nested inside another nesting adds to it: the limit bounds the
+/// height of the tree, whatever mix of nesting and chaining builds it.
+#[test]
+fn a_chain_inside_a_nesting_counts_against_the_same_limit() {
+    // 60 parentheses use 180 levels; 60 more links stay under the limit,
+    // 120 more exceed it.
+    let nested = |links: usize| {
+        format!(
+            "fn f() {{ let r = {}1{}{}; }}",
+            "(".repeat(60),
+            " + 0".repeat(links),
+            ")".repeat(60)
+        )
+    };
+    assert!(parse(&nested(60)).diags.is_empty());
+    let refused = parse(&nested(120));
+    assert!(refused.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"));
+}

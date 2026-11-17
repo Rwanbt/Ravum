@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.wild_pat(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let pat = self.parse_pattern_inner();
         self.depth -= 1;
 

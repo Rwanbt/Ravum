@@ -191,3 +191,45 @@ fn a_reference_cannot_be_returned_inside_an_option_or_stored_in_a_vector_field()
     );
     assert_eq!(codes, ["E-OWN-REF-ESCAPE", "E-OWN-REF-ESCAPE"]);
 }
+
+/// `check` accepted these programs and `rustc` refused the generated Rust
+/// (E0382): past 256 levels the ownership analysis gave up without a
+/// diagnostic, and a 300-link chain builds a tree that deep. Chains within
+/// the nesting limit are analysed to the bottom; longer ones do not parse.
+///
+/// The checker recurses on the tree, so the test runs on a stack sized like
+/// the toolchain's own (`ravum-lang` runs every command on a 64 MiB thread).
+#[test]
+fn a_double_move_under_a_long_chain_is_still_reported() {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(double_moves_under_long_chains)
+        .expect("the thread starts")
+        .join()
+        .expect("the checks pass");
+}
+
+fn double_moves_under_long_chains() {
+    let sum = format!(
+        "fn m(a: String) -> i32 {{ 1 }}\n\
+         fn main() {{ let s = String::from(\"a\"); let r = m(s) + m(s){}; }}",
+        " + 0".repeat(200)
+    );
+    assert_eq!(errors(&sum), ["E-OWN-USE-AFTER-MOVE"]);
+
+    let branches = format!(
+        "fn m(a: String) {{ }}\n\
+         fn main() {{ let c = true; let s = String::from(\"a\"); \
+         if c {{ }}{} else {{ m(s); m(s); }} }}",
+        " else if c { }".repeat(200)
+    );
+    assert_eq!(errors(&branches), ["E-OWN-USE-AFTER-MOVE"]);
+
+    let blocks = format!(
+        "fn m(a: String) {{ }}\n\
+         fn main() {{ let s = String::from(\"a\"); {} m(s); m(s); {} }}",
+        "{".repeat(80),
+        "}".repeat(80)
+    );
+    assert_eq!(errors(&blocks), ["E-OWN-USE-AFTER-MOVE"]);
+}
