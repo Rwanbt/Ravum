@@ -1467,4 +1467,87 @@ fn registering_a_source_twice_preserves_its_original_identity_and_text() {
     assert_eq!(sources.file(id).unwrap().text, "original");
 }
 
+/// Defensive refusals of the module loader that a full load never reaches,
+/// because the package digest refuses every symlink under `src/` first. They
+/// guard a file swapped between the digest walk and the module load; the test
+/// drives the loader functions directly on such a state.
+#[cfg(unix)]
+mod loader_after_digest {
+    use super::*;
+    use crate::loader::crates::{load_crate_root, resolve_module_file, CrateCtx};
+
+    fn with_ctx(src_root: &Path, run: impl FnOnce(&mut CrateCtx<'_>)) -> Vec<String> {
+        let mut sources = SourceMap::new();
+        let mut diags = DiagnosticBag::new();
+        let mut file_ids = BTreeMap::new();
+        let mut next_file_id = 0;
+        let mut synthetic = 0u64;
+        let mut parse_time = Duration::ZERO;
+        let mut parse_cache = ParseCache::new();
+        let overrides = BTreeMap::new();
+        let mut ctx = CrateCtx {
+            src_root: src_root.to_path_buf(),
+            display_base: src_root.to_path_buf(),
+            display_prefix: String::new(),
+            sources: &mut sources,
+            diags: &mut diags,
+            file_ids: &mut file_ids,
+            next_file_id: &mut next_file_id,
+            loaded: BTreeSet::new(),
+            synthetic: &mut synthetic,
+            parse_time: &mut parse_time,
+            parse_cache: &mut parse_cache,
+            overrides: &overrides,
+        };
+        run(&mut ctx);
+        diags
+            .iter()
+            .map(|diag| format!("{}: {}", diag.code, diag.message))
+            .collect()
+    }
+
+    fn decl(name: &str) -> ravum_lang_syntax::ast::ModDecl {
+        ravum_lang_syntax::ast::ModDecl {
+            name: ravum_lang_syntax::ast::Ident::new(name, Span::dummy()),
+        }
+    }
+
+    #[test]
+    fn a_symlinked_crate_root_is_refused() {
+        let temp = TempDir::new("after-digest-root");
+        let real = temp.file("real.rv", "fn main() { }\n");
+        let src = temp.path().join("src");
+        fs::create_dir_all(&src).expect("src");
+        std::os::unix::fs::symlink(&real, src.join("main.rv")).expect("symlink");
+        let src = fs::canonicalize(&src).expect("canonical src");
+        let diags = with_ctx(&src, |ctx| {
+            assert!(load_crate_root(ctx, &src.join("main.rv")).is_none());
+        });
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.starts_with("E-MOD-PATH:") && d.contains("symbolic link")),
+            "{diags:?}"
+        );
+    }
+
+    #[test]
+    fn a_module_file_outside_the_source_root_is_refused() {
+        let temp = TempDir::new("after-digest-escape");
+        temp.file("src/main.rv", "mod m;\nfn main() { }\n");
+        temp.file("elsewhere/m.rv", "pub fn f() { }\n");
+        let src = fs::canonicalize(temp.path().join("src")).expect("src");
+        let elsewhere = fs::canonicalize(temp.path().join("elsewhere")).expect("elsewhere");
+        let diags = with_ctx(&src, |ctx| {
+            assert!(resolve_module_file(ctx, &decl("m"), &elsewhere, Path::new("")).is_none());
+        });
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.starts_with("E-MOD-PATH-ESCAPE:") && d.contains("module `m`")),
+            "{diags:?}"
+        );
+    }
+}
+
 mod filesystem_contracts;

@@ -312,6 +312,81 @@ fn a_program_without_source_files_still_generates_and_locates_neutrally() {
     assert!(message.contains("unknown-file"), "{message}");
 }
 
+#[test]
+fn an_item_other_than_a_function_inside_an_impl_is_refused() {
+    let mut program = checked(
+        "const C: i32 = 1;\nstruct S { }\nimpl S { fn f(&self) { } }\nfn main() { }\n",
+        Profile::Core,
+    );
+    let constant = program.program.root.items[0].clone();
+    for item in &mut program.program.root.items {
+        if let ItemKind::Impl(block) = &mut item.kind {
+            block.items.push(constant.clone());
+        }
+    }
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("unsupported item inside `impl`"),
+        "{message}"
+    );
+}
+
+#[test]
+fn a_let_without_initializer_or_known_type_is_refused() {
+    let mut program = checked("fn main() { let x: i32; x = 1; drop(x); }\n", Profile::Core);
+    for item in &mut program.program.root.items {
+        if let ItemKind::Fn(f) = &mut item.kind {
+            if let StmtKind::Let(l) = &mut f.body.stmts[0].kind {
+                l.ty = None;
+                program.facts.pat_types.remove(&l.pat.id);
+            }
+        }
+    }
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("`let` without initializer requires a type annotation"),
+        "{message}"
+    );
+}
+
+/// The index and the item emitter fall back on the syntax when a fact table
+/// is partial: return kinds from the signature or the written type, test
+/// order from the source, a constant from its literal.
+#[test]
+fn partial_item_facts_fall_back_on_the_syntax() {
+    let mut program = checked(
+        "const C: i32 = 7;\ntest fn t() { }\ntest fn u() -> Result<(), Error> { return Ok(()); }\n\
+         fn main() { let x = C; drop(x); }\n",
+        Profile::Core,
+    );
+    let mut rets = Vec::new();
+    for item in &program.program.root.items {
+        if let ItemKind::Fn(f) = &item.kind {
+            // Only `()` returns: a written type still needs its resolved type
+            // to be rendered at all.
+            if f.name.name != "u" {
+                rets.push((item.id, f.ret.id));
+            }
+        }
+    }
+    program.facts.test_fns.clear();
+    program.facts.consts.clear();
+    for (_, ret) in &rets {
+        program.facts.type_nodes.remove(ret);
+    }
+    let options = GenOptions {
+        test_mode: true,
+        ..GenOptions::default()
+    };
+    let code = generate(&program, &options).expect("generation from the signatures");
+    assert!(code.contains("7"), "{code}");
+    for (item, _) in &rets {
+        program.facts.fn_sigs.remove(item);
+    }
+    let code = generate(&program, &options).expect("generation from the syntax");
+    assert!(code.contains("fn t"), "{code}");
+}
+
 // ---------------------------------------------------------------------------
 // Reachable output shapes.
 // ---------------------------------------------------------------------------
