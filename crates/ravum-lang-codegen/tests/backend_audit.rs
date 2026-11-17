@@ -5015,3 +5015,104 @@ fn main() {
     assert_eq!(status, 0, "both tests pass: {stdout}{stderr}");
     assert!(stdout.contains("2 passed"), "{stdout}");
 }
+
+/// A borrow through a runtime index of a partially moved nested array, followed
+/// by a field and a tuple step (`&a[0][i].n`, `&a[0][i].t.0`): the constant run
+/// is a `ref` binding and the later steps are applied to it.
+#[test]
+fn audit_borrow_after_a_runtime_index_of_a_partially_moved_array_runs() {
+    if skip("audit_borrow_after_a_runtime_index_of_a_partially_moved_array_runs") {
+        return;
+    }
+    let code = generate_source(
+        "borrow-after-runtime-index",
+        r#"struct S { n: String, t: (String, i32) }
+fn mk(s: &str) -> S { S { n: String::from(s), t: (String::from(s), 1) } }
+fn show(s: &String) { io::println(s); }
+fn main() {
+    let i: usize = 1;
+    let a = [[mk("a"), mk("b")], [mk("c"), mk("d")]];
+    let x = a[1][0].n;
+    show(&a[0][i].n);
+    show(&a[0][i].t.0);
+    show(&x);
+}
+"#,
+    );
+    assert!(code.contains("})[i].n)"), "{code}");
+    assert!(code.contains("})[i].t.0)"), "{code}");
+    let built = must_compile(&code, "borrow-after-runtime-index");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "b\nb\nc\n");
+}
+
+/// Array element paths whose projections go through a reference (`self.a[0]`
+/// with `&self`, `t.0[1]` with a `&` tuple) or through a `Vec` index before the
+/// fixed-size array (`v[0].a[1]`): no pattern slot exists for those steps, and
+/// the plain indexing form is emitted.
+#[test]
+fn audit_element_paths_through_references_and_vec_indexes_run() {
+    if skip("audit_element_paths_through_references_and_vec_indexes_run") {
+        return;
+    }
+    let code = generate_source(
+        "element-paths-through-refs",
+        r#"struct S { a: [String; 2] }
+impl S { fn first(&self) -> usize { self.a[0].len() } }
+fn tup(t: &([String; 2], i32)) -> usize { t.0[1].len() }
+fn main() {
+    let s = S { a: [String::from("ab"), String::from("c")] };
+    let t = ([String::from("x"), String::from("yz")], 3);
+    let mut v: Vec<S> = Vec::new();
+    v.push(S { a: [String::from("abc"), String::from("d")] });
+    io::println(&s.first().to_string());
+    io::println(&tup(&t).to_string());
+    io::println(&v[0].a[0].len().to_string());
+}
+"#,
+    );
+    let built = must_compile(&code, "element-paths-through-refs");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "2\n2\n3\n");
+}
+
+/// A literal index past the end of a fixed-size array, on an element that is
+/// moved out, panics at run time like a copied or borrowed element does; the
+/// generated code used to keep a plain `a[3]` that rustc refuses (E0508).
+#[test]
+fn audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time() {
+    if skip("audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time") {
+        return;
+    }
+    for (label, source, len, index) in [
+        (
+            "move-out-of-range-root",
+            "fn main() { let a = [String::from(\"a\")]; let x = a[3]; io::println(&x); }",
+            1,
+            3,
+        ),
+        (
+            "move-out-of-range-nested",
+            "struct S { n: String }\n\
+             fn main() { let i: usize = 0; \
+             let a = [[S { n: String::from(\"a\") }, S { n: String::from(\"b\") }]]; \
+             let x = a[i][5].n; io::println(&x); }",
+            2,
+            5,
+        ),
+    ] {
+        let code = generate_source(label, source);
+        let built = must_compile(&code, label);
+        let (stdout, stderr, status) = run(&built.binary, &[]);
+        assert_ne!(status, 0, "{label}: the program must panic");
+        assert_eq!(stdout, "", "{label}");
+        assert!(
+            stderr.contains(&format!(
+                "index out of bounds: the len is {len} but the index is {index}"
+            )),
+            "{label}: {stderr}"
+        );
+    }
+}

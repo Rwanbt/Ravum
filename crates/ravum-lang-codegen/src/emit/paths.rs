@@ -30,16 +30,6 @@ pub(super) enum PathStep<'x> {
     Index { base: &'x Expr, index: &'x Expr },
 }
 
-impl<'x> PathStep<'x> {
-    fn base(&self) -> &'x Expr {
-        match self {
-            PathStep::Field { base, .. }
-            | PathStep::Tuple { base, .. }
-            | PathStep::Index { base, .. } => base,
-        }
-    }
-}
-
 /// Collect the path from the deepest non-projection/non-index expression down to
 /// `expr`, in application order (`a[0].0[1]` -> `[Index(0), Tuple(0), Index(1)]`
 /// for the root expression `a`).
@@ -97,6 +87,8 @@ pub(super) enum Slot {
 pub(super) struct ElementPath<'x> {
     /// Deepest expression that is neither a projection nor an index.
     root: &'x Expr,
+    /// The fixed-size array `steps[first]` indexes.
+    array: &'x Expr,
     steps: Vec<PathStep<'x>>,
     /// Position in `steps` of the first index into a fixed-size array.
     first: usize,
@@ -107,7 +99,7 @@ pub(super) struct ElementPath<'x> {
 impl<'x> ElementPath<'x> {
     /// The array expression the constant run applies to.
     fn array(&self) -> &'x Expr {
-        self.steps[self.first].base()
+        self.array
     }
 
     /// The steps after the constant run.
@@ -746,9 +738,12 @@ impl<'a> Emitter<'a> {
     pub(super) fn element_path<'x>(&self, expr: &'x Expr) -> Option<ElementPath<'x>> {
         let mut steps = Vec::new();
         let root = collect_path_steps(expr, &mut steps);
-        let first = steps
-            .iter()
-            .position(|step| self.indexed_array_len(step).is_some())?;
+        let (first, array) = steps.iter().enumerate().find_map(|(at, step)| match step {
+            PathStep::Index { base, .. } if self.indexed_array_len(step).is_some() => {
+                Some((at, *base))
+            }
+            _ => None,
+        })?;
         let mut slots = Vec::new();
         for step in &steps[first..] {
             match self.slot_of(step) {
@@ -758,6 +753,7 @@ impl<'a> Emitter<'a> {
         }
         Some(ElementPath {
             root,
+            array,
             steps,
             first,
             slots,
@@ -835,7 +831,12 @@ impl<'a> Emitter<'a> {
                             ));
                             current = selected;
                         }
-                        (Some(len), None) => {
+                        // A runtime index, or a literal one past the end: Core
+                        // reports the latter at run time, like a copied or
+                        // borrowed element (`a[3]` of a `[T; 1]`), so it takes
+                        // the same bounds-checked form instead of a plain `a[3]`
+                        // that rustc refuses for a non-`Copy` element (E0508).
+                        (Some(len), _) => {
                             let index_name = format!("__rv_idx_{id}_{level}");
                             out.push_str(&format!(
                                 "let {index_name}: usize = {}; ",
@@ -848,8 +849,7 @@ impl<'a> Emitter<'a> {
                             ));
                             current = selected;
                         }
-                        // Not a fixed-size array level, or a literal index the
-                        // checker should have rejected: keep the plain form so
+                        // Not a fixed-size array level: keep the plain form so
                         // rustc reports it instead of a pattern it cannot match.
                         _ => {
                             current = format!("{current}[{}]", self.expr(index, indent)?);
