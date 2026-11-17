@@ -233,3 +233,73 @@ fn double_moves_under_long_chains() {
     );
     assert_eq!(errors(&blocks), ["E-OWN-USE-AFTER-MOVE"]);
 }
+
+#[test]
+fn a_field_of_an_uninitialised_binding_cannot_be_written() {
+    let codes = errors(
+        "struct P { a: i32, b: i32 }\n\
+         fn main() { let mut p: P; p.a = 1; }",
+    );
+    assert_eq!(codes, ["E-OWN-UNINIT"]);
+}
+
+/// OWN-5.3: writes into a partially moved aggregate. A sibling field, the
+/// moved field itself and an ancestor of the moved field are all writable, and
+/// each write restores exactly what it covers.
+#[test]
+fn a_partially_moved_struct_accepts_sibling_exact_and_ancestor_writes() {
+    let codes = errors(
+        "struct Q { x: String, y: String }\n\
+         struct P { q: Q, n: String }\n\
+         fn main() { \
+         let mut p = P { q: Q { x: String::from(\"a\"), y: String::from(\"b\") }, n: String::from(\"c\") }; \
+         let a = p.q.x; p.n = String::from(\"d\"); p.q.x = String::from(\"e\"); \
+         let b = p.q.y; p.q = Q { x: String::from(\"a\"), y: String::from(\"b\") }; \
+         let c = p.q.x; let d = p.n; p.q.y = String::from(\"z\"); }",
+    );
+    assert_eq!(codes, [] as [&str; 0]);
+}
+
+#[test]
+fn a_compound_assignment_reads_then_writes_under_an_exclusive_loan() {
+    let found = messages(
+        "fn g(a: &mut i32, b: i32) { }\n\
+         fn main() { let mut x = 1; g(&mut x, { x += 1; 1 }); }",
+    );
+    assert_eq!(
+        found,
+        [
+            "lecture de `x` pendant un emprunt exclusif",
+            "écriture de `x` pendant qu'il est emprunté"
+        ]
+    );
+}
+
+/// OWN-5.11: an element is restored one by one only while no other part of the
+/// same array is moved.
+#[test]
+fn an_element_is_not_restored_while_another_part_of_the_array_is_moved() {
+    let codes = errors(
+        "fn main() { let mut a = [[String::from(\"a\"), String::from(\"b\")], \
+         [String::from(\"c\"), String::from(\"d\")]]; \
+         let x = a[0][0]; let y = a[1][1]; a[0][0] = String::from(\"e\"); }",
+    );
+    assert_eq!(codes, ["E-OWN-PARTIAL-MOVE"]);
+}
+
+#[test]
+fn an_array_of_tuples_is_restored_by_element_and_by_field() {
+    let codes = errors(
+        "fn main() { let mut a = [(String::from(\"a\"), String::from(\"b\")), \
+         (String::from(\"c\"), String::from(\"d\"))]; \
+         let x = a[0].0; a[0] = (String::from(\"e\"), String::from(\"f\")); \
+         let y = a[1].1; a[1].1 = String::from(\"g\"); let z = a; }",
+    );
+    assert_eq!(codes, [] as [&str; 0]);
+}
+
+#[test]
+fn a_loop_cannot_bind_references_taken_out_of_a_vector() {
+    let codes = errors("fn f(v: Vec<&i32>) { for r in v { } }\nfn main() { }");
+    assert_eq!(codes, ["E-OWN-REF-ESCAPE"]);
+}

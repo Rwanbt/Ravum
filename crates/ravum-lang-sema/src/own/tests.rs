@@ -1496,3 +1496,185 @@ fn the_depth_guard_refuses_the_function_instead_of_skipping_it() {
     let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
     assert_eq!(codes, ["E-OWN-LIMIT"]);
 }
+
+// ----------------------------------------------------------------------
+// Path algebra: the pure predicates every move/borrow decision rests on.
+// ----------------------------------------------------------------------
+
+mod path_algebra {
+    use super::super::{
+        classify_partial, diverges_disjoint, field_type, join, places_overlap, prefix_compatible,
+        step_compatible, IndexKey, PartialRel, Place, SlotState, State, Step,
+    };
+    use crate::facts::Facts;
+    use crate::types::Type;
+
+    fn field(name: &str) -> Step {
+        Step::Field(name.to_string())
+    }
+    fn lit(index: u128) -> Step {
+        Step::Index(IndexKey::Lit(index))
+    }
+    fn opaque() -> Step {
+        Step::Index(IndexKey::Opaque)
+    }
+
+    #[test]
+    fn two_steps_denote_the_same_position_only_when_nothing_tells_them_apart() {
+        assert!(step_compatible(&Step::Deref, &Step::Deref));
+        assert!(step_compatible(&field("a"), &field("a")));
+        assert!(!step_compatible(&field("a"), &field("b")));
+        assert!(step_compatible(&Step::Tuple(0), &Step::Tuple(0)));
+        assert!(!step_compatible(&Step::Tuple(0), &Step::Tuple(1)));
+        assert!(step_compatible(&lit(1), &lit(1)));
+        assert!(!step_compatible(&lit(1), &lit(2)));
+        // A computed index may equal any index.
+        assert!(step_compatible(&opaque(), &lit(2)));
+        assert!(step_compatible(&lit(2), &opaque()));
+        // A dereference is never the same position as a projection.
+        assert!(!step_compatible(&Step::Deref, &field("a")));
+        assert!(!step_compatible(&lit(0), &Step::Deref));
+        // Mismatched projection kinds: nothing proves them apart.
+        assert!(step_compatible(&field("a"), &Step::Tuple(0)));
+        assert!(step_compatible(&Step::Tuple(0), &lit(0)));
+    }
+
+    #[test]
+    fn a_divergence_proves_disjointness_only_on_comparable_steps() {
+        assert!(diverges_disjoint(&[field("a")], &[field("b")]));
+        assert!(diverges_disjoint(&[Step::Tuple(0)], &[Step::Tuple(1)]));
+        assert!(diverges_disjoint(&[lit(0)], &[lit(1)]));
+        assert!(diverges_disjoint(&[Step::Deref], &[field("a")]));
+        assert!(diverges_disjoint(&[field("a")], &[Step::Deref]));
+        // Under a computed index a later divergence proves nothing.
+        assert!(!diverges_disjoint(
+            &[opaque(), field("a")],
+            &[opaque(), field("b")]
+        ));
+        assert!(!diverges_disjoint(
+            &[lit(0), field("a")],
+            &[opaque(), field("b")]
+        ));
+        // Identical or prefix paths never diverge.
+        assert!(!diverges_disjoint(&[field("a")], &[field("a")]));
+        assert!(!diverges_disjoint(&[field("a")], &[field("a"), field("b")]));
+        assert!(!diverges_disjoint(&[], &[field("a")]));
+    }
+
+    #[test]
+    fn a_place_is_classified_against_a_moved_path() {
+        let moved = [field("a"), lit(0)];
+        assert_eq!(
+            classify_partial(&[field("a"), lit(0)], &moved),
+            PartialRel::Exact
+        );
+        assert_eq!(
+            classify_partial(&[field("a"), lit(0), field("x")], &moved),
+            PartialRel::Extension
+        );
+        assert_eq!(
+            classify_partial(&[field("a")], &moved),
+            PartialRel::Ancestor
+        );
+        assert_eq!(
+            classify_partial(&[field("b")], &moved),
+            PartialRel::Disjoint
+        );
+        assert_eq!(
+            classify_partial(&[field("a"), lit(1)], &moved),
+            PartialRel::Disjoint
+        );
+        // Same length, a computed index on one side, then a field that differs:
+        // the paths overlap without being comparable, which is refused like an
+        // extension.
+        assert_eq!(
+            classify_partial(&[opaque(), field("x")], &[lit(0), field("y")]),
+            PartialRel::Extension
+        );
+        assert!(prefix_compatible(&[field("a")], &moved));
+        assert!(!prefix_compatible(&moved, &[field("a")]));
+        assert!(!prefix_compatible(&[field("b")], &moved));
+    }
+
+    #[test]
+    fn two_places_overlap_unless_a_step_separates_them() {
+        let place = |slot, steps: &[Step]| Place {
+            slot,
+            steps: steps.to_vec(),
+        };
+        let first: super::super::SlotId = 0;
+        let other: super::super::SlotId = 1;
+        assert!(!places_overlap(&place(first, &[]), &place(other, &[])));
+        assert!(places_overlap(
+            &place(first, &[]),
+            &place(first, &[field("a")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[Step::Deref]),
+            &place(first, &[Step::Deref])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[field("a")]),
+            &place(first, &[field("b")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[Step::Tuple(1)]),
+            &place(first, &[Step::Tuple(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[Step::Tuple(0)]),
+            &place(first, &[Step::Tuple(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[lit(1)])
+        ));
+        assert!(places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[lit(0), field("a")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[opaque()]),
+            &place(first, &[lit(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[Step::Deref]),
+            &place(first, &[field("a")])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[Step::Deref])
+        ));
+        // A field against a tuple index: the kinds differ, stay conservative.
+        assert!(places_overlap(
+            &place(first, &[field("a")]),
+            &place(first, &[Step::Tuple(0)])
+        ));
+    }
+
+    #[test]
+    fn a_join_keeps_the_slots_known_on_one_side_only() {
+        let left_only: super::super::SlotId = 0;
+        let right_only: super::super::SlotId = 1;
+        let mut left = State::default();
+        left.slots.insert(left_only, SlotState::initialised());
+        let mut right = State::default();
+        right.slots.insert(right_only, SlotState::default());
+        let joined = join(&left, &right);
+        assert!(joined.slots[&left_only].init);
+        assert!(!joined.slots[&right_only].init);
+        assert_eq!(joined.slots.len(), 2);
+    }
+
+    #[test]
+    fn a_field_of_an_unknown_type_has_an_unknown_type() {
+        let facts = Facts::default();
+        assert_eq!(field_type(&Type::I32, "a", &facts), Type::Error);
+        let unknown_struct = Type::Nominal {
+            def: 7,
+            name: "Missing".to_string(),
+            args: Vec::new(),
+        };
+        assert_eq!(field_type(&unknown_struct, "a", &facts), Type::Error);
+    }
+}
