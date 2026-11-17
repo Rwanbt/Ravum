@@ -319,6 +319,16 @@ impl<'a> Parser<'a> {
                             self.bump();
                             args = self.parse_type_args(opener);
                         } else if self.at(Punct::ColonColon) && self.peek_punct(1, Punct::Lt) {
+                            if !type_ctx {
+                                // G-5.9 (MUST): generic arguments exist in type
+                                // position only; the turbofish is refused on
+                                // every segment of an expression path, not only
+                                // on a single-name path (`Vec::<i32>::new()`,
+                                // `m::f::<i64>(1)` used to drop the arguments).
+                                self.unexpected(
+                                    "explicit generic arguments are not supported in expressions",
+                                );
+                            }
                             self.bump(); // `::`
                             let opener = self.cur_span();
                             self.bump(); // `<`

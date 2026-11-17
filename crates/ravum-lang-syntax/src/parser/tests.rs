@@ -1423,3 +1423,28 @@ fn a_chain_inside_a_nesting_counts_against_the_same_limit() {
     let refused = parse(&nested(120));
     assert!(refused.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"));
 }
+
+/// G-5.9 (MUST): generic arguments exist in type position only. The turbofish
+/// is refused on every segment of an expression or pattern path; it used to be
+/// refused on a single-name path only, and silently dropped elsewhere.
+#[test]
+fn a_turbofish_is_refused_on_every_segment_of_an_expression_path() {
+    for src in [
+        "fn f() { let v = Vec::<i32>::new(); }",
+        "fn f() { let a = m::g::<i64>(1); }",
+        "fn f() { let e = E::<i64>::A { v: 1 }; }",
+        "fn f() { let o = Option::Some::<i64>(1); }",
+        "fn f(e: E<i32>) { match e { E::<i32>::A(x) => { } _ => { } } }",
+    ] {
+        let codes: Vec<String> = diags_of(src).into_iter().map(|(code, _, _)| code).collect();
+        assert_eq!(codes, ["E-PARSE-UNEXPECTED"], "{src}");
+    }
+    let start = "fn f() { let v = Vec".len() as u32;
+    assert_error_at(
+        "fn f() { let v = Vec::<i32>::new(); }",
+        "E-PARSE-UNEXPECTED",
+        start,
+    );
+    // Type position keeps both spellings.
+    parse_ok("fn f(v: Vec<i32>, w: Vec::<i32>) { }");
+}
