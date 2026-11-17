@@ -5174,3 +5174,34 @@ fn main() {
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "n\na\nc\nb\n");
 }
+
+/// A match over an `Option` nested 100 levels deep, made exhaustive by a
+/// `None` arm at every level instead of a wildcard, is accepted and runs; the
+/// coverage check used to give up past 64 levels and report
+/// E-TYP-NONEXHAUSTIVE on it.
+#[test]
+fn audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs() {
+    if skip("audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs") {
+        return;
+    }
+    let depth = 100;
+    let wrap = |inner: &str, levels: usize| {
+        (0..levels).fold(inner.to_string(), |acc, _| format!("Some({acc})"))
+    };
+    let ty = (0..depth).fold(String::from("bool"), |acc, _| format!("Option<{acc}>"));
+    let mut arms = vec![
+        format!("{} => 1", wrap("true", depth)),
+        format!("{} => 2", wrap("false", depth)),
+    ];
+    arms.extend((0..depth).map(|level| format!("{} => {}", wrap("None", level), level + 3)));
+    let source = format!(
+        "fn f(t: {ty}) -> usize {{ match t {{ {} }} }}\n\
+         fn main() {{ io::println(&f(Some(None)).to_string()); }}\n",
+        arms.join(", ")
+    );
+    let code = generate_source("deep-exhaustive-match", &source);
+    let built = must_compile(&code, "deep-exhaustive-match");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "4\n");
+}
