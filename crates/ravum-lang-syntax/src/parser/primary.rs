@@ -517,9 +517,12 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Punct(Punct::DotDot) | TokenKind::Punct(Punct::DotDotEq) => {
-                // Defensive: `parse_range` normally handles prefix ranges.
+                // A prefix range in operand position (`1 + ..3`): `parse_range`
+                // handles the other ones. An operand is never the outermost
+                // expression of a `for` iterator, so it is always refused.
                 let inclusive = self.at(Punct::DotDotEq);
                 self.bump();
+                self.reject_range_outside_for(false, start);
                 let end = if self.starts_expr() {
                     Some(Box::new(self.parse_binary(1, allow_struct)))
                 } else {

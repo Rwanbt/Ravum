@@ -123,8 +123,8 @@ impl<'a> Parser<'a> {
     /// A range is a `for`-clause construct in Core 1.0. Report it in the parse
     /// phase (E-UNSUPPORTED-RANGE, per `diagnostics.md` §3) instead of letting
     /// the checker reclassify it as a type error.
-    pub(super) fn reject_range_outside_for(&mut self, span: Span) {
-        if self.in_for_iter {
+    pub(super) fn reject_range_outside_for(&mut self, allowed: bool, span: Span) {
+        if allowed {
             return;
         }
         self.diags.error(
@@ -135,6 +135,10 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_range(&mut self, allow_struct: bool) -> Expr {
+        // Only the outermost expression of a `for` iterator may be a range:
+        // the flag is consumed here, so every operand and nested expression
+        // (`0..g(..3)`, `0..{ ..3; 2 }`) is parsed as outside a `for` clause.
+        let allowed = std::mem::take(&mut self.in_for_iter);
         if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
             let start = self.cur_span();
             let inclusive = self.at(Punct::DotDotEq);
@@ -145,7 +149,7 @@ impl<'a> Parser<'a> {
                 None
             };
             let id = self.id();
-            self.reject_range_outside_for(start);
+            self.reject_range_outside_for(allowed, start);
             return Expr {
                 id,
                 kind: ExprKind::Range {
@@ -167,7 +171,7 @@ impl<'a> Parser<'a> {
                 None
             };
             let id = self.id();
-            self.reject_range_outside_for(start);
+            self.reject_range_outside_for(allowed, start);
             return Expr {
                 id,
                 kind: ExprKind::Range {

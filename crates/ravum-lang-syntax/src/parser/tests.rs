@@ -764,6 +764,39 @@ fn ranges_try_and_return() {
     }
 }
 
+/// Only the outermost expression of a `for` iterator may be a range: a range
+/// nested in it (an argument, an index, a block, a bound) or used as an operand
+/// is outside a `for` clause and refused in the parse phase. Before this, the
+/// nested forms reached the back end (rustc E0308/E0277) or built.
+#[test]
+fn a_range_nested_in_a_for_iterator_is_refused() {
+    for source in [
+        "fn f() { for i in 0..g(..3) { } }",
+        "fn f() { for i in [..3][0] { } }",
+        "fn f() { for i in 0..{ let r = ..3; 2 } { } }",
+        "fn f() { for i in (0..3) { } }",
+        "fn f() { for i in 0..2 + ..3 { } }",
+        "fn f() { let x = 1 + ..3; }",
+    ] {
+        let result = parse(source);
+        let codes: Vec<&str> = result.diags.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(
+            codes,
+            ["E-UNSUPPORTED-RANGE"],
+            "{source}: {}",
+            dump_diags(&result)
+        );
+    }
+    for source in [
+        "fn f() { for i in 0..3 { for j in 0..i { } } }",
+        "fn f() { for i in ..3 { } for k in 0..=2 { } }",
+        "fn f() { for i in 0..{ for j in 0..2 { } 3 } { } }",
+    ] {
+        let result = parse(source);
+        assert!(result.diags.is_empty(), "{source}: {}", dump_diags(&result));
+    }
+}
+
 #[test]
 fn loop_expressions() {
     let src = "fn f() { while i < 10 { i += 1; } loop { break; } for x in 0..3 { continue; } }";
