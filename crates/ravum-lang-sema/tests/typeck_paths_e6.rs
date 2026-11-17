@@ -786,3 +786,22 @@ fn a_deferred_or_diverging_let_in_a_static_text_function() {
         &[],
     );
 }
+
+/// check => build: a diverging callee used to be accepted, and the backend
+/// then failed with "call expression has an unresolved target".
+#[test]
+fn a_diverging_callee_is_not_callable() {
+    assert_errors(
+        "fn main() { (return)(); }",
+        &[("E-TYP-CALL", "value of type `!` is not callable")],
+    );
+}
+
+/// A unit variant called with an empty argument list is the variant itself.
+#[test]
+fn a_unit_variant_called_without_arguments_is_accepted() {
+    assert_errors(
+        "enum E { A, B(i32) } fn main() { let e = E::A(); drop(e); }",
+        &[],
+    );
+}

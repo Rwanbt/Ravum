@@ -11,14 +11,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let path = match &callee.kind {
             ExprKind::Path(path) => path,
             _ => {
+                // Even a diverging callee (`(return)()`) is refused: the
+                // backend has no call target to lower, and rustc refuses to
+                // call a `!` value too (check => build).
                 let callee_ty = self.check_expr(callee, None);
-                if !matches!(callee_ty, Type::Never) {
-                    self.error(
-                        "E-TYP-CALL",
-                        callee.span,
-                        format!("value of type `{callee_ty}` is not callable"),
-                    );
-                }
+                self.error(
+                    "E-TYP-CALL",
+                    callee.span,
+                    format!("value of type `{callee_ty}` is not callable"),
+                );
                 for arg in args {
                     self.check_expr(arg, None);
                 }
@@ -334,7 +335,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         inner,
                     },
                 ) if **inner == Type::String => expected.clone(),
-                (Type::Str, Type::Str) => expected.clone(),
                 (
                     Type::Slice(elem),
                     Type::Ref {
@@ -343,7 +343,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     },
                 ) => match &**inner {
                     Type::Array { elem: felem, .. } if elem == felem => expected.clone(),
-                    Type::Slice(felem) if elem == felem => expected.clone(),
                     _ => found,
                 },
                 _ => found,
