@@ -322,3 +322,30 @@ fn a_reference_place_passed_by_value_to_a_generic_or_a_variant_is_refused() {
         assert!(errors(source).is_empty(), "{source}");
     }
 }
+
+/// Writes after a partial move: to a moved field (re-initialisation), to a
+/// sibling field, to an enclosing tuple field, and to a sibling array element
+/// followed by a use of the whole array.
+#[test]
+fn writes_after_a_partial_move_reinitialise_or_keep_the_partial_state() {
+    for source in [
+        "struct P { n: String, m: String }\n\
+         fn main() { let mut p = P { n: String::from(\"a\"), m: String::from(\"b\") }; \
+         let a = p.n; p.m = String::from(\"c\"); drop(a); drop(p.m); }",
+        "struct P { n: String, m: String }\n\
+         fn main() { let mut p = P { n: String::from(\"a\"), m: String::from(\"b\") }; \
+         let a = p.n; p.n = String::from(\"c\"); drop(a); drop(p); }",
+        "struct Q { t: (String, String) }\n\
+         fn main() { let mut q = Q { t: (String::from(\"a\"), String::from(\"b\")) }; \
+         let x = q.t.0; q.t = (String::from(\"c\"), String::from(\"d\")); drop(x); drop(q); }",
+    ] {
+        assert!(errors(source).is_empty(), "{source}");
+    }
+    let codes = errors(
+        "fn main() { let mut a = [String::from(\"a\"), String::from(\"b\")]; \
+         let x = a[0]; a[1] = String::from(\"c\"); drop(x); drop(a); }",
+    );
+    assert_eq!(codes, ["E-OWN-PARTIAL-MOVE"]);
+    let codes = errors("fn f(s: &[String]) { let x = s[0]; drop(x); }\nfn main() { }");
+    assert_eq!(codes, ["E-OWN-MOVE-OUT-OF-BORROW"]);
+}

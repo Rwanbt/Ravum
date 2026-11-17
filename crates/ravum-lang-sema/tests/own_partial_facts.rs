@@ -130,3 +130,28 @@ fn syntactic_borrow_conflicts_are_reported_even_without_types() {
     );
     assert_eq!(codes, ["E-OWN-BORROW-CONFLICT", "E-OWN-BORROW-CONFLICT"]);
 }
+
+const REF_ARGS: &str = "enum W<T> { A(T), B }\n\
+    struct S { n: String }\n\
+    impl S { fn take(&self, x: &str) { } }\n\
+    fn id<T>(x: T) { }\n\
+    fn r(x: &String) { }\n\
+    fn f(s: &String, o: &S) { r(s); id(\"lit\"); o.take(\"lit\"); drop(W::A(\"lit\")); }\n\
+    fn main() { }";
+
+/// Reference arguments (a reference place, a static literal, a variant
+/// payload, a method argument) analysed with one fact table missing at a time:
+/// the analysis falls back on the syntax and never invents an escape.
+#[test]
+fn reference_arguments_with_a_missing_fact_table_invent_no_escape() {
+    let strips: [fn(&mut Facts); 5] = [
+        |f| f.fn_sigs.clear(),
+        |f| f.calls.clear(),
+        |f| f.methods.clear(),
+        |f| f.expr_types.clear(),
+        |f| f.type_nodes.clear(),
+    ];
+    for strip in strips {
+        assert_eq!(with_stripped_facts(REF_ARGS, strip), NONE);
+    }
+}
