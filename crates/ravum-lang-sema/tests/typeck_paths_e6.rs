@@ -1048,3 +1048,47 @@ fn a_struct_variant_pattern_with_a_bad_path_still_checks_its_fields() {
         ],
     );
 }
+
+/// A struct pattern on a struct scrutinee is not a Core pattern (it names no
+/// variant), and a tuple pattern of the wrong arity covers nothing: both are
+/// refused, and the match they leave uncovered is reported as well.
+#[test]
+fn struct_patterns_and_tuple_patterns_of_the_wrong_arity_cover_nothing() {
+    let codes = |source: &str| -> Vec<String> {
+        let mut found: Vec<String> = errors(source).into_iter().map(|(code, _)| code).collect();
+        found.sort();
+        found
+    };
+    assert_eq!(
+        codes(
+            "struct S { a: bool }\n\
+             fn f(s: S) -> i32 { match s { S { a: true } => 1, S { a: false } => 0 } }\n\
+             fn main() { }"
+        ),
+        ["E-RES-UNKNOWN", "E-RES-UNKNOWN", "E-TYP-NONEXHAUSTIVE"]
+    );
+    assert_eq!(
+        codes(
+            "fn f(t: (bool, i32)) -> i32 { match t { (true, n, m) => n, (false, _) => 0 } }\n\
+             fn main() { }"
+        ),
+        ["E-TYP-ARITY", "E-TYP-NONEXHAUSTIVE"]
+    );
+    assert_eq!(
+        codes(
+            "fn f(t: ((bool, i32), i32)) -> i32 { match t { ((true, a, b), c) => c, ((false, _), _) => 0 } }\n\
+             fn main() { }"
+        ),
+        ["E-TYP-ARITY", "E-TYP-NONEXHAUSTIVE"]
+    );
+    // A field left out of a variant struct pattern is reported once; the
+    // coverage check reads it as a wildcard and adds nothing.
+    assert_eq!(
+        codes(
+            "enum E { A { x: bool, y: i32 }, B }\n\
+             fn f(e: E) -> i32 { match e { E::A { x: true } => 1, E::A { x: false, y } => y, E::B => 0 } }\n\
+             fn main() { }"
+        ),
+        ["E-TYP-MISSING-FIELD"]
+    );
+}
