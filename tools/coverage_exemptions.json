@@ -23,19 +23,20 @@
         "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
         "lines": [
           [
-            252,
-            254
+            253,
+            253
           ]
         ],
         "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
         "why_unreachable": "RFC-OWN-FACTS-1 step B is a debug-only audit guard: the branch is compiled out in release builds and is never executed in a debug build. Coverage is measured on a debug build (`cargo llvm-cov` without `--release`), so the line cannot be covered by any test in the measured profile.",
         "proof": "The guard is `if !cfg!(debug_assertions) { return Ok(()); }`; the instrumented profile is the default debug profile. The *other* direction (a disagreement between `OwnFacts` and the emitter) is covered by the crate's own unit test.",
         "evidence": [
-          "crates/ravum-lang-codegen/src/emit/mod.rs:252-254",
+          "crates/ravum-lang-codegen/src/emit/mod.rs:253",
           "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
         ],
         "review_condition": "Une mesure de couverture en profil release, ou la suppression de la garde de debug.",
-        "approval": "PENDING_HUMAN_APPROVAL"
+        "approval": "PENDING_HUMAN_APPROVAL",
+        "metric": "lines"
       },
       {
         "id": "E-LINE-BUILTINS-TO-STR-EDGES",
@@ -62,7 +63,8 @@
           "python tools/coverage_report.py --gap (builtins.rs regions)"
         ],
         "review_condition": "Un formateur faillible, ou une entrée de spécification malformée ajoutée au dépôt.",
-        "approval": "PENDING_HUMAN_APPROVAL"
+        "approval": "PENDING_HUMAN_APPROVAL",
+        "metric": "regions"
       }
     ]
   }
