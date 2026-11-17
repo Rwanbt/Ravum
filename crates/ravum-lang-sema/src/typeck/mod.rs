@@ -250,3 +250,6 @@ fn path_pattern_kind(path: &Path) -> PatternKind {
         _ => PatternKind::Other,
     }
 }
+
+#[cfg(test)]
+mod helper_tests;

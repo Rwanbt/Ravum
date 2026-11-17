@@ -700,3 +700,89 @@ fn a_match_must_cover_tuples_and_unit() {
         ],
     );
 }
+
+#[test]
+fn unwrap_or_on_static_text_is_static_only_with_a_static_default() {
+    assert_errors(
+        "fn f(o: Option<&str>) -> &str { o.unwrap_or(\"x\") }\n\
+         fn g(o: Option<&str>, d: &String) -> &str { o.unwrap_or(d.as_str()) }\n\
+         fn main() { let a = f(None); }",
+        &[(
+            "E-OWN-REF-ESCAPE",
+            "une référence ne peut pas être retournée en Core 1.0",
+        )],
+    );
+}
+
+#[test]
+fn a_user_method_returning_static_text_propagates() {
+    assert_errors(
+        "struct P { n: i32 }\n\
+         impl P { fn name(&self) -> &str { \"p\" } }\n\
+         fn f(p: &P) -> &str { p.name() }\n\
+         fn main() { let p = P { n: 1 }; let s = f(&p); }",
+        &[],
+    );
+}
+
+#[test]
+fn a_tail_return_of_static_text_is_static() {
+    assert_errors(
+        "fn f(c: bool) -> &str { if c { return \"a\"; } return \"b\" }\n\
+         fn main() { let s = f(true); }",
+        &[],
+    );
+}
+
+#[test]
+fn a_let_initialised_with_non_static_text_cannot_be_returned() {
+    assert_errors(
+        "fn f(s: &String) -> &str { let t = s.as_str(); t }\n\
+         fn main() { }",
+        &[
+            (
+                "E-OWN-REF-ESCAPE",
+                "une référence ne peut pas être stockée en Core 1.0",
+            ),
+            (
+                "E-OWN-REF-ESCAPE",
+                "une référence ne peut pas être retournée en Core 1.0",
+            ),
+        ],
+    );
+}
+
+/// Conservative refusal: the static-text analysis does not follow a tuple
+/// scrutinee into its pattern bindings (recorded as an open question).
+#[test]
+fn text_bound_by_a_tuple_pattern_is_not_returned_as_static() {
+    assert_errors(
+        "fn f(c: bool) -> &str { let t = (\"a\", \"b\"); match t { (x, y) => if c { x } else { y } } }\n\
+         fn main() { let s = f(true); }",
+        &[
+            ("E-OWN-REF-ESCAPE", "une référence ne peut pas être retournée en Core 1.0"),
+        ],
+    );
+}
+
+#[test]
+fn text_bound_by_a_struct_variant_pattern_is_not_returned_as_static() {
+    assert_errors(
+        "enum E { A { s: &str } }\n\
+         fn f() -> &str { let e = E::A { s: \"x\" }; match e { E::A { s } => s } }\n\
+         fn main() { let s = f(); }",
+        &[(
+            "E-OWN-REF-ESCAPE",
+            "une référence ne peut pas être retournée en Core 1.0",
+        )],
+    );
+}
+
+#[test]
+fn a_deferred_or_diverging_let_in_a_static_text_function() {
+    assert_errors(
+        "fn f(c: bool) -> &str { let x: i32; x = 1; let y = if c { return \"a\"; } else { 2 }; \"b\" }\n\
+         fn main() { let s = f(true); }",
+        &[],
+    );
+}
