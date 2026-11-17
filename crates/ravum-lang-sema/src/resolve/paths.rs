@@ -648,6 +648,13 @@ pub(crate) fn insert_import(
     entry: ImportEntry,
     diags: &mut DiagnosticBag,
 ) {
+    // Same namespace invariant as `World::register`, for imports.
+    debug_assert_eq!(
+        entry.sym.ns(),
+        entry.ns,
+        "import `{}` in the wrong namespace",
+        entry.name
+    );
     if let Some(existing) = world.table(module, entry.ns).get(&entry.name) {
         let span = existing.span;
         diags.push(

@@ -580,3 +580,45 @@ fn an_import_cannot_be_re_imported_from_another_module() {
         )],
     );
 }
+
+/// MOD-3.2: both anchors exist, neither resolves; the local failure (a private
+/// segment) says more than the root's "unknown".
+#[test]
+fn a_local_private_failure_is_preferred_over_an_unknown_root() {
+    assert_errors(
+        "pub mod a { }\n\
+         mod c { mod a { mod b { pub fn f() { } } } use a::b::f; pub fn g() { f(); } }\n\
+         fn main() { c::g(); }",
+        &[(
+            "E-RES-PRIVATE",
+            "`a::b::f` is inaccessible from this module: intermediate module `b` is private",
+        )],
+    );
+}
+
+#[test]
+fn a_use_resolving_locally_and_at_the_root_is_ambiguous() {
+    assert_errors(
+        "pub mod a { pub fn f() { } }\n\
+         mod c { pub mod a { pub fn f() { } } use a::f; pub fn g() { f(); } }\n\
+         fn main() { c::g(); }",
+        &[
+            ("E-RES-CONFLICT", "`a::f` is ambiguous: it resolves both in the current module and at the crate root; use a `crate::`/`self::`/`super::` prefix"),
+        ],
+    );
+}
+
+/// Two anchors that reach different modules, or a module and a function, are
+/// never the same import.
+#[test]
+fn a_use_resolving_to_two_modules_or_two_kinds_is_ambiguous() {
+    assert_errors(
+        "pub mod a { pub mod f { } pub mod g { } }\n\
+         mod c { pub mod a { pub mod g { } pub fn f() { } } use a::g; use a::f; pub fn h() { } }\n\
+         fn main() { c::h(); }",
+        &[
+            ("E-RES-CONFLICT", "`a::g` is ambiguous: it resolves both in the current module and at the crate root; use a `crate::`/`self::`/`super::` prefix"),
+            ("E-RES-CONFLICT", "`a::f` is ambiguous: it resolves both in the current module and at the crate root; use a `crate::`/`self::`/`super::` prefix"),
+        ],
+    );
+}

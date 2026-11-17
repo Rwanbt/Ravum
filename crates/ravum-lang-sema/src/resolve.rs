@@ -207,3 +207,27 @@ pub(crate) use paths::*;
 pub(crate) use uses::*;
 pub(crate) use world::*;
 pub(crate) use world::{PathError, ValuePath};
+
+#[cfg(test)]
+mod sym_tests {
+    use super::*;
+
+    /// The noun used in "`x` is a …, not a value" diagnostics, and the
+    /// namespace of each symbol kind.
+    #[test]
+    fn every_symbol_kind_has_a_label_and_a_namespace() {
+        let cases = [
+            (Sym::Fn(1), "function", Ns::Value),
+            (Sym::Const(1), "constant", Ns::Value),
+            (Sym::BuiltinFn("drop"), "function", Ns::Value),
+            (Sym::Struct(1), "struct", Ns::Type),
+            (Sym::Enum(1), "enum", Ns::Type),
+            (Sym::Module(0), "module", Ns::Module),
+            (Sym::BuiltinModule("std::io"), "module", Ns::Module),
+        ];
+        for (sym, label, ns) in cases {
+            assert_eq!(sym.label(), label);
+            assert_eq!(sym.ns(), ns);
+        }
+    }
+}

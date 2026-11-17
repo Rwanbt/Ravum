@@ -528,13 +528,15 @@ pub(crate) fn resolve_impl(
     item: &Item,
     imp: &ast::ImplItem,
 ) {
-    let (target, generics) = {
+    let (target, generics, def) = {
         let mut ctx = HeaderCtx::new(world, facts, diags, module, Vec::new(), None);
         let generics = generic_scope(ctx.diags, &imp.generics);
         ctx.generics = generics.clone();
         let target = ctx.resolve_type(&imp.self_ty);
-        let def = match &target {
-            Type::Nominal { def, .. } if ctx.world.nominal_kind(*def).is_some() => *def,
+        let (def, args) = match &target {
+            Type::Nominal { def, args, .. } if ctx.world.nominal_kind(*def).is_some() => {
+                (*def, args.clone())
+            }
             _ => {
                 ctx.error(
                     "E-RES-IMPL-SELF-TYPE",
@@ -544,27 +546,20 @@ pub(crate) fn resolve_impl(
                 return;
             }
         };
-        if let Type::Nominal { args, .. } = &target {
-            let names: Vec<&str> = generics.iter().map(|(n, _)| n.as_str()).collect();
-            let ok = args.len() == names.len()
-                && args.iter().enumerate().all(|(i, arg)| {
-                    matches!(arg, Type::Param { name, index } if *index == i && name == names[i])
-                });
-            if !ok {
-                ctx.error(
-                    "E-RES-IMPL-TARGET",
-                    imp.self_ty.span,
-                    "generic parameters of `impl` must match the target type arguments in order"
-                        .to_string(),
-                );
-            }
+        let names: Vec<&str> = generics.iter().map(|(n, _)| n.as_str()).collect();
+        let ok = args.len() == names.len()
+            && args.iter().enumerate().all(|(i, arg)| {
+                matches!(arg, Type::Param { name, index } if *index == i && name == names[i])
+            });
+        if !ok {
+            ctx.error(
+                "E-RES-IMPL-TARGET",
+                imp.self_ty.span,
+                "generic parameters of `impl` must match the target type arguments in order"
+                    .to_string(),
+            );
         }
-        let _ = def;
-        (target, generics)
-    };
-    let def = match &target {
-        Type::Nominal { def, .. } => *def,
-        _ => return,
+        (target, generics, def)
     };
     let impl_generics: Vec<String> = generics.iter().map(|(n, _)| n.clone()).collect();
     world.impls.entry(def).or_default();

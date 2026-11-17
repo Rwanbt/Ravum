@@ -148,6 +148,15 @@ impl<'a> World<'a> {
         vis: Vis,
         span: Span,
     ) {
+        // Namespace invariant: a table only holds symbols of its own
+        // namespace, so a lookup in `Ns::Module` returns a module, in
+        // `Ns::Value` a function or a constant, in `Ns::Type` a struct or an
+        // enum. The `_` arms after a lookup rely on it.
+        debug_assert_eq!(
+            sym.ns(),
+            ns,
+            "symbol `{name}` registered in the wrong namespace"
+        );
         if let Some(previous) = self.table(module, ns).get(name) {
             let first = previous.span;
             self.duplicates
