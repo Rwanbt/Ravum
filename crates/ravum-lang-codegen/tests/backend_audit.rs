@@ -4760,6 +4760,32 @@ fn main() {
     assert_eq!(stdout, "ok\n");
 }
 
+/// check => build: a type nested 100 levels deep used to resolve to `Error`
+/// past 64 levels (no diagnostic), and generation then failed with
+/// "attempted to generate the recovered error type". rustc itself stops at
+/// 128 levels (E0275), a limit the checker does not enforce yet.
+#[test]
+fn audit_a_type_nested_one_hundred_levels_builds_and_runs() {
+    if skip("audit_a_type_nested_one_hundred_levels_builds_and_runs") {
+        return;
+    }
+    let mut ty = String::from("i32");
+    let mut pattern = String::from("_");
+    for _ in 0..100 {
+        ty = format!("Option<{ty}>");
+        pattern = format!("Some({pattern})");
+    }
+    let source = format!(
+        "fn main() {{\n    let x: {ty} = None;\n    let y = x;\n    \
+         match y {{\n        {pattern} => {{ }}\n        _ => {{ io::println(\"ok\"); }}\n    }}\n}}\n"
+    );
+    let code = generate_source("deep-type", &source);
+    let built = must_compile(&code, "deep-type");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.

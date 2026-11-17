@@ -266,13 +266,21 @@ pub(super) fn resolve_vars_final(
     resolve_vars_impl(vars, ty, Some(unresolved), 0)
 }
 
+/// Bound on the recursion of [`resolve_vars_impl`]. A written type is at most
+/// `parser::MAX_DEPTH` (256) levels deep; a chain of bound inference variables
+/// adds one level per link. The bound only stops a runaway substitution: the
+/// old value (64) turned any type nested more than 64 levels into `Error`
+/// without a diagnostic, and `build` then failed on a program `check` had
+/// accepted.
+const MAX_RESOLVE_DEPTH: usize = 1024;
+
 pub(super) fn resolve_vars_impl(
     vars: &[Option<Type>],
     ty: &Type,
     mut unresolved: Option<&mut BTreeSet<usize>>,
     depth: usize,
 ) -> Type {
-    if depth > 64 {
+    if depth > MAX_RESOLVE_DEPTH {
         return Type::Error;
     }
     if let Some(index) = infer_var_index(ty) {
