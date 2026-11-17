@@ -28,6 +28,7 @@ fn literal_and_singleton_patterns_keep_rust_spelling() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     assert_eq!(emitter.pattern(&signed).unwrap(), "(-128i8,)");
@@ -76,6 +77,7 @@ fn variant_rendering_preserves_empty_shapes_and_requires_resolution() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     assert_eq!(emitter.pattern(&unit).unwrap(), "Shape::Empty");

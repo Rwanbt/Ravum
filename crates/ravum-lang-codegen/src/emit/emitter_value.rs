@@ -3,7 +3,7 @@ use super::*;
 impl<'a> Emitter<'a> {
     pub(super) fn value_path(&self, path: &Path) -> Result<String, CodegenError> {
         match self.facts().resolutions.get(&path.id) {
-            Some(Resolution::Local { name, .. }) => Ok(mangle_ident(name)),
+            Some(Resolution::Local { name, .. }) => Ok(self.local_ident(name)),
             Some(Resolution::Item { item }) => self.item_path(*item),
             Some(Resolution::Variant { enum_item, variant }) => {
                 match self.variant_name_opt(*enum_item, *variant) {

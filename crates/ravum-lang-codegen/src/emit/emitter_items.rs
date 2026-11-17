@@ -67,9 +67,9 @@ impl<'a> Emitter<'a> {
                     params.push(format!(
                         "{}: {}",
                         if *mutable {
-                            format!("mut {}", mangle_ident(&name.name))
+                            format!("mut {}", self.local_ident(&name.name))
                         } else {
-                            mangle_ident(&name.name)
+                            self.local_ident(&name.name)
                         },
                         self.type_node_pos(ty, TypePos::Param)?
                     ));

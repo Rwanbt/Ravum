@@ -159,6 +159,7 @@ impl<'a> Generator<'a> {
             options: self.options,
             index,
             array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+            shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
         };
         emitter.verify_ownership_facts()?;
         emitter.run()
@@ -235,6 +236,11 @@ struct Emitter<'a> {
     /// Array-element moves planned for the function body being emitted (see
     /// [`Emitter::plan_array_moves`]).
     array_moves: std::cell::RefCell<ArrayMovePlan>,
+    /// Rust names of the constants and structs of the module being emitted.
+    /// rustc reads a binding pattern with one of those names as a constant
+    /// (or unit struct) pattern, so such a local is emitted under another
+    /// name (G-6.38: `IDENT` always binds).
+    shadowed_names: std::cell::RefCell<BTreeSet<String>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -729,12 +735,50 @@ impl<'a> Emitter<'a> {
         self.marker(buf, module.span);
         buf.line(&format!("pub mod {} {{", entry.rust_name));
         buf.indent += 1;
+        let shadowed: BTreeSet<String> = module
+            .items
+            .iter()
+            .filter(|item| matches!(item.kind, ItemKind::Const(_) | ItemKind::Struct(_)))
+            .filter_map(|item| self.index.items.get(&item.id))
+            .map(|entry| entry.rust_name.clone())
+            .collect();
+        let outer = self.shadowed_names.replace(shadowed);
         for item in &module.items {
             self.emit_item(buf, item)?;
         }
+        self.shadowed_names.replace(outer);
         buf.indent -= 1;
         buf.line("}");
         Ok(())
+    }
+
+    /// Rust name of a local binding: its mangled name, unless a constant or a
+    /// struct of the enclosing module has that name; then a suffixed name no
+    /// other binding or item of the program uses.
+    pub(super) fn local_ident(&self, name: &str) -> String {
+        let plain = mangle_ident(name);
+        if !self.shadowed_names.borrow().contains(&plain) {
+            return plain;
+        }
+        let taken: BTreeSet<&str> = self
+            .checked
+            .facts
+            .own
+            .bindings
+            .keys()
+            .map(|(_, binding)| binding.as_str())
+            .chain(
+                self.index
+                    .items
+                    .values()
+                    .map(|item| item.rust_name.as_str()),
+            )
+            .collect();
+        let mut renamed = format!("{plain}_rv_local");
+        while taken.contains(renamed.as_str()) {
+            renamed.push('_');
+        }
+        renamed
     }
 
     /// `true` when the program declares at least one `extern "C"` block. Such a

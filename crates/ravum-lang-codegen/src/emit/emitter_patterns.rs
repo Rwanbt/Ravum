@@ -5,9 +5,9 @@ impl<'a> Emitter<'a> {
         match &pat.kind {
             PatKind::Wild => Ok("_".to_string()),
             PatKind::Binding { mutable, name } => Ok(if *mutable {
-                format!("mut {}", mangle_ident(&name.name))
+                format!("mut {}", self.local_ident(&name.name))
             } else {
-                mangle_ident(&name.name)
+                self.local_ident(&name.name)
             }),
             PatKind::Lit(literal) => self.literal_pattern(pat, literal),
             PatKind::Tuple(items) => {

@@ -69,6 +69,7 @@ fn array_slot_requires_a_literal_index_strictly_below_length() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     assert!(matches!(

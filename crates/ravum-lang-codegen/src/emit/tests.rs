@@ -1191,6 +1191,7 @@ fn fact_item_paths_are_rewritten_into_emitted_modules() {
         options: &options,
         index,
         array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
     };
     assert_eq!(
         emitter.rewrite_fact_path("crate::area"),

@@ -4872,7 +4872,9 @@ fn main() {
 }
 
 /// A constant used as a `match` pattern, and a builtin text parser called on
-/// a borrowed `String`.
+/// a borrowed `String`. The constant is named by a path: a bare `C` pattern is
+/// a binding (G-6.38, see
+/// `audit_locals_named_like_a_module_constant_bind_as_written`).
 #[test]
 fn audit_constant_patterns_and_borrowed_string_arguments_run() {
     if skip("audit_constant_patterns_and_borrowed_string_arguments_run") {
@@ -4884,7 +4886,7 @@ fn audit_constant_patterns_and_borrowed_string_arguments_run() {
 
 fn k(n: i32) -> i32 {
     match n {
-        C => { 10 }
+        crate::C => { 10 }
         _ => { 20 }
     }
 }
@@ -5204,4 +5206,42 @@ fn audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs() {
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "4\n");
+}
+
+/// G-6.38: an `IDENT` pattern always binds. A local, a parameter or a match
+/// binding named like a constant of its module used to be emitted as is, and
+/// rustc read it as that constant: `match b { T => 1, false => 2 }` returned 2
+/// for `false`, `let T = 5;` and `fn g(T: i32)` were refused (E0005). Such a
+/// local is now emitted under another name; `crate::T` still names the
+/// constant.
+#[test]
+fn audit_locals_named_like_a_module_constant_bind_as_written() {
+    if skip("audit_locals_named_like_a_module_constant_bind_as_written") {
+        return;
+    }
+    let code = generate_source(
+        "locals-named-like-constants",
+        r#"const T: bool = true;
+const N: i32 = 3;
+struct U;
+fn pick(b: bool) -> i32 { match b { T => 1, false => 2 } }
+fn g(N: i32) -> i32 { N + 1 }
+fn unit(n: i32) -> i32 { match n { U => U * 10 } }
+mod m { pub const K: i32 = 3; pub fn h(K: i32) -> i32 { match K { K => K * 2 } } }
+fn main() {
+    io::println(&pick(false).to_string());
+    let mut N = 5;
+    N = N + 1;
+    io::println(&N.to_string());
+    io::println(&g(N).to_string());
+    io::println(&crate::N.to_string());
+    io::println(&unit(4).to_string());
+    io::println(&m::h(4).to_string());
+}
+"#,
+    );
+    let built = must_compile(&code, "locals-named-like-constants");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "1\n6\n7\n3\n40\n8\n");
 }

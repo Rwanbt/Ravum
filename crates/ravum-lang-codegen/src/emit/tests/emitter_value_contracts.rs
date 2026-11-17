@@ -39,6 +39,7 @@ fn value_paths_reject_invalid_resolution_facts() {
             options: &options,
             index: Index::build(&program.checked),
             array_moves: Default::default(),
+            shadowed_names: Default::default(),
         };
         let error = emitter
             .value_path(&path)
@@ -59,6 +60,7 @@ fn assertion_and_panic_lowering_refuses_invalid_checked_arities() {
         options: &options,
         index: Index::build(&checked),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     for (builtin, arity, expected) in [
@@ -116,6 +118,7 @@ fn constant_lowering_checks_the_value_type_and_missing_facts() {
         options: &options,
         index: Index::build(&checked),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     assert_eq!(

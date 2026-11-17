@@ -53,6 +53,7 @@ fn type_fallback_preserves_rust_spelling_without_resolution_facts() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     for (ty, position, expected) in [
@@ -99,6 +100,7 @@ fn type_emitter_refuses_invalid_fallback_and_recovered_semantic_types() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
 
     for (ty, expected) in [
@@ -152,6 +154,7 @@ fn semantic_nominals_use_the_resolved_rust_path_and_render_generic_arguments() {
         options: &options,
         index: Index::build(&program),
         array_moves: Default::default(),
+        shadowed_names: Default::default(),
     };
     let vector = STy::Nominal {
         def: id,
