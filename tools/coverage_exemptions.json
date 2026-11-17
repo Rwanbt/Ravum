@@ -1269,6 +1269,87 @@
         "review_condition": "Des modules émis hors de l'arbre indexé.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-LOADER-DEP-MANIFEST-REGISTER",
+        "file": "crates/ravum-lang-sema/src/loader/graph.rs",
+        "lines": [
+          [
+            115,
+            116
+          ]
+        ],
+        "summary": "`register_source` refusing the manifest of a dependency.",
+        "why_unreachable": "A dependency manifest is registered under `<key>/ravum.toml`, and the key must equal the target's `package.name` (E-MOD-DEPENDENCY otherwise), so one canonical manifest always comes with the same display name and an existing id is reused; a new id comes from a counter that only grows, so `add_at` never meets a taken id.",
+        "proof": "crates/ravum-lang-sema/src/loader/crates.rs `register_source`; loader/graph.rs `collect_dependencies` (key = package.name check).",
+        "evidence": [
+          "ravum-lang check of `other = { path = \"../util\" }`: E-MOD-DEPENDENCY \"dependency key `other` does not match the target `package.name`\""
+        ],
+        "review_condition": "Des clés de dépendance différentes du nom du paquet.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-LOADER-DEP-CANONICALIZE-RACE",
+        "file": "crates/ravum-lang-sema/src/loader/graph.rs",
+        "lines": [
+          [
+            421,
+            422
+          ],
+          [
+            424,
+            425
+          ],
+          [
+            428,
+            428
+          ],
+          [
+            431,
+            431
+          ]
+        ],
+        "summary": "`fs::canonicalize` failing on a dependency directory whose components were just checked.",
+        "why_unreachable": "Every component of the dependency path was checked with `symlink_metadata` just above: it exists and is not a symbolic link. `canonicalize` can then fail only if the tree changes between the two system calls (a concurrent removal), which no test can schedule deterministically.",
+        "proof": "crates/ravum-lang-sema/src/loader/graph.rs `resolve_dependency_dir` (component walk, then `canonicalize`).",
+        "evidence": [
+          "crates/ravum-lang-sema/tests/loader_paths_e6.rs (missing component, symlink, I/O error)"
+        ],
+        "review_condition": "Une résolution qui ne vérifie plus chaque composant.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-LOADER-DEP-CANONICAL-ESCAPE",
+        "file": "crates/ravum-lang-sema/src/loader/graph.rs",
+        "lines": [
+          [
+            441,
+            441
+          ],
+          [
+            443,
+            444
+          ],
+          [
+            448,
+            448
+          ],
+          [
+            451,
+            451
+          ]
+        ],
+        "summary": "A canonical dependency directory outside the package parent.",
+        "why_unreachable": "The lexical pass refuses any `..` that climbs above the package parent (E-MOD-PATH-ESCAPE), every component is then checked not to be a symbolic link, and `pkg_dir` is itself canonical (the root is canonicalized in loader/files.rs, a dependency directory is the canonical path returned here). The canonical path is therefore the lexical one, which stays inside the parent.",
+        "proof": "crates/ravum-lang-sema/src/loader/graph.rs `resolve_dependency_dir`; loader/files.rs (`fs::canonicalize(input)`).",
+        "evidence": [
+          "ravum-lang check of a package reached through a symlinked directory with a `../util` dependency: accepted"
+        ],
+        "review_condition": "Un répertoire de paquet non canonique.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
       }
     ]
   }
