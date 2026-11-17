@@ -5116,3 +5116,33 @@ fn audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time() 
         );
     }
 }
+
+/// Re-initialising an element at a literal index past the end panics at run
+/// time after evaluating the value, whether or not the move it restores ran;
+/// code generation used to stop with an internal error.
+#[test]
+fn audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time() {
+    if skip("audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time") {
+        return;
+    }
+    let code = generate_source(
+        "reinit-out-of-range",
+        r#"fn value() -> String { io::println("value"); String::from("b") }
+fn pick(c: bool) {
+    let mut a = [String::from("a")];
+    if c { let x = a[3]; io::println(&x); }
+    a[3] = value();
+    io::println(&a[0]);
+}
+fn main() { pick(false); }
+"#,
+    );
+    let built = must_compile(&code, "reinit-out-of-range");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_ne!(status, 0, "the program must panic");
+    assert_eq!(stdout, "value\n");
+    assert!(
+        stderr.contains("index out of bounds: the len is 1 but the index is 3"),
+        "{stderr}"
+    );
+}

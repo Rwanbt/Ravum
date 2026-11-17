@@ -683,11 +683,9 @@ impl<'a> Emitter<'a> {
         self.array_moves.borrow().paths.get(&node).copied()
     }
 
-    /// Element count of the fixed-size array an index step applies to.
-    pub(super) fn indexed_array_len(&self, step: &PathStep<'_>) -> Option<usize> {
-        let PathStep::Index { base, .. } = step else {
-            return None;
-        };
+    /// Element count of `base` when it is a fixed-size array (the indexed
+    /// expression of an index step).
+    pub(super) fn indexed_array_len(&self, base: &Expr) -> Option<usize> {
         match self.facts().expr_types.get(&base.id) {
             Some(Type::Array { len, .. }) => Some(*len),
             _ => None,
@@ -700,8 +698,8 @@ impl<'a> Emitter<'a> {
     /// non-literal index has no pattern form.
     pub(super) fn slot_of(&self, step: &PathStep<'_>) -> Option<Slot> {
         match step {
-            PathStep::Index { index, .. } => {
-                let len = self.indexed_array_len(step)?;
+            PathStep::Index { base, index } => {
+                let len = self.indexed_array_len(base)?;
                 let at = constant_index(index)?;
                 (at < len).then_some(Slot::Index { len, at })
             }
@@ -739,7 +737,7 @@ impl<'a> Emitter<'a> {
         let mut steps = Vec::new();
         let root = collect_path_steps(expr, &mut steps);
         let (first, array) = steps.iter().enumerate().find_map(|(at, step)| match step {
-            PathStep::Index { base, .. } if self.indexed_array_len(step).is_some() => {
+            PathStep::Index { base, .. } if self.indexed_array_len(base).is_some() => {
                 Some((at, *base))
             }
             _ => None,
@@ -821,9 +819,9 @@ impl<'a> Emitter<'a> {
                     current.push_str(&format!(".{}", mangle_ident(name)));
                 }
                 PathStep::Tuple { index, .. } => current.push_str(&format!(".{index}")),
-                PathStep::Index { index, .. } => {
+                PathStep::Index { base, index } => {
                     let selected = format!("__rv_sel_{id}_{level}");
-                    match (self.indexed_array_len(step), constant_index(index)) {
+                    match (self.indexed_array_len(base), constant_index(index)) {
                         (Some(len), Some(at)) if at < len => {
                             out.push_str(&format!(
                                 "let {} = {current}; ",
@@ -916,6 +914,17 @@ impl<'a> Emitter<'a> {
         indent: usize,
     ) -> Result<String, CodegenError> {
         let path = self.planned_path(target)?;
+        // A literal index past the end of a fixed-size array stops the constant
+        // run (`a[3] = v` with `a: [T; 1]`): Core reports it at run time, after
+        // evaluating the value, like the move it re-initialises.
+        if let Some(PathStep::Index { base, index }) = path.rest().first() {
+            if let (Some(len), Some(at)) = (self.indexed_array_len(base), constant_index(index)) {
+                return Ok(format!(
+                    "{{ let _ = {}; panic!(\"index out of bounds: the len is {{}} but the index is {{}}\", {len}usize, {at}usize); }}",
+                    self.expr(value, indent)?
+                ));
+            }
+        }
         if !path.rest().is_empty() {
             return Err(err(format!(
                 "internal: re-initialised array element {} is not reachable by a constant path",
