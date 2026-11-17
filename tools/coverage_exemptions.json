@@ -23,8 +23,8 @@
         "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
         "lines": [
           [
-            259,
-            259
+            258,
+            258
           ]
         ],
         "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
@@ -1179,6 +1179,94 @@
           "crates/ravum-lang-sema/src/typeck/aggregates.rs"
         ],
         "review_condition": "Un autre genre de motif enregistré comme variante.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-BINDING-IDENTITY-NOT-LOCAL",
+        "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
+        "lines": [
+          [
+            445,
+            445
+          ]
+        ],
+        "summary": "A binding identity recorded for an expression whose resolution is not a local (debug cross-check).",
+        "why_unreachable": "The ownership checker publishes a binding identity only in `eval_place_expr`, for a slot found by `path_local_slot` or `lookup(\"self\")`. With the facts of a checked program every path has a resolution, and `path_local_slot` returns a slot only for `Resolution::Local`; `self` is always resolved to a local by typeck (`check_self_value`).",
+        "proof": "crates/ravum-lang-sema/src/own/checker_a.rs `eval_place_expr`, `path_local_slot`; typeck/expr.rs `check_self_value`.",
+        "evidence": [
+          "cargo test -p ravum-lang-sema --test own_paths_e6 a_qualified_path_to_a_constant_is_not_the_local_of_the_same_name"
+        ],
+        "review_condition": "Une identité de liaison publiée hors de `eval_place_expr`.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-SYNTACTIC-PLACE-NON-LOCAL-ROOT",
+        "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
+        "lines": [
+          [
+            478,
+            478
+          ],
+          [
+            486,
+            486
+          ]
+        ],
+        "summary": "`syntactic_place` on `self` or a single-segment path that does not resolve to a local (debug cross-check).",
+        "why_unreachable": "`syntactic_place` is called on the expressions of `OwnFacts::place` and on the bases of their projections, and by the element-path cross-check on roots of projections. Every recorded place starts at a local slot, `self` always resolves to a local, and a projection rooted at a constant or function does not type-check (constants are scalars or `&str`: E-TYP-CONST for aggregates; fields and indexes of those are E-TYP-* errors).",
+        "proof": "crates/ravum-lang-codegen/src/emit/mod.rs `verify_ownership_facts`; emit/paths.rs `cross_check`; typeck/consts.rs.",
+        "evidence": [
+          "ravum-lang build of `const N: [i32; 2] = [1, 2];`: E-TYP-CONST"
+        ],
+        "review_condition": "Des constantes agrégées.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-FN-ENTRY-MISSING",
+        "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
+        "lines": [
+          [
+            607,
+            607
+          ],
+          [
+            691,
+            691
+          ]
+        ],
+        "summary": "The user `main` or a test function without an entry in `index.fns`.",
+        "why_unreachable": "`Index::build` records an `FnEntry` for every function item it walks; `user_main` is filtered to raw items of kind `Fn` and the tests are collected from function items during the same walk.",
+        "proof": "crates/ravum-lang-codegen/src/emit/index.rs `build`, `walk_module`.",
+        "evidence": [
+          "crates/ravum-lang-codegen/src/emit/index.rs"
+        ],
+        "review_condition": "Un `main` ou un test hors de l'index.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-MODULE-NOT-INDEXED",
+        "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
+        "lines": [
+          [
+            729,
+            729
+          ],
+          [
+            733,
+            733
+          ]
+        ],
+        "summary": "A module node missing from the index.",
+        "why_unreachable": "`emit_module` walks the same module tree as `Index::walk_module`, which registers every module it enters (the root and each `ItemKind::Mod`) before walking its items.",
+        "proof": "crates/ravum-lang-codegen/src/emit/index.rs `walk_module`.",
+        "evidence": [
+          "crates/ravum-lang-codegen/src/emit/index.rs"
+        ],
+        "review_condition": "Des modules émis hors de l'arbre indexé.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
       }
