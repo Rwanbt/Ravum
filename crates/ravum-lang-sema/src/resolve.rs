@@ -206,7 +206,7 @@ pub use paths::resolve;
 pub(crate) use paths::*;
 pub(crate) use uses::*;
 pub(crate) use world::*;
-pub(crate) use world::{PathError, ValuePath};
+pub(crate) use world::{PathError, PayloadCtor, ValuePath, OPTION_NONE};
 
 #[cfg(test)]
 mod sym_tests {

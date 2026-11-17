@@ -312,6 +312,28 @@ pub(crate) fn rust_ident(name: &str) -> String {
 // Résolution de chemins de valeurs (partagée avec `typeck`)
 // ---------------------------------------------------------------------------
 
+/// Path of the only builtin constant ([`ValuePath::BuiltinNone`]).
+pub(crate) const OPTION_NONE: &str = "Option::None";
+
+/// A prelude constructor that takes a payload. `None`, the unit one, is
+/// [`ValuePath::BuiltinNone`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PayloadCtor {
+    Some,
+    Ok,
+    Err,
+}
+
+impl PayloadCtor {
+    pub(crate) fn path(self) -> &'static str {
+        match self {
+            PayloadCtor::Some => "Option::Some",
+            PayloadCtor::Ok => "Result::Ok",
+            PayloadCtor::Err => "Result::Err",
+        }
+    }
+}
+
 /// Résultat d'une résolution de chemin de valeur.
 #[derive(Debug, Clone)]
 pub(crate) enum ValuePath {
@@ -327,12 +349,12 @@ pub(crate) enum ValuePath {
     },
     /// Fonction builtin libre (`std::io::println`, `drop`, ...).
     BuiltinFn(&'static str),
-    /// Constante builtin (`Option::None`).
-    BuiltinConst(&'static str),
+    /// The only builtin constant, `Option::None` (path [`OPTION_NONE`]).
+    BuiltinNone,
     /// Constructeur de variante builtin (`Option::Some`, `Result::Ok`, ...).
-    /// Its only unit variant, `None`, is a `BuiltinConst`.
+    /// Its only unit variant, `None`, is [`ValuePath::BuiltinNone`].
     BuiltinCtor {
-        path: &'static str,
+        ctor: PayloadCtor,
     },
     /// Fonction associée utilisateur (`Type::new`).
     AssocFn(NodeId),

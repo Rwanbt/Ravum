@@ -72,14 +72,18 @@ pub(crate) fn resolve_value_path(
         match name.as_str() {
             "Some" => {
                 return Ok(ValuePath::BuiltinCtor {
-                    path: "Option::Some",
+                    ctor: PayloadCtor::Some,
                 })
             }
-            "None" => return Ok(ValuePath::BuiltinConst("Option::None")),
-            "Ok" => return Ok(ValuePath::BuiltinCtor { path: "Result::Ok" }),
+            "None" => return Ok(ValuePath::BuiltinNone),
+            "Ok" => {
+                return Ok(ValuePath::BuiltinCtor {
+                    ctor: PayloadCtor::Ok,
+                })
+            }
             "Err" => {
                 return Ok(ValuePath::BuiltinCtor {
-                    path: "Result::Err",
+                    ctor: PayloadCtor::Err,
                 })
             }
             _ => {}
@@ -331,15 +335,17 @@ pub(crate) fn resolve_associated(
         }
         Type::Option(_) => match name {
             "Some" => Ok(ValuePath::BuiltinCtor {
-                path: "Option::Some",
+                ctor: PayloadCtor::Some,
             }),
-            "None" => Ok(ValuePath::BuiltinConst("Option::None")),
+            "None" => Ok(ValuePath::BuiltinNone),
             _ => Err(PathError::unknown(name)),
         },
         Type::Result(_, _) => match name {
-            "Ok" => Ok(ValuePath::BuiltinCtor { path: "Result::Ok" }),
+            "Ok" => Ok(ValuePath::BuiltinCtor {
+                ctor: PayloadCtor::Ok,
+            }),
             "Err" => Ok(ValuePath::BuiltinCtor {
-                path: "Result::Err",
+                ctor: PayloadCtor::Err,
             }),
             _ => Err(PathError::unknown(name)),
         },

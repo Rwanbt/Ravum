@@ -284,11 +284,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::BuiltinFn(path) => Resolution::BuiltinFn {
                 path: (*path).to_string(),
             },
-            ValuePath::BuiltinConst(path) => Resolution::BuiltinConst {
-                path: (*path).to_string(),
+            ValuePath::BuiltinNone => Resolution::BuiltinConst {
+                path: OPTION_NONE.to_string(),
             },
-            ValuePath::BuiltinCtor { path } => Resolution::BuiltinFn {
-                path: (*path).to_string(),
+            ValuePath::BuiltinCtor { ctor } => Resolution::BuiltinFn {
+                path: ctor.path().to_string(),
             },
             ValuePath::AssocFn(item) => Resolution::Item { item: *item },
             ValuePath::Module => Resolution::Module,
@@ -327,7 +327,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
-            ValuePath::BuiltinCtor { path } => {
+            ValuePath::BuiltinCtor { ctor } => {
+                let path = ctor.path();
                 self.error(
                     "E-TYP-CALL",
                     expr.span,
@@ -335,7 +336,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 );
                 Type::Error
             }
-            ValuePath::BuiltinConst(path) => self.builtin_unit_variant_type(expr, path, expected),
+            ValuePath::BuiltinNone => self.builtin_none_type(expr, expected),
             ValuePath::Variant { enum_item, variant } => {
                 let info = match self.facts.enums.get(enum_item) {
                     Some(info) => info.clone(),
@@ -414,25 +415,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         args
     }
 
-    pub(super) fn builtin_unit_variant_type(
-        &mut self,
-        expr: &Expr,
-        path: &str,
-        expected: Option<&Type>,
-    ) -> Type {
-        match path {
-            "Option::None" => match expected {
-                Some(Type::Option(inner)) => Type::option((**inner).clone()),
-                _ => Type::option(self.fresh_var(expr.span)),
-            },
-            _ => {
-                self.error(
-                    "E-RES-UNKNOWN",
-                    expr.span,
-                    format!("unknown builtin constant `{path}`"),
-                );
-                Type::Error
-            }
+    pub(super) fn builtin_none_type(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
+        match expected {
+            Some(Type::Option(inner)) => Type::option((**inner).clone()),
+            _ => Type::option(self.fresh_var(expr.span)),
         }
     }
 

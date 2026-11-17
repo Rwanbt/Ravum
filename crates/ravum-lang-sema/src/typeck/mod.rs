@@ -19,7 +19,9 @@ use crate::builtins::{self, MethodSelfKind};
 use crate::facts::{
     CallTarget, CheckedProgram, ConstInfo, ConstValue, Facts, MethodTarget, Resolution,
 };
-use crate::resolve::{self, ModuleId, NominalKind, PathError, ValuePath, World};
+use crate::resolve::{
+    self, ModuleId, NominalKind, PathError, PayloadCtor, ValuePath, World, OPTION_NONE,
+};
 use crate::types::{contains_never, Type};
 use ravum_lang_syntax::ast::{
     self, Block, ConstItem, Expr, ExprKind, FieldInit, FloatTy, FnItem, IntTy, Item, ItemKind,
