@@ -541,13 +541,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 Some(*value)
             }
             ExprKind::Path(path) => {
-                let target = resolve::resolve_value_path(
-                    self.world,
-                    self.module,
-                    &self.generics,
-                    self.self_ty.as_ref(),
-                    path,
-                );
+                let target =
+                    resolve::resolve_value_path(self.world, self.module, &self.generics, path);
                 if let Ok(ValuePath::Item(id)) = target {
                     let info = self.facts.consts.get(&id).cloned();
                     if let Some(info) = info {

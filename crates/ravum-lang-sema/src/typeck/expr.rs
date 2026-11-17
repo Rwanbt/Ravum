@@ -257,13 +257,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 return local.ty;
             }
         }
-        match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
+        match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
             Ok(target) => {
                 self.record_value_resolution(path.id, &target);
                 self.type_of_value_path(expr, &target, expected)

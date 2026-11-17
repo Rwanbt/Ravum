@@ -312,8 +312,29 @@ fn f(p: Point::Champ) {}
 /// that reaches a builtin module must be reported as "`std::io::Foo` is not a
 /// type". Without the arm the checker reports "`io` is not a module", which is
 /// the wrong explanation: `io` *is* a module.
+///
+/// The import is private to `m` (MOD-4.1, no `pub use` in Core 1.0), so the
+/// path is written from a descendant of `m`, where the import is visible.
 #[test]
 fn an_imported_builtin_module_prefix_is_named_as_a_module() {
+    expect_code_msg(
+        r#"
+mod m {
+    use std::io;
+    mod k {
+        fn f(x: super::io::Foo) {}
+    }
+}
+"#,
+        "E-RES-UNKNOWN",
+        "`std::io::Foo` is not a type",
+    );
+}
+
+/// The same path written from outside `m` names `m`'s private import: refused
+/// before the type is looked at.
+#[test]
+fn a_private_import_is_not_visible_outside_its_module() {
     expect_code_msg(
         r#"
 mod m {
@@ -322,8 +343,8 @@ mod m {
 
 fn f(x: m::io::Foo) {}
 "#,
-        "E-RES-UNKNOWN",
-        "`std::io::Foo` is not a type",
+        "E-RES-PRIVATE",
+        "`io` is private",
     );
 }
 

@@ -47,25 +47,20 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
 
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(callee.span, &error);
-                for arg in args {
-                    self.check_expr(arg, None);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(callee.span, &error);
+                    for arg in args {
+                        self.check_expr(arg, None);
+                    }
+                    self.facts.resolutions.insert(path.id, Resolution::Error);
+                    self.facts.expr_types.insert(callee.id, Type::Error);
+                    self.facts.calls.insert(expr.id, CallTarget::Error);
+                    return Type::Error;
                 }
-                self.facts.resolutions.insert(path.id, Resolution::Error);
-                self.facts.expr_types.insert(callee.id, Type::Error);
-                self.facts.calls.insert(expr.id, CallTarget::Error);
-                return Type::Error;
-            }
-        };
+            };
         self.record_value_resolution(path.id, &target);
 
         let result = match &target {

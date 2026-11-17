@@ -399,3 +399,184 @@ fn a_module_qualified_generic_struct_takes_its_arguments() {
         ],
     );
 }
+
+/// MOD-3.2: a local anchor that does not resolve the path falls back to the crate root.
+#[test]
+fn a_bare_import_falls_back_to_the_root_when_the_local_module_lacks_the_name() {
+    assert_errors(
+        "mod a { pub mod b { pub fn f() { } } }\n\
+         mod c { mod a { } use a::b; pub fn h() { b::f(); } }\n\
+         fn main() { c::h(); }",
+        &[],
+    );
+}
+
+#[test]
+fn a_bare_import_resolved_nowhere_reports_the_local_failure() {
+    assert_errors(
+        "mod a { pub mod b { } }\n\
+         mod c { mod a { } use a::zz; }\n\
+         fn main() { }",
+        &[("E-RES-UNKNOWN", "unknown import path `a::zz`")],
+    );
+}
+
+#[test]
+fn a_bare_import_resolved_only_locally_is_the_local_item() {
+    assert_errors(
+        "mod a { pub mod b { } }\n\
+         mod c { pub mod a { pub fn g() { } } use a::g; pub fn h() { g(); } }\n\
+         fn main() { c::h(); }",
+        &[],
+    );
+}
+
+#[test]
+fn an_imported_builtin_module_anchors_a_bare_import() {
+    assert_errors(
+        "mod m { use std::io; use io::println; pub fn h() { println(\"a\"); } }\n\
+         fn main() { m::h(); }",
+        &[],
+    );
+}
+
+#[test]
+fn a_value_path_cannot_name_a_struct_or_enum_through_a_module() {
+    assert_errors(
+        "mod m { pub struct S { n: i32 } pub enum E { A } pub mod k { } }\n\
+         fn main() { let a = m::S; let b = m::E; let c = m::k; let d = m::E::A; let e = m::E::Z; }",
+        &[
+            ("E-TYP-CALL", "type `S` cannot be used as a value"),
+            ("E-TYP-CALL", "type `E` cannot be used as a value"),
+            ("E-TYP-CALL", "a module cannot be used as a value"),
+            ("E-RES-UNKNOWN", "unknown name `Z`"),
+        ],
+    );
+}
+
+#[test]
+fn a_private_module_or_type_cannot_be_walked_through() {
+    assert_errors(
+        "mod m { mod k { pub fn f() { } } struct S { n: i32 } }\n\
+         fn main() { m::k::f(); let s = m::S::new(); }",
+        &[
+            ("E-RES-PRIVATE", "`k` is private"),
+            ("E-RES-PRIVATE", "`S` is private"),
+        ],
+    );
+}
+
+#[test]
+fn a_value_path_through_a_type_names_an_associated_item() {
+    assert_errors(
+        "struct S { n: i32 }\n\
+         impl S { fn new() -> S { S { n: 1 } } }\n\
+         mod m { pub struct T { n: i32 } impl T { pub fn make() -> T { T { n: 2 } } } }\n\
+         fn main() { let a = S::new(); let b = m::T::make(); let c = S::missing(); let d = i32::nothing(); }",
+        &[
+            ("E-RES-UNKNOWN", "unknown name `missing`"),
+            ("E-RES-UNKNOWN", "unknown name `nothing`"),
+        ],
+    );
+}
+
+#[test]
+fn an_imported_function_cannot_start_a_value_path() {
+    assert_errors(
+        "mod m { pub fn f() { } }\n\
+         use m::f;\n\
+         fn main() { f::g(); }",
+        &[("E-RES-UNKNOWN", "unknown name `f`")],
+    );
+}
+
+#[test]
+fn a_value_constant_pattern_through_a_module() {
+    assert_errors(
+        "mod m { pub const K: i32 = 3; const H: i32 = 4; }\n\
+         fn f(x: i32) -> i32 { match x { m::K => 1, m::H => 2, _ => 0 } }\n\
+         fn main() { }",
+        &[("E-RES-PRIVATE", "`H` is private")],
+    );
+}
+
+#[test]
+fn an_unqualified_variant_must_be_qualified() {
+    assert_errors(
+        "enum E { A, B }\n\
+         fn main() { let e = A; let f = E::A; }",
+        &[(
+            "E-RES-UNKNOWN",
+            "variant `A` must be qualified as `E::A` in Core 1.0",
+        )],
+    );
+}
+
+#[test]
+fn re_exports_are_refused() {
+    assert_errors(
+        "mod m { pub use std::io; }\n\
+         fn main() { }",
+        &[(
+            "E-UNSUPPORTED-REEXPORT",
+            "`pub use` re-exports are not supported in Ravum Core 1.0",
+        )],
+    );
+}
+
+#[test]
+fn a_private_import_of_a_builtin_module_is_walked_from_a_descendant() {
+    assert_errors(
+        "mod m { use std::io; mod k { use super::io::println; pub fn h() { println(\"a\"); } } pub fn g() { k::h(); } }\n\
+         fn main() { m::g(); }",
+        &[],
+    );
+}
+
+#[test]
+fn an_import_can_end_on_a_module_reached_through_super() {
+    assert_errors(
+        "mod m { pub mod k { pub fn f() { } } mod j { use super::k; pub fn h() { k::f(); } } pub fn g() { j::h(); } }\n\
+         fn main() { m::g(); }",
+        &[],
+    );
+}
+
+/// MOD-4.1/MOD-4.3: a `use` is a private item of its module. `check` accepted
+/// `m::io::println` and `m::a::g` from the root through `m`'s imports.
+#[test]
+fn a_private_import_cannot_be_walked_from_outside() {
+    assert_errors(
+        "mod a { pub fn g() { } }\n\
+         mod m { use std::io; use crate::a; }\n\
+         use m::io::println;\n\
+         fn main() { m::io::println(\"a\"); m::a::g(); }",
+        &[
+            ("E-RES-PRIVATE", "`m::io::println` is inaccessible from this module: intermediate module `io` is private"),
+        ],
+    );
+}
+
+#[test]
+fn a_private_import_is_visible_in_its_module_and_below() {
+    assert_errors(
+        "mod a { pub fn g() { } }\n\
+         mod m { use std::io; use crate::a; pub fn h() { io::println(\"a\"); a::g(); } mod k { pub fn j() { super::io::println(\"b\"); super::a::g(); } } pub fn l() { k::j(); } }\n\
+         fn main() { m::h(); m::l(); }",
+        &[],
+    );
+}
+
+#[test]
+fn an_import_cannot_be_re_imported_from_another_module() {
+    assert_errors(
+        "mod a { pub fn g() { } }\n\
+         mod c { use crate::a::g; }\n\
+         use c::g;\n\
+         fn main() { }",
+        &[(
+            "E-RES-PRIVATE",
+            "`c::g` is private and cannot be imported here",
+        )],
+    );
+}

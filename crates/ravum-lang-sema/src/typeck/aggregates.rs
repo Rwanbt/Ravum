@@ -8,23 +8,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         fields: &[FieldInit],
         expected: Option<&Type>,
     ) -> Type {
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(path.span, &error);
-                self.facts.resolutions.insert(path.id, Resolution::Error);
-                for field in fields {
-                    self.check_expr(&field.value, None);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(path.span, &error);
+                    self.facts.resolutions.insert(path.id, Resolution::Error);
+                    for field in fields {
+                        self.check_expr(&field.value, None);
+                    }
+                    return Type::Error;
                 }
-                return Type::Error;
-            }
-        };
+            };
         // Le codegen exige un fait de résolution pour le chemin du littéral.
         match &target {
             ValuePath::Type(Type::Nominal { def, .. }) => {
@@ -456,13 +451,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     pub(super) fn check_path_pattern(&mut self, pat: &Pat, path: &Path, expected: &Type) -> Type {
-        match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
+        match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
             Ok(ValuePath::Variant { enum_item, variant }) => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));
                 self.facts
@@ -578,22 +567,17 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         fields: &VariantPatFields,
         expected: &Type,
     ) -> Type {
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(pat.span, &error);
-                for field in variant_pat_patterns(fields) {
-                    self.check_pattern(field, &Type::Error);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(pat.span, &error);
+                    for field in variant_pat_patterns(fields) {
+                        self.check_pattern(field, &Type::Error);
+                    }
+                    return Type::Error;
                 }
-                return Type::Error;
-            }
-        };
+            };
         match target {
             ValuePath::Variant { enum_item, variant } => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));

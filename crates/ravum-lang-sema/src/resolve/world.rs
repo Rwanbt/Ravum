@@ -195,10 +195,14 @@ impl<'a> World<'a> {
         }
         for (index, imp) in self.modules[module].imports.iter().enumerate() {
             if imp.ns == ns && imp.name == name {
+                // MOD-4.1/MOD-4.3: a `use` is an item of the importing module,
+                // private like every item (`pub use` does not exist in Core
+                // 1.0). Reached by name, it is visible in that module's subtree
+                // only, whatever the visibility of what it imports.
                 return Some(SymRef {
                     sym: imp.sym,
-                    vis: imp.vis,
-                    def_module: imp.def_module,
+                    vis: Vis::Private,
+                    def_module: module,
                     import: Some(index),
                 });
             }

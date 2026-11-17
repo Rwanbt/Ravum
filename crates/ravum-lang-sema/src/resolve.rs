@@ -110,8 +110,6 @@ pub(crate) struct ImportEntry {
     pub name: String,
     pub ns: Ns,
     pub sym: Sym,
-    pub vis: Vis,
-    pub def_module: ModuleId,
     pub span: Span,
     pub display: String,
     pub used: Cell<bool>,
