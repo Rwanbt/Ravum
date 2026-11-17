@@ -5232,7 +5232,9 @@ fn main() {
     io::println(&pick(false).to_string());
     let mut N = 5;
     N = N + 1;
+    let N_rv_local = 9;
     io::println(&N.to_string());
+    io::println(&N_rv_local.to_string());
     io::println(&g(N).to_string());
     io::println(&crate::N.to_string());
     io::println(&unit(4).to_string());
@@ -5243,5 +5245,6 @@ fn main() {
     let built = must_compile(&code, "locals-named-like-constants");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
-    assert_eq!(stdout, "1\n6\n7\n3\n40\n8\n");
+    assert!(code.contains("N_rv_local_"), "{code}");
+    assert_eq!(stdout, "1\n6\n9\n7\n3\n40\n8\n");
 }

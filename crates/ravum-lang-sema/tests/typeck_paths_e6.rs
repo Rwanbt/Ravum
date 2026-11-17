@@ -1092,3 +1092,32 @@ fn struct_patterns_and_tuple_patterns_of_the_wrong_arity_cover_nothing() {
         ["E-TYP-MISSING-FIELD"]
     );
 }
+
+/// A constant used as a pattern covers nothing in the coverage check: a
+/// `bool` match over `crate::T` (true) and `false` is reported
+/// non-exhaustive. Conservative; rustc accepts it (decision pending).
+#[test]
+fn a_constant_pattern_does_not_count_as_coverage() {
+    let codes: Vec<String> = errors(
+        "const T: bool = true;\n\
+         fn f(b: bool) -> i32 { match b { crate::T => 1, false => 2 } }\nfn main() { }",
+    )
+    .into_iter()
+    .map(|(code, _)| code)
+    .collect();
+    assert_eq!(codes, ["E-TYP-NONEXHAUSTIVE"]);
+}
+
+/// A variant struct pattern that leaves out a `bool` field: the field is a
+/// wildcard for the coverage check, which specializes it on both values.
+#[test]
+fn a_bool_field_left_out_of_a_variant_pattern_is_a_wildcard_for_coverage() {
+    let codes: Vec<String> = errors(
+        "enum E { A { x: bool, y: i32 } }\n\
+         fn f(e: E) -> i32 { match e { E::A { y: 1 } => 1, E::A { x: true, y } => y, E::A { x: false, y } => 0 } }\nfn main() { }",
+    )
+    .into_iter()
+    .map(|(code, _)| code)
+    .collect();
+    assert_eq!(codes, ["E-TYP-MISSING-FIELD"]);
+}
