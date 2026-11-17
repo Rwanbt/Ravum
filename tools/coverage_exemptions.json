@@ -23,8 +23,8 @@
         "file": "crates/ravum-lang-codegen/src/emit/mod.rs",
         "lines": [
           [
-            253,
-            253
+            259,
+            259
           ]
         ],
         "summary": "Early `return Ok(())` of `verify_ownership_facts` when `!cfg!(debug_assertions)`.",
@@ -624,123 +624,16 @@
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {
-        "id": "E-LINE-EMIT-PATHS-DEBUG-CROSS-CHECK",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            510,
-            510
-          ]
-        ],
-        "summary": "Skipping the debug-only cross-check of element paths (`if cfg!(debug_assertions)`).",
-        "why_unreachable": "The branch that skips `cross_check` is taken only in a release build; coverage is measured on the default debug profile, where `cfg!(debug_assertions)` is always true.",
-        "proof": "`if cfg!(debug_assertions) { self.cross_check(expr, root); }` in `walk_path`; same reasoning as E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD.",
-        "evidence": [
-          "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
-        ],
-        "review_condition": "Une mesure de couverture en profil release.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            714,
-            714
-          ],
-          [
-            729,
-            729
-          ]
-        ],
-        "summary": "`slot_of` on a tuple or field step whose base is not a tuple or a struct.",
-        "why_unreachable": "`slot_of` is only asked about the steps after the first fixed-size array index, while each previous step still had a slot. The base of such a step is then an array element, a tuple item or a struct field, and typeck types `x.0` / `x.f` only on a tuple / struct or a reference to one. A reference cannot be stored in an array, tuple or struct in Core (E-OWN-REF-ESCAPE), so the base is the tuple or struct itself.",
-        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `element_path`; crates/ravum-lang-sema/src/typeck/places.rs; E-OWN-REF-ESCAPE in crates/ravum-lang-sema/src/own/checker_a.rs.",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test backend_audit audit_element_paths_through_references_and_vec_indexes_run"
-        ],
-        "review_condition": "Des références stockables dans un agrégat.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PATHS-PLANNED-NOT-ELEMENT",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            779,
-            779
-          ],
-          [
-            783,
-            783
-          ]
-        ],
-        "summary": "`planned_path` on a node that is not an element path.",
-        "why_unreachable": "A node gets a `PathMode` only from `plan`: a move or borrow access is recorded by `walk_path` after `element_path(expr)` returned `Some`, and `planned_path` calls the same pure function on the same expression and facts. A re-initialisation target is recorded only when `OwnFacts::element_reinit` holds it, which `element_write` sets only for a place with an array index, and that index is on a fixed-size array (a `Vec` element cannot be moved out, E-OWN-PARTIAL-MOVE).",
-        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `walk_path`, `plan`; crates/ravum-lang-sema/src/own/checker_b.rs `element_write`.",
-        "evidence": [
-          "crates/ravum-lang-codegen/tests/backend_audit.rs"
-        ],
-        "review_condition": "Un mode de chemin attribué hors de `walk_path`.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PATHS-MOVE-NON-ARRAY-INDEX",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            853,
-            853
-          ]
-        ],
-        "summary": "Moving out through an index of something that is not a fixed-size array.",
-        "why_unreachable": "Past the first fixed-size array index the moved value is consumed step by step; an index of a `Vec` or a slice there would move a `Vec` element out, which the ownership checker refuses (E-OWN-PARTIAL-MOVE \"déplacement d'un élément de `Vec` par indexation interdit\").",
-        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs (E-OWN-PARTIAL-MOVE on a `Vec` index).",
-        "evidence": [
-          "ravum-lang build of `let x = a[0].v[0];` with `v: Vec<String>`: E-OWN-PARTIAL-MOVE"
-        ],
-        "review_condition": "Le déplacement hors d'un `Vec` par indexation.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
-        "id": "E-LINE-EMIT-PATHS-REINIT-NOT-CONSTANT",
-        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
-        "lines": [
-          [
-            926,
-            926
-          ],
-          [
-            929,
-            932
-          ]
-        ],
-        "summary": "A re-initialised element whose path goes past the constant run.",
-        "why_unreachable": "`element_write` records a re-initialisation only when no opaque index follows the first array index, and a `Vec` element is never moved out (E-OWN-PARTIAL-MOVE). Field and tuple steps always have a slot (E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE), so the constant run stops only at a literal index past the end of a fixed-size array, which the branch just above lowers to a run-time panic.",
-        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs `element_write` (`opaque_index` returns Blocked).",
-        "evidence": [
-          "cargo test -p ravum-lang-codegen --test backend_audit audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time"
-        ],
-        "review_condition": "Une réinitialisation à travers un index non constant.",
-        "metric": "lines",
-        "approval": "PENDING_HUMAN_APPROVAL"
-      },
-      {
         "id": "E-LINE-OWN-OPEN-RANGE",
         "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
         "lines": [
           [
-            533,
-            533
-          ],
-          [
             536,
             536
+          ],
+          [
+            539,
+            539
           ]
         ],
         "summary": "Ownership walk of a range without a start or an end.",
@@ -910,8 +803,8 @@
         "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
         "lines": [
           [
-            455,
-            455
+            458,
+            458
           ]
         ],
         "summary": "`&&`/`||` whose left operand diverged and whose right operand did not.",
@@ -930,8 +823,8 @@
         "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
         "lines": [
           [
-            468,
-            468
+            471,
+            471
           ]
         ],
         "summary": "An assignment whose target is not a place.",
@@ -949,8 +842,8 @@
         "file": "crates/ravum-lang-sema/src/own/checker_a.rs",
         "lines": [
           [
-            846,
-            846
+            849,
+            849
           ]
         ],
         "summary": "A `break` joined into the exit of a `while` whose condition diverged.",
@@ -1106,6 +999,186 @@
           "cargo test -p ravum-lang-sema --test own_paths_e6 moving_out_of_a_slice_element_is_refused"
         ],
         "review_condition": "Des tranches par valeur.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-DEBUG-CROSS-CHECK",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            510,
+            510
+          ]
+        ],
+        "summary": "Skipping the debug-only cross-check of element paths (`if cfg!(debug_assertions)`).",
+        "why_unreachable": "The branch that skips `cross_check` is taken only in a release build; coverage is measured on the default debug profile, where `cfg!(debug_assertions)` is always true.",
+        "proof": "`if cfg!(debug_assertions) { self.cross_check(expr, root); }` in `walk_path`; same reasoning as E-LINE-EMIT-RELEASE-ONLY-OWNERSHIP-GUARD.",
+        "evidence": [
+          "cargo llvm-cov invocation in tools/coverage_thresholds.json (no --release)"
+        ],
+        "review_condition": "Une mesure de couverture en profil release.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            714,
+            714
+          ],
+          [
+            729,
+            729
+          ]
+        ],
+        "summary": "`slot_of` on a tuple or field step whose base is not a tuple or a struct.",
+        "why_unreachable": "`slot_of` is only asked about the steps after the first fixed-size array index, while each previous step still had a slot. The base of such a step is then an array element, a tuple item or a struct field, and typeck types `x.0` / `x.f` only on a tuple / struct or a reference to one. A reference cannot be stored in an array, tuple or struct in Core (E-OWN-REF-ESCAPE), so the base is the tuple or struct itself.",
+        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `element_path`; crates/ravum-lang-sema/src/typeck/places.rs; E-OWN-REF-ESCAPE in crates/ravum-lang-sema/src/own/checker_a.rs.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test backend_audit audit_element_paths_through_references_and_vec_indexes_run"
+        ],
+        "review_condition": "Des références stockables dans un agrégat.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-PLANNED-NOT-ELEMENT",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            779,
+            779
+          ],
+          [
+            783,
+            783
+          ]
+        ],
+        "summary": "`planned_path` on a node that is not an element path.",
+        "why_unreachable": "A node gets a `PathMode` only from `plan`: a move or borrow access is recorded by `walk_path` after `element_path(expr)` returned `Some`, and `planned_path` calls the same pure function on the same expression and facts. A re-initialisation target is recorded only when `OwnFacts::element_reinit` holds it, which `element_write` sets only for a place with an array index, and that index is on a fixed-size array (a `Vec` element cannot be moved out, E-OWN-PARTIAL-MOVE).",
+        "proof": "crates/ravum-lang-codegen/src/emit/paths.rs `walk_path`, `plan`; crates/ravum-lang-sema/src/own/checker_b.rs `element_write`.",
+        "evidence": [
+          "crates/ravum-lang-codegen/tests/backend_audit.rs"
+        ],
+        "review_condition": "Un mode de chemin attribué hors de `walk_path`.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-MOVE-NON-ARRAY-INDEX",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            853,
+            853
+          ]
+        ],
+        "summary": "Moving out through an index of something that is not a fixed-size array.",
+        "why_unreachable": "Past the first fixed-size array index the moved value is consumed step by step; an index of a `Vec` or a slice there would move a `Vec` element out, which the ownership checker refuses (E-OWN-PARTIAL-MOVE \"déplacement d'un élément de `Vec` par indexation interdit\").",
+        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs (E-OWN-PARTIAL-MOVE on a `Vec` index).",
+        "evidence": [
+          "ravum-lang build of `let x = a[0].v[0];` with `v: Vec<String>`: E-OWN-PARTIAL-MOVE"
+        ],
+        "review_condition": "Le déplacement hors d'un `Vec` par indexation.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-EMIT-PATHS-REINIT-NOT-CONSTANT",
+        "file": "crates/ravum-lang-codegen/src/emit/paths.rs",
+        "lines": [
+          [
+            926,
+            926
+          ],
+          [
+            929,
+            932
+          ]
+        ],
+        "summary": "A re-initialised element whose path goes past the constant run.",
+        "why_unreachable": "`element_write` records a re-initialisation only when no opaque index follows the first array index, and a `Vec` element is never moved out (E-OWN-PARTIAL-MOVE). Field and tuple steps always have a slot (E-LINE-EMIT-PATHS-SLOT-NON-AGGREGATE), so the constant run stops only at a literal index past the end of a fixed-size array, which the branch just above lowers to a run-time panic.",
+        "proof": "crates/ravum-lang-sema/src/own/checker_b.rs `element_write` (`opaque_index` returns Blocked).",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test backend_audit audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time"
+        ],
+        "review_condition": "Une réinitialisation à travers un index non constant.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-COVERAGE-DEPTH-GUARD",
+        "file": "crates/ravum-lang-sema/src/typeck/coverage.rs",
+        "lines": [
+          [
+            41,
+            41
+          ],
+          [
+            181,
+            181
+          ]
+        ],
+        "summary": "The coverage check giving up past `MAX_COVERAGE_DEPTH` (1024) levels.",
+        "why_unreachable": "Each recursion of the coverage check descends one level of the scrutinee type, and typeck resolves no type nested deeper than `MAX_RESOLVE_DEPTH` (1024, typeck/helpers.rs), which equals the guard.",
+        "proof": "crates/ravum-lang-sema/src/typeck/coverage.rs `MAX_COVERAGE_DEPTH`; typeck/helpers.rs `MAX_RESOLVE_DEPTH`.",
+        "evidence": [
+          "cargo test -p ravum-lang-codegen --test backend_audit audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs"
+        ],
+        "review_condition": "Une borne de résolution des types supérieure à celle de la couverture.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-COVERAGE-NON-CTOR-PATTERN",
+        "file": "crates/ravum-lang-sema/src/typeck/coverage.rs",
+        "lines": [
+          [
+            81,
+            81
+          ],
+          [
+            93,
+            93
+          ],
+          [
+            145,
+            145
+          ]
+        ],
+        "summary": "An `Option`, `Result` or tuple scrutinee matched by a pattern that is neither a constructor nor irrefutable.",
+        "why_unreachable": "A constant cannot hold an `Option`, a `Result` or a tuple (`const A: Option<i32> = Some(1);`, `Ok(1)` and `(1, 2)` are E-TYP-CONST), so the only patterns that type-check against such a scrutinee are its constructors (`Some`/`None`, `Ok`/`Err`, a tuple pattern) and the irrefutable ones, which `patterns_exhaustive` has already accepted before this match.",
+        "proof": "crates/ravum-lang-sema/src/typeck/consts.rs (E-TYP-CONST); typeck/aggregates.rs `check_pattern`.",
+        "evidence": [
+          "ravum-lang build of `const A: Option<i32> = Some(1);`, `const P: (i32, i32) = (1, 2);`: E-TYP-CONST"
+        ],
+        "review_condition": "Des constantes d'`Option`, de `Result` ou de tuple.",
+        "metric": "lines",
+        "approval": "PENDING_HUMAN_APPROVAL"
+      },
+      {
+        "id": "E-LINE-TYP-COVERAGE-VARIANT-PAT-KIND",
+        "file": "crates/ravum-lang-sema/src/typeck/coverage.rs",
+        "lines": [
+          [
+            409,
+            409
+          ],
+          [
+            439,
+            439
+          ]
+        ],
+        "summary": "A pattern recorded in `variant_pats` that is neither a path nor a variant pattern.",
+        "why_unreachable": "`variant_pats` is filled only by `check_path_pattern` and `check_variant_pattern` (typeck/aggregates.rs), for `PatKind::Path` and `PatKind::Variant`; both functions are reached only for a pattern found in it.",
+        "proof": "crates/ravum-lang-sema/src/typeck/aggregates.rs (`variant_pats.insert`).",
+        "evidence": [
+          "crates/ravum-lang-sema/src/typeck/aggregates.rs"
+        ],
+        "review_condition": "Un autre genre de motif enregistré comme variante.",
         "metric": "lines",
         "approval": "PENDING_HUMAN_APPROVAL"
       }
