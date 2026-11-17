@@ -165,18 +165,16 @@ impl<'a> OwnChecker<'a> {
             .unwrap_or(Type::Error)
     }
 
-    pub(super) fn path_local_slot(&self, expr: &Expr) -> Option<SlotId> {
-        if let Some(Resolution::Local { name, .. }) = self.facts.resolutions.get(&expr.id) {
+    pub(super) fn path_local_slot(&self, path: &crate::syntax::ast::Path) -> Option<SlotId> {
+        // Typeck keys a local's resolution by the `Path` node (typeck/expr.rs).
+        // Without that fact, a single-segment path is still looked up by name.
+        if let Some(Resolution::Local { name, .. }) = self.facts.resolutions.get(&path.id) {
             return self.lookup(name);
         }
-        if let ExprKind::Path(path) = &expr.kind {
-            if path.segments.len() == 1 {
-                if let Some(seg) = path.segments.first() {
-                    return self.lookup(&seg.name.name);
-                }
-            }
+        match path.segments.as_slice() {
+            [segment] => self.lookup(&segment.name.name),
+            _ => None,
         }
-        None
     }
 
     // ------------------------------------------------------------------
@@ -600,8 +598,8 @@ impl<'a> OwnChecker<'a> {
         let result = match &expr.kind {
             ExprKind::SelfValue | ExprKind::Path(_) => {
                 let slot = match &expr.kind {
-                    ExprKind::SelfValue => self.lookup("self"),
-                    _ => self.path_local_slot(expr),
+                    ExprKind::Path(path) => self.path_local_slot(path),
+                    _ => self.lookup("self"),
                 };
                 // RFC-OWN-FACTS-2 step C4: the scope lookup above is the only
                 // place where a path becomes a binding; publish its outcome.

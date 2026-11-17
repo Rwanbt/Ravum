@@ -413,3 +413,28 @@ fn writing_below_a_moved_field_is_a_use_after_move() {
         ["E-OWN-USE-AFTER-MOVE"]
     );
 }
+
+/// An array repeat of a value that is not `Copy`, as a temporary or as a
+/// place, is refused once (G-5.5, E-TYP-ARRAY-REPEAT from the ownership phase).
+#[test]
+fn an_array_repeat_of_a_non_copy_value_is_refused() {
+    for source in [
+        "fn main() { let a = [String::from(\"a\"); 3]; }",
+        "fn main() { let s = String::from(\"a\"); let a = [s; 3]; }",
+    ] {
+        assert_eq!(errors(source), ["E-TYP-ARRAY-REPEAT"], "{source}");
+    }
+}
+
+/// `self` passed on as a reference argument is a reborrow of a parameter,
+/// not a `'static` reference: the program checks.
+#[test]
+fn self_passed_on_as_a_reference_argument_checks() {
+    assert_eq!(
+        errors(
+            "struct S { n: i32 }\nfn take(s: &S) -> i32 { s.n }\n\
+             impl S { fn m(&self) -> i32 { take(self) } }\nfn main() { }"
+        ),
+        Vec::<String>::new()
+    );
+}

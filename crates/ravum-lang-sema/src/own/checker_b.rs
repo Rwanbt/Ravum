@@ -745,13 +745,12 @@ impl<'a> OwnChecker<'a> {
             // stores a reference to a temporary, which must be rejected like any
             // other escaping borrow (F2 audit finding).
             ExprKind::Unary { op: UnOp::Ref, .. } => false,
-            ExprKind::Path(_) | ExprKind::SelfValue => {
-                if let Some(slot) = self.path_local_slot(expr) {
-                    self.slot_info(slot).map(|s| s.static_ref).unwrap_or(false)
-                } else {
-                    false
-                }
-            }
+            ExprKind::Path(path) => self
+                .path_local_slot(path)
+                .and_then(|slot| self.slot_info(slot))
+                .is_some_and(|info| info.static_ref),
+            // `self` is a parameter: never a `'static` reference.
+            ExprKind::SelfValue => false,
             ExprKind::Block(block) | ExprKind::Unsafe(block) => block
                 .tail
                 .as_ref()
