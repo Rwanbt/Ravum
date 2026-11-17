@@ -689,9 +689,9 @@ pub(super) fn build_program_e() -> ProgramE {
     let ok_number = b.call(
         ok_callee,
         vec![number_value],
-        CallTarget::VariantCtor {
-            enum_item: 920_002,
-            variant: 0,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Ok".to_string(),
         },
     );
     let parse_body = b.block(vec![number_let], Some(ok_number));
@@ -1035,9 +1035,9 @@ pub(super) fn build_program_e() -> ProgramE {
         b.call(
             callee,
             vec![payload],
-            CallTarget::VariantCtor {
-                enum_item: 930_000,
-                variant: 0,
+            // The checker records a prelude constructor as a builtin call.
+            CallTarget::BuiltinFn {
+                path: "Option::Some".to_string(),
             },
         )
     };
@@ -1070,9 +1070,9 @@ pub(super) fn build_program_e() -> ProgramE {
         let path = b.path(&["None"]);
         b.facts.resolutions.insert(
             path.id,
-            Resolution::Variant {
-                enum_item: 930_001,
-                variant: 1,
+            // The checker resolves `None` to the builtin constant.
+            Resolution::BuiltinConst {
+                path: "Option::None".to_string(),
             },
         );
         b.expr(ExprKind::Path(path), Some(STy::Option(Box::new(STy::I32))))
@@ -1214,9 +1214,9 @@ pub(super) fn build_program_e() -> ProgramE {
     let ok_call = b.call(
         ok_callee,
         vec![unit_value],
-        CallTarget::VariantCtor {
-            enum_item: 940_000,
-            variant: 0,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Ok".to_string(),
         },
     );
     let main_body = b.block(statements, Some(ok_call));

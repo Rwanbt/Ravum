@@ -5,12 +5,11 @@ impl<'a> Emitter<'a> {
         match self.facts().resolutions.get(&path.id) {
             Some(Resolution::Local { name, .. }) => Ok(self.local_ident(name)),
             Some(Resolution::Item { item }) => self.item_path(*item),
-            Some(Resolution::Variant { enum_item, variant }) => {
-                match self.variant_name_opt(*enum_item, *variant) {
-                    Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                    None => self.plain_path_text(path),
-                }
-            }
+            Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                "{}::{}",
+                self.enum_path(*enum_item)?,
+                self.variant_name(*enum_item, *variant)?
+            )),
             Some(Resolution::BuiltinFn { path: builtin }) => Err(err(format!(
                 "builtin function `{builtin}` must be called (path node {})",
                 path.id
@@ -59,12 +58,11 @@ impl<'a> Emitter<'a> {
     pub(super) fn struct_literal_path(&self, path: &Path) -> Result<String, CodegenError> {
         match self.facts().resolutions.get(&path.id) {
             Some(Resolution::Item { item }) => self.item_path(*item),
-            Some(Resolution::Variant { enum_item, variant }) => {
-                match self.variant_name_opt(*enum_item, *variant) {
-                    Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                    None => self.plain_path_text(path),
-                }
-            }
+            Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                "{}::{}",
+                self.enum_path(*enum_item)?,
+                self.variant_name(*enum_item, *variant)?
+            )),
             Some(_) => self.plain_path_text(path),
             None => Err(err(format!(
                 "missing resolution fact for struct literal path `{}` (path node {})",
@@ -78,17 +76,24 @@ impl<'a> Emitter<'a> {
         self.item_path(enum_item)
     }
 
-    pub(super) fn variant_name_opt(&self, enum_item: NodeId, variant: usize) -> Option<String> {
-        if let Some(names) = self.index.enum_variants.get(&enum_item) {
-            if let Some(name) = names.get(variant) {
-                return Some(name.clone());
-            }
-        }
-        self.facts()
-            .enums
+    /// Rust name of a variant. `Index::build` records the variants of every
+    /// enum item of the program, and the checker resolves a variant only to an
+    /// index of its enum, so a miss is a defect upstream: refuse it.
+    pub(super) fn variant_name(
+        &self,
+        enum_item: NodeId,
+        variant: usize,
+    ) -> Result<String, CodegenError> {
+        self.index
+            .enum_variants
             .get(&enum_item)
-            .and_then(|info| info.variants.get(variant))
-            .map(|info| info.rust_name.clone())
+            .and_then(|names| names.get(variant))
+            .cloned()
+            .ok_or_else(|| {
+                err(format!(
+                    "unknown variant {variant} of enum node {enum_item}"
+                ))
+            })
     }
 
     /// Rust path of an item. `Facts::item_paths` is used when it is consistent

@@ -279,9 +279,9 @@ pub(super) fn build_program_a() -> ProgramA {
     let ok_call = b.call(
         ok_callee,
         vec![unit_value],
-        CallTarget::VariantCtor {
-            enum_item: 900_000,
-            variant: 0,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Ok".to_string(),
         },
     );
 
@@ -433,9 +433,9 @@ pub(super) fn build_program_c() -> CheckedProgram {
     let err_call = b.call(
         err_callee,
         vec![error_call],
-        CallTarget::VariantCtor {
-            enum_item: 910_000,
-            variant: 1,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Err".to_string(),
         },
     );
     let body = b.block(Vec::new(), Some(err_call));

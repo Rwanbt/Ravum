@@ -49,7 +49,7 @@ impl<'a> Emitter<'a> {
             ExprKind::Str(value) => Ok(string_literal(value)),
             ExprKind::SelfValue => Ok("self".to_string()),
             ExprKind::Path(path) => self.value_path(path),
-            ExprKind::Call { callee, args } => self.call_expr(expr, callee, args, indent),
+            ExprKind::Call { args, .. } => self.call_expr(expr, args, indent),
             ExprKind::MethodCall {
                 receiver,
                 method,
@@ -392,13 +392,9 @@ impl<'a> Emitter<'a> {
         text: &str,
         ty: Option<&Type>,
     ) -> String {
+        // The lexer builds a float token only after a fraction or an exponent
+        // (lexer.rs `is_float`), so the text always holds `.`, `e` or `E`.
         let mut out = text.trim().to_string();
-        if out.is_empty() {
-            out.push('0');
-        }
-        if !out.contains('.') && !out.contains('e') && !out.contains('E') {
-            out.push_str(".0");
-        }
         let is_f32 = match suffix {
             Some(FloatTy::F32) => true,
             Some(FloatTy::F64) => false,

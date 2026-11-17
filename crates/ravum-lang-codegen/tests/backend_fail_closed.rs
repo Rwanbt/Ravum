@@ -501,3 +501,35 @@ fn an_empty_crate_name_falls_back_to_the_default_banner() {
     );
     assert!(code.contains("ravum_program"), "{code}");
 }
+
+/// A variant index the enum does not have is refused in every position (value
+/// path, pattern, variant pattern, constructor call) instead of falling back
+/// to the source text of the path.
+#[test]
+fn a_variant_index_outside_its_enum_is_refused() {
+    let source = "enum E { A, B(i32) }\n\
+                  fn main() {\n\
+                  let a = E::A;\n\
+                  let b = E::B(1);\n\
+                  let n = match a { E::A => 0, E::B(x) => x };\n\
+                  let m = match b { E::B(x) => x, _ => 0 };\n\
+                  }\n";
+    let program = checked(source, Profile::Core);
+    // Break the resolutions (value paths and patterns) and the calls apart.
+    let mut broken = program.clone();
+    for resolution in broken.facts.resolutions.values_mut() {
+        if let Resolution::Variant { variant, .. } = resolution {
+            *variant = 99;
+        }
+    }
+    let message = refusal(&broken, &GenOptions::default());
+    assert!(message.contains("unknown variant 99"), "{message}");
+    let mut broken = program;
+    for target in broken.facts.calls.values_mut() {
+        if let CallTarget::VariantCtor { variant, .. } = target {
+            *variant = 99;
+        }
+    }
+    let message = refusal(&broken, &GenOptions::default());
+    assert!(message.contains("unknown variant 99"), "{message}");
+}

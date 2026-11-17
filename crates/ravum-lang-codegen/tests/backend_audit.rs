@@ -232,15 +232,17 @@ impl B {
         self.call_target(callee, args, CallTarget::UserFn { item })
     }
 
-    fn call_variant(
-        &self,
-        callee: &str,
-        args: Vec<Expr>,
-        enum_item: NodeId,
-        variant: usize,
-    ) -> Expr {
+    /// A prelude constructor call (`Ok(..)`, `Err(..)`, `Some(..)`), recorded
+    /// as the checker records it: a builtin call.
+    fn call_prelude(&self, callee: &str, args: Vec<Expr>) -> Expr {
+        let owner = if matches!(callee, "Ok" | "Err") {
+            "Result"
+        } else {
+            "Option"
+        };
+        let path = format!("{owner}::{callee}");
         let callee = self.callee(callee);
-        self.call_target(callee, args, CallTarget::VariantCtor { enum_item, variant })
+        self.call_target(callee, args, CallTarget::BuiltinFn { path })
     }
 
     fn call_target(&self, callee: Expr, args: Vec<Expr>, target: CallTarget) -> Expr {
@@ -547,7 +549,7 @@ fn result_unit_ret(b: &B) -> AstType {
 
 fn ok_unit(b: &B) -> Expr {
     let unit = b.unit();
-    b.call_variant("Ok", vec![unit], 900_002, 0)
+    b.call_prelude("Ok", vec![unit])
 }
 
 fn println_expr(b: &B, argument: Expr) -> Expr {
@@ -2227,7 +2229,7 @@ fn panic_program(kind: PanicKind) -> CheckedProgram {
         }
         PanicKind::ResultUnwrap => {
             let error_call = b.call_free("Error::new", vec![b.text("x")], "Error::new");
-            let result_expr = b.call_variant("Err", vec![error_call], 901_000, 1);
+            let result_expr = b.call_prelude("Err", vec![error_call]);
             let result_ty = b.ty(
                 TypeKind::Path(b.path(&["Result"])),
                 Some(STy::Result(
@@ -2359,7 +2361,7 @@ fn test_runner_program() -> CheckedProgram {
     // test fn result_fails() -> Result<(), Error> { Err(Error::new("nope")) }
     let result_id = b.id();
     let error_call = b.call_free("Error::new", vec![b.text("nope")], "Error::new");
-    let err_expr = b.call_variant("Err", vec![error_call], 902_000, 1);
+    let err_expr = b.call_prelude("Err", vec![error_call]);
     let result_body = b.block(Vec::new(), Some(err_expr));
     let result_ret = result_unit_ret(&b);
     b.items.borrow_mut().push(make_fn(
@@ -5298,6 +5300,28 @@ fn main() {
 "#,
     );
     let built = must_compile(&code, "constant-comparisons");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// A one-element tuple pattern keeps its trailing comma (`(a,)`) and a float
+/// written with an exponent only (`1e3`) gets its type suffix.
+#[test]
+fn audit_one_element_tuple_patterns_and_exponent_floats_run() {
+    if skip("audit_one_element_tuple_patterns_and_exponent_floats_run") {
+        return;
+    }
+    let code = generate_source(
+        "one-tuple-pattern",
+        r#"fn main() {
+    let x = 1e3;
+    let t = (5,);
+    match t { (a,) => { if a == 5 && x > 999.5 { io::println("ok"); } } }
+}
+"#,
+    );
+    let built = must_compile(&code, "one-tuple-pattern");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");

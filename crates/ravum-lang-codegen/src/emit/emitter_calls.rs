@@ -12,7 +12,6 @@ impl<'a> Emitter<'a> {
     pub(super) fn call_expr(
         &self,
         expr: &Expr,
-        callee: &Expr,
         args: &[Expr],
         indent: usize,
     ) -> Result<String, CodegenError> {
@@ -30,19 +29,11 @@ impl<'a> Emitter<'a> {
             )),
             CallTarget::BuiltinFn { path } => self.builtin_free_call(expr, path, args, indent),
             CallTarget::VariantCtor { enum_item, variant } => {
-                let name = self.variant_name_opt(*enum_item, *variant);
-                let constructor = match name {
-                    Some(name) => format!("{}::{}", self.enum_path(*enum_item)?, name),
-                    None => match &callee.kind {
-                        ExprKind::Path(path) => self.plain_path_text(path)?,
-                        _ => {
-                            return Err(err(format!(
-                                "unresolved variant constructor for call expression (expression node {})",
-                                expr.id
-                            )));
-                        }
-                    },
-                };
+                let constructor = format!(
+                    "{}::{}",
+                    self.enum_path(*enum_item)?,
+                    self.variant_name(*enum_item, *variant)?
+                );
                 let rendered = self.call_args(args, indent)?;
                 let is_unit = self.facts().enums.get(enum_item).is_some_and(|info| {
                     matches!(
@@ -348,7 +339,7 @@ impl<'a> Emitter<'a> {
         let owner = normalize_owner(owner);
         let rendered = self.call_args(args, indent)?;
 
-        if let Some(special) = builtin_method_special(&owner, method, receiver, &rendered) {
+        if let Some(special) = builtin_method_special(&owner, method, receiver) {
             return Ok(special);
         }
 

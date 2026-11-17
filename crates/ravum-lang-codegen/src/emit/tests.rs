@@ -1294,9 +1294,9 @@ fn test_runner_supports_result_returning_tests() {
     let ok_call = b.call(
         ok_callee,
         vec![unit_value],
-        CallTarget::VariantCtor {
-            enum_item: 950_002,
-            variant: 0,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Ok".to_string(),
         },
     );
     let happy_body = b.block(Vec::new(), Some(ok_call));
@@ -1328,9 +1328,9 @@ fn test_runner_supports_result_returning_tests() {
     let err_call = b.call(
         err_callee,
         vec![error_call],
-        CallTarget::VariantCtor {
-            enum_item: 950_003,
-            variant: 1,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Err".to_string(),
         },
     );
     let sad_body = b.block(Vec::new(), Some(err_call));
@@ -1490,4 +1490,34 @@ fn e2e_tests_demo_runner() {
 #[test]
 fn the_prelude_ends_with_a_newline() {
     assert!(PRELUDE.ends_with('\n'));
+}
+
+// -- E6 coverage: pure helpers of builtins.rs ---------------------------------
+
+#[test]
+fn builtin_owner_names_drop_references_and_type_arguments() {
+    use super::builtins::normalize_owner;
+    assert_eq!(normalize_owner("Vec<i32>"), "Vec");
+    assert_eq!(normalize_owner("&str"), "str");
+    assert_eq!(normalize_owner("& mut Vec<String>"), "Vec");
+    assert_eq!(normalize_owner("  String "), "String");
+}
+
+#[test]
+fn a_method_of_an_unknown_owner_is_never_passed_through() {
+    use super::builtins::builtin_method_is_direct;
+    assert!(builtin_method_is_direct("Vec", "len"));
+    assert!(!builtin_method_is_direct("Deque", "len"));
+    assert!(!builtin_method_is_direct("", "len"));
+}
+
+#[test]
+fn prelude_constructor_paths_are_recognised_by_their_last_segments() {
+    use super::builtins::is_option_or_result_ctor;
+    assert!(is_option_or_result_ctor("Some"));
+    assert!(is_option_or_result_ctor("Option::None"));
+    assert!(is_option_or_result_ctor("std::Result::Err"));
+    assert!(!is_option_or_result_ctor("E::Some"));
+    assert!(!is_option_or_result_ctor(""));
+    assert!(!is_option_or_result_ctor("Option::"));
 }

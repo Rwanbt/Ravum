@@ -22,12 +22,11 @@ impl<'a> Emitter<'a> {
                 }
             }
             PatKind::Path(path) => match self.facts().resolutions.get(&path.id) {
-                Some(Resolution::Variant { enum_item, variant }) => {
-                    match self.variant_name_opt(*enum_item, *variant) {
-                        Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                        None => self.plain_path_text(path),
-                    }
-                }
+                Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                    "{}::{}",
+                    self.enum_path(*enum_item)?,
+                    self.variant_name(*enum_item, *variant)?
+                )),
                 Some(Resolution::Item { item }) => self.item_path(*item),
                 Some(_) => self.plain_path_text(path),
                 None => Err(err(format!(
@@ -104,12 +103,11 @@ impl<'a> Emitter<'a> {
     /// Resolves the `Enum::Variant` prefix shared by the two pattern renderers.
     pub(super) fn variant_pattern_base(&self, path: &Path) -> Result<String, CodegenError> {
         match self.facts().resolutions.get(&path.id) {
-            Some(Resolution::Variant { enum_item, variant }) => {
-                match self.variant_name_opt(*enum_item, *variant) {
-                    Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                    None => self.plain_path_text(path),
-                }
-            }
+            Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                "{}::{}",
+                self.enum_path(*enum_item)?,
+                self.variant_name(*enum_item, *variant)?
+            )),
             Some(Resolution::Item { item }) => self.item_path(*item),
             Some(_) => self.plain_path_text(path),
             None => Err(err(format!(
