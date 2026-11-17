@@ -13,7 +13,8 @@ use ravum_lang_codegen::{generate, GenOptions};
 use ravum_lang_sema::facts::{
     CallTarget, CheckOptions, CheckedProgram, MethodTarget, OwnPlace, Profile, Resolution,
 };
-use ravum_lang_sema::syntax::ast::{Expr, ExprKind, ItemKind, StmtKind};
+use ravum_lang_sema::syntax::ast::{Expr, ExprKind, ItemKind, ParamKind, Receiver, StmtKind};
+use ravum_lang_sema::syntax::span::Span;
 use ravum_lang_sema::types::Type;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -207,7 +208,7 @@ fn an_ownership_place_on_a_non_place_expression_is_refused() {
     program.facts.own.place.insert(
         literal,
         OwnPlace {
-            binding: ravum_lang_sema::syntax::span::Span::dummy(),
+            binding: Span::dummy(),
             steps: Vec::new(),
         },
     );
@@ -257,6 +258,58 @@ fn a_builtin_constant_other_than_none_is_refused() {
         message.contains("unsupported builtin constant `math::PI`"),
         "{message}"
     );
+}
+
+#[test]
+fn an_extern_function_with_a_receiver_is_refused() {
+    let mut program = checked(
+        "extern \"C\" { fn c_abs(x: i32) -> i32; }\nfn main() { }\n",
+        Profile::Core,
+    );
+    for item in &mut program.program.root.items {
+        if let ItemKind::Extern(block) = &mut item.kind {
+            block.fns[0].params[0].kind = ParamKind::Receiver(Receiver::Shared);
+        }
+    }
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("`self` is not allowed in an extern function"),
+        "{message}"
+    );
+}
+
+/// Without a source table, markers and guard messages fall back to a neutral
+/// location instead of indexing a file that does not exist.
+#[test]
+fn a_program_without_source_files_still_generates_and_locates_neutrally() {
+    let mut program = checked("fn main() { let x = 1 + 2; }\n", Profile::Core);
+    program.files.clear();
+    let code = generate(&program, &GenOptions::default()).expect("generation succeeds");
+    assert!(!code.contains("// rv source:"), "{code}");
+    assert!(code.contains("// rv: <unknown>:0"), "{code}");
+
+    // A span without a position produces no marker at all.
+    for item in &mut program.program.root.items {
+        item.span = Span::dummy();
+    }
+    let code = generate(&program, &GenOptions::default()).expect("generation succeeds");
+    assert!(code.contains("fn main"), "{code}");
+
+    let literal = *program
+        .facts
+        .expr_types
+        .keys()
+        .find(|id| !program.facts.own.place.contains_key(id))
+        .expect("the fixture has an expression without a place");
+    program.facts.own.place.insert(
+        literal,
+        OwnPlace {
+            binding: Span::dummy(),
+            steps: Vec::new(),
+        },
+    );
+    let message = refusal(&program, &GenOptions::default());
+    assert!(message.contains("unknown-file"), "{message}");
 }
 
 // ---------------------------------------------------------------------------
