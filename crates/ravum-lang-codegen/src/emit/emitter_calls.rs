@@ -85,7 +85,6 @@ impl<'a> Emitter<'a> {
             FreeBuiltin::Eprintln => {
                 Ok(format!("crate::rv_eprintln({})", self.str_arg(first, indent)?))
             }
-            FreeBuiltin::Eprint => Ok(format!("crate::rv_eprint({})", self.str_arg(first, indent)?)),
             FreeBuiltin::ReadLine => {
                 self.expect_arity(path, args, 0)?;
                 Ok("crate::rv_read_line()".to_string())
