@@ -349,3 +349,67 @@ fn writes_after_a_partial_move_reinitialise_or_keep_the_partial_state() {
     let codes = errors("fn f(s: &[String]) { let x = s[0]; drop(x); }\nfn main() { }");
     assert_eq!(codes, ["E-OWN-MOVE-OUT-OF-BORROW"]);
 }
+
+/// A reference argument stored by a builtin `push`, either a reference-typed
+/// place or a reference rvalue, is an escape.
+#[test]
+fn a_reference_pushed_into_a_vec_escapes() {
+    for source in [
+        "fn f(r: &String) { let mut v: Vec<&String> = Vec::new(); v.push(r); }\nfn main() { }",
+        "fn f(s: &String) { let mut v: Vec<&str> = Vec::new(); v.push(s.as_str()); }\nfn main() { }",
+    ] {
+        assert!(
+            errors(source).contains(&"E-OWN-REF-ESCAPE".to_string()),
+            "{source}: {:?}",
+            errors(source)
+        );
+    }
+}
+
+/// A `for` whose iterator diverges after a `return` keeps a `break` of its dead
+/// body out of the exit state: the function checks.
+#[test]
+fn a_for_over_a_diverging_iterator_with_a_break_checks() {
+    assert_eq!(
+        errors("fn f(v: Vec<i32>) -> i32 { for i in { return 1; v } { break; } 2 }\nfn main() { }"),
+        Vec::<String>::new()
+    );
+}
+
+/// After a field is moved out, writing a disjoint field and then the moved one
+/// is accepted (OWN-5.4).
+#[test]
+fn writes_after_a_partial_move_restore_the_aggregate() {
+    assert_eq!(
+        errors(
+            "struct P { name: String, n: i32 }\n\
+             fn main() { let mut p = P { name: String::from(\"a\"), n: 1 }; let s = p.name; \
+             p.n = 3; p.name = String::from(\"x\"); let t = p; }"
+        ),
+        Vec::<String>::new()
+    );
+}
+
+/// Moving an element out of a borrowed slice moves out of borrowed memory.
+#[test]
+fn moving_out_of_a_slice_element_is_refused() {
+    let codes = errors("fn f(s: &[String]) { let x = s[0]; }\nfn main() { }");
+    assert!(
+        codes.contains(&"E-OWN-MOVE-OUT-OF-BORROW".to_string()),
+        "{codes:?}"
+    );
+}
+
+/// Writing below a moved field (`p.a.b = ..` after `let x = p.a;`) writes into
+/// moved memory: E-OWN-USE-AFTER-MOVE, as rustc E0382.
+#[test]
+fn writing_below_a_moved_field_is_a_use_after_move() {
+    assert_eq!(
+        errors(
+            "struct Q { b: String }\nstruct P { a: Q }\n\
+             fn main() { let mut p = P { a: Q { b: String::from(\"a\") } }; let x = p.a; \
+             p.a.b = String::from(\"y\"); }"
+        ),
+        ["E-OWN-USE-AFTER-MOVE"]
+    );
+}

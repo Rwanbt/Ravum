@@ -5146,3 +5146,31 @@ fn main() { pick(false); }
         "{stderr}"
     );
 }
+
+/// Re-initialising an array element of a struct whose other field was moved
+/// out: the moved field does not block the rebuild of the array.
+#[test]
+fn audit_reinit_of_an_array_field_next_to_a_moved_field_runs() {
+    if skip("audit_reinit_of_an_array_field_next_to_a_moved_field_runs") {
+        return;
+    }
+    let code = generate_source(
+        "reinit-array-field-next-to-moved-field",
+        r#"struct P { arr: [String; 2], n: String }
+fn main() {
+    let mut p = P { arr: [String::from("a"), String::from("b")], n: String::from("n") };
+    let x = p.n;
+    let y = p.arr[0];
+    p.arr[0] = String::from("c");
+    io::println(&x);
+    io::println(&y);
+    io::println(&p.arr[0]);
+    io::println(&p.arr[1]);
+}
+"#,
+    );
+    let built = must_compile(&code, "reinit-array-field-next-to-moved-field");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "n\na\nc\nb\n");
+}

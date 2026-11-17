@@ -286,13 +286,11 @@ impl<'a> OwnChecker<'a> {
                         self.eval_value(arg);
                     }
                 }
+                // A known parameter that is not a reference: the callers that
+                // pass a parameter type always forbid reference temporaries.
                 Some(_) => {
-                    if allow_ref_temporaries {
-                        self.eval_value(arg);
-                    } else {
-                        self.report_ref_escape(arg.span, "stockée");
-                        self.eval_value(arg);
-                    }
+                    self.report_ref_escape(arg.span, "stockée");
+                    self.eval_value(arg);
                 }
                 None => {
                     if !allow_ref_temporaries {
@@ -563,11 +561,11 @@ impl<'a> OwnChecker<'a> {
                         record = Some(rec.clone());
                         break;
                     }
+                    // `Exact` leaves the loop at once, so it is never the
+                    // relation seen here.
                     PartialRel::Extension => {
-                        if relation != PartialRel::Exact {
-                            relation = PartialRel::Extension;
-                            record = Some(rec.clone());
-                        }
+                        relation = PartialRel::Extension;
+                        record = Some(rec.clone());
                     }
                     PartialRel::Ancestor => {
                         if relation == PartialRel::Disjoint {
