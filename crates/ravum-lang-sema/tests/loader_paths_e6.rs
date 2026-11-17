@@ -392,3 +392,23 @@ fn empty_inline_table_entries_are_ignored() {
         "path `../u\\tl` does not exist",
     );
 }
+
+/// The same I/O refusals without permissions (they run as root too): a regular
+/// file used as a directory makes `lstat` fail with `ENOTDIR`, which is not
+/// "not found".
+#[cfg(unix)]
+#[test]
+fn a_file_used_as_a_directory_in_a_dependency_is_an_io_error() {
+    let temp = TempDir::new("notdir-path");
+    temp.file("afile", "x\n");
+    let app = app_with_dependency(&temp, "util", "../afile/util");
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-IO", "dependency `util`: cannot inspect");
+
+    let temp = TempDir::new("notdir-src");
+    let app = app_with_dependency(&temp, "util", "../util");
+    temp.file("util/ravum.toml", &manifest("util", ""));
+    temp.file("util/src", "not a directory\n");
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-IO", "cannot inspect dependency `util`");
+}
