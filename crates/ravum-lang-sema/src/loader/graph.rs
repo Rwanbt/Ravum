@@ -315,25 +315,22 @@ pub(super) fn resolve_dependency_dir(
         ));
         return None;
     };
+    // The absolute-path check above refuses every `Prefix` and `RootDir`
+    // component, so only `.`, `..` and names remain. A `..` that cannot pop
+    // (above the filesystem root) is an escape, like one that leaves the
+    // package parent directory.
     let mut normalized = pkg_dir.to_path_buf();
     let mut escaped = false;
     for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::Normal(name) => normalized.push(name),
-            Component::ParentDir => match normalized.parent() {
-                Some(parent) => normalized = parent.to_path_buf(),
-                None => {
-                    escaped = true;
-                    break;
-                }
-            },
-            Component::Prefix(_) | Component::RootDir => {
-                escaped = true;
-                break;
+        let stayed = match component {
+            Component::Normal(name) => {
+                normalized.push(name);
+                true
             }
-        }
-        if !normalized.starts_with(allowed_parent) {
+            Component::ParentDir => normalized.pop(),
+            _ => true,
+        };
+        if !stayed || !normalized.starts_with(allowed_parent) {
             escaped = true;
             break;
         }
@@ -351,24 +348,14 @@ pub(super) fn resolve_dependency_dir(
         return None;
     }
 
+    // Same components, now checked against the filesystem. The lexical pass
+    // above guarantees `..` never climbs above the package parent directory.
     let mut current = pkg_dir.to_path_buf();
     for component in path.components() {
         match component {
-            Component::CurDir => {}
-            Component::ParentDir => match current.parent() {
-                Some(parent) => current = parent.to_path_buf(),
-                None => {
-                    diags.push(Diagnostic::error(
-                        "E-MOD-PATH-ESCAPE",
-                        dep.span,
-                        format!(
-                            "dependency `{}` path `{raw}` escapes above the filesystem root",
-                            dep.name
-                        ),
-                    ));
-                    return None;
-                }
-            },
+            Component::ParentDir => {
+                current.pop();
+            }
             Component::Normal(name) => {
                 let component = name.to_string_lossy();
                 if is_reserved_windows_component(&component) {
@@ -425,7 +412,7 @@ pub(super) fn resolve_dependency_dir(
                     }
                 }
             }
-            Component::Prefix(_) | Component::RootDir => unreachable!("checked above"),
+            _ => {}
         }
     }
 

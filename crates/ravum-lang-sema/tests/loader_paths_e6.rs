@@ -259,3 +259,60 @@ fn a_package_opened_through_a_linked_directory_resolves_real_siblings() {
     assert_accepted(&loaded);
     assert_eq!(loaded.dependencies.len(), 1);
 }
+
+/// Removes every permission from a directory for the life of the guard.
+#[cfg(unix)]
+struct Locked(PathBuf);
+
+#[cfg(unix)]
+impl Locked {
+    /// `None` when permissions do not bind the current user (root): the
+    /// filesystem then answers every lookup and there is nothing to observe.
+    fn new(dir: PathBuf) -> Option<Self> {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o000)).expect("chmod works");
+        let locked = Self(dir);
+        if fs::read_dir(&locked.0).is_ok() {
+            eprintln!("SKIP: permissions do not apply to this user");
+            return None;
+        }
+        Some(locked)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Locked {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+    }
+}
+
+/// A dependency path whose directory cannot be inspected is an I/O error, not
+/// a missing dependency.
+#[cfg(unix)]
+#[test]
+fn an_uninspectable_dependency_path_is_an_io_error() {
+    let temp = TempDir::new("locked-path");
+    let app = app_with_dependency(&temp, "util", "../locked/util");
+    library_package(&temp, "locked/util", "util");
+    let Some(_locked) = Locked::new(temp.path().join("locked")) else {
+        return;
+    };
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-IO", "dependency `util`: cannot inspect");
+}
+
+/// A dependency whose crate root cannot be inspected is an I/O error.
+#[cfg(unix)]
+#[test]
+fn an_uninspectable_dependency_crate_root_is_an_io_error() {
+    let temp = TempDir::new("locked-src");
+    let app = app_with_dependency(&temp, "util", "../util");
+    library_package(&temp, "util", "util");
+    let Some(_locked) = Locked::new(temp.path().join("util/src")) else {
+        return;
+    };
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-IO", "cannot inspect dependency `util`");
+}
