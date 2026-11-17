@@ -4548,8 +4548,9 @@ fn audit_float_min_max_temporary_avoids_user_constant_names() {
     let temporary = code
         .split_once("let __rv_math_args_")
         .and_then(|(_, rest)| rest.split_once(" = "))
-        .map(|(id, _)| format!("__rv_math_args_{id}"))
-        .expect("the float lowering binds both operands to one temporary");
+        .and_then(|(id, _)| id.parse::<u64>().ok())
+        .map(|id| format!("__rv_math_args_{id}"))
+        .expect("without a collision the temporary name ends in the numeric node ID");
     // Append the declaration so the existing expression keeps its node ID.
     let source = format!("{source}\nconst {temporary}: i32 = -1;");
     let code = generate_source("math-temporary-collision", &source);

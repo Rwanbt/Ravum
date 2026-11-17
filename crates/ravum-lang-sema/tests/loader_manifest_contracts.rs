@@ -235,6 +235,11 @@ fn package_required_keys_and_value_kinds_are_enforced() {
         "E-MOD-MANIFEST",
         "unsupported TOML value `5`",
     );
+    assert_manifest_refusal(
+        "[package]\nname = { text = \"pkg\" }\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+        "E-MOD-MANIFEST",
+        "`package.name` must be a string",
+    );
     // The manifest is strict about unknown keys.
     assert_manifest_refusal(
         "[package]\nname = \"pkg\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\nlicence = \"MIT\"\n",

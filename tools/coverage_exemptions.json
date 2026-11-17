@@ -104,16 +104,16 @@
       },
       {
         "id": "E-LINE-LOADER-TOML-VALUE-SHAPE",
-        "file": "crates/ravum-lang-sema/src/loader.rs",
-        "lines": [[1046, 1056], [1155, 1164]],
-        "summary": "`package.<key> must be a string` and `dependency path must be a string` branches of `parse_manifest`.",
-        "why_unreachable": "The manifest TOML reader only produces `TomlValue::Str` and `TomlValue::Table`; a bare integer/bool is refused earlier with `E-MOD-MANIFEST: unsupported TOML value`, and an inline-table entry must be a quoted string. `parse_manifest` therefore never sees a non-string scalar.",
-        "proof": "Measured: `name = 5` → `E-MOD-MANIFEST: unsupported TOML value `5``; `dep = { path = 5 }` → `E-MOD-MANIFEST: inline table entry `path = 5` must be `key = \"value\"``.",
+        "file": "crates/ravum-lang-sema/src/loader/toml.rs",
+        "lines": [[499, 504]],
+        "summary": "The dependency `path` is present but its value is not a string.",
+        "why_unreachable": "parse_toml_value builds inline tables exclusively from entries with TomlValue::Str values. A table is allowed as a top-level manifest value, including under package, so package fields rejected as non-strings are a separate, reachable path.",
+        "proof": "The inline-table reader rejects an unquoted entry value before constructing the table. For every successfully parsed entry it inserts TomlValue::Str.",
         "evidence": [
-          "cargo test -p ravum-lang-sema --test loader_manifest_contracts package_required_keys_and_value_kinds_are_enforced",
+          "crates/ravum-lang-sema/src/loader/toml.rs:181-246 (inline table reader)",
           "cargo test -p ravum-lang-sema --test loader_manifest_contracts dependency_entries_are_strict"
         ],
-        "review_condition": "Un lecteur TOML qui produirait d'autres types de valeurs (entiers, booléens, tableaux).",
+        "review_condition": "Un lecteur TOML qui accepterait une valeur non textuelle dans une table en ligne.",
         "approval": "PENDING_HUMAN_APPROVAL"
       },
       {

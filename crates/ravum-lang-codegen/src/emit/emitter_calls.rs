@@ -193,7 +193,12 @@ impl<'a> Emitter<'a> {
                     // Item names must be avoided because Rust can interpret a
                     // bare binding as a constant pattern.
                     let mut operands = format!("__rv_math_args_{}", expr.id);
-                    while self.index.items.values().any(|item| item.rust_name == operands) {
+                    // Each candidate is distinct, so at most one candidate
+                    // per indexed item can be occupied.
+                    for _ in 0..self.index.items.len() {
+                        if !self.index.items.values().any(|item| item.rust_name == operands) {
+                            break;
+                        }
                         operands.push('_');
                     }
                     return Ok(format!(
