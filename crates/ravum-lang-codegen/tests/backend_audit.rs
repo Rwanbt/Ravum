@@ -4506,3 +4506,34 @@ fn audit_d13_str_as_str_identity_compiles_and_runs() {
     assert_eq!(stdout, "x\n", "stderr: {stderr}");
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+#[test]
+fn audit_float_min_max_evaluate_each_operand_once_in_order() {
+    if skip("audit_float_min_max_evaluate_each_operand_once_in_order") {
+        return;
+    }
+    let code = generate_source(
+        "math-min-max-operand-order",
+        r#"fn left(value: f64) -> f64 {
+    io::println("left");
+    return value;
+}
+
+fn right(value: f64) -> f64 {
+    io::println("right");
+    return value;
+}
+
+fn main() {
+    assert_eq(math::max(left(0.0), right(2.0)), 2.0);
+    assert_eq(math::min(left(0.0), right(-2.0)), -2.0);
+    assert_eq(math::max(left(-2.0), right(0.0)), 0.0);
+    assert_eq(math::min(left(2.0), right(0.0)), 0.0);
+}
+"#,
+    );
+    let built = must_compile(&code, "math-min-max-operand-order");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+    assert_eq!(stdout, "left\nright\n".repeat(4), "stderr: {stderr}");
+}

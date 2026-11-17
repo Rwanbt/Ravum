@@ -461,6 +461,7 @@ use std::io;
 const FLAG: bool = true;
 const LETTER: char = 'z';
 const NEG: i32 = -4;
+const ZERO: i32 = 0;
 const COUNT: usize = 7;
 const LABEL: &str = "ravum";
 
@@ -478,6 +479,7 @@ fn main() {
             "const FLAG: bool = true;",
             "const LETTER: char = 'z';",
             "const NEG: i32 = -4i32;",
+            "const ZERO: i32 = 0i32;",
             "const COUNT: usize = 7usize;",
             "const LABEL: &'static str = \"ravum\";",
         ],
@@ -558,6 +560,9 @@ fn main() {
     let b = math::sqrt(2.0);
     let c = math::floor(1.5);
     let d = math::pow(2.0, 3.0);
+    let e = math::round(1.5);
+    let f = math::sin(0.0);
+    let g = math::ln(1.0);
 }
 "#;
     let code = emitted(source);
@@ -568,6 +573,9 @@ fn main() {
             "(2.0f64).sqrt()",
             "(1.5f64).floor()",
             "(2.0f64).powf(3.0f64)",
+            "(1.5f64).round()",
+            "(0.0f64).sin()",
+            "(1.0f64).ln()",
         ],
         source,
     );

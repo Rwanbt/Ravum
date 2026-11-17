@@ -189,8 +189,15 @@ impl<'a> Emitter<'a> {
                 );
                 if is_float && (method == "max" || method == "min") {
                     let tie = if method == "max" { "0.0" } else { "-0.0" };
+                    // Evaluate both operands before binding either temporary.
+                    // Item names must be avoided because Rust can interpret a
+                    // bare binding as a constant pattern.
+                    let mut operands = format!("__rv_math_args_{}", expr.id);
+                    while self.index.items.values().any(|item| item.rust_name == operands) {
+                        operands.push('_');
+                    }
                     return Ok(format!(
-                        "(if ({a}) == 0.0 && ({b}) == 0.0 {{ {tie} }} else {{ ({a}).{method}({b}) }})"
+                        "({{ let {operands} = ({a}, {b}); if ({operands}.0) == 0.0 && ({operands}.1) == 0.0 {{ {tie} }} else {{ ({operands}.0).{method}({operands}.1) }} }})"
                     ));
                 }
                 Ok(format!("({a}).{method}({b})"))
