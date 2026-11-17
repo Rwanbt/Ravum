@@ -4537,3 +4537,25 @@ fn main() {
     assert_eq!(status, 0, "stderr: {stderr}");
     assert_eq!(stdout, "left\nright\n".repeat(4), "stderr: {stderr}");
 }
+
+#[test]
+fn audit_float_min_max_temporary_avoids_user_constant_names() {
+    if skip("audit_float_min_max_temporary_avoids_user_constant_names") {
+        return;
+    }
+    let source = "fn main() { assert_eq(math::max(-2.0, 0.0), 0.0); }";
+    let code = generate_source("math-temporary-name", source);
+    let temporary = code
+        .split_once("let __rv_math_args_")
+        .and_then(|(_, rest)| rest.split_once(" = "))
+        .map(|(id, _)| format!("__rv_math_args_{id}"))
+        .expect("the float lowering binds both operands to one temporary");
+    // Append the declaration so the existing expression keeps its node ID.
+    let source = format!("{source}\nconst {temporary}: i32 = -1;");
+    let code = generate_source("math-temporary-collision", &source);
+    assert!(code.contains(&format!("const {temporary}: i32")));
+    assert!(code.contains(&format!("let {temporary}_ = ")));
+    let built = must_compile(&code, "math-temporary-collision");
+    let (_, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
