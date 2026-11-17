@@ -4560,3 +4560,65 @@ fn audit_float_min_max_temporary_avoids_user_constant_names() {
     let (_, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "stderr: {stderr}");
 }
+
+#[test]
+fn audit_float_guard_matches_record_and_nested_tuple_values() {
+    if skip("audit_float_guard_matches_record_and_nested_tuple_values") {
+        return;
+    }
+    let code = generate_source(
+        "float-guard-record-tuple",
+        r#"enum Event {
+    Reading { coordinates: (f32, f64), count: i32 },
+    Absent {},
+}
+
+fn classify(event: Event) -> i32 {
+    match event {
+        Event::Reading { coordinates: (1.25f32, -2.5f64), count: count } => count,
+        Event::Absent {} => 3,
+        _ => 0,
+    }
+}
+
+fn main() {
+    assert_eq(classify(Event::Reading { coordinates: (1.25f32, -2.5f64), count: 7 }), 7);
+    assert_eq(classify(Event::Reading { coordinates: (1.25f32, 2.5f64), count: 7 }), 0);
+    assert_eq(classify(Event::Reading { coordinates: (2.25f32, -2.5f64), count: 7 }), 0);
+    assert_eq(classify(Event::Absent {}), 3);
+}
+"#,
+    );
+    let built = must_compile(&code, "float-guard-record-tuple");
+    let (_, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_float_guard_temporaries_do_not_capture_user_bindings() {
+    if skip("audit_float_guard_temporaries_do_not_capture_user_bindings") {
+        return;
+    }
+    let code = generate_source(
+        "float-guard-hygiene",
+        r#"const __ravum_flt_0_: i32 = 5;
+
+fn classify(pair: (f64, i32), __ravum_match_scrutinee: i32, __ravum_flt_0: i32) -> i32 {
+    match pair {
+        (1.5, __ravum_flt_0) => __ravum_flt_0 + __ravum_match_scrutinee,
+        (2.5, _) => __ravum_flt_0 + __ravum_flt_0_,
+        _ => __ravum_match_scrutinee,
+    }
+}
+
+fn main() {
+    assert_eq(classify((1.5, 7), 3, 11), 10);
+    assert_eq(classify((2.5, 7), 3, 11), 16);
+    assert_eq(classify((0.5, 7), 3, 11), 3);
+}
+"#,
+    );
+    let built = must_compile(&code, "float-guard-hygiene");
+    let (_, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+}

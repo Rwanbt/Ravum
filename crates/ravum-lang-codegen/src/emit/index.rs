@@ -72,6 +72,8 @@ pub(super) struct Index {
     /// `(display name, item id)` of the tests, in declaration order.
     pub(super) tests: Vec<(String, NodeId)>,
     pub(super) user_main: Option<NodeId>,
+    /// User names that may collide with generated float-match bindings.
+    pub(super) float_match_names: BTreeSet<String>,
     /// Ravum module paths (`""` for the root) used to rewrite `item_paths`.
     pub(super) module_paths: BTreeSet<String>,
 }
@@ -171,6 +173,17 @@ impl Index {
                 }
             }
         }
+
+        index.float_match_names = checked
+            .facts
+            .own
+            .bindings
+            .keys()
+            .map(|(_, name)| name)
+            .chain(index.items.values().map(|item| &item.rust_name))
+            .filter(|name| name.starts_with("__ravum_"))
+            .cloned()
+            .collect();
 
         index
     }
