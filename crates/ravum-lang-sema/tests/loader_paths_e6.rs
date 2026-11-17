@@ -425,3 +425,17 @@ fn a_device_path_is_neither_a_package_nor_a_source_file() {
         "is neither a file nor a directory",
     );
 }
+
+/// A dependency crate root above the file size limit is refused, and its
+/// module is not merged into the program.
+#[test]
+fn an_oversized_dependency_crate_root_is_refused() {
+    let temp = TempDir::new("lib-size");
+    let app = app_with_dependency(&temp, "util", "../util");
+    temp.file("util/ravum.toml", &manifest("util", ""));
+    let mut text = String::from("pub fn helper() -> i32 { return 1; }\n");
+    text.push_str(&" ".repeat(MAX_FILE_SIZE as usize + 1));
+    temp.file("util/src/lib.rv", &text);
+    let loaded = load_package(&app);
+    assert_fail_closed(&loaded, "E-LIMIT-FILE-SIZE", "lib.rv");
+}

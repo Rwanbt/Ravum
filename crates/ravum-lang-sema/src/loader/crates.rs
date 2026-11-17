@@ -302,21 +302,21 @@ pub(super) fn resolve_module_file(
         );
         return None;
     }
-    for component in inline_prefix.components() {
-        if let Component::Normal(part) = component {
-            let part = part.to_string_lossy();
-            if is_reserved_windows_component(&part) {
-                err(
-                    ctx.diags,
-                    "E-MOD-RESERVED-NAME",
-                    decl.name.span,
-                    format!(
-                        "inline module path component `{part}` is a reserved Windows path \
-                         component"
-                    ),
-                );
-                return None;
-            }
+    // The prefix is built by `expand_module` from inline module names only, so
+    // every component is a plain name.
+    for part in inline_prefix.iter() {
+        let part = part.to_string_lossy();
+        if is_reserved_windows_component(&part) {
+            err(
+                ctx.diags,
+                "E-MOD-RESERVED-NAME",
+                decl.name.span,
+                format!(
+                    "inline module path component `{part}` is a reserved Windows path \
+                     component"
+                ),
+            );
+            return None;
         }
     }
     let dir = file_dir.join(inline_prefix);
