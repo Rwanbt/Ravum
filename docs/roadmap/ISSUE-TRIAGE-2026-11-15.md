@@ -174,6 +174,47 @@ donne `T5 = PASS`, ce qui paraît trop généreux au regard de ces deux points. 
 T5 relève d'une décision de gate, donc humaine. Aucune clôture de T5 avant résolution
 de ABI-2.5/3.3 et de la parité debug/release exhaustive.
 
+## 3 quinquies. Vérification par issue : T7 (#95) — **maintenue ouverte**
+
+Rejeu du 2026-11-17 sur `dev` = `bbb2ddf`, Linux x86_64, CLI construite par
+`cargo build -p ravum-lang-cli --bin ravum-lang` (rustc 1.95.0).
+
+| Exigence de l'issue | Preuve mesurée | Verdict |
+|---|---|---|
+| commandes `init/check/build/run/test/fmt/lint/doc/cache/doctor` | chacune exécutée sur un paquet créé par `ravum-lang init app` dans un répertoire vide, code de sortie 0 ; `run` imprime `hello, ravum` ; `doctor` conclut `verdict: ready` | couvert |
+| manifeste, lockfile, paquets locaux | `check` crée `ravum.lock` puis `check --locked` répond `lockfile: current` ; sur une copie de `examples/package-demo` (dépendance `util = { path = "../util" }`), `check --locked`, `build`, `run` (sorties `42` et `40`), `test` et `fmt --check` sortent à 0 | couvert |
+| LSP livré | `cargo test -p ravum-lang-cli` : `lsp_client` 12 réussites, 0 échec, **3 ignorés** (mesures de latence marquées `#[ignore]`, donc non exécutées) ; job CI `vscode-e2e` | couvert, hors mesures de latence |
+| sorties stables | deux `build` du même paquet, cache `.ravum/` supprimé entre les deux, donnent la même ligne `identity: sha256:6e199fc3…` | couvert sur une machine |
+| parcours `init → fmt` **sur machine propre** | le job `Installer contract` de `linux-qual.yml` installe dans un préfixe temporaire et n'exécute que `--version` sur le binaire installé ; le parcours ci-dessus part d'un binaire du workspace | **non couvert** |
+
+Suite complète `cargo test -p ravum-lang-cli` sur ce même arbre : 133 réussites,
+0 échec, 3 ignorés, en 8 binaires de tests.
+
+Conclusion : l'issue reste **ouverte**. Le critère de PASS de l'issue demande le
+parcours sur une machine propre, et aucune preuve ne fait tourner ce parcours depuis
+un binaire installé. Proposition (non appliquée ici) : étendre
+`scripts/install-contract.sh` pour dérouler `init`, `check`, `build`, `run`, `test`
+et `fmt --check` avec le binaire du préfixe. Le `Statut : PARTIAL` du corps de
+l'issue est juste sur ce point ; le reclassement du gate `T7 = PASS` de la matrice
+relève du responsable.
+
+## 3 sexies. Issues de gate `PARTIAL` : lecture point par point
+
+Aucune de ces issues n'est fermée. La colonne « manque » dit ce qui empêche la
+clôture au sens de P-14.
+
+| Issue | Exigences lues dans le corps | Constat sur `bbb2ddf` | Manque |
+|---|---|---|---|
+| #89 (T1) | comparaison A/B/C, `docs/decision/M5-technical-report.md`, `scripts/m5-bench.ps1`, `evidence/m5-results.json`, décision provisoire | les trois fichiers existent ; le rapport se déclare `DRAFT / EXPERIMENTAL` et écrit que C est `NOT_IMPLEMENTED` | voie C sans mesure, donc pas de comparaison A/B/C ; choix de bootstrap non ratifié (D2) |
+| #94 (T6) | stdlib Core, erreurs/panic/exit spécifiés, programmes fichier/texte/heap/collection | `bash scripts/lang-smoke.sh --skip-build` : 31 PASS, 0 FAIL, 0 NOT_RUN (dont `stats` et `ffi-abs`) ; `file-tool` et `file-store` ne sont pas dans ce smoke : `check` et `build` sortent à 0, leur exécution n'a pas été rejouée ici | le corps dit « FFI et unsafe UNSUPPORTED », la matrice dit FFI scalaire livrée (C-FFI-1 à 10) : corps périmé à corriger par le responsable ; threads, réseau, async `UNSUPPORTED` |
+| #96 (T8) | hot reload `.rv` démontré **ou** repli honnête documenté, 0 perte en concurrence, API versionnée | `watch_continuity` : 3 réussites ; `watch` reconstruit et redémarre, sans préservation d'état | pas de preuve « 0 perte en concurrence » pour du code `.rv` ; pas d'ABI de patch ; bloc DSP reporté à la 1.1 (A2) |
+| #97 (T9) | hello, calculator, file-tool, paquet multi-module, data, DSP offline ; HTTP/SQLite et WASM seulement si profils supportés | les six exemples nommés existent ; cinq passent le smoke Linux (`check`, `build`, `run`), `file-tool` n'y figure pas (`check` et `build` à 0, `run` non rejoué) ; `git ls-files examples` : 11 fichiers `.rv`, 575 lignes, 0 fichier `.rs` suivi | E2E « sur cibles annoncées » : le smoke WASI et Windows n'ont pas été rejoués dans cette vérification ; verdict matrice `PARTIAL` (HTTP + SQLite, DSP hôte, D6/D7) |
+| #98 (T10) | conformance, fuzz, tests adversariaux, Miri/sanitizers, **revue indépendante** | conformance et mutation mesurées en CI (voir matrice T10) | revue indépendante absente (D4) ; sanitizers non exécutés ; couverture produit sous 100 % (E6 en cours, PR #148) |
+| #99 (T11) | benchmarks gelés, budgets, SBOM/provenance, archives et installateurs Windows/Linux, checksums, politique de compatibilité | job CI `Release evidence (repro, SBOM, provenance, installer)` vert sur la PR #149 | pas d'artefact installable publié et lié à un SHA (aucune release, P-10) ; aucune clé de signature (D9) ; licence = #34 |
+
+#90 (T2) n'est pas relue ici : les inverses S6 sont en cours dans la PR #149 et le
+verdict reste `PARTIAL` (D10). #92 (T4) et #100 (T12) ne sont pas touchées.
+
 ## 4. Ce que ce tri ne fait pas
 
 - Il ne ferme aucune issue : la clôture est un acte séparé, par issue, avec la preuve citée.
@@ -183,6 +224,8 @@ de ABI-2.5/3.3 et de la parité debug/release exhaustive.
 
 ## 5. Prochaine action
 
-Pour chaque issue de gate `PASS` (T0, T3, T5, T7), lire l'issue, vérifier que chaque
-livrable listé est couvert par une preuve mesurée de la matrice, puis fermer avec un
-commentaire citant la commande, le SHA et le run. Les autres restent ouvertes.
+Les quatre issues de gate `PASS` ont été lues : #91 (T3) est fermée, #88 (T0),
+#93 (T5) et #95 (T7) restent ouvertes pour les motifs des sections 3 bis à
+3 quinquies. Restent à faire : relire #90 (T2) une fois les inverses S6 consignés,
+et soumettre au responsable les trois écarts entre la matrice et les issues
+(T0, T5, T7 notés `PASS` alors qu'un critère de l'issue n'est pas couvert).
