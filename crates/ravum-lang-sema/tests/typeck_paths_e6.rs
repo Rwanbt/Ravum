@@ -966,3 +966,68 @@ fn ok_without_its_argument_is_an_arity_error() {
         ],
     );
 }
+
+#[test]
+fn a_generic_over_a_slice_is_instantiated() {
+    assert_errors(
+        "fn first<T>(s: &[T]) -> usize { s.len() }\n\
+         fn main() { let v: Vec<i32> = Vec::new(); let n = first(v.as_slice()); drop(n); }",
+        &[],
+    );
+}
+
+#[test]
+fn a_generic_result_parameter_binds_through_an_inferred_argument() {
+    assert_errors(
+        "fn f<T>(x: Result<T, i32>) { }\n\
+         fn main() { let r = Ok(1); f(r); }",
+        &[],
+    );
+}
+
+#[test]
+fn an_inference_variable_bound_through_moves_is_resolved_by_a_later_use() {
+    assert_errors(
+        "fn main() { let a = Vec::new(); let b = a; let mut c = b; c.push(1); }",
+        &[],
+    );
+}
+
+/// Rows mixing constructors, bindings and wildcards in the columns of a tuple
+/// are split per constructor; a binding row covers every constructor.
+#[test]
+fn exhaustiveness_with_bindings_and_wildcards_in_tuple_columns() {
+    assert_errors(
+        "enum E { A, B(bool), C { f: bool } }\n\
+         fn f(o: Option<i32>, b: bool, r: Result<i32, bool>, e: E) {\n\
+             match (o, b) { (Some(_), true) => { } (x, false) => { drop(x); } (None, true) => { } }\n\
+             match (r, b) { (Ok(n), _) => { drop(n); } (Err(true), x) => { drop(x); } (Err(false), _) => { } }\n\
+             match (e, b) { (E::A, _) => { } (E::B(true), _) => { } (E::B(x), y) => { drop(x); drop(y); } (E::C { f: true }, _) => { } (E::C { f: g }, _) => { drop(g); } }\n\
+             match (b, b) { (true, true) => { } (true, false) => { } (false, x) => { drop(x); } }\n\
+         }\n\
+         fn main() { }",
+        &[],
+    );
+}
+
+#[test]
+fn non_exhaustive_mixed_rows_are_refused() {
+    assert_errors(
+        "enum E { A, B(bool) }\n\
+         fn f(o: Option<bool>, e: E, b: bool) {\n\
+             match (o, b) { (Some(true), x) => { drop(x); } (None, _) => { } }\n\
+             match (e, b) { (E::A, true) => { } (E::B(x), _) => { drop(x); } }\n\
+         }\n\
+         fn main() { }",
+        &[
+            (
+                "E-TYP-NONEXHAUSTIVE",
+                "non-exhaustive match: the arms do not cover every value of `(Option<bool>, bool)`",
+            ),
+            (
+                "E-TYP-NONEXHAUSTIVE",
+                "non-exhaustive match: the arms do not cover every value of `(E, bool)`",
+            ),
+        ],
+    );
+}

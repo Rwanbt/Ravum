@@ -4829,6 +4829,48 @@ fn main() {
     assert_eq!(stdout, "a\nok\n");
 }
 
+/// G-6.42: block arms followed by tuple patterns and a negative literal arm,
+/// without commas, run as written (the block is not called on the next arm).
+#[test]
+fn audit_block_arms_without_commas_before_tuple_and_negative_arms_run() {
+    if skip("audit_block_arms_without_commas_before_tuple_and_negative_arms_run") {
+        return;
+    }
+    let code = generate_source(
+        "block-arms-without-commas",
+        r#"fn classify(p: (bool, bool)) -> i32 {
+    match p {
+        (true, true) => { return 3; }
+        (true, false) => { return 2; }
+        (false, x) => { if x { return 1; } return 0; }
+    }
+}
+
+fn sign(n: i32) -> i32 {
+    match n {
+        0 => if true { 10 } else { 11 }
+        -1 => { 20 }
+        _ => { 30 }
+    }
+}
+
+fn main() {
+    assert_eq(classify((true, true)), 3);
+    assert_eq(classify((true, false)), 2);
+    assert_eq(classify((false, true)), 1);
+    assert_eq(sign(0), 10);
+    assert_eq(sign(-1), 20);
+    assert_eq(sign(5), 30);
+    io::println("ok");
+}
+"#,
+    );
+    let built = must_compile(&code, "block-arms-without-commas");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
 /// Item shapes no other in-process test generated: an empty struct, an extern
 /// function without a return value, test functions inside and outside a
 /// module. The program runs, then its test runner runs both tests.

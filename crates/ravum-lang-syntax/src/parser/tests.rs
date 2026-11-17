@@ -1448,3 +1448,21 @@ fn a_turbofish_is_refused_on_every_segment_of_an_expression_path() {
     // Type position keeps both spellings.
     parse_ok("fn f(v: Vec<i32>, w: Vec::<i32>) { }");
 }
+
+/// G-6.21/G-6.42 (MUST): a block-bodied arm needs no comma, even when the next
+/// arm starts with `(` or `-`; the block is not called or subtracted from. An expression arm still needs its comma.
+#[test]
+fn a_block_arm_ends_before_a_parenthesised_next_arm() {
+    for src in [
+        "fn f(p: (bool, bool)) { match p { (true, _) => { } (false, x) => { } } }",
+        "fn f(n: i32) { match n { 1 => if true { } else { } -1 => { } _ => { } } }",
+        "fn f(n: i32) { match n { 1 => match n { _ => { } } (2) => { } _ => loop { } } }",
+    ] {
+        parse_ok(src);
+    }
+    let codes: Vec<String> = diags_of("fn f(n: i32) { let x = match n { 1 => 2 3 => 4 }; }")
+        .into_iter()
+        .map(|(code, _, _)| code)
+        .collect();
+    assert!(codes.contains(&"E-PARSE-EXPECTED".to_string()), "{codes:?}");
+}

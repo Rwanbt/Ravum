@@ -208,15 +208,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         mapping: &mut BTreeMap<usize, Type>,
     ) -> Type {
         match ty {
-            Type::Param { .. } if infer_var_index(ty).is_none() => {
-                let Type::Param { index, .. } = ty else {
-                    unreachable!()
-                };
-                mapping
-                    .entry(*index)
-                    .or_insert_with(|| self.fresh_var(span))
-                    .clone()
-            }
+            Type::Param { index, .. } if infer_var_index(ty).is_none() => mapping
+                .entry(*index)
+                .or_insert_with(|| self.fresh_var(span))
+                .clone(),
             Type::Ref { mutable, inner } => Type::Ref {
                 mutable: *mutable,
                 inner: Box::new(self.instantiate_with(inner, span, mapping)),
