@@ -938,63 +938,32 @@ pub(crate) fn resolve_type_path(
         },
         PathRoot::Plain => {
             let first = &segments[0].name.name;
-            match first.as_str() {
-                "crate" => {
-                    index = 1;
-                    Cursor::Module(world.root)
+            if let Some(sym) = world.lookup(module, Ns::Module, first) {
+                world.mark_used(module, sym);
+                index = 1;
+                match sym.sym {
+                    Sym::Module(m) => Cursor::Module(m),
+                    Sym::BuiltinModule(p) => Cursor::Builtin(p),
+                    _ => return Type::Error,
                 }
-                "self" => {
-                    index = 1;
-                    Cursor::Module(module)
-                }
-                "super" => {
-                    let mut levels = 1usize;
-                    while segments.get(levels).map(|s| s.name.name.as_str()) == Some("super") {
-                        levels += 1;
-                    }
-                    index = levels;
-                    match world.ancestor(module, levels) {
-                        Some(parent) => Cursor::Module(parent),
-                        None => {
-                            diags.error(
-                                "E-RES-UNKNOWN",
-                                path.span,
-                                "`super` escapes the crate root".to_string(),
-                            );
-                            return Type::Error;
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(sym) = world.lookup(module, Ns::Module, first) {
-                        world.mark_used(module, sym);
-                        index = 1;
-                        match sym.sym {
-                            Sym::Module(m) => Cursor::Module(m),
-                            Sym::BuiltinModule(p) => Cursor::Builtin(p),
-                            _ => return Type::Error,
-                        }
-                    } else if let Some(p) = builtins::builtin_root_module(first) {
-                        index = 1;
-                        Cursor::Builtin(p)
-                    } else if world.lookup(module, Ns::Type, first).is_some()
-                        || is_builtin_type_name(first)
-                    {
-                        diags.error(
-                            "E-RES-UNKNOWN",
-                            segments[0].name.span,
-                            format!("`{first}` is a type, not a module"),
-                        );
-                        return Type::Error;
-                    } else {
-                        diags.error(
-                            "E-RES-UNKNOWN",
-                            segments[0].name.span,
-                            format!("unknown type `{first}`"),
-                        );
-                        return Type::Error;
-                    }
-                }
+            } else if let Some(p) = builtins::builtin_root_module(first) {
+                index = 1;
+                Cursor::Builtin(p)
+            } else if world.lookup(module, Ns::Type, first).is_some() || is_builtin_type_name(first)
+            {
+                diags.error(
+                    "E-RES-UNKNOWN",
+                    segments[0].name.span,
+                    format!("`{first}` is a type, not a module"),
+                );
+                return Type::Error;
+            } else {
+                diags.error(
+                    "E-RES-UNKNOWN",
+                    segments[0].name.span,
+                    format!("unknown type `{first}`"),
+                );
+                return Type::Error;
             }
         }
     };

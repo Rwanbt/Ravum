@@ -133,25 +133,6 @@ pub(crate) fn resolve_value_path(
         PathRoot::Plain => {
             let first = &segments[0].name.name;
             match first.as_str() {
-                "crate" => {
-                    index = 1;
-                    Cursor::Module(world.root)
-                }
-                "self" => {
-                    index = 1;
-                    Cursor::Module(module)
-                }
-                "super" => {
-                    let mut levels = 1usize;
-                    while segments.get(levels).map(|s| s.name.name.as_str()) == Some("super") {
-                        levels += 1;
-                    }
-                    index = levels;
-                    match world.ancestor(module, levels) {
-                        Some(parent) => Cursor::Module(parent),
-                        None => return Err(PathError::unknown("super")),
-                    }
-                }
                 "Self" => {
                     index = 1;
                     match self_ty {

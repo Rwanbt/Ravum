@@ -53,26 +53,10 @@ pub(crate) fn resolve_use_target(world: &World, module: ModuleId, path: &Path) -
             Some(parent) => (0, UseCursor::Module(parent)),
             None => return UseTarget::Unknown,
         },
-        PathRoot::Plain => {
-            let first = &segments[0].name.name;
-            match first.as_str() {
-                "crate" => (1, UseCursor::Module(world.root)),
-                "self" => (1, UseCursor::Module(module)),
-                "super" => {
-                    let mut levels = 1usize;
-                    while segments.get(levels).map(|s| s.name.name.as_str()) == Some("super") {
-                        levels += 1;
-                    }
-                    match world.ancestor(module, levels) {
-                        Some(parent) => (levels, UseCursor::Module(parent)),
-                        None => return UseTarget::Unknown,
-                    }
-                }
-                // MOD-3.2: bare relative path, resolvable from the current
-                // module first and then from the crate root.
-                _ => return resolve_use_bare_path(world, module, segments),
-            }
-        }
+        // MOD-3.2: bare relative path, resolvable from the current module
+        // first and then from the crate root. `crate`, `self` and `super` are
+        // keywords: the parser turns them into a `PathRoot`, never a segment.
+        PathRoot::Plain => return resolve_use_bare_path(world, module, segments),
     };
 
     resolve_use_tail(world, module, cursor, index, segments)
