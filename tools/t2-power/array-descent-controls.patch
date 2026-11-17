@@ -1,0 +1,113 @@
+diff --git a/crates/ravum-lang-codegen/src/emit/paths.rs b/crates/ravum-lang-codegen/src/emit/paths.rs
+index 341d9ea..7d898b4 100644
+--- a/crates/ravum-lang-codegen/src/emit/paths.rs
++++ b/crates/ravum-lang-codegen/src/emit/paths.rs
+@@ -397,6 +397,9 @@ pub(super) struct PathAccess {
+     exclusive: bool,
+     /// The constant run is not empty: a pattern reaches the element.
+     constant: bool,
++    tuple_descent: bool,
++    block: NodeId,
++    binder_block: NodeId,
+ }
+ 
+ /// Walk of one function body that classifies its element paths. The walk only
+@@ -406,6 +409,7 @@ pub(super) struct PathAccess {
+ pub(super) struct PathPlanner<'e, 'a> {
+     emitter: &'e Emitter<'a>,
+     accesses: Vec<PathAccess>,
++    blocks: Vec<(NodeId, Span)>,
+     reinits: Vec<NodeId>,
+     /// Step-B guard (debug builds): decisions this walk derives from the syntax
+     /// that the checker's facts do not confirm.
+@@ -417,6 +421,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
+         Self {
+             emitter,
+             accesses: Vec::new(),
++            blocks: Vec::new(),
+             reinits: Vec::new(),
+             disagreements: Vec::new(),
+         }
+@@ -460,6 +465,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
+     }
+ 
+     fn walk_block(&mut self, block: &Block) {
++        self.blocks.push((block.id, block.span));
+         for statement in &block.stmts {
+             match &statement.kind {
+                 StmtKind::Let(declaration) => {
+@@ -473,6 +479,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
+         if let Some(tail) = &block.tail {
+             self.walk_expr(tail, false);
+         }
++        self.blocks.pop();
+     }
+ 
+     /// The array place of a path rooted at a local binding through field/tuple
+@@ -516,14 +523,33 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
+         };
+         let own = &self.emitter.facts().own;
+         let borrowed_mutably = matches!(own.use_kind.get(&expr.id), Some(UseKind::BorrowMut));
++        let place = self.array_place(&path);
++        let declaration = place.as_ref().and_then(|place| {
++            own.bindings.iter().find_map(|((span, _), binding)| {
++                (*binding == place.binding).then_some(*span)
++            })
++        });
++        let binder_block = declaration.and_then(|decl| {
++            self.blocks.iter().rev().find_map(|(id, span)| {
++                (span.file == decl.file && span.start <= decl.start && decl.end <= span.end)
++                    .then_some(*id)
++            })
++        });
++        let block = self.blocks.last().expect("body block").0;
+         self.accesses.push(PathAccess {
+             node: expr.id,
+-            place: self.array_place(&path),
++            place,
+             // RFC-OWN-FACTS-2 step C3: the checker decided, where it evaluated
+             // this expression, whether its value is moved out.
+             consumed: own.consumed.contains(&expr.id),
+             exclusive: exclusive || borrowed_mutably,
+             constant: !path.slots.is_empty(),
++            tuple_descent: matches!(
++                path.slots.as_slice(),
++                [Slot::Index { .. }, Slot::Tuple { .. }, Slot::Index { .. }, ..]
++            ),
++            block,
++            binder_block: binder_block.unwrap_or(self.blocks[0].0),
+         });
+     }
+ 
+@@ -640,7 +666,31 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
+             .filter_map(|access| access.place.as_ref())
+             .collect();
+         let mut plan = ArrayMovePlan::default();
++        let inverse = std::env::var("RAVUM_E7_INVERSE").ok();
+         for access in &self.accesses {
++            if access.consumed && access.tuple_descent && inverse.is_some() {
++                if let Some(place) = &access.place {
++                    let peers: Vec<_> = self.accesses.iter().filter(|peer| {
++                        peer.place.as_ref() == Some(place)
++                    }).collect();
++                    let descents: Vec<_> = peers.iter().filter(|peer| {
++                        peer.consumed && peer.tuple_descent
++                    }).collect();
++                    let same_block = descents.iter().all(|peer| peer.block == access.block);
++                    let binder_block = access.block == access.binder_block;
++                    let lose_lowering = match inverse.as_deref() {
++                        Some("10") => descents.len() > 1 && same_block && binder_block,
++                        Some("11") => descents.len() == 1 && binder_block
++                            && peers.iter().any(|peer| !peer.consumed && !peer.exclusive),
++                        Some("12") => descents.len() > 1 && !same_block && !binder_block,
++                        Some("13") => descents.len() > 1 && same_block && !binder_block,
++                        _ => false,
++                    };
++                    if lose_lowering {
++                        continue;
++                    }
++                }
++            }
+             let mode = if access.consumed {
+                 PathMode::Move
+             } else {
