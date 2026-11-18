@@ -41,7 +41,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         }
                     }
                 };
-                if !Self::compatible(&then_ty, &else_ty) {
+                if !self.branch_types_agree(&then_ty, &else_ty) {
                     self.error(
                         "E-TYP-MISMATCH",
                         else_expr.span,
@@ -49,9 +49,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     );
                 }
                 if matches!(then_ty, Type::Never) {
-                    else_ty
+                    self.resolve_vars(&else_ty)
                 } else {
-                    then_ty
+                    self.resolve_vars(&then_ty)
                 }
             }
         }
@@ -229,7 +229,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             result = Some(match result {
                 None => body_ty,
                 Some(acc) => {
-                    if !Self::compatible(&acc, &body_ty) {
+                    if !self.branch_types_agree(&acc, &body_ty) {
                         self.error(
                             "E-TYP-MISMATCH",
                             arm.body.span,
@@ -237,9 +237,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         );
                         acc
                     } else if matches!(acc, Type::Never) {
-                        body_ty
+                        self.resolve_vars(&body_ty)
                     } else {
-                        acc
+                        self.resolve_vars(&acc)
                     }
                 }
             });

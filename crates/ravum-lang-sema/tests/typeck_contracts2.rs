@@ -2826,3 +2826,16 @@ fn a_variant_pattern_on_an_ill_typed_scrutinee_adds_no_pattern_error() {
         describe(&result)
     );
 }
+
+#[test]
+fn a_generic_branch_never_agrees_with_a_concrete_one() {
+    // TYP-6.1: `T` is rigid inside its function; `Vec<T>` and `Vec<i32>` differ.
+    expect_code(
+        "fn f<T>(t: bool, a: Vec<T>) -> usize { let b: Vec<i32> = Vec::new(); let c = if t { a } else { b }; return c.len(); }",
+        "E-TYP-MISMATCH",
+    );
+    expect_code(
+        "fn f<T>(t: bool, a: Option<T>) -> i32 { let c = match t { true => a, false => Some(1) }; return 0; }",
+        "E-TYP-MISMATCH",
+    );
+}

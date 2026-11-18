@@ -5351,3 +5351,45 @@ fn main() {
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");
 }
+
+/// Branch types unify their inference variables in either order: a first
+/// branch `Vec::new()` or `None` takes the type of the next one. These used
+/// to be refused (`if` branches / match arms "have different types") while
+/// the mirrored order was accepted.
+#[test]
+fn audit_branch_inference_works_in_either_order() {
+    if skip("audit_branch_inference_works_in_either_order") {
+        return;
+    }
+    let code = generate_source(
+        "branch-inference-order",
+        r#"fn pick(t: bool) -> usize {
+    let a: Vec<i32> = Vec::new();
+    let c = if t { Vec::new() } else { a };
+    return c.len();
+}
+fn both(t: bool) -> usize {
+    let a = Vec::new();
+    let b = Vec::new();
+    let c = if t { a } else { b };
+    let d: Vec<i32> = c;
+    return d.len();
+}
+fn first_none(t: bool) -> i32 {
+    let c = match t { true => None, false => Some(4) };
+    return c.unwrap_or(1);
+}
+fn main() {
+    if pick(true) == 0 && both(false) == 0 && first_none(true) == 1 && first_none(false) == 4 {
+        io::println("ok");
+    } else {
+        io::println("bad");
+    }
+}
+"#,
+    );
+    let built = must_compile(&code, "branch-inference-order");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}

@@ -113,6 +113,28 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         false
     }
 
+    /// Two branch types (`if`/`else`, `match` arms) agree when they are
+    /// compatible once inference variables are unified, in either order: a
+    /// first branch `Vec::new()` (`Vec<$0>`) takes the type of a second one.
+    pub(super) fn branch_types_agree(&mut self, first: &Type, second: &Type) -> bool {
+        let first = self.resolve_vars(first);
+        let second = self.resolve_vars(second);
+        if Self::compatible(&first, &second) {
+            return true;
+        }
+        if !(self.has_infer_var(&first) || self.has_infer_var(&second))
+            || !self.unify_pattern(&first, &second, &mut BTreeMap::new())
+        {
+            return false;
+        }
+        // `unify_pattern` reads a generic parameter of the pattern as a
+        // wildcard; a branch pair agrees only if the types, once the variables
+        // are bound, are really the same (`Vec<T>` never agrees with `Vec<i32>`).
+        let first = self.resolve_vars(&first);
+        let second = self.resolve_vars(&second);
+        Self::compatible(&first, &second)
+    }
+
     pub(super) fn has_infer_var(&self, ty: &Type) -> bool {
         has_infer_var_rec(ty)
     }
