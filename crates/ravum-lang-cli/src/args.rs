@@ -42,6 +42,7 @@ pub enum Command {
         path: PathBuf,
         args: Vec<String>,
         target: BuildTarget,
+        json: bool,
     },
     Watch {
         path: PathBuf,
@@ -285,6 +286,7 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
     let mut path: Option<PathBuf> = None;
     let mut child: Vec<String> = Vec::new();
     let mut target = BuildTarget::Native;
+    let mut json = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
@@ -293,6 +295,7 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
                 child.extend(rest[i + 1..].iter().cloned());
                 break;
             }
+            "--json" => json = true,
             "--target" => {
                 let value = option_value(rest, &mut i, "--target")?;
                 target = parse_target(&value, "run")?;
@@ -313,6 +316,7 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
         path: path.unwrap_or_else(default_path),
         args: child,
         target,
+        json,
     })
 }
 
@@ -510,7 +514,7 @@ COMMANDS:
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
-    run [PATH] [--target TRIPLE] [-- ARGS...]
+    run [PATH] [--json] [--target TRIPLE] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run] [--release]    Poll sources and rebuild on change (alias: `dev`)
     test [PATH] [--filter TEXT] [--json]
@@ -583,11 +587,12 @@ pub fn help_for(topic: &str) -> String {
                     `--target wasm32-wasip1` writes `.ravum/bin/<name>.wasm`; it requires the\n\
                     `wasm32-wasip1` rustc target. --emit-ir dumps the checked facts; it is not\n\
                     a stable IR.\n",
-        "run" => "USAGE: ravum-lang run [PATH] [--target TRIPLE] [-- ARGS...]\n\n\
+        "run" => "USAGE: ravum-lang run [PATH] [--json] [--target TRIPLE] [-- ARGS...]\n\n\
                   Builds the binary crate, then executes it from the package root with stdin,\n\
                   stdout, stderr and the exit code forwarded. Child arguments must follow `--`.\n\
                   `--target wasm32-wasip1` runs the `.wasm` artifact through Node.js WASI\n\
-                  (Node.js 22+; `RAVUM_NODE` overrides the executable).\n",
+                  (Node.js 22+; `RAVUM_NODE` overrides the executable). --json writes one\n\
+                  JSON object on stdout and forwards the program's stdout to stderr.\n",
         "watch" => "USAGE: ravum-lang watch [PATH] [--run] [--release]   (alias: dev)\n\n\
                     Polls `.rv`, `ravum.toml` and `ravum.lock` (250 ms, no external dependency),\n\
                     ignoring `.ravum/`, `target/` and `*.ravum-tmp`. Rebuild + restart with\n\
@@ -730,6 +735,20 @@ mod tests {
     }
 
     #[test]
+    fn run_accepts_json_before_the_child_arguments() {
+        match parse(&args(&["run", "--json", "pkg", "--", "--json"])).unwrap() {
+            Invocation::Command(Command::Run {
+                path, args, json, ..
+            }) => {
+                assert_eq!(path, PathBuf::from("pkg"));
+                assert!(json);
+                assert_eq!(args, vec!["--json".to_string()]);
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
     fn run_separates_child_arguments() {
         let parsed = parse(&args(&["run", "pkg", "--", "--flag", "x"])).unwrap();
         match parsed {
@@ -786,7 +805,9 @@ mod tests {
             other => panic!("unexpected {other:?}"),
         }
         match parse(&args(&["run", "--target=wasm32-wasip1", "pkg", "--", "a"])).unwrap() {
-            Invocation::Command(Command::Run { target, args, path }) => {
+            Invocation::Command(Command::Run {
+                target, args, path, ..
+            }) => {
                 assert_eq!(target, BuildTarget::Wasm32WasiP1);
                 assert_eq!(path, PathBuf::from("pkg"));
                 assert_eq!(args, vec!["a".to_string()]);

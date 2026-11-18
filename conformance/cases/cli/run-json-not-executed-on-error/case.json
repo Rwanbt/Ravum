@@ -1,0 +1,13 @@
+{
+  "id": "cli/run-json-not-executed-on-error",
+  "mode": "cli",
+  "args": [
+    "run",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"executed\":false",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-8.1 (D-18-5): a compile error is distinguishable from a program exit code 1: `summary.executed` is false and the diagnostics are listed."
+}

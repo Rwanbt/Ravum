@@ -13,8 +13,9 @@
 
 use ravum_lang_sema::Profile;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
+use crate::json;
 use crate::pipeline::{self, Artifacts, BuildOptions, BuildTarget};
 use crate::util;
 
@@ -60,19 +61,136 @@ main().catch((error) => {
 });
 "#;
 
-pub fn run(path: &Path, child_args: &[String], target: BuildTarget) -> i32 {
+/// How `run` reports. Without `--json` the CLI prints diagnostics on stderr
+/// and lets the program write to the terminal. With `--json` (DIAG-8.1,
+/// D-18-5) stdout carries exactly one JSON object (DIAG-7.1): the program's
+/// own stdout is forwarded to stderr, and the object gives `status`,
+/// `exit_code` and, in `summary`, whether the program ran and its exit code.
+struct Report<'a> {
+    path: &'a Path,
+    json: bool,
+}
+
+impl Report<'_> {
+    /// A failure before the program ran (frontend, build or runtime lookup).
+    fn not_run(
+        &self,
+        frontend: Option<&pipeline::Frontend>,
+        exit_code: i32,
+        diagnostics: Vec<json::JsonDiagnostic>,
+    ) -> i32 {
+        if self.json {
+            let mut summary = frontend
+                .map(|f| pipeline::base_summary(f, Profile::Core))
+                .unwrap_or_else(|| serde_json::json!({}));
+            summary["executed"] = serde_json::json!(false);
+            summary["program_exit_code"] = serde_json::Value::Null;
+            json::print(&self.envelope(frontend, exit_code, diagnostics, summary));
+        }
+        exit_code
+    }
+
+    /// The program ran and returned `exit`.
+    fn ran(&self, frontend: &pipeline::Frontend, exit: ChildExit, context: &str) -> i32 {
+        if let Some(note) = &exit.note {
+            util::err(format!("{context} {note}"));
+        }
+        if self.json {
+            let mut summary = pipeline::base_summary(frontend, Profile::Core);
+            summary["executed"] = serde_json::json!(true);
+            summary["program_exit_code"] = serde_json::json!(exit.code);
+            if let Some(note) = &exit.note {
+                summary["program_exit_note"] = serde_json::json!(note);
+            }
+            json::print(&self.envelope(Some(frontend), exit.code, Vec::new(), summary));
+        }
+        exit.code
+    }
+
+    fn envelope(
+        &self,
+        frontend: Option<&pipeline::Frontend>,
+        exit_code: i32,
+        diagnostics: Vec<json::JsonDiagnostic>,
+        summary: serde_json::Value,
+    ) -> json::JsonEnvelope {
+        use ravum_lang_sema::loader::{CrateKind, LockfileState};
+        let target_kind = match frontend {
+            Some(f) if f.pkg.crate_kind == Some(CrateKind::File) => "file",
+            _ => "package",
+        };
+        let lockfile_stale = frontend.and_then(|f| match f.pkg.lockfile_state {
+            LockfileState::Stale => Some(true),
+            LockfileState::Created | LockfileState::Current => Some(false),
+            _ => None,
+        });
+        json::envelope(
+            json::ReportMeta {
+                command: "run",
+                success: exit_code == util::EXIT_OK,
+                exit_code,
+                target_kind,
+                target_path: util::target_display(self.path),
+                profile: Some("core".to_string()),
+                dependencies_digest: frontend.map(|f| f.pkg.dependencies_digest.clone()),
+                lockfile_stale,
+            },
+            diagnostics,
+            summary,
+        )
+    }
+
+    /// Where the program's stdout goes: the terminal, or stderr under `--json`.
+    fn program_stdout(&self) -> Stdio {
+        if self.json {
+            Stdio::from(std::io::stderr())
+        } else {
+            Stdio::inherit()
+        }
+    }
+
+    /// A tool error message: on stderr, and as a diagnostic under `--json`.
+    fn tool_error(
+        &self,
+        frontend: Option<&pipeline::Frontend>,
+        code: &str,
+        message: String,
+        exit_code: i32,
+    ) -> i32 {
+        util::err(&message);
+        self.not_run(
+            frontend,
+            exit_code,
+            vec![json::synthetic(code, "error", message)],
+        )
+    }
+}
+
+pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output: bool) -> i32 {
+    let report = Report {
+        path,
+        json: json_output,
+    };
     // Fail fast before spending time on compilation when the runtime is absent.
     if target.is_wasm() && pipeline::node_version().is_none() {
-        util::err(format!(
-            "E-CLI-WASM-RUNTIME: Node.js was not found (`{}`); install Node.js 22+ or set \
-             RAVUM_NODE to run wasm32-wasip1 programs",
-            pipeline::node_command()
-        ));
-        return util::EXIT_TOOL;
+        return report.tool_error(
+            None,
+            "E-CLI-WASM-RUNTIME",
+            format!(
+                "E-CLI-WASM-RUNTIME: Node.js was not found (`{}`); install Node.js 22+ or set \
+                 RAVUM_NODE to run wasm32-wasip1 programs",
+                pipeline::node_command()
+            ),
+            util::EXIT_TOOL,
+        );
     }
 
     let frontend = pipeline::analyze(path, Profile::Core, false);
     if !frontend.success() {
+        if json_output {
+            let diagnostics = json::diagnostics(frontend.diags.as_slice(), &frontend.pkg.sources);
+            return report.not_run(Some(&frontend), util::EXIT_FAIL, diagnostics);
+        }
         eprint!("{}", pipeline::render_diags(&frontend));
         util::err(format!(
             "run: {} error(s); the program was not executed",
@@ -89,26 +207,56 @@ pub fn run(path: &Path, child_args: &[String], target: BuildTarget) -> i32 {
         Ok(artifacts) => artifacts,
         Err(error) => {
             error.print();
-            return error.exit_code();
+            let diagnostic = json::synthetic("E-BUILD", "error", error.message());
+            return report.not_run(Some(&frontend), error.exit_code(), vec![diagnostic]);
         }
     };
 
     if artifacts.target.is_wasm() {
-        run_wasm(&frontend, &artifacts, child_args)
+        run_wasm(&report, &frontend, &artifacts, child_args)
     } else {
-        run_native(&frontend, &artifacts, child_args)
+        run_native(&report, &frontend, &artifacts, child_args)
     }
 }
 
-fn run_native(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[String]) -> i32 {
+fn run_native(
+    report: &Report<'_>,
+    frontend: &pipeline::Frontend,
+    artifacts: &Artifacts,
+    child_args: &[String],
+) -> i32 {
     eprintln!("running: {}", util::pretty_path(&artifacts.binary));
     let mut command = Command::new(&artifacts.binary);
     command.args(child_args);
     command.current_dir(frontend.root());
-    forward_status(command.status(), &artifacts.binary)
+    command.stdout(report.program_stdout());
+    match command.status() {
+        Ok(status) => report.ran(frontend, child_exit_code(status.code()), "run: the program"),
+        Err(error) => {
+            let exit = if error.kind() == std::io::ErrorKind::NotFound {
+                util::EXIT_TOOL
+            } else {
+                util::EXIT_FAIL
+            };
+            report.tool_error(
+                Some(frontend),
+                "E-TOOL",
+                format!(
+                    "run: cannot execute `{}`: {error}",
+                    util::pretty_path(&artifacts.binary)
+                ),
+                exit,
+            )
+        }
+    }
 }
 
-fn run_wasm(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[String]) -> i32 {
+fn run_wasm(
+    report: &Report<'_>,
+    frontend: &pipeline::Frontend,
+    artifacts: &Artifacts,
+    child_args: &[String],
+) -> i32 {
     let stem = artifacts
         .binary
         .file_stem()
@@ -116,8 +264,12 @@ fn run_wasm(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[
         .unwrap_or_else(|| "program".to_string());
     let launcher = artifacts.binary.with_file_name(format!("{stem}-wasi.cjs"));
     if let Err(message) = util::write_atomic(&launcher, WASI_LAUNCHER) {
-        util::err(format!("E-CLI-WASM-RUNTIME: {message}"));
-        return util::EXIT_FAIL;
+        return report.tool_error(
+            Some(frontend),
+            "E-CLI-WASM-RUNTIME",
+            format!("E-CLI-WASM-RUNTIME: {message}"),
+            util::EXIT_FAIL,
+        );
     }
 
     eprintln!(
@@ -132,44 +284,28 @@ fn run_wasm(frontend: &pipeline::Frontend, artifacts: &Artifacts, child_args: &[
         .arg(&artifacts.binary)
         .args(child_args);
     command.current_dir(frontend.root());
+    command.stdout(report.program_stdout());
     match command.status() {
-        Ok(status) => report_child_exit(
+        Ok(status) => report.ran(
+            frontend,
             child_exit_code(status.code()),
             "run: the Node.js WASI runtime",
         ),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            util::err(format!(
-                "E-CLI-WASM-RUNTIME: cannot execute `{}`: {error}",
-                pipeline::node_command()
-            ));
-            util::EXIT_TOOL
-        }
         Err(error) => {
-            util::err(format!(
-                "E-CLI-WASM-RUNTIME: cannot execute `{}`: {error}",
-                pipeline::node_command()
-            ));
-            util::EXIT_FAIL
-        }
-    }
-}
-
-fn forward_status(status: std::io::Result<std::process::ExitStatus>, binary: &Path) -> i32 {
-    match status {
-        Ok(status) => report_child_exit(child_exit_code(status.code()), "run: the program"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            util::err(format!(
-                "run: cannot execute `{}`: {error}",
-                util::pretty_path(binary)
-            ));
-            util::EXIT_TOOL
-        }
-        Err(error) => {
-            util::err(format!(
-                "run: cannot execute `{}`: {error}",
-                util::pretty_path(binary)
-            ));
-            util::EXIT_FAIL
+            let exit = if error.kind() == std::io::ErrorKind::NotFound {
+                util::EXIT_TOOL
+            } else {
+                util::EXIT_FAIL
+            };
+            report.tool_error(
+                Some(frontend),
+                "E-CLI-WASM-RUNTIME",
+                format!(
+                    "E-CLI-WASM-RUNTIME: cannot execute `{}`: {error}",
+                    pipeline::node_command()
+                ),
+                exit,
+            )
         }
     }
 }
@@ -258,13 +394,6 @@ fn exception_name(code: i32) -> &'static str {
         0xC000_0409 => " (abort / stack buffer overrun)",
         _ => "",
     }
-}
-
-fn report_child_exit(exit: ChildExit, context: &str) -> i32 {
-    if let Some(note) = exit.note {
-        util::err(format!("{context} {note}"));
-    }
-    exit.code
 }
 
 #[cfg(test)]

@@ -1,0 +1,13 @@
+{
+  "id": "cli/run-json-program-output-on-stderr",
+  "mode": "cli",
+  "args": [
+    "run",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stderr_contains": "hello\n",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-7.1 (D-18-5): under `run --json` the program's own stdout is forwarded to stderr, so stdout stays one JSON object."
+}
