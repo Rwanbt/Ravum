@@ -63,8 +63,9 @@ impl<'a> Parser<'a> {
                 None
             }
             _ => {
-                let found = self.describe_token();
-                self.unexpected(format!("expected an item, found {found}"));
+                // G-2.2, G-2.3: a token that cannot start an item (a stray `;`
+                // included) is E-PARSE-EXPECTED: an item was expected.
+                self.expected("an item");
                 self.bump();
                 self.recover_item();
                 None
@@ -107,6 +108,16 @@ impl<'a> Parser<'a> {
                 "restricted visibility `pub(...)` is not supported in Ravum Core 1.0",
             );
             return Vis::Public(pub_span);
+        }
+        // G-2.4: `pub` applies to fn, struct, enum, const, mod, use and to
+        // fields and variants; `pub impl` and `pub extern` are refused.
+        if self.at_kw(Kw::Impl) || self.at_kw(Kw::Extern) {
+            let span = pub_span.join(self.cur_span());
+            self.diags.error(
+                "E-PARSE-EXPECTED",
+                span,
+                "`pub` is not valid here: an `impl` or `extern` block has no visibility",
+            );
         }
         if self.at_kw(Kw::Test) {
             let span = pub_span.join(self.cur_span());

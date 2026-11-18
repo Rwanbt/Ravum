@@ -244,7 +244,8 @@ impl<'a> Parser<'a> {
             let value = if self.eat(Punct::Colon) {
                 self.parse_expr(true)
             } else {
-                // Shorthand `Foo { field }`.
+                // G-4.4: the field shorthand `Foo { field }` reads `field: field`
+                // (Lead decision, case `parser/field-shorthand`).
                 let path = Path {
                     id: self.id(),
                     root: PathRoot::Plain,
