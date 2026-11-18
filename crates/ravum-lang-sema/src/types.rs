@@ -23,6 +23,21 @@ pub const MAX_TYPE_DEPTH: usize = 100;
 /// divergent function: it is neither a parameter type, nor a field type, nor a
 /// `Vec`/generic argument. This helper is the single predicate used by the
 /// resolver to enforce that restriction.
+/// True when the recovered error type appears anywhere in `ty`.
+pub fn contains_error(ty: &Type) -> bool {
+    match ty {
+        Type::Error => true,
+        Type::Ref { inner, .. } | Type::Slice(inner) | Type::Vec(inner) | Type::Option(inner) => {
+            contains_error(inner)
+        }
+        Type::Array { elem, .. } => contains_error(elem),
+        Type::Tuple(items) => items.iter().any(contains_error),
+        Type::Result(ok, err) => contains_error(ok) || contains_error(err),
+        Type::Nominal { args, .. } => args.iter().any(contains_error),
+        _ => false,
+    }
+}
+
 pub fn contains_never(ty: &Type) -> bool {
     match ty {
         Type::Never => true,
