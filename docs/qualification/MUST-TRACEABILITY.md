@@ -9,10 +9,10 @@
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
 > `diagnostics.md` #169 et `compatibility.md`)** : `tools/must_audit.py` compte **816 énoncés MUST** et
-> **214 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 017 et
-> 019 à 023 ajoutés) ; **597 / 816** sont atteignables par un FeatureId, **219**
-> ne le sont pas ; couverture stricte **214/214** (1 exemption).
-> `diagnostics.md` : 39 / 45 ; `compatibility.md` : 14 / 39 (25 règles de
+> **215 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 023
+> ajoutés) ; **598 / 816** sont atteignables par un FeatureId, **218**
+> ne le sont pas ; couverture stricte **215/215** (1 exemption).
+> `diagnostics.md` : 40 / 45 ; `compatibility.md` : 14 / 39 (25 règles de
 > gouvernance, `T2-FINDINGS` §32). Le texte ci-dessous est la
 > mesure d'origine, conservée.
 

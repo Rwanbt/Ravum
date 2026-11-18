@@ -10,6 +10,7 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ### Added
 
 - Compatibility contract (T2, `compatibility.md`): FeatureIds F-META-019 to F-META-023, 6 conformance cases, `tests/compat_contract.rs` (digest follows a dependency path, an invalid lockfile is left untouched) and append-only snapshots of rule ids and feature ids. COMPAT-3.6 now names `W-DEPRECATED` and COMPAT-4.2 `E-MOD-DUPLICATE`, as the registry does.
+- `run --json` (DIAG-8.1, D-18-5): one JSON object on stdout with the program's exit code, `summary.executed` and `summary.program_exit_code`; the program's own stdout goes to stderr.
 
 - Diagnostics contract (T2, `diagnostics.md`): FeatureIds F-META-009 to F-META-017, 13 conformance cases, `tests/diagnostics_contract.rs` (byte-identical runs, per-phase order, no colour, no absolute path, one-line JSON) and an append-only snapshot of published diagnostic codes (`tools/diagnostic_codes.snapshot`).
 

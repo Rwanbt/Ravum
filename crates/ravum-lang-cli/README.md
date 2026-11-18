@@ -24,7 +24,7 @@ The binary is `target/debug/ravum-lang` (`ravum-lang.exe` on Windows). It uses
 | `init <dir> [--lib] [--force]` | implemented |
 | `check [PATH] [--json] [--profile core\|pure\|rt] [--locked]` | implemented |
 | `build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir]` | implemented (needs `rustc`) |
-| `run [PATH] [--target TRIPLE] [-- ARGS...]` | implemented (needs `rustc`; `wasm32-wasip1` needs Node.js) |
+| `run [PATH] [--json] [--target TRIPLE] [-- ARGS...]` | implemented (needs `rustc`; `wasm32-wasip1` needs Node.js) |
 | `watch [PATH] [--run] [--release]` (alias `dev`) | implemented; polling restart loop (see `docs/CLI-WATCH-WASM.md`) |
 | `test [PATH] [--filter S] [--json]` | implemented (needs `rustc`) |
 | `fmt [PATH] [--check]` | implemented |
@@ -76,9 +76,16 @@ unit tests plus an end-to-end run of a program that chooses the same status with
 
 ## JSON output (`schema_version: 1`)
 
-`check`, `test` and `doctor` accept `--json`. Exactly one JSON object is written
+`check`, `test`, `run` and `doctor` accept `--json`. Exactly one JSON object is written
 to stdout, on one line, with no colour and no other text. Usage errors (exit 2)
 still go to stderr.
+
+`run --json` (DIAG-8.1) forwards the program's own stdout to stderr, so stdout
+holds only the object. The exit code is still the program's; the object repeats
+it in `exit_code` and adds `summary.executed` (`false` when the program was not
+built or could not start, with the diagnostics) and `summary.program_exit_code`
+(`null` when it did not run), so a script can tell a compile error from a
+program that exited 1.
 
 ```json
 {
