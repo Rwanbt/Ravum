@@ -28,7 +28,7 @@ use crate::gc::{GcMode, GcPolicy, GcReport};
 use crate::report::AutoGcLast;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -256,6 +256,9 @@ pub struct AutoGcStats {
     pub last: Option<AutoGcLast>,
 }
 
+const WORK_PENDING: u8 = 1;
+const WORK_BUSY: u8 = 2;
+
 /// Shared state between the daemon and its maintenance thread.
 pub struct AutoGcRuntime {
     policy: AutoGcPolicy,
@@ -268,8 +271,7 @@ pub struct AutoGcRuntime {
     last: Mutex<Option<AutoGcLast>>,
     failure_injection: Mutex<Option<String>>,
     shutdown: AtomicBool,
-    busy: AtomicBool,
-    pending: AtomicBool,
+    work_state: AtomicU8,
     /// Condvar signalling the maintenance thread. Also used to make
     /// `wait_auto_gc_idle` deterministic in tests.
     pub(crate) signal_lock: Mutex<()>,
@@ -291,8 +293,7 @@ impl AutoGcRuntime {
             last: Mutex::new(None),
             failure_injection: Mutex::new(None),
             shutdown: AtomicBool::new(false),
-            busy: AtomicBool::new(false),
-            pending: AtomicBool::new(false),
+            work_state: AtomicU8::new(0),
             signal_lock: Mutex::new(()),
             signal: Condvar::new(),
         }))
@@ -319,7 +320,7 @@ impl AutoGcRuntime {
         }
         let completed = self.requests_since_check.fetch_add(1, Ordering::SeqCst) + 1;
         if completed >= self.policy.check_every_requests {
-            self.pending.store(true, Ordering::SeqCst);
+            self.work_state.fetch_or(WORK_PENDING, Ordering::SeqCst);
             self.signal.notify_all();
             true
         } else {
@@ -327,15 +328,30 @@ impl AutoGcRuntime {
         }
     }
 
-    /// Consumed by the maintenance thread: true when a threshold evaluation is due.
+    /// Claims a pending evaluation for the maintenance thread. A successful
+    /// claim must be followed by clearing the busy flag after evaluation.
     pub fn take_due(&self) -> bool {
-        if !self.policy.enabled || self.shutdown.load(Ordering::SeqCst) {
+        if !self.policy.enabled || self.is_shutdown() {
             return false;
         }
-        if self.requests_since_check.load(Ordering::SeqCst) < self.policy.check_every_requests {
+        // A waiter must never see idle between dequeuing and evaluating work.
+        let claimed = self
+            .work_state
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |state| {
+                (state == WORK_PENDING).then_some(WORK_BUSY)
+            });
+        if claimed.is_err() {
             return false;
         }
-        self.requests_since_check.store(0, Ordering::SeqCst);
+        let counted = self.requests_since_check.fetch_update(
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+            |completed| (completed >= self.policy.check_every_requests).then_some(0),
+        );
+        if counted.is_err() {
+            self.set_busy(false);
+            return false;
+        }
         self.checks.fetch_add(1, Ordering::SeqCst);
         true
     }
@@ -360,11 +376,16 @@ impl AutoGcRuntime {
 
     /// True when a threshold evaluation is queued or running.
     pub fn is_busy_or_pending(&self) -> bool {
-        self.busy.load(Ordering::SeqCst) || self.pending.load(Ordering::SeqCst)
+        self.work_state.load(Ordering::SeqCst) != 0
     }
 
     pub fn set_busy(&self, busy: bool) {
-        self.busy.store(busy, Ordering::SeqCst);
+        if busy {
+            self.work_state.fetch_or(WORK_BUSY, Ordering::SeqCst);
+        } else {
+            self.work_state.fetch_and(!WORK_BUSY, Ordering::SeqCst);
+            self.signal.notify_all();
+        }
     }
 
     pub fn request_shutdown(&self) {
@@ -383,7 +404,7 @@ impl AutoGcRuntime {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        if self.pending.swap(false, Ordering::SeqCst) {
+        if self.work_state.load(Ordering::SeqCst) & WORK_PENDING != 0 {
             return true;
         }
         let (guard, _) = match self.signal.wait_timeout(guard, timeout) {
@@ -391,7 +412,7 @@ impl AutoGcRuntime {
             Err(poisoned) => poisoned.into_inner(),
         };
         drop(guard);
-        self.pending.swap(false, Ordering::SeqCst)
+        self.work_state.load(Ordering::SeqCst) & WORK_PENDING != 0
     }
 
     /// Test seam: the next automatic attempt fails with this message instead of
@@ -496,14 +517,15 @@ impl AutoGcRuntime {
     }
 
     pub fn snapshot(&self) -> AutoGcStats {
+        let work_state = self.work_state.load(Ordering::SeqCst);
         AutoGcStats {
             enabled: self.policy.enabled,
             checks: self.checks.load(Ordering::SeqCst),
             runs: self.runs.load(Ordering::SeqCst),
             failures: self.failures.load(Ordering::SeqCst),
             journal_entries: self.journal_entries.load(Ordering::SeqCst),
-            busy: self.busy.load(Ordering::SeqCst),
-            pending: self.pending.load(Ordering::SeqCst),
+            busy: work_state & WORK_BUSY != 0,
+            pending: work_state & WORK_PENDING != 0,
             requests_since_check: self.requests_since_check.load(Ordering::SeqCst),
             last: self.last.lock().ok().and_then(|slot| slot.clone()),
         }
@@ -597,6 +619,36 @@ mod tests {
         // Not due again until another interval.
         assert!(!runtime.take_due());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pending_work_stays_visible_until_evaluation_finishes() {
+        let dir = temp_dir("work-state");
+        let runtime = AutoGcRuntime::new(policy(true), &dir).unwrap();
+        for _ in 0..runtime.policy().check_every_requests {
+            runtime.note_request();
+        }
+        assert!(runtime.wait_for_work(Duration::ZERO));
+        assert!(
+            runtime.is_busy_or_pending(),
+            "waking must not expose false idle"
+        );
+        assert!(runtime.take_due());
+        assert!(runtime.snapshot().busy);
+        assert!(!runtime.snapshot().pending);
+
+        for _ in 0..runtime.policy().check_every_requests {
+            runtime.note_request();
+        }
+        runtime.set_busy(false);
+        assert!(
+            runtime.is_busy_or_pending(),
+            "finishing must preserve pending work"
+        );
+        assert!(runtime.take_due());
+        runtime.set_busy(false);
+        assert!(!runtime.is_busy_or_pending());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
