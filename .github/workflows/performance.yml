@@ -76,7 +76,7 @@ jobs:
           python --version
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -199,7 +199,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Cache cargo registry and release target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index

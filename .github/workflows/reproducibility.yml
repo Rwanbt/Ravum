@@ -59,7 +59,7 @@ jobs:
       # No target/ cache: a cache restored from another commit could hide a
       # build difference. Only the registry is cached, and only for speed.
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
