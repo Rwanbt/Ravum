@@ -324,3 +324,70 @@ fn impl_generics_bind_only_from_a_nominal_target_with_parameters() {
         }
     });
 }
+
+/// A literal pattern, standing for a pattern no coverage rule expects.
+fn literal_pattern(id: u64) -> ravum_lang_syntax::ast::Pat {
+    use ravum_lang_syntax::ast::{LitPat, Pat, PatKind};
+    Pat {
+        id,
+        kind: PatKind::Lit(LitPat::Bool(true)),
+        span: ravum_lang_syntax::span::Span::dummy(),
+    }
+}
+
+#[test]
+fn the_coverage_check_gives_up_past_its_depth_bound() {
+    use crate::types::Type;
+    with_checker(|checker| {
+        let deep = super::coverage::MAX_COVERAGE_DEPTH + 1;
+        assert!(!checker.patterns_exhaustive(&Type::Bool, &[None], deep));
+        assert!(!checker.product_rows_exhaustive(&[Type::Bool], &[vec![None]], deep));
+    });
+}
+
+#[test]
+fn patterns_that_are_not_constructors_cover_nothing() {
+    // Typeck refuses such patterns before the coverage check; should one reach
+    // it, it covers no `Some`/`None`, `Ok`/`Err` or tuple row.
+    use crate::types::Type;
+    let lit = literal_pattern(4_000_000_031);
+    with_checker(|checker| {
+        let option = Type::Option(Box::new(Type::I32));
+        let result = Type::Result(Box::new(Type::I32), Box::new(Type::I32));
+        let pair = Type::Tuple(vec![Type::Bool, Type::Bool]);
+        for ty in [option, result, pair] {
+            assert!(!checker.patterns_exhaustive(&ty, &[Some(&lit)], 0), "{ty}");
+        }
+    });
+}
+
+#[test]
+fn a_variant_row_of_a_non_variant_pattern_is_empty() {
+    use crate::types::Type;
+    let lit = literal_pattern(4_000_000_032);
+    with_checker(|checker| {
+        let (&def, info) = checker
+            .facts
+            .enums
+            .iter()
+            .find(|(_, info)| info.name == "E")
+            .expect("the enum `E`");
+        let variant = info.variants[1].clone();
+        assert!(checker.variant_payload_row(&lit, &variant).is_empty());
+        let ty = Type::Nominal {
+            def,
+            name: "E".to_string(),
+            args: Vec::new(),
+        };
+        let ctors = checker
+            .coverage_ctors(&ty)
+            .expect("the constructors of `E`");
+        checker.variant_pats.insert(lit.id, (def, 1));
+        assert_eq!(
+            checker
+                .pattern_payloads_for_ctor(&lit, &ctors[1])
+                .map(|row| row.len()),
+            Some(1)
+        );
+    });
+}
