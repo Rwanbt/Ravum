@@ -198,10 +198,10 @@ pub(super) fn nominal_def(ty: &Type) -> Option<NodeId> {
 pub(super) fn nominal_subst(world: &World, def: &NodeId, args: &[Type]) -> BTreeMap<usize, Type> {
     let generics = world.type_generics(*def);
     let mut subst = BTreeMap::new();
-    for (index, arg) in args.iter().enumerate() {
-        if index < generics.len() {
-            subst.insert(index, arg.clone());
-        }
+    // A well-formed nominal has exactly one argument per parameter (E-TYP-ARGS
+    // otherwise); `take` keeps the map bounded by the parameters anyway.
+    for (index, arg) in args.iter().enumerate().take(generics.len()) {
+        subst.insert(index, arg.clone());
     }
     subst
 }

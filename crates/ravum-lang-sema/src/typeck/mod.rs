@@ -47,31 +47,42 @@ pub(crate) fn typecheck_with_world(
     sources: Option<&SourceMap>,
     diags: &mut DiagnosticBag,
 ) -> bool {
-    let mut checker = TypeChecker {
-        program,
-        facts,
-        world,
-        diags,
-        module: world.root,
-        generics: Vec::new(),
-        self_ty: None,
-        fn_ret: Type::Unit,
-        current_fn: None,
-        scopes: Vec::new(),
-        loop_depth: 0,
-        value_position: 0,
-        unsafe_depth: 0,
-        in_const: false,
-        variant_pats: BTreeMap::new(),
-        unused_candidates: Vec::new(),
-        used_locals: BTreeSet::new(),
-        vars: Vec::new(),
-        var_spans: Vec::new(),
-    };
+    let mut checker = TypeChecker::new(program, facts, world, diags);
     checker.run(sources);
     compute_static_str_fns(program, &mut *checker.facts);
     resolve::emit_unused_import_warnings(world, checker.diags);
     !checker.diags.has_errors()
+}
+
+impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
+    fn new(
+        program: &'p ast::Program,
+        facts: &'f mut Facts,
+        world: &'w World<'p>,
+        diags: &'f mut DiagnosticBag,
+    ) -> Self {
+        TypeChecker {
+            program,
+            facts,
+            world,
+            diags,
+            module: world.root,
+            generics: Vec::new(),
+            self_ty: None,
+            fn_ret: Type::Unit,
+            current_fn: None,
+            scopes: Vec::new(),
+            loop_depth: 0,
+            value_position: 0,
+            unsafe_depth: 0,
+            in_const: false,
+            variant_pats: BTreeMap::new(),
+            unused_candidates: Vec::new(),
+            used_locals: BTreeSet::new(),
+            vars: Vec::new(),
+            var_spans: Vec::new(),
+        }
+    }
 }
 
 // ----------------------------------------------------------------------

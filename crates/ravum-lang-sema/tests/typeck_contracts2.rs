@@ -2839,3 +2839,25 @@ fn a_generic_branch_never_agrees_with_a_concrete_one() {
         "E-TYP-MISMATCH",
     );
 }
+
+#[test]
+fn an_array_repeat_length_constant_must_be_a_non_negative_integer() {
+    // G-6.27: the length of `[x; N]` is a constant integer >= 0.
+    expect_code(
+        "const N: i32 = -2;\nfn f() -> i32 { let a = [0; N]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
+    expect_code(
+        "const N: bool = true;\nfn f() -> i32 { let a = [0; N]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
+}
+
+#[test]
+fn a_unit_variant_of_a_generic_enum_against_another_type_is_refused() {
+    // TYP-6.1: `E::B` is an `E<_>`, never an `S`.
+    expect_code(
+        "enum E<T> { A(T), B }\nstruct S { n: i32 }\nfn f() -> i32 { let x: S = E::B; return 0; }",
+        "E-TYP-MISMATCH",
+    );
+}

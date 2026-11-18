@@ -41,17 +41,21 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         deferred: bool,
         decl: Span,
     ) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(
-                name.to_string(),
-                Local {
-                    ty,
-                    mutable,
-                    deferred,
-                    decl,
-                },
-            );
-        }
+        // Every binding site (parameter, `let`, pattern) runs inside the
+        // scope its function, block or arm pushed.
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("invariant: a local is bound inside an open scope");
+        scope.insert(
+            name.to_string(),
+            Local {
+                ty,
+                mutable,
+                deferred,
+                decl,
+            },
+        );
     }
 
     pub(super) fn lookup_local(&self, name: &str) -> Option<Local> {
@@ -185,12 +189,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if contains_never(&ty) {
             return true;
         }
-        if let Some(slot) = self.vars.get_mut(index) {
-            *slot = Some(ty);
-            true
-        } else {
-            false
-        }
+        // An inference variable index comes only from `fresh_var`.
+        let slot = self
+            .vars
+            .get_mut(index)
+            .expect("invariant: an inference variable is created before it is bound");
+        *slot = Some(ty);
+        true
     }
 
     pub(super) fn var_occurs(&self, target: usize, ty: &Type) -> bool {

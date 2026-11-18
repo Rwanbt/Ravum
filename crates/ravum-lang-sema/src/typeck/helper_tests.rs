@@ -3,7 +3,7 @@
 //! of inference-variable resolution.
 
 use super::helpers::*;
-use super::VAR_BASE;
+use super::{PatternKind, VAR_BASE};
 use crate::facts::ConstValue;
 use crate::types::Type;
 
@@ -139,4 +139,46 @@ fn text_constants_do_not_cast() {
         cast_const_value(ConstValue::Bool(true), &Type::Bool, &Type::F64),
         None
     );
+}
+
+/// Patterns of the arms of the single `match` in the body of `f`.
+fn match_arm_patterns(src: &str) -> Vec<ravum_lang_syntax::ast::Pat> {
+    use ravum_lang_syntax::ast::{ExprKind, ItemKind};
+    let parsed = ravum_lang_syntax::parser::parse_file(0, src);
+    assert!(parsed.diags.is_empty(), "the fixture must parse");
+    let ItemKind::Fn(f) = &parsed.program.root.items[0].kind else {
+        panic!("expected a function");
+    };
+    let tail = f.body.tail.as_ref().expect("a tail match");
+    let ExprKind::Match { arms, .. } = &tail.kind else {
+        panic!("expected a match");
+    };
+    arms.iter().map(|arm| arm.pat.clone()).collect()
+}
+
+#[test]
+fn prelude_pattern_kinds_follow_the_last_path_segment() {
+    let pats = match_arm_patterns(
+        "fn f(o: Option<i32>) -> i32 { match o { _ => 0, x => 0, Some(y) => 0, None => 0, \
+         Option::Some(z) => 0, Ok(a) => 0, Err(b) => 0, E::X => 0, E::Y(c) => 0, 5 => 0, (d, e) => 0 } }",
+    );
+    let kinds: Vec<PatternKind> = pats.iter().map(super::pattern_kind).collect();
+    use PatternKind as K;
+    let expected = [
+        K::Wild,
+        K::Wild,
+        K::Some,
+        K::None,
+        K::Some,
+        K::Ok,
+        K::Err,
+        K::Other,
+        K::Other,
+        K::Other,
+        K::Other,
+    ];
+    assert_eq!(kinds.len(), expected.len());
+    for (kind, want) in kinds.iter().zip(expected.iter()) {
+        assert!(kind == want);
+    }
 }
