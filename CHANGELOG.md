@@ -19,6 +19,10 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   promise.
 - Supply-chain and governance guard-rails: blocking Clippy, `cargo-deny`,
   weekly Dependabot updates, `CODEOWNERS` and this changelog.
+- `W-DEPRECATED` (DIAG-1.10): a use of a deprecated standard-library path is
+  reported with its version and replacement and stays valid. The register is
+  empty in Core 1.0.
+- DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
 ### Fixed
 

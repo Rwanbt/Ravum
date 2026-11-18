@@ -149,7 +149,8 @@ still go to stderr.
 
 Warnings do not fail `check`. `lint --deny CODE` (or `--deny all`) turns a
 matching warning into a failure. Only the canonical warning list is reported
-(`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`); no heuristic rule is invented.
+(`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`, `W-DEPRECATED`); no heuristic
+rule is invented.
 
 ## Loader policy (`ravum-lang-sema/src/loader.rs`)
 
