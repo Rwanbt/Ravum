@@ -41,7 +41,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         }
                     }
                 };
-                if !Self::compatible(&then_ty, &else_ty) {
+                if !self.branch_types_agree(&then_ty, &else_ty) {
                     self.error(
                         "E-TYP-MISMATCH",
                         else_expr.span,
@@ -49,9 +49,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     );
                 }
                 if matches!(then_ty, Type::Never) {
-                    else_ty
+                    self.resolve_vars(&else_ty)
                 } else {
-                    then_ty
+                    self.resolve_vars(&then_ty)
                 }
             }
         }
@@ -151,11 +151,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         let (Some(start), Some(end)) = (start, end) else {
-            self.error(
-                "E-TYP-RANGE",
-                iter.span,
-                "`for` requires an explicit `start..end` range".to_string(),
-            );
+            let message = if end.is_none() {
+                "an open range is not allowed in a `for`; give an upper bound: `start..end`"
+            } else {
+                "`for` requires an explicit `start..end` range"
+            };
+            self.error("E-TYP-RANGE", iter.span, message.to_string());
             return Type::Error;
         };
         let start_lit = is_untyped_num_literal(start);
@@ -190,11 +191,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         end: Option<&Expr>,
         inclusive: bool,
     ) -> Type {
-        if let Some(start) = start {
-            self.check_expr(start, None);
-        }
-        if let Some(end) = end {
-            self.check_expr(end, None);
+        // Type whichever bounds are present.
+        for bound in start.iter().chain(end.iter()) {
+            self.check_expr(bound, None);
         }
         let _ = inclusive;
         let _ = expr;
@@ -229,7 +228,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             result = Some(match result {
                 None => body_ty,
                 Some(acc) => {
-                    if !Self::compatible(&acc, &body_ty) {
+                    if !self.branch_types_agree(&acc, &body_ty) {
                         self.error(
                             "E-TYP-MISMATCH",
                             arm.body.span,
@@ -237,9 +236,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         );
                         acc
                     } else if matches!(acc, Type::Never) {
-                        body_ty
+                        self.resolve_vars(&body_ty)
                     } else {
-                        acc
+                        self.resolve_vars(&acc)
                     }
                 }
             });
@@ -541,13 +540,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 Some(*value)
             }
             ExprKind::Path(path) => {
-                let target = resolve::resolve_value_path(
-                    self.world,
-                    self.module,
-                    &self.generics,
-                    self.self_ty.as_ref(),
-                    path,
-                );
+                let target =
+                    resolve::resolve_value_path(self.world, self.module, &self.generics, path);
                 if let Ok(ValuePath::Item(id)) = target {
                     let info = self.facts.consts.get(&id).cloned();
                     if let Some(info) = info {

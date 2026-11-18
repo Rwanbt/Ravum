@@ -35,13 +35,9 @@ pub(super) fn collect_static_str_candidates<'a>(
             }
             ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
             ItemKind::Impl(imp) => {
-                for sub in &imp.items {
-                    match &sub.kind {
-                        ItemKind::Fn(f) if fn_sig_returns_static_str(sub.id, f, facts) => {
-                            out.push((f, sub.id));
-                        }
-                        ItemKind::Mod(inner) => collect_static_str_candidates(inner, facts, out),
-                        _ => {}
+                for (sub, f) in imp.methods() {
+                    if fn_sig_returns_static_str(sub.id, f, facts) {
+                        out.push((f, sub.id));
                     }
                 }
             }
@@ -237,16 +233,10 @@ pub(super) fn expr_returns_are_static(
         ExprKind::StructLit { fields, .. } => fields
             .iter()
             .all(|field| expr_returns_are_static(&field.value, facts, seen, env)),
-        ExprKind::Range { start, end, .. } => {
-            start
-                .as_ref()
-                .map(|start| expr_returns_are_static(start, facts, seen, env))
-                .unwrap_or(true)
-                && end
-                    .as_ref()
-                    .map(|end| expr_returns_are_static(end, facts, seen, env))
-                    .unwrap_or(true)
-        }
+        ExprKind::Range { start, end, .. } => start
+            .iter()
+            .chain(end.iter())
+            .all(|bound| expr_returns_are_static(bound, facts, seen, env)),
         // No `return` can hide in these, and they are never a static text.
         ExprKind::Unit
         | ExprKind::Int { .. }
@@ -314,7 +304,6 @@ pub(super) fn is_static_text_expr(expr: &Expr, facts: &Facts, env: &BTreeSet<Str
         ExprKind::Path(path) => path_local_name(path)
             .map(|name| env.contains(name))
             .unwrap_or(false),
-        ExprKind::SelfValue => false,
         // Interprocedural propagation: only user functions classified by the
         // fixpoint; never a builtin (`as_str` and friends must stay non-static).
         ExprKind::Call { .. } => matches!(

@@ -12,7 +12,6 @@ impl<'a> Emitter<'a> {
     pub(super) fn call_expr(
         &self,
         expr: &Expr,
-        callee: &Expr,
         args: &[Expr],
         indent: usize,
     ) -> Result<String, CodegenError> {
@@ -30,19 +29,11 @@ impl<'a> Emitter<'a> {
             )),
             CallTarget::BuiltinFn { path } => self.builtin_free_call(expr, path, args, indent),
             CallTarget::VariantCtor { enum_item, variant } => {
-                let name = self.variant_name_opt(*enum_item, *variant);
-                let constructor = match name {
-                    Some(name) => format!("{}::{}", self.enum_path(*enum_item)?, name),
-                    None => match &callee.kind {
-                        ExprKind::Path(path) => self.plain_path_text(path)?,
-                        _ => {
-                            return Err(err(format!(
-                                "unresolved variant constructor for call expression (expression node {})",
-                                expr.id
-                            )));
-                        }
-                    },
-                };
+                let constructor = format!(
+                    "{}::{}",
+                    self.enum_path(*enum_item)?,
+                    self.variant_name(*enum_item, *variant)?
+                );
                 let rendered = self.call_args(args, indent)?;
                 let is_unit = self.facts().enums.get(enum_item).is_some_and(|info| {
                     matches!(
@@ -85,7 +76,6 @@ impl<'a> Emitter<'a> {
             FreeBuiltin::Eprintln => {
                 Ok(format!("crate::rv_eprintln({})", self.str_arg(first, indent)?))
             }
-            FreeBuiltin::Eprint => Ok(format!("crate::rv_eprint({})", self.str_arg(first, indent)?)),
             FreeBuiltin::ReadLine => {
                 self.expect_arity(path, args, 0)?;
                 Ok("crate::rv_read_line()".to_string())
@@ -112,40 +102,21 @@ impl<'a> Emitter<'a> {
                 self.str_arg(first, indent)?
             )),
             FreeBuiltin::Exit => Ok(format!("crate::rv_exit({rendered})")),
-            FreeBuiltin::Panic => match args.len() {
-                0 => Ok("crate::rv_panic(\"panic\")".to_string()),
-                1 => Ok(format!("crate::rv_panic({})", self.str_arg(first, indent)?)),
-                _ => Err(err(format!(
-                    "`panic` takes at most one argument (call node {})",
-                    expr.id
-                ))),
-            },
-            FreeBuiltin::Assert => match args.len() {
-                1 => Ok(format!(
+            FreeBuiltin::Panic => {
+                self.expect_arity(path, args, 1)?;
+                Ok(format!("crate::rv_panic({})", self.str_arg(first, indent)?))
+            }
+            FreeBuiltin::Assert => {
+                self.expect_arity(path, args, 1)?;
+                Ok(format!(
                     "crate::rv_assert({}, {}, {})",
                     self.expr(&args[0], indent)?,
                     string_literal(&file),
                     line
-                )),
-                2 => Ok(format!(
-                    "crate::rv_assert_msg({}, {}, {}, {})",
-                    self.expr(&args[0], indent)?,
-                    self.str_arg(args.get(1), indent)?,
-                    string_literal(&file),
-                    line
-                )),
-                _ => Err(err(format!(
-                    "`assert` takes one or two arguments (call node {})",
-                    expr.id
-                ))),
-            },
+                ))
+            }
             FreeBuiltin::AssertEq => {
-                if args.len() != 2 {
-                    return Err(err(format!(
-                        "`assert_eq` takes exactly two arguments (call node {})",
-                        expr.id
-                    )));
-                }
+                self.expect_arity(path, args, 2)?;
                 // Ravum compares text values of different Rust types (`String`
                 // versus `&str`); Rust's cross `PartialEq` impls cover that with
                 // the `_cross` helper. Same types keep the simple `Debug` form.
@@ -208,8 +179,13 @@ impl<'a> Emitter<'a> {
                 );
                 if is_float && (method == "max" || method == "min") {
                     let tie = if method == "max" { "0.0" } else { "-0.0" };
+                    // Evaluate both operands before binding either temporary.
+                    // Rust could read a bare binding named like an item as a
+                    // constant pattern; no item can be named so, since
+                    // `_rv_` is reserved in user identifiers (LEX-4.6).
+                    let operands = format!("__rv_math_args_{}", expr.id);
                     return Ok(format!(
-                        "(if ({a}) == 0.0 && ({b}) == 0.0 {{ {tie} }} else {{ ({a}).{method}({b}) }})"
+                        "({{ let {operands} = ({a}, {b}); if ({operands}.0) == 0.0 && ({operands}.1) == 0.0 {{ {tie} }} else {{ ({operands}.0).{method}({operands}.1) }} }})"
                     ));
                 }
                 Ok(format!("({a}).{method}({b})"))
@@ -225,10 +201,10 @@ impl<'a> Emitter<'a> {
                     .get(segments.len().wrapping_sub(2))
                     .copied()
                     .filter(|owner| matches!(*owner, "Option" | "Result"));
-                match owner {
-                    Some(owner) => Ok(format!("{owner}::{constructor}({rendered})")),
-                    None => Ok(format!("{constructor}({rendered})")),
-                }
+                // The checker records prelude constructors qualified
+                // (`Option::Some`); a bare name is written as it is.
+                let prefix = owner.map(|owner| format!("{owner}::")).unwrap_or_default();
+                Ok(format!("{prefix}{constructor}({rendered})"))
             }
         }
     }
@@ -284,19 +260,15 @@ impl<'a> Emitter<'a> {
     }
 
     /// Emit an argument that must be usable as a `&str` receiver (`str::parse_*`).
+    /// Its signature takes `&str`, so typeck admits only a text reference
+    /// (`&String` coerces): the argument is emitted as it is.
     pub(super) fn str_borrow(
         &self,
         arg: Option<&Expr>,
         indent: usize,
     ) -> Result<String, CodegenError> {
         match arg {
-            Some(argument) => {
-                let text = self.expr(argument, indent)?;
-                match self.facts().expr_types.get(&argument.id) {
-                    Some(Type::String) | Some(Type::Str) => Ok(format!("&({text})")),
-                    _ => Ok(text),
-                }
-            }
+            Some(argument) => self.expr(argument, indent),
             None => Err(err("builtin call is missing its text argument")),
         }
     }
@@ -356,15 +328,12 @@ impl<'a> Emitter<'a> {
         let owner = normalize_owner(owner);
         let rendered = self.call_args(args, indent)?;
 
-        if let Some(special) = builtin_method_special(&owner, method, receiver, &rendered) {
+        if let Some(special) = builtin_method_special(&owner, method, receiver) {
             return Ok(special);
         }
 
         // Direct pass-through only for the methods the Core 1.0 stdlib actually
         // provides on this owner. No hidden clone, no hidden conversion.
-        if method == "to_string" {
-            return Ok(format!("format!(\"{{}}\", {receiver})"));
-        }
         if builtin_method_is_direct(&owner, method) {
             return Ok(format!("{receiver}.{}({rendered})", mangle_ident(method)));
         }

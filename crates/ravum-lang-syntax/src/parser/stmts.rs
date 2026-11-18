@@ -42,7 +42,10 @@ impl<'a> Parser<'a> {
                 let stmt = self.parse_let_stmt();
                 stmts.push(stmt);
             } else {
+                self.stmt_head = true;
                 let expr = self.parse_expr(true);
+                self.stmt_head = false;
+                self.stmt_end = false;
                 let block_like = is_block_like(&expr);
                 if self.at(Punct::Semi) {
                     let semi = self.cur_span();
@@ -132,7 +135,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.wild_pat(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let pat = self.parse_pattern_inner();
         self.depth -= 1;
 

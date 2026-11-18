@@ -77,7 +77,13 @@ use ravum_lang_syntax::span::Span;
 use std::collections::BTreeMap;
 
 /// Bornes de robustesse / performance (P0-H).
-pub(super) const MAX_DEPTH: u32 = 256;
+///
+/// The analysis enters up to three levels per syntactic nesting level (block,
+/// statement, expression; an operand read as a place then as a value), and the
+/// parser bounds the tree height at `ravum_lang_syntax::parser::MAX_DEPTH`
+/// (256). Four times that bound cannot be reached by a parsed program; a tree
+/// that reaches it anyway is refused with `E-OWN-LIMIT`, never skipped.
+pub(super) const MAX_DEPTH: u32 = 1024;
 pub(super) const MAX_FIXPOINT: u32 = 16;
 /// Per-function borrow-error bound. It **must** stay strictly below the
 /// per-file diagnostic budget (`ravum_lang_syntax::diag::DIAGNOSTIC_BUDGET`,
@@ -97,6 +103,7 @@ pub(super) const E_BORROW_CONFLICT: &str = "E-OWN-BORROW-CONFLICT";
 pub(super) const E_REF_ESCAPE: &str = "E-OWN-REF-ESCAPE";
 pub(super) const E_NOT_COPY: &str = "E-TYP-ARRAY-REPEAT";
 pub(super) const E_LIMIT: &str = "E-OWN-LIMIT";
+pub(super) const E_IMMUTABLE: &str = "E-OWN-IMMUTABLE";
 
 /// Verify ownership rules on a typed program. Diagnostics are appended in source
 /// order by the caller; this function only pushes them.
@@ -245,12 +252,8 @@ pub(super) fn collect_fns<'a>(module: &'a Module, out: &mut Vec<(&'a Item, &'a F
             ItemKind::Fn(f) => out.push((item, f)),
             ItemKind::Mod(inner) => collect_fns(inner, out),
             ItemKind::Impl(imp) => {
-                for sub in &imp.items {
-                    match &sub.kind {
-                        ItemKind::Fn(f) => out.push((sub, f)),
-                        ItemKind::Mod(inner) => collect_fns(inner, out),
-                        _ => {}
-                    }
+                for (sub, f) in imp.methods() {
+                    out.push((sub, f));
                 }
             }
             _ => {}
@@ -305,6 +308,9 @@ pub(super) struct SlotInfo {
     pub(super) decl_span: Span,
     /// Program-wide identity of the binding (RFC-OWN-FACTS-2 step C4).
     pub(super) binding: BindingId,
+    /// Declared without `mut` and without an initialiser: the binding takes
+    /// its value from one assignment, and may not be assigned again.
+    pub(super) assign_once: bool,
 }
 
 /// One binding introduced by a pattern, with the information needed to decide
@@ -344,6 +350,9 @@ pub(super) struct SlotState {
     pub(super) used_since: bool,
     /// Projections that may have been partially moved, with their move record.
     pub(super) partial: BTreeMap<Vec<Step>, PartialMove>,
+    /// Assigned on at least one path since its declaration (only tracked for
+    /// the bindings that may be assigned once).
+    pub(super) maybe_assigned: bool,
 }
 
 impl SlotState {
@@ -409,6 +418,10 @@ pub(super) struct OwnChecker<'a> {
     pub(super) scopes: Vec<Vec<(String, SlotId)>>,
     pub(super) state: State,
     pub(super) loans: Vec<Loan>,
+    /// Loans taken by the expressions that enclose the construct under
+    /// analysis (a call whose earlier argument borrows, for instance). A nested
+    /// block, branch or loop ends its own temporaries, never these.
+    pub(super) loan_floor: usize,
     pub(super) next_slot: SlotId,
     /// Diagnostics are emitted only when this is true (false during the silent
     /// fixpoint passes of loops).

@@ -8,11 +8,8 @@ name: Mutation evidence (weekly, non-blocking gate)
 # its summary step had a schema bug (it read the report as a list), fixed here,
 # and the survivors are now printed by name.
 #
-# Campaign 4 (added 2026-11-14) closes the R8 hole named in
-# `PRODUCTION-READINESS.md`: mutation was never run on `codegen/emit.rs`. The
-# targeted functions are the ones that decide ownership/move behaviour and the
-# extern-wrapper emission, not the whole file: a mutation score over the whole
-# crate would still say nothing about the rest (MUTATION-EQUIVALENCE.md §1).
+# E6 adds an exhaustive campaign over the emit module's production files.
+# The three targeted sema campaigns are kept for historical comparison.
 #
 # Scope and honesty rules:
 #   * the same targeted `-F` filters are used, so the numbers stay comparable
@@ -21,20 +18,28 @@ name: Mutation evidence (weekly, non-blocking gate)
 #     and triaged in MUTATION-EQUIVALENCE.md §7.1-§7.4. The job therefore does
 #     not fail on survivors; it fails only when the campaign itself could not
 #     run (missing report, crashed tool), which is a real infrastructure defect;
-#   * no mutation score is published for the whole crate: a targeted score says
-#     nothing about the rest (MUTATION-EQUIVALENCE.md §1).
+#   * the full emit campaign's result applies to the emit module only, with
+#     its inventory and outcomes published per shard.
 #
 # The report is uploaded as an artifact; a maintainer diffs it against the
 # published table and records any new survivor with a reason.
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/mutation.yml'
   schedule:
     # Every Monday at 03:17 UTC (off the top of the hour to avoid the CI rush).
     - cron: '17 3 * * 1'
 
 permissions:
   contents: read
+
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: never
@@ -80,7 +85,7 @@ jobs:
         run: |
           mkdir -p target/mutants/own
           cargo mutants --no-shuffle -j 8 \
-            --file crates/ravum-lang-sema/src/own.rs \
+            --file crates/ravum-lang-sema/src/own.rs --file 'crates/ravum-lang-sema/src/own/**/*.rs' \
             -F 'borrow_place|check_availability|place_mutability' \
             2>&1 | tee target/mutants/own/campaign.log || true
           if [ -d mutants.out ]; then mv mutants.out target/mutants/own/; fi
@@ -90,7 +95,7 @@ jobs:
         run: |
           mkdir -p target/mutants/resolve
           cargo mutants --no-shuffle -j 8 \
-            --file crates/ravum-lang-sema/src/resolve.rs \
+            --file crates/ravum-lang-sema/src/resolve.rs --file 'crates/ravum-lang-sema/src/resolve/**/*.rs' \
             -F 'resolve_type_path|resolve_imports|resolve_use_target|type_is_copy|nominal_is_copy' \
             2>&1 | tee target/mutants/resolve/campaign.log || true
           if [ -d mutants.out ]; then mv mutants.out target/mutants/resolve/; fi
@@ -100,45 +105,36 @@ jobs:
         run: |
           mkdir -p target/mutants/typeck
           cargo mutants --no-shuffle -j 8 \
-            --file crates/ravum-lang-sema/src/typeck.rs \
+            --file crates/ravum-lang-sema/src/typeck.rs --file 'crates/ravum-lang-sema/src/typeck/**/*.rs' \
             -F 'check_struct_lit|check_variant_call|check_for|check_lit_pattern|cover_pattern|negative_value_fits|pattern_contains_float|check_const_expr' \
             2>&1 | tee target/mutants/typeck/campaign.log || true
           if [ -d mutants.out ]; then mv mutants.out target/mutants/typeck/; fi
 
-      # emit.rs decides the shape of the generated Rust: which values move, what
-      # copy semantics apply, how an extern wrapper is emitted. Its local move
-      # logic was removed in T7 (OwnFacts guard) and is the exact kind of code a
-      # "covered" giant match can hide a bug in. Targeted, not whole-file.
-      - name: emit.rs (move/repr decisions and extern wrapper emission)
-        continue-on-error: true
-        run: |
-          mkdir -p target/mutants/emit
-          cargo mutants --no-shuffle -j 8 \
-            --file crates/ravum-lang-codegen/src/emit.rs \
-            -F 'builtin_method_moves_receiver|is_copy_type|is_owned_position|plan_array_moves|verify_ownership_facts|emit_extern_block' \
-            2>&1 | tee target/mutants/emit/campaign.log || true
-          if [ -d mutants.out ]; then mv mutants.out target/mutants/emit/; fi
-
       # A campaign that produced no report is an infrastructure failure, not a
       # mutation result: there is nothing to triage, so the job must fail.
-      - name: Verify that every campaign produced a report
+      - name: Verify that every targeted campaign recorded mutants
         run: |
-          set -e
-          missing=0
-          for name in own resolve typeck emit; do
-            if [ ! -f "target/mutants/$name/mutants.out/outcomes.json" ]; then
-              echo "::error::campaign $name produced no mutants.out/outcomes.json (see its log)"
-              missing=1
-            fi
-          done
-          exit "$missing"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for name in ("own", "resolve", "typeck"):
+              path = Path(f"target/mutants/{name}/mutants.out/outcomes.json")
+              report = json.loads(path.read_text())
+              baseline = [
+                  entry["summary"] for entry in report["outcomes"]
+                  if entry["scenario"] == "Baseline"
+              ]
+              if baseline != ["Success"] or report["total_mutants"] <= 0:
+                  raise SystemExit(f"{name}: failed baseline or no mutants")
+          PY
 
       - name: Summarize outcomes (never hides survivors)
         if: always()
         run: |
           python - <<'PY'
           import json, pathlib
-          for name in ("own", "resolve", "typeck", "emit"):
+          for name in ("own", "resolve", "typeck"):
               path = pathlib.Path(f"target/mutants/{name}/mutants.out/outcomes.json")
               if not path.is_file():
                   print(f"{name}: NO REPORT")
@@ -172,4 +168,96 @@ jobs:
           name: mutants-targeted
           path: target/mutants
           if-no-files-found: warn
+          retention-days: 90
+
+  emit-full:
+    name: Emit mutation (shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    env:
+      SHARD: ${{ matrix.shard }}
+      SHARDS: '12'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+
+      - name: Run the full production emitter campaign
+        shell: bash
+        run: |
+          output=target/mutants/emit-full
+          mkdir -p "$output"
+          scope=(
+            --no-shuffle
+            --sharding round-robin
+            --shard "$SHARD/$SHARDS"
+            --file 'crates/ravum-lang-codegen/src/emit/**/*.rs'
+            --exclude 'crates/ravum-lang-codegen/src/emit/tests.rs'
+            --exclude 'crates/ravum-lang-codegen/src/emit/tests/**'
+          )
+          cargo mutants "${scope[@]}" --list --json > "$output/inventory.json"
+          set +e
+          cargo mutants "${scope[@]}" --jobs 2 --test-package ravum-lang-codegen \
+            --output "$output" 2>&1 | tee "$output/campaign.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # Exit 2 records survivors. A broken baseline or a timeout needs
+          # investigation before this shard can count as complete.
+          case "$status" in
+            0|2) ;;
+            *) exit "$status" ;;
+          esac
+
+          python3 - "$output" <<'PY'
+          import collections
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          inventory = json.loads((root / "inventory.json").read_text())
+          report = json.loads((root / "mutants.out/outcomes.json").read_text())
+          expected = collections.Counter(item["name"] for item in inventory)
+          observed = collections.Counter()
+          counts = collections.Counter()
+          baseline = []
+          for outcome in report["outcomes"]:
+              scenario = outcome["scenario"]
+              if scenario == "Baseline":
+                  baseline.append(outcome["summary"])
+                  continue
+              name = scenario["Mutant"]["name"]
+              summary = outcome["summary"]
+              observed[name] += 1
+              counts[summary] += 1
+              if summary == "MissedMutant":
+                  print(f"MISSED {name}")
+          if not expected or expected != observed or report["total_mutants"] != len(inventory):
+              raise SystemExit("Incomplete emitter mutation inventory")
+          if baseline != ["Success"]:
+              raise SystemExit("Missing successful unmutated baseline")
+          if counts.keys() - {"CaughtMutant", "MissedMutant", "Unviable"}:
+              raise SystemExit(f"Unresolved emitter mutation outcomes: {dict(counts)}")
+          print(f"Emit shard complete: {len(inventory)} mutants {dict(counts)}")
+          PY
+
+      - name: Upload emitter mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-emit-shard-${{ matrix.shard }}
+          path: target/mutants/emit-full
+          if-no-files-found: error
           retention-days: 90

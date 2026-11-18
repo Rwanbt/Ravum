@@ -601,12 +601,12 @@ fn cast_and_assignment_operators() {
         other => panic!("expected expression statement, got {other:?}"),
     }
     match &stmt_expr(&f.body.stmts[1]).0.kind {
-        ExprKind::AssignOp { op, .. } => assert_eq!(*op, BinOp::Add),
+        ExprKind::AssignOp { op, .. } => assert_eq!(*op, CompoundOp::Add),
         other => panic!("expected +=, got {other:?}"),
     }
     // `>>=` is lexed as one token and split internally; it must stay Shr.
     match &stmt_expr(&f.body.stmts[2]).0.kind {
-        ExprKind::AssignOp { op, .. } => assert_eq!(*op, BinOp::Shr),
+        ExprKind::AssignOp { op, .. } => assert_eq!(*op, CompoundOp::Shr),
         other => panic!("expected >>=, got {other:?}"),
     }
 }
@@ -761,6 +761,39 @@ fn ranges_try_and_return() {
             assert!(matches!(&value.kind, ExprKind::Path(_)));
         }
         other => panic!("expected return with value, got {other:?}"),
+    }
+}
+
+/// Only the outermost expression of a `for` iterator may be a range: a range
+/// nested in it (an argument, an index, a block, a bound) or used as an operand
+/// is outside a `for` clause and refused in the parse phase. Before this, the
+/// nested forms reached the back end (rustc E0308/E0277) or built.
+#[test]
+fn a_range_nested_in_a_for_iterator_is_refused() {
+    for source in [
+        "fn f() { for i in 0..g(..3) { } }",
+        "fn f() { for i in [..3][0] { } }",
+        "fn f() { for i in 0..{ let r = ..3; 2 } { } }",
+        "fn f() { for i in (0..3) { } }",
+        "fn f() { for i in 0..2 + ..3 { } }",
+        "fn f() { let x = 1 + ..3; }",
+    ] {
+        let result = parse(source);
+        let codes: Vec<&str> = result.diags.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(
+            codes,
+            ["E-UNSUPPORTED-RANGE"],
+            "{source}: {}",
+            dump_diags(&result)
+        );
+    }
+    for source in [
+        "fn f() { for i in 0..3 { for j in 0..i { } } }",
+        "fn f() { for i in ..3 { } for k in 0..=2 { } }",
+        "fn f() { for i in 0..{ for j in 0..2 { } 3 } { } }",
+    ] {
+        let result = parse(source);
+        assert!(result.diags.is_empty(), "{source}: {}", dump_diags(&result));
     }
 }
 
@@ -1344,5 +1377,171 @@ fn hostile_bizarre_inputs_never_panic() {
         assert_ne!(result.program.root.id, 0);
         // No assertion on diagnostics: some hostile inputs are merely
         // lexically odd. The contract is "no panic, no hang".
+    }
+}
+
+/// Source of `fn f() { <body> }` where `body` repeats `link` `count` times
+/// after `head`.
+fn chained(head: &str, link: &str, count: usize, tail: &str) -> String {
+    format!("fn f() {{ {head}{}{tail} }}", link.repeat(count))
+}
+
+/// Left-associative chains are parsed by loops, so they nest the tree without
+/// nesting the parser. Every later phase recurses on that tree: a chain is
+/// bounded like any other nesting, and a hostile one is refused, not followed
+/// until the stack overflows (100 000 links aborted the compiler).
+#[test]
+fn hostile_chains_report_depth_without_overflow() {
+    let shapes: [(&str, &str, &str); 8] = [
+        ("let r = 1", " + 0", ";"),
+        ("let r = c", " && c", ";"),
+        ("let r = 1", " as i32", ";"),
+        ("let r = v", ".a", ";"),
+        ("let r = v", "[0]", ";"),
+        ("let r = v", ".m()", ";"),
+        ("let r = v", "?", ";"),
+        ("if c { }", " else if c { }", " else { }"),
+    ];
+    for (head, link, tail) in shapes {
+        for count in [300, 20_000] {
+            let result = parse(&chained(head, link, count, tail));
+            assert!(
+                result.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"),
+                "`{link}` x {count}: expected E-PARSE-DEPTH, got:\n{}",
+                dump_diags(&result)
+            );
+        }
+    }
+}
+
+/// The bound is the nesting limit, not a small constant: chains of two
+/// hundred links parse cleanly in every shape.
+#[test]
+fn long_chains_below_the_nesting_limit_parse() {
+    let shapes: [(&str, &str, &str); 8] = [
+        ("let r = 1", " + 0", ";"),
+        ("let r = c", " && c", ";"),
+        ("let r = 1", " as i32", ";"),
+        ("let r = v", ".a", ";"),
+        ("let r = v", "[0]", ";"),
+        ("let r = v", ".m()", ";"),
+        ("let r = v", "?", ";"),
+        ("if c { }", " else if c { }", " else { }"),
+    ];
+    for (head, link, tail) in shapes {
+        let result = parse(&chained(head, link, 200, tail));
+        assert!(
+            result.diags.is_empty(),
+            "`{link}` x 200 must parse, got:\n{}",
+            dump_diags(&result)
+        );
+    }
+}
+
+/// A chain nested inside another nesting adds to it: the limit bounds the
+/// height of the tree, whatever mix of nesting and chaining builds it.
+#[test]
+fn a_chain_inside_a_nesting_counts_against_the_same_limit() {
+    // 60 parentheses use 180 levels; 60 more links stay under the limit,
+    // 120 more exceed it.
+    let nested = |links: usize| {
+        format!(
+            "fn f() {{ let r = {}1{}{}; }}",
+            "(".repeat(60),
+            " + 0".repeat(links),
+            ")".repeat(60)
+        )
+    };
+    assert!(parse(&nested(60)).diags.is_empty());
+    let refused = parse(&nested(120));
+    assert!(refused.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"));
+}
+
+/// G-5.9 (MUST): generic arguments exist in type position only. The turbofish
+/// is refused on every segment of an expression or pattern path; it used to be
+/// refused on a single-name path only, and silently dropped elsewhere.
+#[test]
+fn a_turbofish_is_refused_on_every_segment_of_an_expression_path() {
+    for src in [
+        "fn f() { let v = Vec::<i32>::new(); }",
+        "fn f() { let a = m::g::<i64>(1); }",
+        "fn f() { let e = E::<i64>::A { v: 1 }; }",
+        "fn f() { let o = Option::Some::<i64>(1); }",
+        "fn f(e: E<i32>) { match e { E::<i32>::A(x) => { } _ => { } } }",
+    ] {
+        let codes: Vec<String> = diags_of(src).into_iter().map(|(code, _, _)| code).collect();
+        assert_eq!(codes, ["E-PARSE-UNEXPECTED"], "{src}");
+    }
+    let start = "fn f() { let v = Vec".len() as u32;
+    assert_error_at(
+        "fn f() { let v = Vec::<i32>::new(); }",
+        "E-PARSE-UNEXPECTED",
+        start,
+    );
+    // Type position keeps both spellings.
+    parse_ok("fn f(v: Vec<i32>, w: Vec::<i32>) { }");
+}
+
+/// G-6.21/G-6.42 (MUST): a block-bodied arm needs no comma, even when the next
+/// arm starts with `(` or `-`; the block is not called or subtracted from. An expression arm still needs its comma.
+#[test]
+fn a_block_arm_ends_before_a_parenthesised_next_arm() {
+    for src in [
+        "fn f(p: (bool, bool)) { match p { (true, _) => { } (false, x) => { } } }",
+        "fn f(n: i32) { match n { 1 => if true { } else { } -1 => { } _ => { } } }",
+        "fn f(n: i32) { match n { 1 => match n { _ => { } } (2) => { } _ => loop { } } }",
+    ] {
+        parse_ok(src);
+    }
+    let codes: Vec<String> = diags_of("fn f(n: i32) { let x = match n { 1 => 2 3 => 4 }; }")
+        .into_iter()
+        .map(|(code, _, _)| code)
+        .collect();
+    assert!(codes.contains(&"E-PARSE-EXPECTED".to_string()), "{codes:?}");
+}
+
+/// G-6.1: a block-like expression at the head of a statement ends at its `}`.
+#[test]
+fn a_block_like_statement_head_ends_at_its_brace() {
+    for (src, head) in [
+        ("fn f(c: bool) { if c { } (1, 2); }", "if"),
+        ("fn f(c: bool) { match c { _ => { } } (3, 4); }", "match"),
+        ("fn f() { { } (5, 6); }", "block"),
+        ("fn f() { { } [1][0]; }", "block"),
+        ("fn f(c: bool) { if c { } - 1; }", "if"),
+    ] {
+        let program = parse_ok(src);
+        let body = &as_fn(&top(&program)[0]).body;
+        assert_eq!(body.stmts.len(), 2, "{src}");
+        let (first, semi) = stmt_expr(&body.stmts[0]);
+        assert!(!semi, "{src}");
+        let kind_ok = match head {
+            "if" => matches!(first.kind, ExprKind::If { .. }),
+            "match" => matches!(first.kind, ExprKind::Match { .. }),
+            _ => matches!(first.kind, ExprKind::Block(_)),
+        };
+        assert!(kind_ok, "{src}: {:?}", first.kind);
+        let (_, semi) = stmt_expr(&body.stmts[1]);
+        assert!(semi, "{src}");
+    }
+}
+
+/// G-6.1: `.` and `?` still continue a block-like head; a prefix operator or
+/// a non-head position keeps the whole expression.
+#[test]
+fn a_block_like_head_continues_with_a_method_call_or_inside_an_expression() {
+    for src in [
+        "fn f(c: bool) { match c { _ => 1 } .max(2); }",
+        "fn f() { -{ 1 } + 1; }",
+        "fn f() { let x = { 1 } + 2; }",
+        "fn f() -> i32 { 1 + { 2 } * 3 }",
+    ] {
+        let program = parse_ok(src);
+        let body = &as_fn(&top(&program)[0]).body;
+        assert_eq!(
+            body.stmts.len() + usize::from(body.tail.is_some()),
+            1,
+            "{src}"
+        );
     }
 }

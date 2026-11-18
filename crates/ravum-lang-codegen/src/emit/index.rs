@@ -72,6 +72,8 @@ pub(super) struct Index {
     /// `(display name, item id)` of the tests, in declaration order.
     pub(super) tests: Vec<(String, NodeId)>,
     pub(super) user_main: Option<NodeId>,
+    /// User names that may collide with generated float-match bindings.
+    pub(super) float_match_names: BTreeSet<String>,
     /// Ravum module paths (`""` for the root) used to rewrite `item_paths`.
     pub(super) module_paths: BTreeSet<String>,
 }
@@ -125,15 +127,15 @@ impl Index {
         }
 
         // Pass B: inherent methods -> `Type::method`, owned by the type path.
-        for raw in raws.iter().filter(|raw| raw.owner.is_some()) {
+        for (raw, owner) in raws
+            .iter()
+            .filter_map(|raw| raw.owner.as_ref().map(|owner| (raw, owner)))
+        {
             let rust_name = rust_names[&raw.id].clone();
-            let owner_path = match &raw.owner {
-                Some(owner) => match owner.def.and_then(|def| index.items.get(&def)) {
-                    Some(entry) => entry.rust_path.clone(),
-                    None if owner.name_hint.is_empty() => raw.module_rust.clone(),
-                    None => format!("{}::{}", raw.module_rust, mangle_ident(&owner.name_hint)),
-                },
-                None => raw.module_rust.clone(),
+            let owner_path = match owner.def.and_then(|def| index.items.get(&def)) {
+                Some(entry) => entry.rust_path.clone(),
+                None if owner.name_hint.is_empty() => raw.module_rust.clone(),
+                None => format!("{}::{}", raw.module_rust, mangle_ident(&owner.name_hint)),
             };
             index.items.insert(
                 raw.id,
@@ -146,10 +148,8 @@ impl Index {
 
         // Function table (`ret` already classifies `main`/test entry points).
         for raw in raws.iter().filter(|raw| raw.kind == RawKind::Fn) {
-            let entry = match index.items.get(&raw.id) {
-                Some(entry) => entry,
-                None => continue,
-            };
+            // Passes A and B above give every raw item an entry.
+            let entry = &index.items[&raw.id];
             index.fns.insert(
                 raw.id,
                 FnEntry {
@@ -165,12 +165,26 @@ impl Index {
                 index.tests.push((test_display_name(raw), raw.id));
             }
         } else {
-            for id in &checked.facts.test_fns {
-                if let Some(raw) = raws.iter().find(|raw| raw.id == *id) {
-                    index.tests.push((test_display_name(raw), raw.id));
-                }
+            for raw in checked
+                .facts
+                .test_fns
+                .iter()
+                .filter_map(|id| raws.iter().find(|raw| raw.id == *id))
+            {
+                index.tests.push((test_display_name(raw), raw.id));
             }
         }
+
+        index.float_match_names = checked
+            .facts
+            .own
+            .bindings
+            .keys()
+            .map(|(_, name)| name)
+            .chain(index.items.values().map(|item| &item.rust_name))
+            .filter(|name| name.starts_with("__ravum_"))
+            .cloned()
+            .collect();
 
         index
     }
@@ -255,19 +269,17 @@ impl Index {
                 }),
                 ItemKind::Impl(implementation) => {
                     let owner = impl_owner_hint(checked, implementation);
-                    for sub in &implementation.items {
-                        if let ItemKind::Fn(fun) = &sub.kind {
-                            raws.push(RawItem {
-                                id: sub.id,
-                                name: fun.name.name.clone(),
-                                kind: RawKind::Fn,
-                                is_test: fun.is_test,
-                                ret: ret_kind_of(checked, sub.id, fun),
-                                module_ravum: ravum_path.to_string(),
-                                module_rust: rust_path.to_string(),
-                                owner: Some(owner.clone()),
-                            });
-                        }
+                    for (sub, fun) in implementation.methods() {
+                        raws.push(RawItem {
+                            id: sub.id,
+                            name: fun.name.name.clone(),
+                            kind: RawKind::Fn,
+                            is_test: fun.is_test,
+                            ret: ret_kind_of(checked, sub.id, fun),
+                            module_ravum: ravum_path.to_string(),
+                            module_rust: rust_path.to_string(),
+                            owner: Some(owner.clone()),
+                        });
                     }
                 }
                 ItemKind::Mod(inner) => {

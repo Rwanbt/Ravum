@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return None;
         }
-        self.depth += 1;
+        self.descend();
         let result = self.parse_item_inner();
         self.depth -= 1;
         result

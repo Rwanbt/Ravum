@@ -64,8 +64,16 @@ impl<'a> Parser<'a> {
         let mut else_branch = None;
         if self.eat_kw(Kw::Else) {
             if self.at_kw(Kw::If) {
-                let nested = self.parse_if_expr();
-                else_branch = Some(Box::new(nested));
+                // An `else if` chain nests one `if` per link: it counts
+                // against the nesting limit like any other nesting.
+                if self.depth >= MAX_DEPTH {
+                    self.fail_depth();
+                } else {
+                    self.descend();
+                    let nested = self.parse_if_expr();
+                    self.depth -= 1;
+                    else_branch = Some(Box::new(nested));
+                }
             } else if self.at(Punct::LBrace) {
                 let block = self.parse_block();
                 let span = block.span;
@@ -186,7 +194,21 @@ impl<'a> Parser<'a> {
                 }
                 continue;
             }
-            let body = self.parse_expr(true);
+            // G-6.21/G-6.42 (MUST): `match_arm = pattern "=>" ( expr "," | block )`.
+            // A body that starts as a block-like expression ends with it, so
+            // the next arm may start with `(` or `-` without being read as a
+            // call or a subtraction of the block.
+            let starts_block_like = self.at(Punct::LBrace)
+                || self.at_kw(Kw::If)
+                || self.at_kw(Kw::Match)
+                || self.at_kw(Kw::While)
+                || self.at_kw(Kw::Loop)
+                || self.at_kw(Kw::For);
+            let body = if starts_block_like {
+                self.parse_primary(true)
+            } else {
+                self.parse_expr(true)
+            };
             let body_block_like = is_block_like(&body);
             arms.push(MatchArm {
                 id: self.id(),

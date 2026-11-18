@@ -30,16 +30,6 @@ pub(super) enum PathStep<'x> {
     Index { base: &'x Expr, index: &'x Expr },
 }
 
-impl<'x> PathStep<'x> {
-    fn base(&self) -> &'x Expr {
-        match self {
-            PathStep::Field { base, .. }
-            | PathStep::Tuple { base, .. }
-            | PathStep::Index { base, .. } => base,
-        }
-    }
-}
-
 /// Collect the path from the deepest non-projection/non-index expression down to
 /// `expr`, in application order (`a[0].0[1]` -> `[Index(0), Tuple(0), Index(1)]`
 /// for the root expression `a`).
@@ -97,6 +87,8 @@ pub(super) enum Slot {
 pub(super) struct ElementPath<'x> {
     /// Deepest expression that is neither a projection nor an index.
     root: &'x Expr,
+    /// The fixed-size array `steps[first]` indexes.
+    array: &'x Expr,
     steps: Vec<PathStep<'x>>,
     /// Position in `steps` of the first index into a fixed-size array.
     first: usize,
@@ -107,7 +99,7 @@ pub(super) struct ElementPath<'x> {
 impl<'x> ElementPath<'x> {
     /// The array expression the constant run applies to.
     fn array(&self) -> &'x Expr {
-        self.steps[self.first].base()
+        self.array
     }
 
     /// The steps after the constant run.
@@ -213,6 +205,7 @@ pub(super) fn rebuild_text(slots: &[Slot], depth: usize, array: &str, fresh: &st
     }
 }
 /// Collect every expression node of a module (step B place cross-check).
+#[cfg(debug_assertions)]
 pub(super) fn collect_module_exprs<'a>(
     module: &'a Module,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -222,10 +215,8 @@ pub(super) fn collect_module_exprs<'a>(
         match &item.kind {
             ItemKind::Fn(function) => collect_block_exprs(&function.body, out, receivers),
             ItemKind::Impl(implementation) => {
-                for member in &implementation.items {
-                    if let ItemKind::Fn(function) = &member.kind {
-                        collect_block_exprs(&function.body, out, receivers);
-                    }
+                for (_, function) in implementation.methods() {
+                    collect_block_exprs(&function.body, out, receivers);
                 }
             }
             ItemKind::Mod(inner) => collect_module_exprs(inner, out, receivers),
@@ -235,15 +226,14 @@ pub(super) fn collect_module_exprs<'a>(
 }
 
 /// Collect the body of every function of a module (step-B path cross-check).
+#[cfg(debug_assertions)]
 pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>) {
     for item in &module.items {
         match &item.kind {
             ItemKind::Fn(function) => out.push(&function.body),
             ItemKind::Impl(implementation) => {
-                for member in &implementation.items {
-                    if let ItemKind::Fn(function) = &member.kind {
-                        out.push(&function.body);
-                    }
+                for (_, function) in implementation.methods() {
+                    out.push(&function.body);
                 }
             }
             ItemKind::Mod(inner) => collect_fn_bodies(inner, out),
@@ -252,6 +242,7 @@ pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>
     }
 }
 
+#[cfg(debug_assertions)]
 pub(super) fn collect_block_exprs<'a>(
     block: &'a Block,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -272,6 +263,7 @@ pub(super) fn collect_block_exprs<'a>(
     }
 }
 
+#[cfg(debug_assertions)]
 pub(super) fn collect_expr<'a>(
     expr: &'a Expr,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -354,11 +346,10 @@ pub(super) fn collect_expr<'a>(
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                collect_expr(start, out, receivers);
-            }
-            if let Some(end) = end {
-                collect_expr(end, out, receivers);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                collect_expr(bound, out, receivers);
             }
         }
         ExprKind::Try(inner) => collect_expr(inner, out, receivers),
@@ -409,6 +400,7 @@ pub(super) struct PathPlanner<'e, 'a> {
     reinits: Vec<NodeId>,
     /// Step-B guard (debug builds): decisions this walk derives from the syntax
     /// that the checker's facts do not confirm.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     disagreements: Vec<String>,
 }
 
@@ -430,6 +422,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
     ///   identity for its root;
     /// * a projection of a temporary (`make()[i]`) is no place, and carries the
     ///   use the checker recorded when it took its value.
+    #[cfg(debug_assertions)]
     fn cross_check(&mut self, expr: &Expr, root: &Expr) {
         let own = &self.emitter.facts().own;
         let location = self.emitter.expr_location(expr);
@@ -450,7 +443,12 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 expr.id
             ));
         }
-        if !own.binding_identity.contains_key(&root.id) {
+        // A place reached through an explicit dereference (`(*r)[0]`) is rooted
+        // at that dereference, not at a binding: the planner tracks no array
+        // place for it (`array_place` finds no identity and stops), so only a
+        // root that names a binding owes one.
+        let rooted_at_a_binding = matches!(root.kind, ExprKind::Path(_) | ExprKind::SelfValue);
+        if rooted_at_a_binding && !own.binding_identity.contains_key(&root.id) {
             self.disagreements.push(format!(
                 "ownership facts disagree with the backend for expression {} ({location}): the \
                  checker recorded no binding identity for the root of this place",
@@ -508,9 +506,9 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 self.walk_expr(index, false);
             }
         }
-        if cfg!(debug_assertions) {
-            self.cross_check(expr, root);
-        }
+        // Debug builds only: the cross-check is an audit, not a rule.
+        #[cfg(debug_assertions)]
+        self.cross_check(expr, root);
         let Some(path) = self.emitter.element_path(expr) else {
             return;
         };
@@ -599,11 +597,10 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 self.walk_expr(len, false);
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.walk_expr(start, false);
-                }
-                if let Some(end) = end {
-                    self.walk_expr(end, false);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.walk_expr(bound, false);
                 }
             }
             ExprKind::Unary { op, expr: inner } => {
@@ -676,6 +673,7 @@ impl<'a> Emitter<'a> {
 
     /// Step-B guard: the disagreements between the syntactic walk of `body` and
     /// the checker's facts (see [`PathPlanner::cross_check`]).
+    #[cfg(debug_assertions)]
     pub(super) fn path_fact_disagreements(&self, body: &Block) -> Vec<String> {
         let mut planner = PathPlanner::new(self);
         planner.walk_block(body);
@@ -686,11 +684,9 @@ impl<'a> Emitter<'a> {
         self.array_moves.borrow().paths.get(&node).copied()
     }
 
-    /// Element count of the fixed-size array an index step applies to.
-    pub(super) fn indexed_array_len(&self, step: &PathStep<'_>) -> Option<usize> {
-        let PathStep::Index { base, .. } = step else {
-            return None;
-        };
+    /// Element count of `base` when it is a fixed-size array (the indexed
+    /// expression of an index step).
+    pub(super) fn indexed_array_len(&self, base: &Expr) -> Option<usize> {
         match self.facts().expr_types.get(&base.id) {
             Some(Type::Array { len, .. }) => Some(*len),
             _ => None,
@@ -703,8 +699,8 @@ impl<'a> Emitter<'a> {
     /// non-literal index has no pattern form.
     pub(super) fn slot_of(&self, step: &PathStep<'_>) -> Option<Slot> {
         match step {
-            PathStep::Index { index, .. } => {
-                let len = self.indexed_array_len(step)?;
+            PathStep::Index { base, index } => {
+                let len = self.indexed_array_len(base)?;
                 let at = constant_index(index)?;
                 (at < len).then_some(Slot::Index { len, at })
             }
@@ -741,9 +737,12 @@ impl<'a> Emitter<'a> {
     pub(super) fn element_path<'x>(&self, expr: &'x Expr) -> Option<ElementPath<'x>> {
         let mut steps = Vec::new();
         let root = collect_path_steps(expr, &mut steps);
-        let first = steps
-            .iter()
-            .position(|step| self.indexed_array_len(step).is_some())?;
+        let (first, array) = steps.iter().enumerate().find_map(|(at, step)| match step {
+            PathStep::Index { base, .. } if self.indexed_array_len(base).is_some() => {
+                Some((at, *base))
+            }
+            _ => None,
+        })?;
         let mut slots = Vec::new();
         for step in &steps[first..] {
             match self.slot_of(step) {
@@ -753,6 +752,7 @@ impl<'a> Emitter<'a> {
         }
         Some(ElementPath {
             root,
+            array,
             steps,
             first,
             slots,
@@ -776,12 +776,14 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn planned_path<'x>(&self, expr: &'x Expr) -> Result<ElementPath<'x>, CodegenError> {
-        self.element_path(expr).ok_or_else(|| {
-            err(format!(
-                "internal: expression {} was planned as an array-element path but is not one",
+        // `plan` records a mode only for a node whose `element_path` is `Some`,
+        // and the answer depends on the node alone.
+        Ok(self.element_path(expr).unwrap_or_else(|| {
+            panic!(
+                "invariant: expression {} was planned as an array-element path",
                 expr.id
-            ))
-        })
+            )
+        }))
     }
 
     /// Move the value of an element path out of its array.
@@ -820,9 +822,9 @@ impl<'a> Emitter<'a> {
                     current.push_str(&format!(".{}", mangle_ident(name)));
                 }
                 PathStep::Tuple { index, .. } => current.push_str(&format!(".{index}")),
-                PathStep::Index { index, .. } => {
+                PathStep::Index { base, index } => {
                     let selected = format!("__rv_sel_{id}_{level}");
-                    match (self.indexed_array_len(step), constant_index(index)) {
+                    match (self.indexed_array_len(base), constant_index(index)) {
                         (Some(len), Some(at)) if at < len => {
                             out.push_str(&format!(
                                 "let {} = {current}; ",
@@ -830,7 +832,12 @@ impl<'a> Emitter<'a> {
                             ));
                             current = selected;
                         }
-                        (Some(len), None) => {
+                        // A runtime index, or a literal one past the end: Core
+                        // reports the latter at run time, like a copied or
+                        // borrowed element (`a[3]` of a `[T; 1]`), so it takes
+                        // the same bounds-checked form instead of a plain `a[3]`
+                        // that rustc refuses for a non-`Copy` element (E0508).
+                        (Some(len), _) => {
                             let index_name = format!("__rv_idx_{id}_{level}");
                             out.push_str(&format!(
                                 "let {index_name}: usize = {}; ",
@@ -843,8 +850,7 @@ impl<'a> Emitter<'a> {
                             ));
                             current = selected;
                         }
-                        // Not a fixed-size array level, or a literal index the
-                        // checker should have rejected: keep the plain form so
+                        // Not a fixed-size array level: keep the plain form so
                         // rustc reports it instead of a pattern it cannot match.
                         _ => {
                             current = format!("{current}[{}]", self.expr(index, indent)?);
@@ -911,6 +917,17 @@ impl<'a> Emitter<'a> {
         indent: usize,
     ) -> Result<String, CodegenError> {
         let path = self.planned_path(target)?;
+        // A literal index past the end of a fixed-size array stops the constant
+        // run (`a[3] = v` with `a: [T; 1]`): Core reports it at run time, after
+        // evaluating the value, like the move it re-initialises.
+        if let Some(PathStep::Index { base, index }) = path.rest().first() {
+            if let (Some(len), Some(at)) = (self.indexed_array_len(base), constant_index(index)) {
+                return Ok(format!(
+                    "{{ let _ = {}; panic!(\"index out of bounds: the len is {{}} but the index is {{}}\", {len}usize, {at}usize); }}",
+                    self.expr(value, indent)?
+                ));
+            }
+        }
         if !path.rest().is_empty() {
             return Err(err(format!(
                 "internal: re-initialised array element {} is not reachable by a constant path",

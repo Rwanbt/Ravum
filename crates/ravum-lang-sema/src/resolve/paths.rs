@@ -23,13 +23,6 @@ impl PathError {
             ),
         }
     }
-
-    pub(crate) fn self_outside_impl() -> Self {
-        Self {
-            code: "E-RES-SELF",
-            message: "`self` is only available in a method".to_string(),
-        }
-    }
 }
 
 /// Résout un chemin de valeur (sans les liaisons locales, gérées par typeck).
@@ -40,7 +33,6 @@ pub(crate) fn resolve_value_path(
     world: &World,
     module: ModuleId,
     generics: &[(String, usize)],
-    self_ty: Option<&Type>,
     path: &Path,
 ) -> Result<ValuePath, PathError> {
     let segments = &path.segments;
@@ -62,9 +54,8 @@ pub(crate) fn resolve_value_path(
         }
         if let Some(sym) = world.lookup(module, Ns::Value, name) {
             world.mark_used(module, sym);
-            if !world.visible_from(&sym, module) {
-                return Err(PathError::private(name));
-            }
+            // A name looked up in the current module is always visible from it:
+            // `lookup` answers `def_module == module`, which `visible_from` accepts.
             return match sym.sym {
                 Sym::Fn(id) | Sym::Const(id) => Ok(ValuePath::Item(id)),
                 Sym::BuiltinFn(p) => Ok(ValuePath::BuiltinFn(p)),
@@ -80,21 +71,18 @@ pub(crate) fn resolve_value_path(
         match name.as_str() {
             "Some" => {
                 return Ok(ValuePath::BuiltinCtor {
-                    path: "Option::Some",
-                    unit: false,
+                    ctor: PayloadCtor::Some,
                 })
             }
-            "None" => return Ok(ValuePath::BuiltinConst("Option::None")),
+            "None" => return Ok(ValuePath::BuiltinNone),
             "Ok" => {
                 return Ok(ValuePath::BuiltinCtor {
-                    path: "Result::Ok",
-                    unit: false,
+                    ctor: PayloadCtor::Ok,
                 })
             }
             "Err" => {
                 return Ok(ValuePath::BuiltinCtor {
-                    path: "Result::Err",
-                    unit: false,
+                    ctor: PayloadCtor::Err,
                 })
             }
             _ => {}
@@ -132,74 +120,41 @@ pub(crate) fn resolve_value_path(
         },
         PathRoot::Plain => {
             let first = &segments[0].name.name;
-            match first.as_str() {
-                "crate" => {
-                    index = 1;
-                    Cursor::Module(world.root)
+            // `Self` is the keyword `Kw::SelfType`, never an identifier segment, and
+            // the parser refuses it in expression and pattern position.
+            if let Some(sym) = world.lookup(module, Ns::Module, first) {
+                world.mark_used(module, sym);
+                // A name looked up in the current module is always visible from it:
+                // `lookup` answers `def_module == module`, which `visible_from` accepts.
+                index = 1;
+                match sym.sym {
+                    Sym::Module(m) => Cursor::Module(m),
+                    Sym::BuiltinModule(p) => Cursor::Builtin(p),
+                    _ => return Err(PathError::unknown(first)),
                 }
-                "self" => {
-                    index = 1;
-                    Cursor::Module(module)
-                }
-                "super" => {
-                    let mut levels = 1usize;
-                    while segments.get(levels).map(|s| s.name.name.as_str()) == Some("super") {
-                        levels += 1;
-                    }
-                    index = levels;
-                    match world.ancestor(module, levels) {
-                        Some(parent) => Cursor::Module(parent),
-                        None => return Err(PathError::unknown("super")),
-                    }
-                }
-                "Self" => {
-                    index = 1;
-                    match self_ty {
-                        Some(t) => Cursor::Type(t.clone()),
-                        None => return Err(PathError::self_outside_impl()),
-                    }
-                }
-                _ => {
-                    if let Some(sym) = world.lookup(module, Ns::Module, first) {
-                        world.mark_used(module, sym);
-                        if !world.visible_from(&sym, module) {
-                            return Err(PathError::private(first));
-                        }
-                        index = 1;
-                        match sym.sym {
-                            Sym::Module(m) => Cursor::Module(m),
-                            Sym::BuiltinModule(p) => Cursor::Builtin(p),
-                            _ => return Err(PathError::unknown(first)),
-                        }
-                    } else if let Some(p) = builtins::builtin_root_module(first) {
-                        index = 1;
-                        Cursor::Builtin(p)
-                    } else if let Some(sym) = world.lookup(module, Ns::Type, first) {
-                        world.mark_used(module, sym);
-                        index = 1;
-                        Cursor::Type(type_of_symbol(world, sym.sym))
-                    } else if let Some(t) = builtins::prelude_type(first) {
-                        index = 1;
-                        Cursor::Type(t)
-                    } else if let Some(t) = prelude_container(first) {
-                        index = 1;
-                        Cursor::Type(t)
-                    } else {
-                        return Err(PathError::unknown(first));
-                    }
-                }
+            } else if let Some(p) = builtins::builtin_root_module(first) {
+                index = 1;
+                Cursor::Builtin(p)
+            } else if let Some(sym) = world.lookup(module, Ns::Type, first) {
+                world.mark_used(module, sym);
+                index = 1;
+                Cursor::Type(type_of_symbol(world, sym.sym))
+            } else if let Some(t) = builtins::prelude_type(first) {
+                index = 1;
+                Cursor::Type(t)
+            } else if let Some(t) = prelude_container(first) {
+                index = 1;
+                Cursor::Type(t)
+            } else {
+                return Err(PathError::unknown(first));
             }
         }
     };
 
     loop {
-        if index >= segments.len() {
-            return match cursor {
-                Cursor::Module(_) => Ok(ValuePath::Module),
-                Cursor::Builtin(_) => Ok(ValuePath::BuiltinModule),
-                Cursor::Type(t) => Ok(ValuePath::Type(t)),
-            };
-        }
+        // Entered with `index < len` (an empty path is refused above, and a
+        // plain path consumes only its first segment before the loop when it
+        // has at least two); each turn advances or returns on the last segment.
         let last = index + 1 == segments.len();
         let name = &segments[index].name.name;
         match cursor {
@@ -356,15 +311,13 @@ pub(crate) fn resolve_associated(
             builtin_assoc("Error", name)
         }
         Type::Nominal { def, .. } => {
-            if world.nominal_kind(*def) == Some(NominalKind::Enum) {
-                if let Some(enum_ast) = world.enums.get(def) {
-                    if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name)
-                    {
-                        return Ok(ValuePath::Variant {
-                            enum_item: *def,
-                            variant: index,
-                        });
-                    }
+            // `nominal_kind` answers `Enum` exactly for the ids of `world.enums`.
+            if let Some(enum_ast) = world.enums.get(def) {
+                if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name) {
+                    return Ok(ValuePath::Variant {
+                        enum_item: *def,
+                        variant: index,
+                    });
                 }
             }
             if let Some(entry) = world.method(*def, name, true) {
@@ -374,20 +327,17 @@ pub(crate) fn resolve_associated(
         }
         Type::Option(_) => match name {
             "Some" => Ok(ValuePath::BuiltinCtor {
-                path: "Option::Some",
-                unit: false,
+                ctor: PayloadCtor::Some,
             }),
-            "None" => Ok(ValuePath::BuiltinConst("Option::None")),
+            "None" => Ok(ValuePath::BuiltinNone),
             _ => Err(PathError::unknown(name)),
         },
         Type::Result(_, _) => match name {
             "Ok" => Ok(ValuePath::BuiltinCtor {
-                path: "Result::Ok",
-                unit: false,
+                ctor: PayloadCtor::Ok,
             }),
             "Err" => Ok(ValuePath::BuiltinCtor {
-                path: "Result::Err",
-                unit: false,
+                ctor: PayloadCtor::Err,
             }),
             _ => Err(PathError::unknown(name)),
         },
@@ -560,8 +510,6 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         name,
                         ns: Ns::Module,
                         sym,
-                        vis,
-                        def_module,
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
@@ -577,8 +525,6 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         name: last_segment(&use_item.path),
                         ns: Ns::Module,
                         sym: Sym::BuiltinModule(path),
-                        vis: Vis::Public(Span::dummy()),
-                        def_module: ModuleId::MAX,
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
@@ -594,8 +540,6 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         name: last_segment(&use_item.path),
                         ns: Ns::Value,
                         sym: Sym::BuiltinFn(path),
-                        vis: Vis::Public(Span::dummy()),
-                        def_module: ModuleId::MAX,
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
@@ -619,8 +563,6 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         name: last_segment(&use_item.path),
                         ns: sym.ns(),
                         sym,
-                        vis,
-                        def_module,
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
@@ -692,6 +634,13 @@ pub(crate) fn insert_import(
     entry: ImportEntry,
     diags: &mut DiagnosticBag,
 ) {
+    // Same namespace invariant as `World::register`, for imports.
+    debug_assert_eq!(
+        entry.sym.ns(),
+        entry.ns,
+        "import `{}` in the wrong namespace",
+        entry.name
+    );
     if let Some(existing) = world.table(module, entry.ns).get(&entry.name) {
         let span = existing.span;
         diags.push(

@@ -2667,3 +2667,210 @@ fn f(x: i32) -> i32 {
         "E-TYP-MISMATCH",
     );
 }
+
+#[test]
+fn nested_generic_enum_payloads_must_cover_each_boolean_in_a_product() {
+    let source = r#"
+enum Choice<T> { Tuple(T), Named { value: T }, Empty }
+fn choose(input: (Option<Choice<bool>>, bool)) -> i32 {
+    match input {
+        (Some(Choice::Tuple(true)), _) => 1,
+        (Some(Choice::Tuple(false)), _) => 2,
+        (Some(Choice::Named { value: true }), _) => 3,
+        (Some(Choice::Named { value: false }), _) => 4,
+        (Some(Choice::Empty), _) => 5,
+        (Option::None, true) => 6,
+        (Option::None, false) => 7,
+    }
+}
+"#;
+    accept(source);
+    let incomplete = source.replace(
+        "        (Some(Choice::Named { value: false }), _) => 4,\n",
+        "",
+    );
+    expect_code(&incomplete, "E-TYP-NONEXHAUSTIVE");
+}
+
+#[test]
+fn result_payloads_in_product_patterns_must_cover_each_inner_variant() {
+    let source = r#"
+fn choose(input: (Result<Option<bool>, bool>, bool)) -> i32 {
+    match input {
+        (Ok(Some(true)), _) => 1,
+        (Ok(Some(false)), _) => 2,
+        (Ok(Option::None), _) => 3,
+        (Err(true), _) => 4,
+        (Err(false), _) => 5,
+    }
+}
+"#;
+    accept(source);
+    let incomplete = source.replace("        (Err(false), _) => 5,\n", "");
+    expect_code(&incomplete, "E-TYP-NONEXHAUSTIVE");
+}
+
+#[test]
+fn static_text_non_static_returns_taint_every_enclosing_form() {
+    // TYP-6.4: a non-static `return` nested in a `let` initialiser, an `if`
+    // value or a block tail makes the function non-static; OWN-6.2 then
+    // refuses the escaping reference.
+    for src in [
+        "fn f(b: bool) -> &str { let x = if b { return String::from(\"a\").as_str(); } else { \"b\" }; return x; }",
+        "fn f(b: bool) -> &str { return if b { return String::from(\"a\").as_str(); } else { \"b\" }; }",
+        "fn f(b: bool) -> &str { let x = { if b { return String::from(\"a\").as_str(); } \"b\" }; return x; }",
+        "struct S { n: i32 }\nimpl S { fn g(&self) -> &str { let s = String::from(\"a\"); return s.as_str(); } fn f(&self) -> &str { return self.g(); } }",
+        "mod m { pub const C: &str = \"a\"; }\nfn f() -> &str { return m::C; }",
+    ] {
+        expect_code(src, "E-OWN-REF-ESCAPE");
+    }
+}
+
+#[test]
+fn static_text_analysis_survives_a_refused_destructuring_let() {
+    // A `let` with a non-identifier pattern is refused by the parser; the
+    // checker still walks the recovered statement without crashing.
+    for src in [
+        "fn f() -> &str { let (a, b) = (\"a\", 1); return a; }",
+        "fn f() -> &str { let (a, b): (&str, i32); return \"a\"; }",
+    ] {
+        expect_code(src, "E-PARSE-EXPECTED");
+    }
+}
+
+#[test]
+fn static_text_non_text_return_is_a_type_error() {
+    // TYP-6.4: an arithmetic value is never static text; the return is refused.
+    expect_code("fn f() -> &str { return 1 + 2; }", "E-TYP-RETURN");
+}
+
+// ---------------------------------------------------------------------------
+// E6 coverage: typeck paths reached by accepted and refused programs
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_diverging_value_returned_from_a_never_function_is_accepted() {
+    // TYP-6.4: `return e` in a `-> !` function needs `e: !`.
+    accept("fn f() -> ! { return panic(\"x\"); }");
+}
+
+#[test]
+fn a_constant_array_repeat_length_is_accepted() {
+    // G-6.27: a non-negative integer constant gives the repeat length.
+    accept("const N: usize = 2;\nfn f() -> i32 { let a = [0; N]; return a[0]; }");
+}
+
+#[test]
+fn an_assignment_unifies_an_inference_variable_with_the_place_type() {
+    // TYP-6.1: `Vec::new()` takes the type of the annotated binding it moves into.
+    accept("fn f() -> i32 { let mut v = Vec::new(); let x: Vec<i32> = v; return x.len() as i32; }");
+}
+
+#[test]
+fn a_method_on_a_generic_parameter_still_checks_its_arguments() {
+    // TYP-9.1: no method resolves on a bare `T`; the arguments are still typed.
+    expect_code(
+        "fn f<T>(t: T) -> i32 { t.foo(1 + true); return 0; }",
+        "E-RES-UNKNOWN",
+    );
+    let result = run("fn f<T>(t: T) -> i32 { t.foo(1 + true); return 0; }");
+    assert!(codes(&result).iter().any(|c| c == "E-TYP-MISMATCH"));
+}
+
+#[test]
+fn a_compound_assignment_through_a_diverging_dereference_is_refused_once() {
+    // OWN-7.4: `*x` with `x: !` has type `!`; no mutability error is added.
+    let result = run("fn f() -> i32 { let x = panic(\"x\"); *x += 1; return 0; }");
+    assert!(
+        !codes(&result).iter().any(|c| c == "E-OWN-IMMUTABLE"),
+        "{}",
+        describe(&result)
+    );
+    assert!(codes(&result).iter().any(|c| c == "E-TYP-MISMATCH"));
+}
+
+#[test]
+fn constant_operands_follow_the_expression_operator_rules() {
+    // G-5.11 / TYP-7: a constant initialiser is typed like an expression; an
+    // ill-typed one used to be accepted with no value (code generation then
+    // failed on a missing constant).
+    for src in [
+        "const A: i32 = 1 + true;",
+        "const A: bool = true && 1;",
+        "const A: i32 = 1 & true;",
+        "const A: i64 = 1 + 2i32;",
+    ] {
+        expect_code(src, "E-TYP-MISMATCH");
+    }
+    expect_code("const A: bool = \"a\" < \"b\";", "E-TYP-CMP");
+    accept("const A: bool = 'a' < 'b';\nconst B: bool = true == false;\nconst C: bool = \"x\" != \"y\";");
+}
+
+#[test]
+fn a_variant_pattern_on_an_ill_typed_scrutinee_adds_no_pattern_error() {
+    // TYP-10: the scrutinee is already refused; its arms are not reported again.
+    let src =
+        "enum E { A(i32), B }\nfn f() -> i32 { match (1 + true) { E::A(x) => 0, E::B => 1 } }";
+    let result = run(src);
+    assert!(
+        codes(&result).iter().any(|c| c == "E-TYP-MISMATCH"),
+        "{}",
+        describe(&result)
+    );
+    assert!(
+        !result
+            .diags
+            .iter()
+            .any(|d| d.message.contains("variant pattern")),
+        "{}",
+        describe(&result)
+    );
+}
+
+#[test]
+fn a_generic_branch_never_agrees_with_a_concrete_one() {
+    // TYP-6.1: `T` is rigid inside its function; `Vec<T>` and `Vec<i32>` differ.
+    expect_code(
+        "fn f<T>(t: bool, a: Vec<T>) -> usize { let b: Vec<i32> = Vec::new(); let c = if t { a } else { b }; return c.len(); }",
+        "E-TYP-MISMATCH",
+    );
+    expect_code(
+        "fn f<T>(t: bool, a: Option<T>) -> i32 { let c = match t { true => a, false => Some(1) }; return 0; }",
+        "E-TYP-MISMATCH",
+    );
+}
+
+#[test]
+fn an_array_repeat_length_constant_must_be_a_non_negative_integer() {
+    // G-6.27: the length of `[x; N]` is a constant integer >= 0.
+    expect_code(
+        "const N: i32 = -2;\nfn f() -> i32 { let a = [0; N]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
+    expect_code(
+        "const N: bool = true;\nfn f() -> i32 { let a = [0; N]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
+    // A function is an item, not a constant.
+    expect_code(
+        "fn g() -> i32 { return 1; }\nfn f() -> i32 { let a = [0; g]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
+}
+
+#[test]
+fn a_unit_variant_of_a_generic_enum_against_another_type_is_refused() {
+    // TYP-6.1: `E::B` is an `E<_>`, never an `S`.
+    expect_code(
+        "enum E<T> { A(T), B }\nstruct S { n: i32 }\nfn f() -> i32 { let x: S = E::B; return 0; }",
+        "E-TYP-MISMATCH",
+    );
+}
+
+#[test]
+fn a_float_operand_leaves_an_integer_constant_without_a_value() {
+    // G-5.11: a float constant is not representable; the bitwise and the
+    // arithmetic forms built on one are refused the same way.
+    expect_code("const A: i32 = (1.5 as i32) & 1;", "E-RES-CONST-NOT-CONST");
+    expect_code("const B: i32 = (1.5 as i32) + 1;", "E-RES-CONST-NOT-CONST");
+}

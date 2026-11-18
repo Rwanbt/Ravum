@@ -2,12 +2,20 @@ use super::*;
 
 impl<'a> Parser<'a> {
     pub(super) fn parse_postfix(&mut self, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
+        let head = std::mem::take(&mut self.stmt_head);
         let mut expr = self.parse_primary(allow_struct);
+        let mut spine = self.reach;
+        if head && is_block_like(&expr) && !self.at(Punct::Dot) && !self.at(Punct::Question) {
+            // G-6.1: `if c { } (1, 2);` is the `if` statement, then a tuple.
+            self.stmt_end = true;
+        }
         loop {
-            if self.fatal {
+            if self.fatal || self.stmt_end {
                 break;
             }
             let before = self.pos;
+            self.reach = self.depth;
             if self.at(Punct::LParen) {
                 let start = expr.span;
                 let opener = self.cur_span();
@@ -174,7 +182,12 @@ impl<'a> Parser<'a> {
             if self.pos == before {
                 break;
             }
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
         }
+        self.reach = outer.max(spine);
         expr
     }
 
@@ -509,9 +522,12 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Punct(Punct::DotDot) | TokenKind::Punct(Punct::DotDotEq) => {
-                // Defensive: `parse_range` normally handles prefix ranges.
+                // A prefix range in operand position (`1 + ..3`): `parse_range`
+                // handles the other ones. An operand is never the outermost
+                // expression of a `for` iterator, so it is always refused.
                 let inclusive = self.at(Punct::DotDotEq);
                 self.bump();
+                self.reject_range_outside_for(false, start);
                 let end = if self.starts_expr() {
                     Some(Box::new(self.parse_binary(1, allow_struct)))
                 } else {

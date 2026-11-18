@@ -159,6 +159,7 @@ impl<'a> Generator<'a> {
             options: self.options,
             index,
             array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+            shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
         };
         emitter.verify_ownership_facts()?;
         emitter.run()
@@ -194,11 +195,10 @@ impl Buf {
         self.out.push('\n');
     }
 
+    /// Append text that already ends with a newline (the prelude; see
+    /// `tests::the_prelude_ends_with_a_newline`).
     fn raw(&mut self, text: &str) {
         self.out.push_str(text);
-        if !text.ends_with('\n') {
-            self.out.push('\n');
-        }
     }
 
     fn finish(self) -> String {
@@ -235,6 +235,11 @@ struct Emitter<'a> {
     /// Array-element moves planned for the function body being emitted (see
     /// [`Emitter::plan_array_moves`]).
     array_moves: std::cell::RefCell<ArrayMovePlan>,
+    /// Rust names of the constants and structs of the module being emitted.
+    /// rustc reads a binding pattern with one of those names as a constant
+    /// (or unit struct) pattern, so such a local is emitted under another
+    /// name (G-6.38: `IDENT` always binds).
+    shadowed_names: std::cell::RefCell<BTreeSet<String>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -248,10 +253,14 @@ impl<'a> Emitter<'a> {
     /// table). In debug builds an incoherence is an error instead of a silently
     /// different lowering. Release builds skip the check (it is a test/audit
     /// guard, not a semantic rule).
+    #[cfg(not(debug_assertions))]
     fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
-        if !cfg!(debug_assertions) {
-            return Ok(());
-        }
+        Ok(())
+    }
+
+    /// Debug build: see the release variant above for the rule.
+    #[cfg(debug_assertions)]
+    fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
         for (id, kind) in &self.checked.facts.own.use_kind {
             let Some(ty) = self.checked.facts.expr_types.get(id) else {
                 continue;
@@ -383,6 +392,7 @@ impl<'a> Emitter<'a> {
     /// * `consumed` is a subset of `owned_position`, and an owned position is a
     ///   `Move` or a `Copy`, never a borrow;
     /// * a binding identity names the binding the path resolves to.
+    #[cfg(debug_assertions)]
     fn verify_ownership_tables(&self) -> Result<(), CodegenError> {
         let own = &self.checked.facts.own;
         for (id, kind) in &own.use_kind {
@@ -462,6 +472,7 @@ impl<'a> Emitter<'a> {
 
     /// Place described by the syntax alone, binding identity included (step B
     /// cross-check). See `OwnPlace`.
+    #[cfg(debug_assertions)]
     fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
         use ravum_lang_sema::facts::{OwnPlace, Projection as PlaceStep, ProjectionIndex};
         match &expr.kind {
@@ -516,6 +527,7 @@ impl<'a> Emitter<'a> {
     }
 
     /// Human location of an expression for a debug-guard error message.
+    #[cfg(debug_assertions)]
     fn expr_location(&self, expr: &Expr) -> String {
         match self.checked.files.get(expr.span.file as usize) {
             Some(file) => format!("{}:{}", file.path, file.line_of(expr.span.start)),
@@ -523,12 +535,14 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn expr_span_text(&self, expr: &Expr) -> String {
         format!("{}..{}", expr.span.start, expr.span.end)
     }
 
     /// A field/tuple/index projection on a reference auto-derefs it: the checker
     /// records one `Deref` step per reference layer before the projection.
+    #[cfg(debug_assertions)]
     fn push_auto_derefs(&self, base: &Expr, steps: &mut Vec<ravum_lang_sema::facts::Projection>) {
         let mut ty = self.checked.facts.expr_types.get(&base.id);
         while let Some(Type::Ref { inner, .. }) = ty {
@@ -597,10 +611,8 @@ impl<'a> Emitter<'a> {
         match self.index.user_main {
             Some(id) => {
                 let path = self.item_path(id)?;
-                let ret = match self.index.fns.get(&id) {
-                    Some(entry) => entry.ret,
-                    None => RetKind::Unit,
-                };
+                // `Index::build` records every function, `main` included.
+                let ret = self.index.fns[&id].ret;
                 match ret {
                     RetKind::Unit => {
                         buf.line(&format!("{}();", path));
@@ -681,10 +693,8 @@ impl<'a> Emitter<'a> {
         buf.line("let mut rv_filtered: usize = 0;");
         for (name, id) in &self.index.tests {
             let path = self.item_path(*id)?;
-            let ret = match self.index.fns.get(id) {
-                Some(entry) => entry.ret,
-                None => RetKind::Unit,
-            };
+            // `Index::build` records every function, the tests included.
+            let ret = self.index.fns[id].ret;
             let runner = match ret {
                 RetKind::Unit => "crate::rv_test",
                 RetKind::Result => "crate::rv_test_result",
@@ -720,21 +730,38 @@ impl<'a> Emitter<'a> {
     // -- items -------------------------------------------------------------
 
     fn emit_module(&self, buf: &mut Buf, module: &Module) -> Result<(), CodegenError> {
-        let entry = self.index.modules.get(&module.id).ok_or_else(|| {
-            err(format!(
-                "module node {} is missing from the index",
-                module.id
-            ))
-        })?;
+        // `Index::walk_module` registers every module this walk enters.
+        let entry = &self.index.modules[&module.id];
         self.marker(buf, module.span);
         buf.line(&format!("pub mod {} {{", entry.rust_name));
         buf.indent += 1;
+        let shadowed: BTreeSet<String> = module
+            .items
+            .iter()
+            .filter(|item| matches!(item.kind, ItemKind::Const(_) | ItemKind::Struct(_)))
+            .filter_map(|item| self.index.items.get(&item.id))
+            .map(|entry| entry.rust_name.clone())
+            .collect();
+        let outer = self.shadowed_names.replace(shadowed);
         for item in &module.items {
             self.emit_item(buf, item)?;
         }
+        self.shadowed_names.replace(outer);
         buf.indent -= 1;
         buf.line("}");
         Ok(())
+    }
+
+    /// Rust name of a local binding: its mangled name, unless a constant or a
+    /// struct of the enclosing module has that name; then `<name>_rv_local`,
+    /// which no user binding or item can use, since `_rv_` is reserved in
+    /// user identifiers (LEX-4.6).
+    pub(super) fn local_ident(&self, name: &str) -> String {
+        let plain = mangle_ident(name);
+        if !self.shadowed_names.borrow().contains(&plain) {
+            return plain;
+        }
+        format!("{plain}_rv_local")
     }
 
     /// `true` when the program declares at least one `extern "C"` block. Such a
@@ -895,7 +922,9 @@ impl<'a> Emitter<'a> {
 
 mod paths;
 
-use paths::{collect_fn_bodies, collect_module_exprs, ArrayMovePlan, PathMode};
+#[cfg(debug_assertions)]
+use paths::{collect_fn_bodies, collect_module_exprs};
+use paths::{ArrayMovePlan, PathMode};
 
 // ---------------------------------------------------------------------------
 // Tests.

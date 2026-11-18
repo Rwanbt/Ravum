@@ -178,7 +178,12 @@ pub fn infer_and_check(
                 .collect(),
         },
     };
-    for (entry, entry_name) in entries {
+    // An entry that is not a function of the program (a stray `rt_entry` id
+    // from a library caller) has no effect to look for.
+    for (entry, entry_name) in entries
+        .into_iter()
+        .filter(|(id, _)| direct.contains_key(id))
+    {
         if let Some((chain, effect, source)) = find_violation(entry, &forbidden, &direct, facts) {
             let span = fns.get(&entry).map(|f| f.span).unwrap_or(Span::dummy());
             let chain_text: Vec<String> = chain
@@ -246,10 +251,8 @@ fn collect_module_fns<'a>(
             }
             ItemKind::Mod(inner) => collect_module_fns(inner, out),
             ItemKind::Impl(imp) => {
-                for member in &imp.items {
-                    if let ItemKind::Fn(f) = &member.kind {
-                        out.insert(member.id, f);
-                    }
+                for (member, f) in imp.methods() {
+                    out.insert(member.id, f);
                 }
             }
             _ => {}
@@ -380,11 +383,10 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                walk_expr(start, facts, out);
-            }
-            if let Some(end) = end {
-                walk_expr(end, facts, out);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                walk_expr(bound, facts, out);
             }
         }
         ExprKind::Try(inner) => walk_expr(inner, facts, out),
@@ -423,11 +425,10 @@ fn add_builtin_path(path: &str, out: &mut FnEffects) {
 }
 
 fn add_method_path(path: &str, out: &mut FnEffects) {
-    if let Some(effects) = builtins::builtin_method_effects(path) {
-        for effect in effects {
-            out.direct.insert(*effect);
-            out.sources.push((*effect, format!("call to `{path}`")));
-        }
+    // A method with no effect entry adds nothing.
+    for effect in builtins::builtin_method_effects(path).into_iter().flatten() {
+        out.direct.insert(*effect);
+        out.sources.push((*effect, format!("call to `{path}`")));
     }
 }
 
@@ -446,23 +447,130 @@ fn find_violation(
         if !visited.insert(node) {
             continue;
         }
-        if let Some(effects) = direct.get(&node) {
-            if let Some((effect, source)) = effects
-                .sources
-                .iter()
-                .find(|(effect, _)| forbidden.contains(*effect))
-            {
-                return Some((chain, *effect, source.clone()));
-            }
-            for callee in &effects.edges {
-                if direct.contains_key(callee) {
-                    let mut next = chain.clone();
-                    next.push(*callee);
-                    queue.push_back((*callee, next));
-                }
+        // Only functions of `direct` are queued: the entry is one (`main`, a
+        // test or the `--rt-entry` function), and an edge is followed only
+        // when its callee is one.
+        let effects = &direct[&node];
+        if let Some((effect, source)) = effects
+            .sources
+            .iter()
+            .find(|(effect, _)| forbidden.contains(*effect))
+        {
+            return Some((chain, *effect, source.clone()));
+        }
+        for callee in &effects.edges {
+            if direct.contains_key(callee) {
+                let mut next = chain.clone();
+                next.push(*callee);
+                queue.push_back((*callee, next));
             }
         }
         let _ = facts;
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    //! The effect analysis trusts the checker's facts: every call edge names
+    //! a function of the program, every function has a signature, every
+    //! method target is resolved. Each test checks a real program, breaks one
+    //! fact the way a defect upstream would, and requires the analysis to
+    //! finish without inventing an effect or a call.
+    use super::*;
+    use crate::facts::{CallTarget, CheckOptions, CheckedProgram};
+    use ravum_lang_syntax::source::SourceMap;
+
+    fn checked(src: &str) -> CheckedProgram {
+        let mut sources = SourceMap::new();
+        let file = sources.add("src/main.rv", src);
+        let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+        assert!(parsed.diags.is_empty(), "the fixture must parse");
+        let result = crate::check(&parsed.program, &sources, &CheckOptions::default());
+        result.checked.expect("the fixture must check")
+    }
+
+    fn rerun(program: &mut CheckedProgram, profile: Profile) -> DiagnosticBag {
+        let mut diags = DiagnosticBag::new();
+        infer_and_check(
+            &program.program,
+            &mut program.facts,
+            profile,
+            None,
+            &mut diags,
+        );
+        diags
+    }
+
+    const SOURCE: &str = "use std::io;\n\
+        fn helper() -> i32 { io::println(\"x\"); return 1; }\n\
+        fn main() { let s = String::from(\"a\"); let n = s.len(); let h = helper(); }\n";
+
+    #[test]
+    fn a_call_edge_to_an_unknown_function_adds_no_effect() {
+        let mut program = checked(
+            "use std::io;\n\
+             fn helper() -> i32 { io::println(\"x\"); return 1; }\n\
+             fn main() { let h = helper(); }\n",
+        );
+        for target in program.facts.calls.values_mut() {
+            if matches!(target, CallTarget::UserFn { .. }) {
+                *target = CallTarget::UserFn { item: 999_999_999 };
+            }
+        }
+        let diags = rerun(&mut program, Profile::Pure);
+        // `helper` is no longer reached from `main`: its `io` effect is not
+        // charged to `main`, and the unknown callee contributes nothing.
+        assert!(
+            !diags.has_errors(),
+            "{:?}",
+            diags.iter().map(|d| &d.code).collect::<Vec<_>>()
+        );
+        let graph = infer_and_check(
+            &program.program,
+            &mut program.facts,
+            Profile::Core,
+            None,
+            &mut DiagnosticBag::new(),
+        );
+        let main = graph
+            .keys()
+            .copied()
+            .find(|id| graph[id].contains(&999_999_999))
+            .expect("main keeps its edge");
+        assert!(!reachable_from(&graph, main).contains(&999_999_999));
+    }
+
+    #[test]
+    fn a_function_without_a_signature_still_gets_its_effects_recorded() {
+        let mut program = checked(SOURCE);
+        program.facts.fn_sigs.clear();
+        let diags = rerun(&mut program, Profile::Core);
+        assert!(!diags.has_errors());
+        assert!(program
+            .facts
+            .effects
+            .values()
+            .any(|set| set.contains(Effect::Io)));
+    }
+
+    #[test]
+    fn unresolved_methods_and_unknown_builtins_add_no_effect() {
+        let mut program = checked(SOURCE);
+        for target in program.facts.methods.values_mut() {
+            *target = MethodTarget::Error;
+        }
+        for target in program.facts.calls.values_mut() {
+            if let CallTarget::BuiltinFn { path } = target {
+                *path = "nowhere::nothing".to_string();
+            }
+        }
+        let diags = rerun(&mut program, Profile::Pure);
+        assert!(!diags.has_errors());
+        assert!(program
+            .facts
+            .effects
+            .values()
+            .all(|set| set.effects.is_empty()));
+    }
 }

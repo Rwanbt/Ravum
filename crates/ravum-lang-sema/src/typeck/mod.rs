@@ -19,8 +19,10 @@ use crate::builtins::{self, MethodSelfKind};
 use crate::facts::{
     CallTarget, CheckedProgram, ConstInfo, ConstValue, Facts, MethodTarget, Resolution,
 };
-use crate::resolve::{self, ModuleId, NominalKind, PathError, ValuePath, World};
-use crate::types::{contains_never, Type};
+use crate::resolve::{
+    self, ModuleId, NominalKind, PathError, PayloadCtor, ValuePath, World, OPTION_NONE,
+};
+use crate::types::{contains_never, Type, MAX_TYPE_DEPTH};
 use ravum_lang_syntax::ast::{
     self, Block, ConstItem, Expr, ExprKind, FieldInit, FloatTy, FnItem, IntTy, Item, ItemKind,
     LitPat, MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,
@@ -45,31 +47,43 @@ pub(crate) fn typecheck_with_world(
     sources: Option<&SourceMap>,
     diags: &mut DiagnosticBag,
 ) -> bool {
-    let mut checker = TypeChecker {
-        program,
-        facts,
-        world,
-        diags,
-        module: world.root,
-        generics: Vec::new(),
-        self_ty: None,
-        fn_ret: Type::Unit,
-        current_fn: None,
-        scopes: Vec::new(),
-        loop_depth: 0,
-        value_position: 0,
-        unsafe_depth: 0,
-        in_const: false,
-        variant_pats: BTreeMap::new(),
-        unused_candidates: Vec::new(),
-        used_locals: BTreeSet::new(),
-        vars: Vec::new(),
-        var_spans: Vec::new(),
-    };
+    let mut checker = TypeChecker::new(program, facts, world, diags);
     checker.run(sources);
     compute_static_str_fns(program, &mut *checker.facts);
     resolve::emit_unused_import_warnings(world, checker.diags);
     !checker.diags.has_errors()
+}
+
+impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
+    fn new(
+        program: &'p ast::Program,
+        facts: &'f mut Facts,
+        world: &'w World<'p>,
+        diags: &'f mut DiagnosticBag,
+    ) -> Self {
+        TypeChecker {
+            program,
+            facts,
+            world,
+            diags,
+            module: world.root,
+            generics: Vec::new(),
+            self_ty: None,
+            fn_ret: Type::Unit,
+            current_fn: None,
+            scopes: Vec::new(),
+            loop_depth: 0,
+            value_position: 0,
+            unsafe_depth: 0,
+            in_const: false,
+            variant_pats: BTreeMap::new(),
+            unused_candidates: Vec::new(),
+            used_locals: BTreeSet::new(),
+            vars: Vec::new(),
+            var_spans: Vec::new(),
+            expr_spans: BTreeMap::new(),
+        }
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -183,6 +197,9 @@ struct TypeChecker<'p, 'w, 'f> {
     /// Variables d'inférence (index >= [`VAR_BASE`]), liées par unification.
     vars: Vec<Option<Type>>,
     var_spans: Vec<Span>,
+    /// Span of every checked expression, to place `E-TYP-DEPTH` once the
+    /// final types are known (`finalize_inference`).
+    expr_spans: BTreeMap<NodeId, Span>,
 }
 
 impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
@@ -250,3 +267,8 @@ fn path_pattern_kind(path: &Path) -> PatternKind {
         _ => PatternKind::Other,
     }
 }
+
+#[cfg(test)]
+mod forged_tests;
+#[cfg(test)]
+mod helper_tests;

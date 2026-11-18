@@ -3,7 +3,7 @@ use super::*;
 impl<'a> OwnChecker<'a> {
     pub(super) fn eval_for(&mut self, pat: &Pat, iter_expr: &Expr, body: &Block) {
         self.eval_value(iter_expr);
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let after_iter = self.state.clone();
         let iter_diverged = self.diverged;
 
@@ -32,7 +32,7 @@ impl<'a> OwnChecker<'a> {
                 self.state.slots.insert(*slot, SlotState::initialised());
             }
             self.diverged = iter_diverged;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.loop_stack.push(LoopCtx::default());
             if !self.diverged {
                 self.analyze_block(body, false);
@@ -62,7 +62,7 @@ impl<'a> OwnChecker<'a> {
             self.state.slots.insert(*slot, SlotState::initialised());
         }
         self.diverged = iter_diverged;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.loop_stack.push(LoopCtx::default());
         if !self.diverged {
             self.analyze_block(body, false);
@@ -73,17 +73,14 @@ impl<'a> OwnChecker<'a> {
 
         // Exit: zero iterations (`after_iter`) or any number of iterations then
         // normal termination (the fixpoint header), plus every `break`.
-        let mut exit: Option<State> = if iter_diverged {
+        // A diverging iterator sends the body through `analyze_dead`, which
+        // discards its `break`s: there is no exit at all, and nothing to join.
+        let exit: Option<State> = if iter_diverged {
             None
         } else {
             Some(join(&after_iter, &entry))
-        };
-        for b in &ctx.breaks {
-            exit = Some(match exit {
-                Some(e) => join(&e, b),
-                None => b.clone(),
-            });
         }
+        .map(|exit| ctx.breaks.iter().fold(exit, |acc, b| join(&acc, b)));
         self.pop_scope();
         match exit {
             Some(mut st) => {
@@ -172,6 +169,9 @@ impl<'a> OwnChecker<'a> {
         }
         self.loans.truncate(snapshot);
         self.call_depth = self.call_depth.saturating_sub(1);
+        if self.facts.expr_types.get(&expr.id) == Some(&Type::Never) {
+            self.diverged = true;
+        }
     }
 
     pub(super) fn eval_method_call(&mut self, expr: &Expr, receiver: &Expr, args: &[Expr]) {
@@ -235,6 +235,9 @@ impl<'a> OwnChecker<'a> {
         }
         self.loans.truncate(snapshot);
         self.call_depth = self.call_depth.saturating_sub(1);
+        if self.facts.expr_types.get(&expr.id) == Some(&Type::Never) {
+            self.diverged = true;
+        }
     }
 
     pub(super) fn borrow_receiver(&mut self, receiver: &Expr, mutable: bool) {
@@ -280,13 +283,11 @@ impl<'a> OwnChecker<'a> {
                         self.eval_value(arg);
                     }
                 }
+                // A known parameter that is not a reference: the callers that
+                // pass a parameter type always forbid reference temporaries.
                 Some(_) => {
-                    if allow_ref_temporaries {
-                        self.eval_value(arg);
-                    } else {
-                        self.report_ref_escape(arg.span, "stockée");
-                        self.eval_value(arg);
-                    }
+                    self.report_ref_escape(arg.span, "stockée");
+                    self.eval_value(arg);
                 }
                 None => {
                     if !allow_ref_temporaries {
@@ -373,28 +374,56 @@ impl<'a> OwnChecker<'a> {
             }
         }
         if place.steps.is_empty() {
-            if let Some(st) = self.state.slots.get_mut(&place.slot) {
-                st.init = true;
-                st.moved = false;
-                st.maybe_moved = false;
-                st.move_span = None;
-                st.used_since = true;
-                st.partial.clear();
+            let assign_once = self
+                .slot_info(place.slot)
+                .is_some_and(|info| info.assign_once);
+            let assigned_before = self
+                .state
+                .slots
+                .get(&place.slot)
+                .is_some_and(|st| st.maybe_assigned);
+            if assign_once && assigned_before {
+                let name = self.display_place(place);
+                self.emit_diag(
+                    E_IMMUTABLE,
+                    span,
+                    format!("seconde affectation de la liaison immuable `{name}`"),
+                    vec![(
+                        "une liaison sans `mut` reçoit sa valeur une seule fois".to_string(),
+                        None,
+                    )],
+                );
             }
+            let st = self.slot_state_mut(place);
+            st.maybe_assigned = true;
+            st.init = true;
+            st.moved = false;
+            st.maybe_moved = false;
+            st.move_span = None;
+            st.used_since = true;
+            st.partial.clear();
             return;
         }
-        if let Some(st) = self.state.slots.get_mut(&place.slot) {
-            // Writing a projection: an exact re-assignment of a partially moved
-            // projection restores it; writing an ancestor restores all its
-            // sub-projections.
-            let keys: Vec<Vec<Step>> = st.partial.keys().cloned().collect();
-            for key in keys {
-                if steps_start_with(&key, &place.steps) {
-                    st.partial.remove(&key);
-                }
+        // Writing a projection: an exact re-assignment of a partially moved
+        // projection restores it; writing an ancestor restores all its
+        // sub-projections.
+        let st = self.slot_state_mut(place);
+        let keys: Vec<Vec<Step>> = st.partial.keys().cloned().collect();
+        for key in keys {
+            if steps_start_with(&key, &place.steps) {
+                st.partial.remove(&key);
             }
-            st.used_since = true;
         }
+        st.used_since = true;
+    }
+
+    /// State of a place's slot once `check_availability` accepted the place
+    /// (it refuses a slot without a state).
+    pub(super) fn slot_state_mut(&mut self, place: &Place) -> &mut SlotState {
+        self.state
+            .slots
+            .get_mut(&place.slot)
+            .expect("invariant: an available place has a slot state")
     }
 
     pub(super) fn borrow_place(
@@ -536,11 +565,11 @@ impl<'a> OwnChecker<'a> {
                         record = Some(rec.clone());
                         break;
                     }
+                    // `Exact` leaves the loop at once, so it is never the
+                    // relation seen here.
                     PartialRel::Extension => {
-                        if relation != PartialRel::Exact {
-                            relation = PartialRel::Extension;
-                            record = Some(rec.clone());
-                        }
+                        relation = PartialRel::Extension;
+                        record = Some(rec.clone());
                     }
                     PartialRel::Ancestor => {
                         if relation == PartialRel::Disjoint {
@@ -720,13 +749,12 @@ impl<'a> OwnChecker<'a> {
             // stores a reference to a temporary, which must be rejected like any
             // other escaping borrow (F2 audit finding).
             ExprKind::Unary { op: UnOp::Ref, .. } => false,
-            ExprKind::Path(_) | ExprKind::SelfValue => {
-                if let Some(slot) = self.path_local_slot(expr) {
-                    self.slot_info(slot).map(|s| s.static_ref).unwrap_or(false)
-                } else {
-                    false
-                }
-            }
+            ExprKind::Path(path) => self
+                .path_local_slot(path)
+                .and_then(|slot| self.slot_info(slot))
+                .is_some_and(|info| info.static_ref),
+            // `self` is a parameter: never a `'static` reference.
+            ExprKind::SelfValue => false,
             ExprKind::Block(block) | ExprKind::Unsafe(block) => block
                 .tail
                 .as_ref()

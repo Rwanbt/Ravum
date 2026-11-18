@@ -533,9 +533,16 @@ fn generate_ok(checked: &CheckedProgram, options: &GenOptions) -> String {
     crate::generate(checked, options).expect("code generation must succeed")
 }
 
+mod emitter_type_contracts;
 mod emitter_value_contracts;
 mod fixture_facts;
+mod name_contracts;
+// These two exercise the debug-only ownership guards of the backend.
+#[cfg(debug_assertions)]
 mod own_facts_guard;
+#[cfg(debug_assertions)]
+mod path_walk_contracts;
+mod pattern_contracts;
 mod programs_abcd;
 mod programs_e;
 
@@ -1187,6 +1194,7 @@ fn fact_item_paths_are_rewritten_into_emitted_modules() {
         options: &options,
         index,
         array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
     };
     assert_eq!(
         emitter.rewrite_fact_path("crate::area"),
@@ -1289,9 +1297,9 @@ fn test_runner_supports_result_returning_tests() {
     let ok_call = b.call(
         ok_callee,
         vec![unit_value],
-        CallTarget::VariantCtor {
-            enum_item: 950_002,
-            variant: 0,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Ok".to_string(),
         },
     );
     let happy_body = b.block(Vec::new(), Some(ok_call));
@@ -1323,9 +1331,9 @@ fn test_runner_supports_result_returning_tests() {
     let err_call = b.call(
         err_callee,
         vec![error_call],
-        CallTarget::VariantCtor {
-            enum_item: 950_003,
-            variant: 1,
+        // The checker records a prelude constructor as a builtin call.
+        CallTarget::BuiltinFn {
+            path: "Result::Err".to_string(),
         },
     );
     let sad_body = b.block(Vec::new(), Some(err_call));
@@ -1478,4 +1486,144 @@ fn e2e_tests_demo_runner() {
         "the user `main` must not run in test mode: {stdout}"
     );
     assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// `Buf::raw` appends the prelude as is: the next generated line must start on
+/// a line of its own.
+#[test]
+fn the_prelude_ends_with_a_newline() {
+    assert!(PRELUDE.ends_with('\n'));
+}
+
+// -- E6 coverage: pure helpers of builtins.rs ---------------------------------
+
+#[test]
+fn builtin_owner_names_drop_references_and_type_arguments() {
+    use super::builtins::normalize_owner;
+    assert_eq!(normalize_owner("Vec<i32>"), "Vec");
+    assert_eq!(normalize_owner("&str"), "str");
+    assert_eq!(normalize_owner("& mut Vec<String>"), "Vec");
+    assert_eq!(normalize_owner("  String "), "String");
+}
+
+#[test]
+fn a_method_of_an_unknown_owner_is_never_passed_through() {
+    use super::builtins::builtin_method_is_direct;
+    assert!(builtin_method_is_direct("Vec", "len"));
+    assert!(!builtin_method_is_direct("Deque", "len"));
+    assert!(!builtin_method_is_direct("", "len"));
+}
+
+#[test]
+fn prelude_constructor_paths_are_recognised_by_their_last_segments() {
+    use super::builtins::is_option_or_result_ctor;
+    assert!(is_option_or_result_ctor("Some"));
+    assert!(is_option_or_result_ctor("Option::None"));
+    assert!(is_option_or_result_ctor("std::Result::Err"));
+    assert!(!is_option_or_result_ctor("E::Some"));
+    assert!(!is_option_or_result_ctor(""));
+    assert!(!is_option_or_result_ctor("Option::"));
+}
+
+// -- E6 coverage: type rendering without type facts ---------------------------
+
+#[test]
+fn syntactic_types_render_slices_constant_lengths_and_a_bare_str() {
+    let mut b = Builder::new();
+    // `&[i32]` with no type facts: the inner type is not the `str` keyword.
+    let elem = b.named_type("i32", None);
+    let slice = b.ty(TypeKind::Slice(Box::new(elem)), None);
+    let slice_ref = b.ty(
+        TypeKind::Ref {
+            mutable: false,
+            inner: Box::new(slice),
+        },
+        None,
+    );
+    // `[i32; N]` whose length is a constant path.
+    let n_path = b.path(&["N"]);
+    let n_id = 7_000_001;
+    b.facts
+        .resolutions
+        .insert(n_path.id, Resolution::Item { item: n_id });
+    b.facts.item_paths.insert(n_id, "crate::N".to_string());
+    let length = b.expr(ExprKind::Path(n_path), Some(STy::Usize));
+    let elem = b.named_type("i32", None);
+    let array = b.ty(
+        TypeKind::Array {
+            elem: Box::new(elem),
+            len: Box::new(length),
+        },
+        None,
+    );
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    assert_eq!(
+        emitter
+            .syntactic_type_pos(&slice_ref, TypePos::Value)
+            .unwrap(),
+        "&[i32]"
+    );
+    let rendered = emitter.syntactic_type_pos(&array, TypePos::Value).unwrap();
+    assert!(
+        rendered.starts_with("[i32; ") && rendered.ends_with("N]"),
+        "{rendered}"
+    );
+    // A bare `str` never reaches a signature (only `&str`), but renders as is.
+    assert_eq!(
+        emitter.fmt_type_pos(&STy::Str, TypePos::Value).unwrap(),
+        "str"
+    );
+}
+
+#[test]
+#[should_panic(expected = "was planned as an array-element path")]
+fn a_planned_path_that_is_not_an_element_path_is_an_invariant_failure() {
+    let mut b = Builder::new();
+    let literal = b.int(1, Some(STy::I32));
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    let _ = emitter.planned_path(&literal);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_syntactic_place_needs_a_local_root() {
+    // The debug cross-check reads a place only from a local or `self`; a root
+    // that resolves to anything else gives no place.
+    let mut b = Builder::new();
+    let self_value = b.expr(ExprKind::SelfValue, None);
+    b.facts
+        .resolutions
+        .insert(self_value.id, Resolution::Item { item: 7_000_003 });
+    let item_path = b.path(&["K"]);
+    b.facts
+        .resolutions
+        .insert(item_path.id, Resolution::Item { item: 7_000_002 });
+    let item = b.expr(ExprKind::Path(item_path), Some(STy::I32));
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    assert!(emitter.syntactic_place(&self_value).is_none());
+    assert!(emitter.syntactic_place(&item).is_none());
 }

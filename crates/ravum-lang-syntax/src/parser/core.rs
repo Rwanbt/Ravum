@@ -17,10 +17,13 @@ impl<'a> Parser<'a> {
             ids,
             node_count: 0,
             depth: 0,
+            reach: 0,
             fatal: false,
             depth_reported: false,
             nodes_reported: false,
             forbid_assign: 0,
+            stmt_head: false,
+            stmt_end: false,
             paren_exprs: BTreeSet::new(),
             in_for_iter: false,
         }
@@ -148,6 +151,29 @@ impl<'a> Parser<'a> {
         }
         self.node_count += 1;
         self.ids.next()
+    }
+
+    /// Enter one level of syntactic nesting.
+    pub(super) fn descend(&mut self) {
+        self.depth += 1;
+        self.reach = self.reach.max(self.depth);
+    }
+
+    /// Start measuring an operand: returns the reach to restore afterwards.
+    pub(super) fn open_operand(&mut self) -> u32 {
+        std::mem::replace(&mut self.reach, self.depth)
+    }
+
+    /// Add one link to a left-associative chain whose spine currently reaches
+    /// `spine`. Returns the new reach of the spine, or `None` after reporting
+    /// `E-PARSE-DEPTH` when the tree would exceed the nesting limit.
+    pub(super) fn chain_link(&mut self, spine: u32) -> Option<u32> {
+        let reach = spine.max(self.reach).saturating_add(1);
+        if reach >= MAX_DEPTH {
+            self.fail_depth();
+            return None;
+        }
+        Some(reach)
     }
 
     pub(super) fn fail_depth(&mut self) {

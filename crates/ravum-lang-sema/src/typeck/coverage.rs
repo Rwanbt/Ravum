@@ -1,7 +1,10 @@
 use super::*;
 
-/// Bound on the recursion depth of the coverage check (P0-H).
-pub(super) const MAX_COVERAGE_DEPTH: u32 = 64;
+/// Bound on the recursion depth of the coverage check (P0-H). Each level of
+/// recursion follows one level of the scrutinee type, so the bound is the
+/// normative [`MAX_TYPE_DEPTH`]: a deeper scrutinee is already refused with
+/// `E-TYP-DEPTH`.
+pub(super) const MAX_COVERAGE_DEPTH: u32 = MAX_TYPE_DEPTH as u32;
 
 /// One constructor of a sum type, with the payload types it introduces.
 pub(super) struct CoverageCtor {

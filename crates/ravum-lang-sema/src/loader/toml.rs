@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum TomlValue {
     Str(String),
-    Table(Vec<(String, TomlValue)>),
+    Table(Vec<(String, String)>),
 }
 
 #[derive(Debug)]
@@ -231,7 +231,7 @@ pub(super) fn parse_toml_value(
                 let (value, _) = parse_basic_string(v, file, value_offset, diags)?;
                 if entries
                     .iter()
-                    .any(|(existing, _): &(String, TomlValue)| existing == k)
+                    .any(|(existing, _): &(String, String)| existing == k)
                 {
                     diags.push(Diagnostic::error(
                         "E-MOD-MANIFEST",
@@ -240,7 +240,7 @@ pub(super) fn parse_toml_value(
                     ));
                     return None;
                 }
-                entries.push((k.to_string(), TomlValue::Str(value)));
+                entries.push((k.to_string(), value));
             }
         }
         return Some(TomlValue::Table(entries));
@@ -395,12 +395,12 @@ pub(super) fn parse_manifest(text: &str, file: FileId) -> (Option<PackageManifes
                     ));
                     continue;
                 };
-                match key.as_str() {
-                    "name" => name = Some(text.clone()),
-                    "version" => version = Some(text.clone()),
-                    "edition" => edition = Some(text.clone()),
-                    _ => unreachable!(),
-                }
+                let slot = match key.as_str() {
+                    "name" => &mut name,
+                    "version" => &mut version,
+                    _ => &mut edition,
+                };
+                *slot = Some(text.clone());
             }
             other => diags.push(Diagnostic::error(
                 "E-MOD-MANIFEST",
@@ -495,14 +495,8 @@ pub(super) fn parse_manifest(text: &str, file: FileId) -> (Option<PackageManifes
                 ));
                 continue;
             }
-            let TomlValue::Str(path) = &entries[0].1 else {
-                diags.push(Diagnostic::error(
-                    "E-MOD-DEPENDENCY",
-                    *span,
-                    format!("dependency `{dep_name}`: `path` must be a string"),
-                ));
-                continue;
-            };
+            // An inline-table value is a basic string by construction.
+            let path = &entries[0].1;
             dependencies.push(DependencyDecl {
                 name: dep_name.clone(),
                 path: path.clone(),

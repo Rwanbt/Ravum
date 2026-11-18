@@ -123,7 +123,6 @@ pub(super) fn cast_allowed(source: &Type, target: &Type) -> bool {
         (Type::Never, _) => true,
         (s, t) if s.is_int() && t.is_int() => true,
         (s, Type::F32) | (s, Type::F64) if s.is_int() || s == &Type::F32 || s == &Type::F64 => true,
-        (Type::F32, Type::F64) | (Type::F64, Type::F32) => true,
         (Type::F32 | Type::F64, t) if t.is_int() => true,
         (Type::Bool, t) if t.is_int() => true,
         (Type::Char, t) if t.is_int() => true,
@@ -199,10 +198,10 @@ pub(super) fn nominal_def(ty: &Type) -> Option<NodeId> {
 pub(super) fn nominal_subst(world: &World, def: &NodeId, args: &[Type]) -> BTreeMap<usize, Type> {
     let generics = world.type_generics(*def);
     let mut subst = BTreeMap::new();
-    for (index, arg) in args.iter().enumerate() {
-        if index < generics.len() {
-            subst.insert(index, arg.clone());
-        }
+    // A well-formed nominal has exactly one argument per parameter (E-TYP-ARGS
+    // otherwise); `take` keeps the map bounded by the parameters anyway.
+    for (index, arg) in args.iter().enumerate().take(generics.len()) {
+        subst.insert(index, arg.clone());
     }
     subst
 }
@@ -266,26 +265,42 @@ pub(super) fn resolve_vars_final(
     resolve_vars_impl(vars, ty, Some(unresolved), 0)
 }
 
+/// Substitutes the bound inference variables of `ty`.
+///
+/// The structural recursion stops past [`MAX_TYPE_DEPTH`]: the part below is
+/// replaced by `Error`, which keeps the type deeper than the bound, so
+/// `finalize_inference` still reports `E-TYP-DEPTH` on it. Links between
+/// variables are followed in a loop and do not count as a level. The occurs
+/// check (`var_occurs`) makes the chains acyclic, so a chain visits each
+/// variable at most once; a longer walk is a forged cycle and yields `Error`.
 pub(super) fn resolve_vars_impl(
     vars: &[Option<Type>],
     ty: &Type,
     mut unresolved: Option<&mut BTreeSet<usize>>,
     depth: usize,
 ) -> Type {
-    if depth > 64 {
+    if depth >= MAX_TYPE_DEPTH {
         return Type::Error;
     }
-    if let Some(index) = infer_var_index(ty) {
-        return match vars.get(index).and_then(|v| v.clone()) {
-            Some(bound) => resolve_vars_impl(vars, &bound, unresolved, depth + 1),
-            None => match unresolved.as_deref_mut() {
-                Some(set) => {
-                    set.insert(index);
-                    Type::Error
-                }
-                None => ty.clone(),
-            },
-        };
+    let mut ty = ty;
+    let mut links = 0;
+    while let Some(index) = infer_var_index(ty) {
+        match vars.get(index).and_then(Option::as_ref) {
+            Some(_) if links >= vars.len() => return Type::Error,
+            Some(bound) => {
+                ty = bound;
+                links += 1;
+            }
+            None => {
+                return match unresolved.as_deref_mut() {
+                    Some(set) => {
+                        set.insert(index);
+                        Type::Error
+                    }
+                    None => ty.clone(),
+                };
+            }
+        }
     }
     match ty {
         Type::Ref { mutable, inner } => Type::Ref {

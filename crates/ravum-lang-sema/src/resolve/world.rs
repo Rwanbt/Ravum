@@ -148,6 +148,15 @@ impl<'a> World<'a> {
         vis: Vis,
         span: Span,
     ) {
+        // Namespace invariant: a table only holds symbols of its own
+        // namespace, so a lookup in `Ns::Module` returns a module, in
+        // `Ns::Value` a function or a constant, in `Ns::Type` a struct or an
+        // enum. The `_` arms after a lookup rely on it.
+        debug_assert_eq!(
+            sym.ns(),
+            ns,
+            "symbol `{name}` registered in the wrong namespace"
+        );
         if let Some(previous) = self.table(module, ns).get(name) {
             let first = previous.span;
             self.duplicates
@@ -195,10 +204,14 @@ impl<'a> World<'a> {
         }
         for (index, imp) in self.modules[module].imports.iter().enumerate() {
             if imp.ns == ns && imp.name == name {
+                // MOD-4.1/MOD-4.3: a `use` is an item of the importing module,
+                // private like every item (`pub use` does not exist in Core
+                // 1.0). Reached by name, it is visible in that module's subtree
+                // only, whatever the visibility of what it imports.
                 return Some(SymRef {
                     sym: imp.sym,
-                    vis: imp.vis,
-                    def_module: imp.def_module,
+                    vis: Vis::Private,
+                    def_module: module,
                     import: Some(index),
                 });
             }
@@ -299,6 +312,28 @@ pub(crate) fn rust_ident(name: &str) -> String {
 // Résolution de chemins de valeurs (partagée avec `typeck`)
 // ---------------------------------------------------------------------------
 
+/// Path of the only builtin constant ([`ValuePath::BuiltinNone`]).
+pub(crate) const OPTION_NONE: &str = "Option::None";
+
+/// A prelude constructor that takes a payload. `None`, the unit one, is
+/// [`ValuePath::BuiltinNone`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PayloadCtor {
+    Some,
+    Ok,
+    Err,
+}
+
+impl PayloadCtor {
+    pub(crate) fn path(self) -> &'static str {
+        match self {
+            PayloadCtor::Some => "Option::Some",
+            PayloadCtor::Ok => "Result::Ok",
+            PayloadCtor::Err => "Result::Err",
+        }
+    }
+}
+
 /// Résultat d'une résolution de chemin de valeur.
 #[derive(Debug, Clone)]
 pub(crate) enum ValuePath {
@@ -314,13 +349,12 @@ pub(crate) enum ValuePath {
     },
     /// Fonction builtin libre (`std::io::println`, `drop`, ...).
     BuiltinFn(&'static str),
-    /// Constante builtin (`Option::None`).
-    BuiltinConst(&'static str),
+    /// The only builtin constant, `Option::None` (path [`OPTION_NONE`]).
+    BuiltinNone,
     /// Constructeur de variante builtin (`Option::Some`, `Result::Ok`, ...).
+    /// Its only unit variant, `None`, is [`ValuePath::BuiltinNone`].
     BuiltinCtor {
-        path: &'static str,
-        /// `true` pour une variante unitaire.
-        unit: bool,
+        ctor: PayloadCtor,
     },
     /// Fonction associée utilisateur (`Type::new`).
     AssocFn(NodeId),

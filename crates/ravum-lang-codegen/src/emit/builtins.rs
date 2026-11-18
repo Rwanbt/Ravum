@@ -2,15 +2,12 @@
 //!
 //! Extracted from `emit` by E4 (P-6), no behaviour change.
 
-use super::*;
-
 /// A free function of the Ravum standard library and how it is emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FreeBuiltin {
     Println,
     Print,
     Eprintln,
-    Eprint,
     ReadLine,
     Args,
     EnvVar,
@@ -42,7 +39,6 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "io::println" | "println" => FreeBuiltin::Println,
         "io::print" | "print" => FreeBuiltin::Print,
         "io::eprintln" | "eprintln" => FreeBuiltin::Eprintln,
-        "io::eprint" | "eprint" => FreeBuiltin::Eprint,
         "io::read_line" | "read_line" => FreeBuiltin::ReadLine,
         "env::args" | "args" => FreeBuiltin::Args,
         "env::var" | "env_var" => FreeBuiltin::EnvVar,
@@ -88,9 +84,8 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
 /// `Option::Some`, `Result::Ok`, `Some`, `Ok` ... (unqualified accepted).
 pub(super) fn is_option_or_result_ctor(path: &str) -> bool {
     let segments: Vec<&str> = path.split("::").collect();
-    let Some(last) = segments.last() else {
-        return false;
-    };
+    // `split` yields at least one (possibly empty) segment.
+    let last = &segments[segments.len() - 1];
     let accepted = ["Some", "None", "Ok", "Err"];
     if !accepted.contains(last) {
         return false;
@@ -102,46 +97,19 @@ pub(super) fn is_option_or_result_ctor(path: &str) -> bool {
         )
 }
 
+/// The Rust spelling of a builtin constant. The resolver produces exactly one,
+/// `Option::None` (resolve/paths.rs); `math::PI` and the primitive associated
+/// constants are `E-RES-UNKNOWN` in Core 1.0, so any other path is a defect
+/// upstream and the caller refuses it.
 pub(super) fn builtin_const(path: &str) -> Option<String> {
-    let path = path.strip_prefix("std::").unwrap_or(path);
-    let direct = match path {
-        "math::PI" | "math::pi" => Some("std::f64::consts::PI"),
-        "math::E" | "math::e" => Some("std::f64::consts::E"),
-        "math::TAU" | "math::tau" => Some("std::f64::consts::TAU"),
-        // `Option::None` is a constant, not a constructor call: the canonical
-        // representation decided by the checker.
-        "Option::None" | "None" => Some("None"),
+    match path.strip_prefix("std::").unwrap_or(path) {
+        "Option::None" | "None" => Some("None".to_string()),
         _ => None,
-    };
-    if let Some(found) = direct {
-        return Some(found.to_string());
-    }
-    // `<primitive>::MIN` / `MAX` / `EPSILON` ... are already valid Rust paths.
-    let mut segments = path.split("::");
-    let owner = segments.next()?;
-    let member = segments.next()?;
-    if segments.next().is_some() {
-        return None;
-    }
-    let owner_ok = builtin_type_name(owner).is_some();
-    let member_ok = matches!(
-        member,
-        "MIN" | "MAX" | "EPSILON" | "NAN" | "INFINITY" | "NEG_INFINITY" | "DIGITS" | "BITS"
-    );
-    if owner_ok && member_ok {
-        Some(format!("{owner}::{member}"))
-    } else {
-        None
     }
 }
 
 /// Builtin methods that need more than a direct `.name(args)` call.
-pub(super) fn builtin_method_special(
-    owner: &str,
-    method: &str,
-    receiver: &str,
-    args: &str,
-) -> Option<String> {
+pub(super) fn builtin_method_special(owner: &str, method: &str, receiver: &str) -> Option<String> {
     let rendered = match (owner, method) {
         (_, "to_string") => format!("format!(\"{{}}\", {receiver})"),
         // `str::as_str` (STD-11.4) is the identity on a text reference: the
@@ -159,12 +127,9 @@ pub(super) fn builtin_method_special(
         ),
         _ => return None,
     };
-    if args.is_empty() {
-        Some(rendered)
-    } else {
-        // These special forms take no argument in Core 1.0.
-        Some(rendered)
-    }
+    // These special forms take no argument in Core 1.0 (typeck checks the
+    // arity), so the rendered arguments are never needed.
+    Some(rendered)
 }
 
 /// Rust method name that exists on a builtin owner, exactly as listed by the

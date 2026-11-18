@@ -41,17 +41,21 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         deferred: bool,
         decl: Span,
     ) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(
-                name.to_string(),
-                Local {
-                    ty,
-                    mutable,
-                    deferred,
-                    decl,
-                },
-            );
-        }
+        // Every binding site (parameter, `let`, pattern) runs inside the
+        // scope its function, block or arm pushed.
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("invariant: a local is bound inside an open scope");
+        scope.insert(
+            name.to_string(),
+            Local {
+                ty,
+                mutable,
+                deferred,
+                decl,
+            },
+        );
     }
 
     pub(super) fn lookup_local(&self, name: &str) -> Option<Local> {
@@ -68,7 +72,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // ------------------------------------------------------------------
 
     pub(super) fn resolve_type(&mut self, ty: &AstType) -> Type {
-        resolve::resolve_type_syntax(
+        let resolved = resolve::resolve_type_syntax(
             self.world,
             &mut self.facts.type_nodes,
             &mut self.facts.expr_types,
@@ -77,7 +81,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             &self.generics,
             self.self_ty.as_ref(),
             ty,
-        )
+        );
+        resolve::check_written_type_depth(self.diags, ty, resolved)
     }
 
     pub(super) fn compatible(a: &Type, b: &Type) -> bool {
@@ -97,6 +102,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     ) -> bool {
         let found = self.resolve_vars(found);
         let expected = self.resolve_vars(expected);
+        if matches!(expected, Type::Error) {
+            self.absorb_into_error(&found);
+        } else if matches!(found, Type::Error) {
+            self.absorb_into_error(&expected);
+        }
         if Self::compatible(&found, &expected) {
             return true;
         }
@@ -111,6 +121,56 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             format!("{context}: expected `{expected}`, found `{found}`"),
         );
         false
+    }
+
+    /// Two branch types (`if`/`else`, `match` arms) agree when they are
+    /// compatible once inference variables are unified, in either order: a
+    /// first branch `Vec::new()` (`Vec<$0>`) takes the type of a second one.
+    pub(super) fn branch_types_agree(&mut self, first: &Type, second: &Type) -> bool {
+        let first = self.resolve_vars(first);
+        let second = self.resolve_vars(second);
+        if Self::compatible(&first, &second) {
+            return true;
+        }
+        if !(self.has_infer_var(&first) || self.has_infer_var(&second))
+            || !self.unify_pattern(&first, &second, &mut BTreeMap::new())
+        {
+            return false;
+        }
+        // `unify_pattern` reads a generic parameter of the pattern as a
+        // wildcard; a branch pair agrees only if the types, once the variables
+        // are bound, are really the same (`Vec<T>` never agrees with `Vec<i32>`).
+        let first = self.resolve_vars(&first);
+        let second = self.resolve_vars(&second);
+        Self::compatible(&first, &second)
+    }
+
+    /// Binds every unbound inference variable of `ty` to [`Type::Error`]: a
+    /// value checked against the recovered error type takes it, so its open
+    /// variables do not add an `E-TYP-AMBIGUOUS` to the diagnostic that
+    /// produced the error type (`let x: Unknown = None;`).
+    pub(super) fn absorb_into_error(&mut self, ty: &Type) {
+        if let Some(index) = infer_var_index(ty) {
+            self.bind_var(index, &Type::Error);
+            return;
+        }
+        match ty {
+            Type::Ref { inner, .. }
+            | Type::Array { elem: inner, .. }
+            | Type::Slice(inner)
+            | Type::Vec(inner)
+            | Type::Option(inner) => self.absorb_into_error(inner),
+            Type::Tuple(items) | Type::Nominal { args: items, .. } => {
+                for item in items {
+                    self.absorb_into_error(item);
+                }
+            }
+            Type::Result(ok, err) => {
+                self.absorb_into_error(ok);
+                self.absorb_into_error(err);
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn has_infer_var(&self, ty: &Type) -> bool {
@@ -163,12 +223,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if contains_never(&ty) {
             return true;
         }
-        if let Some(slot) = self.vars.get_mut(index) {
-            *slot = Some(ty);
-            true
-        } else {
-            false
-        }
+        // An inference variable index comes only from `fresh_var`.
+        let slot = self
+            .vars
+            .get_mut(index)
+            .expect("invariant: an inference variable is created before it is bound");
+        *slot = Some(ty);
+        true
     }
 
     pub(super) fn var_occurs(&self, target: usize, ty: &Type) -> bool {
@@ -208,15 +269,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         mapping: &mut BTreeMap<usize, Type>,
     ) -> Type {
         match ty {
-            Type::Param { .. } if infer_var_index(ty).is_none() => {
-                let Type::Param { index, .. } = ty else {
-                    unreachable!()
-                };
-                mapping
-                    .entry(*index)
-                    .or_insert_with(|| self.fresh_var(span))
-                    .clone()
-            }
+            Type::Param { index, .. } if infer_var_index(ty).is_none() => mapping
+                .entry(*index)
+                .or_insert_with(|| self.fresh_var(span))
+                .clone(),
             Type::Ref { mutable, inner } => Type::Ref {
                 mutable: *mutable,
                 inner: Box::new(self.instantiate_with(inner, span, mapping)),
@@ -347,12 +403,43 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
         }
+        self.report_type_depth();
         for index in unresolved {
             let span = self.var_spans.get(index).copied().unwrap_or(Span::dummy());
             self.error(
                 "E-TYP-AMBIGUOUS",
                 span,
                 "cannot infer this type; add an explicit type annotation".to_string(),
+            );
+        }
+    }
+
+    /// TYP-1.7: a type deeper than [`MAX_TYPE_DEPTH`] is refused with
+    /// `E-TYP-DEPTH`. Every expression whose final type crosses the bound is
+    /// a candidate; the one that ends first is reported, which is the
+    /// innermost expression of a nest and the first binding of a chain. One
+    /// diagnostic is enough: the others follow from it, and none is added when a
+    /// written type was already refused (`check_written_type_depth`).
+    fn report_type_depth(&mut self) {
+        if self.diags.iter().any(|d| d.code == "E-TYP-DEPTH") {
+            // A written type already carries the diagnostic.
+            return;
+        }
+        let first = self
+            .facts
+            .expr_types
+            .iter()
+            .filter(|(_, ty)| ty.depth() > MAX_TYPE_DEPTH)
+            .filter_map(|(id, _)| self.expr_spans.get(id).copied())
+            .min_by_key(|span| (span.file, span.end, span.start));
+        if let Some(span) = first {
+            self.error(
+                "E-TYP-DEPTH",
+                span,
+                format!(
+                    "this type nests more than {MAX_TYPE_DEPTH} levels; \
+                     split it with a named struct"
+                ),
             );
         }
     }
@@ -404,17 +491,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .cloned()
                 .unwrap_or(Type::Error);
             let generics: Vec<String> = imp.generics.iter().map(|g| g.name.name.clone()).collect();
-            for member in &imp.items {
-                if let ItemKind::Fn(f) = &member.kind {
-                    methods.push((
-                        module,
-                        member.id,
-                        member.span,
-                        f,
-                        self_ty.clone(),
-                        generics.clone(),
-                    ));
-                }
+            for (member, f) in imp.methods() {
+                methods.push((
+                    module,
+                    member.id,
+                    member.span,
+                    f,
+                    self_ty.clone(),
+                    generics.clone(),
+                ));
             }
         }
         for (module, id, decl_span, f, self_ty, generics) in methods {
@@ -717,9 +802,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 };
                 self.check_let_pattern(&lets.pat, &final_ty, lets.init.is_none());
+                // DIAG-1.9: a name starting with `_` declares the binding
+                // unused on purpose and is never reported.
                 if let PatKind::Binding { name, .. } = &lets.pat.kind {
-                    self.unused_candidates
-                        .push((name.name.clone(), lets.pat.span));
+                    if !name.name.starts_with('_') {
+                        self.unused_candidates
+                            .push((name.name.clone(), lets.pat.span));
+                    }
                 }
                 Type::Unit
             }
@@ -780,6 +869,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .to_string(),
             );
         }
+        self.expr_spans.insert(expr.id, expr.span);
         let ty = self.check_expr_inner(expr, expected);
         // TYP-1.6: `!` is not inhabitable, so it must never become a type
         // argument (`Option<!>`, `Result<!, E>`, `W<!>`). The bottom type only

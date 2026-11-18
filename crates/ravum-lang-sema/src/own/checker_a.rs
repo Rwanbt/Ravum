@@ -13,6 +13,7 @@ impl<'a> OwnChecker<'a> {
             scopes: Vec::new(),
             state: State::default(),
             loans: Vec::new(),
+            loan_floor: 0,
             next_slot: 0,
             emit: true,
             depth: 0,
@@ -34,7 +35,7 @@ impl<'a> OwnChecker<'a> {
         self.state = State::default();
         self.slots.clear();
         self.scopes.clear();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.next_slot = 0;
         self.emit = true;
         self.depth = 0;
@@ -94,7 +95,7 @@ impl<'a> OwnChecker<'a> {
         self.analyze_block(&f.body, true);
 
         self.pop_scope();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
     }
 
     // ------------------------------------------------------------------
@@ -132,6 +133,7 @@ impl<'a> OwnChecker<'a> {
                 static_ref,
                 decl_span: span,
                 binding,
+                assign_once: false,
             },
         );
         if let Some(scope) = self.scopes.last_mut() {
@@ -163,27 +165,38 @@ impl<'a> OwnChecker<'a> {
             .unwrap_or(Type::Error)
     }
 
-    pub(super) fn path_local_slot(&self, expr: &Expr) -> Option<SlotId> {
-        if let Some(Resolution::Local { name, .. }) = self.facts.resolutions.get(&expr.id) {
-            return self.lookup(name);
+    pub(super) fn path_local_slot(&self, path: &crate::syntax::ast::Path) -> Option<SlotId> {
+        // Typeck keys a local's resolution by the `Path` node (typeck/expr.rs).
+        // A path resolved to anything else (`crate::T` naming a constant while
+        // a local `T` is in scope) is not a local. Without a resolution fact, a
+        // plain single-segment path is still looked up by name.
+        match self.facts.resolutions.get(&path.id) {
+            Some(Resolution::Local { name, .. }) => self.lookup(name),
+            Some(_) => None,
+            None => match (&path.root, path.segments.as_slice()) {
+                (crate::syntax::ast::PathRoot::Plain, [segment]) => self.lookup(&segment.name.name),
+                _ => None,
+            },
         }
-        if let ExprKind::Path(path) = &expr.kind {
-            if path.segments.len() == 1 {
-                if let Some(seg) = path.segments.first() {
-                    return self.lookup(&seg.name.name);
-                }
-            }
-        }
-        None
     }
 
     // ------------------------------------------------------------------
     // Block / statement / CFG
     // ------------------------------------------------------------------
 
-    pub(super) fn enter(&mut self) -> bool {
+    pub(super) fn enter(&mut self, span: Span) -> bool {
         if self.depth >= MAX_DEPTH {
-            self.too_deep = true;
+            // Fail closed: what lies below is not analysed, so the function
+            // cannot be accepted. Reported once per function, even during a
+            // silent fixpoint pass.
+            if !self.too_deep {
+                self.too_deep = true;
+                self.diags.push(Diagnostic::error(
+                    E_LIMIT,
+                    span,
+                    "imbrication trop profonde pour l'analyse d'ownership ; analyse interrompue",
+                ));
+            }
             return false;
         }
         self.depth += 1;
@@ -195,11 +208,11 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn analyze_block(&mut self, block: &Block, fn_body: bool) {
-        if !self.enter() {
+        if !self.enter(block.span) {
             return;
         }
         self.push_scope();
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let mut reached = 0;
         for stmt in &block.stmts {
             if self.diverged {
@@ -210,12 +223,12 @@ impl<'a> OwnChecker<'a> {
         }
         if !self.diverged {
             if let Some(tail) = &block.tail {
-                self.loans.clear();
+                self.loans.truncate(self.loan_floor);
                 self.eval_value(tail);
                 if fn_body && self.is_nonstatic_ref(tail) {
                     self.report_ref_escape(tail.span, "retournée");
                 }
-                self.loans.clear();
+                self.loans.truncate(self.loan_floor);
             }
         } else {
             // The rest of the block is unreachable, but the backend still emits
@@ -227,7 +240,7 @@ impl<'a> OwnChecker<'a> {
                 }
                 if let Some(tail) = &block.tail {
                     checker.diverged = false;
-                    checker.loans.clear();
+                    checker.loans.truncate(checker.loan_floor);
                     checker.eval_value(tail);
                 }
             });
@@ -259,15 +272,15 @@ impl<'a> OwnChecker<'a> {
     }
 
     pub(super) fn analyze_stmt(&mut self, stmt: &Stmt) {
-        if !self.enter() {
+        if !self.enter(stmt.span) {
             return;
         }
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         match &stmt.kind {
             StmtKind::Let(l) => self.check_let(l, stmt.span),
             StmtKind::Expr { expr, .. } => self.eval_value(expr),
         }
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.leave();
     }
 
@@ -279,7 +292,7 @@ impl<'a> OwnChecker<'a> {
             init_static = self.is_static_ref(init);
         }
 
-        if let PatKind::Binding { name, .. } = &l.pat.kind {
+        if let PatKind::Binding { name, mutable } = &l.pat.kind {
             let ty = self
                 .facts
                 .pat_types
@@ -292,27 +305,11 @@ impl<'a> OwnChecker<'a> {
                 self.report_ref_escape(stmt_span, "stockée");
             }
             let slot = self.declare_slot(&name.name, ty, static_ref, l.pat.span);
-            let st = if has_init {
-                SlotState::initialised()
-            } else {
-                SlotState::default()
-            };
-            self.state.slots.insert(slot, st);
-            return;
-        }
-
-        // Destructuring pattern: the initialiser was consumed as a whole.
-        let mut bindings: Vec<PatBinding> = Vec::new();
-        self.collect_pat_bindings(&l.pat, false, &mut bindings);
-        for b in bindings {
-            // A `&str` extracted from a destructured aggregate is static by
-            // construction (D13 rule 1 + rule 2); every other reference keeps
-            // the Core 1.0 refusal.
-            let static_ref = b.nested && is_borrowed_text(&b.ty);
-            if b.ty.is_reference() && !static_ref {
-                self.report_ref_escape(b.span, "stockée");
+            if !has_init && !*mutable {
+                if let Some(info) = self.slots.get_mut(&slot) {
+                    info.assign_once = true;
+                }
             }
-            let slot = self.declare_slot(&b.name, b.ty, static_ref, b.span);
             let st = if has_init {
                 SlotState::initialised()
             } else {
@@ -320,6 +317,9 @@ impl<'a> OwnChecker<'a> {
             };
             self.state.slots.insert(slot, st);
         }
+        // Any other pattern: the type checker refused it ("`let` binds exactly
+        // one identifier in Core 1.0", typeck/core.rs), so ownership never
+        // runs on it in a check; walked without facts, it declares nothing.
     }
 
     pub(super) fn collect_pat_bindings(&self, pat: &Pat, nested: bool, out: &mut Vec<PatBinding>) {
@@ -365,8 +365,19 @@ impl<'a> OwnChecker<'a> {
     // Expressions
     // ------------------------------------------------------------------
 
+    /// Analyse a construct that owns statements (block, branch, loop). The
+    /// loans active on entry belong to the enclosing expression and stay in
+    /// force inside; the construct only ends the temporaries it creates.
+    fn nested(&mut self, analyse: impl FnOnce(&mut Self)) {
+        let outer = self.loan_floor;
+        self.loan_floor = self.loans.len();
+        analyse(self);
+        self.loans.truncate(self.loan_floor);
+        self.loan_floor = outer;
+    }
+
     pub(super) fn eval_value(&mut self, expr: &Expr) {
-        if !self.enter() {
+        if !self.enter(expr.span) {
             return;
         }
         match &expr.kind {
@@ -439,10 +450,12 @@ impl<'a> OwnChecker<'a> {
                     let after_lhs = self.state.clone();
                     let lhs_diverged = self.diverged;
                     self.eval_value(rhs);
+                    // `diverged` stays set once raised, so a diverging left
+                    // operand always takes the first branch.
                     if self.diverged {
                         self.state = after_lhs;
                         self.diverged = lhs_diverged;
-                    } else if !lhs_diverged {
+                    } else {
                         self.state = join(&after_lhs, &self.state);
                     }
                 } else {
@@ -474,13 +487,13 @@ impl<'a> OwnChecker<'a> {
                 cond,
                 then_block,
                 else_branch,
-            } => self.eval_if(cond, then_block, else_branch.as_deref()),
-            ExprKind::Match { scrutinee, arms } => self.eval_match(scrutinee, arms),
-            ExprKind::While { cond, body } => self.eval_while(cond, body),
-            ExprKind::Loop { body } => self.eval_loop(body),
-            ExprKind::For { pat, iter, body } => self.eval_for(pat, iter, body),
-            ExprKind::Block(block) => self.analyze_block(block, false),
-            ExprKind::Unsafe(block) => self.analyze_block(block, false),
+            } => self.nested(|c| c.eval_if(cond, then_block, else_branch.as_deref())),
+            ExprKind::Match { scrutinee, arms } => self.nested(|c| c.eval_match(scrutinee, arms)),
+            ExprKind::While { cond, body } => self.nested(|c| c.eval_while(cond, body)),
+            ExprKind::Loop { body } => self.nested(|c| c.eval_loop(body)),
+            ExprKind::For { pat, iter, body } => self.nested(|c| c.eval_for(pat, iter, body)),
+            ExprKind::Block(block) => self.nested(|c| c.analyze_block(block, false)),
+            ExprKind::Unsafe(block) => self.nested(|c| c.analyze_block(block, false)),
             ExprKind::Tuple(items) | ExprKind::Array(items) => {
                 for item in items {
                     self.eval_value(item);
@@ -520,11 +533,10 @@ impl<'a> OwnChecker<'a> {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.eval_value(start);
-                }
-                if let Some(end) = end {
-                    self.eval_value(end);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.eval_value(bound);
                 }
             }
             ExprKind::Try(inner) => {
@@ -584,14 +596,14 @@ impl<'a> OwnChecker<'a> {
 
     /// Evaluate an expression as a place without consuming it.
     pub(super) fn eval_place_expr(&mut self, expr: &Expr) -> Option<Place> {
-        if !self.enter() {
+        if !self.enter(expr.span) {
             return None;
         }
         let result = match &expr.kind {
             ExprKind::SelfValue | ExprKind::Path(_) => {
                 let slot = match &expr.kind {
-                    ExprKind::SelfValue => self.lookup("self"),
-                    _ => self.path_local_slot(expr),
+                    ExprKind::Path(path) => self.path_local_slot(path),
+                    _ => self.lookup("self"),
                 };
                 // RFC-OWN-FACTS-2 step C4: the scope lookup above is the only
                 // place where a path becomes a binding; publish its outcome.
@@ -665,7 +677,7 @@ impl<'a> OwnChecker<'a> {
         self.eval_value(cond);
         // Condition borrows/temporaries end before the branches execute; branch
         // statements are distinct instructions.
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let after_cond = self.state.clone();
         let cond_diverged = self.diverged;
 
@@ -712,7 +724,7 @@ impl<'a> OwnChecker<'a> {
         // that a subsequent `match v.pop() { ... v.push(..) }` stays accepted.
         // Any reference that could escape from the scrutinee would already be
         // rejected as a ref escape.
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let base = self.state.clone();
         let base_diverged = self.diverged;
 
@@ -783,9 +795,9 @@ impl<'a> OwnChecker<'a> {
             self.emit = false;
             self.state = entry.clone();
             self.diverged = false;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.eval_value(cond);
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             let cond_diverged = self.diverged;
             self.loop_stack.push(LoopCtx::default());
             if !cond_diverged {
@@ -811,9 +823,9 @@ impl<'a> OwnChecker<'a> {
         self.emit = saved_emit;
         self.state = entry;
         self.diverged = false;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.eval_value(cond);
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         let cond_diverged = self.diverged;
         let after_cond = self.state.clone();
         self.loop_stack.push(LoopCtx::default());
@@ -827,17 +839,14 @@ impl<'a> OwnChecker<'a> {
         // Exit: either the (at least one) condition evaluation fails, or a
         // `break` was taken. The failing-condition state comes from the
         // stabilised header, not from the body exit.
-        let mut exit: Option<State> = if cond_diverged {
+        // A diverging condition sends the body through `analyze_dead`, which
+        // discards its `break`s: there is no exit at all, and nothing to join.
+        let exit: Option<State> = if cond_diverged {
             None
         } else {
             Some(after_cond)
-        };
-        for b in &ctx.breaks {
-            exit = Some(match exit {
-                Some(e) => join(&e, b),
-                None => b.clone(),
-            });
         }
+        .map(|exit| ctx.breaks.iter().fold(exit, |acc, b| join(&acc, b)));
         match exit {
             Some(st) => {
                 self.state = st;
@@ -858,7 +867,7 @@ impl<'a> OwnChecker<'a> {
             self.emit = false;
             self.state = entry.clone();
             self.diverged = false;
-            self.loans.clear();
+            self.loans.truncate(self.loan_floor);
             self.loop_stack.push(LoopCtx::default());
             self.analyze_block(body, false);
             let ctx = self.loop_stack.pop().unwrap_or_default();
@@ -880,7 +889,7 @@ impl<'a> OwnChecker<'a> {
         self.emit = saved_emit;
         self.state = entry;
         self.diverged = false;
-        self.loans.clear();
+        self.loans.truncate(self.loan_floor);
         self.loop_stack.push(LoopCtx::default());
         self.analyze_block(body, false);
         let ctx = self.loop_stack.pop().unwrap_or_default();

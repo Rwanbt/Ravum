@@ -168,11 +168,23 @@ struct Parser<'a> {
     ids: NodeIds,
     node_count: u32,
     depth: u32,
+    /// Deepest nesting reached by the expression being parsed, counting one
+    /// level per link of a left-associative chain (`a + b + c`, `x.f.g`).
+    /// Those chains are parsed by loops, so `depth` alone does not bound the
+    /// height of the tree they build.
+    reach: u32,
     fatal: bool,
     depth_reported: bool,
     nodes_reported: bool,
     /// Number of enclosing condition contexts where assignment is forbidden.
     forbid_assign: u32,
+    /// G-6.1: set by a block just before it parses a statement, taken by the
+    /// first operand parsed. A block-like operand there ends the statement at
+    /// its `}` (`stmt_end`), unless `.` or `?` follows, as in Rust.
+    stmt_head: bool,
+    /// The statement being parsed already ended at a block-like `}`: no
+    /// operator, call, index, cast, range or assignment continues it.
+    stmt_end: bool,
     /// Expressions that were written between parentheses. Used to distinguish
     /// `(a < b) < c` (allowed) from `a < b < c` (E-PARSE-UNEXPECTED) and
     /// `(t.0).0` (allowed) from `t.0.1` (E-PARSE-UNEXPECTED).

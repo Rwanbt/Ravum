@@ -5,9 +5,9 @@ impl<'a> Emitter<'a> {
         match &pat.kind {
             PatKind::Wild => Ok("_".to_string()),
             PatKind::Binding { mutable, name } => Ok(if *mutable {
-                format!("mut {}", mangle_ident(&name.name))
+                format!("mut {}", self.local_ident(&name.name))
             } else {
-                mangle_ident(&name.name)
+                self.local_ident(&name.name)
             }),
             PatKind::Lit(literal) => self.literal_pattern(pat, literal),
             PatKind::Tuple(items) => {
@@ -22,12 +22,11 @@ impl<'a> Emitter<'a> {
                 }
             }
             PatKind::Path(path) => match self.facts().resolutions.get(&path.id) {
-                Some(Resolution::Variant { enum_item, variant }) => {
-                    match self.variant_name_opt(*enum_item, *variant) {
-                        Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                        None => self.plain_path_text(path),
-                    }
-                }
+                Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                    "{}::{}",
+                    self.enum_path(*enum_item)?,
+                    self.variant_name(*enum_item, *variant)?
+                )),
                 Some(Resolution::Item { item }) => self.item_path(*item),
                 Some(_) => self.plain_path_text(path),
                 None => Err(err(format!(
@@ -104,13 +103,13 @@ impl<'a> Emitter<'a> {
     /// Resolves the `Enum::Variant` prefix shared by the two pattern renderers.
     pub(super) fn variant_pattern_base(&self, path: &Path) -> Result<String, CodegenError> {
         match self.facts().resolutions.get(&path.id) {
-            Some(Resolution::Variant { enum_item, variant }) => {
-                match self.variant_name_opt(*enum_item, *variant) {
-                    Some(name) => Ok(format!("{}::{}", self.enum_path(*enum_item)?, name)),
-                    None => self.plain_path_text(path),
-                }
-            }
-            Some(Resolution::Item { item }) => self.item_path(*item),
+            Some(Resolution::Variant { enum_item, variant }) => Ok(format!(
+                "{}::{}",
+                self.enum_path(*enum_item)?,
+                self.variant_name(*enum_item, *variant)?
+            )),
+            // A variant pattern resolves to a variant or a prelude
+            // constructor; the latter is written as its path.
             Some(_) => self.plain_path_text(path),
             None => Err(err(format!(
                 "missing resolution fact for pattern path `{}` (path node {})",

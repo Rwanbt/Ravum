@@ -49,7 +49,7 @@ impl<'a> Emitter<'a> {
             ExprKind::Str(value) => Ok(string_literal(value)),
             ExprKind::SelfValue => Ok("self".to_string()),
             ExprKind::Path(path) => self.value_path(path),
-            ExprKind::Call { callee, args } => self.call_expr(expr, callee, args, indent),
+            ExprKind::Call { args, .. } => self.call_expr(expr, args, indent),
             ExprKind::MethodCall {
                 receiver,
                 method,
@@ -181,12 +181,14 @@ impl<'a> Emitter<'a> {
                 end,
                 inclusive,
             } => {
+                // Only closed `for` ranges reach the backend; an absent bound
+                // would be written as nothing.
                 let mut text = String::new();
-                if let Some(first) = start {
+                for first in start.iter() {
                     text.push_str(&self.operand(first, indent)?);
                 }
                 text.push_str(if *inclusive { "..=" } else { ".." });
-                if let Some(last) = end {
+                for last in end.iter() {
                     text.push_str(&self.operand(last, indent)?);
                 }
                 Ok(text)
@@ -251,17 +253,19 @@ impl<'a> Emitter<'a> {
         if !arms.iter().any(|arm| pattern_contains_float(&arm.pat)) {
             return self.plain_match_text(scrutinee, arms, indent);
         }
-        let temp = "__ravum_match_scrutinee";
+        // Generated bindings must neither shadow locals used by the arms
+        // nor be interpreted as named constant patterns by Rust.
+        let temp = self.match_temporary_name("__ravum_match_scrutinee".into());
         let mut text = "{\n".to_string();
         text.push_str(&indent_text(indent + 1));
         text.push_str("let ");
-        text.push_str(temp);
+        text.push_str(&temp);
         text.push_str(" = ");
         text.push_str(&self.operand(scrutinee, indent + 1)?);
         text.push_str(";\n");
         text.push_str(&indent_text(indent + 1));
         text.push_str("match ");
-        text.push_str(temp);
+        text.push_str(&temp);
         text.push_str(" {\n");
         for arm in arms {
             let mut counter = 0usize;
@@ -317,7 +321,7 @@ impl<'a> Emitter<'a> {
     ) -> Result<String, CodegenError> {
         match &pat.kind {
             PatKind::Lit(LitPat::Float { text, suffix }) => {
-                let name = format!("__ravum_flt_{counter}");
+                let name = self.match_temporary_name(format!("__ravum_flt_{counter}"));
                 *counter += 1;
                 let literal =
                     self.float_literal(*suffix, text, self.facts().pat_types.get(&pat.id));
@@ -390,13 +394,9 @@ impl<'a> Emitter<'a> {
         text: &str,
         ty: Option<&Type>,
     ) -> String {
+        // The lexer builds a float token only after a fraction or an exponent
+        // (lexer.rs `is_float`), so the text always holds `.`, `e` or `E`.
         let mut out = text.trim().to_string();
-        if out.is_empty() {
-            out.push('0');
-        }
-        if !out.contains('.') && !out.contains('e') && !out.contains('E') {
-            out.push_str(".0");
-        }
         let is_f32 = match suffix {
             Some(FloatTy::F32) => true,
             Some(FloatTy::F64) => false,
@@ -411,4 +411,13 @@ impl<'a> Emitter<'a> {
     }
 
     // -- paths -------------------------------------------------------------
+    fn match_temporary_name(&self, mut name: String) -> String {
+        for _ in &self.index.float_match_names {
+            if !self.index.float_match_names.contains(&name) {
+                break;
+            }
+            name.push('_');
+        }
+        name
+    }
 }

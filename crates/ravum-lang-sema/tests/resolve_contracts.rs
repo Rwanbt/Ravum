@@ -1014,15 +1014,32 @@ fn generic_parameter_as_value_is_e_res_unknown() {
 
 #[test]
 fn explicit_generic_arguments_in_expression_is_e_parse_unexpected() {
-    // TYP-11.4: `f::<i32>(1)` is refused (the `types.md` example names
-    // E-PARSE-UNEXPECTED).
-    expect_code(
-        r#"
+    // TYP-11.4 / G-5.9: `f::<i32>(1)` is refused (the `types.md` example names
+    // E-PARSE-UNEXPECTED). The parser reports it on every segment of an
+    // expression path; the resolver still refuses a single-name turbofish if
+    // it is handed the tree anyway (defence in depth).
+    let src = r#"
 fn id<T>(x: T) -> T { return x; }
 fn g() { let y = id::<i32>(1); }
-"#,
-        "E-PARSE-UNEXPECTED",
-    );
+fn main() { }
+"#;
+    let mut sources = SourceMap::new();
+    let file = sources.add("src/main.rv", src);
+    let parsed = parser::parse_file(file, src);
+    let parse_codes: Vec<String> = parsed.diags.iter().map(|d| d.code.clone()).collect();
+    assert_eq!(parse_codes, ["E-PARSE-UNEXPECTED"]);
+    let options = CheckOptions {
+        profile: Profile::Core,
+        edition: LANGUAGE_EDITION.to_string(),
+    };
+    let result = check(&parsed.program, &sources, &options);
+    let codes: Vec<String> = result
+        .diags
+        .iter()
+        .filter(|d| d.code.starts_with("E-"))
+        .map(|d| d.code.clone())
+        .collect();
+    assert_eq!(codes, ["E-PARSE-UNEXPECTED"]);
 }
 
 #[test]

@@ -32,12 +32,8 @@ impl<'a> Emitter<'a> {
         fun: &FnItem,
     ) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
-        let entry = self.index.fns.get(&item.id).ok_or_else(|| {
-            err(format!(
-                "function node {} is missing from the index",
-                item.id
-            ))
-        })?;
+        // `Index::build` walks the same AST and records every function.
+        let entry = &self.index.fns[&item.id];
 
         let mut signature = String::new();
         // `main` and test functions are called from the generated crate-root
@@ -67,9 +63,9 @@ impl<'a> Emitter<'a> {
                     params.push(format!(
                         "{}: {}",
                         if *mutable {
-                            format!("mut {}", mangle_ident(&name.name))
+                            format!("mut {}", self.local_ident(&name.name))
                         } else {
-                            mangle_ident(&name.name)
+                            self.local_ident(&name.name)
                         },
                         self.type_node_pos(ty, TypePos::Param)?
                     ));
@@ -177,17 +173,16 @@ impl<'a> Emitter<'a> {
         let generics = self.generics(&implementation.generics);
         buf.line(&format!("impl{generics} {self_type} {{"));
         buf.indent += 1;
-        for item in &implementation.items {
-            match &item.kind {
-                ItemKind::Fn(fun) => self.emit_fn(buf, item, fun)?,
-                ItemKind::Const(constant) => self.emit_const(buf, item, constant)?,
-                _ => {
-                    return Err(err(format!(
-                        "unsupported item inside `impl` (item node {})",
-                        item.id
-                    )));
-                }
-            }
+        // The checker accepts only functions inside an `impl`
+        // (E-RES-IMPL-UNKNOWN); anything else is refused here too.
+        if let Some(item) = implementation.non_methods().next() {
+            return Err(err(format!(
+                "unsupported item inside `impl` (item node {})",
+                item.id
+            )));
+        }
+        for (item, fun) in implementation.methods() {
+            self.emit_fn(buf, item, fun)?;
         }
         buf.indent -= 1;
         buf.line("}");

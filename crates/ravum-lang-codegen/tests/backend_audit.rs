@@ -232,15 +232,17 @@ impl B {
         self.call_target(callee, args, CallTarget::UserFn { item })
     }
 
-    fn call_variant(
-        &self,
-        callee: &str,
-        args: Vec<Expr>,
-        enum_item: NodeId,
-        variant: usize,
-    ) -> Expr {
+    /// A prelude constructor call (`Ok(..)`, `Err(..)`, `Some(..)`), recorded
+    /// as the checker records it: a builtin call.
+    fn call_prelude(&self, callee: &str, args: Vec<Expr>) -> Expr {
+        let owner = if matches!(callee, "Ok" | "Err") {
+            "Result"
+        } else {
+            "Option"
+        };
+        let path = format!("{owner}::{callee}");
         let callee = self.callee(callee);
-        self.call_target(callee, args, CallTarget::VariantCtor { enum_item, variant })
+        self.call_target(callee, args, CallTarget::BuiltinFn { path })
     }
 
     fn call_target(&self, callee: Expr, args: Vec<Expr>, target: CallTarget) -> Expr {
@@ -547,7 +549,7 @@ fn result_unit_ret(b: &B) -> AstType {
 
 fn ok_unit(b: &B) -> Expr {
     let unit = b.unit();
-    b.call_variant("Ok", vec![unit], 900_002, 0)
+    b.call_prelude("Ok", vec![unit])
 }
 
 fn println_expr(b: &B, argument: Expr) -> Expr {
@@ -717,6 +719,48 @@ fn generate_source(label: &str, source: &str) -> String {
 
 fn generate_source_with(label: &str, source: &str, options: &GenOptions) -> String {
     checked_from_source(label, source, options)
+}
+
+/// The checker's diagnostic codes for a one-file package, for audits whose
+/// program must be refused before generation.
+fn checker_codes(label: &str, source: &str) -> Vec<String> {
+    let dir = TempDir::new(label);
+    let manifest =
+        format!("[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n");
+    std::fs::write(dir.path.join("ravum.toml"), manifest).expect("cannot write the manifest");
+    let src = dir.path.join("src");
+    std::fs::create_dir_all(&src).expect("cannot create the package source directory");
+    std::fs::write(src.join("main.rv"), source).expect("cannot write the Ravum source");
+    let loaded = ravum_lang_sema::loader::load_package_with_options(
+        &dir.path,
+        &ravum_lang_sema::loader::LoadOptions {
+            locked: false,
+            overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
+        },
+    );
+    assert!(
+        loaded.diags.is_empty(),
+        "loader diagnostics for `{label}`:\n{}",
+        loaded.diags.render(&loaded.sources)
+    );
+    let program = loaded
+        .program
+        .expect("the loader produced no program for a valid package");
+    let checked = ravum_lang_sema::check(
+        &program,
+        &loaded.sources,
+        &CheckOptions {
+            profile: Profile::Core,
+            edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+        },
+    );
+    let _ = std::fs::remove_dir_all(&dir.path);
+    assert!(
+        checked.checked.is_none() || !checked.diags.is_empty(),
+        "a refused program must carry a diagnostic"
+    );
+    checked.diags.iter().map(|d| d.code.to_string()).collect()
 }
 
 fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> String {
@@ -2227,7 +2271,7 @@ fn panic_program(kind: PanicKind) -> CheckedProgram {
         }
         PanicKind::ResultUnwrap => {
             let error_call = b.call_free("Error::new", vec![b.text("x")], "Error::new");
-            let result_expr = b.call_variant("Err", vec![error_call], 901_000, 1);
+            let result_expr = b.call_prelude("Err", vec![error_call]);
             let result_ty = b.ty(
                 TypeKind::Path(b.path(&["Result"])),
                 Some(STy::Result(
@@ -2359,7 +2403,7 @@ fn test_runner_program() -> CheckedProgram {
     // test fn result_fails() -> Result<(), Error> { Err(Error::new("nope")) }
     let result_id = b.id();
     let error_call = b.call_free("Error::new", vec![b.text("nope")], "Error::new");
-    let err_expr = b.call_variant("Err", vec![error_call], 902_000, 1);
+    let err_expr = b.call_prelude("Err", vec![error_call]);
     let result_body = b.block(Vec::new(), Some(err_expr));
     let result_ret = result_unit_ret(&b);
     b.items.borrow_mut().push(make_fn(
@@ -4505,4 +4549,956 @@ fn audit_d13_str_as_str_identity_compiles_and_runs() {
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(stdout, "x\n", "stderr: {stderr}");
     assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_float_min_max_evaluate_each_operand_once_in_order() {
+    if skip("audit_float_min_max_evaluate_each_operand_once_in_order") {
+        return;
+    }
+    let code = generate_source(
+        "math-min-max-operand-order",
+        r#"fn left(value: f64) -> f64 {
+    io::println("left");
+    return value;
+}
+
+fn right(value: f64) -> f64 {
+    io::println("right");
+    return value;
+}
+
+fn main() {
+    assert_eq(math::max(left(0.0), right(2.0)), 2.0);
+    assert_eq(math::min(left(0.0), right(-2.0)), -2.0);
+    assert_eq(math::max(left(-2.0), right(0.0)), 0.0);
+    assert_eq(math::min(left(2.0), right(0.0)), 0.0);
+}
+"#,
+    );
+    let built = must_compile(&code, "math-min-max-operand-order");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+    assert_eq!(stdout, "left\nright\n".repeat(4), "stderr: {stderr}");
+}
+
+#[test]
+fn audit_float_min_max_temporary_avoids_user_constant_names() {
+    if skip("audit_float_min_max_temporary_avoids_user_constant_names") {
+        return;
+    }
+    let source = "fn main() { assert_eq(math::max(-2.0, 0.0), 0.0); }";
+    let code = generate_source("math-temporary-name", source);
+    let temporary = code
+        .split_once("let __rv_math_args_")
+        .and_then(|(_, rest)| rest.split_once(" = "))
+        .and_then(|(id, _)| id.parse::<u64>().ok())
+        .map(|id| format!("__rv_math_args_{id}"))
+        .expect("without a collision the temporary name ends in the numeric node ID");
+    // A user constant named like the temporary used to be the collision this
+    // test forced; LEX-4.6 now refuses the name, so no collision can arise.
+    let source = format!("{source}\nconst {temporary}: i32 = -1;");
+    let dir = TempDir::new("math-temporary-collision");
+    std::fs::write(
+        dir.path.join("ravum.toml"),
+        "[package]\nname = \"math-temporary-collision\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .expect("cannot write the manifest");
+    std::fs::create_dir_all(dir.path.join("src")).expect("cannot create src");
+    std::fs::write(dir.path.join("src/main.rv"), &source).expect("cannot write the source");
+    let loaded = ravum_lang_sema::loader::load_package_with_options(
+        &dir.path,
+        &ravum_lang_sema::loader::LoadOptions::default(),
+    );
+    let codes: Vec<&str> = loaded.diags.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(codes, ["E-LEX-RESERVED-IDENT"], "{source}");
+}
+
+#[test]
+fn audit_float_guard_matches_record_and_nested_tuple_values() {
+    if skip("audit_float_guard_matches_record_and_nested_tuple_values") {
+        return;
+    }
+    let code = generate_source(
+        "float-guard-record-tuple",
+        r#"enum Event {
+    Reading { coordinates: (f32, f64), count: i32 },
+    Absent {},
+}
+
+fn classify(event: Event) -> i32 {
+    match event {
+        Event::Reading { coordinates: (1.25f32, -2.5f64), count: count } => count,
+        Event::Absent {} => 3,
+        _ => 0,
+    }
+}
+
+fn main() {
+    assert_eq(classify(Event::Reading { coordinates: (1.25f32, -2.5f64), count: 7 }), 7);
+    assert_eq(classify(Event::Reading { coordinates: (1.25f32, 2.5f64), count: 7 }), 0);
+    assert_eq(classify(Event::Reading { coordinates: (2.25f32, -2.5f64), count: 7 }), 0);
+    assert_eq(classify(Event::Absent {}), 3);
+}
+"#,
+    );
+    let built = must_compile(&code, "float-guard-record-tuple");
+    let (_, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn audit_float_guard_temporaries_do_not_capture_user_bindings() {
+    if skip("audit_float_guard_temporaries_do_not_capture_user_bindings") {
+        return;
+    }
+    let code = generate_source(
+        "float-guard-hygiene",
+        r#"const __ravum_flt_0_: i32 = 5;
+
+fn classify(pair: (f64, i32), __ravum_match_scrutinee: i32, __ravum_flt_0: i32) -> i32 {
+    match pair {
+        (1.5, __ravum_flt_0) => __ravum_flt_0 + __ravum_match_scrutinee,
+        (2.5, _) => __ravum_flt_0 + __ravum_flt_0_,
+        _ => __ravum_match_scrutinee,
+    }
+}
+
+fn main() {
+    assert_eq(classify((1.5, 7), 3, 11), 10);
+    assert_eq(classify((2.5, 7), 3, 11), 16);
+    assert_eq(classify((0.5, 7), 3, 11), 3);
+}
+"#,
+    );
+    let built = must_compile(&code, "float-guard-hygiene");
+    let (_, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "stderr: {stderr}");
+}
+
+/// A place reached through an explicit dereference is rooted at that
+/// dereference. The ownership guard asked the checker for a binding identity
+/// on the dereference itself and refused to generate code for a program that
+/// `check` accepts: `(*q)[0]`, `(*q).n`.
+#[test]
+fn audit_places_under_an_explicit_dereference_are_generated_and_run() {
+    if skip("audit_places_under_an_explicit_dereference_are_generated_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "explicit-deref-places",
+        r#"struct P { n: i32 }
+
+fn bump(a: &mut i32) {
+    *a = *a + 1;
+}
+
+fn through_array(q: &mut [i32; 2]) -> i32 {
+    (*q)[0] = 5;
+    bump(&mut (*q)[1]);
+    return (*q)[0] + (*q)[1];
+}
+
+fn through_struct(q: &mut P) -> i32 {
+    (*q).n = 7;
+    bump(&mut (*q).n);
+    return (*q).n;
+}
+
+fn main() {
+    let mut a = [1, 2];
+    assert_eq(through_array(&mut a), 8);
+    let mut p = P { n: 1 };
+    assert_eq(through_struct(&mut p), 8);
+}
+"#,
+    );
+    let built = must_compile(&code, "explicit-deref-places");
+    let (_stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+}
+
+/// Array-element paths followed by more projections, while another element
+/// of the same array is moved: a field or tuple field moved out of an element,
+/// a field of an element borrowed exclusively and read, a nested constant
+/// index, a nested computed index. Each lowering is checked by running it.
+#[test]
+fn audit_element_paths_with_trailing_projections_run_correctly() {
+    if skip("audit_element_paths_with_trailing_projections_run_correctly") {
+        return;
+    }
+    let code = generate_source(
+        "element-path-projections",
+        r#"struct P { name: String, n: i32 }
+
+fn take(s: String) -> usize {
+    return s.len();
+}
+
+fn bump(n: &mut i32) {
+    *n = *n + 1;
+}
+
+fn main() {
+    let mut a = [P { name: String::from("ab"), n: 1 }, P { name: String::from("cde"), n: 2 }];
+    let moved = a[0].name;
+    bump(&mut a[1].n);
+    assert_eq(a[1].name.len(), 3);
+    assert_eq(take(moved), 2);
+    assert_eq(a[1].n, 3);
+    let t = [(String::from("x"), String::from("yy")), (String::from("z"), String::from("w"))];
+    let u = t[1].1;
+    assert_eq(take(u), 1);
+    let g = [[String::from("p"), String::from("qq")], [String::from("r"), String::from("s")]];
+    let h = g[1][1];
+    assert_eq(g[0][1].len(), 2);
+    assert_eq(take(h), 1);
+    let i: usize = 1;
+    let m = [[String::from("aaa"), String::from("b")], [String::from("c"), String::from("dd")]];
+    let n = m[0][i];
+    assert_eq(take(n), 1);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("ref mut __rv_el_"),
+        "an exclusive element borrow is lowered"
+    );
+    assert!(
+        code.contains("into_iter().nth("),
+        "a computed nested index is lowered"
+    );
+    let built = must_compile(&code, "element-path-projections");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// Projections after a computed index (`a[i].t.0`, `l[i][1]`) consume the
+/// array and keep projecting the selected value; a borrow through an element
+/// of a partially moved array (`b[1].t.0`) keeps its trailing projections.
+#[test]
+fn audit_projections_after_a_computed_index_and_a_partial_move_run_correctly() {
+    if skip("audit_projections_after_a_computed_index_and_a_partial_move_run_correctly") {
+        return;
+    }
+    let code = generate_source(
+        "element-path-computed-projections",
+        r#"struct S { n: String, t: (String, i32) }
+
+fn main() {
+    let i: usize = 1;
+    let a = [S { n: String::from("x"), t: (String::from("y"), 1) }, S { n: String::from("z"), t: (String::from("ww"), 2) }];
+    let m = a[i].t.0;
+    assert_eq(m.len(), 2);
+    let l = [[String::from("p"), String::from("q")], [String::from("r"), String::from("sss")]];
+    let j = l[i][1];
+    assert_eq(j.len(), 3);
+    let b = [S { n: String::from("xxxx"), t: (String::from("y"), 1) }, S { n: String::from("z"), t: (String::from("vvvvv"), 2) }];
+    let k = b[0].n;
+    assert_eq(b[1].t.0.len(), 5);
+    assert_eq(k.len(), 4);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("into_iter().nth("),
+        "a computed index is lowered"
+    );
+    let built = must_compile(&code, "element-path-computed-projections");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// check => build: a type nested 100 levels deep used to resolve to `Error`
+/// past 64 levels (no diagnostic), and generation then failed with
+/// "attempted to generate the recovered error type". The type here sits
+/// exactly at the normative bound (TYP-1.7, depth 100: 99 `Option`s around
+/// `i32`); one level more is `E-TYP-DEPTH`.
+#[test]
+fn audit_a_type_nested_at_the_depth_bound_builds_and_runs() {
+    if skip("audit_a_type_nested_at_the_depth_bound_builds_and_runs") {
+        return;
+    }
+    let mut ty = String::from("i32");
+    let mut pattern = String::from("_");
+    for _ in 0..99 {
+        ty = format!("Option<{ty}>");
+        pattern = format!("Some({pattern})");
+    }
+    let source = format!(
+        "fn main() {{\n    let x: {ty} = None;\n    let y = x;\n    \
+         match y {{\n        {pattern} => {{ }}\n        _ => {{ io::println(\"ok\"); }}\n    }}\n}}\n"
+    );
+    let code = generate_source("deep-type", &source);
+    let built = must_compile(&code, "deep-type");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// TYP-1.7 past the bound, end to end: the 128-level shapes the depth audits
+/// used before the bound existed are refused with exactly one `E-TYP-DEPTH`
+/// (no panic, no stack overflow, no generation of the error type).
+#[test]
+fn audit_types_nested_128_levels_are_refused_with_one_depth_diagnostic() {
+    let depth = 128;
+    let ty = (0..depth).fold(String::from("i32"), |acc, _| format!("Option<{acc}>"));
+    let pattern = (0..depth).fold(String::from("_"), |acc, _| format!("Some({acc})"));
+    let written = format!(
+        "fn main() {{\n    let x: {ty} = None;\n    \
+         match x {{\n        {pattern} => {{ }}\n        _ => {{ }}\n    }}\n}}\n"
+    );
+    assert_eq!(checker_codes("deep-type-128", &written), ["E-TYP-DEPTH"]);
+    let mut body = String::from("    let a0 = 1;\n");
+    for i in 1..=depth {
+        body.push_str(&format!("    let a{i} = Some(a{});\n", i - 1));
+    }
+    let inferred = format!("fn main() {{\n{body}    match a{depth} {{ _ => {{ }} }}\n}}\n");
+    assert_eq!(
+        checker_codes("deep-inferred-128", &inferred),
+        ["E-TYP-DEPTH"]
+    );
+    let bool_ty = (0..depth).fold(String::from("bool"), |acc, _| format!("Option<{acc}>"));
+    let signature = format!("fn f(_t: {bool_ty}) -> usize {{ 0 }}\nfn main() {{ }}\n");
+    assert_eq!(checker_codes("deep-param-128", &signature), ["E-TYP-DEPTH"]);
+}
+
+/// Expression shapes no corpus program generated: a one-element tuple, an
+/// exponent float literal, a unit variant called with `()`, and a valueless
+/// `return` as the `else` value of an `if` expression.
+#[test]
+fn audit_rare_expression_shapes_build_and_run() {
+    if skip("audit_rare_expression_shapes_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "rare-expression-shapes",
+        r#"enum E { A, B(i32) }
+
+fn g(c: bool) {
+    let y = if c { 1 } else { return };
+    drop(y);
+}
+
+fn main() {
+    let t = (1,);
+    let x = 1.5;
+    let y = 2e3;
+    let e = E::A();
+    match e {
+        E::A => { io::println("a"); }
+        E::B(n) => { drop(n); }
+    }
+    g(false);
+    assert_eq(t.0, 1);
+    assert(x < y);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("(1i32,)"),
+        "a one-element tuple keeps its comma"
+    );
+    let built = must_compile(&code, "rare-expression-shapes");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "a\nok\n");
+}
+
+/// G-6.42: block arms followed by tuple patterns and a negative literal arm,
+/// without commas, run as written (the block is not called on the next arm).
+#[test]
+fn audit_block_arms_without_commas_before_tuple_and_negative_arms_run() {
+    if skip("audit_block_arms_without_commas_before_tuple_and_negative_arms_run") {
+        return;
+    }
+    let code = generate_source(
+        "block-arms-without-commas",
+        r#"fn classify(p: (bool, bool)) -> i32 {
+    match p {
+        (true, true) => { return 3; }
+        (true, false) => { return 2; }
+        (false, x) => { if x { return 1; } return 0; }
+    }
+}
+
+fn sign(n: i32) -> i32 {
+    match n {
+        0 => if true { 10 } else { 11 }
+        -1 => { 20 }
+        _ => { 30 }
+    }
+}
+
+fn main() {
+    assert_eq(classify((true, true)), 3);
+    assert_eq(classify((true, false)), 2);
+    assert_eq(classify((false, true)), 1);
+    assert_eq(sign(0), 10);
+    assert_eq(sign(-1), 20);
+    assert_eq(sign(5), 30);
+    io::println("ok");
+}
+"#,
+    );
+    let built = must_compile(&code, "block-arms-without-commas");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// A constant used as a `match` pattern, and a builtin text parser called on
+/// a borrowed `String`. The constant is named by a path: a bare `C` pattern is
+/// a binding (G-6.38, see
+/// `audit_locals_named_like_a_module_constant_bind_as_written`).
+#[test]
+fn audit_constant_patterns_and_borrowed_string_arguments_run() {
+    if skip("audit_constant_patterns_and_borrowed_string_arguments_run") {
+        return;
+    }
+    let code = generate_source(
+        "constant-patterns",
+        r#"const C: i32 = 1;
+
+fn k(n: i32) -> i32 {
+    match n {
+        crate::C => { 10 }
+        _ => { 20 }
+    }
+}
+
+fn main() {
+    assert_eq(k(1), 10);
+    assert_eq(k(2), 20);
+    let s = String::from("4");
+    let t = string::parse_i64(&s);
+    drop(t);
+    io::println("ok");
+}
+"#,
+    );
+    let built = must_compile(&code, "constant-patterns");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// A borrow through an element of a partially moved array, followed by a
+/// `Vec` index (computed and literal): the steps after the constant run are
+/// applied to the `ref` binding.
+#[test]
+fn audit_borrow_of_a_partially_moved_element_followed_by_a_vec_index_runs() {
+    if skip("audit_borrow_of_a_partially_moved_element_followed_by_a_vec_index_runs") {
+        return;
+    }
+    let code = generate_source(
+        "partially-moved-element-vec-index",
+        r#"struct S { n: String, v: Vec<String> }
+fn len_of(s: &String) -> usize { s.len() }
+fn main() {
+    let mut v0: Vec<String> = Vec::new();
+    v0.push(String::from("q"));
+    let mut v1: Vec<String> = Vec::new();
+    v1.push(String::from("rrr"));
+    let b = [S { n: String::from("x"), v: v0 }, S { n: String::from("y"), v: v1 }];
+    let k = b[0].n;
+    let i: usize = 0;
+    assert_eq(len_of(&b[1].v[i]), 3);
+    assert_eq(b[1].v[0].len(), 3);
+    assert_eq(k.len(), 1);
+    io::println("ok");
+}
+"#,
+    );
+    assert!(
+        code.contains("ref __rv_el_"),
+        "the element is borrowed by a ref binding"
+    );
+    let built = must_compile(&code, "partially-moved-element-vec-index");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// Item shapes no other in-process test generated: an empty struct, an extern
+/// function without a return value, test functions inside and outside a
+/// module. The program runs, then its test runner runs both tests.
+#[test]
+fn audit_empty_struct_unit_extern_and_module_tests_run() {
+    if skip("audit_empty_struct_unit_extern_and_module_tests_run") {
+        return;
+    }
+    let source = r#"struct Empty {}
+
+struct P { n: i32 }
+
+impl P {
+    fn k(&self) -> i32 {
+        return self.n + 4;
+    }
+}
+
+extern "C" {
+    fn srand(seed: u32);
+    fn abs(x: i32) -> i32;
+}
+
+mod inner {
+    test fn inner_test() {
+        assert_eq(1 + 1, 2);
+    }
+}
+
+test fn outer_test() {
+    assert_eq(2, 2);
+}
+
+fn main() {
+    let e = Empty {};
+    drop(e);
+    let p = P { n: 1 };
+    assert_eq(p.k(), 5);
+    unsafe {
+        srand(7);
+    };
+    let a = unsafe { abs(-3) };
+    assert_eq(a, 3);
+    io::println("ok");
+}
+"#;
+    let code = generate_source("item-shapes", source);
+    assert!(
+        code.contains("struct Empty {}"),
+        "the empty struct is emitted as such"
+    );
+    let built = must_compile(&code, "item-shapes");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+
+    let tests = generate_source_with(
+        "item-shapes-tests",
+        source,
+        &GenOptions {
+            test_mode: true,
+            ..GenOptions::default()
+        },
+    );
+    assert!(
+        tests.contains("inner::inner_test"),
+        "a module test is named by its path"
+    );
+    let built = must_compile(&tests, "item-shapes-tests");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "both tests pass: {stdout}{stderr}");
+    assert!(stdout.contains("2 passed"), "{stdout}");
+}
+
+/// A borrow through a runtime index of a partially moved nested array, followed
+/// by a field and a tuple step (`&a[0][i].n`, `&a[0][i].t.0`): the constant run
+/// is a `ref` binding and the later steps are applied to it.
+#[test]
+fn audit_borrow_after_a_runtime_index_of_a_partially_moved_array_runs() {
+    if skip("audit_borrow_after_a_runtime_index_of_a_partially_moved_array_runs") {
+        return;
+    }
+    let code = generate_source(
+        "borrow-after-runtime-index",
+        r#"struct S { n: String, t: (String, i32) }
+fn mk(s: &str) -> S { S { n: String::from(s), t: (String::from(s), 1) } }
+fn show(s: &String) { io::println(s); }
+fn main() {
+    let i: usize = 1;
+    let a = [[mk("a"), mk("b")], [mk("c"), mk("d")]];
+    let x = a[1][0].n;
+    show(&a[0][i].n);
+    show(&a[0][i].t.0);
+    show(&x);
+}
+"#,
+    );
+    assert!(code.contains("})[i].n)"), "{code}");
+    assert!(code.contains("})[i].t.0)"), "{code}");
+    let built = must_compile(&code, "borrow-after-runtime-index");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "b\nb\nc\n");
+}
+
+/// Array element paths whose projections go through a reference (`self.a[0]`
+/// with `&self`, `t.0[1]` with a `&` tuple) or through a `Vec` index before the
+/// fixed-size array (`v[0].a[1]`): no pattern slot exists for those steps, and
+/// the plain indexing form is emitted.
+#[test]
+fn audit_element_paths_through_references_and_vec_indexes_run() {
+    if skip("audit_element_paths_through_references_and_vec_indexes_run") {
+        return;
+    }
+    let code = generate_source(
+        "element-paths-through-refs",
+        r#"struct S { a: [String; 2] }
+impl S { fn first(&self) -> usize { self.a[0].len() } }
+fn tup(t: &([String; 2], i32)) -> usize { t.0[1].len() }
+fn main() {
+    let s = S { a: [String::from("ab"), String::from("c")] };
+    let t = ([String::from("x"), String::from("yz")], 3);
+    let mut v: Vec<S> = Vec::new();
+    v.push(S { a: [String::from("abc"), String::from("d")] });
+    io::println(&s.first().to_string());
+    io::println(&tup(&t).to_string());
+    io::println(&v[0].a[0].len().to_string());
+}
+"#,
+    );
+    let built = must_compile(&code, "element-paths-through-refs");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "2\n2\n3\n");
+}
+
+/// A literal index past the end of a fixed-size array, on an element that is
+/// moved out, panics at run time like a copied or borrowed element does; the
+/// generated code used to keep a plain `a[3]` that rustc refuses (E0508).
+#[test]
+fn audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time() {
+    if skip("audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time") {
+        return;
+    }
+    for (label, source, len, index) in [
+        (
+            "move-out-of-range-root",
+            "fn main() { let a = [String::from(\"a\")]; let x = a[3]; io::println(&x); }",
+            1,
+            3,
+        ),
+        (
+            "move-out-of-range-nested",
+            "struct S { n: String }\n\
+             fn main() { let i: usize = 0; \
+             let a = [[S { n: String::from(\"a\") }, S { n: String::from(\"b\") }]]; \
+             let x = a[i][5].n; io::println(&x); }",
+            2,
+            5,
+        ),
+    ] {
+        let code = generate_source(label, source);
+        let built = must_compile(&code, label);
+        let (stdout, stderr, status) = run(&built.binary, &[]);
+        assert_ne!(status, 0, "{label}: the program must panic");
+        assert_eq!(stdout, "", "{label}");
+        assert!(
+            stderr.contains(&format!(
+                "index out of bounds: the len is {len} but the index is {index}"
+            )),
+            "{label}: {stderr}"
+        );
+    }
+}
+
+/// Re-initialising an element at a literal index past the end panics at run
+/// time after evaluating the value, whether or not the move it restores ran;
+/// code generation used to stop with an internal error.
+#[test]
+fn audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time() {
+    if skip("audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run_time") {
+        return;
+    }
+    let code = generate_source(
+        "reinit-out-of-range",
+        r#"fn value() -> String { io::println("value"); String::from("b") }
+fn pick(c: bool) {
+    let mut a = [String::from("a")];
+    if c { let x = a[3]; io::println(&x); }
+    a[3] = value();
+    io::println(&a[0]);
+}
+fn main() { pick(false); }
+"#,
+    );
+    let built = must_compile(&code, "reinit-out-of-range");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_ne!(status, 0, "the program must panic");
+    assert_eq!(stdout, "value\n");
+    assert!(
+        stderr.contains("index out of bounds: the len is 1 but the index is 3"),
+        "{stderr}"
+    );
+}
+
+/// Re-initialising an array element of a struct whose other field was moved
+/// out: the moved field does not block the rebuild of the array.
+#[test]
+fn audit_reinit_of_an_array_field_next_to_a_moved_field_runs() {
+    if skip("audit_reinit_of_an_array_field_next_to_a_moved_field_runs") {
+        return;
+    }
+    let code = generate_source(
+        "reinit-array-field-next-to-moved-field",
+        r#"struct P { arr: [String; 2], n: String }
+fn main() {
+    let mut p = P { arr: [String::from("a"), String::from("b")], n: String::from("n") };
+    let x = p.n;
+    let y = p.arr[0];
+    p.arr[0] = String::from("c");
+    io::println(&x);
+    io::println(&y);
+    io::println(&p.arr[0]);
+    io::println(&p.arr[1]);
+}
+"#,
+    );
+    let built = must_compile(&code, "reinit-array-field-next-to-moved-field");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "n\na\nc\nb\n");
+}
+
+/// A match over an `Option` nested 100 levels deep, made exhaustive by a
+/// `None` arm at every level instead of a wildcard, is accepted and runs; the
+/// coverage check used to give up past 64 levels and report
+/// E-TYP-NONEXHAUSTIVE on it. The scrutinee sits at the normative bound
+/// (TYP-1.7, depth 100).
+#[test]
+fn audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs() {
+    if skip("audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs") {
+        return;
+    }
+    let depth = 99;
+    let wrap = |inner: &str, levels: usize| {
+        (0..levels).fold(inner.to_string(), |acc, _| format!("Some({acc})"))
+    };
+    let ty = (0..depth).fold(String::from("bool"), |acc, _| format!("Option<{acc}>"));
+    let mut arms = vec![
+        format!("{} => 1", wrap("true", depth)),
+        format!("{} => 2", wrap("false", depth)),
+    ];
+    arms.extend((0..depth).map(|level| format!("{} => {}", wrap("None", level), level + 3)));
+    let source = format!(
+        "fn f(t: {ty}) -> usize {{ match t {{ {} }} }}\n\
+         fn main() {{ io::println(&f(Some(None)).to_string()); }}\n",
+        arms.join(", ")
+    );
+    let code = generate_source("deep-exhaustive-match", &source);
+    let built = must_compile(&code, "deep-exhaustive-match");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "4\n");
+}
+
+/// G-6.38: an `IDENT` pattern always binds. A local, a parameter or a match
+/// binding named like a constant of its module used to be emitted as is, and
+/// rustc read it as that constant: `match b { T => 1, false => 2 }` returned 2
+/// for `false`, `let T = 5;` and `fn g(T: i32)` were refused (E0005). Such a
+/// local is now emitted under another name; `crate::T` still names the
+/// constant. A user name cannot collide with the generated one: `_rv_` is
+/// reserved (LEX-4.6).
+#[test]
+fn audit_locals_named_like_a_module_constant_bind_as_written() {
+    if skip("audit_locals_named_like_a_module_constant_bind_as_written") {
+        return;
+    }
+    let code = generate_source(
+        "locals-named-like-constants",
+        r#"const T: bool = true;
+const N: i32 = 3;
+struct U;
+fn pick(b: bool) -> i32 { match b { T => 1, false => 2 } }
+fn g(N: i32) -> i32 { N + 1 }
+fn unit(n: i32) -> i32 { match n { U => U * 10 } }
+mod m { pub const K: i32 = 3; pub fn h(K: i32) -> i32 { match K { K => K * 2 } } }
+fn main() {
+    io::println(&pick(false).to_string());
+    let mut N = 5;
+    N = N + 1;
+    io::println(&N.to_string());
+    io::println(&g(N).to_string());
+    io::println(&crate::N.to_string());
+    io::println(&unit(4).to_string());
+    io::println(&m::h(4).to_string());
+}
+"#,
+    );
+    let built = must_compile(&code, "locals-named-like-constants");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert!(code.contains("let mut N_rv_local: i32 = 5i32;"), "{code}");
+    assert_eq!(stdout, "1\n6\n7\n3\n40\n8\n");
+}
+
+/// A generic argument checked before its type parameter is bound is expected
+/// as an inference variable: `g(Some(7), 1)` for `g<T>(Option<T>, T)` and
+/// `h(Vec::new(), 5)` for `h<T>(Vec<T>, T)` used to be refused with
+/// E-TYP-MISMATCH (`Option<i32>` against a bare `Option<T>`).
+#[test]
+fn audit_a_generic_argument_before_its_parameter_is_bound_builds_and_runs() {
+    if skip("audit_a_generic_argument_before_its_parameter_is_bound_builds_and_runs") {
+        return;
+    }
+    let code = generate_source(
+        "generic-argument-before-binding",
+        r#"fn g<T>(a: Option<T>, b: T) -> T { match a { Some(x) => x, None => b } }
+fn h<T>(a: Vec<T>, b: T) -> usize { let mut v = a; v.push(b); return v.len(); }
+fn main() {
+    let x = g(Some(7), 1);
+    let y = g(None, 3);
+    let n = h(Vec::new(), 5);
+    if x == 7 && y == 3 && n == 1 { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "generic-argument-before-binding");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// Every constant comparison is evaluated: `true == true`, `'a' < 'b'` and
+/// `"a" == "a"` used to be accepted by `check` with no value, and code
+/// generation then stopped on a missing `Facts::consts` entry.
+#[test]
+fn audit_constant_comparisons_of_every_kind_build_and_run() {
+    if skip("audit_constant_comparisons_of_every_kind_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "constant-comparisons",
+        r#"const A: bool = true == true;
+const B: bool = 'a' < 'b';
+const C: bool = "a" == "a";
+const D: bool = 1 != 1;
+const E: bool = 'z' <= 'a';
+const F: bool = false != true;
+fn main() {
+    if A && B && C && !D && !E && F { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "constant-comparisons");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// A one-element tuple pattern keeps its trailing comma (`(a,)`) and a float
+/// written with an exponent only (`1e3`) gets its type suffix.
+#[test]
+fn audit_one_element_tuple_patterns_and_exponent_floats_run() {
+    if skip("audit_one_element_tuple_patterns_and_exponent_floats_run") {
+        return;
+    }
+    let code = generate_source(
+        "one-tuple-pattern",
+        r#"fn main() {
+    let x = 1e3;
+    let t = (5,);
+    match t { (a,) => { if a == 5 && x > 999.5 { io::println("ok"); } } }
+}
+"#,
+    );
+    let built = must_compile(&code, "one-tuple-pattern");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// `& | ^` on two `bool` constants are evaluated: they used to be accepted
+/// by `check` with no value, and code generation stopped on a missing
+/// `Facts::consts` entry.
+#[test]
+fn audit_boolean_bitwise_constants_build_and_run() {
+    if skip("audit_boolean_bitwise_constants_build_and_run") {
+        return;
+    }
+    let code = generate_source(
+        "boolean-bitwise-constants",
+        r#"const A: bool = true & false;
+const B: bool = true | false;
+const C: bool = true ^ true;
+const D: bool = (6 & 3) == 2;
+fn main() {
+    if !A && B && !C && D { io::println("ok"); } else { io::println("bad"); }
+}
+"#,
+    );
+    let built = must_compile(&code, "boolean-bitwise-constants");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// Branch types unify their inference variables in either order: a first
+/// branch `Vec::new()` or `None` takes the type of the next one. These used
+/// to be refused (`if` branches / match arms "have different types") while
+/// the mirrored order was accepted.
+#[test]
+fn audit_branch_inference_works_in_either_order() {
+    if skip("audit_branch_inference_works_in_either_order") {
+        return;
+    }
+    let code = generate_source(
+        "branch-inference-order",
+        r#"fn pick(t: bool) -> usize {
+    let a: Vec<i32> = Vec::new();
+    let c = if t { Vec::new() } else { a };
+    return c.len();
+}
+fn both(t: bool) -> usize {
+    let a = Vec::new();
+    let b = Vec::new();
+    let c = if t { a } else { b };
+    let d: Vec<i32> = c;
+    return d.len();
+}
+fn first_none(t: bool) -> i32 {
+    let c = match t { true => None, false => Some(4) };
+    return c.unwrap_or(1);
+}
+fn main() {
+    if pick(true) == 0 && both(false) == 0 && first_none(true) == 1 && first_none(false) == 4 {
+        io::println("ok");
+    } else {
+        io::println("bad");
+    }
+}
+"#,
+    );
+    let built = must_compile(&code, "branch-inference-order");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}
+
+/// `string::parse_i64` takes a text reference (`&String` coerces, a literal
+/// is one) and a one-element tuple pattern holding a float is matched through
+/// its guard.
+#[test]
+fn audit_text_parsing_and_float_tuple_patterns_run() {
+    if skip("audit_text_parsing_and_float_tuple_patterns_run") {
+        return;
+    }
+    let code = generate_source(
+        "parse-and-float-tuple",
+        r#"use std::string;
+fn main() {
+    let s = String::from("42");
+    let n = string::parse_i64(&s);
+    let m = string::parse_i64("7");
+    let t = (1.5,);
+    let k = match t { (1.5,) => 1, _ => 0 };
+    match n {
+        Ok(v) => { if v == 42 && k == 1 && m.unwrap_or(0) == 7 { io::println("ok"); } }
+        Err(e) => { io::println("err"); }
+    }
+}
+"#,
+    );
+    let built = must_compile(&code, "parse-and-float-tuple");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
 }

@@ -362,6 +362,15 @@ pub fn builtin_fn(path: &str) -> Option<BuiltinFnSig> {
     BUILTIN_FNS.iter().copied().find(|f| f.path == path)
 }
 
+/// Signature of a builtin function path produced by the resolver. The
+/// resolver builds such a path only from a `BUILTIN_FNS` entry or from
+/// `prelude_value_path` (test `every_resolvable_builtin_function_path_has_a_signature`),
+/// so a miss is a defect upstream.
+pub fn resolved_builtin_fn(path: &str) -> BuiltinFnSig {
+    builtin_fn(path)
+        .unwrap_or_else(|| panic!("invariant: the resolved builtin path `{path}` has a signature"))
+}
+
 /// Chemins canoniques des fonctions du prélude accessibles sans qualification.
 pub fn prelude_value_path(name: &str) -> Option<&'static str> {
     Some(match name {
@@ -977,13 +986,10 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
             let parts = split_top_level(inner, ',')?;
             let types: Option<Vec<Type>> = parts.iter().map(|p| type_from_str(p, env)).collect();
             let types = types?;
-            return match wrap {
-                0 if types.len() == 1 => Some(Type::Vec(Box::new(types.into_iter().next()?))),
-                1 if types.len() == 1 => Some(Type::Option(Box::new(types.into_iter().next()?))),
-                2 if types.len() == 2 => {
-                    let mut it = types.into_iter();
-                    Some(Type::Result(Box::new(it.next()?), Box::new(it.next()?)))
-                }
+            return match (wrap, types.as_slice()) {
+                (0, [elem]) => Some(Type::Vec(Box::new(elem.clone()))),
+                (1, [inner]) => Some(Type::Option(Box::new(inner.clone()))),
+                (2, [ok, err]) => Some(Type::Result(Box::new(ok.clone()), Box::new(err.clone()))),
                 _ => None,
             };
         }
@@ -1090,6 +1096,21 @@ pub fn method_ret_type(sig: &BuiltinMethodSig, env: &[(&str, Type)]) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The resolver produces `ValuePath::BuiltinFn` only from a `BUILTIN_FNS`
+    /// entry (`sig.path`) or from `prelude_value_path`; every such path has a
+    /// signature, so typeck's "unknown builtin function" arm cannot be taken.
+    #[test]
+    fn every_resolvable_builtin_function_path_has_a_signature() {
+        for name in PRELUDE_VALUES {
+            if let Some(path) = prelude_value_path(name) {
+                assert!(builtin_fn(path).is_some(), "prelude `{name}` -> `{path}`");
+            }
+        }
+        for sig in BUILTIN_FNS {
+            assert!(builtin_fn(sig.path).is_some(), "{}", sig.path);
+        }
+    }
 
     #[test]
     fn every_builtin_fn_parses() {
@@ -1244,8 +1265,28 @@ mod tests {
             "Inconnu",
             "[Inconnu]",
             "(i32, Inconnu)",
+            "&mut Inconnu",
+            "Vec<(i32>",
         ] {
             assert_eq!(type_from_str(text, &[]), None, "accepted {text:?}");
         }
+    }
+
+    #[test]
+    fn every_prelude_module_has_a_canonical_path() {
+        for name in PRELUDE_MODULES {
+            let path = builtin_root_module(name).expect("a prelude module");
+            assert!(
+                path == "std" || path == format!("std::{name}"),
+                "{name} -> {path}"
+            );
+        }
+        assert_eq!(builtin_root_module("nowhere"), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "invariant: the resolved builtin path `nowhere::f` has a signature")]
+    fn a_builtin_path_without_a_signature_is_an_invariant_failure() {
+        let _ = resolved_builtin_fn("nowhere::f");
     }
 }

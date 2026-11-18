@@ -1094,7 +1094,7 @@ fn audit_move_field_during_its_own_borrow_conflicts() {
         r#"
 struct D { titre: String }
 fn h(a: &mut String, b: String) {}
-fn f(d: D) {
+fn f(mut d: D) {
     h(&mut d.titre, d.titre);
 }
 "#,
@@ -1128,7 +1128,7 @@ fn audit_whole_mut_borrow_after_partial_move_is_rejected() {
         r#"
 struct D { titre: String, n: i32 }
 fn h(x: &mut D) {}
-fn f(d: D) {
+fn f(mut d: D) {
     let t = d.titre;
     h(&mut d);
 }
@@ -1764,6 +1764,64 @@ fn pick(a: [&str; 2]) -> &str {
 fn f() -> &str {
     let s = pick(["x", "y"]);
     return s;
+}
+"#,
+    );
+}
+
+#[test]
+fn audit_conditional_loop_breaks_join_with_the_zero_iteration_path() {
+    for header in ["while flag", "for index in 0i32..2i32"] {
+        let source = format!(
+            r#"
+fn take(value: String) {{}}
+fn probe(flag: bool, value: String) {{
+    {header} {{
+        take(value);
+        break;
+    }}
+    take(value);
+}}
+"#
+        );
+        rejected(&source, "E-OWN-USE-AFTER-MOVE");
+    }
+}
+
+#[test]
+fn audit_unconditional_loop_joins_all_break_exits() {
+    rejected(
+        r#"
+fn take(value: String) {}
+fn probe(flag: bool, value: String) {
+    loop {
+        if flag {
+            take(value);
+            break;
+        } else {
+            break;
+        }
+    }
+    take(value);
+}
+"#,
+        "E-OWN-USE-AFTER-MOVE",
+    );
+}
+
+#[test]
+fn audit_short_circuit_with_diverging_rhs_preserves_the_continuing_state() {
+    accepted(
+        r#"
+fn stop(value: String) -> ! { panic("stopped"); }
+fn take(value: String) {}
+fn and_rhs(flag: bool, value: String) {
+    let ignored = flag && { stop(value); false };
+    take(value);
+}
+fn or_rhs(flag: bool, value: String) {
+    let ignored = flag || { stop(value); true };
+    take(value);
 }
 "#,
     );

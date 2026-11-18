@@ -8,23 +8,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         fields: &[FieldInit],
         expected: Option<&Type>,
     ) -> Type {
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(path.span, &error);
-                self.facts.resolutions.insert(path.id, Resolution::Error);
-                for field in fields {
-                    self.check_expr(&field.value, None);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(path.span, &error);
+                    self.facts.resolutions.insert(path.id, Resolution::Error);
+                    for field in fields {
+                        self.check_expr(&field.value, None);
+                    }
+                    return Type::Error;
                 }
-                return Type::Error;
-            }
-        };
+            };
         // Le codegen exige un fait de résolution pour le chemin du littéral.
         match &target {
             ValuePath::Type(Type::Nominal { def, .. }) => {
@@ -41,11 +36,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     },
                 );
             }
-            ValuePath::BuiltinConst(ctor_path) => {
+            ValuePath::BuiltinNone => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::BuiltinConst {
-                        path: (*ctor_path).to_string(),
+                        path: OPTION_NONE.to_string(),
                     },
                 );
             }
@@ -54,7 +49,10 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
         match target {
-            ValuePath::Type(Type::Nominal { def, name, args }) => {
+            // A struct literal path never carries type arguments: `type_of_symbol`
+            // builds a nominal with empty `args`, and G-5.9 refuses explicit
+            // generic arguments in expressions (E-PARSE-UNEXPECTED).
+            ValuePath::Type(Type::Nominal { def, name, .. }) => {
                 if self.world.nominal_kind(def) != Some(NominalKind::Struct) {
                     self.error(
                         "E-RES-UNKNOWN",
@@ -81,11 +79,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         for (i, arg) in exp_args.iter().enumerate() {
                             subst.insert(i, arg.clone());
                         }
-                    }
-                }
-                if !args.is_empty() && args.len() == info.generics.len() {
-                    for (i, arg) in args.iter().enumerate() {
-                        subst.insert(i, arg.clone());
                     }
                 }
                 let fields_ok = self.check_struct_fields(
@@ -174,7 +167,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     args: final_args,
                 }
             }
-            ValuePath::BuiltinConst(path) => self.builtin_unit_variant_type(expr, path, expected),
+            ValuePath::BuiltinNone => self.builtin_none_type(expr, expected),
             _ => {
                 self.error(
                     "E-RES-UNKNOWN",
@@ -322,11 +315,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                     expected.clone()
                 } else {
-                    self.error(
-                        "E-TYP-MISMATCH",
-                        pat.span,
-                        format!("tuple pattern cannot match type `{expected}`"),
-                    );
+                    // The recovered error type matches any pattern (one
+                    // diagnostic already explains it).
+                    if !matches!(expected, Type::Error | Type::Never) {
+                        self.error(
+                            "E-TYP-MISMATCH",
+                            pat.span,
+                            format!("tuple pattern cannot match type `{expected}`"),
+                        );
+                    }
                     for item in items {
                         self.check_pattern(item, &Type::Error);
                     }
@@ -456,40 +453,51 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     pub(super) fn check_path_pattern(&mut self, pat: &Pat, path: &Path, expected: &Type) -> Type {
-        match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
+        match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
             Ok(ValuePath::Variant { enum_item, variant }) => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));
                 self.facts
                     .resolutions
                     .insert(path.id, Resolution::Variant { enum_item, variant });
+                // A bare path only matches a unit variant: `E::B` for a variant
+                // that carries a payload is not a pattern (rustc E0532/E0533).
+                let payload = self.facts.enums.get(&enum_item).and_then(|info| {
+                    let found = info.variants.get(variant)?;
+                    let fields = match found.kind {
+                        crate::facts::VariantKind::Unit => return None,
+                        crate::facts::VariantKind::Tuple => found.tuple_types.len(),
+                        crate::facts::VariantKind::Struct => found.fields.len(),
+                    };
+                    Some((info.name.clone(), found.name.clone(), fields))
+                });
+                if let Some((enum_name, variant_name, fields)) = payload {
+                    self.error(
+                        "E-TYP-ARITY",
+                        pat.span,
+                        format!(
+                            "variant `{enum_name}::{variant_name}` expects {fields} field(s), found 0"
+                        ),
+                    );
+                }
                 self.pattern_enum_ty(pat.span, enum_item, expected)
             }
-            Ok(ValuePath::BuiltinConst(ctor_path)) => {
+            Ok(ValuePath::BuiltinNone) => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::BuiltinConst {
-                        path: ctor_path.to_string(),
+                        path: OPTION_NONE.to_string(),
                     },
                 );
-                match ctor_path {
-                    "Option::None" => match expected {
-                        Type::Option(_) => expected.clone(),
-                        _ => {
-                            self.error(
-                                "E-TYP-MISMATCH",
-                                pat.span,
-                                format!("`None` pattern cannot match type `{expected}`"),
-                            );
-                            Type::Error
-                        }
-                    },
-                    _ => Type::Error,
+                match expected {
+                    Type::Option(_) | Type::Error | Type::Never => expected.clone(),
+                    _ => {
+                        self.error(
+                            "E-TYP-MISMATCH",
+                            pat.span,
+                            format!("`None` pattern cannot match type `{expected}`"),
+                        );
+                        Type::Error
+                    }
                 }
             }
             Ok(ValuePath::Item(id)) => {
@@ -558,22 +566,17 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         fields: &VariantPatFields,
         expected: &Type,
     ) -> Type {
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(pat.span, &error);
-                for field in variant_pat_patterns(fields) {
-                    self.check_pattern(field, &Type::Error);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(pat.span, &error);
+                    for field in variant_pat_patterns(fields) {
+                        self.check_pattern(field, &Type::Error);
+                    }
+                    return Type::Error;
                 }
-                return Type::Error;
-            }
-        };
+            };
         match target {
             ValuePath::Variant { enum_item, variant } => {
                 self.variant_pats.insert(pat.id, (enum_item, variant));
@@ -619,25 +622,23 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 }
             }
-            ValuePath::BuiltinCtor {
-                path: ctor_path, ..
-            } => {
+            ValuePath::BuiltinCtor { ctor } => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::BuiltinFn {
-                        path: ctor_path.to_string(),
+                        path: ctor.path().to_string(),
                     },
                 );
-                self.check_builtin_variant_payload(pat, ctor_path, fields, expected)
+                self.check_builtin_variant_payload(pat, Some(ctor), fields, expected)
             }
-            ValuePath::BuiltinConst(ctor_path) => {
+            ValuePath::BuiltinNone => {
                 self.facts.resolutions.insert(
                     path.id,
                     Resolution::BuiltinConst {
-                        path: ctor_path.to_string(),
+                        path: OPTION_NONE.to_string(),
                     },
                 );
-                self.check_builtin_variant_payload(pat, ctor_path, fields, expected)
+                self.check_builtin_variant_payload(pat, None, fields, expected)
             }
             _ => {
                 self.error(
@@ -732,14 +733,16 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_builtin_variant_payload(
         &mut self,
         pat: &Pat,
-        path: &str,
+        ctor: Option<PayloadCtor>,
         fields: &VariantPatFields,
         expected: &Type,
     ) -> Type {
-        match path {
-            "Option::Some" => {
+        // `None` stands for `Option::None`, the only unit prelude constructor.
+        match ctor {
+            Some(PayloadCtor::Some) => {
                 let inner = match expected {
                     Type::Option(inner) => (**inner).clone(),
+                    Type::Error | Type::Never => Type::Error,
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -772,10 +775,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 expected.clone()
             }
-            "Result::Ok" | "Result::Err" => {
-                let payload = match (path, expected) {
-                    ("Result::Ok", Type::Result(ok, _)) => (**ok).clone(),
-                    ("Result::Err", Type::Result(_, err)) => (**err).clone(),
+            Some(ctor @ (PayloadCtor::Ok | PayloadCtor::Err)) => {
+                let path = ctor.path();
+                let payload = match (ctor, expected) {
+                    (PayloadCtor::Ok, Type::Result(ok, _)) => (**ok).clone(),
+                    (PayloadCtor::Err, Type::Result(_, err)) => (**err).clone(),
+                    (_, Type::Error | Type::Never) => Type::Error,
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -808,8 +813,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 expected.clone()
             }
-            "Option::None" => {
-                if !matches!(expected, Type::Option(_)) {
+            None => {
+                if !matches!(expected, Type::Option(_) | Type::Error | Type::Never) {
                     self.error(
                         "E-TYP-MISMATCH",
                         pat.span,
@@ -846,7 +851,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 expected.clone()
             }
-            _ => Type::Error,
         }
     }
 

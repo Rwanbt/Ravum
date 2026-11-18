@@ -127,9 +127,11 @@ def analyse(document: dict, only: str | None) -> tuple[list[tuple], dict]:
                 product = covered | uncovered
                 product_uncovered = len(uncovered)
                 test_uncovered = 0
+                product_uncovered_lines = set(uncovered)
             else:
                 product = {line for line in covered | uncovered if line < start}
                 product_uncovered = len([line for line in uncovered if line < start])
+                product_uncovered_lines = {line for line in uncovered if line < start}
                 test_uncovered = len([line for line in uncovered if line >= start])
 
             # A file may appear once per test binary; keep the best
@@ -140,10 +142,15 @@ def analyse(document: dict, only: str | None) -> tuple[list[tuple], dict]:
                     "prod_unc": product_uncovered,
                     "test_unc": test_uncovered,
                     "prod_lin": len(product),
+                    "unc_lines": product_uncovered_lines,
+                    "prod_set": product,
                 }
 
     for name, values in merge.items():
-        rows.append((name, values["prod_unc"], values["test_unc"], values["prod_lin"]))
+        rows.append(
+            (name, values["prod_unc"], values["test_unc"], values["prod_lin"], values["unc_lines"],
+             values["prod_set"])
+        )
     totals = {
         "prod_unc": sum(row[1] for row in rows),
         "test_unc": sum(row[2] for row in rows),
@@ -152,11 +159,69 @@ def analyse(document: dict, only: str | None) -> tuple[list[tuple], dict]:
     return rows, totals
 
 
+def load_exemptions(path: Path) -> dict[str, set[int]]:
+    """Exempted product lines per file, from `line_coverage_exemptions.entries`."""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    exempt: dict[str, set[int]] = {}
+    for entry in document.get("line_coverage_exemptions", {}).get("entries", []):
+        # Region-only entries document `?` edges of fully covered lines.
+        if entry.get("metric", "lines") != "lines":
+            continue
+        lines = exempt.setdefault(entry["file"], set())
+        for first, last in entry["lines"]:
+            lines.update(range(first, last + 1))
+    return exempt
+
+
+def report_exemptions(rows: list[tuple], exempt: dict[str, set[int]]) -> int:
+    """Print the S5 figure (covered or exempted) and the two kinds of drift.
+
+    The raw figure above is never reduced: an exemption is a documented claim
+    that no accepted program reaches the line, pending human approval.
+    """
+    total = sum(row[3] for row in rows)
+    debt = []
+    exempted = 0
+    for name, _, _, _, uncovered, _ in rows:
+        claimed = exempt.get(name, set())
+        exempted += len(uncovered & claimed)
+        debt.extend("%s:%d" % (name, line) for line in sorted(uncovered - claimed))
+    # A range may span blank lines or lines the instrumentation never marks;
+    # only exempted lines that are measured *covered* are stale.
+    stale = []
+    measured = {row[0]: row for row in rows}
+    for name, claimed in sorted(exempt.items()):
+        row = measured.get(name)
+        if row is None:
+            stale.append("%s: file not measured" % name)
+            continue
+        covered = row[5] - row[4]
+        stale.extend("%s:%d" % (name, line) for line in sorted(claimed & covered))
+    percent = 100.0 * (total - len(debt)) / total if total else 100.0
+    print(
+        "\nS5 objective (covered or exempted, PENDING_HUMAN_APPROVAL): %.2f%%: "
+        "%d exempted line(s), %d uncovered line(s) without exemption, %d stale exemption line(s)."
+        % (percent, exempted, len(debt), len(stale))
+    )
+    for line in debt:
+        print("  debt  %s" % line)
+    for line in stale:
+        print("  stale %s" % line)
+    return len(debt) + len(stale)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--file", default=None, help="restrict to paths containing this string")
     parser.add_argument("--check", action="store_true", help="exit 1 if any product line is uncovered")
+    parser.add_argument(
+        "--exemptions",
+        type=Path,
+        default=None,
+        help="also report the S5 figure against tools/coverage_exemptions.json; "
+        "with --check, exit 1 on debt or stale exemptions instead of on raw gaps",
+    )
     args = parser.parse_args()
 
     try:
@@ -171,7 +236,7 @@ def main() -> int:
         return 1
 
     print("%-58s %8s %8s %8s %7s" % ("file", "prod_unc", "test_unc", "prod_lin", "prod%"))
-    for name, product_uncovered, test_uncovered, product_lines in sorted(
+    for name, product_uncovered, test_uncovered, product_lines, _, _ in sorted(
         rows, key=lambda row: (-row[1], row[0])
     ):
         percent = 100.0 * (product_lines - product_uncovered) / product_lines if product_lines else 100.0
@@ -193,6 +258,13 @@ def main() -> int:
         " inside #[cfg(test)] modules (assert messages, panic paths, helper arms)."
         % (percent, totals["prod_unc"], totals["test_unc"])
     )
+
+    if args.exemptions is not None:
+        drift = report_exemptions(rows, load_exemptions(args.exemptions))
+        if args.check and drift:
+            print("\n--check: %d line(s) of debt or stale exemption" % drift, file=sys.stderr)
+            return 1
+        return 0
 
     if args.check and totals["prod_unc"]:
         print("\n--check: %d product line(s) still uncovered" % totals["prod_unc"], file=sys.stderr)

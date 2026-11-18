@@ -11,14 +11,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let path = match &callee.kind {
             ExprKind::Path(path) => path,
             _ => {
+                // Even a diverging callee (`(return)()`) is refused: the
+                // backend has no call target to lower, and rustc refuses to
+                // call a `!` value too (check => build).
                 let callee_ty = self.check_expr(callee, None);
-                if !matches!(callee_ty, Type::Never) {
-                    self.error(
-                        "E-TYP-CALL",
-                        callee.span,
-                        format!("value of type `{callee_ty}` is not callable"),
-                    );
-                }
+                self.error(
+                    "E-TYP-CALL",
+                    callee.span,
+                    format!("value of type `{callee_ty}` is not callable"),
+                );
                 for arg in args {
                     self.check_expr(arg, None);
                 }
@@ -47,25 +48,20 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
 
-        let target = match resolve::resolve_value_path(
-            self.world,
-            self.module,
-            &self.generics,
-            self.self_ty.as_ref(),
-            path,
-        ) {
-            Ok(target) => target,
-            Err(error) => {
-                self.emit_path_error(callee.span, &error);
-                for arg in args {
-                    self.check_expr(arg, None);
+        let target =
+            match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                Ok(target) => target,
+                Err(error) => {
+                    self.emit_path_error(callee.span, &error);
+                    for arg in args {
+                        self.check_expr(arg, None);
+                    }
+                    self.facts.resolutions.insert(path.id, Resolution::Error);
+                    self.facts.expr_types.insert(callee.id, Type::Error);
+                    self.facts.calls.insert(expr.id, CallTarget::Error);
+                    return Type::Error;
                 }
-                self.facts.resolutions.insert(path.id, Resolution::Error);
-                self.facts.expr_types.insert(callee.id, Type::Error);
-                self.facts.calls.insert(expr.id, CallTarget::Error);
-                return Type::Error;
-            }
-        };
+            };
         self.record_value_resolution(path.id, &target);
 
         let result = match &target {
@@ -96,31 +92,22 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::BuiltinFn(path) => {
                 if let Some(assoc) = builtins::builtin_assoc_fn(path) {
                     self.check_builtin_assoc_call(assoc, args, expected, expr.span)
-                } else if let Some(sig) = builtins::builtin_fn(path) {
-                    self.check_builtin_fn_call(sig, args, expected, expr.span)
                 } else {
-                    self.error(
-                        "E-RES-UNKNOWN",
-                        callee.span,
-                        format!("unknown builtin function `{path}`"),
-                    );
-                    for arg in args {
-                        self.check_expr(arg, None);
-                    }
-                    Type::Error
+                    let sig = builtins::resolved_builtin_fn(path);
+                    self.check_builtin_fn_call(sig, args, expected, expr.span)
                 }
             }
             ValuePath::Variant { enum_item, variant } => {
                 self.check_variant_call(*enum_item, *variant, args, expected, expr.span)
             }
-            ValuePath::BuiltinCtor { path, .. } => {
-                self.check_builtin_ctor_call(path, args, expected, expr.span)
+            ValuePath::BuiltinCtor { ctor } => {
+                self.check_builtin_ctor_call(*ctor, args, expected, expr.span)
             }
-            ValuePath::BuiltinConst(path) => {
+            ValuePath::BuiltinNone => {
                 self.error(
                     "E-TYP-ARITY",
                     expr.span,
-                    format!("`{path}` is a value, not a function"),
+                    format!("`{OPTION_NONE}` is a value, not a function"),
                 );
                 for arg in args {
                     self.check_expr(arg, None);
@@ -167,8 +154,8 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 ValuePath::BuiltinFn(path) => CallTarget::BuiltinFn {
                     path: (*path).to_string(),
                 },
-                ValuePath::BuiltinCtor { path, .. } => CallTarget::BuiltinFn {
-                    path: (*path).to_string(),
+                ValuePath::BuiltinCtor { ctor } => CallTarget::BuiltinFn {
+                    path: ctor.path().to_string(),
                 },
                 _ => CallTarget::Error,
             },
@@ -228,9 +215,17 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 ),
             );
         }
+        // A callee parameter not bound yet is expected as an inference
+        // variable, shared by every argument of the call: an argument checked
+        // against a bare `T` (`g(Some(1), 1)` for `g<T>(Option<T>, T)`) would
+        // otherwise be refused for producing `Option<i32>`, not `Option<T>`.
+        let mut expected_params: BTreeMap<usize, Type> = BTreeMap::new();
         for (index, arg) in args.iter().enumerate() {
             if let Some(param) = sig.params.get(index) {
-                let param_ty = substitute(&param.ty, &subst);
+                for (k, v) in &subst {
+                    expected_params.entry(*k).or_insert_with(|| v.clone());
+                }
+                let param_ty = self.instantiate_with(&param.ty, span, &mut expected_params);
                 let arg_ty = self.check_arg(arg, &param_ty);
                 if !self.unify_pattern(&param.ty, &arg_ty, &mut subst) {
                     self.error(
@@ -339,7 +334,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         inner,
                     },
                 ) if **inner == Type::String => expected.clone(),
-                (Type::Str, Type::Str) => expected.clone(),
                 (
                     Type::Slice(elem),
                     Type::Ref {
@@ -348,7 +342,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     },
                 ) => match &**inner {
                     Type::Array { elem: felem, .. } if elem == felem => expected.clone(),
-                    Type::Slice(felem) if elem == felem => expected.clone(),
                     _ => found,
                 },
                 _ => found,
@@ -695,13 +688,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
 
     pub(super) fn check_builtin_ctor_call(
         &mut self,
-        path: &'static str,
+        ctor: PayloadCtor,
         args: &[Expr],
         expected: Option<&Type>,
         span: Span,
     ) -> Type {
-        match path {
-            "Option::Some" => {
+        let path = ctor.path();
+        match ctor {
+            PayloadCtor::Some => {
                 if args.len() != 1 {
                     self.error(
                         "E-TYP-ARITY",
@@ -732,7 +726,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
                 self.resolve_vars(&result)
             }
-            "Result::Ok" | "Result::Err" => {
+            PayloadCtor::Ok | PayloadCtor::Err => {
                 if args.len() != 1 {
                     self.error(
                         "E-TYP-ARITY",
@@ -746,7 +740,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 };
                 let value = match args.first() {
                     Some(arg) => {
-                        let expectation = if path == "Result::Ok" {
+                        let expectation = if ctor == PayloadCtor::Ok {
                             ok_expected.clone()
                         } else {
                             err_expected.clone()
@@ -758,7 +752,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                     None => Type::Error,
                 };
-                let (ok, err) = if path == "Result::Ok" {
+                let (ok, err) = if ctor == PayloadCtor::Ok {
                     (value, err_expected.unwrap_or_else(|| self.fresh_var(span)))
                 } else {
                     (ok_expected.unwrap_or_else(|| self.fresh_var(span)), value)
@@ -774,17 +768,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 }
                 self.resolve_vars(&result)
-            }
-            _ => {
-                self.error(
-                    "E-RES-UNKNOWN",
-                    span,
-                    format!("unknown builtin constructor `{path}`"),
-                );
-                for arg in args {
-                    self.check_expr(arg, None);
-                }
-                Type::Error
             }
         }
     }

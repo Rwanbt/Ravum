@@ -1468,3 +1468,425 @@ fn own_facts_are_identical_to_the_append_accumulation() {
             "own facts equivalence: {compared} packages compared, {with_facts} recorded facts, 0 difference"
         );
 }
+
+/// The parser bounds the tree height well below the analysis' own depth
+/// guard, so no parsed program reaches it. If a tree does anyway, the
+/// function is refused: the guard used to skip what lay below in silence,
+/// which accepted a double move the generated Rust then failed on (E0382).
+#[test]
+fn the_depth_guard_refuses_the_function_instead_of_skipping_it() {
+    let result = run("fn f(s: String) -> usize { let t = s; t.len() }\n");
+    let checked = result.checked.expect("the fixture checks");
+    let mut fns: Vec<(&Item, &FnItem)> = Vec::new();
+    collect_fns(&checked.program.root, &mut fns);
+    let (_, f) = fns[0];
+
+    let mut diags = DiagnosticBag::new();
+    let mut own = OwnFacts::default();
+    let mut checker = OwnChecker::new(&checked.facts, &mut diags, &mut own);
+    checker.depth = super::MAX_DEPTH;
+    // Every entry point of the recursion refuses, and reports once.
+    checker.analyze_block(&f.body, true);
+    checker.analyze_stmt(&f.body.stmts[0]);
+    let tail = f.body.tail.as_ref().expect("the fixture has a tail");
+    checker.eval_value(tail);
+    assert!(checker.eval_place_expr(tail).is_none());
+    assert!(checker.too_deep);
+
+    let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(codes, ["E-OWN-LIMIT"]);
+}
+
+// ----------------------------------------------------------------------
+// Path algebra: the pure predicates every move/borrow decision rests on.
+// ----------------------------------------------------------------------
+
+mod path_algebra {
+    use super::super::{
+        classify_partial, diverges_disjoint, field_type, join, places_overlap, prefix_compatible,
+        step_compatible, IndexKey, PartialRel, Place, SlotState, State, Step,
+    };
+    use crate::facts::Facts;
+    use crate::types::Type;
+
+    fn field(name: &str) -> Step {
+        Step::Field(name.to_string())
+    }
+    fn lit(index: u128) -> Step {
+        Step::Index(IndexKey::Lit(index))
+    }
+    fn opaque() -> Step {
+        Step::Index(IndexKey::Opaque)
+    }
+
+    #[test]
+    fn two_steps_denote_the_same_position_only_when_nothing_tells_them_apart() {
+        assert!(step_compatible(&Step::Deref, &Step::Deref));
+        assert!(step_compatible(&field("a"), &field("a")));
+        assert!(!step_compatible(&field("a"), &field("b")));
+        assert!(step_compatible(&Step::Tuple(0), &Step::Tuple(0)));
+        assert!(!step_compatible(&Step::Tuple(0), &Step::Tuple(1)));
+        assert!(step_compatible(&lit(1), &lit(1)));
+        assert!(!step_compatible(&lit(1), &lit(2)));
+        // A computed index may equal any index.
+        assert!(step_compatible(&opaque(), &lit(2)));
+        assert!(step_compatible(&lit(2), &opaque()));
+        // A dereference is never the same position as a projection.
+        assert!(!step_compatible(&Step::Deref, &field("a")));
+        assert!(!step_compatible(&lit(0), &Step::Deref));
+        // Mismatched projection kinds: nothing proves them apart.
+        assert!(step_compatible(&field("a"), &Step::Tuple(0)));
+        assert!(step_compatible(&Step::Tuple(0), &lit(0)));
+    }
+
+    #[test]
+    fn a_divergence_proves_disjointness_only_on_comparable_steps() {
+        assert!(diverges_disjoint(&[field("a")], &[field("b")]));
+        assert!(diverges_disjoint(&[Step::Tuple(0)], &[Step::Tuple(1)]));
+        assert!(diverges_disjoint(&[lit(0)], &[lit(1)]));
+        assert!(diverges_disjoint(&[Step::Deref], &[field("a")]));
+        assert!(diverges_disjoint(&[field("a")], &[Step::Deref]));
+        // Under a computed index a later divergence proves nothing.
+        assert!(!diverges_disjoint(
+            &[opaque(), field("a")],
+            &[opaque(), field("b")]
+        ));
+        assert!(!diverges_disjoint(
+            &[lit(0), field("a")],
+            &[opaque(), field("b")]
+        ));
+        // Identical or prefix paths never diverge.
+        assert!(!diverges_disjoint(&[field("a")], &[field("a")]));
+        assert!(!diverges_disjoint(&[field("a")], &[field("a"), field("b")]));
+        assert!(!diverges_disjoint(&[], &[field("a")]));
+    }
+
+    #[test]
+    fn a_place_is_classified_against_a_moved_path() {
+        let moved = [field("a"), lit(0)];
+        assert_eq!(
+            classify_partial(&[field("a"), lit(0)], &moved),
+            PartialRel::Exact
+        );
+        assert_eq!(
+            classify_partial(&[field("a"), lit(0), field("x")], &moved),
+            PartialRel::Extension
+        );
+        assert_eq!(
+            classify_partial(&[field("a")], &moved),
+            PartialRel::Ancestor
+        );
+        assert_eq!(
+            classify_partial(&[field("b")], &moved),
+            PartialRel::Disjoint
+        );
+        assert_eq!(
+            classify_partial(&[field("a"), lit(1)], &moved),
+            PartialRel::Disjoint
+        );
+        // Same length, a computed index on one side, then a field that differs:
+        // the paths overlap without being comparable, which is refused like an
+        // extension.
+        assert_eq!(
+            classify_partial(&[opaque(), field("x")], &[lit(0), field("y")]),
+            PartialRel::Extension
+        );
+        assert!(prefix_compatible(&[field("a")], &moved));
+        assert!(!prefix_compatible(&moved, &[field("a")]));
+        assert!(!prefix_compatible(&[field("b")], &moved));
+    }
+
+    #[test]
+    fn two_places_overlap_unless_a_step_separates_them() {
+        let place = |slot, steps: &[Step]| Place {
+            slot,
+            steps: steps.to_vec(),
+        };
+        let first: super::super::SlotId = 0;
+        let other: super::super::SlotId = 1;
+        assert!(!places_overlap(&place(first, &[]), &place(other, &[])));
+        assert!(places_overlap(
+            &place(first, &[]),
+            &place(first, &[field("a")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[Step::Deref]),
+            &place(first, &[Step::Deref])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[field("a")]),
+            &place(first, &[field("b")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[Step::Tuple(1)]),
+            &place(first, &[Step::Tuple(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[Step::Tuple(0)]),
+            &place(first, &[Step::Tuple(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[lit(1)])
+        ));
+        assert!(places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[lit(0), field("a")])
+        ));
+        assert!(places_overlap(
+            &place(first, &[opaque()]),
+            &place(first, &[lit(1)])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[Step::Deref]),
+            &place(first, &[field("a")])
+        ));
+        assert!(!places_overlap(
+            &place(first, &[lit(0)]),
+            &place(first, &[Step::Deref])
+        ));
+        // A field against a tuple index: the kinds differ, stay conservative.
+        assert!(places_overlap(
+            &place(first, &[field("a")]),
+            &place(first, &[Step::Tuple(0)])
+        ));
+    }
+
+    #[test]
+    fn a_join_keeps_the_slots_known_on_one_side_only() {
+        let left_only: super::super::SlotId = 0;
+        let right_only: super::super::SlotId = 1;
+        let mut left = State::default();
+        left.slots.insert(left_only, SlotState::initialised());
+        let mut right = State::default();
+        right.slots.insert(right_only, SlotState::default());
+        let joined = join(&left, &right);
+        assert!(joined.slots[&left_only].init);
+        assert!(!joined.slots[&right_only].init);
+        assert_eq!(joined.slots.len(), 2);
+    }
+
+    #[test]
+    fn a_field_of_an_unknown_type_has_an_unknown_type() {
+        let facts = Facts::default();
+        assert_eq!(field_type(&Type::I32, "a", &facts), Type::Error);
+        let unknown_struct = Type::Nominal {
+            def: 7,
+            name: "Missing".to_string(),
+            args: Vec::new(),
+        };
+        assert_eq!(field_type(&unknown_struct, "a", &facts), Type::Error);
+    }
+}
+
+/// Without resolution facts, a single plain path is still looked up by name
+/// and a qualified one (`crate::K`) is never taken for a local.
+#[test]
+fn paths_without_resolution_facts_fall_back_to_plain_names_only() {
+    let result =
+        run("const K: i32 = 1;\nfn f() -> i32 { let x = 2; let y = crate::K; return x + y; }\n");
+    let mut checked = result.checked.expect("the fixture must check");
+    checked.facts.resolutions.clear();
+    let mut diags = DiagnosticBag::new();
+    let _ = super::check_ownership(&checked, &mut diags);
+    assert!(!diags.has_errors());
+}
+
+// -- E6: the checker's invariants, driven directly ----------------------------
+
+/// A checker with no function entered: no scope is open, no slot exists.
+fn bare_checker(test: impl FnOnce(&mut OwnChecker)) {
+    let facts = Facts::default();
+    let mut diags = DiagnosticBag::new();
+    let mut own = OwnFacts::default();
+    let mut checker = OwnChecker::new(&facts, &mut diags, &mut own);
+    test(&mut checker);
+}
+
+#[test]
+fn scopes_and_unknown_slots_are_handled_without_inventing_state() {
+    use super::{Access, Place, Step};
+    use ravum_lang_syntax::span::Span;
+    bare_checker(|checker| {
+        // `check_fn` opens the function scope first; without one, popping
+        // and declaring change nothing but the slot table.
+        checker.pop_scope();
+        let slot = checker.declare_slot("x", Type::I32, false, Span::dummy());
+        assert!(checker.lookup("x").is_none());
+        // A slot without a state (every place starts from `lookup`, which
+        // only returns declared slots).
+        let ghost = Place {
+            slot: slot + 100,
+            steps: Vec::new(),
+        };
+        let ghost_field = Place {
+            slot: slot + 100,
+            steps: vec![Step::Field("f".to_string())],
+        };
+        assert!(!checker.check_availability(&ghost, Span::dummy(), Access::Read));
+        checker.write_place(&ghost, Span::dummy(), 1);
+        checker.write_place(&ghost_field, Span::dummy(), 1);
+        checker.perform_move(&ghost, Span::dummy());
+        checker.record_partial_move(&ghost_field, Span::dummy());
+        checker.mark_used(slot + 100);
+        assert_eq!(checker.type_at(&ghost, 0), Type::Error);
+        assert_eq!(checker.display_place(&ghost), "<inconnu>");
+        let ghost_index = Place {
+            slot: slot + 100,
+            steps: vec![Step::Index(super::IndexKey::Lit(0))],
+        };
+        assert!(matches!(
+            checker.element_write(&ghost_index),
+            super::ElementWrite::Plain
+        ));
+    });
+}
+
+#[test]
+fn steps_of_different_kinds_prove_no_disjointness() {
+    use super::state::diverges_disjoint;
+    use super::Step;
+    assert!(!diverges_disjoint(
+        &[Step::Field("a".to_string())],
+        &[Step::Tuple(0)]
+    ));
+    assert!(diverges_disjoint(
+        &[Step::Field("a".to_string())],
+        &[Step::Field("b".to_string())]
+    ));
+}
+
+#[test]
+fn moving_out_through_a_slice_index_is_refused() {
+    use super::{Place, Step};
+    use ravum_lang_syntax::span::Span;
+    bare_checker(|checker| {
+        checker.push_scope();
+        let slot = checker.declare_slot(
+            "s",
+            Type::Slice(Box::new(Type::String)),
+            false,
+            Span::dummy(),
+        );
+        let place = Place {
+            slot,
+            steps: vec![Step::Index(super::IndexKey::Lit(0))],
+        };
+        checker.perform_move(&place, Span::dummy());
+    });
+}
+
+#[test]
+fn an_element_write_into_a_moved_element_extension_restores_nothing() {
+    use super::{Place, Step};
+    use ravum_lang_syntax::span::Span;
+    bare_checker(|checker| {
+        checker.push_scope();
+        let slot = checker.declare_slot(
+            "a",
+            Type::Array {
+                elem: Box::new(Type::Tuple(vec![Type::String, Type::String])),
+                len: 2,
+            },
+            false,
+            Span::dummy(),
+        );
+        checker
+            .state
+            .slots
+            .insert(slot, super::SlotState::initialised());
+        let element = Place {
+            slot,
+            steps: vec![Step::Index(super::IndexKey::Lit(0))],
+        };
+        checker.record_partial_move(&element, Span::dummy());
+        let inside = Place {
+            slot,
+            steps: vec![Step::Index(super::IndexKey::Lit(0)), Step::Tuple(1)],
+        };
+        let _ = checker.element_write(&inside);
+    });
+}
+
+/// Check `src`, then let `edit` alter the checked AST before ownership runs
+/// again: the analysis must finish on shapes typeck never hands it.
+fn ownership_after(src: &str, edit: impl FnOnce(&mut ravum_lang_syntax::ast::Block)) {
+    use ravum_lang_syntax::ast::ItemKind;
+    let mut checked = run(src).checked.expect("the fixture must check");
+    let ItemKind::Fn(f) = &mut checked.program.root.items[0].kind else {
+        panic!("expected a function");
+    };
+    edit(&mut f.body);
+    let mut diags = DiagnosticBag::new();
+    let _ = check_ownership(&checked, &mut diags);
+}
+
+fn diverging() -> ravum_lang_syntax::ast::ExprKind {
+    ravum_lang_syntax::ast::ExprKind::Return(None)
+}
+
+#[test]
+fn ownership_finishes_on_shapes_typeck_refuses() {
+    use ravum_lang_syntax::ast::{ExprKind, StmtKind};
+    // `&&` whose left operand diverges while its right one does not.
+    ownership_after(
+        "fn f(a: bool) -> bool { let b = a && true; return b; }",
+        |body| {
+            let StmtKind::Let(l) = &mut body.stmts[0].kind else {
+                panic!()
+            };
+            let ExprKind::Binary { lhs, .. } = &mut l.init.as_mut().unwrap().kind else {
+                panic!()
+            };
+            lhs.kind = diverging();
+        },
+    );
+    // An assignment whose target is not a place.
+    ownership_after("fn f() { let mut x = 1; x = 2; }", |body| {
+        let StmtKind::Expr { expr, .. } = &mut body.stmts[1].kind else {
+            panic!()
+        };
+        let ExprKind::Assign { target, .. } = &mut expr.kind else {
+            panic!()
+        };
+        target.kind = ExprKind::Int {
+            value: 1,
+            suffix: None,
+        };
+    });
+    // A `while` whose condition diverges, with a `break` in its body.
+    ownership_after("fn f(c: bool) { while c { break; } let z = 1; }", |body| {
+        let StmtKind::Expr { expr, .. } = &mut body.stmts[0].kind else {
+            panic!()
+        };
+        let ExprKind::While { cond, .. } = &mut expr.kind else {
+            panic!()
+        };
+        cond.kind = diverging();
+    });
+    // A `for` whose iterator diverges, with a `break` in its body.
+    ownership_after(
+        "fn f(v: Vec<i32>) { for x in v { break; } let z = 1; }",
+        |body| {
+            let StmtKind::Expr { expr, .. } = &mut body.stmts[0].kind else {
+                panic!()
+            };
+            let ExprKind::For { iter, .. } = &mut expr.kind else {
+                panic!()
+            };
+            iter.kind = diverging();
+        },
+    );
+}
+
+#[test]
+#[should_panic(expected = "invariant: an available place has a slot state")]
+fn the_state_of_a_slot_without_one_is_an_invariant_failure() {
+    use super::Place;
+    bare_checker(|checker| {
+        let _ = checker.slot_state_mut(&Place {
+            slot: 77,
+            steps: Vec::new(),
+        });
+    });
+}

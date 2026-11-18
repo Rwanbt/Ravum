@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_assign(allow_struct);
         self.depth -= 1;
         expr
@@ -23,7 +23,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_assign_inner(allow_struct);
         self.depth -= 1;
         expr
@@ -31,6 +31,9 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_assign_inner(&mut self, allow_struct: bool) -> Expr {
         let lhs = self.parse_range(allow_struct);
+        if self.stmt_end {
+            return lhs;
+        }
         if let Some((op, count)) = self.peek_assign() {
             if self.forbid_assign > 0 {
                 let span = self.cur_span();
@@ -98,23 +101,23 @@ impl<'a> Parser<'a> {
     }
 
     /// Assignment operators are the lowest precedence level, right-associative.
-    pub(super) fn peek_assign(&self) -> Option<(Option<BinOp>, usize)> {
+    pub(super) fn peek_assign(&self) -> Option<(Option<CompoundOp>, usize)> {
         match self.kind() {
             TokenKind::Punct(Punct::Eq) => Some((None, 1)),
-            TokenKind::Punct(Punct::PlusEq) => Some((Some(BinOp::Add), 1)),
-            TokenKind::Punct(Punct::MinusEq) => Some((Some(BinOp::Sub), 1)),
-            TokenKind::Punct(Punct::StarEq) => Some((Some(BinOp::Mul), 1)),
-            TokenKind::Punct(Punct::SlashEq) => Some((Some(BinOp::Div), 1)),
-            TokenKind::Punct(Punct::PercentEq) => Some((Some(BinOp::Rem), 1)),
-            TokenKind::Punct(Punct::AmpEq) => Some((Some(BinOp::BitAnd), 1)),
-            TokenKind::Punct(Punct::PipeEq) => Some((Some(BinOp::BitOr), 1)),
-            TokenKind::Punct(Punct::CaretEq) => Some((Some(BinOp::BitXor), 1)),
-            TokenKind::Punct(Punct::ShlEq) => Some((Some(BinOp::Shl), 1)),
+            TokenKind::Punct(Punct::PlusEq) => Some((Some(CompoundOp::Add), 1)),
+            TokenKind::Punct(Punct::MinusEq) => Some((Some(CompoundOp::Sub), 1)),
+            TokenKind::Punct(Punct::StarEq) => Some((Some(CompoundOp::Mul), 1)),
+            TokenKind::Punct(Punct::SlashEq) => Some((Some(CompoundOp::Div), 1)),
+            TokenKind::Punct(Punct::PercentEq) => Some((Some(CompoundOp::Rem), 1)),
+            TokenKind::Punct(Punct::AmpEq) => Some((Some(CompoundOp::BitAnd), 1)),
+            TokenKind::Punct(Punct::PipeEq) => Some((Some(CompoundOp::BitOr), 1)),
+            TokenKind::Punct(Punct::CaretEq) => Some((Some(CompoundOp::BitXor), 1)),
+            TokenKind::Punct(Punct::ShlEq) => Some((Some(CompoundOp::Shl), 1)),
             // `>>=` is split into `>` `>` `=`.
             TokenKind::Punct(Punct::Gt)
                 if self.peek_punct(1, Punct::Gt) && self.peek_punct(2, Punct::Eq) =>
             {
-                Some((Some(BinOp::Shr), 3))
+                Some((Some(CompoundOp::Shr), 3))
             }
             _ => None,
         }
@@ -123,8 +126,8 @@ impl<'a> Parser<'a> {
     /// A range is a `for`-clause construct in Core 1.0. Report it in the parse
     /// phase (E-UNSUPPORTED-RANGE, per `diagnostics.md` §3) instead of letting
     /// the checker reclassify it as a type error.
-    pub(super) fn reject_range_outside_for(&mut self, span: Span) {
-        if self.in_for_iter {
+    pub(super) fn reject_range_outside_for(&mut self, allowed: bool, span: Span) {
+        if allowed {
             return;
         }
         self.diags.error(
@@ -135,17 +138,26 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_range(&mut self, allow_struct: bool) -> Expr {
+        // Only the outermost expression of a `for` iterator may be a range:
+        // the flag is consumed here, so every operand and nested expression
+        // (`0..g(..3)`, `0..{ ..3; 2 }`) is parsed as outside a `for` clause.
+        let allowed = std::mem::take(&mut self.in_for_iter);
         if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
+            // A prefix range is not a statement head (G-6.1).
+            self.stmt_head = false;
             let start = self.cur_span();
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
-            let end = if self.starts_expr() {
+            // In a `for` clause the `{` after `..` opens the body, not an upper
+            // bound (`for j in 1.. { }`): the range stays open and the checker
+            // reports the open range (decision 8).
+            let end = if self.starts_expr() && !(allowed && self.at(Punct::LBrace)) {
                 Some(Box::new(self.parse_binary(1, allow_struct)))
             } else {
                 None
             };
             let id = self.id();
-            self.reject_range_outside_for(start);
+            self.reject_range_outside_for(allowed, start);
             return Expr {
                 id,
                 kind: ExprKind::Range {
@@ -157,17 +169,20 @@ impl<'a> Parser<'a> {
             };
         }
         let lhs = self.parse_binary(1, allow_struct);
-        if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
+        if !self.stmt_end && (self.at(Punct::DotDot) || self.at(Punct::DotDotEq)) {
             let start = lhs.span;
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
-            let end = if self.starts_expr() {
+            // In a `for` clause the `{` after `..` opens the body, not an upper
+            // bound (`for j in 1.. { }`): the range stays open and the checker
+            // reports the open range (decision 8).
+            let end = if self.starts_expr() && !(allowed && self.at(Punct::LBrace)) {
                 Some(Box::new(self.parse_binary(1, allow_struct)))
             } else {
                 None
             };
             let id = self.id();
-            self.reject_range_outside_for(start);
+            self.reject_range_outside_for(allowed, start);
             return Expr {
                 id,
                 kind: ExprKind::Range {
@@ -220,9 +235,11 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_binary(&mut self, min_prec: u8, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
         let mut lhs = self.parse_cast(allow_struct);
+        let mut spine = self.reach;
         while let Some((op, prec, count)) = self.peek_binop() {
-            if prec < min_prec {
+            if prec < min_prec || self.stmt_end {
                 break;
             }
             // Comparisons are non-associative (G-6.12): `a < b < c` is a syntax
@@ -237,7 +254,12 @@ impl<'a> Parser<'a> {
             }
             let start = lhs.span;
             self.bump_n(count);
+            self.reach = self.depth;
             let rhs = self.parse_binary(prec + 1, allow_struct);
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
             let span = start.join(rhs.span);
             let id = self.id();
             lhs = Expr {
@@ -250,15 +272,23 @@ impl<'a> Parser<'a> {
                 span,
             };
         }
+        self.reach = outer.max(spine);
         lhs
     }
 
     pub(super) fn parse_cast(&mut self, allow_struct: bool) -> Expr {
+        let outer = self.open_operand();
         let mut expr = self.parse_unary(allow_struct);
-        while self.at_kw(Kw::As) {
+        let mut spine = self.reach;
+        while !self.stmt_end && self.at_kw(Kw::As) {
             let start = expr.span;
             self.bump();
+            self.reach = self.depth;
             let ty = self.parse_type();
+            let Some(reach) = self.chain_link(spine) else {
+                break;
+            };
+            spine = reach;
             let span = start.join(ty.span);
             let id = self.id();
             expr = Expr {
@@ -270,6 +300,7 @@ impl<'a> Parser<'a> {
                 span,
             };
         }
+        self.reach = outer.max(spine);
         expr
     }
 
@@ -281,7 +312,7 @@ impl<'a> Parser<'a> {
             self.fail_depth();
             return self.unit_expr(self.cur_span());
         }
-        self.depth += 1;
+        self.descend();
         let expr = self.parse_unary_inner(allow_struct);
         self.depth -= 1;
         expr
@@ -289,6 +320,14 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_unary_inner(&mut self, allow_struct: bool) -> Expr {
         let start = self.cur_span();
+        // An operand behind a prefix operator is not a statement head (G-6.1):
+        // `-{ x } + 1;` stays one expression.
+        if matches!(
+            self.kind(),
+            TokenKind::Punct(Punct::Minus | Punct::Bang | Punct::Star | Punct::Amp | Punct::AmpAmp)
+        ) {
+            self.stmt_head = false;
+        }
         let op = match self.kind() {
             TokenKind::Punct(Punct::Minus) => Some(UnOp::Neg),
             TokenKind::Punct(Punct::Bang) => Some(UnOp::Not),

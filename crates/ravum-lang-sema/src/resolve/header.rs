@@ -33,7 +33,7 @@ impl<'w, 'a, 'f> HeaderCtx<'w, 'a, 'f> {
     }
 
     pub(crate) fn resolve_type(&mut self, ty: &AstType) -> Type {
-        resolve_type_syntax(
+        let resolved = resolve_type_syntax(
             self.world,
             &mut self.facts.type_nodes,
             &mut self.facts.expr_types,
@@ -42,7 +42,8 @@ impl<'w, 'a, 'f> HeaderCtx<'w, 'a, 'f> {
             &self.generics,
             self.self_ty.as_ref(),
             ty,
-        )
+        );
+        check_written_type_depth(self.diags, ty, resolved)
     }
 }
 
@@ -528,13 +529,15 @@ pub(crate) fn resolve_impl(
     item: &Item,
     imp: &ast::ImplItem,
 ) {
-    let (target, generics) = {
+    let (target, generics, def) = {
         let mut ctx = HeaderCtx::new(world, facts, diags, module, Vec::new(), None);
         let generics = generic_scope(ctx.diags, &imp.generics);
         ctx.generics = generics.clone();
         let target = ctx.resolve_type(&imp.self_ty);
-        let def = match &target {
-            Type::Nominal { def, .. } if ctx.world.nominal_kind(*def).is_some() => *def,
+        let (def, args) = match &target {
+            Type::Nominal { def, args, .. } if ctx.world.nominal_kind(*def).is_some() => {
+                (*def, args.clone())
+            }
             _ => {
                 ctx.error(
                     "E-RES-IMPL-SELF-TYPE",
@@ -544,42 +547,31 @@ pub(crate) fn resolve_impl(
                 return;
             }
         };
-        if let Type::Nominal { args, .. } = &target {
-            let names: Vec<&str> = generics.iter().map(|(n, _)| n.as_str()).collect();
-            let ok = args.len() == names.len()
-                && args.iter().enumerate().all(|(i, arg)| {
-                    matches!(arg, Type::Param { name, index } if *index == i && name == names[i])
-                });
-            if !ok {
-                ctx.error(
-                    "E-RES-IMPL-TARGET",
-                    imp.self_ty.span,
-                    "generic parameters of `impl` must match the target type arguments in order"
-                        .to_string(),
-                );
-            }
+        let names: Vec<&str> = generics.iter().map(|(n, _)| n.as_str()).collect();
+        let ok = args.len() == names.len()
+            && args.iter().enumerate().all(|(i, arg)| {
+                matches!(arg, Type::Param { name, index } if *index == i && name == names[i])
+            });
+        if !ok {
+            ctx.error(
+                "E-RES-IMPL-TARGET",
+                imp.self_ty.span,
+                "generic parameters of `impl` must match the target type arguments in order"
+                    .to_string(),
+            );
         }
-        let _ = def;
-        (target, generics)
-    };
-    let def = match &target {
-        Type::Nominal { def, .. } => *def,
-        _ => return,
+        (target, generics, def)
     };
     let impl_generics: Vec<String> = generics.iter().map(|(n, _)| n.clone()).collect();
     world.impls.entry(def).or_default();
-    for member in &imp.items {
-        let f = match &member.kind {
-            ItemKind::Fn(f) => f,
-            _ => {
-                diags.error(
-                    "E-RES-IMPL-UNKNOWN",
-                    member.span,
-                    "only fn items are allowed inside an `impl` in Core 1.0".to_string(),
-                );
-                continue;
-            }
-        };
+    for member in imp.non_methods() {
+        diags.error(
+            "E-RES-IMPL-UNKNOWN",
+            member.span,
+            "only fn items are allowed inside an `impl` in Core 1.0".to_string(),
+        );
+    }
+    for (member, f) in imp.methods() {
         let sig = resolve_fn_header(
             world,
             facts,
@@ -626,6 +618,30 @@ pub(crate) fn resolve_impl(
 // ---------------------------------------------------------------------------
 // Résolution de types (partagée avec `typeck`)
 // ---------------------------------------------------------------------------
+
+/// TYP-1.7: a written type deeper than [`MAX_TYPE_DEPTH`] is refused with
+/// `E-TYP-DEPTH`, on the whole written type. Called on every type written in
+/// a declaration or a body, once per written type (not per nested node). The
+/// refused type becomes [`Type::Error`], so nothing checked against it reports
+/// a second, derived diagnostic.
+pub(crate) fn check_written_type_depth(
+    diags: &mut DiagnosticBag,
+    ty: &AstType,
+    resolved: Type,
+) -> Type {
+    if resolved.depth() > MAX_TYPE_DEPTH {
+        diags.error(
+            "E-TYP-DEPTH",
+            ty.span,
+            format!(
+                "this type nests more than {MAX_TYPE_DEPTH} levels; \
+                 split it with a named struct"
+            ),
+        );
+        return Type::Error;
+    }
+    resolved
+}
 
 /// Résout une syntaxe de type en [`Type`], en enregistrant **chaque** nœud de
 /// type dans `type_nodes` et les nœuds d'expression de longueur de tableau dans
@@ -818,28 +834,8 @@ pub(crate) fn resolve_type_path(
         return Type::Error;
     }
 
-    // Cas `Self`.
-    if path.root == PathRoot::Plain && segments[0].name.name == "Self" {
-        if segments.len() != 1 {
-            diags.error(
-                "E-RES-UNKNOWN",
-                path.span,
-                "`Self` cannot be used as a module prefix".to_string(),
-            );
-            return Type::Error;
-        }
-        return match self_ty {
-            Some(t) => t.clone(),
-            None => {
-                diags.error(
-                    "E-RES-SELF-OUTSIDE-IMPL",
-                    path.span,
-                    "`Self` is only valid inside an `impl`".to_string(),
-                );
-                Type::Error
-            }
-        };
-    }
+    // `Self` is the keyword `Kw::SelfType`: the parser builds `TypeKind::SelfType`
+    // for it, never a path segment, so a type path cannot start with it.
 
     // Segment unique non qualifié : paramètre générique, `str`, type local,
     // type prélude.
@@ -864,14 +860,8 @@ pub(crate) fn resolve_type_path(
         }
         if let Some(sym) = world.lookup(module, Ns::Type, name) {
             world.mark_used(module, sym);
-            if !world.visible_from(&sym, module) {
-                diags.error(
-                    "E-RES-PRIVATE",
-                    segment.name.span,
-                    format!("type `{name}` is private"),
-                );
-                return Type::Error;
-            }
+            // A name looked up in the current module is always visible from it:
+            // `lookup` answers `def_module == module`, which `visible_from` accepts.
             let args = resolve_type_args(
                 world,
                 type_nodes,
@@ -938,76 +928,40 @@ pub(crate) fn resolve_type_path(
         },
         PathRoot::Plain => {
             let first = &segments[0].name.name;
-            match first.as_str() {
-                "crate" => {
-                    index = 1;
-                    Cursor::Module(world.root)
+            if let Some(sym) = world.lookup(module, Ns::Module, first) {
+                world.mark_used(module, sym);
+                index = 1;
+                match sym.sym {
+                    Sym::Module(m) => Cursor::Module(m),
+                    Sym::BuiltinModule(p) => Cursor::Builtin(p),
+                    _ => return Type::Error,
                 }
-                "self" => {
-                    index = 1;
-                    Cursor::Module(module)
-                }
-                "super" => {
-                    let mut levels = 1usize;
-                    while segments.get(levels).map(|s| s.name.name.as_str()) == Some("super") {
-                        levels += 1;
-                    }
-                    index = levels;
-                    match world.ancestor(module, levels) {
-                        Some(parent) => Cursor::Module(parent),
-                        None => {
-                            diags.error(
-                                "E-RES-UNKNOWN",
-                                path.span,
-                                "`super` escapes the crate root".to_string(),
-                            );
-                            return Type::Error;
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(sym) = world.lookup(module, Ns::Module, first) {
-                        world.mark_used(module, sym);
-                        index = 1;
-                        match sym.sym {
-                            Sym::Module(m) => Cursor::Module(m),
-                            Sym::BuiltinModule(p) => Cursor::Builtin(p),
-                            _ => return Type::Error,
-                        }
-                    } else if let Some(p) = builtins::builtin_root_module(first) {
-                        index = 1;
-                        Cursor::Builtin(p)
-                    } else if world.lookup(module, Ns::Type, first).is_some()
-                        || is_builtin_type_name(first)
-                    {
-                        diags.error(
-                            "E-RES-UNKNOWN",
-                            segments[0].name.span,
-                            format!("`{first}` is a type, not a module"),
-                        );
-                        return Type::Error;
-                    } else {
-                        diags.error(
-                            "E-RES-UNKNOWN",
-                            segments[0].name.span,
-                            format!("unknown type `{first}`"),
-                        );
-                        return Type::Error;
-                    }
-                }
+            } else if let Some(p) = builtins::builtin_root_module(first) {
+                index = 1;
+                Cursor::Builtin(p)
+            } else if world.lookup(module, Ns::Type, first).is_some() || is_builtin_type_name(first)
+            {
+                diags.error(
+                    "E-RES-UNKNOWN",
+                    segments[0].name.span,
+                    format!("`{first}` is a type, not a module"),
+                );
+                return Type::Error;
+            } else {
+                diags.error(
+                    "E-RES-UNKNOWN",
+                    segments[0].name.span,
+                    format!("unknown type `{first}`"),
+                );
+                return Type::Error;
             }
         }
     };
 
     loop {
-        if index >= segments.len() {
-            diags.error(
-                "E-RES-UNKNOWN",
-                path.span,
-                "a module is not a type".to_string(),
-            );
-            return Type::Error;
-        }
+        // Entered with `index < len` (an empty path is refused above, and a
+        // plain path consumes only its first segment before the loop when it
+        // has at least two); each turn advances or returns on the last segment.
         let last = index + 1 == segments.len();
         let segment = &segments[index];
         let name = &segment.name.name;
@@ -1029,11 +983,8 @@ pub(crate) fn resolve_type_path(
                                 Sym::Module(child) => Cursor::Module(child),
                                 Sym::BuiltinModule(p) => Cursor::Builtin(p),
                                 _ => {
-                                    diags.error(
-                                        "E-RES-UNKNOWN",
-                                        segment.name.span,
-                                        format!("`{name}` is not a module"),
-                                    );
+                                    let message = format!("`{name}` is not a module");
+                                    diags.error("E-RES-UNKNOWN", segment.name.span, message);
                                     return Type::Error;
                                 }
                             };

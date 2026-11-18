@@ -439,3 +439,48 @@ fn a_mod_declaration_that_the_loader_did_not_inline_is_refused() {
         "a program carrying a ModDecl must not yield a CheckedProgram"
     );
 }
+
+#[test]
+fn rt_traps_walk_reachable_methods_conditionals_and_loop_bounds() {
+    // Under `rt`, only functions reachable from the entry are scanned for
+    // traps: a method of an `impl` reached by a call, not the one nobody
+    // calls; an `if` without `else`; a `for` over a variable bound and over a
+    // `len()` bound.
+    let src = r#"
+struct Acc { total: i32 }
+
+impl Acc {
+    fn add(&mut self, value: i32) {
+        if value > 0 {
+            self.total = self.total.wrapping_add(value);
+        }
+    }
+
+    fn never_called(&self) -> i32 {
+        return self.total;
+    }
+}
+
+fn sum(values: &[i32]) -> i32 {
+    let mut total = 0;
+    for j in 0..values.len() {
+        total = total.wrapping_add(values[j]);
+    }
+    return total;
+}
+
+fn main() {
+    let mut acc = Acc { total: 0 };
+    let n: i32 = 3;
+    for i in 0..n {
+        acc.add(i);
+    }
+    let items = [1, 2, 3];
+    acc.add(sum(&items));
+}
+"#;
+    let (program, sources) = parse(src);
+    let entry = main_id(&program);
+    let result = check_with_entry(&program, &sources, &options(Profile::Rt), Some(entry));
+    accepted(&result, &sources);
+}

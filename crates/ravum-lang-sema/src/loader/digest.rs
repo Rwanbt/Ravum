@@ -13,6 +13,20 @@ pub(super) fn compute_digests(graph: &mut DepGraph, diags: &mut DiagnosticBag) {
 /// relative path) plus `ravum.toml`, encoded as `path\0len\0bytes` with `\r\n`
 /// normalised to `\n` (see `spec/language/modules.md` MOD-7.2 / Q-MOD-6).
 pub(super) fn package_digest(pkg_dir: &Path, diags: &mut DiagnosticBag) -> Option<String> {
+    package_digest_with(
+        pkg_dir,
+        diags,
+        |path| fs::read(path),
+        |path| fs::symlink_metadata(path),
+    )
+}
+
+pub(super) fn package_digest_with(
+    pkg_dir: &Path,
+    diags: &mut DiagnosticBag,
+    read: impl Fn(&Path) -> std::io::Result<Vec<u8>>,
+    inspect: impl Fn(&Path) -> std::io::Result<fs::Metadata>,
+) -> Option<String> {
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
     let manifest_path = pkg_dir.join(MANIFEST_NAME);
     if let Ok(Some(meta)) = symlink_metadata_optional(&manifest_path) {
@@ -29,7 +43,7 @@ pub(super) fn package_digest(pkg_dir: &Path, diags: &mut DiagnosticBag) -> Optio
             return None;
         }
     }
-    let manifest = match fs::read(&manifest_path) {
+    let manifest = match read(&manifest_path) {
         Ok(bytes) => bytes,
         Err(e) => {
             diags.push(Diagnostic::error(
@@ -71,7 +85,7 @@ pub(super) fn package_digest(pkg_dir: &Path, diags: &mut DiagnosticBag) -> Optio
     }
     if symlink_metadata_optional(&src).ok().flatten().is_some() {
         let mut rv_files = Vec::new();
-        if !collect_rv_files(&src, Path::new("src"), &mut rv_files, diags) {
+        if !collect_rv_files(&src, Path::new("src"), &mut rv_files, diags, &inspect) {
             return None;
         }
         rv_files.sort();
@@ -88,7 +102,7 @@ pub(super) fn package_digest(pkg_dir: &Path, diags: &mut DiagnosticBag) -> Optio
         }
         for rel in rv_files {
             let abs = pkg_dir.join(&rel);
-            let data = match fs::read(&abs) {
+            let data = match read(&abs) {
                 Ok(d) => d,
                 Err(e) => {
                     diags.push(Diagnostic::error(
@@ -127,11 +141,12 @@ pub(super) fn package_digest(pkg_dir: &Path, diags: &mut DiagnosticBag) -> Optio
     Some(format!("sha256:{}", hasher.finish_hex()))
 }
 
-pub(super) fn collect_rv_files(
+fn collect_rv_files(
     dir: &Path,
     rel: &Path,
     out: &mut Vec<PathBuf>,
     diags: &mut DiagnosticBag,
+    inspect: &impl Fn(&Path) -> std::io::Result<fs::Metadata>,
 ) -> bool {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -162,7 +177,7 @@ pub(super) fn collect_rv_files(
             return false;
         }
         let path = entry.path();
-        let meta = match fs::symlink_metadata(&path) {
+        let meta = match inspect(&path) {
             Ok(m) => m,
             Err(e) => {
                 diags.push(Diagnostic::error(
@@ -185,7 +200,7 @@ pub(super) fn collect_rv_files(
             return false;
         }
         if meta.is_dir() {
-            if !collect_rv_files(&path, &child_rel, out, diags) {
+            if !collect_rv_files(&path, &child_rel, out, diags, inspect) {
                 return false;
             }
         } else if meta.is_file() && path.extension().and_then(|e| e.to_str()) == Some("rv") {

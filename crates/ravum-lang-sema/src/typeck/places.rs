@@ -277,11 +277,29 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .and_then(|info| info.fields.iter().find(|f| f.name == name))
                     .cloned()
                 else {
-                    self.error(
-                        "E-TYP-FIELD",
-                        span,
-                        format!("no field `{name}` on type `{ty}`"),
-                    );
+                    // Same answer as for a builtin method below: a method named
+                    // without a call is a resolution failure with a hint, not an
+                    // unknown field (decision 6, STD-9.10).
+                    let is_method = self
+                        .world
+                        .impls
+                        .get(&def)
+                        .is_some_and(|methods| methods.iter().any(|m| m.name == name));
+                    if is_method {
+                        self.error(
+                            "E-RES-UNKNOWN",
+                            span,
+                            format!(
+                                "`{name}` is a method of `{ty}`, not a value; call it with `(…)`"
+                            ),
+                        );
+                    } else {
+                        self.error(
+                            "E-TYP-FIELD",
+                            span,
+                            format!("no field `{name}` on type `{ty}`"),
+                        );
+                    }
                     return Type::Error;
                 };
                 self.check_field_visibility(&def, &field, span);
@@ -301,13 +319,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 // value: `s.parse_i64` is a resolution failure (STD-9.10,
                 // F-STD-021), which is a different diagnostic from "unknown
                 // field" and points the user at the fix.
+                // A user type never reaches this arm (the `Nominal` arm above
+                // answers it), so only builtin methods are looked up.
                 let is_method = method_self_kind(&ty)
                     .and_then(|kind| builtins::builtin_method(kind, name))
-                    .is_some()
-                    || matches!(
-                        &ty,
-                        Type::Nominal { def, .. } if self.world.method(*def, name, false).is_some()
-                    );
+                    .is_some();
                 if is_method {
                     self.error(
                         "E-RES-UNKNOWN",
@@ -493,6 +509,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             UnOp::Ref | UnOp::RefMut => {
                 let inner_ty = self.check_expr(operand, None);
+                // `&mut` of a place needs a mutable place (rustc E0596). A
+                // value that is not a place is a temporary and may be borrowed.
+                if op == UnOp::RefMut
+                    && !matches!(inner_ty, Type::Error)
+                    && self.names_a_place(operand)
+                    && self.place_mutability(operand) == Some(false)
+                {
+                    self.error(
+                        "E-OWN-IMMUTABLE",
+                        operand.span,
+                        "cannot borrow an immutable place as `&mut`".to_string(),
+                    );
+                }
                 Type::Ref {
                     mutable: op == UnOp::RefMut,
                     inner: Box::new(inner_ty),
@@ -547,6 +576,21 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             (l, r)
         };
 
+        self.binary_result_type(expr, op, l_ty, r_ty, rhs)
+    }
+
+    /// Type of `lhs op rhs` from the operand types (TYP-7, EXPR-3/4), shared by
+    /// expressions and constant initialisers; reports the refusal and answers
+    /// `Type::Error` for operands the operator does not accept.
+    pub(super) fn binary_result_type(
+        &mut self,
+        expr: &Expr,
+        op: ast::BinOp,
+        l_ty: Type,
+        r_ty: Type,
+        rhs: &Expr,
+    ) -> Type {
+        use ast::BinOp as B;
         match op {
             B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
                 if (l_ty.is_int() && r_ty.is_int()) || (l_ty.is_float() && r_ty.is_float()) {
@@ -710,7 +754,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 format!("cannot assign `{value_ty}` to a place of type `{target_ty}`"),
             );
         }
-        if !matches!(target_ty, Type::Error) && !self.place_is_mutable(target) {
+        // A binding declared without an initialiser (`let x: T;`) receives its
+        // value by one plain assignment of the whole binding; the ownership
+        // phase checks that it happens at most once on every path. Nothing
+        // else about it is mutable.
+        if !matches!(target_ty, Type::Error)
+            && !self.place_is_mutable(target)
+            && !self.is_deferred_binding(target)
+        {
             self.error(
                 "E-OWN-IMMUTABLE",
                 target.span,
@@ -718,6 +769,37 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         Type::Unit
+    }
+
+    /// The expression is a place rooted at a local binding or at `self` (not a
+    /// constant, a function or a temporary).
+    fn names_a_place(&self, expr: &Expr) -> bool {
+        match &expr.kind {
+            ExprKind::Path(path) => {
+                path.root == PathRoot::Plain
+                    && path.segments.len() == 1
+                    && self.lookup_local(&path.segments[0].name.name).is_some()
+            }
+            ExprKind::SelfValue => true,
+            ExprKind::Field { base, .. }
+            | ExprKind::TupleIndex { base, .. }
+            | ExprKind::Index { base, .. } => self.names_a_place(base),
+            ExprKind::Unary {
+                op: UnOp::Deref, ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    fn is_deferred_binding(&self, expr: &Expr) -> bool {
+        let ExprKind::Path(path) = &expr.kind else {
+            return false;
+        };
+        path.root == PathRoot::Plain
+            && path.segments.len() == 1
+            && self
+                .lookup_local(&path.segments[0].name.name)
+                .is_some_and(|local| local.deferred)
     }
 
     /// `Some(false)` = place immuable ; `Some(true)` = place mutable ; `None` =
@@ -732,7 +814,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 if path.root == PathRoot::Plain && path.segments.len() == 1 {
                     let name = &path.segments[0].name.name;
                     if let Some(local) = self.lookup_local(name) {
-                        return Some(local.mutable || local.deferred);
+                        return Some(local.mutable);
                     }
                 }
                 Some(false)
@@ -776,7 +858,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_assign_op(
         &mut self,
         expr: &Expr,
-        op: ast::BinOp,
+        op: ast::CompoundOp,
         target: &Expr,
         value: &Expr,
     ) -> Type {
@@ -786,7 +868,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         // fois : c'est l'affectation composée du Rust émis (`place op= e`) qui
         // le garantit ; le vérificateur de types ne contrôle donc que les
         // types des opérandes et la mutabilité de la place.
-        use ast::BinOp as B;
+        use ast::CompoundOp as B;
         let sym = format!("{}=", op.as_str());
         let target_ty = self.check_expr(target, None);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
@@ -849,16 +931,6 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                         ),
                     );
                 }
-            }
-            // Le parseur ne construit un `AssignOp` qu'avec l'un des dix
-            // opérateurs ci-dessus (G-6.8) ; ce bras n'est donc pas atteignable,
-            // mais un refus typé vaut mieux qu'un silence.
-            B::And | B::Or | B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge => {
-                self.error(
-                    "E-TYP-MISMATCH",
-                    expr.span,
-                    format!("`{sym}` is not a compound assignment operator"),
-                );
             }
         }
         if !matches!(target_ty, Type::Error) && !self.place_is_mutable(target) {
