@@ -1,5 +1,26 @@
 use super::*;
 
+/// `fs::canonicalize` for the checks that can lose a race against the file
+/// system (a component removed or replaced between the checks and this call).
+/// Tests replace it thread-locally to inject that failure or another answer.
+pub(super) fn canonicalize(path: &Path) -> std::io::Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(fake) = TEST_CANONICALIZE.with(std::cell::Cell::get) {
+        return fake(path);
+    }
+    fs::canonicalize(path)
+}
+
+/// Test override of [`canonicalize`] (`None`: the real call).
+#[cfg(test)]
+pub(super) type FakeCanonicalize = fn(&Path) -> std::io::Result<PathBuf>;
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static TEST_CANONICALIZE: std::cell::Cell<Option<FakeCanonicalize>> =
+        const { std::cell::Cell::new(None) };
+}
+
 pub(super) fn next_synthetic(counter: &mut NodeId) -> NodeId {
     let id = *counter;
     *counter = counter.saturating_add(1);

@@ -1474,7 +1474,7 @@ fn registering_a_source_twice_preserves_its_original_identity_and_text() {
 #[cfg(unix)]
 mod loader_after_digest {
     use super::*;
-    use crate::loader::crates::{load_crate_root, resolve_module_file, CrateCtx};
+    use crate::loader::crates::{expand_module, load_crate_root, resolve_module_file, CrateCtx};
 
     fn with_ctx(src_root: &Path, run: impl FnOnce(&mut CrateCtx<'_>)) -> Vec<String> {
         let mut sources = SourceMap::new();
@@ -1504,6 +1504,28 @@ mod loader_after_digest {
             .iter()
             .map(|diag| format!("{}: {}", diag.code, diag.message))
             .collect()
+    }
+
+    #[test]
+    fn an_inline_module_without_a_name_keeps_its_parent_prefix() {
+        // Only the root module of a file is unnamed; an inline module built
+        // without a name is expanded under its parent's prefix.
+        use ravum_lang_syntax::ast::ItemKind;
+        let temp = TempDir::new("unnamed-inline");
+        let src = temp.path().join("src");
+        fs::create_dir_all(&src).expect("src");
+        let src = fs::canonicalize(&src).expect("canonical src");
+        let mut parsed = ravum_lang_syntax::parser::parse_file(0, "mod a { pub fn f() { } }\n");
+        let ItemKind::Mod(inner) = &mut parsed.program.root.items[0].kind else {
+            panic!("expected the inline module");
+        };
+        inner.name = None;
+        let mut module = parsed.program.root;
+        let diags = with_ctx(&src, |ctx| {
+            expand_module(ctx, &mut module, &src, Path::new(""));
+        });
+        assert!(diags.is_empty(), "{diags:?}");
+        assert_eq!(module.items.len(), 1);
     }
 
     fn decl(name: &str) -> ravum_lang_syntax::ast::ModDecl {
@@ -1668,4 +1690,132 @@ fn a_regular_file_whose_read_fails_is_reported() {
 fn slash_paths_keep_normal_parts_parents_and_the_root() {
     assert_eq!(fsutil::path_to_slash(Path::new("a/./b/../c")), "a/b/../c");
     assert_eq!(fsutil::path_to_slash(Path::new("/x/y")), "/x/y");
+}
+
+// -- E6 family E: races between a check and `canonicalize` ---------------------
+
+/// Run `test` with `canonicalize` replaced by `fake`, restoring it after.
+fn with_fake_canonicalize(fake: fsutil::FakeCanonicalize, test: impl FnOnce()) {
+    fsutil::TEST_CANONICALIZE.with(|cell| cell.set(Some(fake)));
+    test();
+    fsutil::TEST_CANONICALIZE.with(|cell| cell.set(None));
+}
+
+fn app_with_util(temp: &TempDir) {
+    temp.file(
+        "app/ravum.toml",
+        &manifest("app", "\n[dependencies]\nutil = { path = \"../util\" }\n"),
+    );
+    temp.file("app/src/main.rv", "fn main() { }\n");
+    temp.file("util/ravum.toml", &manifest("util", ""));
+    temp.file("util/src/lib.rv", "pub fn one() -> i32 { return 1; }\n");
+}
+
+#[test]
+fn a_dependency_directory_that_vanishes_before_canonicalize_is_refused() {
+    let temp = TempDir::new("dep-canonicalize-race");
+    app_with_util(&temp);
+    with_fake_canonicalize(
+        |path| {
+            if path.ends_with("util") {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "removed"))
+            } else {
+                fs::canonicalize(path)
+            }
+        },
+        || {
+            let loaded = load_package(&temp.path.join("app"));
+            assert!(codes(&loaded.diags).iter().any(|c| c == "E-MOD-DEPENDENCY"));
+            assert!(loaded
+                .diags
+                .iter()
+                .any(|d| d.message.contains("cannot be resolved")));
+        },
+    );
+}
+
+#[test]
+fn a_dependency_directory_replaced_by_an_outside_one_is_refused() {
+    let temp = TempDir::new("dep-canonical-escape");
+    app_with_util(&temp);
+    with_fake_canonicalize(
+        |path| {
+            if path.ends_with("util") {
+                Ok(PathBuf::from("/elsewhere/util"))
+            } else {
+                fs::canonicalize(path)
+            }
+        },
+        || {
+            let loaded = load_package(&temp.path.join("app"));
+            assert!(codes(&loaded.diags)
+                .iter()
+                .any(|c| c == "E-MOD-PATH-ESCAPE"));
+        },
+    );
+}
+
+#[test]
+fn a_module_file_that_vanishes_before_canonicalize_is_refused() {
+    let temp = TempDir::new("module-canonicalize-race");
+    temp.file("app/ravum.toml", &manifest("app", ""));
+    temp.file("app/src/main.rv", "mod util;\nfn main() { }\n");
+    temp.file("app/src/util.rv", "pub fn one() -> i32 { return 1; }\n");
+    with_fake_canonicalize(
+        |path| {
+            if path.ends_with("util.rv") {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "removed"))
+            } else {
+                fs::canonicalize(path)
+            }
+        },
+        || {
+            let loaded = load_package(&temp.path.join("app"));
+            assert!(codes(&loaded.diags).iter().any(|c| c == "E-MOD-MISSING"));
+        },
+    );
+}
+
+#[test]
+fn a_dependency_crate_root_that_vanishes_after_the_graph_is_refused() {
+    // The graph accepted `util/src/lib.rv`; it disappears before the crate is
+    // loaded: the dependency contributes no module and the load reports it.
+    let temp = TempDir::new("dep-root-race");
+    app_with_util(&temp);
+    with_fake_canonicalize(
+        |path| {
+            if path.ends_with("lib.rv") {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "removed"))
+            } else {
+                fs::canonicalize(path)
+            }
+        },
+        || {
+            let loaded = load_package(&temp.path.join("app"));
+            assert!(codes(&loaded.diags).iter().any(|c| c == "E-IO"));
+        },
+    );
+}
+
+#[test]
+fn a_dependency_manifest_whose_session_id_is_taken_is_refused() {
+    // A session table that gives the dependency manifest the id of the
+    // package manifest (an inconsistent table) makes its registration fail.
+    let temp = TempDir::new("dep-manifest-id");
+    app_with_util(&temp);
+    let app_manifest = fs::canonicalize(temp.path.join("app/ravum.toml")).expect("app manifest");
+    let util_manifest = fs::canonicalize(temp.path.join("util/ravum.toml")).expect("util manifest");
+    let mut file_ids = BTreeMap::new();
+    file_ids.insert(app_manifest, 7);
+    file_ids.insert(util_manifest, 7);
+    let options = LoadOptions {
+        file_ids: Some(file_ids),
+        ..LoadOptions::default()
+    };
+    let loaded = load_package_with_options(&temp.path.join("app"), &options);
+    assert!(
+        codes(&loaded.diags).iter().any(|c| c == "E-IO"),
+        "{:?}",
+        codes(&loaded.diags)
+    );
 }

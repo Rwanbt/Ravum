@@ -416,7 +416,7 @@ pub(super) fn resolve_dependency_dir(
         }
     }
 
-    let canonical = match fs::canonicalize(&current) {
+    let canonical = match fsutil::canonicalize(&current) {
         Ok(p) => p,
         Err(e) => {
             diags.push(Diagnostic::error(
