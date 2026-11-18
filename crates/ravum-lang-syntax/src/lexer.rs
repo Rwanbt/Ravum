@@ -81,13 +81,20 @@ impl<'a> Lexer<'a> {
             .push(Diagnostic::error(code, self.span(start), message));
     }
 
+    /// LEX-7.1: the only blanks are space, tab, `LF` and `CRLF`. A lone `CR`
+    /// (LEX-3.3) and every other blank or control character (LEX-7.2) stop
+    /// here and are refused by [`Self::punct_or_error`].
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.peek_char() {
-            if ch.is_whitespace() {
-                self.bump();
-            } else {
+            let blank = match ch {
+                ' ' | '\t' | '\n' => true,
+                '\r' => self.peek_second() == Some('\n'),
+                _ => false,
+            };
+            if !blank {
                 break;
             }
+            self.bump();
         }
     }
 
@@ -141,6 +148,40 @@ impl<'a> Lexer<'a> {
         // lexical code instead of a parse cascade. The prefix token is not
         // pushed, so the following string literal is lexed normally and the
         // parser sees a plain string expression.
+        // LEX-8.18: `b'x'` is a byte literal, refused like `b"…"`; the
+        // character literal that follows is lexed normally.
+        if text == "b" && self.peek_char() == Some('\'') {
+            self.error(
+                "E-UNSUPPORTED-TOKEN",
+                start,
+                "`b'…'` byte literals are not supported in Ravum Core 1.0",
+            );
+            return;
+        }
+        // LEX-8.25: `r#"…"#` (any number of `#`) is a raw string too: the
+        // whole literal is consumed and refused once.
+        if matches!(text, "r" | "br") && self.peek_char() == Some('#') {
+            let hashes = self.src[self.pos..]
+                .chars()
+                .take_while(|c| *c == '#')
+                .count();
+            if self.src[self.pos + hashes..].starts_with('"') {
+                let closing = format!("\"{}", "#".repeat(hashes));
+                let body = self.pos + hashes + 1;
+                self.pos = match self.src[body..].find(&closing) {
+                    Some(offset) => body + offset + closing.len(),
+                    None => self.src.len(),
+                };
+                self.error(
+                    "E-UNSUPPORTED-TOKEN",
+                    start,
+                    format!("`{text}#\"…\"#` raw strings are not supported in Ravum Core 1.0"),
+                );
+                self.tokens
+                    .push(Token::new(TokenKind::Str(String::new()), self.span(start)));
+                return;
+            }
+        }
         if matches!(text, "r" | "b" | "br") && self.peek_char() == Some('"') {
             self.error(
                 "E-UNSUPPORTED-TOKEN",
@@ -317,6 +358,31 @@ impl<'a> Lexer<'a> {
             if self.exponent_follows() {
                 self.consume_exponent();
                 is_float = true;
+            } else if self.separator_opens_exponent() {
+                // LEX-8.1, LEX-8.7: `1e_10`, `1e+_5`: a separator is allowed
+                // in an exponent only between digits.
+                while let Some(ch) = self.peek_char() {
+                    if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '+' | '-') {
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                let span = self.span(start);
+                self.diags.push(Diagnostic::error(
+                    "E-LEX-NUMBER",
+                    span,
+                    "`_` is allowed in an exponent only between two digits",
+                ));
+                let text: String = self.src[start..self.pos]
+                    .chars()
+                    .filter(|c| *c != '_')
+                    .collect();
+                self.tokens.push(Token::new(
+                    TokenKind::Float { text, suffix: None },
+                    self.span(start),
+                ));
+                return;
             }
         }
 
@@ -434,6 +500,21 @@ impl<'a> Lexer<'a> {
         matches!(next, Some(c) if c.is_ascii_digit())
     }
 
+    /// True when `e`/`E` (optional sign) is directly followed by `_`: a
+    /// misplaced exponent separator, not an integer suffix.
+    fn separator_opens_exponent(&self) -> bool {
+        if !matches!(self.peek_char(), Some('e') | Some('E')) {
+            return false;
+        }
+        let mut chars = self.src[self.pos..].chars();
+        let _ = chars.next();
+        let mut next = chars.next();
+        if matches!(next, Some('+') | Some('-')) {
+            next = chars.next();
+        }
+        next == Some('_')
+    }
+
     fn consume_exponent(&mut self) {
         self.bump(); // `e` / `E`
         if matches!(self.peek_char(), Some('+') | Some('-')) {
@@ -499,21 +580,17 @@ impl<'a> Lexer<'a> {
                     Some('\\') => value.push('\\'),
                     Some('"') => value.push('"'),
                     Some('\'') => value.push('\''),
-                    Some('x') => match self.hex_escape(2) {
+                    Some('x') => match self.hex_escape() {
                         Some(c) => value.push(c),
                         None => self.error(
                             "E-LEX-ESCAPE",
                             esc_start,
-                            "invalid \\x escape (two hex digits expected)",
+                            "invalid \\x escape (two hex digits, at most 7F)",
                         ),
                     },
                     Some('u') => match self.unicode_escape() {
-                        Some(c) => value.push(c),
-                        None => self.error(
-                            "E-LEX-ESCAPE",
-                            esc_start,
-                            "invalid \\u{...} escape (1 to 6 hex digits, valid scalar value)",
-                        ),
+                        Ok(c) => value.push(c),
+                        Err(error) => self.unicode_escape_error(error, esc_start),
                     },
                     Some(other) => {
                         self.error(
@@ -558,6 +635,19 @@ impl<'a> Lexer<'a> {
                     end = index;
                     break;
                 }
+                // LEX-8.14: a `'` still open at the end of the line or file
+                // is an unterminated character literal, not a lifetime.
+                if matches!(terminator, None | Some('\n' | '\r')) {
+                    for _ in rest[..end].chars() {
+                        self.bump();
+                    }
+                    self.error("E-LEX-CHAR", start, "unterminated character literal");
+                    // One token for the literal, so the parser reports nothing
+                    // more for it (LEX-11.3).
+                    self.tokens
+                        .push(Token::new(TokenKind::Char(first), self.span(start)));
+                    return;
+                }
                 if terminator != Some('\'') {
                     let name = rest[..end].to_string();
                     for _ in rest[..end].chars() {
@@ -575,6 +665,7 @@ impl<'a> Lexer<'a> {
             }
         }
         let ch_start = self.pos;
+        let reported_before = self.diags.len();
         let value = match self.peek_char() {
             None => {
                 self.error("E-LEX-CHAR", start, "unterminated character literal");
@@ -601,12 +692,16 @@ impl<'a> Lexer<'a> {
                     Some('\\') => '\\',
                     Some('\'') => '\'',
                     Some('"') => '"',
-                    Some('x') => self.hex_escape(2).unwrap_or_else(|| {
-                        self.error("E-LEX-ESCAPE", ch_start, "invalid \\x escape");
+                    Some('x') => self.hex_escape().unwrap_or_else(|| {
+                        self.error(
+                            "E-LEX-ESCAPE",
+                            ch_start,
+                            "invalid \\x escape (two hex digits, at most 7F)",
+                        );
                         '\0'
                     }),
-                    Some('u') => self.unicode_escape().unwrap_or_else(|| {
-                        self.error("E-LEX-ESCAPE", ch_start, "invalid \\u{...} escape");
+                    Some('u') => self.unicode_escape().unwrap_or_else(|error| {
+                        self.unicode_escape_error(error, ch_start);
                         '\0'
                     }),
                     Some(other) => {
@@ -633,11 +728,15 @@ impl<'a> Lexer<'a> {
             self.tokens
                 .push(Token::new(TokenKind::Char(value), self.span(start)));
         } else {
-            self.error(
-                "E-LEX-CHAR",
-                start,
-                "character literal must contain exactly one character",
-            );
+            // LEX-11.3: one diagnostic per literal. A refused escape already
+            // reported it; only skip to the closing quote.
+            if self.diags.len() == reported_before {
+                self.error(
+                    "E-LEX-CHAR",
+                    start,
+                    "character literal must contain exactly one character",
+                );
+            }
             // Recover: consume until closing quote or newline.
             while let Some(c) = self.peek_char() {
                 if c == '\'' || c == '\n' {
@@ -653,20 +752,25 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn hex_escape(&mut self, digits: usize) -> Option<char> {
+    /// `\xNN`: two hex digits naming an ASCII byte (LEX-8.23, `≤ 0x7F`).
+    fn hex_escape(&mut self) -> Option<char> {
         let mut code = 0u32;
-        for _ in 0..digits {
+        for _ in 0..2 {
             let ch = self.peek_char()?;
             let digit = ch.to_digit(16)?;
             self.bump();
             code = code * 16 + digit;
         }
+        if code > 0x7F {
+            return None;
+        }
         char::from_u32(code)
     }
 
-    fn unicode_escape(&mut self) -> Option<char> {
+    /// `\u{...}` (LEX-8.17): 1 to 6 hex digits naming a Unicode scalar value.
+    fn unicode_escape(&mut self) -> Result<char, UnicodeEscapeError> {
         if self.peek_char() != Some('{') {
-            return None;
+            return Err(UnicodeEscapeError::Malformed);
         }
         self.bump();
         let mut code = 0u32;
@@ -675,19 +779,47 @@ impl<'a> Lexer<'a> {
             if ch == '}' {
                 self.bump();
                 if count == 0 {
-                    return None;
+                    return Err(UnicodeEscapeError::Malformed);
                 }
-                return char::from_u32(code);
+                if (0xD800..=0xDFFF).contains(&code) {
+                    return Err(UnicodeEscapeError::Surrogate);
+                }
+                return char::from_u32(code).ok_or(UnicodeEscapeError::Malformed);
             }
-            let digit = ch.to_digit(16)?;
+            let digit = ch.to_digit(16).ok_or(UnicodeEscapeError::Malformed)?;
             self.bump();
-            code = code.checked_mul(16)?.checked_add(digit)?;
+            code = code * 16 + digit;
             count += 1;
             if count > 6 {
-                return None;
+                // Consume the rest of the escape, so only one diagnostic is
+                // reported for it (LEX-11.3).
+                while matches!(self.peek_char(), Some(c) if c.is_ascii_hexdigit()) {
+                    self.bump();
+                }
+                if self.peek_char() == Some('}') {
+                    self.bump();
+                }
+                return Err(UnicodeEscapeError::Malformed);
             }
         }
-        None
+        Err(UnicodeEscapeError::Malformed)
+    }
+
+    /// Reports a refused `\u{...}`: a surrogate is `E-LEX-CHAR`, any other
+    /// defect `E-LEX-ESCAPE` (LEX-8.17, LEX-8.24).
+    fn unicode_escape_error(&mut self, error: UnicodeEscapeError, start: usize) {
+        match error {
+            UnicodeEscapeError::Surrogate => self.error(
+                "E-LEX-CHAR",
+                start,
+                "`\\u{D800}`..`\\u{DFFF}` are surrogates, not Unicode scalar values",
+            ),
+            UnicodeEscapeError::Malformed => self.error(
+                "E-LEX-ESCAPE",
+                start,
+                "invalid \\u{...} escape (1 to 6 hex digits, at most 10FFFF)",
+            ),
+        }
     }
 
     fn punct_or_error(&mut self, start: usize) {
@@ -757,7 +889,16 @@ impl<'a> Lexer<'a> {
                 .tokens
                 .push(Token::new(TokenKind::Punct(p), self.span(start))),
             None => {
-                if ch.is_ascii() {
+                if is_refused_control(ch) {
+                    self.error(
+                        "E-UNSUPPORTED-TOKEN",
+                        start,
+                        format!(
+                            "control or blank character U+{:04X} is not allowed outside a literal",
+                            u32::from(ch)
+                        ),
+                    );
+                } else if ch.is_ascii() {
                     self.error(
                         "E-LEX-CHAR",
                         start,
@@ -776,6 +917,23 @@ impl<'a> Lexer<'a> {
             }
         }
     }
+}
+
+/// Why a `\u{...}` escape was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnicodeEscapeError {
+    /// `D800..=DFFF`: a surrogate code point (`E-LEX-CHAR`).
+    Surrogate,
+    /// No digit, a non-hex digit, more than 6 digits, above `10FFFF`, or no `}`.
+    Malformed,
+}
+
+/// LEX-2.4, LEX-3.3, LEX-7.2: characters refused with `E-UNSUPPORTED-TOKEN`
+/// outside a literal: every C0 control (blanks are consumed before this is
+/// asked, so `\t`, `\n` and a `CR` of `CRLF` never reach it), `NEL` and the
+/// Unicode line and paragraph separators.
+fn is_refused_control(ch: char) -> bool {
+    u32::from(ch) < 0x20 || matches!(ch, '\u{85}' | '\u{2028}' | '\u{2029}')
 }
 
 fn default_float_suffix(ch: Option<char>) -> bool {
@@ -1132,5 +1290,78 @@ mod tests {
         assert_eq!(tokens[0].span.start, 0);
         assert_eq!(tokens[0].span.end, 2);
         assert!(tokens.iter().all(|t| t.span.start <= t.span.end));
+    }
+
+    fn codes(src: &str) -> Vec<String> {
+        let (_, diags) = lex(0, src, false);
+        diags.iter().map(|d| d.code.clone()).collect()
+    }
+
+    #[test]
+    fn only_space_tab_lf_and_crlf_are_blanks() {
+        assert!(codes("fn\t x\r\n{ }\n").is_empty());
+        for refused in [
+            "\r", "\u{b}", "\u{c}", "\u{1}", "\u{85}", "\u{2028}", "\u{2029}",
+        ] {
+            assert_eq!(
+                codes(&format!("a{refused}b")),
+                ["E-UNSUPPORTED-TOKEN"],
+                "{refused:?}"
+            );
+        }
+        // DEL is not a C0 control: it stays an unexpected ASCII character.
+        assert_eq!(codes("a\u{7f}b"), ["E-LEX-CHAR"]);
+    }
+
+    #[test]
+    fn hex_escapes_name_ascii_bytes_only() {
+        assert!(codes("\"\\x41\" '\\x7F'").is_empty());
+        assert_eq!(codes("\"\\xFF\""), ["E-LEX-ESCAPE"]);
+        assert_eq!(codes("'\\x80'"), ["E-LEX-ESCAPE"]);
+    }
+
+    #[test]
+    fn a_surrogate_escape_is_a_char_error_and_other_defects_escape_errors() {
+        assert_eq!(codes("'\\u{D800}'"), ["E-LEX-CHAR"]);
+        assert_eq!(codes("\"\\u{DFFF}\""), ["E-LEX-CHAR"]);
+        for bad in [
+            "'\\u{}'",
+            "'\\u{110000}'",
+            "'\\u{1234567}'",
+            "'\\u{12'",
+            "'\\u41'",
+            "'\\u{g}'",
+        ] {
+            assert_eq!(codes(bad), ["E-LEX-ESCAPE"], "{bad}");
+        }
+    }
+
+    #[test]
+    fn byte_chars_and_hashed_raw_strings_are_refused_once() {
+        assert_eq!(codes("b'x'"), ["E-UNSUPPORTED-TOKEN"]);
+        assert_eq!(lex(0, "r#\"a\"b\"# x", false).0.len(), 3);
+        assert_eq!(codes("r#\"a\"b\"# x"), ["E-UNSUPPORTED-TOKEN"]);
+        assert_eq!(codes("br##\"x\"##"), ["E-UNSUPPORTED-TOKEN"]);
+        // Unterminated: the literal runs to the end of the file.
+        assert_eq!(codes("r#\"open"), ["E-UNSUPPORTED-TOKEN"]);
+        // `r#` not followed by a quote is not a raw string.
+        assert_eq!(codes("r#x"), ["E-LEX-CHAR"]);
+    }
+
+    #[test]
+    fn a_quote_open_at_the_end_of_the_line_is_an_unterminated_char() {
+        assert_eq!(codes("'a\n;"), ["E-LEX-CHAR"]);
+        assert_eq!(codes("'ab"), ["E-LEX-CHAR"]);
+        assert_eq!(lex(0, "'a\n;", false).0[0].kind, TokenKind::Char('a'));
+        // A real lifetime keeps its code.
+        assert_eq!(codes("&'a x"), ["E-UNSUPPORTED-TOKEN"]);
+    }
+
+    #[test]
+    fn a_separator_right_after_the_exponent_marker_is_a_number_error() {
+        for bad in ["1e_10", "1E_1", "1e+_5", "2.5e-_1"] {
+            assert_eq!(codes(bad), ["E-LEX-NUMBER"], "{bad}");
+        }
+        assert!(codes("1e1_0").is_empty());
     }
 }
