@@ -138,30 +138,19 @@ pub(super) fn load_package_dir(
             _ => {}
         }
     }
-    let manifest_text = match read_text_limited(
-        &manifest_path,
-        MAX_FILE_SIZE,
-        "E-MOD-MANIFEST",
-        &mut diags,
-    ) {
-        Some(t) => t,
-        None => {
-            if !diags.has_errors() {
-                err(
-                    &mut diags,
-                    "E-MOD-MANIFEST",
-                    Span::dummy(),
-                    format!(
-                        "no `{MANIFEST_NAME}` in `{}`; run `ravum-lang init` or pass a single `.rv` file",
-                        root.display()
-                    ),
-                );
+    let manifest_text =
+        match read_text_limited(&manifest_path, MAX_FILE_SIZE, "E-MOD-MANIFEST", &mut diags) {
+            Some(t) => t,
+            None => {
+                // `read_text_limited` reports every refusal it answers `None` to
+                // (missing manifest included: "`…/ravum.toml` does not exist").
+                out.diags = diags;
+                return out;
             }
-            out.diags = diags;
-            return out;
-        }
-    };
-    let manifest_id = match register_source(
+        };
+    // The manifest is the first source of this load's fresh table, so its
+    // registration cannot collide with another file.
+    let manifest_id = register_source(
         &mut sources,
         &mut file_ids,
         &mut next_file_id,
@@ -169,13 +158,8 @@ pub(super) fn load_package_dir(
         MANIFEST_NAME.to_string(),
         manifest_text.clone(),
         &mut diags,
-    ) {
-        Some(id) => id,
-        None => {
-            out.diags = diags;
-            return out;
-        }
-    };
+    )
+    .expect("invariant: the manifest is the first source registered by a load");
     let (manifest, manifest_diags) = parse_manifest(&manifest_text, manifest_id);
     diags.extend(manifest_diags);
     let Some(manifest) = manifest else {

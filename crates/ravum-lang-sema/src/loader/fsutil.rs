@@ -235,11 +235,11 @@ pub(super) fn display_relative(path: &Path, base: &Path) -> String {
 pub(super) fn path_to_slash(path: &Path) -> String {
     path.components()
         .filter_map(|component| match component {
-            Component::Normal(part) => Some(part.to_string_lossy().to_string()),
             Component::CurDir => None,
             Component::ParentDir => Some("..".to_string()),
             Component::RootDir => Some(String::new()),
-            Component::Prefix(prefix) => Some(prefix.as_os_str().to_string_lossy().to_string()),
+            // A normal part and a Windows prefix (`C:`) are written as they are.
+            other => Some(other.as_os_str().to_string_lossy().to_string()),
         })
         .collect::<Vec<_>>()
         .join("/")
