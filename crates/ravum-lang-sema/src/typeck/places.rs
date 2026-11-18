@@ -277,11 +277,29 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .and_then(|info| info.fields.iter().find(|f| f.name == name))
                     .cloned()
                 else {
-                    self.error(
-                        "E-TYP-FIELD",
-                        span,
-                        format!("no field `{name}` on type `{ty}`"),
-                    );
+                    // Same answer as for a builtin method below: a method named
+                    // without a call is a resolution failure with a hint, not an
+                    // unknown field (decision 6, STD-9.10).
+                    let is_method = self
+                        .world
+                        .impls
+                        .get(&def)
+                        .is_some_and(|methods| methods.iter().any(|m| m.name == name));
+                    if is_method {
+                        self.error(
+                            "E-RES-UNKNOWN",
+                            span,
+                            format!(
+                                "`{name}` is a method of `{ty}`, not a value; call it with `(…)`"
+                            ),
+                        );
+                    } else {
+                        self.error(
+                            "E-TYP-FIELD",
+                            span,
+                            format!("no field `{name}` on type `{ty}`"),
+                        );
+                    }
                     return Type::Error;
                 };
                 self.check_field_visibility(&def, &field, span);
@@ -302,7 +320,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 // F-STD-021), which is a different diagnostic from "unknown
                 // field" and points the user at the fix.
                 // A user type never reaches this arm (the `Nominal` arm above
-                // answers "no field"), so only builtin methods are looked up.
+                // answers it), so only builtin methods are looked up.
                 let is_method = method_self_kind(&ty)
                     .and_then(|kind| builtins::builtin_method(kind, name))
                     .is_some();

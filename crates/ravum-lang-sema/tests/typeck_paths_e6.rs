@@ -358,7 +358,10 @@ fn a_method_is_not_a_field() {
          impl P { fn name(&self) -> i32 { self.n } }\n\
          fn main() { let p = P { n: 1 }; let a = p.name; let b = p.nothing; let c = p.n; }",
         &[
-            ("E-TYP-FIELD", "no field `name` on type `P`"),
+            (
+                "E-RES-UNKNOWN",
+                "`name` is a method of `P`, not a value; call it with `(…)`",
+            ),
             ("E-TYP-FIELD", "no field `nothing` on type `P`"),
         ],
     );
@@ -844,15 +847,18 @@ fn assigning_through_an_unknown_dereference_reports_only_the_unknown_name() {
     );
 }
 
-/// The hint "is a method, call it" exists for builtin methods only; a user
-/// method used without a call is reported as a missing field.
+/// Decision 6: a user method used without a call gets the builtin answer,
+/// E-RES-UNKNOWN with the hint "is a method, call it".
 #[test]
 fn a_method_of_a_user_type_used_without_a_call_is_not_a_field() {
     assert_errors(
         "struct P { }\n\
          impl P { fn m(&self) { } }\n\
          fn main() { let p = P { }; let x = p.m; }",
-        &[("E-TYP-FIELD", "no field `m` on type `P`")],
+        &[(
+            "E-RES-UNKNOWN",
+            "`m` is a method of `P`, not a value; call it with `(…)`",
+        )],
     );
 }
 

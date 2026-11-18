@@ -72,7 +72,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 
 | Code | Phase | Sens |
 |---|---|---|
-| `E-RES-UNKNOWN` | resolve | nom, module, fonction, méthode, champ de module, variante non qualifiée d'un enum utilisateur, `str` seul, `io.println` (point) |
+| `E-RES-UNKNOWN` | resolve | nom, module, fonction, méthode, champ de module, variante non qualifiée d'un enum utilisateur, `str` seul, `io.println` (point), méthode (builtin ou utilisateur) nommée sans appel (`p.m` au lieu de `p.m()`) |
 | `E-RES-PRIVATE` | resolve | item, champ ou module privé accédé hors de son sous-arbre |
 | `E-RES-DUPLICATE` | resolve | deux items/imports de même nom dans le même module |
 | `E-RES-CONFLICT` | resolve | un `use` nu se résout deux fois (module courant **et** racine, MOD-3.2) ou un nom déclaré entre en collision avec un nom du prélude |
