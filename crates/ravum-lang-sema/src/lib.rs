@@ -9,6 +9,7 @@
 
 pub mod builtins;
 pub mod check;
+pub mod deprecation;
 pub mod effects;
 pub mod facts;
 pub mod loader;

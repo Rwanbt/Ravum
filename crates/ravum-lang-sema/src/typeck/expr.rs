@@ -259,7 +259,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
         match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
             Ok(target) => {
-                self.record_value_resolution(path.id, &target);
+                self.record_value_resolution(path, &target);
                 self.type_of_value_path(expr, &target, expected)
             }
             Err(error) => {
@@ -274,7 +274,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.error(error.code, span, error.message.clone());
     }
 
-    pub(super) fn record_value_resolution(&mut self, id: NodeId, target: &ValuePath) {
+    pub(super) fn record_value_resolution(&mut self, path: &Path, target: &ValuePath) {
+        if let ValuePath::BuiltinFn(builtin) = target {
+            // DIAG-1.10: a deprecated path stays valid and is reported once
+            // per use.
+            if let Some(deprecation) = crate::deprecation::deprecation_of(builtin) {
+                self.warning(
+                    "W-DEPRECATED",
+                    path.span,
+                    crate::deprecation::message(&deprecation),
+                );
+            }
+        }
         let resolution = match target {
             ValuePath::Item(item) => Resolution::Item { item: *item },
             ValuePath::Variant { enum_item, variant } => Resolution::Variant {
@@ -295,7 +306,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::BuiltinModule => Resolution::BuiltinModule,
             ValuePath::Type(_) => Resolution::Error,
         };
-        self.facts.resolutions.insert(id, resolution);
+        self.facts.resolutions.insert(path.id, resolution);
     }
 
     pub(super) fn type_of_value_path(

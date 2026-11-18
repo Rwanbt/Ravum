@@ -40,10 +40,10 @@ PREFIX_LITERALS = {"E-LEX", "E-PARSE", "E-RES", "E-TYP", "E-OWN", "E-OWN-", "E-E
 TOOLING_CODES = {"E-BUILD", "E-TOOL", "E-CLI-WASM-RUNTIME", "E-INTERNAL-PARSER",
                  "E-INTERNAL-CHECKER"}
 
-# DIAG-1.6 declares the warning list *closed*: only these two `W-*` codes may be
+# DIAG-1.6 declares the warning list *closed*: only these three `W-*` codes may be
 # registered or emitted. Without this table, re-adding `W-TYP-UNREACHABLE` to
 # §3 and emitting it would pass the audit (found by independent review).
-WARNING_WHITELIST = {"W-RES-UNUSED-IMPORT", "W-OWN-UNUSED-VARIABLE"}
+WARNING_WHITELIST = {"W-RES-UNUSED-IMPORT", "W-OWN-UNUSED-VARIABLE", "W-DEPRECATED"}
 
 
 def strip_comments(line: str, in_block: bool = False) -> tuple[str, bool]:
