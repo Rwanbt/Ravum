@@ -1652,8 +1652,12 @@ fn a_lockfile_under_a_path_that_is_a_file_cannot_be_inspected() {
 fn a_regular_file_whose_read_fails_is_reported() {
     // `/proc/self/mem` is a regular, zero-length file whose `read` fails.
     let mut diags = DiagnosticBag::new();
-    let text =
-        fsutil::read_text_limited(Path::new("/proc/self/mem"), 1024, "E-MOD-MANIFEST", &mut diags);
+    let text = fsutil::read_text_limited(
+        Path::new("/proc/self/mem"),
+        1024,
+        "E-MOD-MANIFEST",
+        &mut diags,
+    );
     assert!(text.is_none());
     assert!(diags
         .iter()
