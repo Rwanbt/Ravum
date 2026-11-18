@@ -1,0 +1,8 @@
+{
+  "id": "lexer/string-hex-above-ascii",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "LEX-8.23: `\\xFF` is above 0x7F: E-LEX-ESCAPE."
+}

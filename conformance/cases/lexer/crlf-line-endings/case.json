@@ -1,0 +1,6 @@
+{
+  "id": "lexer/crlf-line-endings",
+  "mode": "run-pass",
+  "stdout_contains": "a\nb\n",
+  "notes": "LEX-3.1, LEX-3.2: CRLF is accepted as one line terminator; LF is canonical."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "lexer/exponent-separator-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-NUMBER"
+  ],
+  "notes": "LEX-8.7: `_` is allowed in an exponent only between digits."
+}

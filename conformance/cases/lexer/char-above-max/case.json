@@ -1,0 +1,8 @@
+{
+  "id": "lexer/char-above-max",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "LEX-8.17: above 10FFFF is E-LEX-ESCAPE."
+}

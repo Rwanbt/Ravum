@@ -1,0 +1,4 @@
+fn main() {
+    let _a = 0x;
+    let _b = 1z;
+}

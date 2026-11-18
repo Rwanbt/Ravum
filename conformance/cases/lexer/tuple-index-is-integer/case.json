@@ -1,0 +1,6 @@
+{
+  "id": "lexer/tuple-index-is-integer",
+  "mode": "run-pass",
+  "stdout_contains": "2\n",
+  "notes": "LEX-8.9: after `.`, digits form integer field indices (`(t.1).0`), never a float."
+}
