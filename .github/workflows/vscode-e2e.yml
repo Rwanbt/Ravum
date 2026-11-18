@@ -35,7 +35,7 @@ jobs:
       - name: Build the language server
         run: cargo build -p ravum-lang-cli --bin ravum-lang
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
 
@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload the run log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vscode-e2e-log
           path: |

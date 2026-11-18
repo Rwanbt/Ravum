@@ -1068,7 +1068,7 @@ function testWorkflowIntegrity() {
     check(text.includes('browser_e2e_required'), 'le workflow doit lire browser_e2e_required');
     check(text.includes('"browser=$browserFlag"'), 'le workflow doit publier la sortie browser');
     check(text.includes('demo-m4-browser.ps1 -RequireBrowser'), 'le workflow doit exécuter le script E2E avec -RequireBrowser');
-    check(text.includes('actions/setup-node@v4'), 'setup-node requis pour le harnais navigateur');
+    check(text.includes('actions/setup-node@v7'), 'setup-node requis pour le harnais navigateur');
     check(text.includes('target/ravum/browser-e2e'), 'artefact browser-e2e absent du workflow');
     check(
       (text.match(/steps\.impact\.outputs\.browser == 'true'/g) || []).length >= 2,

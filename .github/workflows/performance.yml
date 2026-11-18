@@ -76,7 +76,7 @@ jobs:
           python --version
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -149,7 +149,7 @@ jobs:
 
       - name: Upload the measurement for trend inspection
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lang-timings-ci
           path: |
@@ -199,7 +199,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Cache cargo registry and release target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -228,7 +228,7 @@ jobs:
           exit 0
       - name: Upload the measurement for inspection
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lsp-latency
           path: target/lsp/latency.json

@@ -36,8 +36,8 @@ publish = false
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
-libloading = "0.8"
+sha2 = "0.11"
+libloading = "0.9"
 
 ravum-protocol = { path = "crates/ravum-protocol" }
 ravum-snapshot = { path = "crates/ravum-snapshot" }

@@ -59,7 +59,7 @@ jobs:
       # No target/ cache: a cache restored from another commit could hide a
       # build difference. Only the registry is cached, and only for speed.
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -85,7 +85,7 @@ jobs:
           cat "${RUNNER_TEMP}/digest-${{ matrix.shard }}.json"
 
       - name: Upload the digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digest-${{ matrix.shard }}
           path: ${{ runner.temp }}/digest-${{ matrix.shard }}.json
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: digest-*
           path: digests
@@ -180,7 +180,7 @@ jobs:
 
       - name: Upload the comparison evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repro-comparison
           path: digests
