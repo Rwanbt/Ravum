@@ -2489,3 +2489,30 @@ fn total() -> i32 {
 "#,
     );
 }
+
+/// DIAG-4.2: an operand rejected by resolve is not reported again by the
+/// operator that consumes it (no `<error>` in an E-TYP-MISMATCH).
+#[test]
+fn an_unresolved_operand_does_not_cascade_through_operators() {
+    for op in ["+", "&", "==", "<", "&&", "<<"] {
+        let src = format!("fn main() {{\n    let _x: bool = y {op} 1;\n}}\n");
+        assert_eq!(codes(&run(&src)), ["E-RES-UNKNOWN"], "operator {op}");
+    }
+}
+
+/// The recovered error type is accepted inside every compound constructor, so
+/// an unknown name nested in a `Result`, a tuple or a nested `Option` is
+/// reported once (no E-TYP-MISMATCH on the enclosing value).
+#[test]
+fn an_error_component_is_compatible_inside_every_constructor() {
+    for init in [
+        "let _r: Result<i32, String> = Ok(y);",
+        "let _r: Result<i32, String> = Err(y);",
+        "let _t: (i32, bool) = (y, true);",
+        "let _o: Option<Option<i32>> = Some(Some(y));",
+        "let _o: Option<(i32, bool)> = Some((y, true));",
+    ] {
+        let src = format!("fn main() {{\n    {init}\n}}\n");
+        assert_eq!(codes(&run(&src)), ["E-RES-UNKNOWN"], "{init}");
+    }
+}

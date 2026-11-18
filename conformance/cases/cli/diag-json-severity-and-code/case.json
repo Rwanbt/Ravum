@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-severity-and-code",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"code\":\"E-RES-UNKNOWN\",\"severity\":\"error\",\"phase\":\"resolve\"",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-1.1: every diagnostic carries a registry code and a severity (and its phase)."
+}

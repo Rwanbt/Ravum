@@ -1,0 +1,4 @@
+[package]
+name = "cli-diag-warning-keeps-success"
+version = "0.1.0"
+edition = "core-1.0"

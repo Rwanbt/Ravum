@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Diagnostics contract (T2, `diagnostics.md`): FeatureIds F-META-009 to F-META-017, 13 conformance cases, `tests/diagnostics_contract.rs` (byte-identical runs, per-phase order, no colour, no absolute path, one-line JSON) and an append-only snapshot of published diagnostic codes (`tools/diagnostic_codes.snapshot`).
+
 - Core 1.0 DRAFT compiler and toolchain under `crates/ravum-lang-*`:
   `check`, `build`, `run`, `watch`, `test`, `fmt`, `lint`, `doc`, `cache`,
   `doctor` and an LSP 3.17 server.
@@ -25,6 +27,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 - DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
 ### Fixed
+
+- An operand already in error no longer produces a second `E-TYP-MISMATCH` through a binary operator (`y + 1` with `y` unknown reported `<error>`; DIAG-4.2).
 
 - Lexer conformance to `lexical.md` (found by the T2 lexical cases): a lone
   `CR`, VT, FF, NEL, U+2028/U+2029 and C0 controls were accepted as blanks
