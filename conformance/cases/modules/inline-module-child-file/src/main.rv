@@ -1,0 +1,6 @@
+mod m {
+    pub mod x;
+}
+fn main() {
+    io::println(&m::x::v().to_string());
+}

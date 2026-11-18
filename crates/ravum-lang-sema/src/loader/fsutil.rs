@@ -246,6 +246,18 @@ pub(super) fn check_path_no_symlinks(
     Some(())
 }
 
+/// True when `dir` holds an entry whose stored name is exactly `name`
+/// (byte for byte), whatever the case sensitivity of the file system.
+pub(super) fn has_exact_entry(dir: &Path, name: &str) -> bool {
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|entry| entry.file_name() == std::ffi::OsStr::new(name))
+        })
+        .unwrap_or(false)
+}
+
 pub(super) fn display_relative(path: &Path, base: &Path) -> String {
     match path.strip_prefix(base) {
         Ok(rel) => path_to_slash(rel),

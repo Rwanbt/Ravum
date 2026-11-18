@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Modules contract (T2, `modules.md`): FeatureIds F-MOD-014 to F-MOD-016 and 12 conformance cases (module file resolution, manifest and dependency graph, use of a dependency). MOD-8.5 now names `E-MOD-DUPLICATE`, as the registry does.
+
 - ABI contract (T2, `abi.md`): FeatureIds F-META-024 to F-META-027 citing the existing backend audits and FFI cases, two cases on the emitted Rust file, and a test that refuses any `rustc_*` crate in `Cargo.lock` (ABI-2.7).
 
 - Compatibility contract (T2, `compatibility.md`): FeatureIds F-META-019 to F-META-023, 6 conformance cases, `tests/compat_contract.rs` (digest follows a dependency path, an invalid lockfile is left untouched) and append-only snapshots of rule ids and feature ids. COMPAT-3.6 now names `W-DEPRECATED` and COMPAT-4.2 `E-MOD-DUPLICATE`, as the registry does.
@@ -33,6 +35,7 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Fixed
 
+- `mod Foo;` no longer resolves `src/foo.rv` on case-insensitive file systems (macOS, Windows): a module file must carry exactly the module's name, so the verdict no longer depends on the OS (MOD-2.6, MOD-1.6).
 - Loader messages no longer contain absolute machine paths (DIAG-6.8, DIAG-7.5): `module `b` not found: neither `/tmp/…/src/b.rv` …` now reads `src/b.rv`, and a sibling dependency is shown as `../lib/…`. The rewrite is done once, when the diagnostics leave the loader, so it covers all of its ~60 messages.
 
 - An operand already in error no longer produces a second `E-TYP-MISMATCH` through a binary operator (`y + 1` with `y` unknown reported `<error>`; DIAG-4.2).
