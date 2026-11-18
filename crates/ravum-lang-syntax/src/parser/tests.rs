@@ -1402,8 +1402,13 @@ fn hostile_chains_report_depth_without_overflow() {
         ("let r = v", "?", ";"),
         ("if c { }", " else if c { }", " else { }"),
     ];
+    // 300 links already cross the nesting limit; 20 000 checks that a far
+    // longer chain is still refused without a stack overflow. Under Miri
+    // (~1000x slower) the long chains take hours, so Miri keeps the 300-link
+    // run; the native workspace job runs both.
+    let counts: &[usize] = if cfg!(miri) { &[300] } else { &[300, 20_000] };
     for (head, link, tail) in shapes {
-        for count in [300, 20_000] {
+        for &count in counts {
             let result = parse(&chained(head, link, count, tail));
             assert!(
                 result.diags.iter().any(|d| d.code == "E-PARSE-DEPTH"),
