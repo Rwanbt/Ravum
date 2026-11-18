@@ -91,11 +91,11 @@ jobs:
       - name: Build the CLI (debug, as the timing script expects)
         run: cargo build -p ravum-lang-cli --bin ravum-lang
 
-      - name: Measure the check loop (10 cold + 10 edit runs per example)
+      - name: Measure the check loop (20 cold + 20 edit runs per example)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          pwsh -NoProfile -File scripts/lang-timings.ps1 -CheckOnly -Runs 10 -Output target/lang-timings/ci.json
+          pwsh -NoProfile -File scripts/lang-timings.ps1 -CheckOnly -Runs 20 -Output target/lang-timings/ci.json
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::lang-timings exited $LASTEXITCODE"; exit 1 }
           exit 0
 
