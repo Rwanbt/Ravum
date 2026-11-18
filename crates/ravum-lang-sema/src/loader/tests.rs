@@ -1624,10 +1624,12 @@ fn a_string_ending_in_a_lone_backslash_is_unterminated() {
     assert!(diags.has_errors());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_lockfile_under_a_path_that_is_a_file_cannot_be_inspected() {
-    // `<file>/ravum.lock`: the metadata call fails with "not a directory",
-    // which is neither "not found" nor a file.
+    // `<file>/ravum.lock`: on Unix the metadata call fails with "not a
+    // directory" (ENOTDIR), which is neither "not found" nor a file; Windows
+    // answers "not found" for the same path.
     let dir = TempDir::new("lock-enotdir");
     let not_a_dir = dir.file("plain", "x");
     let manifest = PackageManifest {
@@ -1651,11 +1653,11 @@ fn a_regular_file_whose_read_fails_is_reported() {
     // `/proc/self/mem` is a regular, zero-length file whose `read` fails.
     let mut diags = DiagnosticBag::new();
     let text =
-        fsutil::read_text_limited(Path::new("/proc/self/mem"), 1024, "E-MOD-READ", &mut diags);
+        fsutil::read_text_limited(Path::new("/proc/self/mem"), 1024, "E-MOD-MANIFEST", &mut diags);
     assert!(text.is_none());
     assert!(diags
         .iter()
-        .any(|d| d.code == "E-MOD-READ" && d.message.contains("cannot read")));
+        .any(|d| d.code == "E-MOD-MANIFEST" && d.message.contains("cannot read")));
 }
 
 #[test]
