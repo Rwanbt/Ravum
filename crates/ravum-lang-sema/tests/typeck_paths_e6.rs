@@ -1159,3 +1159,17 @@ fn a_written_type_deeper_than_100_is_refused() {
         &[("E-TYP-DEPTH", DEPTH_MESSAGE)],
     );
 }
+
+#[test]
+fn a_written_type_in_a_body_is_refused_once() {
+    // The annotation is refused while the body is checked; the expressions of
+    // that type add no second E-TYP-DEPTH at the end of inference.
+    let mut deep = String::from("i32");
+    for _ in 0..100 {
+        deep = format!("Option<{deep}>");
+    }
+    assert_errors(
+        &format!("fn main() {{\n    let x: Vec<{deep}> = Vec::new();\n    let _y = x;\n}}\n"),
+        &[("E-TYP-DEPTH", DEPTH_MESSAGE)],
+    );
+}
