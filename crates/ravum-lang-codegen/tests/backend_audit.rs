@@ -4553,14 +4553,23 @@ fn audit_float_min_max_temporary_avoids_user_constant_names() {
         .and_then(|(id, _)| id.parse::<u64>().ok())
         .map(|id| format!("__rv_math_args_{id}"))
         .expect("without a collision the temporary name ends in the numeric node ID");
-    // Append the declaration so the existing expression keeps its node ID.
+    // A user constant named like the temporary used to be the collision this
+    // test forced; LEX-4.6 now refuses the name, so no collision can arise.
     let source = format!("{source}\nconst {temporary}: i32 = -1;");
-    let code = generate_source("math-temporary-collision", &source);
-    assert!(code.contains(&format!("const {temporary}: i32")));
-    assert!(code.contains(&format!("let {temporary}_ = ")));
-    let built = must_compile(&code, "math-temporary-collision");
-    let (_, stderr, status) = run(&built.binary, &[]);
-    assert_eq!(status, 0, "stderr: {stderr}");
+    let dir = TempDir::new("math-temporary-collision");
+    std::fs::write(
+        dir.path.join("ravum.toml"),
+        "[package]\nname = \"math-temporary-collision\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .expect("cannot write the manifest");
+    std::fs::create_dir_all(dir.path.join("src")).expect("cannot create src");
+    std::fs::write(dir.path.join("src/main.rv"), &source).expect("cannot write the source");
+    let loaded = ravum_lang_sema::loader::load_package_with_options(
+        &dir.path,
+        &ravum_lang_sema::loader::LoadOptions::default(),
+    );
+    let codes: Vec<&str> = loaded.diags.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(codes, ["E-LEX-RESERVED-IDENT"], "{source}");
 }
 
 #[test]
@@ -5248,7 +5257,7 @@ fn main() {
     let built = must_compile(&code, "locals-named-like-constants");
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
-    assert!(code.contains("N_rv_local_"), "{code}");
+    assert!(code.contains("let mut N_rv_local: i32 = 5i32;"), "{code}");
     assert_eq!(stdout, "1\n6\n7\n3\n40\n8\n");
 }
 
