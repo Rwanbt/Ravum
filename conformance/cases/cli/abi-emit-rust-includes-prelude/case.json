@@ -1,0 +1,18 @@
+{
+  "id": "cli/abi-emit-rust-includes-prelude",
+  "mode": "cli",
+  "args": [
+    "build",
+    ".",
+    "--emit-rust",
+    "emitted.rs"
+  ],
+  "exit_code": 0,
+  "expect_file_contains": [
+    {
+      "path": "emitted.rs",
+      "contains": "std::panic::set_hook("
+    }
+  ],
+  "notes": "ABI-2.3, ABI-4.2, ABI-4.3, ABI-4.6: the runtime prelude (Error display, panic hook) is inside the single generated file; there is no separate runtime library."
+}

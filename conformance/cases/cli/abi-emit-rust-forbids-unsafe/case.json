@@ -1,0 +1,18 @@
+{
+  "id": "cli/abi-emit-rust-forbids-unsafe",
+  "mode": "cli",
+  "args": [
+    "build",
+    ".",
+    "--emit-rust",
+    "emitted.rs"
+  ],
+  "exit_code": 0,
+  "expect_file_contains": [
+    {
+      "path": "emitted.rs",
+      "contains": "#![forbid(unsafe_code)]"
+    }
+  ],
+  "notes": "ABI-2.5, ABI-3.3: for a program without `extern`, the generated Rust forbids `unsafe` at crate level, so rustc itself rejects any unsafe construct; the absence of `unsafe`, `extern` and `#[repr]` is checked by backend_audit (audit_generated_file_is_safe_no_unsafe_constructs)."
+}

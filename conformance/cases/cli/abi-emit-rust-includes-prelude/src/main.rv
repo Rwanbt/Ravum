@@ -1,0 +1,4 @@
+fn main() {
+    let x: i32 = 2;
+    io::println(&(x * 3).to_string());
+}

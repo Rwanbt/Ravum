@@ -1,0 +1,4 @@
+[package]
+name = "cli-abi-emit-rust-forbids-unsafe"
+version = "0.1.0"
+edition = "core-1.0"
