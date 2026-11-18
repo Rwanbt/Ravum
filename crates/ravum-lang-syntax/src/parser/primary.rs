@@ -3,10 +3,15 @@ use super::*;
 impl<'a> Parser<'a> {
     pub(super) fn parse_postfix(&mut self, allow_struct: bool) -> Expr {
         let outer = self.open_operand();
+        let head = std::mem::take(&mut self.stmt_head);
         let mut expr = self.parse_primary(allow_struct);
         let mut spine = self.reach;
+        if head && is_block_like(&expr) && !self.at(Punct::Dot) && !self.at(Punct::Question) {
+            // G-6.1: `if c { } (1, 2);` is the `if` statement, then a tuple.
+            self.stmt_end = true;
+        }
         loop {
-            if self.fatal {
+            if self.fatal || self.stmt_end {
                 break;
             }
             let before = self.pos;

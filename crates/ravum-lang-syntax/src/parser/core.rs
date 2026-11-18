@@ -22,6 +22,8 @@ impl<'a> Parser<'a> {
             depth_reported: false,
             nodes_reported: false,
             forbid_assign: 0,
+            stmt_head: false,
+            stmt_end: false,
             paren_exprs: BTreeSet::new(),
             in_for_iter: false,
         }

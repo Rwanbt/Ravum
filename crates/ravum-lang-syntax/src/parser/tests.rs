@@ -1499,3 +1499,49 @@ fn a_block_arm_ends_before_a_parenthesised_next_arm() {
         .collect();
     assert!(codes.contains(&"E-PARSE-EXPECTED".to_string()), "{codes:?}");
 }
+
+/// G-6.1: a block-like expression at the head of a statement ends at its `}`.
+#[test]
+fn a_block_like_statement_head_ends_at_its_brace() {
+    for (src, head) in [
+        ("fn f(c: bool) { if c { } (1, 2); }", "if"),
+        ("fn f(c: bool) { match c { _ => { } } (3, 4); }", "match"),
+        ("fn f() { { } (5, 6); }", "block"),
+        ("fn f() { { } [1][0]; }", "block"),
+        ("fn f(c: bool) { if c { } - 1; }", "if"),
+    ] {
+        let program = parse_ok(src);
+        let body = &as_fn(&top(&program)[0]).body;
+        assert_eq!(body.stmts.len(), 2, "{src}");
+        let (first, semi) = stmt_expr(&body.stmts[0]);
+        assert!(!semi, "{src}");
+        let kind_ok = match head {
+            "if" => matches!(first.kind, ExprKind::If { .. }),
+            "match" => matches!(first.kind, ExprKind::Match { .. }),
+            _ => matches!(first.kind, ExprKind::Block(_)),
+        };
+        assert!(kind_ok, "{src}: {:?}", first.kind);
+        let (_, semi) = stmt_expr(&body.stmts[1]);
+        assert!(semi, "{src}");
+    }
+}
+
+/// G-6.1: `.` and `?` still continue a block-like head; a prefix operator or
+/// a non-head position keeps the whole expression.
+#[test]
+fn a_block_like_head_continues_with_a_method_call_or_inside_an_expression() {
+    for src in [
+        "fn f(c: bool) { match c { _ => 1 } .max(2); }",
+        "fn f() { -{ 1 } + 1; }",
+        "fn f() { let x = { 1 } + 2; }",
+        "fn f() -> i32 { 1 + { 2 } * 3 }",
+    ] {
+        let program = parse_ok(src);
+        let body = &as_fn(&top(&program)[0]).body;
+        assert_eq!(
+            body.stmts.len() + usize::from(body.tail.is_some()),
+            1,
+            "{src}"
+        );
+    }
+}

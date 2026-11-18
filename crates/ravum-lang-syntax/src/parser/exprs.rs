@@ -31,6 +31,9 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_assign_inner(&mut self, allow_struct: bool) -> Expr {
         let lhs = self.parse_range(allow_struct);
+        if self.stmt_end {
+            return lhs;
+        }
         if let Some((op, count)) = self.peek_assign() {
             if self.forbid_assign > 0 {
                 let span = self.cur_span();
@@ -140,6 +143,8 @@ impl<'a> Parser<'a> {
         // (`0..g(..3)`, `0..{ ..3; 2 }`) is parsed as outside a `for` clause.
         let allowed = std::mem::take(&mut self.in_for_iter);
         if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
+            // A prefix range is not a statement head (G-6.1).
+            self.stmt_head = false;
             let start = self.cur_span();
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
@@ -161,7 +166,7 @@ impl<'a> Parser<'a> {
             };
         }
         let lhs = self.parse_binary(1, allow_struct);
-        if self.at(Punct::DotDot) || self.at(Punct::DotDotEq) {
+        if !self.stmt_end && (self.at(Punct::DotDot) || self.at(Punct::DotDotEq)) {
             let start = lhs.span;
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
@@ -228,7 +233,7 @@ impl<'a> Parser<'a> {
         let mut lhs = self.parse_cast(allow_struct);
         let mut spine = self.reach;
         while let Some((op, prec, count)) = self.peek_binop() {
-            if prec < min_prec {
+            if prec < min_prec || self.stmt_end {
                 break;
             }
             // Comparisons are non-associative (G-6.12): `a < b < c` is a syntax
@@ -269,7 +274,7 @@ impl<'a> Parser<'a> {
         let outer = self.open_operand();
         let mut expr = self.parse_unary(allow_struct);
         let mut spine = self.reach;
-        while self.at_kw(Kw::As) {
+        while !self.stmt_end && self.at_kw(Kw::As) {
             let start = expr.span;
             self.bump();
             self.reach = self.depth;
@@ -309,6 +314,14 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_unary_inner(&mut self, allow_struct: bool) -> Expr {
         let start = self.cur_span();
+        // An operand behind a prefix operator is not a statement head (G-6.1):
+        // `-{ x } + 1;` stays one expression.
+        if matches!(
+            self.kind(),
+            TokenKind::Punct(Punct::Minus | Punct::Bang | Punct::Star | Punct::Amp | Punct::AmpAmp)
+        ) {
+            self.stmt_head = false;
+        }
         let op = match self.kind() {
             TokenKind::Punct(Punct::Minus) => Some(UnOp::Neg),
             TokenKind::Punct(Punct::Bang) => Some(UnOp::Not),

@@ -178,6 +178,13 @@ struct Parser<'a> {
     nodes_reported: bool,
     /// Number of enclosing condition contexts where assignment is forbidden.
     forbid_assign: u32,
+    /// G-6.1: set by a block just before it parses a statement, taken by the
+    /// first operand parsed. A block-like operand there ends the statement at
+    /// its `}` (`stmt_end`), unless `.` or `?` follows, as in Rust.
+    stmt_head: bool,
+    /// The statement being parsed already ended at a block-like `}`: no
+    /// operator, call, index, cast, range or assignment continues it.
+    stmt_end: bool,
     /// Expressions that were written between parentheses. Used to distinguish
     /// `(a < b) < c` (allowed) from `a < b < c` (E-PARSE-UNEXPECTED) and
     /// `(t.0).0` (allowed) from `t.0.1` (E-PARSE-UNEXPECTED).
