@@ -753,32 +753,15 @@ impl<'a> Emitter<'a> {
     }
 
     /// Rust name of a local binding: its mangled name, unless a constant or a
-    /// struct of the enclosing module has that name; then a suffixed name no
-    /// other binding or item of the program uses.
+    /// struct of the enclosing module has that name; then `<name>_rv_local`,
+    /// which no user binding or item can use, since `_rv_` is reserved in
+    /// user identifiers (LEX-4.6).
     pub(super) fn local_ident(&self, name: &str) -> String {
         let plain = mangle_ident(name);
         if !self.shadowed_names.borrow().contains(&plain) {
             return plain;
         }
-        let taken: BTreeSet<&str> = self
-            .checked
-            .facts
-            .own
-            .bindings
-            .keys()
-            .map(|(_, binding)| binding.as_str())
-            .chain(
-                self.index
-                    .items
-                    .values()
-                    .map(|item| item.rust_name.as_str()),
-            )
-            .collect();
-        let mut renamed = format!("{plain}_rv_local");
-        while taken.contains(renamed.as_str()) {
-            renamed.push('_');
-        }
-        renamed
+        format!("{plain}_rv_local")
     }
 
     /// `true` when the program declares at least one `extern "C"` block. Such a

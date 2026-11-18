@@ -180,17 +180,10 @@ impl<'a> Emitter<'a> {
                 if is_float && (method == "max" || method == "min") {
                     let tie = if method == "max" { "0.0" } else { "-0.0" };
                     // Evaluate both operands before binding either temporary.
-                    // Item names must be avoided because Rust can interpret a
-                    // bare binding as a constant pattern.
-                    let mut operands = format!("__rv_math_args_{}", expr.id);
-                    // Each candidate is distinct, so at most one candidate
-                    // per indexed item can be occupied.
-                    for _ in 0..self.index.items.len() {
-                        if !self.index.items.values().any(|item| item.rust_name == operands) {
-                            break;
-                        }
-                        operands.push('_');
-                    }
+                    // Rust could read a bare binding named like an item as a
+                    // constant pattern; no item can be named so, since
+                    // `_rv_` is reserved in user identifiers (LEX-4.6).
+                    let operands = format!("__rv_math_args_{}", expr.id);
                     return Ok(format!(
                         "({{ let {operands} = ({a}, {b}); if ({operands}.0) == 0.0 && ({operands}.1) == 0.0 {{ {tie} }} else {{ ({operands}.0).{method}({operands}.1) }} }})"
                     ));
