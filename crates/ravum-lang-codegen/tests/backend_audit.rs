@@ -4764,16 +4764,17 @@ fn main() {
 
 /// check => build: a type nested 100 levels deep used to resolve to `Error`
 /// past 64 levels (no diagnostic), and generation then failed with
-/// "attempted to generate the recovered error type". rustc itself stops at
-/// 128 levels (E0275), a limit the checker does not enforce yet.
+/// "attempted to generate the recovered error type". The type here sits
+/// exactly at the normative bound (TYP-1.7, depth 100: 99 `Option`s around
+/// `i32`); one level more is `E-TYP-DEPTH`.
 #[test]
-fn audit_a_type_nested_one_hundred_levels_builds_and_runs() {
-    if skip("audit_a_type_nested_one_hundred_levels_builds_and_runs") {
+fn audit_a_type_nested_at_the_depth_bound_builds_and_runs() {
+    if skip("audit_a_type_nested_at_the_depth_bound_builds_and_runs") {
         return;
     }
     let mut ty = String::from("i32");
     let mut pattern = String::from("_");
-    for _ in 0..100 {
+    for _ in 0..99 {
         ty = format!("Option<{ty}>");
         pattern = format!("Some({pattern})");
     }
@@ -5182,13 +5183,14 @@ fn main() {
 /// A match over an `Option` nested 100 levels deep, made exhaustive by a
 /// `None` arm at every level instead of a wildcard, is accepted and runs; the
 /// coverage check used to give up past 64 levels and report
-/// E-TYP-NONEXHAUSTIVE on it.
+/// E-TYP-NONEXHAUSTIVE on it. The scrutinee sits at the normative bound
+/// (TYP-1.7, depth 100).
 #[test]
-fn audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs() {
-    if skip("audit_an_exhaustive_match_one_hundred_levels_deep_builds_and_runs") {
+fn audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs() {
+    if skip("audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs") {
         return;
     }
-    let depth = 100;
+    let depth = 99;
     let wrap = |inner: &str, levels: usize| {
         (0..levels).fold(inner.to_string(), |acc, _| format!("Some({acc})"))
     };

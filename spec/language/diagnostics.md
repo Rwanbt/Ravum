@@ -111,6 +111,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-TYP-EQ` | types | `==`/`!=` sur un type non comparable (agrégat, `Option`, `Result`, `T`), `assert_eq` invalide |
 | `E-TYP-CMP` | types | `< <= > >=` sur un type non ordonné (texte, agrégat) |
 | `E-TYP-AMBIGUOUS` | types | inférence non résolue (`Vec::new()` sans contexte, littéral non contraint) |
+| `E-TYP-DEPTH` | types | type imbriqué sur plus de 100 niveaux (TYP-1.7) |
 | `E-TYP-IF-NO-ELSE` | types | `if` sans `else` utilisé en valeur |
 | `E-TYP-STATEMENT-VALUE` | types | expression non-`()` en position d'instruction |
 | `E-TYP-NONEXHAUSTIVE` | types | `match` non exhaustif (enum, `bool`, `Option`, `Result`) |

@@ -265,34 +265,36 @@ pub(super) fn resolve_vars_final(
     resolve_vars_impl(vars, ty, Some(unresolved), 0)
 }
 
-/// Bound on the recursion of [`resolve_vars_impl`]. A written type is at most
-/// `parser::MAX_DEPTH` (256) levels deep; a chain of bound inference variables
-/// adds one level per link. The bound only stops a runaway substitution: the
-/// old value (64) turned any type nested more than 64 levels into `Error`
-/// without a diagnostic, and `build` then failed on a program `check` had
-/// accepted.
-const MAX_RESOLVE_DEPTH: usize = 1024;
-
+/// Substitutes the bound inference variables of `ty`.
+///
+/// The structural recursion stops past [`MAX_TYPE_DEPTH`]: the part below is
+/// replaced by `Error`, which keeps the type deeper than the bound, so
+/// `finalize_inference` still reports `E-TYP-DEPTH` on it. Links between
+/// variables are followed in a loop and do not count as a level; the occurs
+/// check (`var_occurs`) makes the chains acyclic.
 pub(super) fn resolve_vars_impl(
     vars: &[Option<Type>],
     ty: &Type,
     mut unresolved: Option<&mut BTreeSet<usize>>,
     depth: usize,
 ) -> Type {
-    if depth > MAX_RESOLVE_DEPTH {
+    if depth >= MAX_TYPE_DEPTH {
         return Type::Error;
     }
-    if let Some(index) = infer_var_index(ty) {
-        return match vars.get(index).and_then(|v| v.clone()) {
-            Some(bound) => resolve_vars_impl(vars, &bound, unresolved, depth + 1),
-            None => match unresolved.as_deref_mut() {
-                Some(set) => {
-                    set.insert(index);
-                    Type::Error
-                }
-                None => ty.clone(),
-            },
-        };
+    let mut ty = ty;
+    while let Some(index) = infer_var_index(ty) {
+        match vars.get(index).and_then(Option::as_ref) {
+            Some(bound) => ty = bound,
+            None => {
+                return match unresolved.as_deref_mut() {
+                    Some(set) => {
+                        set.insert(index);
+                        Type::Error
+                    }
+                    None => ty.clone(),
+                };
+            }
+        }
     }
     match ty {
         Type::Ref { mutable, inner } => Type::Ref {

@@ -22,7 +22,7 @@ use crate::facts::{
 use crate::resolve::{
     self, ModuleId, NominalKind, PathError, PayloadCtor, ValuePath, World, OPTION_NONE,
 };
-use crate::types::{contains_never, Type};
+use crate::types::{contains_never, Type, MAX_TYPE_DEPTH};
 use ravum_lang_syntax::ast::{
     self, Block, ConstItem, Expr, ExprKind, FieldInit, FloatTy, FnItem, IntTy, Item, ItemKind,
     LitPat, MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,
@@ -81,6 +81,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             used_locals: BTreeSet::new(),
             vars: Vec::new(),
             var_spans: Vec::new(),
+            expr_spans: BTreeMap::new(),
         }
     }
 }
@@ -196,6 +197,9 @@ struct TypeChecker<'p, 'w, 'f> {
     /// Variables d'inférence (index >= [`VAR_BASE`]), liées par unification.
     vars: Vec<Option<Type>>,
     var_spans: Vec<Span>,
+    /// Span of every checked expression, to place `E-TYP-DEPTH` once the
+    /// final types are known (`finalize_inference`).
+    expr_spans: BTreeMap<NodeId, Span>,
 }
 
 impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {

@@ -30,7 +30,7 @@ use crate::facts::{
     Effect, EffectSet, EnumInfo, Facts, FieldInfo, FnSig, ParamSig, StructInfo, VariantInfo,
     VariantKind,
 };
-use crate::types::{contains_never, Type};
+use crate::types::{contains_never, Type, MAX_TYPE_DEPTH};
 use ravum_lang_syntax::ast::{
     self, ConstItem, EnumItem, Expr, FnItem, Item, ItemKind, Module, NodeId, Path, PathRoot,
     Receiver, StructItem, Type as AstType, TypeKind, UseItem, VariantDefFields, Vis,

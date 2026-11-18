@@ -7,6 +7,16 @@
 use ravum_lang_syntax::ast::NodeId;
 use std::fmt;
 
+/// Maximum nesting depth of a type (TYP-1.7, `E-TYP-DEPTH`).
+///
+/// The single normative depth bound of the type checker: every internal
+/// recursion over a type (substitution, exhaustiveness) is bounded by it. A
+/// scalar has depth 1 and each constructor adds one level, so
+/// `Option<Option<i32>>` has depth 3. rustc rejects the generated code once a
+/// type nests about 128 levels (E0275 / E0320, measured at 129 nested
+/// `Option`s); 100 leaves room for the wrappers the backend adds.
+pub const MAX_TYPE_DEPTH: usize = 100;
+
 /// True when `!` appears anywhere in `ty`.
 ///
 /// G-5.11 / TYP-1.6 make `!` legal **only** as the whole return type of a
@@ -81,6 +91,34 @@ pub enum Type {
 }
 
 impl Type {
+    /// Nesting depth of the type: 1 for a leaf, 1 + the deepest component
+    /// otherwise. Iterative, so an arbitrarily deep value cannot overflow the
+    /// stack.
+    pub fn depth(&self) -> usize {
+        let mut max = 0;
+        let mut stack: Vec<(&Type, usize)> = vec![(self, 1)];
+        while let Some((ty, level)) = stack.pop() {
+            max = max.max(level);
+            let next = level + 1;
+            match ty {
+                Type::Ref { inner, .. }
+                | Type::Array { elem: inner, .. }
+                | Type::Slice(inner)
+                | Type::Vec(inner)
+                | Type::Option(inner) => stack.push((inner, next)),
+                Type::Result(ok, err) => {
+                    stack.push((ok, next));
+                    stack.push((err, next));
+                }
+                Type::Tuple(items) | Type::Nominal { args: items, .. } => {
+                    stack.extend(items.iter().map(|t| (t, next)));
+                }
+                _ => {}
+            }
+        }
+        max
+    }
+
     pub fn i32() -> Type {
         Type::I32
     }

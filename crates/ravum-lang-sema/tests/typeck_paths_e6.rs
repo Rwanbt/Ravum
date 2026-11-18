@@ -1123,3 +1123,39 @@ fn a_bool_field_left_out_of_a_variant_pattern_is_a_wildcard_for_coverage() {
     .collect();
     assert_eq!(codes, ["E-TYP-MISSING-FIELD"]);
 }
+
+/// `depth` nested `Option`s around `i32`, built one binding at a time so the
+/// parser's own depth bound is not involved.
+fn option_chain(depth: usize) -> String {
+    let mut body = String::from("    let a0 = 1;\n");
+    for i in 1..=depth {
+        body.push_str(&format!("    let a{i} = Some(a{});\n", i - 1));
+    }
+    format!("fn main() {{\n{body}    let _z = a{depth};\n}}\n")
+}
+
+const DEPTH_MESSAGE: &str = "this type nests more than 100 levels; split it with a named struct";
+
+#[test]
+fn an_inferred_type_of_depth_100_is_accepted() {
+    // 99 `Option`s around `i32`: depth 100 (TYP-1.7).
+    assert_errors(&option_chain(99), &[]);
+}
+
+#[test]
+fn an_inferred_type_deeper_than_100_is_refused_once() {
+    assert_errors(&option_chain(100), &[("E-TYP-DEPTH", DEPTH_MESSAGE)]);
+    assert_errors(&option_chain(300), &[("E-TYP-DEPTH", DEPTH_MESSAGE)]);
+}
+
+#[test]
+fn a_written_type_deeper_than_100_is_refused() {
+    let mut deep = String::from("i32");
+    for _ in 0..100 {
+        deep = format!("Option<{deep}>");
+    }
+    assert_errors(
+        &format!("struct S {{ f: {deep} }}\nfn main() {{ }}\n"),
+        &[("E-TYP-DEPTH", DEPTH_MESSAGE)],
+    );
+}

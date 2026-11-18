@@ -72,7 +72,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // ------------------------------------------------------------------
 
     pub(super) fn resolve_type(&mut self, ty: &AstType) -> Type {
-        resolve::resolve_type_syntax(
+        let resolved = resolve::resolve_type_syntax(
             self.world,
             &mut self.facts.type_nodes,
             &mut self.facts.expr_types,
@@ -81,7 +81,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             &self.generics,
             self.self_ty.as_ref(),
             ty,
-        )
+        );
+        resolve::check_written_type_depth(self.diags, ty, &resolved);
+        resolved
     }
 
     pub(super) fn compatible(a: &Type, b: &Type) -> bool {
@@ -369,12 +371,43 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 }
             }
         }
+        self.report_type_depth();
         for index in unresolved {
             let span = self.var_spans.get(index).copied().unwrap_or(Span::dummy());
             self.error(
                 "E-TYP-AMBIGUOUS",
                 span,
                 "cannot infer this type; add an explicit type annotation".to_string(),
+            );
+        }
+    }
+
+    /// TYP-1.7: a type deeper than [`MAX_TYPE_DEPTH`] is refused with
+    /// `E-TYP-DEPTH`. Every expression whose final type crosses the bound is
+    /// a candidate; the one that ends first is reported, which is the
+    /// innermost expression of a nest and the first binding of a chain. One
+    /// diagnostic is enough: the others follow from it, and none is added when a
+    /// written type was already refused (`check_written_type_depth`).
+    fn report_type_depth(&mut self) {
+        if self.diags.iter().any(|d| d.code == "E-TYP-DEPTH") {
+            // A written type already carries the diagnostic.
+            return;
+        }
+        let first = self
+            .facts
+            .expr_types
+            .iter()
+            .filter(|(_, ty)| ty.depth() > MAX_TYPE_DEPTH)
+            .filter_map(|(id, _)| self.expr_spans.get(id).copied())
+            .min_by_key(|span| (span.file, span.end, span.start));
+        if let Some(span) = first {
+            self.error(
+                "E-TYP-DEPTH",
+                span,
+                format!(
+                    "this type nests more than {MAX_TYPE_DEPTH} levels; \
+                     split it with a named struct"
+                ),
             );
         }
     }
@@ -800,6 +833,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     .to_string(),
             );
         }
+        self.expr_spans.insert(expr.id, expr.span);
         let ty = self.check_expr_inner(expr, expected);
         // TYP-1.6: `!` is not inhabitable, so it must never become a type
         // argument (`Option<!>`, `Result<!, E>`, `W<!>`). The bottom type only

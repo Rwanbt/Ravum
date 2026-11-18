@@ -1,11 +1,10 @@
 use super::*;
 
 /// Bound on the recursion depth of the coverage check (P0-H). Each level of
-/// recursion follows one level of the scrutinee type, so the bound matches the
-/// type nesting `resolve_vars` accepts (`MAX_RESOLVE_DEPTH`); at 64 an
-/// exhaustive match on a type nested 65 levels deep was reported as
-/// E-TYP-NONEXHAUSTIVE.
-pub(super) const MAX_COVERAGE_DEPTH: u32 = 1024;
+/// recursion follows one level of the scrutinee type, so the bound is the
+/// normative [`MAX_TYPE_DEPTH`]: a deeper scrutinee is already refused with
+/// `E-TYP-DEPTH`.
+pub(super) const MAX_COVERAGE_DEPTH: u32 = MAX_TYPE_DEPTH as u32;
 
 /// One constructor of a sum type, with the payload types it introduces.
 pub(super) struct CoverageCtor {

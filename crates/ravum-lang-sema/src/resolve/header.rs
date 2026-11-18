@@ -33,7 +33,7 @@ impl<'w, 'a, 'f> HeaderCtx<'w, 'a, 'f> {
     }
 
     pub(crate) fn resolve_type(&mut self, ty: &AstType) -> Type {
-        resolve_type_syntax(
+        let resolved = resolve_type_syntax(
             self.world,
             &mut self.facts.type_nodes,
             &mut self.facts.expr_types,
@@ -42,7 +42,9 @@ impl<'w, 'a, 'f> HeaderCtx<'w, 'a, 'f> {
             &self.generics,
             self.self_ty.as_ref(),
             ty,
-        )
+        );
+        check_written_type_depth(self.diags, ty, &resolved);
+        resolved
     }
 }
 
@@ -617,6 +619,22 @@ pub(crate) fn resolve_impl(
 // ---------------------------------------------------------------------------
 // Résolution de types (partagée avec `typeck`)
 // ---------------------------------------------------------------------------
+
+/// TYP-1.7: a written type deeper than [`MAX_TYPE_DEPTH`] is refused with
+/// `E-TYP-DEPTH`, on the whole written type. Called on every type written in
+/// a declaration or a body, once per written type (not per nested node).
+pub(crate) fn check_written_type_depth(diags: &mut DiagnosticBag, ty: &AstType, resolved: &Type) {
+    if resolved.depth() > MAX_TYPE_DEPTH {
+        diags.error(
+            "E-TYP-DEPTH",
+            ty.span,
+            format!(
+                "this type nests more than {MAX_TYPE_DEPTH} levels; \
+                 split it with a named struct"
+            ),
+        );
+    }
+}
 
 /// Résout une syntaxe de type en [`Type`], en enregistrant **chaque** nœud de
 /// type dans `type_nodes` et les nœuds d'expression de longueur de tableau dans
