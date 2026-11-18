@@ -326,6 +326,25 @@ pub struct ImplItem {
     pub span: Span,
 }
 
+impl ImplItem {
+    /// The methods of the block with their items. The parser builds an `impl`
+    /// with `fn` members only (E-PARSE-UNEXPECTED otherwise); a hand-built AST
+    /// holding anything else is refused by `resolve` (see [`Self::non_methods`]).
+    pub fn methods(&self) -> impl Iterator<Item = (&Item, &FnItem)> {
+        self.items.iter().filter_map(|item| match &item.kind {
+            ItemKind::Fn(f) => Some((item, f)),
+            _ => None,
+        })
+    }
+
+    /// The members that are not methods (empty for a parsed program).
+    pub fn non_methods(&self) -> impl Iterator<Item = &Item> {
+        self.items
+            .iter()
+            .filter(|item| !matches!(item.kind, ItemKind::Fn(_)))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstItem {
     pub name: Ident,
@@ -558,7 +577,7 @@ pub enum ExprKind {
         value: Box<Expr>,
     },
     AssignOp {
-        op: BinOp,
+        op: CompoundOp,
         target: Box<Expr>,
         value: Box<Expr>,
     },
@@ -639,6 +658,44 @@ pub enum UnOp {
     Ref,
     RefMut,
     Deref,
+}
+
+/// The operator of a compound assignment (G-6.8): only the ten operators
+/// that have an `op=` form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompoundOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+}
+
+impl CompoundOp {
+    /// The binary operator applied by `place op= value`.
+    pub fn bin_op(self) -> BinOp {
+        match self {
+            CompoundOp::Add => BinOp::Add,
+            CompoundOp::Sub => BinOp::Sub,
+            CompoundOp::Mul => BinOp::Mul,
+            CompoundOp::Div => BinOp::Div,
+            CompoundOp::Rem => BinOp::Rem,
+            CompoundOp::BitAnd => BinOp::BitAnd,
+            CompoundOp::BitOr => BinOp::BitOr,
+            CompoundOp::BitXor => BinOp::BitXor,
+            CompoundOp::Shl => BinOp::Shl,
+            CompoundOp::Shr => BinOp::Shr,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        self.bin_op().as_str()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

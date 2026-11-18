@@ -210,14 +210,9 @@ impl LspClient {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
-            loop {
-                match read_framed(&mut reader) {
-                    Ok(Some(value)) => {
-                        if sender.send(value).is_err() {
-                            break;
-                        }
-                    }
-                    _ => break,
+            while let Ok(Some(value)) = read_framed(&mut reader) {
+                if sender.send(value).is_err() {
+                    break;
                 }
             }
         });
@@ -787,9 +782,6 @@ fn warm_incremental_edits_match_a_cold_analysis() {
         state
     };
     let inserts = ["(", ")", "\"", ";", " ", "x", "1", "->", "{", "}", "fn "];
-    let first_symbols = symbols(&mut warm, &package.main_uri());
-    let mut changed = 0;
-
     for batch in 0..12 {
         for _ in 0..3 {
             if text.len() < 16 {
@@ -836,9 +828,6 @@ fn warm_incremental_edits_match_a_cold_analysis() {
         }
 
         let warm_symbols = symbols(&mut warm, &package.main_uri());
-        if warm_symbols != first_symbols {
-            changed += 1;
-        }
 
         // Cold oracle: a fresh package holding exactly the edited text, analysed by
         // a fresh server. Nothing is shared with the warm instance.
@@ -968,9 +957,8 @@ fn end_to_end_diagnostic_latency_after_one_line_edit() {
     let _ = client.wait_notification("textDocument/publishDiagnostics");
 
     let mut text = original.clone();
-    let mut version = 2;
     let mut times: Vec<f64> = Vec::with_capacity(20);
-    for index in 0..20 {
+    for (index, version) in (0..20).zip(2..) {
         let insertion = format!("    let unused_probe_{index}: i32 = 0;\n");
         // Insert before `Ok(())`, i.e. *inside* main and before its tail
         // expression: appending after the tail would be unreachable code and the
@@ -988,7 +976,6 @@ fn end_to_end_diagnostic_latency_after_one_line_edit() {
                 "contentChanges": [{ "text": text }],
             }),
         );
-        version += 1;
         let _ = client.wait_notification("textDocument/publishDiagnostics");
         times.push(started.elapsed().as_secs_f64() * 1000.0);
     }
@@ -1116,9 +1103,8 @@ fn end_to_end_diagnostic_latency_on_the_scale_corpus() {
     let _ = client.wait_notification("textDocument/publishDiagnostics");
 
     let mut text = main.clone();
-    let mut version = 2;
     let mut times: Vec<f64> = Vec::with_capacity(20);
-    for index in 0..20 {
+    for (index, version) in (0..20).zip(2..) {
         let insertion = format!("    let unused_probe_{index}: i32 = 0;\n");
         let at = text
             .find("    io::println")
@@ -1132,7 +1118,6 @@ fn end_to_end_diagnostic_latency_on_the_scale_corpus() {
                 "contentChanges": [{ "text": text }],
             }),
         );
-        version += 1;
         let _ = client.wait_notification("textDocument/publishDiagnostics");
         times.push(started.elapsed().as_secs_f64() * 1000.0);
     }
@@ -1174,9 +1159,8 @@ fn end_to_end_diagnostic_latency_on_the_thousand_line_corpus() {
     let _ = client.wait_notification("textDocument/publishDiagnostics");
 
     let mut text = main.clone();
-    let mut version = 2;
     let mut times: Vec<f64> = Vec::with_capacity(20);
-    for index in 0..20 {
+    for (index, version) in (0..20).zip(2..) {
         let insertion = format!("    let unused_probe_{index}: i32 = 0;\n");
         let at = text
             .find("    io::println")
@@ -1190,7 +1174,6 @@ fn end_to_end_diagnostic_latency_on_the_thousand_line_corpus() {
                 "contentChanges": [{ "text": text }],
             }),
         );
-        version += 1;
         let _ = client.wait_notification("textDocument/publishDiagnostics");
         times.push(started.elapsed().as_secs_f64() * 1000.0);
     }

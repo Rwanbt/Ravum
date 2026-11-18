@@ -1,4 +1,4 @@
-# Statut architectural — Ravum (mise à jour 2026-11-13)
+# Statut architectural — Ravum (mise à jour 2026-11-15)
 
 > **Deux lignes de travail, deux statuts — ne pas mélanger leurs chiffres.**
 >
@@ -8,9 +8,9 @@
 > 2. **Langage Core 1.0** (`crates/ravum-lang-*`) : compilateur réel, **fusionné
 >    dans `main` le 2026-11-12** (PR #101 → `dev` `a2b8db5`, puis PR #104 →
 >    `main` `94f3ac4`), cible décidée **D2 « production ready »**. Il ne vit plus
->    sur une branche séparée. État mesuré le 2026-11-13 (phase 0 du GOAL,
->    `c931fdf`) : conformance **471 cas : 470 PASS / 0 FAIL / 1 SKIP**,
->    `build_verified: true`, workspace **1574 passés / 0 échec / 2 ignorés**.
+>    sur une branche séparée. État mesuré le 2026-11-15 (E1) : conformance
+>    **503 cas : 502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true`, workspace
+>    **1740 passés / 0 échec / 8 ignorés**.
 >    C'est un sous-ensemble Core 1.0 **DRAFT** : aucun ADR ratifié, aucun tag,
 >    aucune release, et l'audit externe (T4) comme le Go/No-Go (T12) restent
 >    humains. Registre canonique :
@@ -33,7 +33,7 @@
 | MVP-0d / Lot B — overlays | **Prototype testé, partiel** : `BaseSnapshot` content-adressée, overlays privés, intégration tout ou rien, CAS de base, conflits de chemin refusés, 9 tests dont concurrence 8 threads ; stockage mesuré −92,0 % vs 8 copies complètes ; **publication Git non branchée**, campagne A/B/C/D non exécutée — [MVP-0d-overlays](../mvp/MVP-0d-overlays.md) |
 | MVP-0d / Lot C — groupement adaptatif | **Implémenté et mesuré** (trace synthétique) : fenêtre bornée 10–100 ms, croissance sur densité, rétrécissement sur rareté ; fixe 0/50/100 = 12/4/4 lots, attente 200/360/510 ms ; adaptative = 4 lots / 450 ms — [MVP-0d-batch-window](../mvp/MVP-0d-batch-window.md) |
 | MVP-0d / Lot D — projets représentatifs | **`NOT_RUN`** : aucun corpus externe exécuté pendant ce cycle — [rapport](../mvp/MVP-0d-REPORT.md) |
-| Langage Core 1.0 (`ravum-lang`) | **Intégré à `main` depuis le 2026-11-12** : lexer/parser, résolution, typage, ownership, effets, codegen Rust, CLI, LSP, 471 cas de conformance. Mesures du 2026-11-13 (`c931fdf`) : 470 PASS / 0 FAIL / 1 SKIP, `build_verified: true` (périmètre 202/202), smoke 43/0/0. Sous-ensemble **DRAFT** : ADR non ratifiés, audit externe et Go/No-Go humains absents, aucun `PROVED`, aucune release. Détail : [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md), [GOAL-BASELINE](../reports/GOAL-BASELINE.md) |
+| Langage Core 1.0 (`ravum-lang`) | **Intégré à `main` depuis le 2026-11-12** : lexer/parser, résolution, typage, ownership, effets, codegen Rust, CLI, LSP, 503 cas de conformance. Mesures du 2026-11-15 (E1) : 502 PASS / 0 FAIL / 1 SKIP, `build_verified: true` (périmètre 222/222), workspace 1740 passés / 0 échec / 8 ignorés. Sous-ensemble **DRAFT** : ADR non ratifiés, audit externe et Go/No-Go humains absents, aucun `PROVED`, aucune release. Détail : [LANGUAGE-CORE-STATUS](../reports/LANGUAGE-CORE-STATUS.md), [GOAL-BASELINE](../reports/GOAL-BASELINE.md) |
 | Outil Rust MVP-0a (M1) | **Implémenté, expérimental** : boucle analyse → build → vérification → hot patch, voir [docs/mvp/architecture.md](../mvp/architecture.md) |
 | Hot swap natif (une entrée `f64 -> f64`) | **Démontré** par tests et démonstration ; migration d'état **non** implémentée |
 | MVP-0b / L0 — audit et baseline | **Fait** : 139/139 tests reproduits, démonstrations M1–M4 reproduites, risques R1–R10 publiés — [MVP-0b-audit.md](../mvp/MVP-0b-audit.md) |

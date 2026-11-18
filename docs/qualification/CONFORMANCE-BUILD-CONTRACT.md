@@ -380,6 +380,14 @@ Le corpus build-vérifié **ne prouve pas** l'absence de divergences en dehors d
 lui. Cette section liste les formes `check`-pass / `build`-fail connues : **il
 n'en reste aucune** à ce commit.
 
+> **Mise à jour 2026-11-15 (E1).** La vague 3 a trouvé une forme nouvelle,
+> `run/power-array-move-write-region-nested` (`check` exit 0, `build` `E0508`) ;
+> elle est fermée par le remplacement de `MovePlanner` par un abaissement à
+> l'accès ([`RFC-OWN-ARRAY-ELEMENTS.md`](../rfc/RFC-OWN-ARRAY-ELEMENTS.md)). Le
+> corpus passe à **503 cas / 502 PASS / 0 FAIL / 1 SKIP**, `build_verified:
+> true`. Les sous-sections (a)–(h) ci-dessous restent l'archive des formes
+> fermées entre les passes 6 et 9 ; elles décrivent l'ancien hissage, supprimé.
+
 **Les huit familles trouvées pendant P0-A sont fermées**, chacune par un commit,
 un test `rustc`-vérifié (compilation réelle + exécution + valeur) et un cas de
 corpus `conformance/cases/run/array-move-*` :

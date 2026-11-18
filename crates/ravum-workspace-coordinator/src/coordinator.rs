@@ -2175,7 +2175,7 @@ mod tests {
             .as_ref()
             .expect("failed verification record");
         assert_eq!(verification.status, MergeCheckStatus::Failed);
-        assert_eq!(c.evaluations()[0].evidence_ids.len() >= 2, true);
+        assert!(c.evaluations()[0].evidence_ids.len() >= 2);
     }
 
     #[test]

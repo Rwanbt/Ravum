@@ -13,6 +13,8 @@ pub mod effects;
 pub mod facts;
 pub mod loader;
 mod own;
+
+pub use own::{check_ownership, copy_types, is_copy_type};
 pub mod resolve;
 mod traps;
 pub mod typeck;

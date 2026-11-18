@@ -213,8 +213,8 @@ impl Server {
             "textDocument/documentSymbol" => {
                 let uri = uri_parameter(params)?;
                 let analysis = self.analysis_for_uri(&uri)?;
-                let file = self.file_id(&analysis, &uri)?;
-                Ok(features::document_symbols(&analysis, file))
+                let file = self.file_id(analysis, &uri)?;
+                Ok(features::document_symbols(analysis, file))
             }
             "workspace/symbol" => {
                 let query = params
@@ -310,8 +310,8 @@ impl Server {
         let index = TextIndex::new(&text);
         let offset = index.offset_at(&text, line, character);
         let analysis = self.analysis_for_uri(&uri)?;
-        let file = self.file_id(&analysis, &uri)?;
-        run(&analysis, file, offset)
+        let file = self.file_id(analysis, &uri)?;
+        run(analysis, file, offset)
     }
 
     fn with_analysis<F>(&mut self, params: &Value, run: F) -> Result<Value, RpcError>
@@ -320,7 +320,7 @@ impl Server {
     {
         let uri = uri_parameter(params)?;
         let analysis = self.analysis_for_uri(&uri)?;
-        run(&analysis)
+        run(analysis)
     }
 
     fn analysis_for_uri(&self, uri: &str) -> Result<&Analysis, RpcError> {

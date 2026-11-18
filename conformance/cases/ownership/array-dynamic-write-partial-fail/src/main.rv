@@ -1,0 +1,11 @@
+fn mk(x: &str, y: &str) -> [String; 2] {
+    return [String::from(x), String::from(y)];
+}
+
+fn main() {
+    let mut a: [String; 2] = mk("a", "b");
+    let i: usize = 1;
+    let s: String = a[0];
+    a[i] = String::from("z");
+    io::println(s.as_str());
+}

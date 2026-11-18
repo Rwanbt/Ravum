@@ -461,6 +461,7 @@ use std::io;
 const FLAG: bool = true;
 const LETTER: char = 'z';
 const NEG: i32 = -4;
+const ZERO: i32 = 0;
 const COUNT: usize = 7;
 const LABEL: &str = "ravum";
 
@@ -478,6 +479,7 @@ fn main() {
             "const FLAG: bool = true;",
             "const LETTER: char = 'z';",
             "const NEG: i32 = -4i32;",
+            "const ZERO: i32 = 0i32;",
             "const COUNT: usize = 7usize;",
             "const LABEL: &'static str = \"ravum\";",
         ],
@@ -511,6 +513,7 @@ fn main() {
     io::println("out");
     io::print("out");
     io::eprintln("err");
+    let input = io::read_line();
 }
 "#;
     let code = emitted(source);
@@ -520,6 +523,7 @@ fn main() {
             "crate::rv_println(",
             "crate::rv_print(",
             "crate::rv_eprintln(",
+            "crate::rv_read_line()",
         ],
         source,
     );
@@ -556,6 +560,9 @@ fn main() {
     let b = math::sqrt(2.0);
     let c = math::floor(1.5);
     let d = math::pow(2.0, 3.0);
+    let e = math::round(1.5);
+    let f = math::sin(0.0);
+    let g = math::ln(1.0);
 }
 "#;
     let code = emitted(source);
@@ -566,6 +573,9 @@ fn main() {
             "(2.0f64).sqrt()",
             "(1.5f64).floor()",
             "(2.0f64).powf(3.0f64)",
+            "(1.5f64).round()",
+            "(0.0f64).sin()",
+            "(1.0f64).ln()",
         ],
         source,
     );
@@ -635,8 +645,7 @@ fn main() {
 
 #[test]
 fn a_builtin_function_used_as_a_value_is_refused_by_the_checker() {
-    // The emitter has a `Resolution::BuiltinFn` path (free builtins as values),
-    // but the checker refuses it with `E-TYP-CALL` before code generation.
+    // The checker diagnoses a bare builtin before lowering to Rust.
     let message = match compile_source("emit", "fn main() {\n    let write = io::println;\n}\n") {
         Ok(_) => panic!("a builtin used as a value must be refused by the checker"),
         Err(message) => message,
@@ -1052,4 +1061,44 @@ fn the_checker_pins_the_assertion_arities_before_codegen() {
             "expected `E-TYP-ARITY` naming {needle:?}, got:\n{message}"
         );
     }
+}
+
+#[test]
+fn deferred_initialization_emits_an_explicit_type_and_no_placeholder() {
+    let rust = compile_source(
+        "deferred-init",
+        r#"
+fn main() {
+    let mut count: i32;
+    count = 4;
+    io::println(count.to_string().as_str());
+}
+"#,
+    )
+    .expect("a typed local may be assigned before its first read");
+
+    assert!(rust.contains("let mut count: i32;"), "{rust}");
+    assert!(rust.contains("count = 4i32"), "{rust}");
+}
+
+#[test]
+fn nested_extern_is_discovered_without_weakening_unsafe_elsewhere() {
+    let code = compile_source(
+        "nested-extern",
+        r#"
+mod platform {
+    mod native {
+        extern "C" {
+            fn abs(value: i32) -> i32;
+        }
+    }
+}
+fn main() {}
+"#,
+    )
+    .expect("nested module with a scalar extern should compile");
+    assert!(code.contains("#![deny(unsafe_code)]"), "{code}");
+    assert!(!code.contains("#![forbid(unsafe_code)]"), "{code}");
+    assert_eq!(code.matches("#[allow(unsafe_code)]").count(), 1);
+    assert_eq!(code.matches("unsafe {").count(), 1);
 }

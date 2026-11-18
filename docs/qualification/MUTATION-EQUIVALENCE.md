@@ -639,3 +639,43 @@ publié est le décompte des artefacts : **32/32 tués sur les 32 testés**, plu
 n'est prouvé sur `emit.rs` au-delà des 32 mutants testés sur 36 (les 4 non
 testés sont les équivalents de formatage E7.1/E7.2), ni sur les autres crates. Les survivants sont triés, pas éliminés ; les classes E1-E6 sont
 des revues, pas des preuves.
+
+## 14. E6 — Campagne complète du module `emit`
+
+La [campagne GitHub Actions](https://github.com/Rwanbt/Ravum/actions/runs/43780206534)
+a exécuté les douze lots sur Linux avec Rust 1.95.0 et cargo-mutants 27.1.0.
+La tête de PR est `a97b5b833746a896f8d8cb2a1896786cbb3f131d`. Le journal de
+checkout du lot 0 identifie l'arbre testé par le commit de fusion temporaire
+`eb21125fd6d44d5b3cce1bffe2edfcef90ef4d2d`.
+Chaque job a comparé son inventaire avec les résultats de
+`cargo mutants --no-shuffle --sharding round-robin --shard <lot>/12 --jobs 2
+--test-package ravum-lang-codegen`, limité aux sources de production sous
+`crates/ravum-lang-codegen/src/emit/`.
+
+Les lignes `Emit shard complete` des journaux totalisent **650 mutants**
+dont **436 détectés**, **198 survivants**, **16 non viables** et **0 timeout**.
+Le score parmi les mutants viables exécutés est **436/634 (68,77 %)**.
+Les survivants restent à examiner individuellement avant de conclure à la
+présence d'une lacune ou à l'équivalence. Les rapports de chaque lot sont
+disponibles dans les artefacts du run.
+
+Le [rapport CI de couverture](https://github.com/Rwanbt/Ravum/actions/runs/43780206540)
+sur la même tête donne **91,48 % des lignes du code produit** et **1 135 lignes
+découvertes** avec `tools/coverage_product_split.py`. Le ratchet passe et
+l'objectif E6 de couverture reste ouvert.
+
+Le tri des lignes `MISSED` donne 34 survivants dans `emit/mod.rs`, 33 dans
+`names.rs`, 33 dans `paths.rs`, 21 dans `emitter_expr.rs`, 19 dans
+`builtins.rs`, 15 dans `emitter_calls.rs`, 15 dans `emitter_types.rs`,
+12 dans `emitter_items.rs`, 9 dans `index.rs`, 6 dans `emitter_value.rs`
+et 1 dans `emitter_patterns.rs`.
+
+Le [lot 0](https://github.com/Rwanbt/Ravum/actions/runs/43780206534/job/133015530740)
+signale la suppression du bras `ItemKind::Mod(inner) => scan(inner)` dans
+`program_uses_extern`. Sur Linux x86_64, Rust 1.95.0, tête de départ
+`8ad59bbc611053be100a57a26eb101ed311505ec`, le nouveau contrat s'exécute avec
+`cargo test -p ravum-lang-codegen --test emit_constructs nested_extern_is_discovered_without_weakening_unsafe_elsewhere`.
+Il passe sur le backend intact et échoue sur l'arbre temporaire avec ce seul
+bras supprimé (0 réussite, 1 échec). La comparaison porte sur la directive
+`unsafe_code` et l'unicité du wrapper. Le score de la campagne publiée
+reste associé à son propre SHA.

@@ -20,6 +20,7 @@ Un diagnostic est un objet immuable produit par une phase du compilateur. Il con
 | DIAG-1.6 | Les avertissements sont une **liste fermée** : `W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`. Aucun autre `W-*` n'existe en Core 1.0. | MUST |
 | DIAG-1.7 | Le nombre de diagnostics par fichier est **borné** (budget déterministe) : au-delà, un unique `E-PARSE-TOO-LARGE` est ajouté et l'analyse du fichier s'arrête. | MUST |
 | DIAG-1.8 | Deux exécutions sur la même source et la même configuration produisent la **même liste**, dans le même ordre (T3). | MUST |
+| DIAG-1.9 | Une liaison dont le nom commence par `_` (`let _z = …`) est déclarée inutilisée volontairement : elle **MUST NOT** produire `W-OWN-UNUSED-VARIABLE`. Elle reste une liaison ordinaire (portée, possession, lecture possible). | MUST |
 
 ## 2. Sévérités et effets sur la compilation
 
@@ -43,6 +44,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-LEX-NUMBER` | lex | littéral numérique mal formé (séparateur, base, exposant, flottant infini) |
 | `E-LEX-INT-OVERFLOW` | lex | littéral entier hors de `u128` |
 | `E-LEX-INT-SUFFIX` | lex | suffixe de type entier inconnu |
+| `E-LEX-RESERVED-IDENT` | lex | identifiant contenant `_rv_`, réservé aux noms engendrés (LEX-4.6) |
 | `E-PARSE-EXPECTED` | parse | token inattendu là où une forme précise était attendue (`;`, identifiant, type, `:`, champ, item) |
 | `E-PARSE-UNEXPECTED` | parse | token inattendu dans une position donnée (`*` dans `use`, `..` hors `for`, comparaison chaînée, `::<`) |
 | `E-PARSE-UNCLOSED` | parse | délimiteur `(`, `[`, `{` non fermé |
@@ -71,7 +73,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 
 | Code | Phase | Sens |
 |---|---|---|
-| `E-RES-UNKNOWN` | resolve | nom, module, fonction, méthode, champ de module, variante non qualifiée d'un enum utilisateur, `str` seul, `io.println` (point) |
+| `E-RES-UNKNOWN` | resolve | nom, module, fonction, méthode, champ de module, variante non qualifiée d'un enum utilisateur, `str` seul, `io.println` (point), méthode (builtin ou utilisateur) nommée sans appel (`p.m` au lieu de `p.m()`) |
 | `E-RES-PRIVATE` | resolve | item, champ ou module privé accédé hors de son sous-arbre |
 | `E-RES-DUPLICATE` | resolve | deux items/imports de même nom dans le même module |
 | `E-RES-CONFLICT` | resolve | un `use` nu se résout deux fois (module courant **et** racine, MOD-3.2) ou un nom déclaré entre en collision avec un nom du prélude |
@@ -111,6 +113,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-TYP-EQ` | types | `==`/`!=` sur un type non comparable (agrégat, `Option`, `Result`, `T`), `assert_eq` invalide |
 | `E-TYP-CMP` | types | `< <= > >=` sur un type non ordonné (texte, agrégat) |
 | `E-TYP-AMBIGUOUS` | types | inférence non résolue (`Vec::new()` sans contexte, littéral non contraint) |
+| `E-TYP-DEPTH` | types | type imbriqué sur plus de 100 niveaux (TYP-1.7) |
 | `E-TYP-IF-NO-ELSE` | types | `if` sans `else` utilisé en valeur |
 | `E-TYP-STATEMENT-VALUE` | types | expression non-`()` en position d'instruction |
 | `E-TYP-NONEXHAUSTIVE` | types | `match` non exhaustif (enum, `bool`, `Option`, `Result`) |
@@ -122,7 +125,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-TYP-LITERAL-RANGE` | types | littéral entier qui ne tient pas dans le type inféré |
 | `E-TYP-FLOAT-LITERAL` | types | littéral flottant invalide pour le type inféré (`1e39` en `f32`) |
 | `E-TYP-BREAK-OUTSIDE` | types | `break`/`continue` hors boucle |
-| `E-TYP-RANGE` | types | bornes de plage de types différents ou non entières |
+| `E-TYP-RANGE` | types | bornes de plage de types différents ou non entières, plage ouverte ou `..=` dans un `for` |
 | `E-TYP-ARRAY-REPEAT` | types | `[e; n]` invalide (n non littéral/0, `e` non `Copy`), longueur de tableau invalide |
 | `E-TYP-RECURSIVE` | types | type infini sans indirection (`struct Node { next: Option<Node> }`) |
 | `E-TYP-CONST` | types | `const` non constant ou évaluation de constante en erreur (débordement, /0) |
@@ -153,7 +156,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | Code | Phase | Sens |
 |---|---|---|
 | `W-RES-UNUSED-IMPORT` | resolve | import jamais utilisé |
-| `W-OWN-UNUSED-VARIABLE` | ownership | variable liée jamais utilisée (y compris `mut` inutile) |
+| `W-OWN-UNUSED-VARIABLE` | ownership | variable liée jamais utilisée (y compris `mut` inutile), sauf un nom commençant par `_` (DIAG-1.9) |
 
 > Les codes `reserved` sont documentés pour que la spécification soit complète, mais l'implémentation actuelle ne les émet pas. Un test de conformance qui les attend **doit** être marqué `PENDING_IMPL`, jamais `PASS`.
 

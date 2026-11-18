@@ -33,9 +33,9 @@ enum Command {
     Apply {
         artifact_path: String,
         expected_snapshot: SnapshotId,
-        build: BuildOutput,
+        build: Box<BuildOutput>,
         #[serde(default)]
-        evidence: Option<EvidenceRecord>,
+        evidence: Option<Box<EvidenceRecord>>,
     },
     Quit,
 }
@@ -77,7 +77,13 @@ fn main() {
                 build,
                 evidence,
             }) => {
-                let report = apply(&host, &artifact_path, &expected_snapshot, &build, evidence);
+                let report = apply(
+                    &host,
+                    &artifact_path,
+                    &expected_snapshot,
+                    &build,
+                    evidence.as_deref(),
+                );
                 emit(&json!({"event": "apply_result", "report": report}));
             }
             Err(e) => emit(&json!({"event": "error", "message": format!("bad command: {e}")})),
@@ -91,7 +97,7 @@ fn apply(
     artifact_path: &str,
     expected_snapshot: &SnapshotId,
     build: &BuildOutput,
-    evidence: Option<EvidenceRecord>,
+    evidence: Option<&EvidenceRecord>,
 ) -> ActivationReport {
     let prepared = match prepare(&PathBuf::from(artifact_path), host.expected_abi()) {
         Ok(p) => p,
@@ -103,7 +109,7 @@ fn apply(
             found: prepared.module.artifact_id.clone(),
         });
     }
-    host.apply(prepared, build, evidence.as_ref(), expected_snapshot)
+    host.apply(prepared, build, evidence, expected_snapshot)
 }
 
 fn rejected(reason: RejectReason) -> ActivationReport {

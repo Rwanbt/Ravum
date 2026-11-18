@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-sibling-blocks",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned and one element moved in a first block, another element is moved in a sibling block. Printed the stale `a b` with no error (silent wrong output)."
+}

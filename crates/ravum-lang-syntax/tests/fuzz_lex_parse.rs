@@ -340,7 +340,7 @@ impl Ctx<'_> {
             eprintln!("iteration:  {}", self.iteration);
             eprintln!("reason:     {reason}");
             eprintln!("input len:  {} bytes (str)", self.src.len());
-            let bytes = self.raw.unwrap_or_else(|| self.src.as_bytes());
+            let bytes = self.raw.unwrap_or(self.src.as_bytes());
             eprintln!("raw len:    {} bytes", bytes.len());
             eprintln!("repro:      RAVUM_FUZZ_ITERS={} cargo test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --nocapture", self.iteration + 1);
             eprintln!("hex dump (max {HEX_CAP} bytes):");
@@ -704,7 +704,7 @@ fn run_ctx(
     let outcome = catch_unwind(AssertUnwindSafe(|| check_source(&ctx, &mut *stats)));
     if let Err(payload) = outcome {
         let reason = panic_payload_message(payload.as_ref());
-        let input = ctx.raw.unwrap_or_else(|| ctx.src.as_bytes()).to_vec();
+        let input = ctx.raw.unwrap_or(ctx.src.as_bytes()).to_vec();
         if stats.failures.len() < COLLECT_CAP {
             stats.failures.push(FailureRecord {
                 generator,
@@ -895,7 +895,7 @@ fn edge_cases(stats: &mut Stats) {
         let prefix = &unicode[..boundary];
         run_ctx(
             stats,
-            BASE_SEED ^ 0xB0_0000_0000_0000_00,
+            BASE_SEED ^ 0xB000_0000_0000_0000,
             boundary as u64,
             "edge-boundary-prefix",
             prefix,

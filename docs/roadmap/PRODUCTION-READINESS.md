@@ -16,15 +16,24 @@
 > produit** (1 715 lignes non couvertes sur 12 621), objectif **100 %** inscrit
 > — écart, causes et plan par fichier en §7 bis.
 >
-> **Mise à jour du 2026-11-14 (campagne de fermeture, branche
-> `goal/consolidation-2`)** : voir §10 et
+> **Mise à jour du 2026-11-15 (E1, fermeture de la divergence `check → build`,
+> branche `goal/production-plan-2026-11-15`, fusionnée dans `dev`)** : voir
+> [`PRODUCTION-PLAN-2026-11-15.md`](PRODUCTION-PLAN-2026-11-15.md) et
+> [`CORE-1.0-FINAL-REPORT.md`](../reports/CORE-1.0-FINAL-REPORT.md) §0 undecies.
+> Chiffres courants : conformance **503 (502 PASS)**, workspace **1 740** tests
+> (124 suites), `build_verified: true` (périmètre 222/222, vérifiés 124,
+> implicites 98), MUST **811 / 467 mappés / 344 non mappés**. Aucun gate promu :
+> T2 reste `PARTIAL`, T4/T12 restent humains. Cette ligne date l'état ; les gates
+> restent ceux du §10 et de [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+
+> **Historique (2026-11-14, campagne de fermeture)** : voir §10 et
 > [`GOAL-CLOSING-CAMPAIGN-2026-11-14.md`](../reports/GOAL-CLOSING-CAMPAIGN-2026-11-14.md).
-> Chiffres courants : conformance **484 (483 PASS)**, workspace **1 660** tests
-> (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**), mutation
-> ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest **identique
-> sur deux runners distincts**, alarme de performance CI verte. Cette ligne date
-> l'état ; les gates restent ceux du §10 et de
-> [`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md).
+> Chiffres de cette passe : conformance **484 cas (483 PASS)**, workspace **1 660**
+> tests (102 groupes), couverture **90,44/89,88** (code produit **88,55 %**),
+> mutation ciblée **219/180/30/9** dont la première campagne `emit.rs`, digest
+> **identique sur deux runners distincts**, alarme de performance CI verte.
+> Section conservée comme archive ; les chiffres courants sont ceux du bloc
+> ci-dessus.
 
 ## 1. Ce que « production ready » change dans la barre d'acceptation
 
@@ -83,8 +92,8 @@ enforcés sur Windows et Linux. macOS x86-64, ARM Linux, Android, iOS restent
 | Critère | État | Preuve / manque |
 |---|---|---|
 | R1 | `PARTIAL` | **42** ADR `PROPOSED` (ADR-000…ADR-041, comptés par `tools/validate_repo_docs.py`) ; contrat de backend écrit (`RFC-D2`), non ratifié ; D11 corrigé le 2026-11-11 |
-| R2 | **fait sur le périmètre** | **484** cas, 0 FAIL, 0 forme connue ouverte ; ne prouve pas l'absence de formes inconnues |
-| R3 | `PARTIAL` | 188/188 FeatureIds ; 463/807 MUST ; D10 = deux métriques + plan pour les 344 |
+| R2 | **fait sur le périmètre** | **503** cas, **502 PASS / 0 FAIL / 1 SKIP**, `build_verified: true` (2026-11-15, branche E1) ; la divergence `power-array-move-write-region-nested` est fermée ; ne prouve pas l'absence de formes inconnues |
+| R3 | `PARTIAL` | 188/188 FeatureIds ; **467/811** MUST, **344** non mappés ; D10 = deux métriques + plan pour les 344 |
 | R4 | `BLOCKED` | audit externe absent ; Miri Linux vert en CI, Windows partiel |
 | R5 | **`PARTIAL`** | frontière scalaire **confinée et inventoriée** (2026-11-14) : `#![forbid(unsafe_code)]` sur syntax/sema/codegen/lsp, `#![deny]` + 2 `allow` audités sur le CLI (`docs/ffi/UNSAFE-INVENTORY.md`, `tools/unsafe_audit.py` en CI), `&str` refusé (`types/ffi-str-rejected`) ; contrats ABI/lifetime/unwinding **écrits mais non ratifiés** (`SAFETY.md`, RFC-D7) ; `i128`/`u128` (largeur C), unwinding/`longjmp`/signal et Miri FFI restent `NOT_RUN` ou humains |
 | R6 | **fait** | tout fichier généré porte `#![forbid(unsafe_code)]` ; le runtime est en Rust sûr |
@@ -471,7 +480,8 @@ passe de traps `rt` : 100 000, 0 échec, ≈ 33 000 en `rt`). Couverture
 survivants triés / 9 non viables, portée ciblée). Miri et mutation locaux
 absents. `OwnFacts` : étape A livrée (faits enregistrés,
 2 tests), étape B partielle (garde de cohérence `Copy`/`Move`, 0 désaccord sur
-600 programmes + 476 cas), étape C `NOT_RUN`.
+600 programmes + 476 cas) ; étape C **faite le 2026-11-15**
+(`RFC-OWN-FACTS-2` §6 : le backend ne re-dérive plus les décisions d'ownership).
 Phase 5 (`rt`) : gate de traps (y compris affectation composée) + méthodes
 entières explicites + **5 cas de conformance**, **10 tests unitaires** ; `5.4`
 (`examples/dsp-gain-iir`) `NOT_RUN` faute d'API de slice sûre. La phase 8 reste

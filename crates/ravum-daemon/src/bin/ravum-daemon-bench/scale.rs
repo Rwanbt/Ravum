@@ -65,26 +65,26 @@ pub fn run(options: &ScaleOptions) -> Result<Value, String> {
         let cold_dir = options.work_root.join("scale").join(spec.name).join("cold");
         let _ = std::fs::remove_dir_all(&cold_dir);
 
-        let identical = run_case(
-            &options.work_root,
-            &rustc,
-            &fixture,
-            &base,
-            spec.name,
-            "identical",
-            options.reps,
-            false,
-        )?;
-        let body_edit = run_case(
-            &options.work_root,
-            &rustc,
-            &fixture,
-            &base,
-            spec.name,
-            "body_edit",
-            options.reps,
-            true,
-        )?;
+        let identical = run_case(CaseInput {
+            work_root: &options.work_root,
+            rustc: &rustc,
+            fixture: &fixture,
+            base: &base,
+            size: spec.name,
+            case: "identical",
+            reps: options.reps,
+            body_edit: false,
+        })?;
+        let body_edit = run_case(CaseInput {
+            work_root: &options.work_root,
+            rustc: &rustc,
+            fixture: &fixture,
+            base: &base,
+            size: spec.name,
+            case: "body_edit",
+            reps: options.reps,
+            body_edit: true,
+        })?;
         let incremental_dir_bytes = dir_size(
             &options
                 .work_root
@@ -158,16 +158,29 @@ pub fn run(options: &ScaleOptions) -> Result<Value, String> {
     }))
 }
 
-fn run_case(
-    work_root: &Path,
-    rustc: &Path,
-    fixture: &Fixture,
-    base: &[SourceFile],
-    size: &str,
-    case: &str,
+#[derive(Clone, Copy)]
+struct CaseInput<'a> {
+    work_root: &'a Path,
+    rustc: &'a Path,
+    fixture: &'a Fixture,
+    base: &'a [SourceFile],
+    size: &'a str,
+    case: &'a str,
     reps: usize,
     body_edit: bool,
-) -> Result<Value, String> {
+}
+
+fn run_case(input: CaseInput<'_>) -> Result<Value, String> {
+    let CaseInput {
+        work_root,
+        rustc,
+        fixture,
+        base,
+        size,
+        case,
+        reps,
+        body_edit,
+    } = input;
     let category = format!("{size}-{case}");
     let mut cold_samples = Vec::new();
     let mut incremental_samples = Vec::new();

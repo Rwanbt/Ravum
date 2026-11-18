@@ -13,12 +13,39 @@
   },
   "gate_targets": {
     "files": [
-      "crates/ravum-lang-sema/src/typeck.rs",
+      "crates/ravum-lang-sema/src/typeck/mod.rs",
       "crates/ravum-lang-sema/src/resolve.rs"
     ],
     "lines": 90,
     "regions": 85,
-    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Met on `typeck.rs` (93.53/93.11) and `resolve.rs` (93.26/93.45) — measured 2026-11-14 (wave 3). The codegen files were added as floors on 2026-11-11: `emit.rs` now meets the target too (90.61/90.69); `loader.rs` is still below it on lines (85.31/88.09) and is the thinnest remaining file of the set."
+    "note": "Core 1.0 coverage objective (docs/roadmap/CORE-1.0-GATE-MATRIX.md T10). Met on the `typeck` module (93.67/93.21) and on `resolve.rs` (93.26/93.45) — measured 2026-11-14, typeck re-measured 2026-11-15 after its E4 split. The codegen module was added as floors on 2026-11-11; `loader.rs` is still below the target on lines (85.31/88.09) and is the thinnest remaining file of the set."
+  },
+  "modules": {
+    "crates/ravum-lang-codegen/src/emit/": {
+      "lines": 84,
+      "regions": 83,
+      "note": "2026-11-15 (E4, P-6) — **correction de périmètre, pas abaissement**. Avant la découpe, `emit.rs` mesurait 91,45/90,78 ; mais ces totaux comptaient **2 588 lignes du module `#[cfg(test)]`** qui vivait dans le même fichier (vérifié : les totaux `ravum-lang-sema` sont identiques au bit près entre les deux rapports, et l'écart total du rapport vaut exactement ces 2 588 lignes). La découpe place ce code dans `emit/tests*.rs`, que llvm-cov ne mesure pas : la mesure comparable entre alors dans le périmètre que S5 a ratifié — « 100 % du CODE PRODUIT, hors modules `#[cfg(test)]` ». En code produit seul, le module mesure **84,89/83,54**. Le plancher est fixé là (partie entière) et s'applique au module entier ; les planchers par fichier ci-dessous s'y ajoutent. E6 relève l'ensemble vers l'objectif 100 %."
+    },
+    "crates/ravum-lang-sema/src/typeck/": {
+      "lines": 93,
+      "regions": 93,
+      "note": "2026-11-15 (E4, P-6): `typeck.rs` (93.62/93.21 measured pre-split) is divided into eleven submodules. The aggregate re-measures 93.67/93.21 on the CI artifact, so the split is coverage-neutral here (unlike `emit.rs`, whose pre-split total included an inline `#[cfg(test)]` module). The old 93/93 file floor is kept as this module floor."
+    },
+    "crates/ravum-lang-sema/src/loader/": {
+      "lines": 80,
+      "regions": 83,
+      "note": "2026-11-15 (E4, P-6) — correction de périmètre, pas abaissement. `loader.rs` mesurait 85,31/88,09 avant la découpe, mais ce total comptait les 939 lignes du module `#[cfg(test)]` logé dans le même fichier. Le code de test est désormais dans `loader/tests.rs`, que llvm-cov ne mesure pas : en code produit seul — le périmètre S5 — le module mesure 80,65/83,15. Le plancher de fichier `loader.rs` (85/88) reste en place pour le modèle ; ce plancher de module couvre les dix sous-modules. E6 relève l'ensemble vers 100 %."
+    },
+    "crates/ravum-lang-sema/src/own/": {
+      "lines": 90,
+      "regions": 90,
+      "note": "2026-11-15 (E4, P-6): `own.rs` measured 92.47/90.75 before the split, a total that counted the 1433 lines of the inline #[cfg(test)] module. Measured on the CI artifact after the split, the four product files of the own module are 91.16/90.97 together. The old 92/90 file floor stays on `own.rs` for the model part; this aggregate guards the submodules. E6 raises the set toward 100 %."
+    },
+    "crates/ravum-lang-sema/src/resolve/": {
+      "lines": 93,
+      "regions": 93,
+      "note": "2026-11-15 (E4, P-6): `resolve.rs` measured 93.26/93.45 before its split and the whole module still measures 93.60/93.57, so the old 93/93 floor is kept unchanged as this aggregate (resolve had no inline `#[cfg(test)]` module, unlike emit/loader/own)."
+    }
   },
   "files": {
     "crates/ravum-lang-sema/src/traps.rs": {
@@ -50,11 +77,11 @@
       "note": "2026-11-13 (batch 1): raised from 90/88 to 100/98. Line coverage is complete: `type_from_str` now has tests for every compound form it accepts and for the malformed text it must refuse. Wave 3 re-measured 98.89 regions and kept the 98 floor; the gap is the `?` recovery edges, documented with proof in `tools/coverage_exemptions.json` (`E-LINE-BUILTINS-TO-STR-EDGES`)."
     },
     "crates/ravum-lang-sema/src/own.rs": {
-      "lines": 92,
-      "regions": 90,
-      "measured_lines": 92.47,
-      "measured_regions": 90.75,
-      "note": "2026-11-11: raised from 89/86 to 91/89. Wave 3 (2026-11-14): raised to 92/90 at the measured level after the entry-point contracts (`Option<String>` borrowed then consumed). The destructured-`let` path and the missing-signature fallback are documented unreachable (`E-LINE-OWN-DESTRUCTURED-LET`, `E-LINE-OWN-SIGNATURE-FALLBACK`)."
+      "lines": 96,
+      "regions": 95,
+      "measured_lines": 96.91,
+      "measured_regions": 95.3,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
     },
     "crates/ravum-lang-sema/src/check.rs": {
       "lines": 81,
@@ -77,26 +104,89 @@
       "measured_regions": 88.09,
       "note": "Wave 3 (2026-11-14): raised from 76/80 to 85/88 at the measured level, after the manifest-contract batch (`crates/ravum-lang-sema/tests/loader_manifest_contracts.rs`: strict sections/keys, TOML lexical errors, dependency shapes, both crate roots, module inlining, enum identifiers). Still below the 90/85 gate target on lines: it is the largest remaining product gap and the next file to attack."
     },
-    "crates/ravum-lang-sema/src/typeck.rs": {
-      "lines": 93,
-      "regions": 93,
-      "measured_lines": 93.53,
-      "measured_regions": 93.11,
-      "note": "2026-11-10: 77.11/78.48 -> 93.35/92.29 with typeck_contracts2.rs (65 tests). 2026-11-13 (batch 1): raised from 92/91 to 93/92. Wave 3 (2026-11-14): regions floor raised to 93 at the measured level. Gate target 90/85 met."
-    },
     "crates/ravum-lang-sema/src/resolve.rs": {
-      "lines": 93,
-      "regions": 93,
-      "measured_lines": 93.26,
-      "measured_regions": 93.45,
-      "note": "2026-11-10: 67.44/67.98 -> 93.03/93.50 with resolve_contracts.rs (112 tests). 2026-11-13 (batch 1): raised from 92/92 to 93/93. Wave 3 confirmed 93.26/93.45 unchanged; the uncovered remainder is dominated by the `PathRoot::Plain` arms for `crate`/`self`/`super` and the `super::super` loops, documented unreachable with proof (`E-LINE-RESOLVE-PLAIN-ROOT-ARMS`). Gate target 90/85 met."
+      "lines": 61,
+      "regions": 68,
+      "measured_lines": 61.54,
+      "measured_regions": 68.75,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
     },
-    "crates/ravum-lang-codegen/src/emit.rs": {
-      "lines": 90,
-      "regions": 90,
-      "measured_lines": 90.61,
-      "measured_regions": 90.69,
-      "note": "New floor 2026-11-11 (86/85). Wave 3 (2026-11-14): raised to 90/90 at the measured level after 39 construct contracts (`crates/ravum-lang-codegen/tests/emit_constructs.rs`): float patterns lowered to guards (G-6.36), literal patterns of every family, constants, array/tuple/slice/never spelling, free-builtin mapping, signed-zero tie, assertion helpers, FFI wrapper, primitive and text methods, test-mode runner. Gate target 90/85 met. Remaining gap: defensive emitter arms documented one by one in `tools/coverage_exemptions.json` plus the residual listed in COVERAGE-100-OBJECTIVE.md §7."
+    "crates/ravum-lang-codegen/src/emit/mod.rs": {
+      "lines": 92,
+      "regions": 93,
+      "measured_lines": 92.89,
+      "measured_regions": 93.71,
+      "note": "2026-11-15 (E4, P-6): `emit.rs` is split into `emit/` submodules; the old 90/90 floor on the whole file is preserved as a module aggregate (see `modules`), so the split cannot hide a regression. This file keeps the entry point, `Generator`, `Buf` and the Emitter core."
+    },
+    "crates/ravum-lang-codegen/src/emit/builtins.rs": {
+      "lines": 83,
+      "regions": 78,
+      "measured_lines": 83.82,
+      "measured_regions": 78.88,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; the module aggregate still holds 90/90. E6 raises these to the 100 % objective."
+    },
+    "crates/ravum-lang-codegen/src/emit/index.rs": {
+      "lines": 95,
+      "regions": 94,
+      "measured_lines": 95.1,
+      "measured_regions": 94.41,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/names.rs": {
+      "lines": 91,
+      "regions": 78,
+      "measured_lines": 91.84,
+      "measured_regions": 78.95,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/paths.rs": {
+      "lines": 91,
+      "regions": 89,
+      "measured_lines": 91.67,
+      "measured_regions": 89.91,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_calls.rs": {
+      "lines": 75,
+      "regions": 76,
+      "measured_lines": 75.16,
+      "measured_regions": 76.78,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_expr.rs": {
+      "lines": 89,
+      "regions": 84,
+      "measured_lines": 89.83,
+      "measured_regions": 84.46,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_items.rs": {
+      "lines": 88,
+      "regions": 89,
+      "measured_lines": 88.77,
+      "measured_regions": 89.13,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_patterns.rs": {
+      "lines": 67,
+      "regions": 72,
+      "measured_lines": 67.9,
+      "measured_regions": 72.56,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_types.rs": {
+      "lines": 56,
+      "regions": 58,
+      "measured_lines": 56.9,
+      "measured_regions": 58.02,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
+    },
+    "crates/ravum-lang-codegen/src/emit/emitter_value.rs": {
+      "lines": 58,
+      "regions": 60,
+      "measured_lines": 58.5,
+      "measured_regions": 60.73,
+      "note": "2026-11-15 (E4 split): floor set at the measured level; module aggregate unchanged."
     },
     "crates/ravum-lang-codegen/src/lib.rs": {
       "lines": 100,
@@ -111,6 +201,202 @@
       "measured_lines": 100.0,
       "measured_regions": 100.0,
       "note": "New floor 2026-11-11 (100/97): the emitted runtime prelude is a string constant, fully covered by construction. Wave 3 (2026-11-14) re-measured 100/100 and raised the region floor from 97 to 100 at the measured level."
+    },
+    "crates/ravum-lang-sema/src/typeck/aggregates.rs": {
+      "lines": 96,
+      "regions": 95,
+      "measured_lines": 96.52,
+      "measured_regions": 95.44,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/calls.rs": {
+      "lines": 93,
+      "regions": 93,
+      "measured_lines": 93.72,
+      "measured_regions": 93.43,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/consts.rs": {
+      "lines": 90,
+      "regions": 91,
+      "measured_lines": 90.91,
+      "measured_regions": 91.69,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/control.rs": {
+      "lines": 96,
+      "regions": 94,
+      "measured_lines": 96.43,
+      "measured_regions": 94.76,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/core.rs": {
+      "lines": 96,
+      "regions": 94,
+      "measured_lines": 96.87,
+      "measured_regions": 94.73,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/coverage.rs": {
+      "lines": 81,
+      "regions": 84,
+      "measured_lines": 81.5,
+      "measured_regions": 84.72,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/expr.rs": {
+      "lines": 96,
+      "regions": 97,
+      "measured_lines": 96.79,
+      "measured_regions": 97.58,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/helpers.rs": {
+      "lines": 92,
+      "regions": 89,
+      "measured_lines": 92.88,
+      "measured_regions": 89.36,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/mod.rs": {
+      "lines": 92,
+      "regions": 88,
+      "measured_lines": 92.05,
+      "measured_regions": 88.1,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/places.rs": {
+      "lines": 93,
+      "regions": 95,
+      "measured_lines": 93.6,
+      "measured_regions": 95.44,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/typeck/static_str.rs": {
+      "lines": 90,
+      "regions": 90,
+      "measured_lines": 90.57,
+      "measured_regions": 90.37,
+      "note": "2026-11-15 (E4 split of typeck.rs): floor set at the integer part of the measured value from the CI artifact; the 93/93 module aggregate still holds."
+    },
+    "crates/ravum-lang-sema/src/loader/crates.rs": {
+      "lines": 80,
+      "regions": 81,
+      "measured_lines": 80.42,
+      "measured_regions": 81.71,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/digest.rs": {
+      "lines": 69,
+      "regions": 74,
+      "measured_lines": 69.01,
+      "measured_regions": 74.58,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/files.rs": {
+      "lines": 85,
+      "regions": 89,
+      "measured_lines": 85.98,
+      "measured_regions": 89.21,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/fsutil.rs": {
+      "lines": 65,
+      "regions": 67,
+      "measured_lines": 65.52,
+      "measured_regions": 67.88,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/graph.rs": {
+      "lines": 69,
+      "regions": 72,
+      "measured_lines": 69.45,
+      "measured_regions": 72.3,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/lockfile.rs": {
+      "lines": 71,
+      "regions": 71,
+      "measured_lines": 71.43,
+      "measured_regions": 71.84,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/sha256.rs": {
+      "lines": 100,
+      "regions": 100,
+      "measured_lines": 100.0,
+      "measured_regions": 100.0,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/toml.rs": {
+      "lines": 95,
+      "regions": 95,
+      "measured_lines": 95.1,
+      "measured_regions": 95.59,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/loader/validate.rs": {
+      "lines": 97,
+      "regions": 97,
+      "measured_lines": 97.78,
+      "measured_regions": 97.96,
+      "note": "2026-11-15 (E4 split of loader.rs): floor at the integer part of the measured value; the 81/83 module aggregate keeps the module-level guard."
+    },
+    "crates/ravum-lang-sema/src/own/checker_a.rs": {
+      "lines": 88,
+      "regions": 88,
+      "measured_lines": 88.38,
+      "measured_regions": 88.06,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/own/checker_b.rs": {
+      "lines": 93,
+      "regions": 92,
+      "measured_lines": 93.19,
+      "measured_regions": 92.45,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/own/state.rs": {
+      "lines": 89,
+      "regions": 93,
+      "measured_lines": 89.95,
+      "measured_regions": 93.53,
+      "note": "2026-11-15 (E4 split of own.rs): floor at the integer part of the measured value; the 90/90 module aggregate guards the module as a whole."
+    },
+    "crates/ravum-lang-sema/src/resolve/copy.rs": {
+      "lines": 97,
+      "regions": 98,
+      "measured_lines": 97.96,
+      "measured_regions": 98.92,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/header.rs": {
+      "lines": 95,
+      "regions": 94,
+      "measured_lines": 95.12,
+      "measured_regions": 94.56,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/paths.rs": {
+      "lines": 92,
+      "regions": 92,
+      "measured_lines": 92.11,
+      "measured_regions": 92.53,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/uses.rs": {
+      "lines": 86,
+      "regions": 87,
+      "measured_lines": 86.34,
+      "measured_regions": 87.3,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
+    },
+    "crates/ravum-lang-sema/src/resolve/world.rs": {
+      "lines": 99,
+      "regions": 99,
+      "measured_lines": 99.59,
+      "measured_regions": 99.15,
+      "note": "2026-11-15 (E4 split of resolve.rs): floor at the integer part of the measured value; the 93/93 module aggregate keeps the file-level guarantee."
     }
   }
 }

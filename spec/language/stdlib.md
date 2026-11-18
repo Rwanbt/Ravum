@@ -312,7 +312,9 @@ test fn addition_works() {
 }
 
 // NÉGATIF — E-TYP-EQ (assert_eq sur un type non comparable)
-fn f() { assert_eq(Vec::<i32>::new(), Vec::<i32>::new()); }
+fn f() { let a: Vec<i32> = Vec::new(); let b: Vec<i32> = Vec::new(); assert_eq(a, b); }
+// NÉGATIF — E-PARSE-UNEXPECTED (turbofish, G-5.9), et non E-TYP-EQ
+fn f2() { assert_eq(Vec::<i32>::new(), Vec::<i32>::new()); }
 // NÉGATIF — E-TYP-ARITY
 fn g() { assert_eq(1); }
 ```

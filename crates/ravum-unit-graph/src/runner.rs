@@ -60,6 +60,9 @@ impl UnitOutcome {
     }
 }
 
+/// Callback run with a unit name immediately after its compilation.
+pub type AfterCompileHook = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
 /// Everything needed to run one analysis campaign.
 pub struct ChainOptions {
     pub state_dir: PathBuf,
@@ -67,7 +70,7 @@ pub struct ChainOptions {
     pub context: ContextSpec,
     /// Optional hook called with the unit name right after its compilation:
     /// used by the STALE test to modify a source file during verification.
-    pub after_compile_hook: Option<std::sync::Arc<dyn Fn(&str) + Send + Sync>>,
+    pub after_compile_hook: Option<AfterCompileHook>,
 }
 
 impl ChainOptions {

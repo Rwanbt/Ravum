@@ -14,6 +14,16 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+/// One platform sample: CPU, used memory, available memory, process count,
+/// working set. Each field is optional because a probe may fail independently.
+type CaptureSample = (
+    Option<f64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u32>,
+    Option<u64>,
+);
+
 /// One load observation of the host.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SystemSnapshot {
@@ -69,6 +79,7 @@ pub fn pause(millis: u64) {
 
 #[cfg(windows)]
 mod platform {
+    use super::CaptureSample;
     use std::mem::size_of;
 
     #[repr(C)]
@@ -190,15 +201,7 @@ mod platform {
         }
     }
 
-    pub(super) fn capture(
-        cpu_sample_ms: u64,
-    ) -> (
-        Option<f64>,
-        Option<u64>,
-        Option<u64>,
-        Option<u32>,
-        Option<u64>,
-    ) {
+    pub(super) fn capture(cpu_sample_ms: u64) -> CaptureSample {
         // SAFETY: the struct is `repr(C)`, fully initialized and its `length`
         // field is set to its own size, as the API requires.
         let mut memory = MemoryStatusEx {
@@ -271,55 +274,6 @@ mod platform {
         )
     }
 }
-
-#[cfg(not(windows))]
-mod platform {
-    pub(super) fn capture(
-        _cpu_sample_ms: u64,
-    ) -> (
-        Option<f64>,
-        Option<u64>,
-        Option<u64>,
-        Option<u32>,
-        Option<u64>,
-    ) {
-        // Portable build: the Windows reference machine is where load is
-        // measured; elsewhere the fields stay explicitly unobserved.
-        (None, None, None, None, None)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capture_returns_unix_timestamp() {
-        let snapshot = capture(20);
-        assert!(snapshot.captured_unix > 1_600_000_000);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_capture_observes_memory_and_processes() {
-        let snapshot = capture(20);
-        assert!(snapshot.memory_total_bytes.unwrap_or(0) > 0);
-        assert!(
-            snapshot.process_count.unwrap_or(0) > 0,
-            "snapshot: {snapshot:?}"
-        );
-        assert!(snapshot.daemon_working_set_bytes.unwrap_or(0) > 0);
-    }
-
-    #[test]
-    fn spawn_calibration_measures_rustc() {
-        let rustc = std::env::var_os("RAVUM_RUSTC")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("rustc"));
-        let samples = spawn_calibration(&rustc, 2);
-        assert_eq!(samples.len(), 2);
-    }
-}
 /// Working set (RSS) of an arbitrary process, for external soak harnesses that
 /// spawn the daemon binary. Windows only; `None` when the process is gone or the
 /// query is refused.
@@ -367,8 +321,51 @@ pub fn process_working_set(pid: u32) -> Option<u64> {
     }
 }
 
+#[cfg(not(windows))]
+mod platform {
+    use super::CaptureSample;
+
+    pub(super) fn capture(_cpu_sample_ms: u64) -> CaptureSample {
+        // Portable build: the Windows reference machine is where load is
+        // measured; elsewhere the fields stay explicitly unobserved.
+        (None, None, None, None, None)
+    }
+}
+
 /// Non-Windows builds do not observe foreign-process memory.
 #[cfg(not(windows))]
 pub fn process_working_set(_pid: u32) -> Option<u64> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_returns_unix_timestamp() {
+        let snapshot = capture(20);
+        assert!(snapshot.captured_unix > 1_600_000_000);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_capture_observes_memory_and_processes() {
+        let snapshot = capture(20);
+        assert!(snapshot.memory_total_bytes.unwrap_or(0) > 0);
+        assert!(
+            snapshot.process_count.unwrap_or(0) > 0,
+            "snapshot: {snapshot:?}"
+        );
+        assert!(snapshot.daemon_working_set_bytes.unwrap_or(0) > 0);
+    }
+
+    #[test]
+    fn spawn_calibration_measures_rustc() {
+        let rustc = std::env::var_os("RAVUM_RUSTC")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("rustc"));
+        let samples = spawn_calibration(&rustc, 2);
+        assert_eq!(samples.len(), 2);
+    }
 }

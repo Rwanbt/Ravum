@@ -156,3 +156,23 @@ fn empty_and_comment_only_files_parse() {
         assert!(parsed.program.root.items.is_empty());
     }
 }
+
+/// `ImplItem::methods` yields every `fn` member with its item and
+/// `non_methods` the others (none for a parsed program).
+#[test]
+fn impl_methods_and_non_methods_split_the_members() {
+    use ravum_lang_syntax::ast::ItemKind;
+    let src = "struct S { n: i32 }\nconst K: i32 = 1;\nimpl S { fn a(&self) -> i32 { return 1; } fn b(&self) -> i32 { return 2; } }\n";
+    let mut parsed = ravum_lang_syntax::parser::parse_file(0, src);
+    assert!(parsed.diags.is_empty());
+    let constant = parsed.program.root.items[1].clone();
+    let ItemKind::Impl(imp) = &mut parsed.program.root.items[2].kind else {
+        panic!("expected the impl");
+    };
+    let names: Vec<&str> = imp.methods().map(|(_, f)| f.name.name.as_str()).collect();
+    assert_eq!(names, ["a", "b"]);
+    assert_eq!(imp.non_methods().count(), 0);
+    imp.items.push(constant);
+    assert_eq!(imp.methods().count(), 2);
+    assert_eq!(imp.non_methods().count(), 1);
+}

@@ -7,11 +7,12 @@
 > [`GOAL-BASELINE.md`](GOAL-BASELINE.md). Aucun `PROVED`, aucune maturité
 > « production » n'est revendiquée.
 >
-> **Dernière mesure : 2026-11-14**, branche `goal/consolidation-2` @
-> `b172248` (campagne de fermeture, soir), Windows 11 x64, `rustc 1.95.0`. Les
-> lignes workspace, conformance, couverture, mutation et contrats Python ont été
-> rejouées à ce SHA ; les lignes smoke, Miri et LSP sans mention contraire
-> datent des mesures T9/T3 et ne sont pas rejouées ici. Les chiffres de la
+> **Dernière mesure : 2026-11-15**, branche `goal/production-plan-2026-11-15`
+> (E1, fermeture de la divergence `check → build`), Windows 11 x64,
+> `rustc 1.95.0`. Les lignes workspace, conformance et MUST ont été rejouées
+> dans cette passe ; la couverture et la mutation restent celles du 2026-11-14
+> (campagne de fermeture) et ne sont pas rejouées ici. Les lignes smoke, Miri
+> et LSP sans mention contraire datent des mesures T9/T3. Les chiffres de la
 > **phase 0** (`c931fdf`) restent dans [`GOAL-BASELINE.md`](GOAL-BASELINE.md).
 > L'historique des passes (du 2026-11-09 au 2026-11-14) est déplacé **tel quel**
 > en annexe (§2) ; il n'a pas été réécrit et ses chiffres sont ceux de leur
@@ -23,10 +24,11 @@
 
 | Mesure | Commande | Résultat exact |
 |---|---|---|
-| Workspace | `cargo test --workspace --all-targets -- --test-threads=2` | **102 groupes `test result` : 1 660 passés / 0 échec / 7 ignorés**, exit 0 |
+| Workspace | `cargo test --workspace --no-fail-fast` | **124 groupes `test result` : 1 740 passés / 0 échec / 8 ignorés**, exit 0 |
 | Workspace `--release` | `cargo test --workspace --all-targets --release -- --test-threads=2` | **non rejoué depuis le round 17** (`ed60f72`) : 100 groupes, 1 603 passés / 0 échec / 5 ignorés (2 tests debug-only) |
-| `ravum-lang-sema` | `cargo test -p ravum-lang-sema -- --test-threads=2` | **17 groupes : 711 passés / 0 échec / 1 ignoré**, exit 0 |
-| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **484 cas : 483 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=207 covered=207 verified=124 implicit=83 failed=0` ; `build_verified: true` ; exit 0 |
+| `ravum-lang-sema` | `cargo test -p ravum-lang-sema own::tests::` | **74 tests de la passe** : 74 passés / 0 échec ; le crate complet est couvert par la ligne Workspace |
+| Conformance | `cargo run -p ravum-conformance -- run --verify-build` | **503 cas : 502 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `build: perimeter=222 covered=222 verified=124 implicit=98 failed=0` ; `build_verified: true` ; exit 0 |
+| Traçabilité MUST | `python tools/must_audit.py` | **811 MUST, 467 mappés, 344 non mappés** ; 188/188 FeatureIds |
 | Smoke des exemples | `pwsh -File scripts/lang-smoke.ps1 -SkipBuild` | **43 PASS / 0 FAIL / 0 NOT_RUN**, exit 0 |
 | Registre des codes | `python tools/registry_audit.py` | **108 enregistrés / 126 émis / 0 hors registre / 0 jamais émis**, exit 0 |
 | Traçabilité stricte | `python tools/features_coverage.py --strict` | **188/188** règles satisfaites, 1 exemption justifiée (`F-META-006`), exit 0 |
@@ -69,7 +71,8 @@ machine (ou au runner CI pour Linux/Miri/mutation).
   typechecker, exhaustivité, effets transitifs et profils `core`/`pure`/`rt`,
   borrow checker conservateur (init, moves, move partiel, prêts, non-échappement,
   drop, provenance `&'static str`), faits typés (`CheckedProgram`), `OwnFacts`
-  (usages et places, RFC-OWN-FACTS-1) et gate de traps du profil `rt`
+  (usages et places, RFC-OWN-FACTS-1 ; positions possédées, consommations et
+  identités de liaison, RFC-OWN-FACTS-2) et gate de traps du profil `rt`
   (RFC-RT-TRAPS-1).
 - `crates/ravum-lang-codegen` : un fichier Rust autonome et auditable par
   programme, prélude sûr, `#![forbid(unsafe_code)]` **sans** `extern`, et

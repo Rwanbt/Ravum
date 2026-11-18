@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-read-between",
+  "mode": "run-pass",
+  "stdout_contains": "d\nc\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): inside a nested block the array is assigned, an element is read, then both elements are moved. Printed the stale `b a b` with no error (silent wrong output)."
+}

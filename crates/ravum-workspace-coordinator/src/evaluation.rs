@@ -54,9 +54,11 @@ pub const COORDINATOR_SCHEMA_VERSION: u32 = 2;
 /// Which protocol a coordinator instance speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum EvaluationProtocol {
     /// COLLAB-1 compatibility: `AUTO_SAFE` means "textually applicable", nothing
     /// more. Kept only so existing callers keep their exact behaviour.
+    #[default]
     V1CollabCompat,
     /// Strict protocol: `AUTO_SAFE` requires a declared semantic verification and
     /// a level at least `SEMANTICALLY_CHECKED`.
@@ -80,12 +82,6 @@ impl EvaluationProtocol {
 
     pub fn is_v2(self) -> bool {
         matches!(self, EvaluationProtocol::V2SemanticStatuses)
-    }
-}
-
-impl Default for EvaluationProtocol {
-    fn default() -> Self {
-        EvaluationProtocol::V1CollabCompat
     }
 }
 

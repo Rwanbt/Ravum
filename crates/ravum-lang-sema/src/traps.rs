@@ -71,17 +71,13 @@ impl Ctx<'_> {
     fn module(&mut self, module: &Module, reachable: Option<&BTreeSet<NodeId>>) {
         for item in &module.items {
             match &item.kind {
-                ItemKind::Fn(function) => {
-                    if is_reachable(item.id, reachable) {
-                        self.block(&function.body);
-                    }
+                ItemKind::Fn(function) if is_reachable(item.id, reachable) => {
+                    self.block(&function.body);
                 }
                 ItemKind::Impl(implementation) => {
-                    for member in &implementation.items {
-                        if let ItemKind::Fn(function) = &member.kind {
-                            if is_reachable(member.id, reachable) {
-                                self.block(&function.body);
-                            }
+                    for (member, function) in implementation.methods() {
+                        if is_reachable(member.id, reachable) {
+                            self.block(&function.body);
                         }
                     }
                 }
@@ -168,7 +164,7 @@ impl Ctx<'_> {
                 // Compound assignment is the same trap as the corresponding
                 // binary operation: `x += 1` is `x + 1` (RFC-RT-TRAPS-1).
                 let ty = expr_type(self.checked, target);
-                self.binary(expr.span, *op, target, value, ty);
+                self.binary(expr.span, op.bin_op(), target, value, ty);
                 self.expr(target);
                 self.expr(value);
             }
@@ -222,11 +218,10 @@ impl Ctx<'_> {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.expr(start);
-                }
-                if let Some(end) = end {
-                    self.expr(end);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.expr(bound);
                 }
             }
             ExprKind::Return(Some(value)) => self.expr(value),
@@ -241,36 +236,33 @@ impl Ctx<'_> {
     /// integer).
     fn binary(&mut self, span: Span, op: BinOp, lhs: &Expr, rhs: &Expr, result: Option<&Type>) {
         match op {
-            BinOp::Add | BinOp::Sub | BinOp::Mul => {
-                if is_integer(result) {
-                    report(
-                        self.diags,
-                        span,
-                        "integer arithmetic",
-                        "use `wrapping_add/sub/mul`, `saturating_add/sub/mul` or \
+            BinOp::Add | BinOp::Sub | BinOp::Mul if is_integer(result) => {
+                report(
+                    self.diags,
+                    span,
+                    "integer arithmetic",
+                    "use `wrapping_add/sub/mul`, `saturating_add/sub/mul` or \
                          `checked_add/sub/mul`",
-                    );
-                }
+                );
             }
-            BinOp::Div | BinOp::Rem => {
-                if is_integer(result) && !positive_int_literal(rhs) {
-                    report(
-                        self.diags,
-                        span,
-                        "integer division/remainder",
-                        "divide by a positive literal or use `checked_div`/`checked_rem`",
-                    );
-                }
+            BinOp::Div | BinOp::Rem if is_integer(result) && !positive_int_literal(rhs) => {
+                report(
+                    self.diags,
+                    span,
+                    "integer division/remainder",
+                    "divide by a positive literal or use `checked_div`/`checked_rem`",
+                );
             }
-            BinOp::Shl | BinOp::Shr => {
-                if is_integer(expr_type(self.checked, lhs)) && !safe_shift(lhs, rhs, self.checked) {
-                    report(
-                        self.diags,
-                        span,
-                        "integer shift",
-                        "shift by a literal smaller than the type width",
-                    );
-                }
+            BinOp::Shl | BinOp::Shr
+                if is_integer(expr_type(self.checked, lhs))
+                    && !safe_shift(lhs, rhs, self.checked) =>
+            {
+                report(
+                    self.diags,
+                    span,
+                    "integer shift",
+                    "shift by a literal smaller than the type width",
+                );
             }
             _ => {}
         }
@@ -585,11 +577,10 @@ fn scan_expr(expr: &Expr, var: &str, base: Option<&str>, found: &mut bool) {
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                scan_expr(start, var, base, found);
-            }
-            if let Some(end) = end {
-                scan_expr(end, var, base, found);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                scan_expr(bound, var, base, found);
             }
         }
         ExprKind::Return(Some(value)) => scan_expr(value, var, base, found),
@@ -741,7 +732,7 @@ mod tests {
         result.checked.expect("the driver fixture must check")
     }
 
-    fn first_for<'a>(block: &'a Block) -> Option<(&'a Pat, &'a Expr, &'a Block)> {
+    fn first_for(block: &Block) -> Option<(&Pat, &Expr, &Block)> {
         for stmt in &block.stmts {
             if let StmtKind::Expr { expr, .. } = &stmt.kind {
                 if let ExprKind::For { pat, iter, body } = &expr.kind {

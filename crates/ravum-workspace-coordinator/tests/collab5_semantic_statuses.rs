@@ -356,8 +356,7 @@ fn the_corpus_contains_the_ten_mandate_cases() {
             assert!(
                 !scenario
                     .expected_decisions
-                    .iter()
-                    .any(|decision| *decision == DecisionKind::AutoSafe),
+                    .contains(&DecisionKind::AutoSafe),
                 "{}: AUTO_SAFE without a declared verifier is forbidden",
                 scenario.id
             );
@@ -367,10 +366,7 @@ fn the_corpus_contains_the_ten_mandate_cases() {
 
 #[test]
 fn the_ten_cases_produce_their_expected_statuses_and_reasons() {
-    println!(
-        "{:<38} {:<18} {:<24} {}",
-        "case", "decision", "level", "lane"
-    );
+    println!("{:<38} {:<18} {:<24} lane", "case", "decision", "level");
     for scenario in load_scenarios() {
         let scratch = scratch_dir(&scenario.id);
         let journal = scratch.join("journal.jsonl");

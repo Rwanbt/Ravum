@@ -39,17 +39,18 @@ développement continu à du code Rust existant.
 | Langage | Sous-ensemble Core 1.0 **DRAFT** ; compilateur et CLI implémentés dans `crates/ravum-lang-*` |
 | Outillage | `check`, `build`, `run`, `watch`, `test`, `fmt`, `lint`, `doc`, `cache`, `lsp`, `doctor` |
 | Cibles | Natives Windows/Linux ; `wasm32-wasip1` via Node.js WASI |
-| Conformance | **487 cas : 485 PASS / 1 FAIL / 1 SKIP** sur la machine de référence ; un échec connu ; `build_verified: false` |
-| Tests du workspace | **1 732 passés / 0 échec / 8 ignorés** |
+| Conformance | **503 cas : 502 PASS / 0 FAIL / 1 SKIP** sur la machine de référence ; `build_verified: true` |
+| Tests du workspace | **1 740 passés / 0 échec / 8 ignorés** |
 | Couverture | **91,65 % lignes / 91,32 % régions** (sema + codegen) ; **90,37 % de code produit** (1 305 non couvertes / 13 548) ; la cible de 100 % n'est **pas atteinte** |
 | Performance | Exposant de la phase `own` **1,9803 → 0,8372** ; `check` à 50 110 lignes **602,6 ms** (debug) ; LSP p95 **19,551 ms** à 1 025 lignes et **80,283 ms** à 5 110 lignes (release, machine calme) |
 | Release | Aucun tag, aucune release, aucun artefact signé, aucun audit externe |
 
-> Environnement de référence : Windows 11 x64, `rustc 1.95.0`, commit de code
-> `5fd54b8` (2026-11-14). Ces chiffres sont liés aux commandes et au SHA cités ;
-> ce ne sont pas des garanties portables. Ces chiffres se reproduisent avec les
-> commandes de la section [Développement](#développement) ; le protocole détaillé
-> est dans le [rapport de qualification](docs/reports/GOAL-WAVE-3-REPORT.md).
+> Environnement de référence : Windows 11 x64, `rustc 1.95.0`, état du code du
+> 2026-11-15 (étape E1 du chantier production readiness). Ces chiffres sont liés
+> aux commandes et à la révision citées ; ce ne sont pas des garanties portables.
+> Ces chiffres se reproduisent avec les commandes de la section
+> [Développement](#développement) ; le protocole détaillé est dans
+> [`T2-FINDINGS.md` §29](docs/qualification/T2-FINDINGS.md#295-vérification-e1-2026-11-15).
 
 ## Démarrage rapide
 
@@ -117,20 +118,21 @@ vérificateur et par le backend. Les fonctions qui déroulent, appellent
 `longjmp`, lèvent un signal ou terminent le processus sont hors contrat et
 restent de la responsabilité de l'appelant.
 
-## Échec de conformance connu
+## État de la conformance
 
-`conformance/cases/run/power-array-move-write-region-nested` échoue actuellement.
-`check` accepte le programme, mais `build` émet `a[0]`/`a[1]` sans abaisser le
-move et `rustc` rejette le résultat avec `error[E0508]: cannot move out of type
-[String; 2]`. C'est une vraie divergence `check → build` dans la planification
-des moves de tableau.
+`conformance/cases/run/power-array-move-write-region-nested` était une vraie
+divergence `check → build` : `check` acceptait le programme, mais le backend
+émettait de simples accès `a[0]`/`a[1]` et `rustc` les rejetait avec
+`error[E0508]: cannot move out of type [String; 2]`. Le défaut est corrigé dans
+le compilateur : les moves d'éléments de tableau sont abaissés à l'accès au lieu
+d'être hissés par un planificateur, et le cas reste dans le corpus de régression.
+La mesure de référence donne **503 cas : 502 PASS / 0 FAIL / 1 SKIP** et
+`build_verified: true`.
 
-Le cas fait partie du corpus de régression et n'est pas ignoré. En conséquence,
-la commande de conformance sort à 1 et rapporte `build_verified: false` ; les
-jobs CI de conformance Linux, Windows et macOS rapportent le même échec. Le check
-requis `mvp` couvre la compilation du workspace, les tests et les démos ; les jobs
-de conformance sont un signal séparé. Ne désactivez pas ce cas pour faire passer
-la CI : un correctif doit modifier le compilateur, pas le test.
+`build_verified` ne couvre que la dimension build. Le corpus est borné et ne
+prouve pas l'absence de forme inconnue ; ce n'est pas une preuve formelle. La
+commande `--verify-build`, son périmètre et ses limites sont documentés dans
+[`CONFORMANCE-BUILD-CONTRACT.md`](docs/qualification/CONFORMANCE-BUILD-CONTRACT.md).
 
 ## Limites actuelles
 
@@ -184,22 +186,28 @@ garanties réellement imposées et du coût de maintenance.
 
 ```bash
 cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --jobs 2 -- -D warnings
+cargo deny check
 cargo test --workspace --all-targets -- --test-threads=2
 cargo run -p ravum-conformance -- run --verify-build
 ```
 
-La commande de conformance sort actuellement à 1 à cause du cas connu ci-dessus.
-Cet échec est attendu et visible en CI ; il n'est pas masqué. Des vérifications
-ciblées sont aussi disponibles par crate, par exemple :
+La commande de conformance sort à 0 lorsque le corpus et la dimension
+`check → build` sont tous deux verts ; un `SKIP` est rapporté séparément et n'est
+jamais compté comme un PASS. Des vérifications ciblées sont aussi disponibles par
+crate, par exemple :
 
 ```bash
 cargo test -p ravum-lang-sema
 cargo test -p ravum-lang-codegen
 ```
 
-Le job CI `mvp` construit le workspace, exécute la suite de tests, les démos
-M1–M4 et la suite E2E navigateur. Le job de conformance exécute le corpus
-`check → build`.
+Le job CI `mvp` vérifie le formatage, exécute Clippy avec les avertissements
+refusés, valide la politique de chaîne d'approvisionnement avec `cargo-deny`,
+construit le workspace, exécute la suite de tests, les démos M1–M4 et la suite
+E2E navigateur. Le job de conformance exécute le corpus `check → build`.
+Dependabot met à jour les dépendances et les GitHub Actions chaque semaine ;
+`CODEOWNERS` définit la responsabilité de revue.
 
 ## Contribution
 
@@ -208,9 +216,11 @@ Le développement suit un workflow de branches courtes :
 1. Créer une branche depuis `dev`.
 2. Garder le changement ciblé et ajouter des tests pour le nouveau comportement
    et les refus.
-3. Exécuter le formatage, les tests pertinents et, le cas échéant, le corpus de
+3. Exécuter le formatage, Clippy avec les avertissements refusés,
+   `cargo deny check`, les tests pertinents et, le cas échéant, le corpus de
    conformance.
-4. Ouvrir une pull request vers `dev`. Le check requis `mvp` doit passer.
+4. Ajouter le changement visible dans [`CHANGELOG.md`](CHANGELOG.md).
+5. Ouvrir une pull request vers `dev`. Le check requis `mvp` doit passer.
 
 `main` est la branche par défaut et la référence documentaire. `dev` est la
 branche d'intégration. Les branches durables sont `main` et `dev` ; les branches

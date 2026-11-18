@@ -49,7 +49,7 @@ fn constant_block(value: f32, frames: usize) -> Vec<f32> {
 #[test]
 fn a_gain_patch_replaces_the_processing_at_a_block_boundary() {
     let dir = work("dsp-gain");
-    let (host, v1) = host(&dir, "gain_v1.rs");
+    let (host, _v1) = host(&dir, "gain_v1.rs");
     let mut state = DspState::default();
     let mut out = vec![0f32; 128];
 
@@ -136,7 +136,7 @@ fn a_scalar_module_cannot_be_loaded_as_a_dsp_module() {
 #[test]
 fn compatible_iir_swap_keeps_the_host_owned_state_and_the_signal_continuous() {
     let dir = work("dsp-iir");
-    let (host, v1) = host(&dir, "iir_v1.rs");
+    let (host, _v1) = host(&dir, "iir_v1.rs");
     let mut state = DspState::default();
     let mut out = vec![0f32; 64];
 
@@ -207,7 +207,7 @@ fn the_block_path_does_not_allocate() {
 #[test]
 fn an_in_flight_block_keeps_the_retired_module_alive() {
     let dir = work("dsp-inflight");
-    let (host, v1) = host(&dir, "gain_v1.rs");
+    let (host, _v1) = host(&dir, "gain_v1.rs");
     // This is the "in-flight" reference: the audio thread holds it for one block.
     let held = host.enter();
     let weak = Arc::downgrade(&held);

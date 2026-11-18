@@ -323,7 +323,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 fn hex_decode(text: &str) -> Result<Vec<u8>> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err(DaemonError::invalid("rmeta_hex has an odd length"));
     }
     let mut bytes = Vec::with_capacity(text.len() / 2);
@@ -1046,8 +1046,7 @@ mod tests {
         ];
         let third = sync_unit_dir(&dir, &changed).unwrap();
         assert_eq!(third.written_files, 1);
-        let removed =
-            sync_unit_dir(&dir, &vec![("src/lib.rs".to_owned(), "pub fn a() {}")]).unwrap();
+        let removed = sync_unit_dir(&dir, &[("src/lib.rs".to_owned(), "pub fn a() {}")]).unwrap();
         assert_eq!(removed.removed_files, 1);
         assert!(!dir.join("src").join("math.rs").exists());
         let _ = std::fs::remove_dir_all(&dir);
@@ -1078,7 +1077,7 @@ mod tests {
         let extern_input = make_extern(b"dep-rmeta-bytes-1");
         let extern_ref = extern_input.reference();
         let identity = request
-            .identity_with_externs(&toolchain(), &[extern_input.clone()])
+            .identity_with_externs(&toolchain(), std::slice::from_ref(&extern_input))
             .unwrap();
         assert_eq!(identity.externs, vec![extern_ref.clone()]);
         let plain_identity = request.identity(&toolchain()).unwrap();
@@ -1088,7 +1087,7 @@ mod tests {
         );
         let files = request.normalized_files().unwrap();
         let materialized = store
-            .materialize_with_externs(&identity, &files, &[extern_input.clone()])
+            .materialize_with_externs(&identity, &files, std::slice::from_ref(&extern_input))
             .unwrap();
         assert!(materialized.created);
         assert_eq!(materialized.externs, vec![extern_ref.clone()]);
@@ -1107,13 +1106,17 @@ mod tests {
         );
         assert_eq!(verify_snapshot(&materialized.dir, &identity).unwrap(), 1);
         assert_eq!(
-            verify_snapshot_with_externs(&materialized.dir, &identity, &[extern_ref.clone()])
-                .unwrap(),
+            verify_snapshot_with_externs(
+                &materialized.dir,
+                &identity,
+                std::slice::from_ref(&extern_ref),
+            )
+            .unwrap(),
             1
         );
         // Idempotent re-materialization: verified, not overwritten.
         let again = store
-            .materialize_with_externs(&identity, &files, &[extern_input.clone()])
+            .materialize_with_externs(&identity, &files, std::slice::from_ref(&extern_input))
             .unwrap();
         assert!(!again.created);
         assert_eq!(again.verified_files, 1);
@@ -1157,7 +1160,7 @@ mod tests {
         let extern_input = make_extern(b"dep-rmeta-bytes");
         let extern_ref = extern_input.reference();
         let identity = request
-            .identity_with_externs(&toolchain(), &[extern_input.clone()])
+            .identity_with_externs(&toolchain(), std::slice::from_ref(&extern_input))
             .unwrap();
         let files = request.normalized_files().unwrap();
         let materialized = store

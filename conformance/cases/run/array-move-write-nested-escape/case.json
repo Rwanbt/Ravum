@@ -1,0 +1,6 @@
+{
+  "id": "run/array-move-write-nested-escape",
+  "mode": "run-pass",
+  "stdout_contains": "c\nd\n",
+  "notes": "Probe of 2026-11-15 (docs/qualification/T2-FINDINGS.md §29): the array is assigned inside a nested block, one element is moved there and another after the block. A destructuring hoisted before the block printed the stale `a b` with no error (silent wrong output)."
+}

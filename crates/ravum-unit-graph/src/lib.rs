@@ -22,6 +22,7 @@ pub use runner::{run_chain, CargoTrace, ChainOptions, RunReport, RustcTrace, Uni
 /// observation, not a proof of the whole program's correctness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum UnitStatus {
     /// The complete `--extern` chain was verified with fresh interface artifacts.
     TargetedOk,
@@ -32,6 +33,7 @@ pub enum UnitStatus {
     /// The sources changed during verification: the result was discarded.
     Stale,
     /// Real diagnostics were produced (targeted rustc or Cargo).
+    #[default]
     Error,
 }
 
@@ -44,12 +46,6 @@ impl UnitStatus {
             UnitStatus::Stale => "stale",
             UnitStatus::Error => "error",
         }
-    }
-}
-
-impl Default for UnitStatus {
-    fn default() -> Self {
-        UnitStatus::Error
     }
 }
 

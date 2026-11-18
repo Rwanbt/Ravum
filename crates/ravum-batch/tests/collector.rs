@@ -446,8 +446,8 @@ fn mixed_scenario_about_half_of_the_batches_fall_back() {
     assert_eq!(telemetry.batches_formed, 8);
     assert_eq!(telemetry.batches_fell_back, 4);
     assert_eq!(telemetry.batches_accepted_all, 4);
-    assert_eq!(telemetry.analyses_used, 4 * 1 + 4 * 6);
-    assert_eq!(telemetry.analyses_saved_net, 4 * 4 + 4 * -1);
+    assert_eq!(telemetry.analyses_used, 4 + 4 * 6);
+    assert_eq!(telemetry.analyses_saved_net, 4 * 4 + -4);
     assert_eq!(telemetry.wait_p50_ms(), Some(50));
     assert_eq!(telemetry.proposals_received, 40);
     assert_eq!(telemetry.items_reported, 40);

@@ -28,6 +28,7 @@
 | TYP-1.4 | `char` contient un **scalaire Unicode**, jamais un octet UTF-8, jamais un surrogat. `'é'` est un `char` valide ; un `u8` ne se convertit pas implicitement en `char`. | MUST |
 | TYP-1.5 | `bool` n'a que deux valeurs ; il n'existe **aucune** conversion implicite entier↔bool. | MUST |
 | TYP-1.6 | `!` est le **type Never** : aucune valeur, aucune taille. C'est le type des expressions divergentes (`return`, `break`, `continue`, `panic`, `process::exit`) et il **coerce implicitement vers tout type attendu** (aucun `E-TYP-MISMATCH` n'est émis pour `!`). Il n'est ni constructible, ni paramètre, ni champ, ni élément de `Vec`, ni retour d'une fonction non divergente. | MUST |
+| TYP-1.7 | La **profondeur d'imbrication** d'un type est bornée à **100** (`MAX_TYPE_DEPTH`) : un type scalaire a la profondeur 1 et chaque constructeur (`&`, `[T; N]`, `[T]`, tuple, `Vec`, `Option`, `Result`, struct/enum générique) ajoute un niveau. Un type plus profond, écrit ou inféré, est refusé (`E-TYP-DEPTH`). C'est l'unique borne de profondeur du vérificateur de types : la substitution et l'exhaustivité la suivent. Elle garantit que le Rust généré reste sous la limite de récursion de rustc (échec mesuré à 129 `Option` imbriqués). | MUST |
 
 ```rv
 // POSITIF

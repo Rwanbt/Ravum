@@ -6,12 +6,35 @@
 > canonique reste [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](../roadmap/CORE-1.0-GATE-MATRIX.md).
 
 > **Portée de lecture.** Les sections 1 à 15 décrivent la session du **2026-11-09**
-> (SHA `a277b86`). La **section 0 octies** ci-dessous porte la passe du
-> **2026-11-13 (passe 11, cas FFI)** et **prévaut pour les chiffres courants** ;
-> la section 0 septies est la passe 10 (D13, `2b31d63`), la section 0 sexies la
-> passe 9 (`21cf7d4`), la section 0 quinquies la passe 8 (`7696e2a`), la section
-> 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6 (`5d88ecb` →
-> `9da9b12`).
+> (SHA `a277b86`). La **section 0 undecies** ci-dessous porte la passe E1 du
+> **2026-11-15** et **prévaut pour les chiffres courants** ; la section 0 decies
+> est la campagne de fermeture du 2026-11-14, la section 0 octies la passe 11
+> FFI (2026-11-13), la section 0 septies la passe 10 (D13, `2b31d63`), la section
+> 0 sexies la passe 9 (`21cf7d4`), la section 0 quinquies la passe 8 (`7696e2a`),
+> la section 0 quater la passe 7 (`c6b4537`), la section 0 ter la passe 6
+> (`5d88ecb` → `9da9b12`).
+
+## 0 undecies. E1 — fermeture de la divergence `check → build` (2026-11-15)
+
+Cette section **prévaut sur toutes les précédentes** pour les chiffres courants.
+Branche `goal/production-plan-2026-11-15`, Windows 11 x64, `rustc 1.95.0`.
+Décision et conception : [`RFC-OWN-ARRAY-ELEMENTS.md`](../rfc/RFC-OWN-ARRAY-ELEMENTS.md)
+et [`PRODUCTION-PLAN-2026-11-15.md`](../roadmap/PRODUCTION-PLAN-2026-11-15.md).
+
+| Mesure | Résultat courant |
+|---|---|
+| Conformance (`run --verify-build`) | **503 cas : 502 PASS / 0 FAIL / 1 SKIP / 0 NOT_RUN** ; `perimeter=222/222`, `verified=124`, `implicit=98`, `build_verified: true` |
+| Tests workspace | **124 suites, 1740 passés / 0 échec / 8 ignorés** (`cargo test --workspace --no-fail-fast`, exit 0) |
+| Oracle différentiel rapide | **3 graines × 200 programmes, 0 divergence** (`cargo test -p ravum-lang-codegen --test differential_oracle differential_oracle_fast`) ; la campagne nominale 3 × 2 000 reste E7 |
+| Traçabilité | **188/188** FeatureIds ; MUST **811 / 467 mappés / 344 non mappés** ; registre **108 codes** déclarés, 126 émis |
+| Cas de corpus | **+16** : quatorze `run-pass` (`array-move-write-*`, `array-move-before-nested-write`, `array-move-swap-in-block`, `array-move-two-writes`, `array-move-then-write-in-block`, `array-element-reinit-*`) et deux `compile-fail` (`array-element-reinit-sibling-moved-fail`, `array-dynamic-write-partial-fail`) |
+
+La divergence `run/power-array-move-write-region-nested` (`check` exit 0,
+`build` `E0508`) est fermée : `MovePlanner` et le hissage sont supprimés ;
+chaque accès est abaissé à l'accès par un motif Rust. Aucun gate n'est promu :
+T2 reste `PARTIAL` pour la traçabilité MUST, R2 reste « fait sur le périmètre
+mesuré », et l'audit externe (D4/T4/T12) reste humain. Les résultats ne sont pas
+encore rejoués par la CI des trois OS.
 
 ## 0 decies. Campagne de fermeture des chantiers techniques (2026-11-14, soir)
 

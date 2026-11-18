@@ -977,12 +977,9 @@ impl WatchChild {
         let deadline = Instant::now() + timeout;
         loop {
             if let Some(child) = self.child.as_mut() {
-                match child.try_wait().expect("try_wait on watch") {
-                    Some(status) => {
-                        self.child.take();
-                        return status.code();
-                    }
-                    None => {}
+                if let Some(status) = child.try_wait().expect("try_wait on watch") {
+                    self.child.take();
+                    return status.code();
                 }
             } else {
                 return None;

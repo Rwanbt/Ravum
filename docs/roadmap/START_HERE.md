@@ -1,9 +1,8 @@
-# Commencer ici — Ravum (mise à jour 2026-11-13)
+# Commencer ici — Ravum (mise à jour 2026-11-15)
 
-> **Ce document décrit l'état réel du dépôt, pas un plan à venir.** Il a été
-> réécrit le 2026-11-13 : la version précédente affirmait « aucune implémentation
-> commencée », ce qui était faux depuis le 2026-11-09 pour la plateforme et le
-> 2026-11-12 pour le langage.
+> **Ce document décrit l'état réel du dépôt, pas un plan à venir.** La version
+> du 2026-11-13 affirmait encore qu'`AGENTS.md` était une proposition en attente
+> d'approbation, ce qui est faux depuis le 2026-11-14 (S1).
 
 ## Ce qu'est Ravum aujourd'hui
 
@@ -22,16 +21,17 @@ Deux lignes de travail réelles, qui ne se recouvrent pas encore :
 ## Par où commencer
 
 1. [`AGENTS.md`](../../AGENTS.md) — mandat permanent. Sa révision du 2026-11-13
-   est une **proposition `PENDING_HUMAN_APPROVAL`** : elle corrige la phrase
-   « pas encore un compilateur fonctionnel ».
+   est **approuvée par le responsable le 2026-11-14** (S1).
 2. [`DECISIONS_REQUIRED.md`](../../DECISIONS_REQUIRED.md) §0 — décisions déjà
    prises par le responsable (D2, D3, D10…).
 3. [`docs/architecture/STATUS.md`](../architecture/STATUS.md) — état réel, deux
    lignes séparées.
 4. [`docs/roadmap/CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md) — registre
    canonique des gates T0–T12 ; les états ne se changent qu'avec commande + SHA.
+   Les sections datées (anciennes passes) sont archivées dans
+   [`docs/roadmap/archive/`](archive/).
 5. [`docs/reports/GOAL-BASELINE.md`](../reports/GOAL-BASELINE.md) — chiffres de
-   référence mesurés le 2026-11-13 et seuils de non-régression.
+   référence et seuils de non-régression.
 6. [`docs/reports/LANGUAGE-CORE-STATUS.md`](../reports/LANGUAGE-CORE-STATUS.md) —
    état courant du langage, historique des passes en annexe.
 
@@ -48,15 +48,19 @@ python tools/registry_audit.py
 python tools/features_coverage.py --strict
 ```
 
-Les résultats attendus (2026-11-13, `c931fdf`) sont dans `GOAL-BASELINE.md`.
-Aucun chiffre ne doit régresser ; un `SKIP` ou un `NOT_RUN` n'est jamais un
-`PASS`.
+Les résultats attendus (état courant, `dev` = `228abee`) sont dans
+[`CORE-1.0-GATE-MATRIX.md`](CORE-1.0-GATE-MATRIX.md) et
+[`LANGUAGE-CORE-STATUS.md`](../reports/LANGUAGE-CORE-STATUS.md). Aucun chiffre ne
+doit régresser ; un `SKIP` ou un `NOT_RUN` n'est jamais un `PASS`.
 
 ## Organisation des travaux
 
-- Branches de tâche **depuis `dev`**, PR **vers `dev`**. Le chantier en cours
-  vit sur `goal/production-ready` (partie de `test/coverage-batch-1` pour ne pas
-  perdre le lot couverture, absent de `dev`).
+- Branches de tâche **depuis `dev`**, PR **vers `dev`**. Le chantier « production
+  ready » suit le plan
+  [`PRODUCTION-PLAN-2026-11-15.md`](PRODUCTION-PLAN-2026-11-15.md) : E1 (divergence
+  `check → build`) et E2 (garde-fous Clippy/cargo-deny/Dependabot/CODEOWNERS/
+  CHANGELOG/MSRV) sont terminés et fusionnés ; la prochaine étape est E3
+  (véracité documentaire), puis E4–E10.
 - Une même frontière de module a un propriétaire de travail pour une PR donnée.
 - Aucun test supprimé ou affaibli, aucun `PROVED`, aucune ratification d'ADR,
   aucun tag, aucune release sans décision humaine.

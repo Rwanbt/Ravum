@@ -202,6 +202,15 @@ remplace la décision locale par la lecture d'`OwnFacts`, puis vérifiée :
 
 ### 9.2 Résultat, famille par famille
 
+> **Mise à jour du 2026-11-15.** Ce tableau est l'état mesuré à l'époque. Depuis,
+> le `MovePlanner` a été remplacé par un abaissement par accès (E1), et
+> [`RFC-OWN-FACTS-2`](RFC-OWN-FACTS-2.md) §6 a levé les blocages `descents`
+> (décision publiée pour une projection de temporaire), `pattern-consumption`
+> (`consumed` enregistré là où le checker évalue, bras et queues compris) et
+> `field-projection` (`BindingId` unique par liaison). `move-simple` n'a plus
+> d'objet : un chemin n'a qu'un accès, sur son expression la plus externe.
+> `literal-index` reste une lecture syntaxique (RFC-OWN-FACTS-2 §6.6).
+
 | Famille | Décision locale d'`emit.rs` | État | Preuve |
 |---|---|---|---|
 | `receiver` | `MovePlanner::by_value_receiver` + `builtin_method_moves_receiver` : récepteur `self` par valeur (signature utilisateur, ou liste STD-11.3 `Option`/`Result` recopiée dans le backend) | **`TESTED`** (migrée) | Rare de `UseKind` de l'expression récepteur : `Move`/`Copy` = consommé, `Borrow`/`BorrowMut` = emprunté. Les deux dérivations locales sont supprimées. S7 : 239/239 fichiers identiques, 497 cas de manifeste inchangés. Conformance 486 cas : 485 pass, 0 fail, 1 skip ; build perimeter 207/207, 0 échec. |

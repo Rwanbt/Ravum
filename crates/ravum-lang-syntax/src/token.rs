@@ -47,7 +47,7 @@ pub enum Kw {
 }
 
 impl Kw {
-    pub fn from_str(s: &str) -> Option<Kw> {
+    pub fn parse(s: &str) -> Option<Kw> {
         Some(match s {
             "fn" => Kw::Fn,
             "let" => Kw::Let,
