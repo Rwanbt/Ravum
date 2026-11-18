@@ -279,7 +279,7 @@ jobs:
 
       - name: Upload browser E2E evidence (impact-selected)
         if: always() && steps.impact.outputs.browser == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-e2e-evidence
           path: target/ravum/browser-e2e
