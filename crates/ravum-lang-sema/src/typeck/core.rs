@@ -426,17 +426,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .cloned()
                 .unwrap_or(Type::Error);
             let generics: Vec<String> = imp.generics.iter().map(|g| g.name.name.clone()).collect();
-            for member in &imp.items {
-                if let ItemKind::Fn(f) = &member.kind {
-                    methods.push((
-                        module,
-                        member.id,
-                        member.span,
-                        f,
-                        self_ty.clone(),
-                        generics.clone(),
-                    ));
-                }
+            for (member, f) in imp.methods() {
+                methods.push((
+                    module,
+                    member.id,
+                    member.span,
+                    f,
+                    self_ty.clone(),
+                    generics.clone(),
+                ));
             }
         }
         for (module, id, decl_span, f, self_ty, generics) in methods {

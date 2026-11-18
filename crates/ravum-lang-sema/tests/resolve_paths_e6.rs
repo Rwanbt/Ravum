@@ -622,3 +622,24 @@ fn a_use_resolving_to_two_modules_or_two_kinds_is_ambiguous() {
         ],
     );
 }
+
+/// A member of an `impl` that is not a function cannot come from the parser
+/// (E-PARSE-UNEXPECTED); a hand-built AST holding one is refused by `resolve`
+/// instead of being skipped.
+#[test]
+fn a_non_function_member_of_an_impl_is_refused() {
+    use ravum_lang_sema::syntax::ast::ItemKind;
+    let source = "struct S { n: i32 }\nconst K: i32 = 1;\nimpl S { fn get(&self) -> i32 { return self.n; } }\n";
+    let mut sources = SourceMap::new();
+    let file = sources.add("src/lib.rv", source);
+    let mut parsed = parser::parse_file(file, source);
+    assert!(parsed.diags.is_empty());
+    let constant = parsed.program.root.items[1].clone();
+    let ItemKind::Impl(imp) = &mut parsed.program.root.items[2].kind else {
+        panic!("expected the impl");
+    };
+    imp.items.push(constant);
+    let result = ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default());
+    assert!(result.diags.iter().any(|d| d.code == "E-RES-IMPL-UNKNOWN"));
+    assert!(result.checked.is_none());
+}

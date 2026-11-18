@@ -252,12 +252,8 @@ pub(super) fn collect_fns<'a>(module: &'a Module, out: &mut Vec<(&'a Item, &'a F
             ItemKind::Fn(f) => out.push((item, f)),
             ItemKind::Mod(inner) => collect_fns(inner, out),
             ItemKind::Impl(imp) => {
-                for sub in &imp.items {
-                    match &sub.kind {
-                        ItemKind::Fn(f) => out.push((sub, f)),
-                        ItemKind::Mod(inner) => collect_fns(inner, out),
-                        _ => {}
-                    }
+                for (sub, f) in imp.methods() {
+                    out.push((sub, f));
                 }
             }
             _ => {}

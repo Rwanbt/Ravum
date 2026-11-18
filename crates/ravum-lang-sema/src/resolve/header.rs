@@ -563,18 +563,14 @@ pub(crate) fn resolve_impl(
     };
     let impl_generics: Vec<String> = generics.iter().map(|(n, _)| n.clone()).collect();
     world.impls.entry(def).or_default();
-    for member in &imp.items {
-        let f = match &member.kind {
-            ItemKind::Fn(f) => f,
-            _ => {
-                diags.error(
-                    "E-RES-IMPL-UNKNOWN",
-                    member.span,
-                    "only fn items are allowed inside an `impl` in Core 1.0".to_string(),
-                );
-                continue;
-            }
-        };
+    for member in imp.non_methods() {
+        diags.error(
+            "E-RES-IMPL-UNKNOWN",
+            member.span,
+            "only fn items are allowed inside an `impl` in Core 1.0".to_string(),
+        );
+    }
+    for (member, f) in imp.methods() {
         let sig = resolve_fn_header(
             world,
             facts,

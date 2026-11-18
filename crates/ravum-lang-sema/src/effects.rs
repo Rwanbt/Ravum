@@ -251,10 +251,8 @@ fn collect_module_fns<'a>(
             }
             ItemKind::Mod(inner) => collect_module_fns(inner, out),
             ItemKind::Impl(imp) => {
-                for member in &imp.items {
-                    if let ItemKind::Fn(f) = &member.kind {
-                        out.insert(member.id, f);
-                    }
+                for (member, f) in imp.methods() {
+                    out.insert(member.id, f);
                 }
             }
             _ => {}
@@ -385,11 +383,10 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                walk_expr(start, facts, out);
-            }
-            if let Some(end) = end {
-                walk_expr(end, facts, out);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                walk_expr(bound, facts, out);
             }
         }
         ExprKind::Try(inner) => walk_expr(inner, facts, out),

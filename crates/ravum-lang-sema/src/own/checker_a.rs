@@ -531,11 +531,10 @@ impl<'a> OwnChecker<'a> {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.eval_value(start);
-                }
-                if let Some(end) = end {
-                    self.eval_value(end);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.eval_value(bound);
                 }
             }
             ExprKind::Try(inner) => {

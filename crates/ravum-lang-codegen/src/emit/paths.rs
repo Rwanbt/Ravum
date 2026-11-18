@@ -214,10 +214,8 @@ pub(super) fn collect_module_exprs<'a>(
         match &item.kind {
             ItemKind::Fn(function) => collect_block_exprs(&function.body, out, receivers),
             ItemKind::Impl(implementation) => {
-                for member in &implementation.items {
-                    if let ItemKind::Fn(function) = &member.kind {
-                        collect_block_exprs(&function.body, out, receivers);
-                    }
+                for (_, function) in implementation.methods() {
+                    collect_block_exprs(&function.body, out, receivers);
                 }
             }
             ItemKind::Mod(inner) => collect_module_exprs(inner, out, receivers),
@@ -232,10 +230,8 @@ pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>
         match &item.kind {
             ItemKind::Fn(function) => out.push(&function.body),
             ItemKind::Impl(implementation) => {
-                for member in &implementation.items {
-                    if let ItemKind::Fn(function) = &member.kind {
-                        out.push(&function.body);
-                    }
+                for (_, function) in implementation.methods() {
+                    out.push(&function.body);
                 }
             }
             ItemKind::Mod(inner) => collect_fn_bodies(inner, out),
@@ -346,11 +342,10 @@ pub(super) fn collect_expr<'a>(
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                collect_expr(start, out, receivers);
-            }
-            if let Some(end) = end {
-                collect_expr(end, out, receivers);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                collect_expr(bound, out, receivers);
             }
         }
         ExprKind::Try(inner) => collect_expr(inner, out, receivers),
@@ -596,11 +591,10 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 self.walk_expr(len, false);
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.walk_expr(start, false);
-                }
-                if let Some(end) = end {
-                    self.walk_expr(end, false);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.walk_expr(bound, false);
                 }
             }
             ExprKind::Unary { op, expr: inner } => {

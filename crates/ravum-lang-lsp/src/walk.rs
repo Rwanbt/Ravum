@@ -333,11 +333,10 @@ impl AstIndex {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.walk_expr(start);
-                }
-                if let Some(end) = end {
-                    self.walk_expr(end);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.walk_expr(bound);
                 }
             }
             ExprKind::Try(inner) => self.walk_expr(inner),

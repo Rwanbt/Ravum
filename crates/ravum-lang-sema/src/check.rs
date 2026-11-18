@@ -624,11 +624,9 @@ mod fact_coverage_tests {
                 }
                 ItemKind::Impl(imp) => {
                     types.insert(imp.self_ty.id);
-                    for member in &imp.items {
-                        if let ItemKind::Fn(f) = &member.kind {
-                            types.insert(f.ret.id);
-                            walk_block(&f.body, exprs, paths, pats, types);
-                        }
+                    for (_, f) in imp.methods() {
+                        types.insert(f.ret.id);
+                        walk_block(&f.body, exprs, paths, pats, types);
                     }
                 }
                 ItemKind::Mod(inner) => walk_module(inner, exprs, paths, pats, types),
@@ -784,11 +782,10 @@ mod fact_coverage_tests {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(s) = start {
-                    walk_expr(s, exprs, paths, pats, types);
-                }
-                if let Some(e) = end {
-                    walk_expr(e, exprs, paths, pats, types);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    walk_expr(bound, exprs, paths, pats, types);
                 }
             }
             ExprKind::Try(inner) => walk_expr(inner, exprs, paths, pats, types),

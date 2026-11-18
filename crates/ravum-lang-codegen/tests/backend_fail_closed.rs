@@ -533,3 +533,23 @@ fn a_variant_index_outside_its_enum_is_refused() {
     let message = refusal(&broken, &GenOptions::default());
     assert!(message.contains("unknown variant 99"), "{message}");
 }
+
+/// A member of an `impl` that is not a function (a hand-built AST past the
+/// checker) is refused instead of being skipped.
+#[test]
+fn a_non_function_member_of_an_impl_is_refused() {
+    let mut program = checked(
+        "struct S { n: i32 }\nconst K: i32 = 1;\nimpl S { fn get(&self) -> i32 { return self.n; } }\nfn main() { }\n",
+        Profile::Core,
+    );
+    let constant = program.program.root.items[1].clone();
+    let ItemKind::Impl(imp) = &mut program.program.root.items[2].kind else {
+        panic!("expected the impl");
+    };
+    imp.items.push(constant);
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("unsupported item inside `impl`"),
+        "{message}"
+    );
+}

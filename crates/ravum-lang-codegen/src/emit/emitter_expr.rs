@@ -181,12 +181,14 @@ impl<'a> Emitter<'a> {
                 end,
                 inclusive,
             } => {
+                // Only closed `for` ranges reach the backend; an absent bound
+                // would be written as nothing.
                 let mut text = String::new();
-                if let Some(first) = start {
+                for first in start.iter() {
                     text.push_str(&self.operand(first, indent)?);
                 }
                 text.push_str(if *inclusive { "..=" } else { ".." });
-                if let Some(last) = end {
+                for last in end.iter() {
                     text.push_str(&self.operand(last, indent)?);
                 }
                 Ok(text)

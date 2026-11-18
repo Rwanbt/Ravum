@@ -75,11 +75,9 @@ impl Ctx<'_> {
                     self.block(&function.body);
                 }
                 ItemKind::Impl(implementation) => {
-                    for member in &implementation.items {
-                        if let ItemKind::Fn(function) = &member.kind {
-                            if is_reachable(member.id, reachable) {
-                                self.block(&function.body);
-                            }
+                    for (member, function) in implementation.methods() {
+                        if is_reachable(member.id, reachable) {
+                            self.block(&function.body);
                         }
                     }
                 }
@@ -220,11 +218,10 @@ impl Ctx<'_> {
                 }
             }
             ExprKind::Range { start, end, .. } => {
-                if let Some(start) = start {
-                    self.expr(start);
-                }
-                if let Some(end) = end {
-                    self.expr(end);
+                // A range reaching this pass is a closed `for` clause (typeck refuses
+                // the open and inclusive forms); visit whichever bounds are present.
+                for bound in start.iter().chain(end.iter()) {
+                    self.expr(bound);
                 }
             }
             ExprKind::Return(Some(value)) => self.expr(value),
@@ -580,11 +577,10 @@ fn scan_expr(expr: &Expr, var: &str, base: Option<&str>, found: &mut bool) {
             }
         }
         ExprKind::Range { start, end, .. } => {
-            if let Some(start) = start {
-                scan_expr(start, var, base, found);
-            }
-            if let Some(end) = end {
-                scan_expr(end, var, base, found);
+            // A range reaching this pass is a closed `for` clause (typeck refuses
+            // the open and inclusive forms); visit whichever bounds are present.
+            for bound in start.iter().chain(end.iter()) {
+                scan_expr(bound, var, base, found);
             }
         }
         ExprKind::Return(Some(value)) => scan_expr(value, var, base, found),

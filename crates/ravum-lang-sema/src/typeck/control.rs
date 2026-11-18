@@ -190,11 +190,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         end: Option<&Expr>,
         inclusive: bool,
     ) -> Type {
-        if let Some(start) = start {
-            self.check_expr(start, None);
-        }
-        if let Some(end) = end {
-            self.check_expr(end, None);
+        // Type whichever bounds are present.
+        for bound in start.iter().chain(end.iter()) {
+            self.check_expr(bound, None);
         }
         let _ = inclusive;
         let _ = expr;

@@ -326,6 +326,25 @@ pub struct ImplItem {
     pub span: Span,
 }
 
+impl ImplItem {
+    /// The methods of the block with their items. The parser builds an `impl`
+    /// with `fn` members only (E-PARSE-UNEXPECTED otherwise); a hand-built AST
+    /// holding anything else is refused by `resolve` (see [`Self::non_methods`]).
+    pub fn methods(&self) -> impl Iterator<Item = (&Item, &FnItem)> {
+        self.items.iter().filter_map(|item| match &item.kind {
+            ItemKind::Fn(f) => Some((item, f)),
+            _ => None,
+        })
+    }
+
+    /// The members that are not methods (empty for a parsed program).
+    pub fn non_methods(&self) -> impl Iterator<Item = &Item> {
+        self.items
+            .iter()
+            .filter(|item| !matches!(item.kind, ItemKind::Fn(_)))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstItem {
     pub name: Ident,

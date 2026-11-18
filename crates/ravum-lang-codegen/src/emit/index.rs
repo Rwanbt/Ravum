@@ -268,19 +268,17 @@ impl Index {
                 }),
                 ItemKind::Impl(implementation) => {
                     let owner = impl_owner_hint(checked, implementation);
-                    for sub in &implementation.items {
-                        if let ItemKind::Fn(fun) = &sub.kind {
-                            raws.push(RawItem {
-                                id: sub.id,
-                                name: fun.name.name.clone(),
-                                kind: RawKind::Fn,
-                                is_test: fun.is_test,
-                                ret: ret_kind_of(checked, sub.id, fun),
-                                module_ravum: ravum_path.to_string(),
-                                module_rust: rust_path.to_string(),
-                                owner: Some(owner.clone()),
-                            });
-                        }
+                    for (sub, fun) in implementation.methods() {
+                        raws.push(RawItem {
+                            id: sub.id,
+                            name: fun.name.name.clone(),
+                            kind: RawKind::Fn,
+                            is_test: fun.is_test,
+                            ret: ret_kind_of(checked, sub.id, fun),
+                            module_ravum: ravum_path.to_string(),
+                            module_rust: rust_path.to_string(),
+                            owner: Some(owner.clone()),
+                        });
                     }
                 }
                 ItemKind::Mod(inner) => {

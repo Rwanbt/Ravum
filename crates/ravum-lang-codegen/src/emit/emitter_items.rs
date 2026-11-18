@@ -177,18 +177,16 @@ impl<'a> Emitter<'a> {
         let generics = self.generics(&implementation.generics);
         buf.line(&format!("impl{generics} {self_type} {{"));
         buf.indent += 1;
-        for item in &implementation.items {
-            match &item.kind {
-                ItemKind::Fn(fun) => self.emit_fn(buf, item, fun)?,
-                // The checker accepts only functions inside an `impl`
-                // (E-RES-IMPL-UNKNOWN); anything else is refused here too.
-                _ => {
-                    return Err(err(format!(
-                        "unsupported item inside `impl` (item node {})",
-                        item.id
-                    )));
-                }
-            }
+        // The checker accepts only functions inside an `impl`
+        // (E-RES-IMPL-UNKNOWN); anything else is refused here too.
+        if let Some(item) = implementation.non_methods().next() {
+            return Err(err(format!(
+                "unsupported item inside `impl` (item node {})",
+                item.id
+            )));
+        }
+        for (item, fun) in implementation.methods() {
+            self.emit_fn(buf, item, fun)?;
         }
         buf.indent -= 1;
         buf.line("}");
