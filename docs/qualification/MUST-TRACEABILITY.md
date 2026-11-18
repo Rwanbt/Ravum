@@ -7,6 +7,12 @@
 
 ## 1. Résultat en une phrase
 
+> **Mesure du 2026-11-18 (lot T2 `lexical.md`, PR #167)** : `tools/must_audit.py`
+> compte **815 énoncés MUST** et **195 FeatureIds** (F-LEX-009 à F-LEX-015
+> ajoutés) ; **511 / 815** sont atteignables par un FeatureId, **304** ne le sont
+> pas ; couverture stricte **195/195** (1 exemption). Le texte ci-dessous est la
+> mesure d'origine, conservée.
+
 **Confirmé, et l'écart est grand :** `spec/language/` contient **807 énoncés
 MUST** (805 identifiants uniques), tandis que `features.md` contient **188
 FeatureIds**. **463 / 807 MUST (57,4 %)** sont atteignables par un FeatureId
