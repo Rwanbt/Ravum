@@ -69,3 +69,9 @@ Tête `fa1935d` (branche `test/e6-product-coverage`), Linux x86_64 :
 **99,21 %** : 186 lignes exemptées (58 entrées), **105** lignes de dette,
 0 exemption périmée ; `coverage_report.py --check` : seuils respectés ;
 CI verte sur `fa1935d`.
+
+## 5. Avancement
+
+- 2026-11-18, tête `0dbcf40` : familles A–F exécutées. `line_coverage_exemptions.entries` est vide ;
+  100,00 % brut sur 13 135 lignes produit (sema + codegen), 0 dette. Ordre §3 : étapes 1 à 5 faites.
+  Reste l'étape 6 (décisions de comportement 1 à 8).
