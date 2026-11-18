@@ -41,6 +41,31 @@ import {
 
 const EXIT = { pass: 0, fail: 1, skip: 2 };
 
+// Whole-run deadline. Every CDP command and every wait is already bounded, but a
+// stuck child process or an open handle could still keep the run alive until the
+// CI job is cancelled, which loses the log. The watchdog turns that into an
+// explicit failure that names the step in progress. Normal runs take < 60 s.
+const RUN_DEADLINE_MS = Number(process.env.RAVUM_E2E_DEADLINE_MS ?? 300_000);
+let inProgress = 'démarrage';
+const live = { browser: null, ctx: null };
+const watchdog = setTimeout(async () => {
+  console.error(
+    `\nÉCHEC du harnais: délai global dépassé (${RUN_DEADLINE_MS} ms) pendant « ${inProgress} »`,
+  );
+  const bounded = (promise) => Promise.race([promise, new Promise((r) => setTimeout(r, 5000))]);
+  try {
+    if (live.ctx) await bounded(live.ctx.dispose());
+  } catch {
+    // Best effort: the process exits below.
+  }
+  try {
+    if (live.browser) await bounded(live.browser.close());
+  } catch {
+    // Best effort: the process exits below.
+  }
+  process.exit(EXIT.fail);
+}, RUN_DEADLINE_MS);
+
 // ---------------------------------------------------------------------------
 // CLI and runtime checks
 // ---------------------------------------------------------------------------
@@ -754,6 +779,7 @@ async function runScenarios(ctx, options) {
     };
     const step = (text) => state.steps.push(text);
     const startedAt = performance.now();
+    inProgress = `scénario ${scenario.id} : ${scenario.name}`;
     console.log(`\n[${String(scenario.id).padStart(2, '0')}/${SCENARIOS.length}] ${scenario.name}`);
     try {
       await scenario.run(ctx, step);
@@ -859,7 +885,7 @@ function buildReport({
   };
 }
 
-function printSummary(results, { browser, discovery, durationMs, reportPath }) {
+function printSummary(results, { browser, discovery, durationMs, reportPath, harnessError }) {
   console.log('\n=== Résumé ===');
   console.table(
     results.map((result) => ({
@@ -878,7 +904,9 @@ function printSummary(results, { browser, discovery, durationMs, reportPath }) {
     `Résultat: ${pass}/${results.length} scénarios réussis, ${fail} échec(s), durée ${(durationMs / 1000).toFixed(1)} s`,
   );
   if (reportPath) console.log(`Rapport JSON: ${reportPath}`);
-  if (fail === 0) {
+  if (harnessError) {
+    console.log('ÉCHEC: le harnais a échoué avant ou pendant les scénarios (voir l’erreur ci-dessus).');
+  } else if (fail === 0 && results.length > 0) {
     console.log('SUCCÈS: le JavaScript de l’interface a été exercé dans un vrai navigateur.');
   } else {
     console.log('ÉCHEC: au moins un scénario navigateur a échoué (voir les diagnostics ci-dessus).');
@@ -945,14 +973,18 @@ async function main() {
   );
 
   try {
+    inProgress = 'lancement du navigateur';
     browser = await launchBrowser(discovery);
+    live.browser = browser;
     console.log(`Navigateur lancé: ${browser.version.product} (protocol ${browser.version.protocolVersion})`);
     ctx = new TestContext({ repoRoot, browser, tempRoot, token, screenshotsDir });
+    live.ctx = ctx;
     results = await runScenarios(ctx, options);
   } catch (error) {
     harnessError = error;
     console.error(`\nÉCHEC du harnais: ${error?.stack ?? error}`);
   } finally {
+    inProgress = 'nettoyage';
     if (ctx) {
       try {
         await ctx.dispose();
@@ -997,7 +1029,7 @@ async function main() {
     }
   }
 
-  printSummary(results, { browser, discovery, durationMs, reportPath: reportPath ?? null });
+  printSummary(results, { browser, discovery, durationMs, reportPath: reportPath ?? null, harnessError });
   if (harnessError) return EXIT.fail;
   const failures = results.filter((result) => result.status === 'FAIL');
   return failures.length ? EXIT.fail : EXIT.pass;
@@ -1007,4 +1039,7 @@ const exitCode = await main().catch((error) => {
   console.error(`ÉCHEC du harnais: ${error?.stack ?? error}`);
   return EXIT.fail;
 });
-process.exitCode = exitCode;
+clearTimeout(watchdog);
+// Exit explicitly: a handle left open by a child process must not keep the run
+// alive after the verdict is known.
+process.exit(exitCode);
