@@ -154,3 +154,77 @@ fn no_absolute_path_leaks_into_diagnostics() {
         assert_eq!(diagnostic["file"], "src/main.rv");
     }
 }
+
+/// `(tag, src/main.rv, extra files)`.
+type Fixture = (
+    &'static str,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+
+#[test]
+fn loader_messages_name_paths_relative_to_the_package() {
+    // DIAG-6.8, DIAG-7.5: the loader works on absolute paths, but none of
+    // them reaches a message. One fixture per family: a missing module file,
+    // an ambiguous module, a symlink-free missing dependency, a bad manifest.
+    let fixtures: [Fixture; 4] = [
+        ("missing-module", "mod gone;\nfn main() { }\n", &[]),
+        (
+            "ambiguous-module",
+            "mod m;\nfn main() { }\n",
+            &[("src/m.rv", ""), ("src/m/mod.rv", "")],
+        ),
+        (
+            "missing-dependency",
+            "fn main() { }\n",
+            &[(
+                "ravum.toml",
+                "[package]\nname = \"diag\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n\n\
+                 [dependencies]\nutil = { path = \"../nowhere\" }\n",
+            )],
+        ),
+        (
+            "bad-manifest",
+            "fn main() { }\n",
+            &[(
+                "ravum.toml",
+                "[package]\nname = \"diag\"\nversion = \"x\"\n",
+            )],
+        ),
+    ];
+    for (tag, source, extra) in fixtures {
+        let package = Package::new(tag, source);
+        for (relative, contents) in extra {
+            let path = package.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, contents).unwrap();
+        }
+        let root = package.path().to_string_lossy().replace('\\', "/");
+        let parent = package
+            .path()
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        for args in [&["check"][..], &["check", "--json"][..]] {
+            let output = package.run(args);
+            assert_ne!(
+                output.status.code(),
+                Some(0),
+                "{tag}: the fixture must fail"
+            );
+            let all = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .replace("\\\\", "/")
+            .replace('\\', "/");
+            assert!(!all.contains(&root), "{tag} {args:?} leaks {root}:\n{all}");
+            assert!(
+                !all.contains(&parent),
+                "{tag} {args:?} leaks {parent}:\n{all}"
+            );
+        }
+    }
+}

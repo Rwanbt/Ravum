@@ -350,6 +350,19 @@ pub fn load_package_with_parse_cache(
     options: &LoadOptions,
     cache: &mut ParseCache,
 ) -> LoadedPackage {
+    let mut out = load_unrelativized(path, options, cache);
+    // A directory is its own base; a file, or a path that cannot be read, is
+    // shown relative to its parent so that its own name stays in the message.
+    let base = match fs::metadata(path) {
+        Ok(meta) if meta.is_dir() => path.to_path_buf(),
+        _ => path.parent().unwrap_or(path).to_path_buf(),
+    };
+    let relativize = paths::Relativizer::new(&base);
+    out.diags.rewrite_text(|text| relativize.apply(text));
+    out
+}
+
+fn load_unrelativized(path: &Path, options: &LoadOptions, cache: &mut ParseCache) -> LoadedPackage {
     match fs::metadata(path) {
         Ok(meta) if meta.is_file() => load_single_file(path, options, cache),
         Ok(meta) if meta.is_dir() => load_package_dir(path, options, cache),
@@ -408,6 +421,7 @@ mod files;
 mod fsutil;
 mod graph;
 mod lockfile;
+mod paths;
 mod sha256;
 mod toml;
 mod validate;

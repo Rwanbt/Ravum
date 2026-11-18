@@ -166,6 +166,17 @@ impl DiagnosticBag {
         self.diags.iter()
     }
 
+    /// Rewrite the text of every message and note in place (codes, spans
+    /// and the per-file budget are unchanged).
+    pub fn rewrite_text(&mut self, mut rewrite: impl FnMut(&str) -> String) {
+        for diag in &mut self.diags {
+            diag.message = rewrite(&diag.message);
+            for note in &mut diag.notes {
+                note.message = rewrite(&note.message);
+            }
+        }
+    }
+
     pub fn into_vec(self) -> Vec<Diagnostic> {
         self.diags
     }
