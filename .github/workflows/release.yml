@@ -1,0 +1,189 @@
+name: Release (artifacts, SBOM, attested provenance)
+
+# E8 / P-10 / R11. Builds the `ravum-lang` binary for Linux, macOS and Windows,
+# packages it with its licences, writes a SHA-256 manifest and an SPDX SBOM,
+# and attests build provenance with Sigstore (keyless: the trust anchor is this
+# workflow's OIDC identity, not a held key). Every attestation is verified in
+# the same run with `gh attestation verify`.
+#
+# Publishing is gated on a `v*` tag, which only the owner pushes: the
+# `workflow_dispatch` and `pull_request` triggers run every step up to (and
+# excluding) the GitHub release, so the whole chain is rehearsed without
+# publishing anything.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  # Rehearse the whole chain on any change to this file (nothing is published:
+  # the `publish` job runs on a tag only).
+  pull_request:
+    paths: ['.github/workflows/release.yml', 'scripts/sbom.sh', 'tools/sbom/**']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable pinned to 1.95.0)
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build the release binary
+        run: cargo build --locked --release -p ravum-lang-cli --bin ravum-lang --target ${{ matrix.target }}
+
+      - name: The binary answers --version
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/ravum-lang"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" --version | tee version.txt
+          grep -q '^ravum-lang ' version.txt
+
+      - name: Package the archive
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="ravum-lang-cli"))')"
+          name="ravum-lang-${version}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          bin="target/${{ matrix.target }}/release/ravum-lang"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          cp "$bin" LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "dist/$name/"
+          cd dist
+          if [ "${{ matrix.archive }}" = zip ]; then
+            7z a -tzip "$name.zip" "$name" > /dev/null
+            echo "file=$name.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='1970-01-01 00:00:00Z' \
+              -czf "$name.tar.gz" "$name" 2>/dev/null \
+              || tar -czf "$name.tar.gz" "$name"
+            echo "file=$name.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/${{ steps.package.outputs.file }}
+          if-no-files-found: error
+
+  sbom:
+    name: SPDX SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: SBOM is deterministic (two runs, one digest)
+        run: |
+          set -euo pipefail
+          bash scripts/sbom.sh --output dist/a.spdx.json --timestamp 1970-01-01T00:00:00Z
+          bash scripts/sbom.sh --output dist/ravum.spdx.json --timestamp 1970-01-01T00:00:00Z
+          cmp dist/a.spdx.json dist/ravum.spdx.json
+          rm dist/a.spdx.json
+          python3 -c 'import json; d=json.load(open("dist/ravum.spdx.json")); assert d["spdxVersion"]=="SPDX-2.3" and d["packages"], d.get("spdxVersion")'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sbom
+          path: dist/ravum.spdx.json
+          if-no-files-found: error
+
+  attest:
+    name: Checksums and attested provenance
+    needs: [build, sbom]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: SHA-256 manifest
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -- * | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          [ "$(wc -l < SHA256SUMS)" -eq 4 ]
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/*'
+
+      - name: Verify every attestation (fail-closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for f in dist/*; do
+            gh attestation verify "$f" --repo "${{ github.repository }}" \
+              --signer-workflow "${{ github.repository }}/.github/workflows/release.yml"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Draft GitHub release (tag only)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-bundle
+          path: dist
+      - name: The tag names the workspace version
+        run: |
+          set -euo pipefail
+          version="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          [ "${GITHUB_REF_NAME}" = "v${version}" ] || { echo "::error::tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* --draft --verify-tag \
+            --title "Ravum ${GITHUB_REF_NAME}" --notes-file CHANGELOG.md
