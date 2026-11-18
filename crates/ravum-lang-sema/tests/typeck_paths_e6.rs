@@ -1173,3 +1173,16 @@ fn a_written_type_in_a_body_is_refused_once() {
         &[("E-TYP-DEPTH", DEPTH_MESSAGE)],
     );
 }
+
+/// EXPR-5.8: a constant pattern covers no value for exhaustiveness; the
+/// checker does not evaluate constants, so the refusal is the safe answer.
+#[test]
+fn a_constant_pattern_does_not_count_towards_exhaustiveness() {
+    let found = errors(
+        "const T: bool = true;\n\
+         fn pick(b: bool) -> i32 { match b { crate::T => 1, false => 2 } }\n\
+         fn main() { let _x = pick(true); }\n",
+    );
+    let codes: Vec<&str> = found.iter().map(|(code, _)| code.as_str()).collect();
+    assert_eq!(codes, ["E-TYP-NONEXHAUSTIVE"], "{found:?}");
+}
