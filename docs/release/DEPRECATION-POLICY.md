@@ -48,7 +48,7 @@ reproductibles par la commande ou le fichier cité.
 | Mécanisme de dépréciation | **absent** : 0 occurrence de `deprecat` dans les fichiers `*.rs` du dépôt ; aucune commande `migrate` dans `--help` | recherche de texte ; `ravum-lang --help` |
 | CHANGELOG de projet | **absent** (aucun `CHANGELOG*` hors dépendances npm sous `tools/vscode-ravum/node_modules/`) ; Q-COMPAT-1 le recommande | recherche de fichiers ; `spec/language/compatibility.md` §9 |
 | Spécification de compatibilité | **DRAFT, non ratifiée** ; `COMPAT-3.6`, Q-COMPAT-1 et Q-COMPAT-5 sont ouvertes | [`compatibility.md`](../../spec/language/compatibility.md) |
-| Liste des avertissements | **fermée** à deux codes | [`diagnostics.md`](../../spec/language/diagnostics.md) DIAG-1.6 |
+| Liste des avertissements | **fermée** à deux codes (trois depuis le 2026-11-18, voir §3.3) | [`diagnostics.md`](../../spec/language/diagnostics.md) DIAG-1.6 |
 
 ## 0.1 Environnement des vérifications et stabilité de l'arbre
 
@@ -358,7 +358,7 @@ documentation** : un diagnostic, un champ JSON, un message d'outil. Aujourd'hui,
 
 | Canal | État réel | Pourquoi |
 |---|---|---|
-| Diagnostic `W-*` | **impossible sans changement normatif** | la liste des avertissements est fermée (DIAG-1.6) ; ajouter `W-…` est une modification de spec réservée à l'humain |
+| Diagnostic `W-*` | **implémenté le 2026-11-18** : `W-DEPRECATED` (DIAG-1.10), décision du responsable [D-18-3](../decision/DECISIONS-2026-11-18.md) | registre machine `crates/ravum-lang-sema/src/deprecation.rs` (vide en Core 1.0), émis à chaque usage d'un chemin inscrit, sans changer le verdict ; tests `deprecation::tests` |
 | Champ JSON `deprecated` | **non implémenté** | proposé par Q-COMPAT-5 (`compatibility.md` §9) ; `crates/ravum-lang-cli/src/json.rs` n'émet aucun champ de ce type ; ajout additif possible **après** décision |
 | Message d'outil (stderr) | **non implémenté** | aucun code ne mentionne `deprecat` (fichiers `*.rs` du dépôt, 0 occurrence) ; les messages texte sont hors contrat (DIAG-6.6) mais restent un canal lisible |
 | `window/showMessage` LSP | **non implémenté** | aucune occurrence dans `crates/ravum-lang-lsp/src` |
@@ -496,8 +496,8 @@ la liste des points ouverts est en §6.2 et les décisions en §8.
 
 ### 6.2 Ce qui manque (chaque absence est vérifiée)
 
-1. **Aucun mécanisme d'avertissement de dépréciation** : recherche de `deprecat` sur tous les fichiers `*.rs` du dépôt → 0 occurrence ; `json.rs` n'a aucun champ `deprecated` ; la liste `W-*` est fermée (DIAG-1.6). Conséquence : §3.3 est `NOT_AVAILABLE`.
-2. **Aucun CHANGELOG de projet** : aucun `CHANGELOG*` hors `tools/vscode-ravum/node_modules/` ; `RELEASE-CHECKLIST.md` §1 le garde non coché ; Q-COMPAT-1 le dit absent. Conséquence : §3.2 est bloquée.
+1. ~~**Aucun mécanisme d'avertissement de dépréciation**~~ — fermé le 2026-11-18 par `W-DEPRECATED` (DIAG-1.10) pour les chemins de la bibliothèque standard ; le CLI, le JSON et le LSP n'ont toujours pas de canal propre. Constat d'origine : recherche de `deprecat` sur tous les fichiers `*.rs` du dépôt → 0 occurrence ; `json.rs` n'a aucun champ `deprecated` ; la liste `W-*` est fermée (DIAG-1.6). Conséquence : §3.3 est `NOT_AVAILABLE`.
+2. ~~**Aucun CHANGELOG de projet**~~ — fermé par E2 (`CHANGELOG.md`, PR #122). Constat d'origine : aucun `CHANGELOG*` hors `tools/vscode-ravum/node_modules/` ; `RELEASE-CHECKLIST.md` §1 le garde non coché ; Q-COMPAT-1 le dit absent. Conséquence : §3.2 est bloquée.
 3. **Aucun outil de migration** : `ravum-lang migrate` n'existe pas (COMPAT-6.4 ; `--help` ne le liste pas).
 4. **Aucune garde de version en CI** (COMPAT-5.5 est un SHOULD) : la CI exécute `--version` pour vérifier que le binaire répond (`.github/workflows/linux-qual.yml:262-263`, « grep -q ravum »), pas pour échouer si la version majeure change.
 5. **Aucun schéma JSON machine-lisible** : le contrat est de la prose (§7) plus un validateur Python. Le seul `*.schema.json` trouvé dans l'arbre appartient à une dépendance npm de l'extension VS Code (`tools/vscode-ravum/node_modules/vscode-languageserver-protocol/metaModel.schema.json`).

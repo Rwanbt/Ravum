@@ -159,6 +159,8 @@ pub fn phase_for_code(code: &str) -> &'static str {
         // Declared-effect and FFI-safety checks run in the resolver.
         "E-UNSUPPORTED-EFFECT" | "E-FFI-TYPE" => "resolve",
         "E-UNSAFE-CONTEXT" => "types",
+        // DIAG-1.10: reported where a builtin path is resolved.
+        "W-DEPRECATED" => "resolve",
         // Resource limits are enforced by the loader before any analysis: the
         // registry files them under `parse` (§3, §4).
         "E-LIMIT-FILE-SIZE" | "E-LIMIT-FILES" => "parse",

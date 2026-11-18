@@ -17,10 +17,11 @@ Un diagnostic est un objet immuable produit par une phase du compilateur. Il con
 | DIAG-1.3 | Un diagnostic **MUST** référencer un fichier et des offsets valides du fichier original (jamais un fichier généré). | MUST |
 | DIAG-1.4 | Les phases produisent des diagnostics **dans l'ordre de §4**, et une phase précoce **empêche** les phases suivantes sur le même nœud. | MUST |
 | DIAG-1.5 | Une erreur n'est **jamais** convertie en avertissement pour obtenir un vert. Aucun moyen (CLI, attribut, variable d'environnement) ne permet de dégrader une erreur. | MUST |
-| DIAG-1.6 | Les avertissements sont une **liste fermée** : `W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`. Aucun autre `W-*` n'existe en Core 1.0. | MUST |
+| DIAG-1.6 | Les avertissements sont une **liste fermée** : `W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`, `W-DEPRECATED` (DIAG-1.10). Aucun autre `W-*` n'existe en Core 1.0. | MUST |
 | DIAG-1.7 | Le nombre de diagnostics par fichier est **borné** (budget déterministe) : au-delà, un unique `E-PARSE-TOO-LARGE` est ajouté et l'analyse du fichier s'arrête. | MUST |
 | DIAG-1.8 | Deux exécutions sur la même source et la même configuration produisent la **même liste**, dans le même ordre (T3). | MUST |
 | DIAG-1.9 | Une liaison dont le nom commence par `_` (`let _z = …`) est déclarée inutilisée volontairement : elle **MUST NOT** produire `W-OWN-UNUSED-VARIABLE`. Elle reste une liaison ordinaire (portée, possession, lecture possible). | MUST |
+| DIAG-1.10 | Un chemin de la bibliothèque standard inscrit au registre des dépréciations (`docs/release/DEPRECATION-POLICY.md` §5) reste **valide** ; chaque usage produit un `W-DEPRECATED` qui nomme la version de dépréciation et le remplacement. Il ne change jamais le verdict (DIAG-1.5). Le registre est vide en Core 1.0. | MUST |
 
 ## 2. Sévérités et effets sur la compilation
 
@@ -156,6 +157,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | Code | Phase | Sens |
 |---|---|---|
 | `W-RES-UNUSED-IMPORT` | resolve | import jamais utilisé |
+| `W-DEPRECATED` | resolve | usage d'un chemin de la bibliothèque standard déprécié (DIAG-1.10) |
 | `W-OWN-UNUSED-VARIABLE` | ownership | variable liée jamais utilisée (y compris `mut` inutile), sauf un nom commençant par `_` (DIAG-1.9) |
 
 > Les codes `reserved` sont documentés pour que la spécification soit complète, mais l'implémentation actuelle ne les émet pas. Un test de conformance qui les attend **doit** être marqué `PENDING_IMPL`, jamais `PASS`.
@@ -209,7 +211,7 @@ est bloquant en CI.
 | 1 | `lex` | `E-LEX-*`, `E-UNSUPPORTED-IDENT`, `E-UNSUPPORTED-TOKEN` (lexical) |
 | 2 | `parse` | `E-PARSE-*`, `E-UNSUPPORTED-*` syntaxiques |
 | 3 | `modules` | `E-MOD-*`, `E-UNSUPPORTED-EDITION` |
-| 4 | `resolve` | `E-RES-*`, `W-RES-UNUSED-IMPORT` |
+| 4 | `resolve` | `E-RES-*`, `W-RES-UNUSED-IMPORT`, `W-DEPRECATED` |
 | 5 | `types` | `E-TYP-*` |
 | 6 | `ownership` | `E-OWN-*`, `W-OWN-UNUSED-VARIABLE` |
 | 7 | `effects` | `E-EFF-*` |
@@ -439,7 +441,7 @@ error[E-TYP-MISMATCH]: mismatched types
 
 - **Q-DIAG-1 (résolue par le Lead)** — Sont **canoniques** : `E-MOD-MANIFEST`, `E-MOD-DEPENDENCY`, `E-MOD-BUILD-SCRIPT`, `E-MOD-LOCK`, `E-MOD-BOTH-ROOTS`, `E-MOD-PATH-ESCAPE`, `E-MOD-RESERVED-NAME`, `E-OWN-IMMUTABLE`, `E-TYP-RECURSIVE`, `E-TYP-CONST`, `E-UNSUPPORTED-DROP-IMPL`. Aucun code `reserved` ne subsiste.
 - **Q-DIAG-2 (résolue par le Lead)** — `E-RES-VISIBILITY` est **supprimé** : la visibilité utilise `E-RES-PRIVATE` (pas de doublon).
-- **Q-DIAG-3** — Les avertissements sont limités à deux codes. Cela exclut : import de dépendance inutilisée, variable `mut` inutile distincte, bras inatteignable, effet déclaré non inféré. Assumé ; à étendre seulement par décision.
+- **Q-DIAG-3** — Les avertissements sont limités à trois codes (`W-DEPRECATED` ajouté par décision du 2026-11-18, DIAG-1.10). Cela exclut : import de dépendance inutilisée, variable `mut` inutile distincte, bras inatteignable, effet déclaré non inféré. Assumé ; à étendre seulement par décision.
 - **Q-DIAG-4 (résolue par le Lead)** — `rule_id` est **contractuel et stable** : le renommer est une rupture de compatibilité ([`compatibility.md`](compatibility.md) COMPAT-2.9). Les identifiants `OWN-5.1`, `TYP-7.1`, etc. sont donc des noms publics.
 - **Q-DIAG-5** — Le format texte (DIAG-6) est spécifié mais non contractuel. Faut-il un mode stable (`--error-format=json` suffit-il) pour les agents ? Recommandation : oui, JSON uniquement.
 - **Q-DIAG-6** — `run` propage le code du programme (DIAG-8.1), ce qui rend `1` ambigu. Un mode `--wrap-exit` (préfixe `10+`) n'existe pas ; à décider si un CI en a besoin.
