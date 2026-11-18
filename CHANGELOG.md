@@ -35,6 +35,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Fixed
 
+- `mod Foo;` no longer resolves `src/foo.rv` on case-insensitive file systems (macOS, Windows): a module file must carry exactly the module's name, so the verdict no longer depends on the OS (MOD-2.6, MOD-1.6).
+
 - An operand already in error no longer produces a second `E-TYP-MISMATCH` through a binary operator (`y + 1` with `y` unknown reported `<error>`; DIAG-4.2).
 
 - Lexer conformance to `lexical.md` (found by the T2 lexical cases): a lone

@@ -348,6 +348,14 @@ pub(super) fn resolve_module_file(
         }
     };
 
+    // MOD-2.6, MOD-1.6: a module name matches its file name exactly. On a
+    // case-insensitive file system `src/foo.rv` answers for `mod Foo;`; the
+    // directory listing is the only place where the stored name is visible,
+    // so a candidate counts only if an entry carries exactly that name.
+    let file_meta = file_meta.filter(|_| has_exact_entry(&dir, &format!("{name}.rv")));
+    let dir_meta = dir_meta
+        .filter(|_| has_exact_entry(&dir, name) && has_exact_entry(&dir.join(name), "mod.rv"));
+
     if file_meta
         .as_ref()
         .map(|m| m.file_type().is_symlink())

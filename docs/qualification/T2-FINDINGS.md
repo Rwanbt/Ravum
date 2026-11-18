@@ -2030,6 +2030,16 @@ que son programme n'a pas d'erreur de module. Correction : PR dédiée qui suit
 ce lot (chemins relatifs à la racine du package, et un cas par famille de
 message dans le test de contrat).
 
+### 34.4 Défaut trouvé par la CI : la casse sur macOS et Windows
+
+Le cas `modules/module-name-case-sensitive` passait sous Linux et échouait sous
+macOS et Windows (CI de #178, commit 33b9d9e : `check --json: exit 0`). Sur un
+système de fichiers insensible à la casse, `mod Foo;` trouvait `src/foo.rv` :
+le même source était accepté ou refusé selon l'OS, ce que MOD-2.6 (« ne dépend
+ni [...] de la casse ») et MOD-1.6 interdisent. Correction : un candidat ne
+compte que si le répertoire contient une entrée de nom **exactement** égal
+(`has_exact_entry`, comparaison octet à octet de la liste du répertoire).
+
 ### 34.4 Non tracés
 
 MOD-6.5 (aucun plugin : rien d'observable), MOD-6.6 (dépendances compilées
