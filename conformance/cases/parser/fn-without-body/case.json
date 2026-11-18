@@ -1,0 +1,8 @@
+{
+  "id": "parser/fn-without-body",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-3.9: a fn body is always a block."
+}

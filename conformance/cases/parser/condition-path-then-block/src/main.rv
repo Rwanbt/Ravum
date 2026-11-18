@@ -1,0 +1,6 @@
+const C: bool = true;
+fn main() {
+    if C {
+        io::println("yes");
+    }
+}

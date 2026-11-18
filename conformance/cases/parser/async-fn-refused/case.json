@@ -1,0 +1,8 @@
+{
+  "id": "parser/async-fn-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ASYNC"
+  ],
+  "notes": "G-3.10: `async fn` is E-UNSUPPORTED-ASYNC."
+}

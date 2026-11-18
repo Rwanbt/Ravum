@@ -1,0 +1,8 @@
+{
+  "id": "parser/no-operator-overloading",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "G-6.18: no user operators; `+` on a struct is refused by typing."
+}

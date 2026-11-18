@@ -28,6 +28,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   `\u{D800}` surrogate is `E-LEX-CHAR`; `b'x'`, `r#"…"#` and `1e_10` produced
   parse cascades or the wrong code; an unterminated `'a` was read as a
   lifetime; a malformed escape no longer adds a second diagnostic.
+- Parser conformance to `grammar.md` (found by the T2 grammar cases): `pub
+  impl` and `pub extern` were accepted (now `E-PARSE-EXPECTED`); a token that
+  cannot start an item is `E-PARSE-EXPECTED`; a match guard is
+  `E-UNSUPPORTED-TOKEN` and an empty arm `E-PARSE-EXPECTED`; an item nested in
+  a function body, `-> {` and a refused `?` no longer produce cascades.
 - Diagnostic columns counted UTF-8 bytes; they now count UTF-16 code units
   (DIAG-5.2, DIAG-5.6, LEX-9.3), in JSON and in `file:line:col`.
 

@@ -1,0 +1,8 @@
+{
+  "id": "parser/match-guard-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "notes": "G-6.23: a match arm has no guard."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/empty-arm-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-6.43: an arm cannot be empty."
+}

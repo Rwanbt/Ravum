@@ -1,0 +1,8 @@
+{
+  "id": "parser/item-bad-head-token",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-2.2: a token that cannot start an item is E-PARSE-EXPECTED."
+}

@@ -1,0 +1,4 @@
+[package]
+name = "parser-unary-binds-tighter-than-as-and-mul"
+version = "0.1.0"
+edition = "core-1.0"
