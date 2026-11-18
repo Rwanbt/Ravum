@@ -343,10 +343,8 @@ impl Daemon {
     }
 
     fn run_auto_gc_once(&self, runtime: &Arc<AutoGcRuntime>) -> std::result::Result<(), String> {
-        runtime.set_busy(true);
         let result = self.auto_gc_step(runtime);
         runtime.set_busy(false);
-        runtime.signal.notify_all();
         result
     }
 
