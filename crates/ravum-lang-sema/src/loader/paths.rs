@@ -111,9 +111,16 @@ mod tests {
 
     #[test]
     fn the_filesystem_root_is_never_rewritten() {
-        let r = Relativizer::new(Path::new("/a/b"));
-        assert_eq!(r.apply("`/etc/hosts`"), "`/etc/hosts`");
-        assert_eq!(r.apply("`/a/x`"), "`../x`");
+        // Built from real absolute paths so that the test holds on Windows
+        // (`C:\...`) as on POSIX (`/...`).
+        let base = std::env::temp_dir().join("ravum-root-check").join("b");
+        let r = Relativizer::new(&base);
+        let root = base.ancestors().last().unwrap().to_path_buf();
+        let elsewhere = root.join("zz-ravum-elsewhere").join("hosts");
+        let shown = elsewhere.display().to_string();
+        assert_eq!(r.apply(&format!("`{shown}`")), format!("`{shown}`"));
+        let sibling = base.parent().unwrap().join("x");
+        assert_eq!(r.apply(&format!("`{}`", sibling.display())), "`../x`");
     }
 
     #[test]
