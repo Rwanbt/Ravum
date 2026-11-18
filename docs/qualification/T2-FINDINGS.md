@@ -1822,3 +1822,45 @@ tableau imbriqué, `self` et liaison de `match`. Le corpus gagne les 16 cas
 Reste hors de cette mesure : la conformance et le workspace sur Linux/macOS, la
 campagne nominale T2 (E7), la couverture 100 % et la mutation (E6), ainsi que
 l'audit externe. La passe ne prouve donc pas l'absence de formes inconnues.
+
+## 30. Passe 17 — les 4 inverses restants exécutés en CI, score sur 13 (2026-11-18)
+
+> Run [43994652442](https://github.com/Rwanbt/Ravum/actions/runs/43994652442)
+> (`t2-power.yml`, PR #149), tête `7773a0f`, Linux x86_64, `rustc 1.95.0`,
+> conclusion `success`. Chaque forme rejoue
+> `bash tools/t2-power/replay-array-descent.sh <forme> 2000` dans un worktree
+> jetable : l'inverse n'est jamais commité.
+
+### 30.1 Formes 10 à 13
+
+Chaque job vérifie, dans l'ordre : le test positif passe sur l'arbre sain
+(sortie 0) ; sous l'inverse, le test historique et l'oracle sortent à 101 avec
+`E0508` ; le générateur produit 3 graines × 2 000 programmes.
+
+| Forme | Job | Générés | Fautes délibérées refusées | Divergences `E0508` |
+|---|---|---:|---:|---:|
+| 10 | [133743598672](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598672) | 6 000 | 561 | 5 439 |
+| 11 | [133743598690](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598690) | 6 000 | 561 | 5 439 |
+| 12 | [133743598666](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598666) | 6 000 | 561 | 5 439 |
+| 13 | [133743598699](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598699) | 6 000 | 561 | 5 439 |
+
+Ligne lue dans chacun des quatre journaux :
+`[typed:long] TOTAL generated=6000 faults=561 fault_rejected=561 accepted=0 rejected=0 divergences=5439`.
+
+### 30.2 Score
+
+- **Sensibilité des tests existants : 13/13.** Formes 1 à 9 au §28.2, formes
+  10 à 13 ci-dessus : chaque inverse fait échouer son test historique.
+- **Détection par le générateur ciblé sur ce run : 4/4** (formes 10 à 13).
+- Les campagnes des formes 1 à 9 (§28) ont un autre protocole (3 × 200,
+  `release_every=0`) : aucun score de détection homogène sur 13 n'est déduit du
+  cumul.
+- Campagne nominale (arbre sain) : run
+  [43753630956](https://github.com/Rwanbt/Ravum/actions/runs/43753630956),
+  6 000 acceptés, 0 divergence.
+
+### 30.3 Ce que cette passe ne prouve pas
+
+Elle ferme l'étape E7 du plan de production (P-9). Elle ne change pas le gate
+T2 : T2 reste `PARTIAL` tant que 344 énoncés MUST sur 811 n'ont pas de
+FeatureId (D10, `tools/must_audit.py`).
