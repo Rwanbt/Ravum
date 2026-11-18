@@ -62,7 +62,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     return Type::Error;
                 }
             };
-        self.record_value_resolution(path.id, &target);
+        self.record_value_resolution(path, &target);
 
         let result = match &target {
             ValuePath::Item(id) => {
