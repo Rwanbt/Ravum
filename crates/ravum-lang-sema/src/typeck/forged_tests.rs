@@ -252,3 +252,75 @@ fn a_method_call_without_a_target_is_not_static_text() {
     super::compute_static_str_fns(&parsed.program, &mut facts);
     assert!(facts.static_str_fns.is_empty());
 }
+
+#[test]
+fn try_and_return_outside_a_function_are_refused() {
+    // `check_const_expr` never hands `?` or `return` to these checks, and every
+    // body sets `current_fn`; outside a function they refuse instead of typing
+    // against an absent return type.
+    use ravum_lang_syntax::ast::{Expr, ExprKind};
+    let span = ravum_lang_syntax::span::Span::dummy();
+    let value = Expr {
+        id: 4_000_000_021,
+        kind: ExprKind::Int {
+            value: 1,
+            suffix: None,
+        },
+        span,
+    };
+    with_checker(|checker| {
+        assert_eq!(checker.check_try(&value, &value), crate::types::Type::Error);
+        assert_eq!(
+            checker.check_return(Some(&value)),
+            crate::types::Type::Never
+        );
+        assert_eq!(checker.check_return(None), crate::types::Type::Never);
+        let codes: Vec<&str> = checker.diags.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(codes, ["E-TYP-TRY", "E-TYP-RETURN", "E-TYP-RETURN"]);
+    });
+}
+
+#[test]
+fn impl_generics_bind_only_from_a_nominal_target_with_parameters() {
+    // `resolve_impl` admits only a nominal target whose arguments are the impl
+    // parameters; any other entry binds nothing.
+    use crate::types::Type;
+    with_checker(|checker| {
+        let mut entry = checker
+            .world
+            .impls
+            .values()
+            .flatten()
+            .find(|entry| entry.name == "get")
+            .cloned()
+            .expect("the `get` method");
+        let mut subst = std::collections::BTreeMap::new();
+        checker.bind_impl_generics(&entry, &[Type::I32], &mut subst);
+        assert_eq!(subst.get(&0), Some(&Type::I32));
+        let mut subst = std::collections::BTreeMap::new();
+        entry.self_ty = Type::I32;
+        checker.bind_impl_generics(&entry, &[Type::I32], &mut subst);
+        assert!(subst.is_empty());
+        if let Type::Nominal { args, .. } = &mut checker
+            .world
+            .impls
+            .values()
+            .flatten()
+            .find(|entry| entry.name == "get")
+            .cloned()
+            .expect("the `get` method")
+            .self_ty
+        {
+            args[0] = Type::Bool;
+            let mut pinned = entry.clone();
+            pinned.self_ty = Type::Nominal {
+                def: 0,
+                name: "P".to_string(),
+                args: args.clone(),
+            };
+            let mut subst = std::collections::BTreeMap::new();
+            checker.bind_impl_generics(&pinned, &[Type::I32], &mut subst);
+            assert!(subst.is_empty());
+        }
+    });
+}

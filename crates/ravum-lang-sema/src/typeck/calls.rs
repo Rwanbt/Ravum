@@ -92,18 +92,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::BuiltinFn(path) => {
                 if let Some(assoc) = builtins::builtin_assoc_fn(path) {
                     self.check_builtin_assoc_call(assoc, args, expected, expr.span)
-                } else if let Some(sig) = builtins::builtin_fn(path) {
-                    self.check_builtin_fn_call(sig, args, expected, expr.span)
                 } else {
-                    self.error(
-                        "E-RES-UNKNOWN",
-                        callee.span,
-                        format!("unknown builtin function `{path}`"),
-                    );
-                    for arg in args {
-                        self.check_expr(arg, None);
-                    }
-                    Type::Error
+                    let sig = builtins::resolved_builtin_fn(path);
+                    self.check_builtin_fn_call(sig, args, expected, expr.span)
                 }
             }
             ValuePath::Variant { enum_item, variant } => {
