@@ -95,14 +95,10 @@ pub(super) fn prefix_compatible(short: &[Step], long: &[Step]) -> bool {
 pub(super) fn diverges_disjoint(a: &[Step], b: &[Step]) -> bool {
     for (x, y) in a.iter().zip(b.iter()) {
         if !step_compatible(x, y) {
-            return match (x, y) {
-                (Step::Field(p), Step::Field(q)) => p != q,
-                (Step::Tuple(p), Step::Tuple(q)) => p != q,
-                (Step::Index(IndexKey::Lit(p)), Step::Index(IndexKey::Lit(q))) => p != q,
-                (Step::Deref, _) | (_, Step::Deref) => true,
-                // Opaque/different kinds: cannot prove disjointness.
-                _ => false,
-            };
+            // `step_compatible` rejects only two different fields, tuple
+            // positions or literal indices, and a `Deref` against another
+            // kind: each of those proves the places apart.
+            return true;
         }
         // Two paths that agree on a non-literal index may denote the same
         // element, and reaching anything through such an index uses the whole

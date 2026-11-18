@@ -450,10 +450,12 @@ impl<'a> OwnChecker<'a> {
                     let after_lhs = self.state.clone();
                     let lhs_diverged = self.diverged;
                     self.eval_value(rhs);
+                    // `diverged` stays set once raised, so a diverging left
+                    // operand always takes the first branch.
                     if self.diverged {
                         self.state = after_lhs;
                         self.diverged = lhs_diverged;
-                    } else if !lhs_diverged {
+                    } else {
                         self.state = join(&after_lhs, &self.state);
                     }
                 } else {
@@ -837,17 +839,14 @@ impl<'a> OwnChecker<'a> {
         // Exit: either the (at least one) condition evaluation fails, or a
         // `break` was taken. The failing-condition state comes from the
         // stabilised header, not from the body exit.
-        let mut exit: Option<State> = if cond_diverged {
+        // A diverging condition sends the body through `analyze_dead`, which
+        // discards its `break`s: there is no exit at all, and nothing to join.
+        let exit: Option<State> = if cond_diverged {
             None
         } else {
             Some(after_cond)
-        };
-        for b in &ctx.breaks {
-            exit = Some(match exit {
-                Some(e) => join(&e, b),
-                None => b.clone(),
-            });
         }
+        .map(|exit| ctx.breaks.iter().fold(exit, |acc, b| join(&acc, b)));
         match exit {
             Some(st) => {
                 self.state = st;

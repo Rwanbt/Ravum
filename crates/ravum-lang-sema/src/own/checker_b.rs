@@ -73,17 +73,14 @@ impl<'a> OwnChecker<'a> {
 
         // Exit: zero iterations (`after_iter`) or any number of iterations then
         // normal termination (the fixpoint header), plus every `break`.
-        let mut exit: Option<State> = if iter_diverged {
+        // A diverging iterator sends the body through `analyze_dead`, which
+        // discards its `break`s: there is no exit at all, and nothing to join.
+        let exit: Option<State> = if iter_diverged {
             None
         } else {
             Some(join(&after_iter, &entry))
-        };
-        for b in &ctx.breaks {
-            exit = Some(match exit {
-                Some(e) => join(&e, b),
-                None => b.clone(),
-            });
         }
+        .map(|exit| ctx.breaks.iter().fold(exit, |acc, b| join(&acc, b)));
         self.pop_scope();
         match exit {
             Some(mut st) => {
@@ -397,29 +394,36 @@ impl<'a> OwnChecker<'a> {
                     )],
                 );
             }
-            if let Some(st) = self.state.slots.get_mut(&place.slot) {
-                st.maybe_assigned = true;
-                st.init = true;
-                st.moved = false;
-                st.maybe_moved = false;
-                st.move_span = None;
-                st.used_since = true;
-                st.partial.clear();
-            }
+            let st = self.slot_state_mut(place);
+            st.maybe_assigned = true;
+            st.init = true;
+            st.moved = false;
+            st.maybe_moved = false;
+            st.move_span = None;
+            st.used_since = true;
+            st.partial.clear();
             return;
         }
-        if let Some(st) = self.state.slots.get_mut(&place.slot) {
-            // Writing a projection: an exact re-assignment of a partially moved
-            // projection restores it; writing an ancestor restores all its
-            // sub-projections.
-            let keys: Vec<Vec<Step>> = st.partial.keys().cloned().collect();
-            for key in keys {
-                if steps_start_with(&key, &place.steps) {
-                    st.partial.remove(&key);
-                }
+        // Writing a projection: an exact re-assignment of a partially moved
+        // projection restores it; writing an ancestor restores all its
+        // sub-projections.
+        let st = self.slot_state_mut(place);
+        let keys: Vec<Vec<Step>> = st.partial.keys().cloned().collect();
+        for key in keys {
+            if steps_start_with(&key, &place.steps) {
+                st.partial.remove(&key);
             }
-            st.used_since = true;
         }
+        st.used_since = true;
+    }
+
+    /// State of a place's slot once `check_availability` accepted the place
+    /// (it refuses a slot without a state).
+    pub(super) fn slot_state_mut(&mut self, place: &Place) -> &mut SlotState {
+        self.state
+            .slots
+            .get_mut(&place.slot)
+            .expect("invariant: an available place has a slot state")
     }
 
     pub(super) fn borrow_place(
