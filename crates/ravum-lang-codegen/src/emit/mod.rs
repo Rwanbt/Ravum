@@ -611,10 +611,8 @@ impl<'a> Emitter<'a> {
         match self.index.user_main {
             Some(id) => {
                 let path = self.item_path(id)?;
-                let ret = match self.index.fns.get(&id) {
-                    Some(entry) => entry.ret,
-                    None => RetKind::Unit,
-                };
+                // `Index::build` records every function, `main` included.
+                let ret = self.index.fns[&id].ret;
                 match ret {
                     RetKind::Unit => {
                         buf.line(&format!("{}();", path));
@@ -695,10 +693,8 @@ impl<'a> Emitter<'a> {
         buf.line("let mut rv_filtered: usize = 0;");
         for (name, id) in &self.index.tests {
             let path = self.item_path(*id)?;
-            let ret = match self.index.fns.get(id) {
-                Some(entry) => entry.ret,
-                None => RetKind::Unit,
-            };
+            // `Index::build` records every function, the tests included.
+            let ret = self.index.fns[id].ret;
             let runner = match ret {
                 RetKind::Unit => "crate::rv_test",
                 RetKind::Result => "crate::rv_test_result",
@@ -734,12 +730,8 @@ impl<'a> Emitter<'a> {
     // -- items -------------------------------------------------------------
 
     fn emit_module(&self, buf: &mut Buf, module: &Module) -> Result<(), CodegenError> {
-        let entry = self.index.modules.get(&module.id).ok_or_else(|| {
-            err(format!(
-                "module node {} is missing from the index",
-                module.id
-            ))
-        })?;
+        // `Index::walk_module` registers every module this walk enters.
+        let entry = &self.index.modules[&module.id];
         self.marker(buf, module.span);
         buf.line(&format!("pub mod {} {{", entry.rust_name));
         buf.indent += 1;

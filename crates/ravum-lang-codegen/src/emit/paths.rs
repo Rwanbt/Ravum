@@ -776,12 +776,14 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn planned_path<'x>(&self, expr: &'x Expr) -> Result<ElementPath<'x>, CodegenError> {
-        self.element_path(expr).ok_or_else(|| {
-            err(format!(
-                "internal: expression {} was planned as an array-element path but is not one",
+        // `plan` records a mode only for a node whose `element_path` is `Some`,
+        // and the answer depends on the node alone.
+        Ok(self.element_path(expr).unwrap_or_else(|| {
+            panic!(
+                "invariant: expression {} was planned as an array-element path",
                 expr.id
-            ))
-        })
+            )
+        }))
     }
 
     /// Move the value of an element path out of its array.

@@ -593,3 +593,115 @@ fn an_impl_target_without_a_type_or_a_path_gets_no_owner_name() {
         Err(error) => assert!(!error.message.is_empty()),
     }
 }
+
+/// Element paths through tuples, struct fields and nested arrays, checked,
+/// then given recorded types that contradict them: the backend still finishes
+/// (generating or refusing) instead of panicking or guessing a slot layout.
+#[test]
+fn element_paths_over_contradicted_types_do_not_panic() {
+    let source = "struct P { s: String }\n\
+                  fn main() {\n\
+                  let a = [(String::from(\"a\"), 1), (String::from(\"b\"), 2)];\n\
+                  let x = a[0].0;\n\
+                  let b = [P { s: String::from(\"c\") }];\n\
+                  let y = b[0].s;\n\
+                  let c = [[String::from(\"d\")]];\n\
+                  let z = c[0][0];\n\
+                  }\n";
+    let program = checked(source, Profile::Core);
+    let rewrites: [fn(&Type) -> Option<Type>; 3] = [
+        |ty| matches!(ty, Type::Tuple(_)).then_some(Type::I32),
+        |ty| matches!(ty, Type::Nominal { .. }).then_some(Type::I32),
+        |ty| match ty {
+            Type::Array { elem, .. } if matches!(**elem, Type::String) => {
+                Some(Type::Vec(Box::new(Type::String)))
+            }
+            _ => None,
+        },
+    ];
+    for rewrite in rewrites {
+        let mut broken = program.clone();
+        for ty in broken.facts.expr_types.values_mut() {
+            if let Some(new) = rewrite(ty) {
+                *ty = new;
+            }
+        }
+        let _ = generate(&broken, &GenOptions::default());
+    }
+}
+
+/// The debug cross-check of binding identities refuses a path whose
+/// resolution is no longer a local, and a `self` without one.
+#[test]
+fn binding_identities_without_a_local_resolution_are_refused() {
+    let program = checked(
+        "struct S { n: i32 }\nimpl S { fn get(&self) -> i32 { return self.n; } }\n\
+         fn main() { let s = S { n: 1 }; let m = s.n; let k = s.get(); }\n",
+        Profile::Core,
+    );
+    let mut broken = program.clone();
+    for resolution in broken.facts.resolutions.values_mut() {
+        if matches!(resolution, Resolution::Local { .. }) {
+            *resolution = Resolution::Item { item: 1 };
+        }
+    }
+    let _ = generate(&broken, &GenOptions::default());
+    let mut broken = program;
+    broken.facts.resolutions.retain(
+        |_, resolution| !matches!(resolution, Resolution::Local { name, .. } if name == "self"),
+    );
+    let _ = generate(&broken, &GenOptions::default());
+}
+
+/// A re-initialised array element whose path, once altered, leaves the
+/// constant run (`a[i][0] = v`) is refused: the ownership facts record a
+/// re-initialisation only on a constant path.
+#[test]
+fn a_reinitialised_element_off_the_constant_path_is_refused() {
+    let mut program = checked(
+        "fn main() {\n\
+         let i: usize = 0;\n\
+         let j = i;\n\
+         let mut a = [[String::from(\"a\")]];\n\
+         let x = a[0][0];\n\
+         a[0][0] = String::from(\"b\");\n\
+         }\n",
+        Profile::Core,
+    );
+    let ItemKind::Fn(f) = &mut program.program.root.items[0].kind else {
+        panic!("expected main");
+    };
+    let StmtKind::Let(j) = &f.body.stmts[1].kind else {
+        panic!("expected `let j`");
+    };
+    let i_expr = j.init.clone().expect("the `i` read");
+    let StmtKind::Expr { expr, .. } = &mut f.body.stmts[4].kind else {
+        panic!("expected the assignment");
+    };
+    let ExprKind::Assign { target, .. } = &mut expr.kind else {
+        panic!("expected the assignment");
+    };
+    let ExprKind::Index { base, .. } = &mut target.kind else {
+        panic!("expected `a[0][0]`");
+    };
+    let ExprKind::Index { index, .. } = &mut base.kind else {
+        panic!("expected `a[0]`");
+    };
+    **index = i_expr;
+    let target_id = target.id;
+    // Keep the ownership facts in step with the altered syntax, so only the
+    // re-initialisation itself is out of reach of a constant path.
+    use ravum_lang_sema::facts::{Projection, ProjectionIndex};
+    let place = program
+        .facts
+        .own
+        .place
+        .get_mut(&target_id)
+        .expect("the place of `a[0][0]`");
+    place.steps[0] = Projection::Index(ProjectionIndex::Opaque);
+    let message = refusal(&program, &GenOptions::default());
+    assert!(
+        message.contains("is not reachable by a constant path"),
+        "{message}"
+    );
+}

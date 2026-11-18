@@ -1582,3 +1582,48 @@ fn syntactic_types_render_slices_constant_lengths_and_a_bare_str() {
         "str"
     );
 }
+
+#[test]
+#[should_panic(expected = "was planned as an array-element path")]
+fn a_planned_path_that_is_not_an_element_path_is_an_invariant_failure() {
+    let mut b = Builder::new();
+    let literal = b.int(1, Some(STy::I32));
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    let _ = emitter.planned_path(&literal);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_syntactic_place_needs_a_local_root() {
+    // The debug cross-check reads a place only from a local or `self`; a root
+    // that resolves to anything else gives no place.
+    let mut b = Builder::new();
+    let self_value = b.expr(ExprKind::SelfValue, None);
+    b.facts
+        .resolutions
+        .insert(self_value.id, Resolution::Item { item: 7_000_003 });
+    let item_path = b.path(&["K"]);
+    b.facts
+        .resolutions
+        .insert(item_path.id, Resolution::Item { item: 7_000_002 });
+    let item = b.expr(ExprKind::Path(item_path), Some(STy::I32));
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    assert!(emitter.syntactic_place(&self_value).is_none());
+    assert!(emitter.syntactic_place(&item).is_none());
+}
