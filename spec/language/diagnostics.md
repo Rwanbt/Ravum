@@ -20,6 +20,7 @@ Un diagnostic est un objet immuable produit par une phase du compilateur. Il con
 | DIAG-1.6 | Les avertissements sont une **liste fermée** : `W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`. Aucun autre `W-*` n'existe en Core 1.0. | MUST |
 | DIAG-1.7 | Le nombre de diagnostics par fichier est **borné** (budget déterministe) : au-delà, un unique `E-PARSE-TOO-LARGE` est ajouté et l'analyse du fichier s'arrête. | MUST |
 | DIAG-1.8 | Deux exécutions sur la même source et la même configuration produisent la **même liste**, dans le même ordre (T3). | MUST |
+| DIAG-1.9 | Une liaison dont le nom commence par `_` (`let _z = …`) est déclarée inutilisée volontairement : elle **MUST NOT** produire `W-OWN-UNUSED-VARIABLE`. Elle reste une liaison ordinaire (portée, possession, lecture possible). | MUST |
 
 ## 2. Sévérités et effets sur la compilation
 
@@ -155,7 +156,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | Code | Phase | Sens |
 |---|---|---|
 | `W-RES-UNUSED-IMPORT` | resolve | import jamais utilisé |
-| `W-OWN-UNUSED-VARIABLE` | ownership | variable liée jamais utilisée (y compris `mut` inutile) |
+| `W-OWN-UNUSED-VARIABLE` | ownership | variable liée jamais utilisée (y compris `mut` inutile), sauf un nom commençant par `_` (DIAG-1.9) |
 
 > Les codes `reserved` sont documentés pour que la spécification soit complète, mais l'implémentation actuelle ne les émet pas. Un test de conformance qui les attend **doit** être marqué `PENDING_IMPL`, jamais `PASS`.
 

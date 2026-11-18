@@ -802,9 +802,13 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                 };
                 self.check_let_pattern(&lets.pat, &final_ty, lets.init.is_none());
+                // DIAG-1.9: a name starting with `_` declares the binding
+                // unused on purpose and is never reported.
                 if let PatKind::Binding { name, .. } = &lets.pat.kind {
-                    self.unused_candidates
-                        .push((name.name.clone(), lets.pat.span));
+                    if !name.name.starts_with('_') {
+                        self.unused_candidates
+                            .push((name.name.clone(), lets.pat.span));
+                    }
                 }
                 Type::Unit
             }

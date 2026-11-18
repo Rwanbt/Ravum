@@ -102,5 +102,5 @@ CI verte sur `fa1935d`.
   Mesure locale Linux x86_64 après ces corrections : 1 560 tests, 0 échec ; clippy propre ;
   conformance `--verify-build` 501 PASS / 0 FAIL / 2 SKIP ; traçabilité stricte 188/188 ;
   couverture produit 100,00 % sur 13 220 lignes, 0 exemption, 0 dette ; seuils respectés.
-  Question ouverte relevée par l'audit : `W-OWN-UNUSED-VARIABLE` s'applique aussi à un nom
-  préfixé par `_` (`let _z = …`) ; la spec (DIAG-1.6) ne prévoit pas d'exception.
+  Exception `_` décidée par le propriétaire : DIAG-1.9, un nom préfixé par `_` ne produit jamais
+  `W-OWN-UNUSED-VARIABLE` (avant : signalé, la spec ne prévoyait pas d'exception).

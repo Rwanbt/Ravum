@@ -1302,3 +1302,26 @@ fn tuple_and_result_patterns_against_never_and_a_wrong_type() {
         ],
     );
 }
+
+/// DIAG-1.9: a binding named with a leading `_` is unused on purpose; the
+/// same binding without it is still reported.
+#[test]
+fn a_binding_starting_with_an_underscore_is_never_reported_unused() {
+    let warnings = |source: &str| -> Vec<String> {
+        let mut sources = SourceMap::new();
+        let file = sources.add("main.rv", source);
+        let parsed = parser::parse_file(file, source);
+        assert!(parsed.diags.is_empty(), "{source}");
+        ravum_lang_sema::check(&parsed.program, &sources, &CheckOptions::default())
+            .diags
+            .iter()
+            .filter(|diag| diag.code.starts_with("W-"))
+            .map(|diag| diag.message.clone())
+            .collect()
+    };
+    assert!(warnings("fn main() {\n    let _z = 1;\n    let _ignored = Some(2);\n}\n").is_empty());
+    assert_eq!(
+        warnings("fn main() {\n    let z = 1;\n}\n"),
+        ["variable `z` is never used"]
+    );
+}
