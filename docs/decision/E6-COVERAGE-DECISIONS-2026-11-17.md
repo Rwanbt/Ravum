@@ -75,3 +75,14 @@ CI verte sur `fa1935d`.
 - 2026-11-18, tête `0dbcf40` : familles A–F exécutées. `line_coverage_exemptions.entries` est vide ;
   100,00 % brut sur 13 135 lignes produit (sema + codegen), 0 dette. Ordre §3 : étapes 1 à 5 faites.
   Reste l'étape 6 (décisions de comportement 1 à 8).
+- 2026-11-18, tête `ec5afcc` : étape 6 faite, décisions 1 à 8 (un commit spec + test chacune) :
+  1–2 `c9c6bed`, `b77de8b`, `d2c4414` (TYP-1.7, `MAX_TYPE_DEPTH` = 100, `E-TYP-DEPTH` ; rustc
+  échoue mesuré à 129 `Option` imbriqués, E0320) ; 3 `9b0fffb` (EXPR-5.8) ; 4 `224707d`, `6b6eef6`,
+  `be3ece6` (LEX-4.6, `E-LEX-RESERVED-IDENT`, boucles anti-collision devenues mortes supprimées) ;
+  5 `7986cd9` ; 6 `9a6a21e` ; 7 `da3a399` (G-6.1) ; 8 `ec5afcc` (EXPR-6.9).
+  Mesure locale Linux x86_64 à `ec5afcc` : 1 554 tests, 0 échec ; clippy propre ; conformance
+  `--verify-build` 501 PASS / 0 FAIL / 2 SKIP ; traçabilité stricte 188/188 ; couverture produit
+  100,00 % sur 13 172 lignes, 0 exemption, 0 dette ; seuils respectés.
+  Écarts à arbitrer : pas de cas de conformance pour la décision 1 (règle « aucun cas ajouté depuis
+  Linux ») ; tests existants dont l'attente a suivi une décision (audits backend profondeur 100,
+  audits `_rv_`, deux tests de message `p.m`).
