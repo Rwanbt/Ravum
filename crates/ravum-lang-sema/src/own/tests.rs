@@ -1678,3 +1678,16 @@ mod path_algebra {
         assert_eq!(field_type(&unknown_struct, "a", &facts), Type::Error);
     }
 }
+
+/// Without resolution facts, a single plain path is still looked up by name
+/// and a qualified one (`crate::K`) is never taken for a local.
+#[test]
+fn paths_without_resolution_facts_fall_back_to_plain_names_only() {
+    let result =
+        run("const K: i32 = 1;\nfn f() -> i32 { let x = 2; let y = crate::K; return x + y; }\n");
+    let mut checked = result.checked.expect("the fixture must check");
+    checked.facts.resolutions.clear();
+    let mut diags = DiagnosticBag::new();
+    let _ = super::check_ownership(&checked, &mut diags);
+    assert!(!diags.has_errors());
+}

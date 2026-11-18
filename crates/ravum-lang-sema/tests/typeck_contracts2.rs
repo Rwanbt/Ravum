@@ -2851,6 +2851,11 @@ fn an_array_repeat_length_constant_must_be_a_non_negative_integer() {
         "const N: bool = true;\nfn f() -> i32 { let a = [0; N]; return a[0]; }",
         "E-TYP-ARRAY-REPEAT",
     );
+    // A function is an item, not a constant.
+    expect_code(
+        "fn g() -> i32 { return 1; }\nfn f() -> i32 { let a = [0; g]; return a[0]; }",
+        "E-TYP-ARRAY-REPEAT",
+    );
 }
 
 #[test]
@@ -2860,4 +2865,12 @@ fn a_unit_variant_of_a_generic_enum_against_another_type_is_refused() {
         "enum E<T> { A(T), B }\nstruct S { n: i32 }\nfn f() -> i32 { let x: S = E::B; return 0; }",
         "E-TYP-MISMATCH",
     );
+}
+
+#[test]
+fn a_float_operand_leaves_an_integer_constant_without_a_value() {
+    // G-5.11: a float constant is not representable; the bitwise and the
+    // arithmetic forms built on one are refused the same way.
+    expect_code("const A: i32 = (1.5 as i32) & 1;", "E-RES-CONST-NOT-CONST");
+    expect_code("const B: i32 = (1.5 as i32) + 1;", "E-RES-CONST-NOT-CONST");
 }

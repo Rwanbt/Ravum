@@ -127,15 +127,15 @@ impl Index {
         }
 
         // Pass B: inherent methods -> `Type::method`, owned by the type path.
-        for raw in raws.iter().filter(|raw| raw.owner.is_some()) {
+        for (raw, owner) in raws
+            .iter()
+            .filter_map(|raw| raw.owner.as_ref().map(|owner| (raw, owner)))
+        {
             let rust_name = rust_names[&raw.id].clone();
-            let owner_path = match &raw.owner {
-                Some(owner) => match owner.def.and_then(|def| index.items.get(&def)) {
-                    Some(entry) => entry.rust_path.clone(),
-                    None if owner.name_hint.is_empty() => raw.module_rust.clone(),
-                    None => format!("{}::{}", raw.module_rust, mangle_ident(&owner.name_hint)),
-                },
-                None => raw.module_rust.clone(),
+            let owner_path = match owner.def.and_then(|def| index.items.get(&def)) {
+                Some(entry) => entry.rust_path.clone(),
+                None if owner.name_hint.is_empty() => raw.module_rust.clone(),
+                None => format!("{}::{}", raw.module_rust, mangle_ident(&owner.name_hint)),
             };
             index.items.insert(
                 raw.id,
@@ -148,10 +148,8 @@ impl Index {
 
         // Function table (`ret` already classifies `main`/test entry points).
         for raw in raws.iter().filter(|raw| raw.kind == RawKind::Fn) {
-            let entry = match index.items.get(&raw.id) {
-                Some(entry) => entry,
-                None => continue,
-            };
+            // Passes A and B above give every raw item an entry.
+            let entry = &index.items[&raw.id];
             index.fns.insert(
                 raw.id,
                 FnEntry {
@@ -167,10 +165,13 @@ impl Index {
                 index.tests.push((test_display_name(raw), raw.id));
             }
         } else {
-            for id in &checked.facts.test_fns {
-                if let Some(raw) = raws.iter().find(|raw| raw.id == *id) {
-                    index.tests.push((test_display_name(raw), raw.id));
-                }
+            for raw in checked
+                .facts
+                .test_fns
+                .iter()
+                .filter_map(|id| raws.iter().find(|raw| raw.id == *id))
+            {
+                index.tests.push((test_display_name(raw), raw.id));
             }
         }
 

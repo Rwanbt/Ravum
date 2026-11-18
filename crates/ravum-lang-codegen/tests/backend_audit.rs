@@ -5393,3 +5393,33 @@ fn main() {
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");
 }
+
+/// `string::parse_i64` takes a text reference (`&String` coerces, a literal
+/// is one) and a one-element tuple pattern holding a float is matched through
+/// its guard.
+#[test]
+fn audit_text_parsing_and_float_tuple_patterns_run() {
+    if skip("audit_text_parsing_and_float_tuple_patterns_run") {
+        return;
+    }
+    let code = generate_source(
+        "parse-and-float-tuple",
+        r#"use std::string;
+fn main() {
+    let s = String::from("42");
+    let n = string::parse_i64(&s);
+    let m = string::parse_i64("7");
+    let t = (1.5,);
+    let k = match t { (1.5,) => 1, _ => 0 };
+    match n {
+        Ok(v) => { if v == 42 && k == 1 && m.unwrap_or(0) == 7 { io::println("ok"); } }
+        Err(e) => { io::println("err"); }
+    }
+}
+"#,
+    );
+    let built = must_compile(&code, "parse-and-float-tuple");
+    let (stdout, stderr, status) = run(&built.binary, &[]);
+    assert_eq!(status, 0, "the program must run to completion: {stderr}");
+    assert_eq!(stdout, "ok\n");
+}

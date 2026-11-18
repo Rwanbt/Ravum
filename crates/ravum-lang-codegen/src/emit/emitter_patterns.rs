@@ -108,7 +108,8 @@ impl<'a> Emitter<'a> {
                 self.enum_path(*enum_item)?,
                 self.variant_name(*enum_item, *variant)?
             )),
-            Some(Resolution::Item { item }) => self.item_path(*item),
+            // A variant pattern resolves to a variant or a prelude
+            // constructor; the latter is written as its path.
             Some(_) => self.plain_path_text(path),
             None => Err(err(format!(
                 "missing resolution fact for pattern path `{}` (path node {})",

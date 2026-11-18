@@ -208,10 +208,10 @@ impl<'a> Emitter<'a> {
                     .get(segments.len().wrapping_sub(2))
                     .copied()
                     .filter(|owner| matches!(*owner, "Option" | "Result"));
-                match owner {
-                    Some(owner) => Ok(format!("{owner}::{constructor}({rendered})")),
-                    None => Ok(format!("{constructor}({rendered})")),
-                }
+                // The checker records prelude constructors qualified
+                // (`Option::Some`); a bare name is written as it is.
+                let prefix = owner.map(|owner| format!("{owner}::")).unwrap_or_default();
+                Ok(format!("{prefix}{constructor}({rendered})"))
             }
         }
     }
@@ -267,19 +267,15 @@ impl<'a> Emitter<'a> {
     }
 
     /// Emit an argument that must be usable as a `&str` receiver (`str::parse_*`).
+    /// Its signature takes `&str`, so typeck admits only a text reference
+    /// (`&String` coerces): the argument is emitted as it is.
     pub(super) fn str_borrow(
         &self,
         arg: Option<&Expr>,
         indent: usize,
     ) -> Result<String, CodegenError> {
         match arg {
-            Some(argument) => {
-                let text = self.expr(argument, indent)?;
-                match self.facts().expr_types.get(&argument.id) {
-                    Some(Type::String) | Some(Type::Str) => Ok(format!("&({text})")),
-                    _ => Ok(text),
-                }
-            }
+            Some(argument) => self.expr(argument, indent),
             None => Err(err("builtin call is missing its text argument")),
         }
     }

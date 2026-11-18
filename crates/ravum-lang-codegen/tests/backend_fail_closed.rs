@@ -553,3 +553,43 @@ fn a_non_function_member_of_an_impl_is_refused() {
         "{message}"
     );
 }
+
+/// An `else` branch that is neither a block nor an `if` (the parser builds no
+/// other) is wrapped in a block rather than written bare.
+#[test]
+fn an_else_branch_that_is_not_a_block_is_wrapped() {
+    let mut program = checked(
+        "fn main() { let c = true; if c { } else { } let d = 1; }\n",
+        Profile::Core,
+    );
+    let expr = first_main_expr(&mut program);
+    let ExprKind::If { else_branch, .. } = &mut expr.kind else {
+        panic!("expected the `if`");
+    };
+    let otherwise = else_branch.as_mut().expect("an else branch");
+    otherwise.kind = ExprKind::Unit;
+    let code = generate(&program, &GenOptions::default()).expect("generation succeeds");
+    assert!(code.contains("else { () }"), "{code}");
+}
+
+/// An `impl` whose target has neither a resolved type nor a path (the parser
+/// always writes a path) gives its methods no owner name: generation does not
+/// invent one, and still finishes or refuses without panicking.
+#[test]
+fn an_impl_target_without_a_type_or_a_path_gets_no_owner_name() {
+    use ravum_lang_sema::syntax::ast::TypeKind;
+    let mut program = checked(
+        "struct S { n: i32 }\nimpl S { fn get(&self) -> i32 { return self.n; } }\nfn main() { }\n",
+        Profile::Core,
+    );
+    let ItemKind::Impl(imp) = &mut program.program.root.items[1].kind else {
+        panic!("expected the impl");
+    };
+    imp.self_ty.kind = TypeKind::Unit;
+    let target = imp.self_ty.id;
+    program.facts.type_nodes.remove(&target);
+    match generate(&program, &GenOptions::default()) {
+        Ok(code) => assert!(!code.contains("impl S"), "{code}"),
+        Err(error) => assert!(!error.message.is_empty()),
+    }
+}

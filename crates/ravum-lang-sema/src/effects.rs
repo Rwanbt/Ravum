@@ -425,11 +425,10 @@ fn add_builtin_path(path: &str, out: &mut FnEffects) {
 }
 
 fn add_method_path(path: &str, out: &mut FnEffects) {
-    if let Some(effects) = builtins::builtin_method_effects(path) {
-        for effect in effects {
-            out.direct.insert(*effect);
-            out.sources.push((*effect, format!("call to `{path}`")));
-        }
+    // A method with no effect entry adds nothing.
+    for effect in builtins::builtin_method_effects(path).into_iter().flatten() {
+        out.direct.insert(*effect);
+        out.sources.push((*effect, format!("call to `{path}`")));
     }
 }
 

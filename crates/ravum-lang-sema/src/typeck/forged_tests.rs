@@ -13,6 +13,7 @@ const SOURCE: &str = "\
 struct P<T> { v: T }
 impl<T> P<T> {
     fn get(&self) -> i32 { return 1; }
+    fn add(&self, k: i32) -> i32 { return k; }
     fn make(v: T) -> P<T> { return P { v: v }; }
 }
 enum E { A, B(i32), C { x: i32 } }
@@ -23,7 +24,7 @@ fn f(e: E) -> i32 {
     let a = E::A;
     let b = E::B(K);
     let c = E::C { x: 3 };
-    let n = p.get() + q.get();
+    let n = p.get() + q.add(1);
     match e { E::A => n, E::B(v) => v, E::C { x } => x }
 }
 fn main() { let r = f(E::A); }
@@ -108,7 +109,7 @@ fn a_constant_without_a_recorded_path_gets_its_module_path() {
 fn typeck_survives_a_callee_without_its_signature() {
     // Only the called function and methods lose their signature, so the
     // bodies that call them are still typed.
-    for callee in ["f", "get", "make"] {
+    for callee in ["f", "get", "add", "make"] {
         let _ = typecheck_broken(|facts| facts.fn_sigs.retain(|_, sig| sig.name != callee));
     }
 }
@@ -192,4 +193,62 @@ fn a_dereference_of_a_non_reference_is_not_a_mutable_place() {
             .insert(4_000_000_001, crate::types::Type::I32);
         assert_eq!(checker.place_mutability(&deref), Some(false));
     });
+}
+
+#[test]
+fn a_method_call_on_a_non_nominal_receiver_binds_no_impl_parameter() {
+    // Method entries come from `impl` blocks on nominal types, and typeck
+    // looks a method up on the receiver's nominal type; should another type
+    // reach the call, no impl parameter is bound from it.
+    use ravum_lang_syntax::ast::{Expr, ExprKind};
+    let span = ravum_lang_syntax::span::Span::dummy();
+    let receiver = Expr {
+        id: 4_000_000_011,
+        kind: ExprKind::Int {
+            value: 1,
+            suffix: None,
+        },
+        span,
+    };
+    with_checker(|checker| {
+        let entry = checker
+            .world
+            .impls
+            .values()
+            .flatten()
+            .find(|entry| entry.name == "get")
+            .cloned()
+            .expect("the `get` method");
+        let (item, _) =
+            checker.check_user_method_call(&entry, &crate::types::Type::I32, &receiver, &[], &span);
+        assert_eq!(item, entry.item);
+    });
+}
+
+#[test]
+fn a_method_call_without_a_target_is_not_static_text() {
+    // `"x".as_str()` is static text through `str::as_str`; once its method
+    // fact is gone, the classification refuses to call it static.
+    let src = "fn g() -> &str { return \"x\".as_str(); }\n";
+    let mut sources = SourceMap::new();
+    let file = sources.add("src/lib.rv", src);
+    let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+    let mut world = World::build(&parsed.program);
+    let mut facts = Facts::default();
+    let mut diags = DiagnosticBag::new();
+    assert!(resolve::resolve_with_world(
+        &mut world, &mut facts, &mut diags
+    ));
+    assert!(super::typecheck_with_world(
+        &parsed.program,
+        &mut facts,
+        &world,
+        Some(&sources),
+        &mut diags
+    ));
+    assert_eq!(facts.static_str_fns.len(), 1);
+    facts.methods.clear();
+    facts.static_str_fns.clear();
+    super::compute_static_str_fns(&parsed.program, &mut facts);
+    assert!(facts.static_str_fns.is_empty());
 }

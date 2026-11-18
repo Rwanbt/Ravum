@@ -32,12 +32,8 @@ impl<'a> Emitter<'a> {
         fun: &FnItem,
     ) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
-        let entry = self.index.fns.get(&item.id).ok_or_else(|| {
-            err(format!(
-                "function node {} is missing from the index",
-                item.id
-            ))
-        })?;
+        // `Index::build` walks the same AST and records every function.
+        let entry = &self.index.fns[&item.id];
 
         let mut signature = String::new();
         // `main` and test functions are called from the generated crate-root

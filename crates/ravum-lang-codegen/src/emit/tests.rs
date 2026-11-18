@@ -1521,3 +1521,61 @@ fn prelude_constructor_paths_are_recognised_by_their_last_segments() {
     assert!(!is_option_or_result_ctor(""));
     assert!(!is_option_or_result_ctor("Option::"));
 }
+
+// -- E6 coverage: type rendering without type facts ---------------------------
+
+#[test]
+fn syntactic_types_render_slices_constant_lengths_and_a_bare_str() {
+    let mut b = Builder::new();
+    // `&[i32]` with no type facts: the inner type is not the `str` keyword.
+    let elem = b.named_type("i32", None);
+    let slice = b.ty(TypeKind::Slice(Box::new(elem)), None);
+    let slice_ref = b.ty(
+        TypeKind::Ref {
+            mutable: false,
+            inner: Box::new(slice),
+        },
+        None,
+    );
+    // `[i32; N]` whose length is a constant path.
+    let n_path = b.path(&["N"]);
+    let n_id = 7_000_001;
+    b.facts
+        .resolutions
+        .insert(n_path.id, Resolution::Item { item: n_id });
+    b.facts.item_paths.insert(n_id, "crate::N".to_string());
+    let length = b.expr(ExprKind::Path(n_path), Some(STy::Usize));
+    let elem = b.named_type("i32", None);
+    let array = b.ty(
+        TypeKind::Array {
+            elem: Box::new(elem),
+            len: Box::new(length),
+        },
+        None,
+    );
+    let checked = b.finish(None, Vec::new());
+    let options = GenOptions::default();
+    let emitter = Emitter {
+        checked: &checked,
+        options: &options,
+        index: Index::build(&checked),
+        array_moves: std::cell::RefCell::new(ArrayMovePlan::default()),
+        shadowed_names: std::cell::RefCell::new(BTreeSet::new()),
+    };
+    assert_eq!(
+        emitter
+            .syntactic_type_pos(&slice_ref, TypePos::Value)
+            .unwrap(),
+        "&[i32]"
+    );
+    let rendered = emitter.syntactic_type_pos(&array, TypePos::Value).unwrap();
+    assert!(
+        rendered.starts_with("[i32; ") && rendered.ends_with("N]"),
+        "{rendered}"
+    );
+    // A bare `str` never reaches a signature (only `&str`), but renders as is.
+    assert_eq!(
+        emitter.fmt_type_pos(&STy::Str, TypePos::Value).unwrap(),
+        "str"
+    );
+}
