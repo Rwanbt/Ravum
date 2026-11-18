@@ -1,0 +1,6 @@
+{
+  "id": "parser/block-arm-without-comma",
+  "mode": "run-pass",
+  "stdout_contains": "b\n",
+  "notes": "G-6.42: a block arm needs no comma before the next arm."
+}

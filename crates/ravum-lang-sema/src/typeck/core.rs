@@ -86,11 +86,43 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     }
 
     pub(super) fn compatible(a: &Type, b: &Type) -> bool {
-        a == b
+        if a == b
             || matches!(a, Type::Never)
             || matches!(b, Type::Never)
             || matches!(a, Type::Error)
             || matches!(b, Type::Error)
+        {
+            return true;
+        }
+        // The recovered error type nested in a constructor (`Option<<error>>`
+        // from `Some(x?)` on a refused `?`) matches the same constructor: its
+        // diagnostic is already reported, so no second one follows.
+        match (a, b) {
+            (Type::Option(x), Type::Option(y))
+            | (Type::Vec(x), Type::Vec(y))
+            | (Type::Slice(x), Type::Slice(y)) => Self::compatible_component(x, y),
+            (Type::Result(ok_a, err_a), Type::Result(ok_b, err_b)) => {
+                Self::compatible_component(ok_a, ok_b) && Self::compatible_component(err_a, err_b)
+            }
+            (Type::Tuple(xs), Type::Tuple(ys)) => {
+                xs.len() == ys.len()
+                    && xs
+                        .iter()
+                        .zip(ys)
+                        .all(|(x, y)| Self::compatible_component(x, y))
+            }
+            _ => false,
+        }
+    }
+
+    /// A component of a constructor: equal, the recovered error type, or a
+    /// component that itself holds it. `!` alone is not accepted here:
+    /// `Vec<!>` never matches `Vec<i32>`.
+    fn compatible_component(a: &Type, b: &Type) -> bool {
+        a == b
+            || matches!(a, Type::Error)
+            || matches!(b, Type::Error)
+            || (contains_error(a) || contains_error(b)) && Self::compatible(a, b)
     }
 
     pub(super) fn unify(

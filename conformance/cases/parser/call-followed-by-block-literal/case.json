@@ -1,0 +1,8 @@
+{
+  "id": "parser/call-followed-by-block-literal",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "G-6.32: `f { x }` is not a call followed by a block: it is read as a struct literal, and `f` names no struct."
+}

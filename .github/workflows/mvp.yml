@@ -124,6 +124,10 @@ jobs:
           node-version: '24'
 
       - name: Browser E2E - real Chromium/Edge via CDP (no npm dependency)
+        # A normal run takes < 1 min; the harness has its own 5 min deadline.
+        # This bound keeps a stuck run from consuming the whole job timeout
+        # (which cancels the job and loses its log).
+        timeout-minutes: 15
         run: powershell -ExecutionPolicy Bypass -File scripts/demo-m4-browser.ps1 -RequireBrowser -Screenshots
 
       - name: Upload browser E2E evidence

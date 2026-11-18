@@ -137,7 +137,7 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 `ref`, `dyn`, `await`, `box`, `yield`, `union`, `macro`, `final`, `abstract`, `override`, `virtual`, `package`, `interface`, `implements` **ne figurent pas** dans la liste réservée : ce sont des **identifiants valides** en Core 1.0 (le codegen les mangle). Conséquences normatives :
 - `let ref = 1;`, `let dyn = 2;`, `let await = 3;` sont **acceptés** (identifiants).
 - `dyn T` en position de type est un nom de type inconnu (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-TRAIT`.
-- `x.await` est une méthode inconnue (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-ASYNC`.
+- `x.await` est un accès de champ inconnu (`E-TYP-FIELD`), pas `E-UNSUPPORTED-ASYNC` ; `x.await()` est une méthode inconnue.
 - `ref x` en pattern est un motif de liaison `ref` suivi d'un token inattendu (`E-PARSE-EXPECTED`).
 
 > `static` et `type` **sont réservés** (35 mots-clés, §5.1) mais non supportés à l'usage :

@@ -1,0 +1,6 @@
+{
+  "id": "parser/struct-shorthand-in-expression",
+  "mode": "run-pass",
+  "stdout_contains": "1\n",
+  "notes": "G-4.4: the field shorthand `P { x }` reads `P { x: x }` (Lead decision)."
+}

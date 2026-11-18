@@ -1,0 +1,5 @@
+fn main() {
+    io::println(&(helper() + K).to_string());
+}
+const K: i32 = 4;
+fn helper() -> i32 { 3 }

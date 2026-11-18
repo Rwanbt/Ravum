@@ -1,0 +1,8 @@
+{
+  "id": "parser/nested-fn-item-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-2.6: an item nested in a fn is refused."
+}

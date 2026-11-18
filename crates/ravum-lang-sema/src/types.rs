@@ -17,6 +17,21 @@ use std::fmt;
 /// `Option`s); 100 leaves room for the wrappers the backend adds.
 pub const MAX_TYPE_DEPTH: usize = 100;
 
+/// True when the recovered error type appears anywhere in `ty`.
+pub fn contains_error(ty: &Type) -> bool {
+    match ty {
+        Type::Error => true,
+        Type::Ref { inner, .. } | Type::Slice(inner) | Type::Vec(inner) | Type::Option(inner) => {
+            contains_error(inner)
+        }
+        Type::Array { elem, .. } => contains_error(elem),
+        Type::Tuple(items) => items.iter().any(contains_error),
+        Type::Result(ok, err) => contains_error(ok) || contains_error(err),
+        Type::Nominal { args, .. } => args.iter().any(contains_error),
+        _ => false,
+    }
+}
+
 /// True when `!` appears anywhere in `ty`.
 ///
 /// G-5.11 / TYP-1.6 make `!` legal **only** as the whole return type of a
@@ -429,6 +444,54 @@ mod tests {
         }
         for ty in [Type::Bool, Type::F32, Type::F64, Type::String, Type::Error] {
             assert_eq!(ty.int_bits(), None, "{ty} has no integer width");
+        }
+    }
+
+    #[test]
+    fn contains_error_recurses_through_every_compound() {
+        let e = || Box::new(Type::Error);
+        let i = || Box::new(Type::I32);
+        for ty in [
+            Type::Error,
+            Type::Ref {
+                mutable: true,
+                inner: e(),
+            },
+            Type::Slice(e()),
+            Type::Vec(e()),
+            Type::Option(e()),
+            Type::Array { elem: e(), len: 2 },
+            Type::Tuple(vec![Type::I32, Type::Error]),
+            Type::Result(e(), i()),
+            Type::Result(i(), e()),
+            Type::Nominal {
+                def: 0,
+                name: "W".to_string(),
+                args: vec![Type::Error],
+            },
+        ] {
+            assert!(contains_error(&ty), "{ty} contains the error type");
+        }
+        for ty in [
+            Type::I32,
+            Type::Never,
+            Type::Ref {
+                mutable: false,
+                inner: i(),
+            },
+            Type::Slice(i()),
+            Type::Vec(i()),
+            Type::Option(i()),
+            Type::Array { elem: i(), len: 2 },
+            Type::Tuple(vec![Type::I32]),
+            Type::Result(i(), i()),
+            Type::Nominal {
+                def: 0,
+                name: "W".to_string(),
+                args: vec![Type::I32],
+            },
+        ] {
+            assert!(!contains_error(&ty), "{ty} has no error type");
         }
     }
 

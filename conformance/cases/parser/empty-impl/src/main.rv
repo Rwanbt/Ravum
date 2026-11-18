@@ -1,0 +1,5 @@
+struct P { }
+impl P { }
+fn main() {
+    io::println("ok");
+}

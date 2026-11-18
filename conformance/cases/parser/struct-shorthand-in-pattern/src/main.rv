@@ -1,0 +1,7 @@
+enum S { V { x: i32 } }
+fn main() {
+    let s = S::V { x: 5 };
+    match s {
+        S::V { x } => io::println(&x.to_string()),
+    }
+}

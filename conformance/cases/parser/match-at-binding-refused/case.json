@@ -1,0 +1,9 @@
+{
+  "id": "parser/match-at-binding-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-CHAR",
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-6.23: a match pattern has no `@` binding; the `@` character is itself refused by the lexer."
+}

@@ -1,0 +1,2 @@
+use std::math as m;
+fn main() { }

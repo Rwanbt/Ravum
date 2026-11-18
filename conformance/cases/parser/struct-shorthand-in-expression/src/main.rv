@@ -1,0 +1,6 @@
+struct P { x: i32 }
+fn main() {
+    let x = 1;
+    let p = P { x };
+    io::println(&p.x.to_string());
+}

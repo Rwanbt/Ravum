@@ -1,0 +1,8 @@
+{
+  "id": "parser/arrow-without-type",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-3.8: `->` without a type is E-PARSE-EXPECTED."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/recursive-struct-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-RECURSIVE"
+  ],
+  "notes": "G-4.13: a recursive struct without indirection is E-TYP-RECURSIVE."
+}

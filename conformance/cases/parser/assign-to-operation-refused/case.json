@@ -1,0 +1,8 @@
+{
+  "id": "parser/assign-to-operation-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-6.11: a place cannot be an operation."
+}

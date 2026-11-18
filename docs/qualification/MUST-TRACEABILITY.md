@@ -7,10 +7,11 @@
 
 ## 1. Résultat en une phrase
 
-> **Mesure du 2026-11-18 (lot T2 `lexical.md`, PR #167)** : `tools/must_audit.py`
-> compte **815 énoncés MUST** et **195 FeatureIds** (F-LEX-009 à F-LEX-015
-> ajoutés) ; **511 / 815** sont atteignables par un FeatureId, **304** ne le sont
-> pas ; couverture stricte **195/195** (1 exemption). Le texte ci-dessous est la
+> **Mesure du 2026-11-18 (lots T2 `lexical.md`, PR #167, et `grammar.md`)** :
+> `tools/must_audit.py` compte **815 énoncés MUST** et **200 FeatureIds**
+> (F-LEX-009 à F-LEX-015, F-SYN-036 à F-SYN-040 ajoutés) ; **544 / 815** sont
+> atteignables par un FeatureId, **271** ne le sont pas ; couverture stricte
+> **200/200** (1 exemption). Le texte ci-dessous est la
 > mesure d'origine, conservée.
 
 **Confirmé, et l'écart est grand :** `spec/language/` contient **807 énoncés

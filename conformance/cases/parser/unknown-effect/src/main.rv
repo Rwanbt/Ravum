@@ -1,0 +1,2 @@
+fn f() effects(teleport) { }
+fn main() { }

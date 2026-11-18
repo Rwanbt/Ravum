@@ -1,0 +1,8 @@
+{
+  "id": "parser/extern-fn-with-body-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-EXTERN"
+  ],
+  "notes": "G-3.10: `extern \"C\" fn` with a body is E-UNSUPPORTED-EXTERN."
+}
