@@ -86,3 +86,21 @@ CI verte sur `fa1935d`.
   Écarts à arbitrer : pas de cas de conformance pour la décision 1 (règle « aucun cas ajouté depuis
   Linux ») ; tests existants dont l'attente a suivi une décision (audits backend profondeur 100,
   audits `_rv_`, deux tests de message `p.m`).
+- 2026-11-18, arbitrage du propriétaire sur les écarts ci-dessus :
+  1. Audits de profondeur : validés. Les audits qui construisent restent à la borne (99 `Option`,
+     profondeur 100) ; un audit de bout en bout ajouté à la profondeur 128 d'origine exige un seul
+     `E-TYP-DEPTH` (type écrit, type inféré, paramètre). Il a révélé deux défauts de récupération,
+     corrigés : un type écrit refusé reste profond au lieu de devenir `Error` (cascade de
+     `E-TYP-MISMATCH`) ; les motifs tuple, `Some`, `None`, `Ok`, `Err` refusent le type d'erreur
+     récupéré, et une valeur vérifiée contre lui laisse ses variables ouvertes (`E-TYP-AMBIGUOUS`
+     en plus d'`E-RES-UNKNOWN` pour `let x: Inconnu = None;`).
+  2. Cas de conformance de la décision 1 : **action ouverte**, à ajouter depuis la plateforme de
+     référence (pas depuis Linux).
+  3. Interface `Fs` complète du loader : retenue, PR dédiée.
+  4. `#[should_panic]` : l'état de slot de `write_place` était déjà couvert (`e3e3e91`) ;
+     l'enregistrement du manifeste est extrait dans `register_manifest` et testé.
+  Mesure locale Linux x86_64 après ces corrections : 1 560 tests, 0 échec ; clippy propre ;
+  conformance `--verify-build` 501 PASS / 0 FAIL / 2 SKIP ; traçabilité stricte 188/188 ;
+  couverture produit 100,00 % sur 13 220 lignes, 0 exemption, 0 dette ; seuils respectés.
+  Question ouverte relevée par l'audit : `W-OWN-UNUSED-VARIABLE` s'applique aussi à un nom
+  préfixé par `_` (`let _z = …`) ; la spec (DIAG-1.6) ne prévoit pas d'exception.
