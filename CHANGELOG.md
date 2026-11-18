@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Compatibility contract (T2, `compatibility.md`): FeatureIds F-META-019 to F-META-023, 6 conformance cases, `tests/compat_contract.rs` (digest follows a dependency path, an invalid lockfile is left untouched) and append-only snapshots of rule ids and feature ids. COMPAT-3.6 now names `W-DEPRECATED` and COMPAT-4.2 `E-MOD-DUPLICATE`, as the registry does.
+
 - Diagnostics contract (T2, `diagnostics.md`): FeatureIds F-META-009 to F-META-017, 13 conformance cases, `tests/diagnostics_contract.rs` (byte-identical runs, per-phase order, no colour, no absolute path, one-line JSON) and an append-only snapshot of published diagnostic codes (`tools/diagnostic_codes.snapshot`).
 
 - Core 1.0 DRAFT compiler and toolchain under `crates/ravum-lang-*`:

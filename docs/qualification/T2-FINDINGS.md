@@ -1906,3 +1906,38 @@ Observation hors MUST : sur un manifeste invalide (`version = "not-a-version"`),
 le span de `E-MOD-MANIFEST` couvre `[package]` (octets 0–9) et non la valeur
 fautive. Ce n'est pas une violation de DIAG-1.3 (le fichier et les offsets sont
 valides), mais le span est imprécis.
+
+## 32. Lot `compatibility.md` : 14 MUST sur 39 tracés, deux textes alignés (2026-11-18)
+
+### 32.1 Mesure
+
+`python3 tools/must_audit.py` : `compatibility.md` passe de 39 non atteints à
+**25** ; global 816 MUST, **219** non atteints ; `features_coverage.py --strict` :
+214/214 (1 exemption). FeatureIds F-META-019 à F-META-023.
+
+Preuves ajoutées : 6 cas (`packages/two-versions-same-name`,
+`packages/dependency-other-edition`, `packages/dependency-digest-exposed`,
+`cli/compat-json-declares-spec-version`, `cli/compat-no-migrate-command`,
+`cli/compat-cache-clean`) ; `crates/ravum-lang-cli/tests/compat_contract.rs`
+(COMPAT-4.3 : changer le `path` d'une dépendance change `dependencies_digest`
+et rend le lockfile `stale` ; COMPAT-1.4/7.1 : un lockfile invalide est refusé
+par `E-MOD-LOCK`, laissé intact, et aucun binaire n'est produit) ;
+`tools/rule_ids.snapshot` et `tools/feature_ids.snapshot` (DIAG-9.6,
+COMPAT-2.9 : un identifiant publié n'est jamais renommé ni retiré, et tout
+nouvel identifiant doit y être ajouté).
+
+### 32.2 Textes alignés
+
+| Règle | Avant | Après | Raison |
+|---|---|---|---|
+| COMPAT-3.6 | une API dépréciée « n'émet aucun avertissement » | chaque usage émet `W-DEPRECATED` | contredisait DIAG-1.6/1.10, décision D-18-3 |
+| COMPAT-4.2 | deux versions du même nom → `E-MOD-DEPENDENCY` | → `E-MOD-DUPLICATE` | le registre canonique (`diagnostics.md` §3) attribue « deux packages de même nom » à `E-MOD-DUPLICATE`, et l'implémentation l'émet |
+
+### 32.3 Non tracés : règles de gouvernance
+
+Les 25 règles restantes décrivent une **politique** (ce qui est une rupture,
+quand créer une édition majeure, comment migrer ou revenir en arrière), pas un
+comportement de l'outil : COMPAT-1.2, 2.1 à 2.8, 3.1 à 3.6, 4.5, 5.2, 6.1 à 6.3,
+6.5, 7.2, 7.3, 7.5, 7.6. Aucun cas de conformance ne peut les exercer sur une
+seule édition. Leur contrôle relève de la revue (D2, ratification) ; les seules
+parties mécanisables le sont déjà (instantanés d'identifiants et de codes).
