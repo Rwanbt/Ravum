@@ -95,7 +95,14 @@ sortie, SHA, CI verte.
   (artefacts Windows/Linux, SBOM, provenance attestée), canal de dépréciation,
   liste de ratification D2 proposée, contrat d'installation.
 - [ ] **E9 — Tri des issues (P-14) et dossier d'audit à jour.**
+- [ ] **E11 — Périmètre 1.0 élargi ([D-18-2](../decision/DECISIONS-2026-11-18.md)).**
+  Un RFC `PROPOSED`, puis une implémentation, pour chaque fonctionnalité :
+  concurrence, réseau et HTTP, SQLite, hot reload avec préservation d'état,
+  bloc DSP. Ferme T6, T8 et T9.
+- [ ] **E12 — T2 : FeatureId et cas pour les 344 MUST sans test
+  ([D-18-1](../decision/DECISIONS-2026-11-18.md)).**
 - [ ] **E10 — Demande de décision finale** : audit, ratification, Go/No-Go.
+  Elle n'a lieu qu'une fois E11 et E12 faits.
 
 ## 5. Journal
 
