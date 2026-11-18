@@ -209,6 +209,9 @@ pub(crate) use world::*;
 pub(crate) use world::{PathError, PayloadCtor, ValuePath, OPTION_NONE};
 
 #[cfg(test)]
+mod forged_tests;
+
+#[cfg(test)]
 mod sym_tests {
     use super::*;
 

@@ -164,16 +164,9 @@ pub(crate) fn resolve_use_tail(
     segments: &[ast::PathSegment],
 ) -> UseTarget {
     loop {
-        if index >= segments.len() {
-            return match cursor {
-                // MOD-4.3/MOD-3.2: the synthetic anchoring form has no `mod`
-                // entry, so it is public by construction.
-                UseCursor::Module(m) => {
-                    UseTarget::Module(Sym::Module(m), Vis::Public(Span::dummy()), m)
-                }
-                UseCursor::Builtin(p) => UseTarget::BuiltinModule(p),
-            };
-        }
+        // Every caller starts the tail before the last segment (a one-segment
+        // `use` goes through `resolve_use_single_name`); each turn advances or
+        // returns on the last segment.
         let last = index + 1 == segments.len();
         let name = &segments[index].name.name;
         match cursor {

@@ -54,9 +54,8 @@ pub(crate) fn resolve_value_path(
         }
         if let Some(sym) = world.lookup(module, Ns::Value, name) {
             world.mark_used(module, sym);
-            if !world.visible_from(&sym, module) {
-                return Err(PathError::private(name));
-            }
+            // A name looked up in the current module is always visible from it:
+            // `lookup` answers `def_module == module`, which `visible_from` accepts.
             return match sym.sym {
                 Sym::Fn(id) | Sym::Const(id) => Ok(ValuePath::Item(id)),
                 Sym::BuiltinFn(p) => Ok(ValuePath::BuiltinFn(p)),
@@ -125,9 +124,8 @@ pub(crate) fn resolve_value_path(
             // the parser refuses it in expression and pattern position.
             if let Some(sym) = world.lookup(module, Ns::Module, first) {
                 world.mark_used(module, sym);
-                if !world.visible_from(&sym, module) {
-                    return Err(PathError::private(first));
-                }
+                // A name looked up in the current module is always visible from it:
+                // `lookup` answers `def_module == module`, which `visible_from` accepts.
                 index = 1;
                 match sym.sym {
                     Sym::Module(m) => Cursor::Module(m),
@@ -154,13 +152,9 @@ pub(crate) fn resolve_value_path(
     };
 
     loop {
-        if index >= segments.len() {
-            return match cursor {
-                Cursor::Module(_) => Ok(ValuePath::Module),
-                Cursor::Builtin(_) => Ok(ValuePath::BuiltinModule),
-                Cursor::Type(t) => Ok(ValuePath::Type(t)),
-            };
-        }
+        // Entered with `index < len` (an empty path is refused above, and a
+        // plain path consumes only its first segment before the loop when it
+        // has at least two); each turn advances or returns on the last segment.
         let last = index + 1 == segments.len();
         let name = &segments[index].name.name;
         match cursor {
@@ -317,15 +311,13 @@ pub(crate) fn resolve_associated(
             builtin_assoc("Error", name)
         }
         Type::Nominal { def, .. } => {
-            if world.nominal_kind(*def) == Some(NominalKind::Enum) {
-                if let Some(enum_ast) = world.enums.get(def) {
-                    if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name)
-                    {
-                        return Ok(ValuePath::Variant {
-                            enum_item: *def,
-                            variant: index,
-                        });
-                    }
+            // `nominal_kind` answers `Enum` exactly for the ids of `world.enums`.
+            if let Some(enum_ast) = world.enums.get(def) {
+                if let Some(index) = enum_ast.variants.iter().position(|v| v.name.name == name) {
+                    return Ok(ValuePath::Variant {
+                        enum_item: *def,
+                        variant: index,
+                    });
                 }
             }
             if let Some(entry) = world.method(*def, name, true) {

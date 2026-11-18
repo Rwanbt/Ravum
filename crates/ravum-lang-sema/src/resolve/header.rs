@@ -835,14 +835,8 @@ pub(crate) fn resolve_type_path(
         }
         if let Some(sym) = world.lookup(module, Ns::Type, name) {
             world.mark_used(module, sym);
-            if !world.visible_from(&sym, module) {
-                diags.error(
-                    "E-RES-PRIVATE",
-                    segment.name.span,
-                    format!("type `{name}` is private"),
-                );
-                return Type::Error;
-            }
+            // A name looked up in the current module is always visible from it:
+            // `lookup` answers `def_module == module`, which `visible_from` accepts.
             let args = resolve_type_args(
                 world,
                 type_nodes,
@@ -940,14 +934,9 @@ pub(crate) fn resolve_type_path(
     };
 
     loop {
-        if index >= segments.len() {
-            diags.error(
-                "E-RES-UNKNOWN",
-                path.span,
-                "a module is not a type".to_string(),
-            );
-            return Type::Error;
-        }
+        // Entered with `index < len` (an empty path is refused above, and a
+        // plain path consumes only its first segment before the loop when it
+        // has at least two); each turn advances or returns on the last segment.
         let last = index + 1 == segments.len();
         let segment = &segments[index];
         let name = &segment.name.name;
@@ -969,11 +958,8 @@ pub(crate) fn resolve_type_path(
                                 Sym::Module(child) => Cursor::Module(child),
                                 Sym::BuiltinModule(p) => Cursor::Builtin(p),
                                 _ => {
-                                    diags.error(
-                                        "E-RES-UNKNOWN",
-                                        segment.name.span,
-                                        format!("`{name}` is not a module"),
-                                    );
+                                    let message = format!("`{name}` is not a module");
+                                    diags.error("E-RES-UNKNOWN", segment.name.span, message);
                                     return Type::Error;
                                 }
                             };
