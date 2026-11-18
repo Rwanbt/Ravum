@@ -270,8 +270,9 @@ pub(super) fn resolve_vars_final(
 /// The structural recursion stops past [`MAX_TYPE_DEPTH`]: the part below is
 /// replaced by `Error`, which keeps the type deeper than the bound, so
 /// `finalize_inference` still reports `E-TYP-DEPTH` on it. Links between
-/// variables are followed in a loop and do not count as a level; the occurs
-/// check (`var_occurs`) makes the chains acyclic.
+/// variables are followed in a loop and do not count as a level. The occurs
+/// check (`var_occurs`) makes the chains acyclic, so a chain visits each
+/// variable at most once; a longer walk is a forged cycle and yields `Error`.
 pub(super) fn resolve_vars_impl(
     vars: &[Option<Type>],
     ty: &Type,
@@ -282,9 +283,14 @@ pub(super) fn resolve_vars_impl(
         return Type::Error;
     }
     let mut ty = ty;
+    let mut links = 0;
     while let Some(index) = infer_var_index(ty) {
         match vars.get(index).and_then(Option::as_ref) {
-            Some(bound) => ty = bound,
+            Some(_) if links >= vars.len() => return Type::Error,
+            Some(bound) => {
+                ty = bound;
+                links += 1;
+            }
             None => {
                 return match unresolved.as_deref_mut() {
                     Some(set) => {

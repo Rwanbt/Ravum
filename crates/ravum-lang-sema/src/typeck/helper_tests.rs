@@ -110,7 +110,8 @@ fn a_generic_parameter_is_found_inside_every_type_constructor() {
 }
 
 /// A cycle among inference variables (which unification refuses) cannot make
-/// resolution recurse without bound: past 64 levels the result is `Error`.
+/// resolution loop without bound: a walk longer than the variable table is a
+/// cycle, and the result is `Error`.
 #[test]
 fn resolution_of_a_cyclic_variable_chain_is_bounded() {
     let var = |index: usize| Type::Param {
