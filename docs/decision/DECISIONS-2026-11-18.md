@@ -51,6 +51,20 @@ réservé à la dépréciation et encadré par
 [`DEPRECATION-POLICY.md`](../release/DEPRECATION-POLICY.md). Aucune construction
 n'est dépréciée en 1.0, mais le canal existe et il est testé.
 
+## D-18-4 — Alarme de temps : 20 échantillons en CI
+
+Le job `performance.yml` mesure 20 exécutions par exemple et par mode au lieu
+de 10. Avec 10 échantillons, le p95 au rang le plus proche est le maximum, et un
+seul pic du runner partagé faisait échouer le job (PR #169). Les plafonds et la
+référence ne changent pas. La comparaison avec la référence, mesurée avec 10
+échantillons, devient un peu plus indulgente sur le p95 ; le responsable l'a
+accepté le 2026-11-18.
+
+## D-18-5 — `run --json`
+
+DIAG-8.1 renvoie à `run --json` (`status`, `exit_code`). La commande est
+implémentée, au lieu de retirer la phrase de la spécification.
+
 ## Ce qui ne change pas
 
 - Aucun tag, aucune release, aucune signature, aucune fusion vers `main` sans
