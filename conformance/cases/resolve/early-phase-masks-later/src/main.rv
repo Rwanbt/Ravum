@@ -1,0 +1,3 @@
+fn main() {
+    let _x: bool = y + 1;
+}

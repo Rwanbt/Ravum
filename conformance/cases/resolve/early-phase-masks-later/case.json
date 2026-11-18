@@ -1,0 +1,8 @@
+{
+  "id": "resolve/early-phase-masks-later",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "DIAG-1.4, DIAG-4.2: the unknown name is rejected by resolve; typing produces no E-TYP-MISMATCH on the same node (`bool` vs the sum)."
+}

@@ -1864,3 +1864,45 @@ Ligne lue dans chacun des quatre journaux :
 Elle ferme l'étape E7 du plan de production (P-9). Elle ne change pas le gate
 T2 : T2 reste `PARTIAL` tant que 344 énoncés MUST sur 811 n'ont pas de
 FeatureId (D10, `tools/must_audit.py`).
+
+## 31. Lot `diagnostics.md` : 38 MUST sur 45 tracés, une cascade corrigée (2026-11-18)
+
+### 31.1 Mesure
+
+`python3 tools/must_audit.py` : `diagnostics.md` passe de 45 non atteints à
+**7** ; dénominateur global 816 MUST, 234 non atteints ; `features_coverage.py
+--strict` : 209/209 (1 exemption). Corpus : `cargo run -p ravum-conformance --
+run` → `total=602 pass=600 fail=0 skip=2`.
+
+Preuves ajoutées : 13 cas (`cli/diag-*`, `resolve/early-phase-masks-later`),
+`crates/ravum-lang-cli/tests/diagnostics_contract.rs` (DIAG-1.8, 4.1, 4.4, 6.5,
+6.8, 7.2 : deux exécutions identiques à l'octet, tri par phase, aucun ESC,
+aucun chemin absolu, une ligne JSON sans BOM), `tools/diagnostic_codes.snapshot`
+et `tools/tests/test_diagnostic_contract.py` (DIAG-9.1/9.2/9.5 : un code publié
+n'est jamais retiré ni changé de préfixe ; DIAG-1.2/6.6/9.4 : aucun cas
+n'asserte un `message`).
+
+### 31.2 Défaut corrigé
+
+DIAG-4.2 était violé : `let _x: bool = y + 1;` produisait `E-RES-UNKNOWN` **et**
+`E-TYP-MISMATCH` (« operator `+` is not defined for `<error>` and `i32` »).
+`binary_result_type` rend désormais `Type::Error` sans diagnostic dès qu'un
+opérande est déjà en erreur (test `an_unresolved_operand_does_not_cascade_through_operators`,
+six opérateurs).
+
+### 31.3 Non tracés, avec la raison
+
+| Règle | Raison |
+|---|---|
+| DIAG-1.10 | le registre des dépréciations est vide en Core 1.0 : aucun cas de conformance ne peut l'exercer ; couvert par les tests unitaires de `deprecation.rs` uniquement |
+| DIAG-5.5 | « span non vide et dans les bornes » : vérifiable seulement sur tous les diagnostics émis ; à ajouter à l'oracle du corpus (vérification générique sur chaque sortie JSON) |
+| DIAG-6.4 | aucun diagnostic de Core 1.0 n'émet aujourd'hui de note ni d'aide : la forme `= note:` n'a pas de producteur |
+| DIAG-7.3 | règle sur le **consommateur** (ignorer les champs inconnus) ; le runner de conformance la respecte mais aucun test ne le fige |
+| DIAG-8.1 | **écart spec / implémentation, arbitrage propriétaire** : la règle renvoie à `run --json` (`status`, `exit_code`), mais `run` et `build` refusent `--json` (code 2). La propagation du code de sortie elle-même est vérifiée (`run/process-exit-code`) |
+| DIAG-9.3 | `schema_version` : aucune comparaison automatique entre deux versions du schéma |
+| DIAG-9.6 | stabilité de `feature_id`/`rule_id` : FEAT-1.4 le pose, aucun instantané ne le vérifie encore |
+
+Observation hors MUST : sur un manifeste invalide (`version = "not-a-version"`),
+le span de `E-MOD-MANIFEST` couvre `[package]` (octets 0–9) et non la valeur
+fautive. Ce n'est pas une violation de DIAG-1.3 (le fichier et les offsets sont
+valides), mais le span est imprécis.

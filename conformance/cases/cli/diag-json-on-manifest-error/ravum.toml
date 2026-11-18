@@ -1,0 +1,4 @@
+[package]
+name = "x"
+version = "not-a-version"
+edition = "core-1.0"

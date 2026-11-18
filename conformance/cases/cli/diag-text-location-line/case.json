@@ -1,0 +1,11 @@
+{
+  "id": "cli/diag-text-location-line",
+  "mode": "cli",
+  "args": [
+    "check",
+    "."
+  ],
+  "exit_code": 1,
+  "stderr_contains": "\n  --> src/main.rv:2:14\n",
+  "notes": "DIAG-6.2, DIAG-6.7: the second line is `  --> <file>:<line>:<col>` and the text form goes to stderr."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "cli/diag-usage-error-no-binary",
+  "mode": "cli",
+  "args": [
+    "build",
+    "--nope",
+    "."
+  ],
+  "exit_code": 2,
+  "stderr_contains": "error: unknown option",
+  "notes": "DIAG-8.5: a usage error exits 2 with a short message on stderr and produces no binary."
+}

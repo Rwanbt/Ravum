@@ -591,6 +591,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         rhs: &Expr,
     ) -> Type {
         use ast::BinOp as B;
+        // DIAG-4.2: an operand already rejected by an earlier phase (or an
+        // earlier error) is not reported again through the operator.
+        if l_ty == Type::Error || r_ty == Type::Error {
+            return Type::Error;
+        }
         match op {
             B::Add | B::Sub | B::Mul | B::Div | B::Rem => {
                 if (l_ty.is_int() && r_ty.is_int()) || (l_ty.is_float() && r_ty.is_float()) {
