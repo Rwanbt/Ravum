@@ -253,10 +253,14 @@ impl<'a> Emitter<'a> {
     /// table). In debug builds an incoherence is an error instead of a silently
     /// different lowering. Release builds skip the check (it is a test/audit
     /// guard, not a semantic rule).
+    #[cfg(not(debug_assertions))]
     fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
-        if !cfg!(debug_assertions) {
-            return Ok(());
-        }
+        Ok(())
+    }
+
+    /// Debug build: see the release variant above for the rule.
+    #[cfg(debug_assertions)]
+    fn verify_ownership_facts(&self) -> Result<(), CodegenError> {
         for (id, kind) in &self.checked.facts.own.use_kind {
             let Some(ty) = self.checked.facts.expr_types.get(id) else {
                 continue;
@@ -388,6 +392,7 @@ impl<'a> Emitter<'a> {
     /// * `consumed` is a subset of `owned_position`, and an owned position is a
     ///   `Move` or a `Copy`, never a borrow;
     /// * a binding identity names the binding the path resolves to.
+    #[cfg(debug_assertions)]
     fn verify_ownership_tables(&self) -> Result<(), CodegenError> {
         let own = &self.checked.facts.own;
         for (id, kind) in &own.use_kind {
@@ -467,6 +472,7 @@ impl<'a> Emitter<'a> {
 
     /// Place described by the syntax alone, binding identity included (step B
     /// cross-check). See `OwnPlace`.
+    #[cfg(debug_assertions)]
     fn syntactic_place(&self, expr: &Expr) -> Option<ravum_lang_sema::facts::OwnPlace> {
         use ravum_lang_sema::facts::{OwnPlace, Projection as PlaceStep, ProjectionIndex};
         match &expr.kind {
@@ -521,6 +527,7 @@ impl<'a> Emitter<'a> {
     }
 
     /// Human location of an expression for a debug-guard error message.
+    #[cfg(debug_assertions)]
     fn expr_location(&self, expr: &Expr) -> String {
         match self.checked.files.get(expr.span.file as usize) {
             Some(file) => format!("{}:{}", file.path, file.line_of(expr.span.start)),
@@ -528,12 +535,14 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn expr_span_text(&self, expr: &Expr) -> String {
         format!("{}..{}", expr.span.start, expr.span.end)
     }
 
     /// A field/tuple/index projection on a reference auto-derefs it: the checker
     /// records one `Deref` step per reference layer before the projection.
+    #[cfg(debug_assertions)]
     fn push_auto_derefs(&self, base: &Expr, steps: &mut Vec<ravum_lang_sema::facts::Projection>) {
         let mut ty = self.checked.facts.expr_types.get(&base.id);
         while let Some(Type::Ref { inner, .. }) = ty {
@@ -938,7 +947,9 @@ impl<'a> Emitter<'a> {
 
 mod paths;
 
-use paths::{collect_fn_bodies, collect_module_exprs, ArrayMovePlan, PathMode};
+#[cfg(debug_assertions)]
+use paths::{collect_fn_bodies, collect_module_exprs};
+use paths::{ArrayMovePlan, PathMode};
 
 // ---------------------------------------------------------------------------
 // Tests.

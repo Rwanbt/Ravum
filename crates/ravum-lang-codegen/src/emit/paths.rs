@@ -205,6 +205,7 @@ pub(super) fn rebuild_text(slots: &[Slot], depth: usize, array: &str, fresh: &st
     }
 }
 /// Collect every expression node of a module (step B place cross-check).
+#[cfg(debug_assertions)]
 pub(super) fn collect_module_exprs<'a>(
     module: &'a Module,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -225,6 +226,7 @@ pub(super) fn collect_module_exprs<'a>(
 }
 
 /// Collect the body of every function of a module (step-B path cross-check).
+#[cfg(debug_assertions)]
 pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>) {
     for item in &module.items {
         match &item.kind {
@@ -240,6 +242,7 @@ pub(super) fn collect_fn_bodies<'a>(module: &'a Module, out: &mut Vec<&'a Block>
     }
 }
 
+#[cfg(debug_assertions)]
 pub(super) fn collect_block_exprs<'a>(
     block: &'a Block,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -260,6 +263,7 @@ pub(super) fn collect_block_exprs<'a>(
     }
 }
 
+#[cfg(debug_assertions)]
 pub(super) fn collect_expr<'a>(
     expr: &'a Expr,
     out: &mut BTreeMap<NodeId, &'a Expr>,
@@ -396,6 +400,7 @@ pub(super) struct PathPlanner<'e, 'a> {
     reinits: Vec<NodeId>,
     /// Step-B guard (debug builds): decisions this walk derives from the syntax
     /// that the checker's facts do not confirm.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     disagreements: Vec<String>,
 }
 
@@ -417,6 +422,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
     ///   identity for its root;
     /// * a projection of a temporary (`make()[i]`) is no place, and carries the
     ///   use the checker recorded when it took its value.
+    #[cfg(debug_assertions)]
     fn cross_check(&mut self, expr: &Expr, root: &Expr) {
         let own = &self.emitter.facts().own;
         let location = self.emitter.expr_location(expr);
@@ -500,9 +506,9 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
                 self.walk_expr(index, false);
             }
         }
-        if cfg!(debug_assertions) {
-            self.cross_check(expr, root);
-        }
+        // Debug builds only: the cross-check is an audit, not a rule.
+        #[cfg(debug_assertions)]
+        self.cross_check(expr, root);
         let Some(path) = self.emitter.element_path(expr) else {
             return;
         };
@@ -667,6 +673,7 @@ impl<'a> Emitter<'a> {
 
     /// Step-B guard: the disagreements between the syntactic walk of `body` and
     /// the checker's facts (see [`PathPlanner::cross_check`]).
+    #[cfg(debug_assertions)]
     pub(super) fn path_fact_disagreements(&self, body: &Block) -> Vec<String> {
         let mut planner = PathPlanner::new(self);
         planner.walk_block(body);

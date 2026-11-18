@@ -977,13 +977,10 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
             let parts = split_top_level(inner, ',')?;
             let types: Option<Vec<Type>> = parts.iter().map(|p| type_from_str(p, env)).collect();
             let types = types?;
-            return match wrap {
-                0 if types.len() == 1 => Some(Type::Vec(Box::new(types.into_iter().next()?))),
-                1 if types.len() == 1 => Some(Type::Option(Box::new(types.into_iter().next()?))),
-                2 if types.len() == 2 => {
-                    let mut it = types.into_iter();
-                    Some(Type::Result(Box::new(it.next()?), Box::new(it.next()?)))
-                }
+            return match (wrap, types.as_slice()) {
+                (0, [elem]) => Some(Type::Vec(Box::new(elem.clone()))),
+                (1, [inner]) => Some(Type::Option(Box::new(inner.clone()))),
+                (2, [ok, err]) => Some(Type::Result(Box::new(ok.clone()), Box::new(err.clone()))),
                 _ => None,
             };
         }
@@ -1259,8 +1256,22 @@ mod tests {
             "Inconnu",
             "[Inconnu]",
             "(i32, Inconnu)",
+            "&mut Inconnu",
+            "Vec<(i32>",
         ] {
             assert_eq!(type_from_str(text, &[]), None, "accepted {text:?}");
         }
+    }
+
+    #[test]
+    fn every_prelude_module_has_a_canonical_path() {
+        for name in PRELUDE_MODULES {
+            let path = builtin_root_module(name).expect("a prelude module");
+            assert!(
+                path == "std" || path == format!("std::{name}"),
+                "{name} -> {path}"
+            );
+        }
+        assert_eq!(builtin_root_module("nowhere"), None);
     }
 }

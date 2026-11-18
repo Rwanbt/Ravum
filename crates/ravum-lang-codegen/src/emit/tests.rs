@@ -537,7 +537,10 @@ mod emitter_type_contracts;
 mod emitter_value_contracts;
 mod fixture_facts;
 mod name_contracts;
+// These two exercise the debug-only ownership guards of the backend.
+#[cfg(debug_assertions)]
 mod own_facts_guard;
+#[cfg(debug_assertions)]
 mod path_walk_contracts;
 mod pattern_contracts;
 mod programs_abcd;
