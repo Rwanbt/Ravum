@@ -63,5 +63,43 @@ class NoCaseAssertsAMessage(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+
+def snapshot(name: str) -> list[str]:
+    lines = (REPO / "tools" / name).read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+
+
+class PublishedIdentifiersAreImmutable(unittest.TestCase):
+    """DIAG-9.6, COMPAT-2.9: a `rule_id` or `feature_id` is never renamed."""
+
+    def current_rule_ids(self) -> set[str]:
+        import must_audit
+
+        rows, _ = must_audit.parse_rule_tables(REPO)
+        return {row["id"] for row in rows}
+
+    def current_feature_ids(self) -> set[str]:
+        import re
+
+        text = (REPO / "spec" / "language" / "features.md").read_text(encoding="utf-8")
+        return set(re.findall(r"^\| (F-[A-Z]+-\d{3}) \|", text, re.M))
+
+    def test_no_published_rule_id_disappears(self) -> None:
+        missing = sorted(set(snapshot("rule_ids.snapshot")) - self.current_rule_ids())
+        self.assertEqual(missing, [], "a published rule id was renamed or removed")
+
+    def test_new_rule_ids_are_appended_to_the_snapshot(self) -> None:
+        new = sorted(self.current_rule_ids() - set(snapshot("rule_ids.snapshot")))
+        self.assertEqual(new, [], "append new rule ids to tools/rule_ids.snapshot")
+
+    def test_no_published_feature_id_disappears(self) -> None:
+        missing = sorted(set(snapshot("feature_ids.snapshot")) - self.current_feature_ids())
+        self.assertEqual(missing, [], "a published feature id was renamed or removed")
+
+    def test_new_feature_ids_are_appended_to_the_snapshot(self) -> None:
+        new = sorted(self.current_feature_ids() - set(snapshot("feature_ids.snapshot")))
+        self.assertEqual(new, [], "append new feature ids to tools/feature_ids.snapshot")
+
+
 if __name__ == "__main__":
     unittest.main()
