@@ -1186,3 +1186,24 @@ fn a_constant_pattern_does_not_count_towards_exhaustiveness() {
     let codes: Vec<&str> = found.iter().map(|(code, _)| code.as_str()).collect();
     assert_eq!(codes, ["E-TYP-NONEXHAUSTIVE"], "{found:?}");
 }
+
+/// The two negative examples of `stdlib.md` §8: `assert_eq` on `Vec` is
+/// E-TYP-EQ; the turbofish spelling is a parse error first (G-5.9).
+#[test]
+fn the_stdlib_assert_eq_examples_report_their_documented_codes() {
+    let typed = errors(
+        "fn f() { let a: Vec<i32> = Vec::new(); let b: Vec<i32> = Vec::new(); assert_eq(a, b); }\n\
+         fn main() { f(); }\n",
+    );
+    let codes: Vec<&str> = typed.iter().map(|(code, _)| code.as_str()).collect();
+    assert_eq!(codes, ["E-TYP-EQ"], "{typed:?}");
+    let turbofish =
+        errors("fn f() { assert_eq(Vec::<i32>::new(), Vec::<i32>::new()); }\nfn main() { f(); }\n");
+    assert!(
+        !turbofish.is_empty()
+            && turbofish
+                .iter()
+                .all(|(code, _)| code == "E-PARSE-UNEXPECTED"),
+        "{turbofish:?}"
+    );
+}
