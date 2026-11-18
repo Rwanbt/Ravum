@@ -1819,3 +1819,25 @@ fn a_dependency_manifest_whose_session_id_is_taken_is_refused() {
         codes(&loaded.diags)
     );
 }
+
+/// The manifest is the first source of a load's fresh table; a table that
+/// already holds a file under the next id is a caller bug, not a diagnostic.
+#[test]
+#[should_panic(expected = "invariant: the manifest is the first source registered by a load")]
+fn registering_the_manifest_into_a_used_table_is_an_invariant_failure() {
+    let mut sources = SourceMap::new();
+    sources
+        .add_at(0, "other.rv", "")
+        .expect("a fresh table accepts id 0");
+    let mut file_ids = BTreeMap::new();
+    let mut next_file_id: FileId = 0;
+    let mut diags = DiagnosticBag::new();
+    let _ = register_manifest(
+        &mut sources,
+        &mut file_ids,
+        &mut next_file_id,
+        Path::new("/pkg/ravum.toml"),
+        String::new(),
+        &mut diags,
+    );
+}

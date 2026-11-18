@@ -148,18 +148,14 @@ pub(super) fn load_package_dir(
                 return out;
             }
         };
-    // The manifest is the first source of this load's fresh table, so its
-    // registration cannot collide with another file.
-    let manifest_id = register_source(
+    let manifest_id = register_manifest(
         &mut sources,
         &mut file_ids,
         &mut next_file_id,
         &manifest_path,
-        MANIFEST_NAME.to_string(),
         manifest_text.clone(),
         &mut diags,
-    )
-    .expect("invariant: the manifest is the first source registered by a load");
+    );
     let (manifest, manifest_diags) = parse_manifest(&manifest_text, manifest_id);
     diags.extend(manifest_diags);
     let Some(manifest) = manifest else {
@@ -250,3 +246,26 @@ pub(super) fn load_package_dir(
 // ---------------------------------------------------------------------------
 // Manifest parsing: minimal TOML subset
 // ---------------------------------------------------------------------------
+
+/// Registers the manifest of a load. It is the first source of the load's
+/// fresh table, so its registration cannot collide with another file; a
+/// table that already holds a file is a caller bug.
+pub(super) fn register_manifest(
+    sources: &mut SourceMap,
+    file_ids: &mut BTreeMap<PathBuf, FileId>,
+    next_file_id: &mut FileId,
+    manifest_path: &Path,
+    manifest_text: String,
+    diags: &mut DiagnosticBag,
+) -> FileId {
+    register_source(
+        sources,
+        file_ids,
+        next_file_id,
+        manifest_path,
+        MANIFEST_NAME.to_string(),
+        manifest_text,
+        diags,
+    )
+    .expect("invariant: the manifest is the first source registered by a load")
+}
