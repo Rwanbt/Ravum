@@ -1213,3 +1213,22 @@ fn the_stdlib_assert_eq_examples_report_their_documented_codes() {
         "{turbofish:?}"
     );
 }
+
+/// EXPR-6.9: in a `for` clause the `{` after `..` is the body; an open range
+/// gets its own message instead of a parse error on the body.
+#[test]
+fn an_open_range_in_a_for_gets_a_dedicated_message() {
+    const OPEN: &str = "an open range is not allowed in a `for`; give an upper bound: `start..end`";
+    assert_errors(
+        "fn main() { for j in 1.. { io::println(\"x\"); } }",
+        &[("E-TYP-RANGE", OPEN)],
+    );
+    assert_errors("fn main() { for j in .. { } }", &[("E-TYP-RANGE", OPEN)]);
+    assert_errors(
+        "fn main() { for j in ..3 { } }",
+        &[(
+            "E-TYP-RANGE",
+            "`for` requires an explicit `start..end` range",
+        )],
+    );
+}

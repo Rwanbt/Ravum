@@ -151,11 +151,12 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             );
         }
         let (Some(start), Some(end)) = (start, end) else {
-            self.error(
-                "E-TYP-RANGE",
-                iter.span,
-                "`for` requires an explicit `start..end` range".to_string(),
-            );
+            let message = if end.is_none() {
+                "an open range is not allowed in a `for`; give an upper bound: `start..end`"
+            } else {
+                "`for` requires an explicit `start..end` range"
+            };
+            self.error("E-TYP-RANGE", iter.span, message.to_string());
             return Type::Error;
         };
         let start_lit = is_untyped_num_literal(start);

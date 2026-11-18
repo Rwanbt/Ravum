@@ -124,7 +124,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-TYP-LITERAL-RANGE` | types | littéral entier qui ne tient pas dans le type inféré |
 | `E-TYP-FLOAT-LITERAL` | types | littéral flottant invalide pour le type inféré (`1e39` en `f32`) |
 | `E-TYP-BREAK-OUTSIDE` | types | `break`/`continue` hors boucle |
-| `E-TYP-RANGE` | types | bornes de plage de types différents ou non entières |
+| `E-TYP-RANGE` | types | bornes de plage de types différents ou non entières, plage ouverte ou `..=` dans un `for` |
 | `E-TYP-ARRAY-REPEAT` | types | `[e; n]` invalide (n non littéral/0, `e` non `Copy`), longueur de tableau invalide |
 | `E-TYP-RECURSIVE` | types | type infini sans indirection (`struct Node { next: Option<Node> }`) |
 | `E-TYP-CONST` | types | `const` non constant ou évaluation de constante en erreur (débordement, /0) |

@@ -148,7 +148,10 @@ impl<'a> Parser<'a> {
             let start = self.cur_span();
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
-            let end = if self.starts_expr() {
+            // In a `for` clause the `{` after `..` opens the body, not an upper
+            // bound (`for j in 1.. { }`): the range stays open and the checker
+            // reports the open range (decision 8).
+            let end = if self.starts_expr() && !(allowed && self.at(Punct::LBrace)) {
                 Some(Box::new(self.parse_binary(1, allow_struct)))
             } else {
                 None
@@ -170,7 +173,10 @@ impl<'a> Parser<'a> {
             let start = lhs.span;
             let inclusive = self.at(Punct::DotDotEq);
             self.bump();
-            let end = if self.starts_expr() {
+            // In a `for` clause the `{` after `..` opens the body, not an upper
+            // bound (`for j in 1.. { }`): the range stays open and the checker
+            // reports the open range (decision 8).
+            let end = if self.starts_expr() && !(allowed && self.at(Punct::LBrace)) {
                 Some(Box::new(self.parse_binary(1, allow_struct)))
             } else {
                 None
