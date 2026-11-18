@@ -1,0 +1,3 @@
+fn main() {
+    let _b = 1z;
+}

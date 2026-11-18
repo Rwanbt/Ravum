@@ -1,0 +1,4 @@
+fn main() {
+    let x = 1e1_0;
+    io::println(&x.to_string());
+}

@@ -1,0 +1,6 @@
+{
+  "id": "lexer/leading-zero-is-decimal",
+  "mode": "run-pass",
+  "stdout_contains": "777\n",
+  "notes": "LEX-8.6: `0777` is the decimal 777, not an implicit octal."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "lexer/blanks-accepted",
+  "mode": "run-pass",
+  "stdout_contains": "3\n",
+  "notes": "LEX-7.1: space, tab, LF and CRLF are blanks without syntactic meaning."
+}

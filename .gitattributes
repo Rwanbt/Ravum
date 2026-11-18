@@ -15,3 +15,9 @@
 *.ico binary
 *.dll binary
 *.exe binary
+
+# Conformance cases whose bytes are the test (LEX-3.2, LEX-7.1, LEX-9.x): a
+# CRLF source must stay CRLF in the repository and in every checkout.
+conformance/cases/lexer/crlf-line-endings/src/*.rv -text
+conformance/cases/lexer/blanks-accepted/src/*.rv -text
+conformance/cases/cli/check-json-spans-utf16-crlf/src/*.rv -text

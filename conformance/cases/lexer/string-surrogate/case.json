@@ -1,0 +1,8 @@
+{
+  "id": "lexer/string-surrogate",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-CHAR"
+  ],
+  "notes": "LEX-8.24 follows LEX-8.17: a surrogate is E-LEX-CHAR."
+}

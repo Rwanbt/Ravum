@@ -1,0 +1,6 @@
+{
+  "id": "lexer/string-no-interpolation",
+  "mode": "run-pass",
+  "stdout_contains": "a{b}\n",
+  "notes": "LEX-8.29: no interpolation; `\"a{b}\"` is literal."
+}

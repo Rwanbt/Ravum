@@ -1,0 +1,8 @@
+{
+  "id": "lexer/literal-range-at-typing",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-LITERAL-RANGE"
+  ],
+  "notes": "LEX-8.5: the literal is unsigned at lexing; `200` out of `i8` is refused at typing."
+}

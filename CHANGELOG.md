@@ -24,6 +24,17 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   empty in Core 1.0.
 - DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
+### Fixed
+
+- Lexer conformance to `lexical.md` (found by the T2 lexical cases): a lone
+  `CR`, VT, FF, NEL, U+2028/U+2029 and C0 controls were accepted as blanks
+  (now `E-UNSUPPORTED-TOKEN`); `"\xFF"` was accepted (now `E-LEX-ESCAPE`); a
+  `\u{D800}` surrogate is `E-LEX-CHAR`; `b'x'`, `r#"…"#` and `1e_10` produced
+  parse cascades or the wrong code; an unterminated `'a` was read as a
+  lifetime; a malformed escape no longer adds a second diagnostic.
+- Diagnostic columns counted UTF-8 bytes; they now count UTF-16 code units
+  (DIAG-5.2, DIAG-5.6, LEX-9.3), in JSON and in `file:line:col`.
+
 ### Changed
 
 - Array-element moves are lowered at each access instead of being hoisted by a

@@ -1,0 +1,6 @@
+{
+  "id": "lexer/string-hex-ascii",
+  "mode": "run-pass",
+  "stdout_contains": "A\n",
+  "notes": "LEX-8.23: `\\x41` is the ASCII byte `A`."
+}

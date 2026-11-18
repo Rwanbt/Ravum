@@ -1,0 +1,8 @@
+{
+  "id": "lexer/char-empty",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-CHAR"
+  ],
+  "notes": "LEX-8.13: an empty char literal is E-LEX-CHAR."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "lexer/string-line-continuation",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "LEX-8.27: no line continuation by `\\` at end of line."
+}

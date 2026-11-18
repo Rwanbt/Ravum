@@ -1,0 +1,4 @@
+[package]
+name = "lexer-string-hex-above-ascii"
+version = "0.1.0"
+edition = "core-1.0"

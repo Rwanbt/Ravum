@@ -1,0 +1,6 @@
+{
+  "id": "lexer/negative-literal-min",
+  "mode": "run-pass",
+  "stdout_contains": "-128\n",
+  "notes": "LEX-8.5: the sign comes from unary `-`; `-128` fits `i8`."
+}
