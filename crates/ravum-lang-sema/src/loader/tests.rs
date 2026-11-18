@@ -1841,3 +1841,14 @@ fn registering_the_manifest_into_a_used_table_is_an_invariant_failure() {
         &mut diags,
     );
 }
+
+#[test]
+fn an_entry_matches_only_with_its_exact_stored_name() {
+    // MOD-2.6: on a case-insensitive file system `foo.rv` would answer for
+    // `Foo.rv`; the listing comparison is byte for byte.
+    let temp = TempDir::new("exact-entry");
+    fs::write(temp.path().join("foo.rv"), "").unwrap();
+    assert!(has_exact_entry(temp.path(), "foo.rv"));
+    assert!(!has_exact_entry(temp.path(), "Foo.rv"));
+    assert!(!has_exact_entry(&temp.path().join("absent"), "foo.rv"));
+}

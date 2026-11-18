@@ -1,0 +1,6 @@
+{
+  "id": "modules/file-module-child-in-same-dir",
+  "mode": "run-pass",
+  "stdout_contains": "7\n",
+  "notes": "MOD-2.1: `mod b;` written in the file module `src/a.rv` resolves in `dir(src/a.rv)` = `src/`, so `src/b.rv`."
+}

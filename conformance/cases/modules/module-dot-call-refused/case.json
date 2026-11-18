@@ -1,0 +1,8 @@
+{
+  "id": "modules/module-dot-call-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "MOD-6.7: `io.println(...)` (with a dot) does not exist; the normative form is `io::println`."
+}

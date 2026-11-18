@@ -1,0 +1,6 @@
+{
+  "id": "modules/inline-module-child-file",
+  "mode": "run-pass",
+  "stdout_contains": "5\n",
+  "notes": "MOD-2.2: inside the inline module `m` of `src/main.rv`, `mod x;` resolves to `src/m/x.rv` (the inline module adds one directory segment)."
+}

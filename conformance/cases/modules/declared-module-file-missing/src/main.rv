@@ -1,0 +1,2 @@
+mod gone;
+fn main() { }

@@ -1660,6 +1660,29 @@ mod tests {
         payload.len() as u64 + 2
     }
 
+    /// Moves the mtime of every file of a build context `seconds` into the past.
+    fn age_context(work: &Path, short: &str, seconds: u64) {
+        let when = std::time::SystemTime::now() - std::time::Duration::from_secs(seconds);
+        for root in [INCREMENTAL_DIR, OUT_DIR, UNITS_DIR] {
+            let mut stack = vec![work.join(root).join(short)];
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(&dir).unwrap() {
+                    let path = entry.unwrap().path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        std::fs::File::options()
+                            .write(true)
+                            .open(&path)
+                            .unwrap()
+                            .set_modified(when)
+                            .unwrap();
+                    }
+                }
+            }
+        }
+    }
+
     fn write_context(work: &Path, short: &str, payload: &[u8]) -> u64 {
         let inc = work.join(INCREMENTAL_DIR).join(short).join("s-session");
         let out = work.join(OUT_DIR).join(short);
@@ -1946,6 +1969,13 @@ mod tests {
         write_snapshot(&work, &hex_id(0x42), &[0u8; 128]);
         write_context(&work, &context_short(7), &[0u8; 256]);
         write_context(&work, &context_short(9), &[0u8; 256]);
+        // Context recency is the newest file mtime, in whole seconds. Written
+        // back to back, the two contexts usually share a second and the tie
+        // is broken by name (07 before 09); when a second boundary falls
+        // between the writes, 09 is newer instead and is the one protected
+        // (seen on macOS CI). Age 09 explicitly so the order is the intended
+        // one on every run.
+        age_context(&work, &context_short(9), 100);
         let policy = GcPolicy {
             max_total_bytes: Some(1),
             keep_recent: 1,

@@ -1998,6 +1998,53 @@ contrainte tenable telle quelle. ABI-4.7 n'est pas tracé. Deux issues :
 | ABI-4.7 | contradiction, §33.2 |
 | ABI-4.8, 4.9 | non-engagements (temps de compilation, format de `--emit-rust`/`--emit-ir`) |
 
+## 34. Lot `modules.md` : 18 MUST de plus tracés, un défaut DIAG-6.8 trouvé (2026-11-18)
+
+### 34.1 Mesure
+
+`python3 tools/must_audit.py` : `modules.md` passe de 21 non atteints à **3** ;
+global 816 MUST, **188** non atteints ; `features_coverage.py --strict` :
+222/222 (1 exemption). FeatureIds F-MOD-014 à F-MOD-016.
+
+Douze cas ajoutés, chacun mesuré avant d'être écrit : résolution des fichiers
+(`mod x;` d'un module fichier non racine → `src/x.rv` ; d'un module inline →
+`src/m/x.rv` ; casse exacte ; fichier absent), manifeste et graphe
+(auto-dépendance, `git`, plage `^1.0`), usage d'une dépendance (répertoire
+libre, item privé, dépendance non déclarée, effets propagés, `io.println`).
+
+### 34.2 Texte aligné
+
+MOD-8.5 annonçait `E-MOD-DEPENDENCY` pour deux packages de même nom ; le
+registre et le loader émettent `E-MOD-DUPLICATE` (même correction que
+COMPAT-4.2, §32.2).
+
+### 34.3 Défaut trouvé : chemins absolus dans les messages du loader
+
+`mod gone;` produit : « module `b` not found: neither
+`/tmp/.../src/b.rv` nor `/tmp/.../src/b/mod.rv` exists ». Le message contient
+le chemin absolu de la machine, ce que DIAG-6.8 et DIAG-7.5 interdisent. Le
+défaut n'est pas propre à ce message : environ 60 messages du loader
+(`crates.rs`, `digest.rs`, `files.rs`, `fsutil.rs`, `graph.rs`, `lockfile.rs`)
+écrivent `path.display()`. `tests/diagnostics_contract.rs` ne l'a pas vu parce
+que son programme n'a pas d'erreur de module. Correction : PR dédiée qui suit
+ce lot (chemins relatifs à la racine du package, et un cas par famille de
+message dans le test de contrat).
+
+### 34.4 Défaut trouvé par la CI : la casse sur macOS et Windows
+
+Le cas `modules/module-name-case-sensitive` passait sous Linux et échouait sous
+macOS et Windows (CI de #178, commit 33b9d9e : `check --json: exit 0`). Sur un
+système de fichiers insensible à la casse, `mod Foo;` trouvait `src/foo.rv` :
+le même source était accepté ou refusé selon l'OS, ce que MOD-2.6 (« ne dépend
+ni [...] de la casse ») et MOD-1.6 interdisent. Correction : un candidat ne
+compte que si le répertoire contient une entrée de nom **exactement** égal
+(`has_exact_entry`, comparaison octet à octet de la liste du répertoire).
+
+### 34.4 Non tracés
+
+MOD-6.5 (aucun plugin : rien d'observable), MOD-6.6 (dépendances compilées
+depuis la source : invariant de construction), MOD-8.6 (compatibilité
+déclarative : non-engagement).
 ## 35. Lot `concurrency.md` : 8 MUST sur 20 tracés, état d'avant le RFC E11 (2026-11-18)
 
 ### 35.1 Mesure

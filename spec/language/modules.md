@@ -296,7 +296,7 @@ lockfile_version = 99
 | MOD-8.2 | `edition = "core-1.0"` est la seule édition acceptée. Une édition inconnue est `E-UNSUPPORTED-EDITION` (fail-closed). | MUST |
 | MOD-8.3 | Si une dépendance déclare une `version` dans son `ravum.toml` et que le dépendant la référence par chemin, **aucune** contrainte de version n'est appliquée : le chemin fait foi. La version sert à l'identification et au lockfile. | MUST |
 | MOD-8.4 | Il n'existe **aucune** plage de versions (`^`, `~`, `>=`, `*`) ni résolution de contraintes en Core 1.0 : `E-MOD-DEPENDENCY`. | MUST |
-| MOD-8.5 | Deux dépendances différentes (chemins différents) portant le même `name` sont `E-MOD-DEPENDENCY`, même si leurs versions diffèrent : pas de résolution multi-version. | MUST |
+| MOD-8.5 | Deux dépendances différentes (chemins différents) portant le même `name` sont `E-MOD-DUPLICATE` (registre de [`diagnostics.md`](diagnostics.md) §3 : « deux packages de même nom »), même si leurs versions diffèrent : pas de résolution multi-version. | MUST |
 | MOD-8.6 | La compatibilité ascendante des packages est **déclarative** en Core 1.0 : rien n'est vérifié automatiquement au-delà de l'édition et de la compilation effective. Voir [`compatibility.md`](compatibility.md) §3. | MUST |
 
 ### 8.3 Composition du package implicite `std`
