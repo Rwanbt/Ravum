@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload browser E2E evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-e2e-evidence
           path: target/ravum/browser-e2e
@@ -289,7 +289,7 @@ jobs:
 
       - name: Upload auto-GC evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: auto-gc-evidence
           path: |
