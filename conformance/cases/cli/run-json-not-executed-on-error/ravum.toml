@@ -1,0 +1,4 @@
+[package]
+name = "cli-run-json-not-executed-on-error"
+version = "0.1.0"
+edition = "core-1.0"

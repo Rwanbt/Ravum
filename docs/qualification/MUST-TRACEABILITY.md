@@ -9,10 +9,10 @@
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168 et
 > `diagnostics.md`)** : `tools/must_audit.py` compte **816 énoncés MUST** et
-> **209 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 017
-> ajoutés) ; **582 / 816** sont atteignables par un FeatureId, **234** ne le
-> sont pas ; couverture stricte **209/209** (1 exemption). `diagnostics.md` :
-> 38 / 45 atteints ; les 7 restants sont listés dans `T2-FINDINGS` §31. Le texte ci-dessous est la
+> **210 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 018
+> ajoutés) ; **583 / 816** sont atteignables par un FeatureId, **233** ne le
+> sont pas ; couverture stricte **210/210** (1 exemption). `diagnostics.md` :
+> 39 / 45 atteints ; les 6 restants sont listés dans `T2-FINDINGS` §31. Le texte ci-dessous est la
 > mesure d'origine, conservée.
 
 **Confirmé, et l'écart est grand :** `spec/language/` contient **807 énoncés

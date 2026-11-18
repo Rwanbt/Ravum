@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- `run --json` (DIAG-8.1, D-18-5): one JSON object on stdout with the program's exit code, `summary.executed` and `summary.program_exit_code`; the program's own stdout goes to stderr.
+
 - Diagnostics contract (T2, `diagnostics.md`): FeatureIds F-META-009 to F-META-017, 13 conformance cases, `tests/diagnostics_contract.rs` (byte-identical runs, per-phase order, no colour, no absolute path, one-line JSON) and an append-only snapshot of published diagnostic codes (`tools/diagnostic_codes.snapshot`).
 
 - Core 1.0 DRAFT compiler and toolchain under `crates/ravum-lang-*`:

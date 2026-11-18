@@ -1898,9 +1898,12 @@ six opérateurs).
 | DIAG-5.5 | « span non vide et dans les bornes » : vérifiable seulement sur tous les diagnostics émis ; à ajouter à l'oracle du corpus (vérification générique sur chaque sortie JSON) |
 | DIAG-6.4 | aucun diagnostic de Core 1.0 n'émet aujourd'hui de note ni d'aide : la forme `= note:` n'a pas de producteur |
 | DIAG-7.3 | règle sur le **consommateur** (ignorer les champs inconnus) ; le runner de conformance la respecte mais aucun test ne le fige |
-| DIAG-8.1 | **écart spec / implémentation, arbitrage propriétaire** : la règle renvoie à `run --json` (`status`, `exit_code`), mais `run` et `build` refusent `--json` (code 2). La propagation du code de sortie elle-même est vérifiée (`run/process-exit-code`) |
 | DIAG-9.3 | `schema_version` : aucune comparaison automatique entre deux versions du schéma |
 | DIAG-9.6 | stabilité de `feature_id`/`rule_id` : FEAT-1.4 le pose, aucun instantané ne le vérifie encore |
+
+DIAG-8.1 était un écart : la règle renvoyait à `run --json`, que `run` refusait. Le
+responsable a décidé de l'implémenter (D-18-5) : `run --json` est tracé par F-META-018
+(`diagnostics.md` : 39 / 45).
 
 Observation hors MUST : sur un manifeste invalide (`version = "not-a-version"`),
 le span de `E-MOD-MANIFEST` couvre `[package]` (octets 0–9) et non la valeur
