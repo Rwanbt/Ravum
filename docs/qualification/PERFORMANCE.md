@@ -82,13 +82,16 @@ par mesure, chronomètre `check`/`build`, échantillonne la working set toutes l
   `scripts/lang-timings.ps1 -CheckOnly -Runs 10`, 10 exemples, modes
   `cold` et `edit`.
 - `.github/workflows/performance.yml` : sur `windows-latest`, reconstruit le CLI
-  en debug, rejoue la même mesure (`-Runs 10`), puis applique
+  en debug, rejoue la mesure avec **20 échantillons** (`-Runs 20`, décision
+  D-18-4 du 2026-11-18), puis applique
   `tools/timings_gate.py`.
 - **Plafonds** : `p50 ≤ max(100 ms, valeur de référence × 3)` et
   `p95 ≤ max(500 ms, valeur de référence × 3)` sur les totaux de chaque exemple
   et de chaque mode. Deux planchers parce que les deux statistiques n'ont pas le
   même bruit : avec 10 échantillons, le p95 au rang le plus proche **est le
-  maximum**. Le premier réglage (`max(200 ms, ×3)` sur les deux) a échoué sur un
+  maximum** ; avec 20, c'est la 19e valeur, si bien qu'un pic isolé du runner
+  partagé ne fait plus échouer le job à lui seul (un p95 de 623 ms pour un p50
+  de 2,97 ms, PR #169, run 44371009417). Les plafonds ne changent pas. Le premier réglage (`max(200 ms, ×3)` sur les deux) a échoué sur un
   run partagé à cause de deux outliers isolés (224 ms et 238 ms) alors que le
   p50 du même exemple valait 2,3 ms (run 43629253306) : c'était un défaut du
   gate, pas une régression. Le p50 porte désormais le signal ; le p95 ne sert
