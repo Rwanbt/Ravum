@@ -229,3 +229,29 @@ Les quatre issues de gate `PASS` ont été lues : #91 (T3) est fermée, #88 (T0)
 3 quinquies. Restent à faire : relire #90 (T2) une fois les inverses S6 consignés,
 et soumettre au responsable les trois écarts entre la matrice et les issues
 (T0, T5, T7 notés `PASS` alors qu'un critère de l'issue n'est pas couvert).
+
+## 4. Tri appliqué le 2026-11-18 (E9)
+
+Selon le périmètre 1.0 élargi par [D-18-2](../decision/DECISIONS-2026-11-18.md)
+(A2 et P-13 annulés), chaque issue ouverte porte un label de périmètre. Aucun
+dépôt de jalon n'est disponible dans les outils de cette session : le label en
+tient lieu.
+
+| Label | Issues | Critère |
+|---|---:|---|
+| `scope:core-1.0` | 44 | les 12 issues de gate restantes ; ce que T6, T8 et T9 exigent (DSP M3 #6 #16 #54–#59, full-stack M4 #7 #17 #60–#64, hot reload et PatchHost #4 #11 #22 #42–#45) ; diagnostics et LSP (#10 #12) ; D2 et gouvernance (#1 #21 #25 #34) ; backend et Go/No-Go (#8 #67 #69 #70) |
+| `scope:platform` | 24 | crates expérimentales `ravum-*` : socle M0 (#2 #13 #14 #19 #24 #26–#33 #35 #36), coordinateur et snapshot M1 (#3 #37–#41 #46 #47), espace de travail partagé (#79) |
+| `scope:post-1.0` | 21 | preuves, solveurs et cache de preuves M2 (#5 #15 #18 #48–#53), recherche M5 (#20 #65 #66 #68), M6+ (#9 #23 #71–#76) |
+
+Contrôle : `gh api --paginate repos/Rwanbt/Ravum/issues?state=open` →
+**89 issues ouvertes**, 44 + 24 + 21 = 89, aucune sans label de périmètre.
+
+**Fermée le 2026-11-18** : #147 (E6), « completed » : couverture 100,00 %
+(PR #148) et mutation d'`emit` exécutée (run 43780206534). Le commentaire de
+clôture signale la dette : 198 survivants non analysés, suivis sous T10 (#98).
+
+**Gates encore ouvertes** : #88 (T0 : le rapport `T0-AUDIT.md` se dit
+`PARTIAL`), #93 (T5 : ABI-2.5/3.3 et parité debug/release), #95 (T7 : parcours
+depuis un binaire installé non prouvé), plus les gates `PARTIAL` et `BLOCKED`.
+Chacune a un manque nommé en §3 ; aucune n'est fermée par lot.
+
