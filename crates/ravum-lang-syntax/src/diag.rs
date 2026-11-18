@@ -196,12 +196,15 @@ impl DiagnosticBag {
             let _ = writeln!(out, "{}[{}]: {}", d.severity.as_str(), d.code, d.message);
             let _ = writeln!(out, "  --> {loc}");
             if let Some(file) = sources.file(d.span.file) {
-                let (line, col) = file.line_col(d.span.start);
+                let (line, col) = file.line_byte_col(d.span.start);
                 let text = file.line_text(line);
                 let _ = writeln!(out, "   |");
                 let _ = writeln!(out, "{line:>3} | {text}");
                 let width = d.span.len().max(1) as usize;
-                let pad = " ".repeat(col.saturating_sub(1) as usize);
+                // One space per character before the span, so the caret sits
+                // under it whatever the UTF-8 width of what precedes it.
+                let before = text.get(..col.saturating_sub(1) as usize).unwrap_or(text);
+                let pad = " ".repeat(before.chars().count());
                 let caret =
                     "^".repeat(width.min(text.len().saturating_sub(col as usize - 1).max(1)));
                 let _ = writeln!(out, "   | {pad}{caret}");

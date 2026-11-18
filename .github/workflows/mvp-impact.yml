@@ -262,6 +262,10 @@ jobs:
           node-version: '24'
 
       - name: Browser E2E - real Chromium/Edge via CDP (impact-selected)
+        # A normal run takes < 1 min; the harness has its own 5 min deadline.
+        # This bound keeps a stuck run from consuming the whole job timeout
+        # (which cancels the job and loses its log).
+        timeout-minutes: 15
         if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'
         shell: pwsh
         run: |

@@ -101,7 +101,7 @@ fn f(v: Vec<i32>) {
 | Pattern de référence | `ref x`, `&x` en pattern | `E-UNSUPPORTED-TOKEN` | parse | capture par valeur (`match` consomme) |
 | Pattern ou | `1 | 2 => ...` | `E-UNSUPPORTED-TOKEN` | parse | deux bras |
 | Garde de pattern | `n if n > 0 => ...` | `E-UNSUPPORTED-TOKEN` | parse | `if` dans le corps |
-| `@` (binding) | `x @ 1..=5` | `E-UNSUPPORTED-TOKEN` | parse | bras séparés |
+| `@` (binding) | `x @ 1..=5` | `E-LEX-CHAR` + `E-PARSE-EXPECTED` ([`grammar.md`](grammar.md) G-6.23) | lex/parse | bras séparés |
 | Pattern de plage | `1..=5 => ...` | `E-UNSUPPORTED-RANGE-PAT` | parse | `_` + `if` |
 | Pattern de struct | `Point { x, y }` | `E-PARSE-EXPECTED` | parse | accès de champ / méthode |
 | Reste de tuple | `(a, ..)` | `E-UNSUPPORTED-REST-PAT` | parse | tuple complet |

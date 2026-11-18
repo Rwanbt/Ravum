@@ -1,0 +1,6 @@
+{
+  "id": "lexer/exponent-separator-between-digits",
+  "mode": "run-pass",
+  "stdout_contains": "10000000000\n",
+  "notes": "LEX-8.7: `1e1_0` is `1e10`."
+}

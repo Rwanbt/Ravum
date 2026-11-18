@@ -1,0 +1,4 @@
+fn main() {
+    let x: f32 = 1.5;
+    io::println(&x.to_string());
+}

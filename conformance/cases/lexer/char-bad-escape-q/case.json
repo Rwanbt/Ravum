@@ -1,0 +1,8 @@
+{
+  "id": "lexer/char-bad-escape-q",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "LEX-8.16: an invalid escape is E-LEX-ESCAPE."
+}

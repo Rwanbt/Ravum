@@ -1,0 +1,8 @@
+{
+  "id": "parser/pub-impl-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-2.4: `pub impl` is refused."
+}

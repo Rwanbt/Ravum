@@ -1,0 +1,8 @@
+{
+  "id": "lexer/paragraph-separator-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN"
+  ],
+  "notes": "LEX-7.2: U+2029 is E-UNSUPPORTED-TOKEN."
+}

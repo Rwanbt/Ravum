@@ -1,0 +1,6 @@
+{
+  "id": "lexer/float-underflow-to-zero",
+  "mode": "run-pass",
+  "stdout_contains": "0\n",
+  "notes": "LEX-8.10: underflow to 0.0 is accepted silently."
+}

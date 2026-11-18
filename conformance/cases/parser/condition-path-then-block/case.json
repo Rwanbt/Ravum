@@ -1,0 +1,6 @@
+{
+  "id": "parser/condition-path-then-block",
+  "mode": "run-pass",
+  "stdout_contains": "yes\n",
+  "notes": "G-6.35: in a condition, `path {` ends the condition and opens the block."
+}

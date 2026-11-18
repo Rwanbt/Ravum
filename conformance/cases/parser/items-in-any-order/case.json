@@ -1,0 +1,6 @@
+{
+  "id": "parser/items-in-any-order",
+  "mode": "run-pass",
+  "stdout_contains": "7\n",
+  "notes": "G-2.1: items may appear in any order; declaration order has no semantic effect."
+}

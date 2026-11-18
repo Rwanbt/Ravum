@@ -346,6 +346,7 @@ impl<'a> Parser<'a> {
                         | Punct::Lt
                         | Punct::Gt
                         | Punct::Eq
+                        | Punct::LBrace
                         | Punct::FatArrow
                         | Punct::Arrow
                         | Punct::Colon
@@ -445,6 +446,27 @@ impl<'a> Parser<'a> {
             }
             _ => false,
         }
+    }
+
+    /// True when a `}` that is not matched by an opener appears after the
+    /// current token: the enclosing block is closed later in the file, so an
+    /// item here is nested in it (G-2.6) rather than a sign that its `}` is
+    /// missing.
+    pub(super) fn has_unmatched_close_ahead(&self) -> bool {
+        let mut depth: i64 = 0;
+        for token in &self.tokens[self.pos..] {
+            match token.kind {
+                TokenKind::Punct(Punct::LBrace) => depth += 1,
+                TokenKind::Punct(Punct::RBrace) => {
+                    depth -= 1;
+                    if depth < 0 {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     pub(super) fn is_item_start(&self) -> bool {

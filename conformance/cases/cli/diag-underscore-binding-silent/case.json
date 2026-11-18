@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-underscore-binding-silent",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"warnings\":0",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-1.9: a binding whose name starts with `_` never produces W-OWN-UNUSED-VARIABLE."
+}

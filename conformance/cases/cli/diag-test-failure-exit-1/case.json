@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-test-failure-exit-1",
+  "mode": "cli",
+  "args": [
+    "test",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"status\":\"failure\"",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-8.3, DIAG-8.4: `test` exits 1 when at least one test fails; `--json` keeps that code."
+}

@@ -1,0 +1,7 @@
+fn main() {
+    let x = 1;
+    match x {
+        _ => { io::println("first"); }
+        1 => { io::println("second"); }
+    }
+}

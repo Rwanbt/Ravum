@@ -207,6 +207,8 @@ def main() -> int:
         ("check-warning", ["check", "--json", str(fixtures["warning"])], 0, False),
         ("check-manifest-error", ["check", "--json", str(fixtures["manifest-error"])], 1, True),
         ("test-clean", ["test", "--json", str(fixtures["clean"])], 0, False),
+        ("run-clean", ["run", "--json", str(fixtures["clean"])], 0, False),
+        ("run-error", ["run", "--json", str(fixtures["error"])], 1, True),
     ]
     for identifier, arguments, expected_exit, expect_diagnostics in scenarios:
         code, stdout, stderr = run(arguments)

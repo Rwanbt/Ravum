@@ -1,0 +1,6 @@
+{
+  "id": "lexer/string-type-is-text",
+  "mode": "run-pass",
+  "stdout_contains": "x\n",
+  "notes": "LEX-8.28: a string literal is `&'static str`."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "parser/unreachable-arm-is-silent",
+  "mode": "run-pass",
+  "stdout_contains": "first\n",
+  "notes": "G-6.44: arm order is significant; an unreachable arm is kept and produces no diagnostic."
+}

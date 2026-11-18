@@ -1,0 +1,9 @@
+{
+  "id": "lexer/recovery-after-unsupported-token",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-TOKEN",
+    "E-LEX-INT-SUFFIX"
+  ],
+  "notes": "LEX-11.2: after E-UNSUPPORTED-TOKEN the lexer advances one character and goes on: the next lexical error is still reported."
+}

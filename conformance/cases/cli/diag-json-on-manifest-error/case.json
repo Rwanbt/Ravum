@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-on-manifest-error",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"code\":\"E-MOD-MANIFEST\",\"severity\":\"error\",\"phase\":\"modules\"",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-7.1: `--json` emits one JSON object even when the manifest itself is invalid; nothing but JSON is written on stdout."
+}

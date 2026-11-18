@@ -1,0 +1,8 @@
+{
+  "id": "parser/range-value-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-RANGE"
+  ],
+  "notes": "G-6.13: `..` outside a `for` clause is E-UNSUPPORTED-RANGE."
+}

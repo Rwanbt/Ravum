@@ -1,0 +1,6 @@
+{
+  "id": "parser/empty-impl",
+  "mode": "run-pass",
+  "stdout_contains": "ok\n",
+  "notes": "G-4.12: an impl without members is valid."
+}

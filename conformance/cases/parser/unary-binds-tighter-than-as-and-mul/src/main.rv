@@ -1,0 +1,13 @@
+fn main() {
+    let x = 3;
+    let y = 2;
+    let a = -x * y;
+    let b = -x as i64;
+    io::println(&format_pair(a, b));
+}
+fn format_pair(a: i32, b: i64) -> String {
+    let mut s = a.to_string();
+    s.push_str(" ");
+    s.push_str(&b.to_string());
+    s
+}

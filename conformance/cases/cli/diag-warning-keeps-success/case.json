@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-warning-keeps-success",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"status\":\"success\",\"exit_code\":0",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-1.5, DIAG-2: a warning never fails the command; the binary would still be produced (exit 0)."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/try-on-plain-value-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-TRY"
+  ],
+  "notes": "G-6.17: `?` applies only to Result/Option."
+}

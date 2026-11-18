@@ -1,0 +1,6 @@
+{
+  "id": "parser/struct-shorthand-in-pattern",
+  "mode": "run-pass",
+  "stdout_contains": "5\n",
+  "notes": "G-4.4, G-6.48: the field shorthand binds `x` in a variant pattern."
+}

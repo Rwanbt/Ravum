@@ -85,8 +85,18 @@ impl SourceFile {
         }
     }
 
-    /// 1-based line and column (UTF-8 bytes) for a byte offset.
+    /// 1-based line and column for a byte offset. The column counts UTF-16
+    /// code units from the start of the line (DIAG-5.2, DIAG-5.6, LEX-9.3):
+    /// never bytes.
     pub fn line_col(&self, offset: u32) -> (u32, u32) {
+        let (line, _) = self.line_byte_col(offset);
+        let (_, col) = self.lsp_position(offset);
+        (line, col + 1)
+    }
+
+    /// 1-based line and 1-based **byte** column, for slicing the line text
+    /// (caret rendering). Not a reported position: see [`Self::line_col`].
+    pub fn line_byte_col(&self, offset: u32) -> (u32, u32) {
         let offset = offset.min(self.text.len() as u32);
         let line_idx = match self.line_starts.binary_search(&offset) {
             Ok(i) => i,
@@ -99,7 +109,7 @@ impl SourceFile {
     /// 0-based (line, UTF-16 column) for the LSP. Counts code units, not bytes.
     pub fn lsp_position(&self, offset: u32) -> (u32, u32) {
         let offset = offset.min(self.text.len() as u32);
-        let (line, _) = self.line_col(offset);
+        let (line, _) = self.line_byte_col(offset);
         let line_start = self.line_starts[line as usize - 1] as usize;
         let prefix = &self.text[line_start..offset as usize];
         let col: usize = prefix.encode_utf16().count();

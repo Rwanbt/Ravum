@@ -1,0 +1,8 @@
+{
+  "id": "lexer/escape-bell-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-ESCAPE"
+  ],
+  "notes": "LEX-8.30: `\\a` is not in the escape table."
+}

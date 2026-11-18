@@ -31,7 +31,23 @@ impl<'a> Parser<'a> {
                 && !self.at_kw(Kw::Unsafe)
                 && !self.at_kw(Kw::Async)
             {
-                break;
+                if !self.has_unmatched_close_ahead() {
+                    break;
+                }
+                // G-2.6: an item nested in a function body. Report it once and
+                // consume it, so the rest of the body is still parsed.
+                let span = self.cur_span();
+                self.diags.error(
+                    "E-PARSE-EXPECTED",
+                    span,
+                    "expected a statement: items cannot be declared inside a function body",
+                );
+                let before_item = self.pos;
+                let _ = self.parse_item();
+                if self.pos == before_item {
+                    self.bump();
+                }
+                continue;
             }
             let before = self.pos;
             if self.at(Punct::Semi) {

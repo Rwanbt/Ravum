@@ -1,0 +1,13 @@
+{
+  "id": "cli/run-json-propagates-exit",
+  "mode": "cli",
+  "args": [
+    "run",
+    "--json",
+    "."
+  ],
+  "exit_code": 7,
+  "stdout_contains": "\"executed\":true",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-8.1, DIAG-7.1 (D-18-5): `run --json` propagates the program's exit code, reports it in `exit_code` and `summary.program_exit_code`, and writes only the JSON object on stdout (the program's stdout goes to stderr)."
+}

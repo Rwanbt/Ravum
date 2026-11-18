@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-relative-file",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"file\":\"src/main.rv\",\"start_byte\":25,\"end_byte\":26",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-1.3, DIAG-5.1, DIAG-7.5: the span names the original source by its path relative to the package root, with `/`, and byte offsets into the file on disk."
+}

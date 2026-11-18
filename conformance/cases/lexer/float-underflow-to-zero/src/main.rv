@@ -1,0 +1,4 @@
+fn main() {
+    let x = 1e-999;
+    io::println(&x.to_string());
+}

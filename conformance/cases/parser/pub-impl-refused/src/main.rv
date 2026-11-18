@@ -1,0 +1,3 @@
+struct S { }
+pub impl S { }
+fn main() { }

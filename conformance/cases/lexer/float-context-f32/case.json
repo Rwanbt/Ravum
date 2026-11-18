@@ -1,0 +1,6 @@
+{
+  "id": "lexer/float-context-f32",
+  "mode": "run-pass",
+  "stdout_contains": "1.5\n",
+  "notes": "LEX-8.11: the context may constrain an unsuffixed float to f32."
+}

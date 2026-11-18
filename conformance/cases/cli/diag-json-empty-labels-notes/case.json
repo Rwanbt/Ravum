@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-empty-labels-notes",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"labels\":[],\"notes\":[]",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-7.4: empty `labels` and `notes` arrays are present, never null."
+}

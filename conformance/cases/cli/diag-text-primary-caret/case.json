@@ -1,0 +1,11 @@
+{
+  "id": "cli/diag-text-primary-caret",
+  "mode": "cli",
+  "args": [
+    "check",
+    "."
+  ],
+  "exit_code": 1,
+  "stderr_contains": "  2 |     let _x = y;\n   |              ^\n",
+  "notes": "DIAG-6.3: the primary label is shown under its line, marked with `^`."
+}

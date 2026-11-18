@@ -1,0 +1,4 @@
+fn main() {
+    let x = 0777;
+    io::println(&x.to_string());
+}

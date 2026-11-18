@@ -1,0 +1,6 @@
+{
+  "id": "parser/unary-binds-tighter-than-as-and-mul",
+  "mode": "run-pass",
+  "stdout_contains": "-6 -3\n",
+  "notes": "G-6.14: `-x * y` is `(-x) * y`; `-x as i64` is `(-x) as i64`."
+}

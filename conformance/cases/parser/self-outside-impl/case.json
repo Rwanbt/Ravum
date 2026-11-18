@@ -1,0 +1,8 @@
+{
+  "id": "parser/self-outside-impl",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-SELF"
+  ],
+  "notes": "G-3.7: `self` outside an impl is E-RES-SELF."
+}

@@ -1,0 +1,4 @@
+[package]
+name = "cli-diag-json-severity-and-code"
+version = "0.1.0"
+edition = "core-1.0"
