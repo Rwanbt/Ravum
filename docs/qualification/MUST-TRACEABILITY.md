@@ -8,12 +8,13 @@
 ## 1. Résultat en une phrase
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
-> `diagnostics.md` #169 et `compatibility.md`)** : `tools/must_audit.py` compte **816 énoncés MUST** et
-> **215 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 023
-> ajoutés) ; **598 / 816** sont atteignables par un FeatureId, **218**
-> ne le sont pas ; couverture stricte **215/215** (1 exemption).
-> `diagnostics.md` : 40 / 45 ; `compatibility.md` : 14 / 39 (25 règles de
-> gouvernance, `T2-FINDINGS` §32). Le texte ci-dessous est la
+> `diagnostics.md` #169, `compatibility.md` #172 et `abi.md`)** :
+> `tools/must_audit.py` compte **816 énoncés MUST** et **219 FeatureIds**
+> (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 027 ajoutés) ; **610 / 816**
+> sont atteignables par un FeatureId, **206** ne le sont pas ; couverture
+> stricte **219/219** (1 exemption). `diagnostics.md` : 40 / 45 ;
+> `compatibility.md` : 14 / 39 (25 règles de gouvernance, `T2-FINDINGS` §32) ;
+> `abi.md` : 14 / 35 (`T2-FINDINGS` §33). Le texte ci-dessous est la
 > mesure d'origine, conservée.
 
 **Confirmé, et l'écart est grand :** `spec/language/` contient **807 énoncés

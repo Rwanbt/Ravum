@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- ABI contract (T2, `abi.md`): FeatureIds F-META-024 to F-META-027 citing the existing backend audits and FFI cases, two cases on the emitted Rust file, and a test that refuses any `rustc_*` crate in `Cargo.lock` (ABI-2.7).
+
 - Compatibility contract (T2, `compatibility.md`): FeatureIds F-META-019 to F-META-023, 6 conformance cases, `tests/compat_contract.rs` (digest follows a dependency path, an invalid lockfile is left untouched) and append-only snapshots of rule ids and feature ids. COMPAT-3.6 now names `W-DEPRECATED` and COMPAT-4.2 `E-MOD-DUPLICATE`, as the registry does.
 - `run --json` (DIAG-8.1, D-18-5): one JSON object on stdout with the program's exit code, `summary.executed` and `summary.program_exit_code`; the program's own stdout goes to stderr.
 

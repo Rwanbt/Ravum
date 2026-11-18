@@ -1944,3 +1944,56 @@ comportement de l'outil : COMPAT-1.2, 2.1 à 2.8, 3.1 à 3.6, 4.5, 5.2, 6.1 à 6
 6.5, 7.2, 7.3, 7.5, 7.6. Aucun cas de conformance ne peut les exercer sur une
 seule édition. Leur contrôle relève de la revue (D2, ratification) ; les seules
 parties mécanisables le sont déjà (instantanés d'identifiants et de codes).
+
+## 33. Lot `abi.md` : 14 MUST sur 35 tracés, une contradiction à arbitrer (2026-11-18)
+
+### 33.1 Mesure
+
+`python3 tools/must_audit.py` : `abi.md` passe de 35 non atteints à **21** ;
+global 816 MUST, **206** non atteints ; `features_coverage.py --strict` :
+219/219 (1 exemption). FeatureIds F-META-024 à F-META-027.
+
+La plupart des preuves existaient déjà sans être citées : `backend_audit.rs`
+(absence d'`unsafe` hors wrapper FFI, déterminisme du Rust généré sur tout le
+corpus, contrôles de débordement et de bornes) et les cas `types/ffi-*`,
+`run/ffi-*`, `run/integer-*`, `run/panic`. Ajouts : deux cas sur le fichier
+émis (`cli/abi-emit-rust-forbids-unsafe` : `#![forbid(unsafe_code)]` ;
+`cli/abi-emit-rust-includes-prelude` : hook de panic dans le fichier unique) et
+un test qui refuse toute crate `rustc_*` dans `Cargo.lock` (ABI-2.7).
+
+Observation : au premier passage, `cli/abi-emit-rust-forbids-unsafe` a échoué
+une fois sans détail affiché ; 20 passages suivants ont réussi (0/15 échec en
+boucle). La cause n'est pas identifiée ; la CI sur trois OS dira si elle se
+reproduit.
+
+### 33.2 Contradiction à arbitrer : ABI-4.7 et le `#![allow]` du prélude
+
+ABI-4.7 dit : « un avertissement `rustc` est un défaut à corriger, pas à
+masquer (`#[allow]` interdit) ». Le fichier généré commence par un
+`#![allow(...)]` de crate qui couvre 17 lints, dont `arithmetic_overflow` et
+`unconditional_panic`. Ces deux-là sont voulus : sans eux, `rustc` refuserait
+à la compilation un débordement que la spécification veut voir paniquer à
+l'exécution (`backend_audit.rs` : `audit_constant_foldable_panics_are_runtime_panics`).
+Les autres (`unused_*`, `non_snake_case`…) masquent des avertissements sur du
+code généré.
+
+L'implémentation ne respecte donc pas le texte, et le texte ne décrit pas une
+contrainte tenable telle quelle. ABI-4.7 n'est pas tracé. Deux issues :
+
+1. **Recommandé** : amender ABI-4.7 en « une seule liste `allow` fixe, de
+   crate, documentée lint par lint et auditée par un test ; aucun `allow` local ;
+   aucun avertissement hors de cette liste ». Le test d'audit fige la liste.
+2. Retirer l'`allow` et faire émettre au backend du code sans avertissement :
+   travail important (noms, variables inutilisées), et `arithmetic_overflow`
+   reste nécessaire pour la sémantique des paniques.
+
+### 33.3 Non tracés, avec la raison
+
+| Règles | Raison |
+|---|---|
+| ABI-1.1 à 1.4, 2.9, 2.10, 5.1 à 5.3, 6.1 à 6.4 | énoncés de **refus** ou de non-garantie (« aucun ABI », « aucune garantie de layout ») : rien d'observable à exercer |
+| ABI-2.1, 2.6, 4.4 | sémantique du source et ordre d'évaluation : couverts indirectement par tout le corpus `run/*`, mais aucune ligne de `features.md` ne les cite comme règle |
+| ABI-2.8 | tailles des primitifs : pas d'opérateur `size_of` en Core 1.0 ; seules les bornes sont observables |
+| ABI-4.1 | un `CheckedProgram` invalide est un bug interne, pas une entrée |
+| ABI-4.7 | contradiction, §33.2 |
+| ABI-4.8, 4.9 | non-engagements (temps de compilation, format de `--emit-rust`/`--emit-ir`) |
