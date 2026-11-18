@@ -315,11 +315,15 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     }
                     expected.clone()
                 } else {
-                    self.error(
-                        "E-TYP-MISMATCH",
-                        pat.span,
-                        format!("tuple pattern cannot match type `{expected}`"),
-                    );
+                    // The recovered error type matches any pattern (one
+                    // diagnostic already explains it).
+                    if !matches!(expected, Type::Error | Type::Never) {
+                        self.error(
+                            "E-TYP-MISMATCH",
+                            pat.span,
+                            format!("tuple pattern cannot match type `{expected}`"),
+                        );
+                    }
                     for item in items {
                         self.check_pattern(item, &Type::Error);
                     }
@@ -485,7 +489,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                     },
                 );
                 match expected {
-                    Type::Option(_) => expected.clone(),
+                    Type::Option(_) | Type::Error | Type::Never => expected.clone(),
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -738,6 +742,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             Some(PayloadCtor::Some) => {
                 let inner = match expected {
                     Type::Option(inner) => (**inner).clone(),
+                    Type::Error | Type::Never => Type::Error,
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -775,6 +780,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let payload = match (ctor, expected) {
                     (PayloadCtor::Ok, Type::Result(ok, _)) => (**ok).clone(),
                     (PayloadCtor::Err, Type::Result(_, err)) => (**err).clone(),
+                    (_, Type::Error | Type::Never) => Type::Error,
                     _ => {
                         self.error(
                             "E-TYP-MISMATCH",
@@ -808,7 +814,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 expected.clone()
             }
             None => {
-                if !matches!(expected, Type::Option(_)) {
+                if !matches!(expected, Type::Option(_) | Type::Error | Type::Never) {
                     self.error(
                         "E-TYP-MISMATCH",
                         pat.span,

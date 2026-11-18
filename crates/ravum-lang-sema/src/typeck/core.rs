@@ -82,8 +82,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             self.self_ty.as_ref(),
             ty,
         );
-        resolve::check_written_type_depth(self.diags, ty, &resolved);
-        resolved
+        resolve::check_written_type_depth(self.diags, ty, resolved)
     }
 
     pub(super) fn compatible(a: &Type, b: &Type) -> bool {
@@ -103,6 +102,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     ) -> bool {
         let found = self.resolve_vars(found);
         let expected = self.resolve_vars(expected);
+        if matches!(expected, Type::Error) {
+            self.absorb_into_error(&found);
+        } else if matches!(found, Type::Error) {
+            self.absorb_into_error(&expected);
+        }
         if Self::compatible(&found, &expected) {
             return true;
         }
@@ -139,6 +143,34 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let first = self.resolve_vars(&first);
         let second = self.resolve_vars(&second);
         Self::compatible(&first, &second)
+    }
+
+    /// Binds every unbound inference variable of `ty` to [`Type::Error`]: a
+    /// value checked against the recovered error type takes it, so its open
+    /// variables do not add an `E-TYP-AMBIGUOUS` to the diagnostic that
+    /// produced the error type (`let x: Unknown = None;`).
+    pub(super) fn absorb_into_error(&mut self, ty: &Type) {
+        if let Some(index) = infer_var_index(ty) {
+            self.bind_var(index, &Type::Error);
+            return;
+        }
+        match ty {
+            Type::Ref { inner, .. }
+            | Type::Array { elem: inner, .. }
+            | Type::Slice(inner)
+            | Type::Vec(inner)
+            | Type::Option(inner) => self.absorb_into_error(inner),
+            Type::Tuple(items) | Type::Nominal { args: items, .. } => {
+                for item in items {
+                    self.absorb_into_error(item);
+                }
+            }
+            Type::Result(ok, err) => {
+                self.absorb_into_error(ok);
+                self.absorb_into_error(err);
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn has_infer_var(&self, ty: &Type) -> bool {

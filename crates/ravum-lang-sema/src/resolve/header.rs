@@ -43,8 +43,7 @@ impl<'w, 'a, 'f> HeaderCtx<'w, 'a, 'f> {
             self.self_ty.as_ref(),
             ty,
         );
-        check_written_type_depth(self.diags, ty, &resolved);
-        resolved
+        check_written_type_depth(self.diags, ty, resolved)
     }
 }
 
@@ -622,8 +621,14 @@ pub(crate) fn resolve_impl(
 
 /// TYP-1.7: a written type deeper than [`MAX_TYPE_DEPTH`] is refused with
 /// `E-TYP-DEPTH`, on the whole written type. Called on every type written in
-/// a declaration or a body, once per written type (not per nested node).
-pub(crate) fn check_written_type_depth(diags: &mut DiagnosticBag, ty: &AstType, resolved: &Type) {
+/// a declaration or a body, once per written type (not per nested node). The
+/// refused type becomes [`Type::Error`], so nothing checked against it reports
+/// a second, derived diagnostic.
+pub(crate) fn check_written_type_depth(
+    diags: &mut DiagnosticBag,
+    ty: &AstType,
+    resolved: Type,
+) -> Type {
     if resolved.depth() > MAX_TYPE_DEPTH {
         diags.error(
             "E-TYP-DEPTH",
@@ -633,7 +638,9 @@ pub(crate) fn check_written_type_depth(diags: &mut DiagnosticBag, ty: &AstType, 
                  split it with a named struct"
             ),
         );
+        return Type::Error;
     }
+    resolved
 }
 
 /// Résout une syntaxe de type en [`Type`], en enregistrant **chaque** nœud de

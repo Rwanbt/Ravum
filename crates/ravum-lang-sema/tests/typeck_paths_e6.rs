@@ -1232,3 +1232,73 @@ fn an_open_range_in_a_for_gets_a_dedicated_message() {
         )],
     );
 }
+
+/// A value checked against the recovered error type takes it: an unknown
+/// annotation is one diagnostic, not one plus `E-TYP-AMBIGUOUS` for the open
+/// variables of the value, however deep they sit in it.
+#[test]
+fn a_value_against_an_unknown_annotation_adds_no_ambiguity() {
+    let values = [
+        "None",
+        "Vec::new()",
+        "Some(Vec::new())",
+        "(None, Vec::new())",
+        "[Vec::new()]",
+        "&Vec::new()",
+        "Ok(Vec::new())",
+    ];
+    for value in values {
+        assert_errors(
+            &format!("fn main() {{\n    let _x: Nope = {value};\n}}\n"),
+            &[("E-RES-UNKNOWN", "unknown type `Nope`")],
+        );
+    }
+}
+
+/// Every pattern shape matches the recovered error type silently: the
+/// annotation's diagnostic is the only one.
+#[test]
+fn patterns_against_an_unknown_type_add_no_mismatch() {
+    let patterns = ["Some(Some(_))", "None", "Ok(_)", "Err(_)", "(_, _)"];
+    for pattern in patterns {
+        assert_errors(
+            &format!(
+                "fn f(v: Nope) {{\n    match v {{\n        {pattern} => {{ }}\n        \
+                 _ => {{ }}\n    }}\n}}\nfn main() {{ }}\n"
+            ),
+            &[("E-RES-UNKNOWN", "unknown type `Nope`")],
+        );
+    }
+}
+
+/// A slice value (`&[$0]`) against an unknown annotation takes the error type
+/// too, through the reference and the slice.
+#[test]
+fn a_slice_against_an_unknown_annotation_adds_no_ambiguity() {
+    assert_errors(
+        "fn main() {\n    let _x: Nope = Vec::new().as_slice();\n}\n",
+        &[("E-RES-UNKNOWN", "unknown type `Nope`")],
+    );
+}
+
+/// A divergent scrutinee (`!`) matches every pattern shape silently, as the
+/// error type does; a real type still refuses a tuple or `Ok` pattern.
+#[test]
+fn tuple_and_result_patterns_against_never_and_a_wrong_type() {
+    assert_errors(
+        "fn stop() -> ! { panic(\"x\") }\nfn main() {\n    match stop() {\n        \
+         (_, _) => { }\n        Ok(_) => { }\n        _ => { }\n    }\n}\n",
+        &[],
+    );
+    assert_errors(
+        "fn f(v: i32) {\n    match v {\n        (_, _) => { }\n        Ok(_) => { }\n        \
+         _ => { }\n    }\n}\nfn main() { }\n",
+        &[
+            ("E-TYP-MISMATCH", "tuple pattern cannot match type `i32`"),
+            (
+                "E-TYP-MISMATCH",
+                "`Result::Ok` pattern cannot match type `i32`",
+            ),
+        ],
+    );
+}

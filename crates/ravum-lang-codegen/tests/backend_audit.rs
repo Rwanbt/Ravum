@@ -721,6 +721,48 @@ fn generate_source_with(label: &str, source: &str, options: &GenOptions) -> Stri
     checked_from_source(label, source, options)
 }
 
+/// The checker's diagnostic codes for a one-file package, for audits whose
+/// program must be refused before generation.
+fn checker_codes(label: &str, source: &str) -> Vec<String> {
+    let dir = TempDir::new(label);
+    let manifest =
+        format!("[package]\nname = \"{label}\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n");
+    std::fs::write(dir.path.join("ravum.toml"), manifest).expect("cannot write the manifest");
+    let src = dir.path.join("src");
+    std::fs::create_dir_all(&src).expect("cannot create the package source directory");
+    std::fs::write(src.join("main.rv"), source).expect("cannot write the Ravum source");
+    let loaded = ravum_lang_sema::loader::load_package_with_options(
+        &dir.path,
+        &ravum_lang_sema::loader::LoadOptions {
+            locked: false,
+            overrides: std::collections::BTreeMap::new(),
+            ..Default::default()
+        },
+    );
+    assert!(
+        loaded.diags.is_empty(),
+        "loader diagnostics for `{label}`:\n{}",
+        loaded.diags.render(&loaded.sources)
+    );
+    let program = loaded
+        .program
+        .expect("the loader produced no program for a valid package");
+    let checked = ravum_lang_sema::check(
+        &program,
+        &loaded.sources,
+        &CheckOptions {
+            profile: Profile::Core,
+            edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
+        },
+    );
+    let _ = std::fs::remove_dir_all(&dir.path);
+    assert!(
+        checked.checked.is_none() || !checked.diags.is_empty(),
+        "a refused program must carry a diagnostic"
+    );
+    checked.diags.iter().map(|d| d.code.to_string()).collect()
+}
+
 fn checked_from_source(label: &str, source: &str, options: &GenOptions) -> String {
     let dir = TempDir::new(label);
     let manifest =
@@ -4796,6 +4838,33 @@ fn audit_a_type_nested_at_the_depth_bound_builds_and_runs() {
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert_eq!(stdout, "ok\n");
+}
+
+/// TYP-1.7 past the bound, end to end: the 128-level shapes the depth audits
+/// used before the bound existed are refused with exactly one `E-TYP-DEPTH`
+/// (no panic, no stack overflow, no generation of the error type).
+#[test]
+fn audit_types_nested_128_levels_are_refused_with_one_depth_diagnostic() {
+    let depth = 128;
+    let ty = (0..depth).fold(String::from("i32"), |acc, _| format!("Option<{acc}>"));
+    let pattern = (0..depth).fold(String::from("_"), |acc, _| format!("Some({acc})"));
+    let written = format!(
+        "fn main() {{\n    let x: {ty} = None;\n    \
+         match x {{\n        {pattern} => {{ }}\n        _ => {{ }}\n    }}\n}}\n"
+    );
+    assert_eq!(checker_codes("deep-type-128", &written), ["E-TYP-DEPTH"]);
+    let mut body = String::from("    let a0 = 1;\n");
+    for i in 1..=depth {
+        body.push_str(&format!("    let a{i} = Some(a{});\n", i - 1));
+    }
+    let inferred = format!("fn main() {{\n{body}    match a{depth} {{ _ => {{ }} }}\n}}\n");
+    assert_eq!(
+        checker_codes("deep-inferred-128", &inferred),
+        ["E-TYP-DEPTH"]
+    );
+    let bool_ty = (0..depth).fold(String::from("bool"), |acc, _| format!("Option<{acc}>"));
+    let signature = format!("fn f(_t: {bool_ty}) -> usize {{ 0 }}\nfn main() {{ }}\n");
+    assert_eq!(checker_codes("deep-param-128", &signature), ["E-TYP-DEPTH"]);
 }
 
 /// Expression shapes no corpus program generated: a one-element tuple, an
