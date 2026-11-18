@@ -33,6 +33,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Fixed
 
+- Loader messages no longer contain absolute machine paths (DIAG-6.8, DIAG-7.5): `module `b` not found: neither `/tmp/…/src/b.rv` …` now reads `src/b.rv`, and a sibling dependency is shown as `../lib/…`. The rewrite is done once, when the diagnostics leave the loader, so it covers all of its ~60 messages.
+
 - An operand already in error no longer produces a second `E-TYP-MISMATCH` through a binary operator (`y + 1` with `y` unknown reported `<error>`; DIAG-4.2).
 
 - Lexer conformance to `lexical.md` (found by the T2 lexical cases): a lone
