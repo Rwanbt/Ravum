@@ -1,0 +1,13 @@
+{
+  "id": "cli/compat-json-declares-spec-version",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"tool\":\"ravum-lang\",\"tool_version\":",
+  "expect_json_schema_version": 1,
+  "notes": "COMPAT-1.1: every report declares the tool and its version, next to `spec_version` (the schema check requires `spec_version`)."
+}

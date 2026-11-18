@@ -1,0 +1,9 @@
+{
+  "id": "packages/dependency-other-edition",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-UNSUPPORTED-EDITION"
+  ],
+  "notes": "COMPAT-4.4: a package cannot depend on another edition; every package must declare `core-1.0`."
+}

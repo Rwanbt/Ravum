@@ -1822,3 +1822,125 @@ tableau imbriqué, `self` et liaison de `match`. Le corpus gagne les 16 cas
 Reste hors de cette mesure : la conformance et le workspace sur Linux/macOS, la
 campagne nominale T2 (E7), la couverture 100 % et la mutation (E6), ainsi que
 l'audit externe. La passe ne prouve donc pas l'absence de formes inconnues.
+
+## 30. Passe 17 — les 4 inverses restants exécutés en CI, score sur 13 (2026-11-18)
+
+> Run [43994652442](https://github.com/Rwanbt/Ravum/actions/runs/43994652442)
+> (`t2-power.yml`, PR #149), tête `7773a0f`, Linux x86_64, `rustc 1.95.0`,
+> conclusion `success`. Chaque forme rejoue
+> `bash tools/t2-power/replay-array-descent.sh <forme> 2000` dans un worktree
+> jetable : l'inverse n'est jamais commité.
+
+### 30.1 Formes 10 à 13
+
+Chaque job vérifie, dans l'ordre : le test positif passe sur l'arbre sain
+(sortie 0) ; sous l'inverse, le test historique et l'oracle sortent à 101 avec
+`E0508` ; le générateur produit 3 graines × 2 000 programmes.
+
+| Forme | Job | Générés | Fautes délibérées refusées | Divergences `E0508` |
+|---|---|---:|---:|---:|
+| 10 | [133743598672](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598672) | 6 000 | 561 | 5 439 |
+| 11 | [133743598690](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598690) | 6 000 | 561 | 5 439 |
+| 12 | [133743598666](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598666) | 6 000 | 561 | 5 439 |
+| 13 | [133743598699](https://github.com/Rwanbt/Ravum/actions/runs/43994652442/job/133743598699) | 6 000 | 561 | 5 439 |
+
+Ligne lue dans chacun des quatre journaux :
+`[typed:long] TOTAL generated=6000 faults=561 fault_rejected=561 accepted=0 rejected=0 divergences=5439`.
+
+### 30.2 Score
+
+- **Sensibilité des tests existants : 13/13.** Formes 1 à 9 au §28.2, formes
+  10 à 13 ci-dessus : chaque inverse fait échouer son test historique.
+- **Détection par le générateur ciblé sur ce run : 4/4** (formes 10 à 13).
+- Les campagnes des formes 1 à 9 (§28) ont un autre protocole (3 × 200,
+  `release_every=0`) : aucun score de détection homogène sur 13 n'est déduit du
+  cumul.
+- Campagne nominale (arbre sain) : run
+  [43753630956](https://github.com/Rwanbt/Ravum/actions/runs/43753630956),
+  6 000 acceptés, 0 divergence.
+
+### 30.3 Ce que cette passe ne prouve pas
+
+Elle ferme l'étape E7 du plan de production (P-9). Elle ne change pas le gate
+T2 : T2 reste `PARTIAL` tant que 344 énoncés MUST sur 811 n'ont pas de
+FeatureId (D10, `tools/must_audit.py`).
+
+## 31. Lot `diagnostics.md` : 38 MUST sur 45 tracés, une cascade corrigée (2026-11-18)
+
+### 31.1 Mesure
+
+`python3 tools/must_audit.py` : `diagnostics.md` passe de 45 non atteints à
+**7** ; dénominateur global 816 MUST, 234 non atteints ; `features_coverage.py
+--strict` : 209/209 (1 exemption). Corpus : `cargo run -p ravum-conformance --
+run` → `total=602 pass=600 fail=0 skip=2`.
+
+Preuves ajoutées : 13 cas (`cli/diag-*`, `resolve/early-phase-masks-later`),
+`crates/ravum-lang-cli/tests/diagnostics_contract.rs` (DIAG-1.8, 4.1, 4.4, 6.5,
+6.8, 7.2 : deux exécutions identiques à l'octet, tri par phase, aucun ESC,
+aucun chemin absolu, une ligne JSON sans BOM), `tools/diagnostic_codes.snapshot`
+et `tools/tests/test_diagnostic_contract.py` (DIAG-9.1/9.2/9.5 : un code publié
+n'est jamais retiré ni changé de préfixe ; DIAG-1.2/6.6/9.4 : aucun cas
+n'asserte un `message`).
+
+### 31.2 Défaut corrigé
+
+DIAG-4.2 était violé : `let _x: bool = y + 1;` produisait `E-RES-UNKNOWN` **et**
+`E-TYP-MISMATCH` (« operator `+` is not defined for `<error>` and `i32` »).
+`binary_result_type` rend désormais `Type::Error` sans diagnostic dès qu'un
+opérande est déjà en erreur (test `an_unresolved_operand_does_not_cascade_through_operators`,
+six opérateurs).
+
+### 31.3 Non tracés, avec la raison
+
+| Règle | Raison |
+|---|---|
+| DIAG-1.10 | le registre des dépréciations est vide en Core 1.0 : aucun cas de conformance ne peut l'exercer ; couvert par les tests unitaires de `deprecation.rs` uniquement |
+| DIAG-5.5 | « span non vide et dans les bornes » : vérifiable seulement sur tous les diagnostics émis ; à ajouter à l'oracle du corpus (vérification générique sur chaque sortie JSON) |
+| DIAG-6.4 | aucun diagnostic de Core 1.0 n'émet aujourd'hui de note ni d'aide : la forme `= note:` n'a pas de producteur |
+| DIAG-7.3 | règle sur le **consommateur** (ignorer les champs inconnus) ; le runner de conformance la respecte mais aucun test ne le fige |
+| DIAG-9.3 | `schema_version` : aucune comparaison automatique entre deux versions du schéma |
+| DIAG-9.6 | stabilité de `feature_id`/`rule_id` : FEAT-1.4 le pose, aucun instantané ne le vérifie encore |
+
+DIAG-8.1 était un écart : la règle renvoyait à `run --json`, que `run` refusait. Le
+responsable a décidé de l'implémenter (D-18-5) : `run --json` est tracé par F-META-018
+(`diagnostics.md` : 39 / 45).
+
+Observation hors MUST : sur un manifeste invalide (`version = "not-a-version"`),
+le span de `E-MOD-MANIFEST` couvre `[package]` (octets 0–9) et non la valeur
+fautive. Ce n'est pas une violation de DIAG-1.3 (le fichier et les offsets sont
+valides), mais le span est imprécis.
+
+## 32. Lot `compatibility.md` : 14 MUST sur 39 tracés, deux textes alignés (2026-11-18)
+
+### 32.1 Mesure
+
+`python3 tools/must_audit.py` : `compatibility.md` passe de 39 non atteints à
+**25** ; global 816 MUST, **218** non atteints après fusion de #171 ; `features_coverage.py --strict` :
+215/215 (1 exemption). FeatureIds F-META-019 à F-META-023.
+
+Preuves ajoutées : 6 cas (`packages/two-versions-same-name`,
+`packages/dependency-other-edition`, `packages/dependency-digest-exposed`,
+`cli/compat-json-declares-spec-version`, `cli/compat-no-migrate-command`,
+`cli/compat-cache-clean`) ; `crates/ravum-lang-cli/tests/compat_contract.rs`
+(COMPAT-4.3 : changer le `path` d'une dépendance change `dependencies_digest`
+et rend le lockfile `stale` ; COMPAT-1.4/7.1 : un lockfile invalide est refusé
+par `E-MOD-LOCK`, laissé intact, et aucun binaire n'est produit) ;
+`tools/rule_ids.snapshot` et `tools/feature_ids.snapshot` (DIAG-9.6,
+COMPAT-2.9 : un identifiant publié n'est jamais renommé ni retiré, et tout
+nouvel identifiant doit y être ajouté).
+
+### 32.2 Textes alignés
+
+| Règle | Avant | Après | Raison |
+|---|---|---|---|
+| COMPAT-3.6 | une API dépréciée « n'émet aucun avertissement » | chaque usage émet `W-DEPRECATED` | contredisait DIAG-1.6/1.10, décision D-18-3 |
+| COMPAT-4.2 | deux versions du même nom → `E-MOD-DEPENDENCY` | → `E-MOD-DUPLICATE` | le registre canonique (`diagnostics.md` §3) attribue « deux packages de même nom » à `E-MOD-DUPLICATE`, et l'implémentation l'émet |
+
+### 32.3 Non tracés : règles de gouvernance
+
+Les 25 règles restantes décrivent une **politique** (ce qui est une rupture,
+quand créer une édition majeure, comment migrer ou revenir en arrière), pas un
+comportement de l'outil : COMPAT-1.2, 2.1 à 2.8, 3.1 à 3.6, 4.5, 5.2, 6.1 à 6.3,
+6.5, 7.2, 7.3, 7.5, 7.6. Aucun cas de conformance ne peut les exercer sur une
+seule édition. Leur contrôle relève de la revue (D2, ratification) ; les seules
+parties mécanisables le sont déjà (instantanés d'identifiants et de codes).

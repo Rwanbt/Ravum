@@ -1,0 +1,8 @@
+{
+  "id": "parser/move-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-MOVE"
+  ],
+  "notes": "G-6.34: no `move` (E-UNSUPPORTED-MOVE)."
+}

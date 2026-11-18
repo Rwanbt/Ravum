@@ -1,0 +1,6 @@
+fn f() -> Option<i32> {
+    let x = 1;
+    let y = x?;
+    Some(y)
+}
+fn main() { }

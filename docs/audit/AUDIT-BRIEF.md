@@ -12,7 +12,17 @@
 > une preuve — et l'auditeur doit suspecter les zones qu'il désigne, pas les
 > croire.
 
-> **Chiffres courants au 2026-11-14 (`goal/consolidation-2`), à rejouer et à ne
+> **Chiffres courants au 2026-11-18 (`dev` à `a930046`, Linux x86_64, rustc
+> 1.95.0), à rejouer et à ne pas croire sur parole** : conformance **503 cas
+> (501 PASS / 0 FAIL / 2 SKIP)**, périmètre build **222/222**,
+> `build_verified: true` ; tests des cinq crates `ravum-lang-*` **1 561 passés /
+> 0 échec** ; traçabilité **188/188** ; couverture produit sema+codegen
+> **100,00 % sur 13 222 lignes, 0 exemption** ; oracle différentiel **6 000
+> programmes, 0 divergence** ; test de puissance T2 **13/13** ; CI `dev` 35/35
+> verts (+1 `SKIP` TSan `NOT_APPLICABLE`). Ce qui reste non prouvé : 344 MUST
+> sans FeatureId, 198 mutants survivants d'`emit` non analysés.
+
+> **Chiffres du 2026-11-14 (`goal/consolidation-2`), historiques — à ne
 > pas croire sur parole** : conformance **484 cas (483 PASS / 0 FAIL / 1 SKIP)**,
 > périmètre build **207/207**, `build_verified: true` ; suite workspace
 > **1 634 passés / 0 échec / 7 ignorés** ; traçabilité **188/188** ; codes
@@ -76,6 +86,9 @@ c'est là qu'il faut chercher.
 | 17 codes émis hors du registre §3 | **contrat de diagnostic** : `python tools/registry_audit.py` en trouve encore un (`W-TYP-UNREACHABLE`, interdit par DIAG-1.6) |
 | `'a` produisait quatre diagnostics en cascade | **reprise après erreur** : toute construction non supportée produit-elle un seul code ? |
 | `r"…"` produisait deux tokens | **frontière lexer/parser** : les formes non supportées sont-elles reconnues assez tôt ? |
+| E6 (2026-11-17/18) : une trentaine de divergences `check` → `build` trouvées en écrivant des tests de couverture (prêts oubliés dans un bloc, analyse d'ownership abandonnée au-delà de 256 niveaux, liaison nommée comme une constante, génériques explicites ignorés…) | **le contrat `check ⇒ build` sur les formes rares** : imbrication profonde, noms qui masquent un item, chemins à plusieurs segments |
+| Un type refusé ou inconnu produisait une cascade (`E-TYP-MISMATCH` ×99, faux `E-TYP-AMBIGUOUS`) | **reprise après erreur du typeur** : chaque diagnostic d'origine doit rester seul |
+| Un test de 20 000 maillons bloquait Miri sur `dev` (CI non déclenchée sur les PR) | **les jobs qui ne tournent qu'après fusion** : ce que la CI d'une PR ne voit pas |
 | `W-OWN-UNUSED-VARIABLE` est déclaré par DIAG-1.6 et **jamais émis** | **capacités annoncées et absentes** : vérifier chaque ligne du registre §3 et chaque warning de DIAG-1.6 contre une émission réelle |
 
 ## 5. Questions auxquelles l'auditeur doit répondre

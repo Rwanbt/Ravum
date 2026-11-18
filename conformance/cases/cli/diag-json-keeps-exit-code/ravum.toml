@@ -1,0 +1,4 @@
+[package]
+name = "cli-diag-json-keeps-exit-code"
+version = "0.1.0"
+edition = "core-1.0"

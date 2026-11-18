@@ -22,7 +22,7 @@ use crate::facts::{
 use crate::resolve::{
     self, ModuleId, NominalKind, PathError, PayloadCtor, ValuePath, World, OPTION_NONE,
 };
-use crate::types::{contains_never, Type, MAX_TYPE_DEPTH};
+use crate::types::{contains_error, contains_never, Type, MAX_TYPE_DEPTH};
 use ravum_lang_syntax::ast::{
     self, Block, ConstItem, Expr, ExprKind, FieldInit, FloatTy, FnItem, IntTy, Item, ItemKind,
     LitPat, MatchArm, Module, NodeId, Pat, PatKind, Path, PathRoot, Receiver, Stmt, StmtKind,

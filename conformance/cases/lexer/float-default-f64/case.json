@@ -1,0 +1,8 @@
+{
+  "id": "lexer/float-default-f64",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "LEX-8.11: an unsuffixed float defaults to f64 once bound without context."
+}

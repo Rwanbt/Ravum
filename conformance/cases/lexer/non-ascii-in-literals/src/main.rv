@@ -1,0 +1,6 @@
+fn main() {
+    // café, comment
+    let c = 'é';
+    io::println("é😀");
+    io::println(&c.to_string());
+}

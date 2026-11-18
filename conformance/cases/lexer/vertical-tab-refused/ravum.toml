@@ -1,0 +1,4 @@
+[package]
+name = "lexer-vertical-tab-refused"
+version = "0.1.0"
+edition = "core-1.0"

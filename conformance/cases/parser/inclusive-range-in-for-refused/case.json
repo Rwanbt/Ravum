@@ -1,0 +1,8 @@
+{
+  "id": "parser/inclusive-range-in-for-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-RANGE"
+  ],
+  "notes": "G-6.13: in a `for` clause, `..=` is E-TYP-RANGE (decision 6)."
+}

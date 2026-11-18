@@ -73,7 +73,7 @@ fn main() {
 fn main() { }\r
 ```
 
-`check` **MUST NOT** produire de diagnostic pour un fichier écrit en CRLF : le fichier est valide, et `fmt` le normalise en LF (LEX-3.4). Aucun avertissement de fin de ligne n'existe en Core 1.0 : la liste des avertissements est **fermée** (`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`, voir [`diagnostics.md`](diagnostics.md) §2).
+`check` **MUST NOT** produire de diagnostic pour un fichier écrit en CRLF : le fichier est valide, et `fmt` le normalise en LF (LEX-3.4). Aucun avertissement de fin de ligne n'existe en Core 1.0 : la liste des avertissements est **fermée** (`W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE`, `W-DEPRECATED`, voir [`diagnostics.md`](diagnostics.md) §2).
 
 ## 4. Identifiants
 
@@ -137,7 +137,7 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 `ref`, `dyn`, `await`, `box`, `yield`, `union`, `macro`, `final`, `abstract`, `override`, `virtual`, `package`, `interface`, `implements` **ne figurent pas** dans la liste réservée : ce sont des **identifiants valides** en Core 1.0 (le codegen les mangle). Conséquences normatives :
 - `let ref = 1;`, `let dyn = 2;`, `let await = 3;` sont **acceptés** (identifiants).
 - `dyn T` en position de type est un nom de type inconnu (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-TRAIT`.
-- `x.await` est une méthode inconnue (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-ASYNC`.
+- `x.await` est un accès de champ inconnu (`E-TYP-FIELD`), pas `E-UNSUPPORTED-ASYNC` ; `x.await()` est une méthode inconnue.
 - `ref x` en pattern est un motif de liaison `ref` suivi d'un token inattendu (`E-PARSE-EXPECTED`).
 
 > `static` et `type` **sont réservés** (35 mots-clés, §5.1) mais non supportés à l'usage :
@@ -470,4 +470,4 @@ any_except_eol= ? tout scalaire sauf LF et CR ? ;
 - **Q-LEX-5** — `\xNN` limité à l'ASCII dans les chaînes (LEX-8.23) suit Rust ; autoriser `\xNN` arbitraire imposerait de définir la validité UTF-8 **au lexer** plutôt qu'au runtime. Maintenir le refus sauf besoin démontré.
 - **Q-LEX-6** — Faut-il un littéral brut multi-lignes de style `r#"..."#` pour les chemins Windows dans les corpus ? Refusé pour l'instant (`E-UNSUPPORTED-TOKEN`) ; cela force `"C:\\x"`.
 - **Q-LEX-7** — Les commentaires de doc `///` sont-ils normatifs (contrat de documentation) ou purement informatifs ? Ce document les traite comme trivia sans effet sémantique ; `ravum-lang doc` les consomme sans garantie de format.
-- **Q-LEX-8 (résolue)** — La liste des avertissements est fermée à `W-RES-UNUSED-IMPORT` et `W-OWN-UNUSED-VARIABLE` ; aucun lint de style/format n'existe. `ravum-lang lint` ne peut donc signaler que ces deux codes. À étendre seulement par décision explicite.
+- **Q-LEX-8 (résolue)** — La liste des avertissements est fermée à `W-RES-UNUSED-IMPORT`, `W-OWN-UNUSED-VARIABLE` et `W-DEPRECATED` (DIAG-1.10, 2026-11-18) ; aucun lint de style/format n'existe. `ravum-lang lint` ne peut donc signaler que ces trois codes. À étendre seulement par décision explicite.

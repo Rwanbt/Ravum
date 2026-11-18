@@ -1,0 +1,8 @@
+{
+  "id": "lexer/nan-is-an-identifier",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "LEX-8.12: there is no NaN literal; `NaN` is an identifier."
+}

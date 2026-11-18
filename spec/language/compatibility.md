@@ -49,14 +49,14 @@
 | COMPAT-3.3 | Un changement de **comportement** (ex. `write_string` devenant atomique, `exists` rendant `Result`) est une rupture même si la signature est compatible. | MUST |
 | COMPAT-3.4 | Les messages d'erreur (`Error::message`) ne sont **pas** contractuels : les changer n'est pas une rupture (STD-1.7). | MUST |
 | COMPAT-3.5 | Les effets d'une fonction `std` sont **contractuels** : ajouter `alloc` ou `io` à une fonction `effects()` est une rupture (elle casse des programmes `pure`/`rt`). | MUST |
-| COMPAT-3.6 | Aucun mécanisme de dépréciation implicite : une API dépréciée est documentée, reste fonctionnelle jusqu'à l'édition majeure suivante, et n'émet **aucun** avertissement (liste `W-*` fermée). | MUST |
+| COMPAT-3.6 | Aucun mécanisme de dépréciation implicite : une API dépréciée est inscrite au registre (`docs/release/DEPRECATION-POLICY.md` §5), reste fonctionnelle jusqu'à l'édition majeure suivante, et chaque usage émet le seul avertissement prévu, `W-DEPRECATED` ([`diagnostics.md`](diagnostics.md) DIAG-1.6, DIAG-1.10 ; décision D-18-3 du 2026-11-18). | MUST |
 
 ## 4. Compatibilité des packages
 
 | ID | Règle | Niveau |
 |---|---|---|
 | COMPAT-4.1 | En Core 1.0, une dépendance est un **chemin** : la compatibilité est celle du source effectivement présent. Aucune plage de versions, aucun solveur ([`modules.md`](modules.md) MOD-8.4). | MUST |
-| COMPAT-4.2 | Le champ `version` d'un package sert à l'**identification** et au lockfile, pas à la résolution. Deux versions différentes du même nom sont un conflit (`E-MOD-DEPENDENCY`). | MUST |
+| COMPAT-4.2 | Le champ `version` d'un package sert à l'**identification** et au lockfile, pas à la résolution. Deux versions différentes du même nom sont un conflit (`E-MOD-DUPLICATE`, « deux packages de même nom » au registre de [`diagnostics.md`](diagnostics.md) §3). | MUST |
 | COMPAT-4.3 | Changer le `path` d'une dépendance sans changer son `name`/`version` est légal mais **change le digest** : `check --json` expose `dependencies_digest` et `lockfile_stale`. | MUST |
 | COMPAT-4.4 | Un package **MUST NOT** dépendre d'une édition différente de la sienne : `edition` est unique par package et doit valoir `core-1.0` ([`modules.md`](modules.md) MOD-5.2). | MUST |
 | COMPAT-4.5 | Le contenu compilé est **toujours** recompilé depuis la source ; aucun cache binaire partagé entre versions n'est un contrat ([`abi.md`](abi.md)). | MUST |
@@ -127,4 +127,4 @@
 - **Q-COMPAT-2** — Faut-il supporter **deux** éditions simultanément (compilation d'un package `core-1.0` par un outil `core-2.0`) ? Le design ne le prévoit pas ; une réponse positive exige une matrice de compatibilité et des tests croisés. Recommandation : non en Core 1.0.
 - **Q-COMPAT-3 (résolue par le Lead)** — Tous les codes anciennement `reserved` sont devenus canoniques ; il n'y a plus de code réservé. Leur émission est un ajout compatible au sens de DIAG-9.5.
 - **Q-COMPAT-4** — Le versionnage de `spec_version` (`core-1.0-draft.1`) n'est pas relié à un hash de commit. Pour la traçabilité (INV-04), un champ `spec_commit` serait utile dans le JSON. Non retenu (schéma `1` figé) ; à trancher avant ratification.
-- **Q-COMPAT-5** — Aucun mécanisme de dépréciation visible (COMPAT-3.6) : une API dépréciée est seulement documentée. Un champ JSON `"deprecated": true` sur les faits serait plus utile que des warnings. À considérer.
+- **Q-COMPAT-5** — *Résolue le 2026-11-18 (D-18-3)* : une API dépréciée est signalée par `W-DEPRECATED` à chaque usage (DIAG-1.10) ; COMPAT-3.6 est aligné.

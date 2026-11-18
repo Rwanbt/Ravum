@@ -1,0 +1,8 @@
+{
+  "id": "lexer/char-unterminated",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-CHAR"
+  ],
+  "notes": "LEX-8.14: a `'` still open at the end of the line is E-LEX-CHAR (one diagnostic)."
+}

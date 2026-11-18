@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-empty-arrays-on-success",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"diagnostics\":[]",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-7.4: an empty `diagnostics` array is present, never null."
+}

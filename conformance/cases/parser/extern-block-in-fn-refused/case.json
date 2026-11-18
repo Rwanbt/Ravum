@@ -1,0 +1,8 @@
+{
+  "id": "parser/extern-block-in-fn-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-3.11: an extern block is valid only at module level."
+}

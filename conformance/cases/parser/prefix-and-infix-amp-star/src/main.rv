@@ -1,0 +1,10 @@
+fn both(a: bool, b: &bool) -> bool { a & *b }
+fn twice(r: &i32) -> i32 { *r * 2 }
+fn main() {
+    let b = true;
+    let x = 3;
+    let mut s = both(true, &b).to_string();
+    s.push_str(" ");
+    s.push_str(&twice(&x).to_string());
+    io::println(&s);
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/assign-through-shared-ref-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "G-6.9: assignment through `&T` is not a mutable place."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/pub-use-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-REEXPORT"
+  ],
+  "notes": "G-4.11: there is no `pub use` (E-UNSUPPORTED-REEXPORT)."
+}

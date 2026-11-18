@@ -1,0 +1,11 @@
+{
+  "id": "cli/compat-cache-clean",
+  "mode": "cli",
+  "args": [
+    "cache",
+    "clean",
+    "."
+  ],
+  "exit_code": 0,
+  "notes": "COMPAT-7.4: the compilation cache can always be emptied with `cache clean`."
+}

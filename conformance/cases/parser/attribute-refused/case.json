@@ -1,0 +1,8 @@
+{
+  "id": "parser/attribute-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ATTR"
+  ],
+  "notes": "G-2.5: attributes are E-UNSUPPORTED-ATTR, never ignored."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "cli/compat-no-migrate-command",
+  "mode": "cli",
+  "args": [
+    "migrate",
+    "."
+  ],
+  "exit_code": 2,
+  "stderr_contains": "unknown command `migrate`",
+  "notes": "COMPAT-6.4: Core 1.0 has no automatic migration tool; `migrate` is not a command (usage error, exit 2)."
+}

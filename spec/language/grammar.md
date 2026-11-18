@@ -116,14 +116,14 @@ use_item       = visibility "use" use_path ";" ;
 | G-4.1 | `struct` vide (`struct U { }`) et `struct U {}` sont valides : type sans champ, toujours `Copy`. | MUST |
 | G-4.2 | Un champ peut être `pub` ; par défaut privé. `pub` sur un champ d'enum est accepté syntaxiquement et **sans effet** (la visibilité d'une variante est celle de l'enum) — voir Q-GRAM-2. | MUST |
 | G-4.3 | Une variante est soit unité (`Empty`), soit tuple (`Circle(f64)`), soit record (`Rect { w: f64, h: f64 }`). Les trois formes ne se mélangent pas dans une variante. | MUST |
-| G-4.4 | Un littéral de struct exige `champ: expr` pour chaque champ fourni ; le raccourci `champ` (shorthand) n'existe **pas** en expression (`E-PARSE-EXPECTED`), alors qu'il est autorisé en **pattern** (§6.6, design §3.4). | MUST |
+| G-4.4 | Un littéral de struct accepte `champ: expr` et le raccourci `champ`, qui se lit `champ: champ` (décision du Lead, cas `parser/field-shorthand`). Le raccourci est aussi autorisé en **pattern** de variante (§6.6, G-6.48, design §3.4). | MUST |
 | G-4.5 | `impl_target` **MUST** être un chemin de type nominal défini dans le package courant ; `impl i32`, `impl String`, `impl Vec<i32>` produisent `E-RES-IMPL-SELF-TYPE`. | MUST |
 | G-4.6 | Les paramètres génériques d'un `impl<T> Foo<T>` doivent correspondre exactement aux paramètres du type cible, dans l'ordre. Toute autre forme est `E-RES-IMPL-UNKNOWN`. | MUST |
 | G-4.7 | Un `impl` ne peut pas contenir de `const`, de `struct`, ni de `impl` imbriqué : `E-PARSE-EXPECTED`. | MUST |
 | G-4.8 | `const` exige un type explicite, un `=` et un `;`. `const N = 10;` est `E-PARSE-EXPECTED`. | MUST |
 | G-4.9 | `const_expr` est le sous-ensemble **fermé** de §5.5 : littéraux, opérateurs arithmétiques/logiques sur scalaires, `as`, parenthèses. Aucun appel, aucune allocation, aucune référence. Toute autre expression est `E-TYP-CONST`. | MUST |
 | G-4.10 | `mod foo;` (fichier) et `mod foo { ... }` (inline) sont exclusifs ; `mod foo { } ;` est `E-PARSE-EXPECTED` (le `;` est refusé après un module inline). | MUST |
-| G-4.11 | `use` n'accepte ni `*`, ni `as`, ni `pub use` : `E-UNSUPPORTED-TOKEN`, `E-UNSUPPORTED-TOKEN`, `E-UNSUPPORTED-TOKEN`. | MUST |
+| G-4.11 | `use` n'accepte ni `*`, ni `as`, ni `pub use` : `E-UNSUPPORTED-TOKEN`, `E-UNSUPPORTED-ALIAS`, `E-UNSUPPORTED-REEXPORT` (codes dédiés du registre, [`diagnostics.md`](diagnostics.md) §3 ; même table en §7). | MUST |
 | G-4.12 | `impl` sans aucun membre est valide (`impl P { }`), sans effet. | MUST |
 | G-4.13 | Un `struct`/`enum` récursif sans indirection (aucun `Box` en Core 1.0) est `E-TYP-RECURSIVE` (voir [`types.md`](types.md) TYP-12). | MUST |
 
@@ -271,7 +271,7 @@ place_suffix   = "." ( IDENT | INT_LIT )
 | G-6.8 | L'affectation est une **instruction**, jamais une expression : `if (x = 1) { }` est `E-PARSE-UNEXPECTED`. La **famille complète** des opérateurs composés est acceptée (`+= -= *= /= %= &= \|= ^= <<= >>=`) avec la sémantique `place = place op e` (une seule évaluation de `place`). | MUST |
 | G-6.9 | La cible d'affectation est un *place* mutable ; `*(&mut x) = e` est valide seulement si le déréférencement porte sur un `&mut T`. Toute autre cible est `E-OWN-IMMUTABLE` ou `E-TYP-MISMATCH`. | MUST |
 | G-6.10 | `;;` et `;` seuls sont acceptés et sans effet. | MUST |
-| G-6.11 | Un `place` ne peut pas être un littéral, un appel ni une opération : `(a + b).0 = 1;` → `E-PARSE-UNEXPECTED`. | MUST |
+| G-6.11 | Un `place` ne peut pas être un littéral, un appel ni une opération : `(a + b).0 = 1;` → `E-PARSE-EXPECTED` (une place était attendue). | MUST |
 
 ```rv
 // POSITIF
@@ -321,7 +321,7 @@ Ordre **croissant** de liaison (le premier lie le plus fort), conforme au design
 | ID | Règle | Niveau |
 |---|---|---|
 | G-6.12 | `a == b == c` est une erreur de syntaxe (`E-PARSE-UNEXPECTED`), pas une comparaison en chaîne. Les parenthèses sont obligatoires. | MUST |
-| G-6.13 | `..` **MUST NOT** apparaître ailleurs que dans la clause `for ... in expr .. expr` : `let r = 0..n;` est `E-UNSUPPORTED-RANGE`. `..=` est `E-UNSUPPORTED-RANGE` (design §3.3 : `0..n` exclusif uniquement). | MUST |
+| G-6.13 | `..` **MUST NOT** apparaître ailleurs que dans la clause `for ... in expr .. expr` : `let r = 0..n;` est `E-UNSUPPORTED-RANGE`. Dans la clause d'un `for`, `..=` et une plage ouverte sont `E-TYP-RANGE` (registre, décision 6 de [`E6-COVERAGE-DECISIONS`](../../docs/decision/E6-COVERAGE-DECISIONS-2026-11-17.md)) ; ailleurs, `..=` est `E-UNSUPPORTED-RANGE` (design §3.3 : `0..n` exclusif uniquement). | MUST |
 | G-6.14 | `-x as i32` se lit `(-x) as i32` (unaire lie plus fort que `as`). `-x * y` se lit `(-x) * y`. | MUST |
 | G-6.15 | `&` unaire et `&` binaire se distinguent **par la position** : en position préfixe (début d'expression ou après un opérateur) c'est l'emprunt ; en position infixe, c'est le `ET` binaire. `a & &b` est valide (`a & (&b)` si `&b: bool`). | MUST |
 | G-6.16 | `*` unaire (déréférencement) et `*` binaire (multiplication) se distinguent de la même façon. | MUST |
@@ -397,7 +397,7 @@ for_iterable   = or_expr ".." or_expr        (* plage entière exclusive *)
 | G-6.20 | Un `if` sans `else` a le type `()` ; un `if` avec `else` a le type de ses branches, qui doivent être identiques (`E-TYP-MISMATCH` sinon). | MUST |
 | G-6.21 | Une branche de `match` est soit `expr ,` (virgule obligatoire), soit un bloc. Une branche bloc n'exige pas de virgule ; la virgule y est acceptée et ignorée. | MUST |
 | G-6.22 | `match` **MUST** être exhaustif (contrôlé au typage, `E-TYP-NONEXHAUSTIVE`, y compris sur `bool` et les enums ; les entiers exigent `_`). | MUST |
-| G-6.23 | Un pattern de `match` ne peut pas porter de garde (`if`) ni de `@` : `E-UNSUPPORTED-TOKEN`, `E-PARSE-EXPECTED`. | MUST |
+| G-6.23 | Un pattern de `match` ne peut pas porter de garde (`if`) ni de `@` : `E-UNSUPPORTED-TOKEN`, `E-PARSE-EXPECTED` (le caractère `@` lui-même est `E-LEX-CHAR`, LEX-2). | MUST |
 | G-6.24 | `for` itère soit sur une **plage entière exclusive** `a..b` (bornes de même type entier, `x` de ce type ; `a >= b` ⇒ zéro itération), soit sur une **collection possédée** `Vec<T>` : `for x in v` **déplace** `v` et rend des `T` possédés. Bornes et collection sont évaluées une seule fois. Aucune autre forme d'itération (pas d'itérateur, pas de `&vec`). | MUST |
 | G-6.25 | Un littéral de struct ne peut viser qu'un `type_path` nominal local ou importé ; il n'y a pas de syntaxe de struct littéral pour une variante d'enum (utiliser `E::V { ... }`, qui est un `path_expr` suivi de `{`). | MUST |
 | G-6.26 | `Point { x: 1.0 }` sans les autres champs est `E-TYP-FIELD` ; un champ inconnu est `E-TYP-FIELD`. Pas de `..base` (struct update syntax) : `E-UNSUPPORTED-RANGE`. | MUST |
@@ -409,7 +409,7 @@ for_iterable   = or_expr ".." or_expr        (* plage entière exclusive *)
 | G-6.31 | `t.0.1` est refusé (`E-PARSE-UNEXPECTED`) : il faut `(t.0).0`. Les indices de champ ne se chaînent pas sans parenthèses. | MUST |
 | G-6.32 | Un appel de fonction ordinaire ne peut pas être suivi d'un littéral de bloc ambigu : `f { x }` n'est pas une syntaxe de Core 1.0. Un `struct_expr` exige qu'un type soit identifiable ; dans `if x { }`, `x` n'est jamais traité comme un type de struct. Le parser **désactive** la lecture de `struct_expr` dans la condition d'un `if`/`while`/`match` (règle de lookahead 2, G-6.35). | MUST |
 | G-6.33 | Il n'y a **aucune** expression de fermeture (`\|x\| x + 1`) : `E-UNSUPPORTED-CLOSURE`. | MUST |
-| G-6.34 | Il n'y a **aucun** `async`/`await` : `E-UNSUPPORTED-ASYNC`. Aucun `move` : `E-UNSUPPORTED-TOKEN`. | MUST |
+| G-6.34 | Il n'y a **aucun** `async` : `E-UNSUPPORTED-ASYNC`. `await` n'est pas un mot-clé ([`lexical.md`](lexical.md) §5) : `x.await` est un champ ou une méthode inconnus. Aucun `move` : `E-UNSUPPORTED-MOVE` (code dédié du registre). | MUST |
 | G-6.35 | **Désambiguïsation `Type { ... }` vs bloc** : en position de condition (`if`, `while`, `match` scrutinee), une séquence `path {` est **toujours** interprétée comme la fin de la condition suivie d'un bloc, jamais comme un littéral de struct. Un littéral de struct en condition exige des parenthèses : `if (P { x: 1 }) == p { }`. | MUST |
 
 ```rv
@@ -457,7 +457,7 @@ literal_pat    = INT_LIT | CHAR_LIT | STRING_LIT | "true" | "false" | "-" INT_LI
 | G-6.36 | Un pattern littéral **flottant** est **accepté** : il correspond si la valeur du scrutinee est **égale** (`==`) au littéral. `NaN` ne correspond donc **jamais** (y compris à lui-même) ; `-0.0` et `0.0` correspondent l'un à l'autre. Aucune comparaison de bits n'est faite. | MUST |
 | G-6.37 | `-N` est admis en pattern pour un **entier** (`-1`) et pour un **flottant** (`-1.0`). Toute autre forme négative (`-x`, `-(1 + 2)`) est `E-PARSE-EXPECTED`. | MUST |
 | G-6.38 | Le pattern `IDENT` lie par valeur (move ou copy). Il n'existe **aucun** pattern `ref`/`&pattern`/`ref mut` : `ref` étant un identifiant valide, `ref x` est un motif de liaison suivi d'un token inattendu (`E-PARSE-EXPECTED`) ; `&x` et `ref mut` sont `E-UNSUPPORTED-TOKEN`. | MUST |
-| G-6.39 | Il n'existe **aucun** pattern ou (`p \| q`) ni de plage (`1..=5`) : `E-UNSUPPORTED-TOKEN`. | MUST |
+| G-6.39 | Il n'existe **aucun** pattern ou (`p \| q`) : `E-UNSUPPORTED-TOKEN` ; ni de pattern de plage (`1..=5`) : `E-UNSUPPORTED-RANGE-PAT` (code dédié, [`unsupported.md`](unsupported.md)). | MUST |
 | G-6.48 | Le raccourci de champ `E::V { champ }` lie `champ` à `champ`, conformément au design §3.4. Il est **autorisé en pattern seulement**. | MUST |
 | G-6.41 | Un pattern de variante d'enum **utilisateur** doit être qualifié (`Shape::Circle(r)`) ; les quatre constructeurs du prélude (`Some`, `None`, `Ok`, `Err`) sont acceptés avec ou sans qualification. Aucune variante n'est importable par `use` ([`modules.md`](modules.md) MOD-3.5). | MUST |
 | G-6.42 | Un bras `p => e,` dont `e` est un bloc n'exige pas la virgule ; `p => { ... }` suivi d'un autre bras est valide sans virgule. | MUST |
@@ -503,18 +503,17 @@ expr_path      = ( "crate" | "super" | "self" | IDENT ) { "::" ( IDENT | "self" 
 | `trait`, `impl Trait`, `where`, bornes | `E-UNSUPPORTED-TRAIT`, `E-UNSUPPORTED-IMPL-TRAIT`, `E-UNSUPPORTED-WHERE`, `E-UNSUPPORTED-BOUNDS` |
 | `dyn T` | `E-RES-UNKNOWN` (`dyn` = identifiant valide) |
 | closures `\|x\| e` | `E-UNSUPPORTED-CLOSURE` |
-| `async`, `await`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-AWAIT`, `E-UNSUPPORTED-MOVE` |
+| `async`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-MOVE` (`await` est un identifiant, [`lexical.md`](lexical.md) §5) |
 | `unsafe`, `extern`, pointeurs bruts | `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN` (`*const`/`*mut` → `E-UNSUPPORTED-UNSAFE`) |
 | `macro!`, `macro_rules!` | `E-UNSUPPORTED-MACRO` |
 | `static` | `E-UNSUPPORTED-STATIC` (`static` est un mot-clé réservé, Q-LEX-1) |
 | `type` alias | `E-UNSUPPORTED-TYPE-ALIAS` |
 | `union` | `E-PARSE-EXPECTED` (`union` n'est pas un mot-clé) |
 | `use a::*` / `use a as b` / `pub use` | `E-UNSUPPORTED-TOKEN` / `E-UNSUPPORTED-ALIAS` / `E-UNSUPPORTED-REEXPORT` |
-| patterns `ref`, `@`, gardes, `\|` | `E-PARSE-EXPECTED` (`ref` = identifiant), `E-UNSUPPORTED-TOKEN` (garde, `\|`) |
-| `..=`, ranges hors `for` | `E-UNSUPPORTED-RANGE`, `-RANGE` |
+| patterns `ref`, `@`, gardes, `\|` | `E-PARSE-EXPECTED` (`ref` = identifiant ; `@` est aussi refusé par le lexer, `E-LEX-CHAR`), `E-UNSUPPORTED-TOKEN` (garde, `\|`) |
+| `..=`, ranges hors `for` | `E-UNSUPPORTED-RANGE` ; dans un `for` : `E-TYP-RANGE` |
 | `break e` | `E-PARSE-EXPECTED` |
 | turbofish `f::<T>(..)` | `E-PARSE-UNEXPECTED` |
-| shorthand de champ en **expression** | `E-PARSE-EXPECTED` |
 | `..base` (struct update) | `E-UNSUPPORTED-RANGE` |
 
 | slicing `&v[1..2]` | `E-UNSUPPORTED-RANGE` |

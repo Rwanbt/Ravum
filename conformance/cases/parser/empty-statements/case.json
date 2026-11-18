@@ -1,0 +1,6 @@
+{
+  "id": "parser/empty-statements",
+  "mode": "run-pass",
+  "stdout_contains": "ok\n",
+  "notes": "G-6.10: `;;` and `;` alone are accepted, without effect."
+}

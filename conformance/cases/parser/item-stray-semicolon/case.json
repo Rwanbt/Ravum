@@ -1,0 +1,8 @@
+{
+  "id": "parser/item-stray-semicolon",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-PARSE-EXPECTED"
+  ],
+  "notes": "G-2.3: no `;` after an item."
+}

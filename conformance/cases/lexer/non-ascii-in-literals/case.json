@@ -1,0 +1,6 @@
+{
+  "id": "lexer/non-ascii-in-literals",
+  "mode": "run-pass",
+  "stdout_contains": "é😀\né\n",
+  "notes": "LEX-7.4, LEX-8.15: non-ASCII scalars are allowed in string and char literals and in comments."
+}

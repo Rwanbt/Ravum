@@ -1,0 +1,8 @@
+{
+  "id": "parser/unknown-effect",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNKNOWN"
+  ],
+  "notes": "G-3.3: an unknown effect group is E-EFF-UNKNOWN, not a parse error."
+}

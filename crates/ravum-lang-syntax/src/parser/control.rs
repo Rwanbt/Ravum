@@ -186,6 +186,20 @@ impl<'a> Parser<'a> {
             let before = self.pos;
             let arm_start = self.cur_span();
             let pat = self.parse_pattern();
+            // G-6.23: a match arm has no guard. The guard is reported once and
+            // skipped, so the arm body is still checked.
+            if self.at_kw(Kw::If) {
+                let span = self.cur_span();
+                self.bump();
+                self.diags.error(
+                    "E-UNSUPPORTED-TOKEN",
+                    span,
+                    "match guards (`pat if cond =>`) are not supported in Ravum Core 1.0",
+                );
+                if self.starts_expr() {
+                    let _ = self.parse_expr(false);
+                }
+            }
             if !self.eat(Punct::FatArrow) {
                 self.expected("`=>`");
                 self.recover_block_or_arm(true);
@@ -204,6 +218,12 @@ impl<'a> Parser<'a> {
                 || self.at_kw(Kw::While)
                 || self.at_kw(Kw::Loop)
                 || self.at_kw(Kw::For);
+            // G-6.43: an arm cannot be empty.
+            if self.at(Punct::Comma) {
+                self.expected("an expression after `=>`");
+                self.bump();
+                continue;
+            }
             let body = if starts_block_like {
                 self.parse_primary(true)
             } else {

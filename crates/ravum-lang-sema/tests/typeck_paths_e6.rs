@@ -965,13 +965,9 @@ fn a_generic_unit_variant_without_context_is_ambiguous() {
 fn ok_without_its_argument_is_an_arity_error() {
     assert_errors(
         "fn main() { let r: Result<i32, i32> = Ok(); drop(r); }",
-        &[
-            ("E-TYP-ARITY", "`Result::Ok` expects exactly 1 argument"),
-            (
-                "E-TYP-MISMATCH",
-                "let: expected `Result<i32, i32>`, found `Result<<error>, i32>`",
-            ),
-        ],
+        // One diagnostic for one cause: the recovered `Result<<error>, i32>`
+        // matches `Result<i32, i32>` (no cascade `E-TYP-MISMATCH`).
+        &[("E-TYP-ARITY", "`Result::Ok` expects exactly 1 argument")],
     );
 }
 

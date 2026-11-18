@@ -1,0 +1,4 @@
+[package]
+name = "lexer-exponent-separator-between-digits"
+version = "0.1.0"
+edition = "core-1.0"

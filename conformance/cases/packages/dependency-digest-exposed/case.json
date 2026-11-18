@@ -1,0 +1,14 @@
+{
+  "id": "packages/dependency-digest-exposed",
+  "mode": "cli",
+  "project": "app",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"dependencies_digest\":\"sha256:",
+  "expect_json_schema_version": 1,
+  "notes": "COMPAT-4.3: `check --json` exposes `dependencies_digest` (and `lockfile_stale`) so a change of a dependency's `path` is visible; tests/compat_contract.rs checks that the digest changes and the lockfile becomes stale."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parser/unsafe-fn-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-UNSAFE"
+  ],
+  "notes": "G-3.10: `unsafe fn` is E-UNSUPPORTED-UNSAFE."
+}

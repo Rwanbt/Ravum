@@ -15,7 +15,8 @@ Two floors, because the two statistics do not carry the same noise:
 * **p50** — `max(100 ms, baseline * 3)`: the stable signal. A sustained
   regression raises it.
 * **p95** — `max(500 ms, baseline * 3)`: with 10 samples the nearest-rank p95
-  is the maximum, so it is fail-on-one-outlier. Observed on a shared runner:
+  is the maximum, so it is fail-on-one-outlier; CI therefore takes 20 samples
+  (D-18-4), where it is the 19th value. Observed on a shared runner:
   p50 = 2.3 ms, p95 = 238 ms for the same example. This ceiling only catches a
   catastrophic stall.
 

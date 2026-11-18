@@ -1,0 +1,13 @@
+{
+  "id": "cli/diag-json-keeps-exit-code",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"status\":\"failure\",\"exit_code\":1",
+  "expect_json_schema_version": 1,
+  "notes": "DIAG-8.4: `--json` never alters the exit code; the object repeats it."
+}

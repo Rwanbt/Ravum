@@ -1,0 +1,6 @@
+{
+  "id": "parser/prefix-and-infix-amp-star",
+  "mode": "run-pass",
+  "stdout_contains": "true 6\n",
+  "notes": "G-6.15, G-6.16: prefix `&`/`*` borrow and dereference; infix `&`/`*` are bitwise and and multiplication."
+}

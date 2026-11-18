@@ -43,7 +43,12 @@ pub fn dispatch(command: Command) -> i32 {
             timings,
             rt_entry.as_deref(),
         ),
-        Command::Run { path, args, target } => run::run(&path, &args, target),
+        Command::Run {
+            path,
+            args,
+            target,
+            json,
+        } => run::run(&path, &args, target, json),
         Command::Watch {
             path,
             run,

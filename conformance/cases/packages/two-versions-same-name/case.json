@@ -1,0 +1,9 @@
+{
+  "id": "packages/two-versions-same-name",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-DUPLICATE"
+  ],
+  "notes": "COMPAT-4.2: `version` identifies a package, it does not resolve one. Two different packages named `util` (0.1.0 directly, 0.2.0 through `mid`) are a conflict (E-MOD-DUPLICATE, diagnostics.md §3); Core 1.0 has no multi-version resolution."
+}
