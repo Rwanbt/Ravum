@@ -84,6 +84,7 @@ fn main() { }\r
 | LEX-4.3 | `_` seul n'est **pas** un identifiant : c'est le pattern joker (§ [`grammar.md`](grammar.md)). `_x` est un identifiant ordinaire. | MUST |
 | LEX-4.4 | Deux identifiants qui ne diffèrent que par la casse sont **distincts**. Aucune conversion de casse n'est effectuée. | MUST |
 | LEX-4.5 | Un identifiant **MUST NOT** être un mot-clé réservé (§5). Les mots-clés contextuels (§5.3) sont des identifiants ordinaires hors de leur position contextuelle. | MUST |
+| LEX-4.6 | Un identifiant **MUST NOT** contenir la séquence `_rv_` : elle est réservée aux noms que le backend engendre (`__rv_keep`, `<nom>_rv_local_<n>` pour une locale homonyme d'une constante). Un tel identifiant produit `E-LEX-RESERVED-IDENT` ; le span couvre l'identifiant complet. | MUST |
 
 ```rv
 // POSITIF

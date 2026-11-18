@@ -43,6 +43,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-LEX-NUMBER` | lex | littéral numérique mal formé (séparateur, base, exposant, flottant infini) |
 | `E-LEX-INT-OVERFLOW` | lex | littéral entier hors de `u128` |
 | `E-LEX-INT-SUFFIX` | lex | suffixe de type entier inconnu |
+| `E-LEX-RESERVED-IDENT` | lex | identifiant contenant `_rv_`, réservé aux noms engendrés (LEX-4.6) |
 | `E-PARSE-EXPECTED` | parse | token inattendu là où une forme précise était attendue (`;`, identifiant, type, `:`, champ, item) |
 | `E-PARSE-UNEXPECTED` | parse | token inattendu dans une position donnée (`*` dans `use`, `..` hors `for`, comparaison chaînée, `::<`) |
 | `E-PARSE-UNCLOSED` | parse | délimiteur `(`, `[`, `{` non fermé |

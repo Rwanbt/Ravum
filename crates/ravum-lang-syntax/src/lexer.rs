@@ -149,6 +149,18 @@ impl<'a> Lexer<'a> {
             );
             return;
         }
+        // LEX-4.6: `_rv_` is reserved for the names the backend generates
+        // (`__rv_keep`, `<name>_rv_local_<id>`). The token is still pushed, so
+        // the parser goes on without a cascade.
+        if text.contains("_rv_") {
+            self.error(
+                "E-LEX-RESERVED-IDENT",
+                start,
+                format!(
+                    "identifier `{text}` contains `_rv_`, which is reserved for generated names"
+                ),
+            );
+        }
         let kind = match Kw::parse(text) {
             Some(kw) => TokenKind::Kw(kw),
             None => TokenKind::Ident(text.to_string()),
@@ -1082,6 +1094,20 @@ mod tests {
         let (_, diags) = lex(0, "let é = 1", false);
         assert_eq!(diags.error_count(), 1);
         assert_eq!(diags.as_slice()[0].code, "E-UNSUPPORTED-IDENT");
+    }
+
+    #[test]
+    fn identifiers_containing_rv_are_reserved() {
+        for name in ["N_rv_local", "__rv_keep", "a_rv_"] {
+            let (tokens, diags) = lex(0, name, false);
+            let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
+            assert_eq!(codes, ["E-LEX-RESERVED-IDENT"], "{name}");
+            assert_eq!(tokens[0].kind, TokenKind::Ident(name.into()), "{name}");
+        }
+        for name in ["rv_x", "x_rv", "_rvx", "a_r_v_"] {
+            let (_, diags) = lex(0, name, false);
+            assert!(diags.is_empty(), "{name}");
+        }
     }
 
     #[test]

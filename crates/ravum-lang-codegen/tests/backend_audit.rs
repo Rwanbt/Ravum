@@ -5217,7 +5217,8 @@ fn audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs() {
 /// rustc read it as that constant: `match b { T => 1, false => 2 }` returned 2
 /// for `false`, `let T = 5;` and `fn g(T: i32)` were refused (E0005). Such a
 /// local is now emitted under another name; `crate::T` still names the
-/// constant.
+/// constant. A user name cannot collide with the generated one: `_rv_` is
+/// reserved (LEX-4.6).
 #[test]
 fn audit_locals_named_like_a_module_constant_bind_as_written() {
     if skip("audit_locals_named_like_a_module_constant_bind_as_written") {
@@ -5236,9 +5237,7 @@ fn main() {
     io::println(&pick(false).to_string());
     let mut N = 5;
     N = N + 1;
-    let N_rv_local = 9;
     io::println(&N.to_string());
-    io::println(&N_rv_local.to_string());
     io::println(&g(N).to_string());
     io::println(&crate::N.to_string());
     io::println(&unit(4).to_string());
@@ -5250,7 +5249,7 @@ fn main() {
     let (stdout, stderr, status) = run(&built.binary, &[]);
     assert_eq!(status, 0, "the program must run to completion: {stderr}");
     assert!(code.contains("N_rv_local_"), "{code}");
-    assert_eq!(stdout, "1\n6\n9\n7\n3\n40\n8\n");
+    assert_eq!(stdout, "1\n6\n7\n3\n40\n8\n");
 }
 
 /// A generic argument checked before its type parameter is bound is expected
