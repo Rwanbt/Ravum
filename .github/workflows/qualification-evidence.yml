@@ -181,7 +181,7 @@ jobs:
       # The SBOM generator is plain Node (tools/sbom/sbom.mjs). Pin the runtime
       # rather than relying on whatever the image happens to ship.
       - name: Setup Node.js for the SBOM generator
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 

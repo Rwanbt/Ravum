@@ -257,7 +257,7 @@ jobs:
       # ---------------------------------------------------------------------
       - name: Setup Node.js for the browser E2E (impact-selected)
         if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
