@@ -62,7 +62,7 @@ jobs:
           tool: cargo-mutants@27.1.0
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -163,7 +163,7 @@ jobs:
 
       - name: Upload mutation reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutants-targeted
           path: target/mutants
@@ -255,7 +255,7 @@ jobs:
 
       - name: Upload emitter mutation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutants-emit-shard-${{ matrix.shard }}
           path: target/mutants/emit-full

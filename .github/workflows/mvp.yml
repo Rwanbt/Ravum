@@ -64,7 +64,7 @@ jobs:
         run: cargo deny check
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -119,7 +119,7 @@ jobs:
       # Edge, so -RequireBrowser turns "no browser found" into a failure instead of a
       # silent green; exit code 2 (explicit SKIP) can only happen outside this step.
       - name: Setup Node.js for the browser E2E
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload browser E2E evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-e2e-evidence
           path: target/ravum/browser-e2e
@@ -183,7 +183,7 @@ jobs:
           cargo --version
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -293,7 +293,7 @@ jobs:
 
       - name: Upload auto-GC evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: auto-gc-evidence
           path: |

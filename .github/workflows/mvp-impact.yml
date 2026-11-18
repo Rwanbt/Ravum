@@ -92,7 +92,7 @@ jobs:
           }
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -257,7 +257,7 @@ jobs:
       # ---------------------------------------------------------------------
       - name: Setup Node.js for the browser E2E (impact-selected)
         if: always() && steps.mapping_selftest.outcome == 'success' && steps.impact.outputs.browser == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -279,7 +279,7 @@ jobs:
 
       - name: Upload browser E2E evidence (impact-selected)
         if: always() && steps.impact.outputs.browser == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-e2e-evidence
           path: target/ravum/browser-e2e
