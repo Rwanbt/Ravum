@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust (stable pinned to 1.95.0)
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Run the long differential campaign
         env:

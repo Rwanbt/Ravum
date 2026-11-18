@@ -21,7 +21,7 @@ jobs:
         form: [10, 11, 12, 13]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - name: Replay the inverse in a disposable checkout
         env:
           FORM: ${{ matrix.form }}
