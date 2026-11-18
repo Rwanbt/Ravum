@@ -1997,3 +1997,30 @@ contrainte tenable telle quelle. ABI-4.7 n'est pas tracé. Deux issues :
 | ABI-4.1 | un `CheckedProgram` invalide est un bug interne, pas une entrée |
 | ABI-4.7 | contradiction, §33.2 |
 | ABI-4.8, 4.9 | non-engagements (temps de compilation, format de `--emit-rust`/`--emit-ir`) |
+
+## 35. Lot `concurrency.md` : 8 MUST sur 20 tracés, état d'avant le RFC E11 (2026-11-18)
+
+### 35.1 Mesure
+
+`python3 tools/must_audit.py` : `concurrency.md` passe de 20 non atteints à
+**12** ; `features_coverage.py --strict` : 220/220 (1 exemption). FeatureId
+F-META-028. Cinq cas `unsupported/*` (`Mutex`, `Arc`, `effects(async)`,
+`async { }`, `T: Send`), chacun mesuré avant d'être écrit, et
+`crates/ravum-lang-cli/tests/exec_determinism.rs` (CONC-3.4 : quatre exécutions
+d'un programme fermé donnent les mêmes octets).
+
+### 35.2 Portée
+
+D-18-2 met la concurrence dans la 1.0 (étape E11) : le RFC de concurrence
+réécrira `concurrency.md`. F-META-028 décrit donc l'**état actuel** (« aucune
+primitive ») et devra être remplacé, sous un nouvel identifiant (FEAT-1.4), le
+jour où le RFC est accepté. Les cas `unsupported/*` changeront alors de verdict
+par décision, pas par accident.
+
+### 35.3 Non tracés
+
+CONC-1.4, 2.1, 2.3, 2.4, 2.5, 2.7, 3.1, 3.3, 4.1, 4.2, 4.4 : énoncés de
+non-garantie ou de politique d'évolution, rien d'observable. CONC-3.2 (« un
+rapport `rt` ne contient jamais `CERTIFIED` ») est vérifiable mais pas par un
+cas : il faudrait une assertion d'absence ; à ajouter au test de contrat du
+profil `rt` lors du lot `effects.md`.
