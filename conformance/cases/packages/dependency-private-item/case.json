@@ -1,0 +1,9 @@
+{
+  "id": "packages/dependency-private-item",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-PRIVATE"
+  ],
+  "project": "app",
+  "notes": "MOD-6.2: only `pub` items of a dependency are reachable: E-RES-PRIVATE."
+}

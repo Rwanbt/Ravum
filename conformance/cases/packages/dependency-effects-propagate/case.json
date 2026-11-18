@@ -1,0 +1,9 @@
+{
+  "id": "packages/dependency-effects-propagate",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "project": "app",
+  "notes": "MOD-6.4: a dependency function keeps its own effects; calling `util::say` (io) from a function declared `effects()` is E-EFF-UNDECLARED."
+}

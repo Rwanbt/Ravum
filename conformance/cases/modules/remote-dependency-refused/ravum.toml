@@ -1,0 +1,7 @@
+[package]
+name = "remote"
+version = "0.1.0"
+edition = "core-1.0"
+
+[dependencies]
+util = { git = "https://example.com/u" }

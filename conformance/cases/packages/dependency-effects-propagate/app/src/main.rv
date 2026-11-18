@@ -1,0 +1,6 @@
+fn f() effects() {
+    util::say();
+}
+fn main() {
+    f();
+}

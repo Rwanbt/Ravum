@@ -1,0 +1,8 @@
+{
+  "id": "modules/self-dependency",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-CYCLE"
+  ],
+  "notes": "MOD-5.9: a package cannot depend on itself: E-MOD-CYCLE."
+}

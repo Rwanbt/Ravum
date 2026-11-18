@@ -1,0 +1,5 @@
+pub fn v() -> i32 { 1 }
+fn hidden() -> i32 { 2 }
+pub fn say() effects(io) {
+    io::println("x");
+}
