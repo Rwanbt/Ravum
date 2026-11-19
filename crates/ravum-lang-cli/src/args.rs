@@ -28,6 +28,8 @@ pub enum Command {
         rt_entry: Option<String>,
         /// `--reload`: also check the reloadable-program contract.
         reload: bool,
+        /// `--dsp-block`: check the DSP block contract and the `rt` profile.
+        dsp_block: bool,
     },
     Build {
         path: PathBuf,
@@ -39,6 +41,8 @@ pub enum Command {
         /// `--rt-entry <chemin::de::fonction>`: check the build with the `rt`
         /// rules applied to the functions reachable from this entry (T6).
         rt_entry: Option<String>,
+        /// `--emit dsp-block`: build a DSP block `cdylib` (RFC-E11-DSP-BLOCK).
+        dsp_block: bool,
     },
     Run {
         path: PathBuf,
@@ -178,12 +182,14 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut timings = false;
     let mut rt_entry: Option<String> = None;
     let mut reload = false;
+    let mut dsp_block = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
             "--reload" => reload = true,
+            "--dsp-block" => dsp_block = true,
             "--locked" => locked = true,
             "--timings" => timings = true,
             "--profile" => {
@@ -218,6 +224,7 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         timings,
         rt_entry,
         reload,
+        dsp_block,
     })
 }
 
@@ -243,11 +250,21 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
     let mut target = BuildTarget::Native;
     let mut timings = false;
     let mut rt_entry: Option<String> = None;
+    let mut dsp_block = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--release" => release = true,
+            "--emit" => match option_value(rest, &mut i, "--emit")?.as_str() {
+                "dsp-block" => dsp_block = true,
+                other => {
+                    return Err(format!(
+                        "unknown `--emit` value `{other}`; expected `dsp-block`"
+                    ))
+                }
+            },
+            "--emit=dsp-block" => dsp_block = true,
             "--emit-ir" => emit_ir = true,
             "--timings" => timings = true,
             "--emit-rust" => {
@@ -278,6 +295,13 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if dsp_block && (rt_entry.is_some() || target.is_wasm()) {
+        return Err(
+            "`--emit dsp-block` fixes the `rt` entry (`process_sample`) and the host target; \
+             it takes neither `--rt-entry` nor `--target`"
+                .to_string(),
+        );
+    }
     Ok(Command::Build {
         path: path.unwrap_or_else(default_path),
         release,
@@ -286,6 +310,7 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         target,
         timings,
         rt_entry,
+        dsp_block,
     })
 }
 
@@ -820,6 +845,29 @@ mod tests {
         assert!(parse(&args(&["watch", "--reload", "--max-rebuilds", "1"])).is_err());
         match parse(&args(&["check", "--reload", "pkg"])).unwrap() {
             Invocation::Command(Command::Check { reload, .. }) => assert!(reload),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_emit_dsp_block_parses_and_fixes_the_entry() {
+        match parse(&args(&["build", "--emit", "dsp-block", "pkg"])).unwrap() {
+            Invocation::Command(Command::Build { dsp_block, .. }) => assert!(dsp_block),
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(parse(&args(&["build", "--emit=dsp-block"])).is_ok());
+        assert!(parse(&args(&["build", "--emit", "wat"])).is_err());
+        assert!(parse(&args(&["build", "--emit", "dsp-block", "--rt-entry", "f"])).is_err());
+        assert!(parse(&args(&[
+            "build",
+            "--emit",
+            "dsp-block",
+            "--target",
+            "wasm32-wasip1"
+        ]))
+        .is_err());
+        match parse(&args(&["check", "--dsp-block"])).unwrap() {
+            Invocation::Command(Command::Check { dsp_block, .. }) => assert!(dsp_block),
             other => panic!("unexpected {other:?}"),
         }
     }

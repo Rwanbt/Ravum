@@ -8,6 +8,12 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `ravum-lang build --emit dsp-block`: a `.rv` DSP block built as a `cdylib`
+  for the block host (DSP ABI 2, unchanged), checked under the `rt` profile
+  from `process_sample`, exporting its state schema digest
+  (`ravum_state_schema`) that the host checks with
+  `ExpectedAbi::dsp_with_state_schema()` (RFC-E11-DSP-BLOCK, F-META-034).
+  `check --dsp-block`; codes `E-DSP-ENTRY`, `E-DSP-STATE-TYPE`.
 - `ravum-lang watch --reload`: hot reload with state preservation
   (RFC-E11-HOT-RELOAD, D-19-5, `spec/language/reload.md`, F-META-033). A
   program declares `State`, `init`, `step` and optionally `migrate`; each stdin

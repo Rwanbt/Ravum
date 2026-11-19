@@ -1,0 +1,10 @@
+{
+  "id": "effects/dsp-block-allocation-refused",
+  "mode": "compile-fail",
+  "args": [
+    "--dsp-block"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ]
+}

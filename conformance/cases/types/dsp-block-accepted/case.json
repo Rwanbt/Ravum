@@ -1,0 +1,7 @@
+{
+  "id": "types/dsp-block-accepted",
+  "mode": "compile-pass",
+  "args": [
+    "--dsp-block"
+  ]
+}

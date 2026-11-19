@@ -1,0 +1,4 @@
+[package]
+name = "dsp_block_allocation_refused"
+version = "0.1.0"
+edition = "core-1.0"

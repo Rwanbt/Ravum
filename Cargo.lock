@@ -277,10 +277,13 @@ name = "ravum-lang-cli"
 version = "0.1.0"
 dependencies = [
  "ravum-core-machine",
+ "ravum-dsp-harness",
  "ravum-lang-codegen",
  "ravum-lang-lsp",
  "ravum-lang-sema",
  "ravum-lang-syntax",
+ "ravum-patch-host",
+ "ravum-protocol",
  "serde",
  "serde_json",
 ]
