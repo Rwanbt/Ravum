@@ -100,6 +100,25 @@ Linux x86_64 (conteneur cloud), `rustc 1.95.0 (59807616e 2026-04-14)`, branche
 `TESTED` (oracle différentiel sur corpus), **pas** `PROVED`. Limites : mono-fichier,
 dépendances par nom, barrière F1, pas encore de réutilisation effective.
 
+## Mesure de coût par phase (2026-11-19, après fusion de `dev` `bb8d5a2`)
+
+`cargo test -p ravum-lang-incr --release --test phase_timings -- --ignored --nocapture`
+(fichier synthétique, fonctions indépendantes, conteneur Linux partagé, une
+seule exécution — ordre de grandeur, pas une référence) :
+
+| Lignes | parse | resolve | typeck | effects | own | total check |
+|---|---|---|---|---|---|---|
+| 603 | 1,5 ms | 0,1 ms | 0,7 ms | 0,1 ms | 0,8 ms | ~3 ms |
+| 6 003 | 13,9 ms | 0,5 ms | 6,4 ms | 1,0 ms | 5,8 ms | ~28 ms |
+| 30 003 | 50,2 ms | 3,7 ms | 40,0 ms | 9,6 ms | 36,9 ms | ~140 ms |
+
+Le coût est **linéaire** (~4–5 ms / 1 000 lignes, parse compris).
+`LANG-TIMINGS.md` §3 mesure déjà que `rustc` représente **97 à 99 %** du
+temps de `build`. **Conclusion** : l'incrémentalité du checker (T13) ramène
+quelques dizaines de ms ; le gain qui change l'expérience (secondes → ms) est
+dans T15 (backend direct) et T16 (hot swap). T13 reste requis par V1, mais
+l'ordre de travail proposé devient T14 → T15 → T16, T13 étape 2 en parallèle.
+
 ## Étape suivante proposée (étape 2)
 
 1. `ravum-lang-sema` : continuer effets/ownership par item hors des items en
