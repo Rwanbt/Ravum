@@ -1,0 +1,6 @@
+{
+  "id": "run/net-connect-refused-is-err",
+  "mode": "run-pass",
+  "stdout_contains": "connect: err\n",
+  "notes": "NET-2.3: a system error is an `Err`, never a panic. The port comes from a listener that is dropped before the connection attempt, so nothing listens on it."
+}

@@ -39,6 +39,18 @@ pub fn error_type() -> Type {
     }
 }
 
+/// `NodeId` réservés aux types opaques de `std::net` (RFC-E11-NET-HTTP).
+pub const PRELUDE_TCP_LISTENER_DEF: NodeId = NodeId::MAX - 1;
+pub const PRELUDE_TCP_STREAM_DEF: NodeId = NodeId::MAX - 2;
+
+fn opaque_type(def: NodeId, name: &str) -> Type {
+    Type::Nominal {
+        def,
+        name: name.to_string(),
+        args: Vec::new(),
+    }
+}
+
 /// Vrai si `ty` est le type prélude `Error`.
 pub fn is_error_type(ty: &Type) -> bool {
     matches!(ty, Type::Nominal { def, .. } if *def == PRELUDE_ERROR_DEF)
@@ -46,8 +58,29 @@ pub fn is_error_type(ty: &Type) -> bool {
 
 /// Noms de types réservés par le prélude (collision = `E-RES-CONFLICT`).
 pub const PRELUDE_TYPES: &[&str] = &[
-    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize", "usize", "f32",
-    "f64", "bool", "char", "String", "Vec", "Option", "Result", "Error",
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "i128",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "u128",
+    "isize",
+    "usize",
+    "f32",
+    "f64",
+    "bool",
+    "char",
+    "String",
+    "Vec",
+    "Option",
+    "Result",
+    "Error",
+    "TcpListener",
+    "TcpStream",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -63,13 +96,15 @@ pub const PRELUDE_VALUES: &[&str] = &[
 ];
 
 /// Modules accessibles sans `use` (chemins canoniques).
-pub const PRELUDE_MODULES: &[&str] = &["io", "fs", "string", "math", "env", "process", "std"];
+pub const PRELUDE_MODULES: &[&str] =
+    &["io", "fs", "net", "string", "math", "env", "process", "std"];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
 pub fn builtin_root_module(name: &str) -> Option<&'static str> {
     Some(match name {
         "io" => "std::io",
         "fs" => "std::fs",
+        "net" => "std::net",
         "string" => "std::string",
         "math" => "std::math",
         "env" => "std::env",
@@ -84,6 +119,7 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std",
     "std::io",
     "std::fs",
+    "std::net",
     "std::string",
     "std::math",
     "std::env",
@@ -118,6 +154,8 @@ const IO: &[Effect] = &[Effect::Io];
 const IO_ALLOC: &[Effect] = &[Effect::Io, Effect::Alloc];
 const FS: &[Effect] = &[Effect::Fs];
 const FS_ALLOC: &[Effect] = &[Effect::Fs, Effect::Alloc];
+const NET: &[Effect] = &[Effect::Net];
+const NET_ALLOC: &[Effect] = &[Effect::Net, Effect::Alloc];
 const ALLOC: &[Effect] = &[Effect::Alloc];
 const PANIC: &[Effect] = &[Effect::Panic];
 const PURE: &[Effect] = &[];
@@ -186,6 +224,56 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["&str"],
         ret: "bool",
         effects: FS,
+    },
+    // --- std::net (RFC-E11-NET-HTTP §3) ---
+    BuiltinFnSig {
+        path: "std::net::listen",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<TcpListener, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::local_port",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "u16",
+        effects: NET,
+    },
+    BuiltinFnSig {
+        path: "std::net::accept",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "Result<TcpStream, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::connect",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<TcpStream, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_line",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Result<Option<String>, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_exact",
+        generics: &[],
+        params: &["&mut TcpStream", "usize"],
+        ret: "Result<String, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::write_str",
+        generics: &[],
+        params: &["&mut TcpStream", "&str"],
+        ret: "Result<(), Error>",
+        effects: NET_ALLOC,
     },
     BuiltinFnSig {
         path: "std::process::exit",
@@ -403,6 +491,8 @@ pub fn prelude_type(name: &str) -> Option<Type> {
         "char" => Type::Char,
         "String" => Type::String,
         "Error" => return Some(error_type()),
+        "TcpListener" => return Some(opaque_type(PRELUDE_TCP_LISTENER_DEF, "TcpListener")),
+        "TcpStream" => return Some(opaque_type(PRELUDE_TCP_STREAM_DEF, "TcpStream")),
         _ => return None,
     })
 }

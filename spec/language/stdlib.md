@@ -16,7 +16,7 @@
 | Catégorie | Noms |
 |---|---|
 | Types primitifs | `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool char ()`, `!` (Never) |
-| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error` |
+| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17) |
 | Constructeurs | `Some`, `None`, `Ok`, `Err` (qualifiés ou non, [`types.md`](types.md) TYP-10.2) |
 | Intrinsèques | `assert`, `assert_eq`, `panic`, `drop` |
 
@@ -26,6 +26,7 @@
 |---|---|---|
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
+| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) |
 | `std::env` | `use std::env;` | `args`, `var` |
 | `std::process` | `use std::process;` | `exit` |
 | `std::math` | `use std::math;` | `abs`, `sqrt`, `floor`, `ceil`, `round`, `pow`, `min`, `max` (f64) |
@@ -605,7 +606,7 @@ fn main() { let s = fs::read_to_string("x")?; }
 | Processus | `Command`, `spawn`, `current_dir`, `env::set_var` | `E-RES-UNKNOWN` |
 | Temps | `Instant`, `Duration`, `SystemTime`, `sleep` | `E-RES-UNKNOWN` |
 | Threads | `thread::spawn`, `Mutex`, `Arc`, atomiques | `E-RES-UNKNOWN` / `E-UNSUPPORTED-EFFECT` |
-| Réseau | `TcpStream`, `UdpSocket` | `E-RES-UNKNOWN` / `E-UNSUPPORTED-EFFECT` |
+| Réseau | `UdpSocket`, TLS, octets bruts, timeouts, DNS asynchrone (TCP texte : §17) | `E-RES-UNKNOWN` |
 | Math étendue | `asin`, `acos`, `atan`, `atan2`, `log2`, `hypot`, `PI` | `E-RES-UNKNOWN` |
 | Conversions | `From`/`Into`, `to_string` universel, `parse` générique | `E-RES-UNKNOWN` |
 | Panic | `catch_unwind`, `Result` de panic, `assert!` avec message | `E-RES-UNKNOWN` |
@@ -638,3 +639,54 @@ fn main() { let s = fs::read_to_string("x")?; }
 - **Q-STD-8** — `assert(bool)` sans message (STD-8.6) : la liste du Lead ne prévoit pas de second argument. Un message est souhaitable pour les tests ; à ajouter ou non.
 - **Q-STD-9** — `String::new()` et `String::from()` sont des ajouts minimaux nécessaires (construction) absents de la liste exacte du Lead ; `string::from` les couvre fonctionnellement. À ratifier.
 - **Q-STD-10** — Les opérations texte possédées coûtent une allocation par appel (`trim`, `lines`, `replace`). Aucun chiffre n'est publié ; une mesure réelle est nécessaire avant toute affirmation de performance.
+
+## 17. `std::net` (TCP texte bloquant)
+
+Source : [`RFC-E11-NET-HTTP`](../../docs/rfc/RFC-E11-NET-HTTP.md) §3
+(`PROPOSED`, décision D-18-2). `TcpListener` et `TcpStream` sont des types
+**opaques** du prélude : ni champ, ni méthode, ni constructeur littéral ; ils
+ne sont pas `Copy`, et leur destruction ferme la socket.
+
+```rv
+pub fn listen(addr: &str) -> Result<TcpListener, Error> effects(net, alloc)
+pub fn local_port(listener: &TcpListener) -> u16 effects(net)
+pub fn accept(listener: &TcpListener) -> Result<TcpStream, Error> effects(net, alloc)
+pub fn connect(addr: &str) -> Result<TcpStream, Error> effects(net, alloc)
+pub fn read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> effects(net, alloc)
+pub fn read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> effects(net, alloc)
+pub fn write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> effects(net, alloc)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-17.1 | Toute fonction de `std::net` porte l'effet `net` ; `net` est interdit au point d'entrée des profils `pure` et `rt` (`E-EFF-PROFILE`, [`effects.md`](effects.md) EFF-4). | MUST |
+| STD-17.2 | `listen("127.0.0.1:0")` choisit un port éphémère ; `local_port` le rend (tests hermétiques). | MUST |
+| STD-17.3 | Toute erreur système (adresse invalide, port occupé, connexion refusée ou réinitialisée) rend `Err(Error)`, jamais une panique. | MUST |
+| STD-17.4 | Les octets reçus sont du **texte UTF-8 strict** : un octet invalide rend `Err`, jamais une substitution. | MUST |
+| STD-17.5 | `read_line` rend `Ok(None)` à la fin du flux, sinon la ligne **sans** son `\n` final ni un `\r` qui le précède. | MUST |
+| STD-17.6 | `read_exact(s, n)` lit exactement `n` octets ; une fin de flux avant `n` octets rend `Err`. | MUST |
+| STD-17.7 | `write_str` écrit tous les octets UTF-8 puis vide le tampon, ou rend `Err`. | MUST |
+| STD-17.8 | Tous les appels sont **bloquants** ; il n'y a ni timeout, ni TLS, ni UDP, ni octets bruts en 1.0. | MUST |
+
+```rv
+// POSITIF — échange sur la boucle locale, un seul processus
+use std::io;
+use std::net;
+
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(net::local_port(&listener).to_string().as_str());
+    let mut client: TcpStream = net::connect(addr.as_str())?;
+    let mut server: TcpStream = net::accept(&listener)?;
+    net::write_str(&mut client, "ping\n")?;
+    let got: Option<String> = net::read_line(&mut server)?;
+    io::println(got.unwrap_or(String::from("")).as_str());
+    return Ok(());
+}
+```
+
+```rv
+// NÉGATIF — E-EFF-PROFILE (net sous `pure`)
+fn main() -> () effects(net, alloc) { let r = net::listen("127.0.0.1:0"); drop(r); }
+```

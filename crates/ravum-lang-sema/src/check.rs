@@ -415,10 +415,30 @@ fn main() -> Result<(), Error> { return f(); }
     fn unsupported_effect_is_reported() {
         let (result, _) = run(
             "src/main.rv",
-            r#"fn main() -> () effects(net) { }"#,
+            r#"fn main() -> () effects(async) { }"#,
             Profile::Core,
         );
         error(&result, "E-UNSUPPORTED-EFFECT");
+    }
+
+    /// RFC-E11-NET-HTTP NET-1.1: `net` is producible under `core` and is
+    /// refused at the entry point of `pure`.
+    #[test]
+    fn net_effect_is_accepted_under_core_and_refused_under_pure() {
+        let (result, _) = run(
+            "src/main.rv",
+            r#"fn main() -> () effects(net) { }"#,
+            Profile::Core,
+        );
+        assert!(result.checked.is_some(), "{:?}", result.diags);
+        let src = r#"fn main() -> () effects(io, net, alloc) {
+    let r: Result<TcpListener, Error> = net::listen("127.0.0.1:0");
+    io::println(if r.is_ok() { "ok" } else { "err" });
+}"#;
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        assert!(result.checked.is_some(), "{:?}", result.diags);
+        let (result, _) = run("src/main.rv", src, Profile::Pure);
+        assert!(result.checked.is_none(), "pure must refuse net");
     }
 
     #[test]

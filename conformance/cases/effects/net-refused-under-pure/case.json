@@ -1,0 +1,12 @@
+{
+  "id": "effects/net-refused-under-pure",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "NET-1.2: `net` is producible under `core` but refused at the entry point of `pure` (and `rt`)."
+}

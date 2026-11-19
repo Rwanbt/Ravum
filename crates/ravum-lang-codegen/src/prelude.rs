@@ -197,6 +197,92 @@ pub fn rv_fs_exists(path: &str) -> bool {
     std::path::Path::new(path).exists()
 }
 
+pub struct TcpListener {
+    inner: std::net::TcpListener,
+}
+
+pub struct TcpStream {
+    reader: std::io::BufReader<std::net::TcpStream>,
+}
+
+fn rv_net_error(what: &str, error: std::io::Error) -> Error {
+    Error::new(&format!("{}: {}", what, error))
+}
+
+pub fn rv_net_listen(addr: &str) -> Result<TcpListener, Error> {
+    match std::net::TcpListener::bind(addr) {
+        Ok(inner) => Ok(TcpListener { inner }),
+        Err(error) => Err(rv_net_error(&format!("cannot listen on `{}`", addr), error)),
+    }
+}
+
+pub fn rv_net_local_port(listener: &TcpListener) -> u16 {
+    match listener.inner.local_addr() {
+        Ok(addr) => addr.port(),
+        Err(_) => 0,
+    }
+}
+
+pub fn rv_net_accept(listener: &TcpListener) -> Result<TcpStream, Error> {
+    match listener.inner.accept() {
+        Ok((stream, _)) => Ok(TcpStream {
+            reader: std::io::BufReader::new(stream),
+        }),
+        Err(error) => Err(rv_net_error("cannot accept a connection", error)),
+    }
+}
+
+pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
+    match std::net::TcpStream::connect(addr) {
+        Ok(stream) => Ok(TcpStream {
+            reader: std::io::BufReader::new(stream),
+        }),
+        Err(error) => Err(rv_net_error(&format!("cannot connect to `{}`", addr), error)),
+    }
+}
+
+pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> {
+    use std::io::BufRead;
+    let mut bytes = Vec::new();
+    match stream.reader.read_until(b'\n', &mut bytes) {
+        Ok(0) => Ok(None),
+        Ok(_) => {
+            if bytes.last() == Some(&b'\n') {
+                bytes.pop();
+                if bytes.last() == Some(&b'\r') {
+                    bytes.pop();
+                }
+            }
+            match String::from_utf8(bytes) {
+                Ok(line) => Ok(Some(line)),
+                Err(_) => Err(Error::new("received bytes are not valid UTF-8")),
+            }
+        }
+        Err(error) => Err(rv_net_error("cannot read from the connection", error)),
+    }
+}
+
+pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
+    use std::io::Read;
+    let mut bytes = vec![0u8; count];
+    match stream.reader.read_exact(&mut bytes) {
+        Ok(()) => match String::from_utf8(bytes) {
+            Ok(text) => Ok(text),
+            Err(_) => Err(Error::new("received bytes are not valid UTF-8")),
+        },
+        Err(error) => Err(rv_net_error("cannot read from the connection", error)),
+    }
+}
+
+pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
+    use std::io::Write;
+    let socket = stream.reader.get_mut();
+    match socket.write_all(text.as_bytes()).and_then(|_| socket.flush()) {
+        Ok(()) => Ok(()),
+        Err(error) => Err(rv_net_error("cannot write to the connection", error)),
+    }
+}
+
 pub fn rv_exit(code: i32) -> ! {
     std::process::exit(code)
 }

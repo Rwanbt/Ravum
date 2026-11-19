@@ -239,6 +239,13 @@ impl<'a> Emitter<'a> {
         if name == "Error" {
             return Ok("crate::Error".to_string());
         }
+        // Opaque prelude types of `std::net` (RFC-E11-NET-HTTP §3).
+        if def == ravum_lang_sema::builtins::PRELUDE_TCP_LISTENER_DEF {
+            return Ok("crate::TcpListener".to_string());
+        }
+        if def == ravum_lang_sema::builtins::PRELUDE_TCP_STREAM_DEF {
+            return Ok("crate::TcpStream".to_string());
+        }
         Err(err(format!(
             "cannot resolve nominal type `{name}` (definition node {def}) to a Rust path"
         )))

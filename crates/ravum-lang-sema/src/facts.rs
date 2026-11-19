@@ -60,7 +60,7 @@ impl Effect {
 
     /// Effects that are declared but cannot be produced in Core 1.0.
     pub fn is_unsupported(&self) -> bool {
-        matches!(self, Effect::Async | Effect::Net)
+        matches!(self, Effect::Async)
     }
 }
 
@@ -572,13 +572,13 @@ mod tests {
         }
     }
 
-    /// EFF-6.x: `async` and `net` are declared but cannot be produced in
-    /// Core 1.0; every other group is producible. The split is what
+    /// EFF-6.x: `async` is declared but cannot be produced yet; `net` is
+    /// producible since RFC-E11-NET-HTTP (D-18-2). The split is what
     /// `E-UNSUPPORTED-*` classification keys on.
     #[test]
-    fn only_async_and_net_are_unsupported() {
+    fn only_async_is_unsupported() {
         for effect in ALL_EFFECTS {
-            let expected = matches!(effect, Effect::Async | Effect::Net);
+            let expected = matches!(effect, Effect::Async);
             assert_eq!(effect.is_unsupported(), expected, "{effect:?}");
         }
     }

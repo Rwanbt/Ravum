@@ -101,6 +101,11 @@ impl<'a> Emitter<'a> {
                 "crate::rv_fs_exists({})",
                 self.str_arg(first, indent)?
             )),
+            FreeBuiltin::Net(name) => {
+                let rendered: Result<Vec<String>, CodegenError> =
+                    (0..args.len()).map(|i| self.nth_arg(args, i, indent)).collect();
+                Ok(format!("crate::rv_net_{name}({})", rendered?.join(", ")))
+            }
             FreeBuiltin::Exit => Ok(format!("crate::rv_exit({rendered})")),
             FreeBuiltin::Panic => {
                 self.expect_arity(path, args, 1)?;

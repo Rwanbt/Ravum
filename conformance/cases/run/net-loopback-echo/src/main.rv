@@ -1,0 +1,18 @@
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(net::local_port(&listener).to_string().as_str());
+    let mut client: TcpStream = net::connect(addr.as_str())?;
+    let mut server: TcpStream = net::accept(&listener)?;
+    net::write_str(&mut client, "ping\r\n")?;
+    let got: Option<String> = net::read_line(&mut server)?;
+    let mut line: String = String::from("server got: ");
+    line.push_str(got.unwrap_or(String::from("<none>")).as_str());
+    io::println(line.as_str());
+    net::write_str(&mut server, "pong\n")?;
+    let reply: String = net::read_exact(&mut client, 4)?;
+    let mut line2: String = String::from("client got: ");
+    line2.push_str(reply.as_str());
+    io::println(line2.as_str());
+    Ok(())
+}
