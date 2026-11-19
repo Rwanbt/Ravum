@@ -114,7 +114,7 @@ fn f(v: Vec<i32>) {
 
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
-| Réseau hors TCP texte | UDP, TLS, octets bruts, timeouts | `E-RES-UNKNOWN` | resolve | `std::net` TCP texte bloquant ([`stdlib.md`](stdlib.md) §17) |
+| Réseau hors TCP texte | UDP, TLS (`https://`), HTTP/2, keep-alive, octets bruts, timeouts | `E-RES-UNKNOWN` (ou `Err` à l'exécution pour `https://`) | resolve | `std::net` TCP texte bloquant et `std::http` HTTP/1.1 en clair ([`stdlib.md`](stdlib.md) §17, §19) |
 | Effet `async` | `effects(async)`, `async fn` | `E-UNSUPPORTED-EFFECT` / `E-UNSUPPORTED-ASYNC` | effects/parse | aucune |
 | Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |
 | Synchronisation | `Mutex`, `RwLock`, `Condvar`, `Arc` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |

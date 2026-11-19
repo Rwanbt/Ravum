@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `std::http`: HTTP/1.1 in clear text over `std::net`, server side
+  (`read_request`, accessors, `respond`) and client side (`get`, `post`), with
+  fixed size limits; `https://` is an `Err` (no TLS). `packages/http-notes` is
+  the HTTP + SQLite vertical for T9, run in a Unix test (RFC-E11-NET-HTTP §4,
+  D-19-8, F-STD-038).
 - `packages/sqlite`: SQLite 3.54.1 as a Ravum package (D-19-7) over a small C
   adapter, built from the amalgamation pinned through `Cargo.lock` by
   `tools/build_sqlite_native.py`; prepared-statement parameters only, every

@@ -56,6 +56,10 @@ pub const PRELUDE_RECEIVER_DEF: NodeId = NodeId::MAX - 6;
 /// C'est le seul type opaque `Copy` du prélude.
 pub const PRELUDE_CHANDLE_DEF: NodeId = NodeId::MAX - 7;
 
+/// `NodeId` réservés aux types opaques de `std::http` (RFC-E11-NET-HTTP §4).
+pub const PRELUDE_HTTP_REQUEST_DEF: NodeId = NodeId::MAX - 8;
+pub const PRELUDE_HTTP_RESPONSE_DEF: NodeId = NodeId::MAX - 9;
+
 /// Le type `CHandle`.
 pub fn chandle_type() -> Type {
     opaque_type(PRELUDE_CHANDLE_DEF, "CHandle")
@@ -79,6 +83,12 @@ pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
     }
     if def == PRELUDE_CHANDLE_DEF {
         return Some("CHandle");
+    }
+    if def == PRELUDE_HTTP_REQUEST_DEF {
+        return Some("HttpRequest");
+    }
+    if def == PRELUDE_HTTP_RESPONSE_DEF {
+        return Some("HttpResponse");
     }
     PRELUDE_GENERIC_OPAQUES
         .iter()
@@ -145,6 +155,8 @@ pub const PRELUDE_TYPES: &[&str] = &[
     "Sender",
     "Receiver",
     "CHandle",
+    "HttpRequest",
+    "HttpResponse",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -161,7 +173,7 @@ pub const PRELUDE_VALUES: &[&str] = &[
 
 /// Modules accessibles sans `use` (chemins canoniques).
 pub const PRELUDE_MODULES: &[&str] = &[
-    "io", "fs", "net", "thread", "sync", "ffi", "string", "math", "env", "process", "std",
+    "io", "fs", "net", "thread", "sync", "ffi", "http", "string", "math", "env", "process", "std",
 ];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
@@ -173,6 +185,7 @@ pub fn builtin_root_module(name: &str) -> Option<&'static str> {
         "thread" => "std::thread",
         "sync" => "std::sync",
         "ffi" => "std::ffi",
+        "http" => "std::http",
         "string" => "std::string",
         "math" => "std::math",
         "env" => "std::env",
@@ -191,6 +204,7 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std::thread",
     "std::sync",
     "std::ffi",
+    "std::http",
     "std::string",
     "std::math",
     "std::env",
@@ -406,6 +420,77 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["&Receiver<T>"],
         ret: "Option<T>",
         effects: THREAD,
+    },
+    // --- std::http (RFC-E11-NET-HTTP §4) ---
+    BuiltinFnSig {
+        path: "std::http::read_request",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Result<HttpRequest, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::method",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::path",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::header",
+        generics: &[],
+        params: &["&HttpRequest", "&str"],
+        ret: "Option<String>",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::body",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::respond",
+        generics: &[],
+        params: &["&mut TcpStream", "u16", "&str", "&str"],
+        ret: "Result<(), Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::get",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<HttpResponse, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::post",
+        generics: &[],
+        params: &["&str", "&str", "&str"],
+        ret: "Result<HttpResponse, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::status",
+        generics: &[],
+        params: &["&HttpResponse"],
+        ret: "u16",
+        effects: PURE,
+    },
+    BuiltinFnSig {
+        path: "std::http::response_body",
+        generics: &[],
+        params: &["&HttpResponse"],
+        ret: "String",
+        effects: ALLOC,
     },
     // --- std::ffi (RFC-E11-SQLITE NAT-3.3) ---
     BuiltinFnSig {
@@ -641,6 +726,8 @@ pub fn prelude_type(name: &str) -> Option<Type> {
         "TcpListener" => return Some(opaque_type(PRELUDE_TCP_LISTENER_DEF, "TcpListener")),
         "TcpStream" => return Some(opaque_type(PRELUDE_TCP_STREAM_DEF, "TcpStream")),
         "CHandle" => return Some(chandle_type()),
+        "HttpRequest" => return Some(opaque_type(PRELUDE_HTTP_REQUEST_DEF, "HttpRequest")),
+        "HttpResponse" => return Some(opaque_type(PRELUDE_HTTP_RESPONSE_DEF, "HttpResponse")),
         _ => return None,
     })
 }
