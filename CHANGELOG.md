@@ -8,6 +8,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- Five `PROPOSED` RFCs for the widened 1.0 scope (D-18-2, step E11):
+  concurrency, TCP/HTTP, SQLite, hot reload with state preservation, DSP
+  block (`docs/rfc/RFC-E11-*.md`). Nothing is implemented yet.
 
 - Reference interpreter of the pure core (`crates/ravum-core-machine`, `core-machine.md`): its own lexer, parser and evaluator, no dependency, a 59-program corpus covering obligations O1 to O10, and a differential test that builds and runs 54 of them with `ravum-lang` and compares the results (54 agree). FeatureId F-META-032; the F-META-006 coverage exemption is revoked, strict coverage is 236/236 with no exemption.
 
