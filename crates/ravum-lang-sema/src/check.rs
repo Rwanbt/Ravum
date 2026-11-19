@@ -256,6 +256,7 @@ pub fn check_entry_with_timings(
         &mut diags,
     );
     timings.effects = started.elapsed();
+    checked.facts.call_graph = call_graph.clone();
 
     let started = Instant::now();
     let own_facts = own::check_ownership(&checked, &mut diags);

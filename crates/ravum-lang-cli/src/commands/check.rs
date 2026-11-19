@@ -59,7 +59,7 @@ pub fn run(
             dependencies_digest: Some(frontend.pkg.dependencies_digest.clone()),
             lockfile_stale: lockfile_stale(&frontend),
         };
-        let envelope = json::envelope_with_timings(
+        let mut envelope = json::envelope_with_timings(
             meta,
             diagnostics,
             summary,
@@ -69,6 +69,10 @@ pub fn run(
                 None
             },
         );
+        envelope.contracts = frontend
+            .checked
+            .as_ref()
+            .and_then(|c| json::contracts(c, &frontend.pkg.sources));
         json::print(&envelope);
     } else {
         print_human(&frontend, profile);

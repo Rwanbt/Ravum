@@ -39,6 +39,11 @@ pub struct JsonEnvelope {
     /// flag is not passed; `schema_version` does not change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timings: Option<Value>,
+    /// Additive (T19, RFC-CONTRACTS-1): the package's contract clauses with
+    /// stable ids, locations and the tests reaching them. Absent when the
+    /// program has none or did not check; `schema_version` does not change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contracts: Option<Vec<JsonContract>>,
     pub summary: Value,
     pub diagnostics: Vec<JsonDiagnostic>,
 }
@@ -99,6 +104,50 @@ fn utf16_offset(text: &str, byte: u32) -> u32 {
         offset -= 1;
     }
     text[..offset].encode_utf16().count() as u32
+}
+
+/// One contract clause (T19). `verification` is always `runtime-checked`:
+/// nothing here is a proof (ADR-040).
+#[derive(Debug, Serialize)]
+pub struct JsonContract {
+    pub id: String,
+    pub function: String,
+    pub kind: &'static str,
+    pub text: String,
+    pub span: JsonSpan,
+    pub exercised_by: Vec<String>,
+    pub verification: &'static str,
+}
+
+/// The contracts of a checked program, for the JSON envelope.
+pub fn contracts(
+    checked: &ravum_lang_sema::CheckedProgram,
+    sources: &SourceMap,
+) -> Option<Vec<JsonContract>> {
+    let all = ravum_lang_sema::contracts::contract_facts(checked);
+    if all.is_empty() {
+        return None;
+    }
+    Some(
+        all.into_iter()
+            .map(|c| JsonContract {
+                span: span_object(
+                    sources,
+                    Span {
+                        file: c.file,
+                        start: c.start,
+                        end: c.end,
+                    },
+                ),
+                id: c.id,
+                function: c.function,
+                kind: c.kind,
+                text: c.text,
+                exercised_by: c.exercised_by,
+                verification: c.verification,
+            })
+            .collect(),
+    )
 }
 
 fn span_object(sources: &SourceMap, span: Span) -> JsonSpan {
@@ -279,6 +328,7 @@ pub fn envelope(
         dependencies_digest: meta.dependencies_digest,
         lockfile_stale: meta.lockfile_stale,
         timings: None,
+        contracts: None,
         summary,
         diagnostics,
     }

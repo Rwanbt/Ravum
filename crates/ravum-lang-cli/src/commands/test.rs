@@ -55,6 +55,8 @@ impl TestStatus {
 struct TestCase {
     name: String,
     status: TestStatus,
+    /// The runner's `panicked: <message>` line for a failed case.
+    message: Option<String>,
 }
 
 /// The tests the checked program declares, before the runner runs anything.
@@ -240,7 +242,12 @@ fn report_envelope(
     diagnostics: Vec<json::JsonDiagnostic>,
     cases: &[TestCase],
 ) -> json::JsonEnvelope {
-    let summary = test_summary(report, cases);
+    let contracts = frontend
+        .checked
+        .as_ref()
+        .map(ravum_lang_sema::contracts::contract_facts)
+        .unwrap_or_default();
+    let summary = test_summary(report, cases, &contracts);
     report_with(frontend, path, report, diagnostics, summary)
 }
 
@@ -321,6 +328,15 @@ fn parse_runner_output(text: &str) -> ParsedOutput {
             }
             continue;
         }
+        if let Some(msg) = trimmed.strip_prefix("panicked: ") {
+            // The failure message the runner prints under a failed case.
+            if let Some(case) = parsed.cases.last_mut() {
+                if case.status == TestStatus::Failed && case.message.is_none() {
+                    case.message = Some(msg.to_string());
+                    continue;
+                }
+            }
+        }
         if let Some(rest) = trimmed.strip_prefix("test ") {
             match parse_case_line(rest) {
                 Some(case) => parsed.cases.push(case),
@@ -360,6 +376,7 @@ fn parse_case_line(rest: &str) -> Option<TestCase> {
     Some(TestCase {
         name: name.to_string(),
         status,
+        message: None,
     })
 }
 
@@ -693,14 +710,43 @@ fn validate_run(
     }
 }
 
-fn test_summary(report: &RunReport, cases: &[TestCase]) -> serde_json::Value {
+/// T19: the contracts a failure message names (`contract violated: <kind>
+/// <clause>`, RFC-CONTRACTS-1). Several when two functions share the same
+/// clause text: every candidate is listed, none is guessed.
+fn violated_contracts(
+    message: &str,
+    contracts: &[ravum_lang_sema::contracts::ContractFact],
+) -> Vec<String> {
+    let Some(rest) = message.strip_prefix("contract violated: ") else {
+        return Vec::new();
+    };
+    contracts
+        .iter()
+        .filter(|c| rest == format!("{} {}", c.kind, c.text))
+        .map(|c| c.id.clone())
+        .collect()
+}
+
+fn test_summary(
+    report: &RunReport,
+    cases: &[TestCase],
+    contracts: &[ravum_lang_sema::contracts::ContractFact],
+) -> serde_json::Value {
     let entries = cases
         .iter()
         .map(|case| {
-            json!({
+            let mut entry = json!({
                 "name": case.name,
                 "status": case.status.name(),
-            })
+            });
+            if let Some(message) = &case.message {
+                entry["message"] = json!(message);
+                let violated = violated_contracts(message, contracts);
+                if !violated.is_empty() {
+                    entry["violated_contracts"] = json!(violated);
+                }
+            }
+            entry
         })
         .collect::<Vec<_>>();
     // `diagnostics.md` §7.2 requires `summary` to carry `errors` and `warnings`.

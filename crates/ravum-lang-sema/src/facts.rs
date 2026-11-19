@@ -414,6 +414,9 @@ impl OwnFacts {
 
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
+    /// Function item id → user functions it calls (the effects phase's
+    /// call graph; T19 uses it to link a contract to the tests reaching it).
+    pub call_graph: BTreeMap<NodeId, Vec<NodeId>>,
     /// Type of every expression node id.
     pub expr_types: BTreeMap<NodeId, Type>,
     /// Type of every type syntax node id (resolved `Type`).
