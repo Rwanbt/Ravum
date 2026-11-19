@@ -77,6 +77,22 @@ cargo fmt --all -- --check
 cargo test --workspace --no-fail-fast
 ```
 
+## Non-régression workspace
+
+`cargo test --workspace --no-fail-fast` : **155 groupes, 2 207 passés / 5 échecs
+/ 10 ignorés**. Les 5 échecs sont **hors du crate ajouté et préexistants** :
+
+- 4 × `ravum-workspace-coordinator/tests/git_publication_crash.rs` (refus de
+  permissions) : échouent **aussi sur `origin/dev` `9b1b6d8` non modifié**
+  (5 échecs dans ce rejeu, dont `crash_before_reference_swap…`, qui ne
+  reproduit pas d'une exécution à l'autre). Cause probable : le conteneur tourne en
+  `root`, qui ignore les permissions refusées que ces tests simulent.
+  `NOT_VERIFIED` sur une machine non-root.
+- 1 × `ravum-dsp-harness/tests/dsp_stress.rs::concurrent_publications_render_whole_versions_only`
+  (472 s, conteneur partagé chargé) : non rejoué sur `dev`, `NOT_VERIFIED`.
+
+Aucun test n'a été désactivé ni modifié.
+
 ## Contexte et état des preuves
 
 Linux x86_64 (conteneur cloud), `rustc 1.95.0 (59807616e 2026-04-14)`, branche
