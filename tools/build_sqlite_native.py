@@ -8,13 +8,15 @@ script does, once per platform:
    `Cargo.lock` pins (fetched by `cargo fetch` if absent), and refuses it unless
    `sqlite3.c` and `sqlite3.h` have the SHA-256 digests pinned below;
 2. it compiles them with `native-src/ravum_sqlite.c` using the system C
-   compiler (`cc`, or `$CC`) into `native/<os>-<arch>/libravum_sqlite.a`;
+   compiler into `native/<os>-<arch>/`: `cc` (or `$CC`) and `ar` give
+   `libravum_sqlite.a` on Linux and macOS; on Windows, MSVC `cl` and `lib`
+   (found with `vswhere`, environment from `vcvars64.bat`, `/Brepro` for
+   reproducible objects) give `ravum_sqlite.lib`;
 3. it writes `packages/sqlite/ravum.toml` from `ravum.toml.in`, pinning the
    SHA-256 of that library for this platform (`sha256-<os>-<arch>`).
 
 The library and the generated manifest are build outputs and are not
 committed: the trust anchors are the pinned SQLite source and this script.
-Windows (MSVC) is not supported yet.
 """
 
 from __future__ import annotations
@@ -82,9 +84,62 @@ def find_amalgamation(version: str) -> pathlib.Path:
     sys.exit(f"error: {CRATE} {version} is not in the cargo registry")
 
 
+def vcvars() -> pathlib.Path:
+    """`vcvars64.bat` of the newest Visual Studio with the C++ tools."""
+    root = pathlib.Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+    vswhere = root / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        sys.exit(f"error: {vswhere} not found; install Visual Studio Build Tools (C++)")
+    found = subprocess.run(
+        [
+            str(vswhere),
+            "-latest",
+            "-products",
+            "*",
+            "-requires",
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "-property",
+            "installationPath",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if not found:
+        sys.exit("error: no Visual Studio installation with the C++ x64 tools")
+    script = pathlib.Path(found) / "VC" / "Auxiliary" / "Build" / "vcvars64.bat"
+    if not script.is_file():
+        sys.exit(f"error: {script} not found")
+    return script
+
+
+def build_msvc(source: pathlib.Path, out_dir: pathlib.Path) -> pathlib.Path:
+    library = out_dir / "ravum_sqlite.lib"
+    if library.exists():
+        library.unlink()
+    defines = [d.replace("-D", "/D", 1) for d in DEFINES]
+    with tempfile.TemporaryDirectory() as tmp:
+        objects = []
+        commands = []
+        for unit in [source / "sqlite3.c", PACKAGE / "native-src" / "ravum_sqlite.c"]:
+            obj = pathlib.Path(tmp) / (unit.stem + ".obj")
+            objects.append(f'"{obj}"')
+            commands.append(
+                f'cl /nologo /O2 /MD /Brepro {" ".join(defines)} /I "{source}" /c "{unit}" /Fo"{obj}"'
+            )
+        commands.append(f'lib /nologo /Brepro /OUT:"{library}" {" ".join(objects)}')
+        batch = pathlib.Path(tmp) / "build.bat"
+        batch.write_text(
+            "@echo off\r\n"
+            + f'call "{vcvars()}" >nul || exit /b 1\r\n'
+            + "".join(f"{command} || exit /b 1\r\n" for command in commands),
+            encoding="utf-8",
+        )
+        subprocess.run(["cmd", "/d", "/c", str(batch)], check=True)
+    return library
+
+
 def main() -> int:
-    if platform.system() == "Windows":
-        sys.exit("error: building packages/sqlite on Windows is not supported yet")
     target = host_platform()
     source = find_amalgamation(pinned_crate_version())
     for name, digest in PINNED.items():
@@ -93,6 +148,20 @@ def main() -> int:
             sys.exit(f"error: {source / name} has digest {actual}, pinned {digest}")
     out_dir = PACKAGE / "native" / target
     out_dir.mkdir(parents=True, exist_ok=True)
+    if platform.system() == "Windows":
+        library = build_msvc(source, out_dir)
+    else:
+        library = build_unix(source, out_dir)
+    digest = sha256(library)
+    template = (PACKAGE / "ravum.toml.in").read_text(encoding="utf-8")
+    manifest = template.replace("@PLATFORM@", target).replace("@SHA256@", digest)
+    (PACKAGE / "ravum.toml").write_text(manifest, encoding="utf-8")
+    print(f"sqlite {SQLITE_VERSION}: {library.relative_to(REPO)}")
+    print(f"sha256-{target} = {digest}")
+    return 0
+
+
+def build_unix(source: pathlib.Path, out_dir: pathlib.Path) -> pathlib.Path:
     library = out_dir / "libravum_sqlite.a"
     cc = os.environ.get("CC", "cc")
     with tempfile.TemporaryDirectory() as tmp:
@@ -110,13 +179,7 @@ def main() -> int:
         # `D`: deterministic archive (no timestamps, uids or modes).
         flags = "rcsD" if platform.system() != "Darwin" else "rcs"
         subprocess.run([ar, flags, str(library), *objects], check=True)
-    digest = sha256(library)
-    template = (PACKAGE / "ravum.toml.in").read_text(encoding="utf-8")
-    manifest = template.replace("@PLATFORM@", target).replace("@SHA256@", digest)
-    (PACKAGE / "ravum.toml").write_text(manifest, encoding="utf-8")
-    print(f"sqlite {SQLITE_VERSION}: {library.relative_to(REPO)}")
-    print(f"sha256-{target} = {digest}")
-    return 0
+    return library
 
 
 if __name__ == "__main__":
