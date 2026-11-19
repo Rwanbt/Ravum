@@ -304,10 +304,10 @@ class RealRepositoryTests(unittest.TestCase):
 
     def test_real_spec_is_parsed_and_report_only_passes(self) -> None:
         report = must_audit.build_report(REPO)
-        self.assertEqual(report["denominators"]["featureids"], 239)
+        self.assertEqual(report["denominators"]["featureids"], 240)
         self.assertGreaterEqual(report["denominators"]["must_statements"], 800)
         self.assertLessEqual(report["denominators"]["must_statements"], 900)
-        self.assertEqual(report["featureid_metric"]["strict_satisfied"], 239)
+        self.assertEqual(report["featureid_metric"]["strict_satisfied"], 240)
         code, _ = run([], REPO)
         self.assertEqual(code, 0)
 

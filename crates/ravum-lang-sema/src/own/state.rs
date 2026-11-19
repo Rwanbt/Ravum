@@ -273,7 +273,9 @@ pub fn is_copy_type(ty: &Type, facts: &Facts) -> bool {
         Type::Option(inner) => is_copy_type(inner, facts),
         Type::Result(ok, err) => is_copy_type(ok, facts) && is_copy_type(err, facts),
         Type::Nominal { def, .. } => {
-            if let Some(info) = facts.structs.get(def) {
+            if *def == crate::builtins::PRELUDE_CHANDLE_DEF {
+                true
+            } else if let Some(info) = facts.structs.get(def) {
                 info.is_copy
             } else if let Some(info) = facts.enums.get(def) {
                 info.is_copy

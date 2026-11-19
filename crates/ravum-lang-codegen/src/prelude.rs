@@ -364,6 +364,21 @@ pub fn rv_sync_recv<T>(receiver: &Receiver<T>) -> Option<T> {
     receiver.inner.recv().ok()
 }
 
+/// An opaque C pointer (`std::ffi`, RFC-E11-SQLITE NAT-3.3). Ravum code can
+/// only receive it from an `extern` function, pass it to another, or compare
+/// it with null; it is stored as an address so this runtime holds no raw
+/// pointer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CHandle(pub usize);
+
+pub fn rv_ffi_null() -> CHandle {
+    CHandle(0)
+}
+
+pub fn rv_ffi_is_null(handle: CHandle) -> bool {
+    handle.0 == 0
+}
+
 pub fn rv_exit(code: i32) -> ! {
     std::process::exit(code)
 }

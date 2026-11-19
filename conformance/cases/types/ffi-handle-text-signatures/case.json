@@ -1,0 +1,6 @@
+{
+  "id": "types/ffi-handle-text-signatures",
+  "mode": "run-pass",
+  "stdout_contains": "null\n",
+  "notes": "ABI-3.4, ABI-3.6: CHandle in and out, &str as a parameter and Option<String> as a return are accepted in an extern block; CHandle is Copy, ffi::null() and ffi::is_null(h) need no effect. The extern functions are declared, never called."
+}
