@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- Native libraries: a `[native]` manifest section pins a pre-built static or
+  dynamic library by SHA-256; `extern "C" from "<name>"` links to it through
+  `rustc -L native=`/`-l`; the digests enter the build identity; five new
+  diagnostics (`E-MOD-NATIVE*`, `E-FFI-UNKNOWN-LIB`). First step of
+  RFC-E11-SQLITE (D-19-4); no SQLite binding yet.
 - `std::thread` and `std::sync`: `thread::spawn(function, argument)`, `join`,
   and channels (`channel`, `sender`, `clone_sender`, `receiver`, `send`,
   `recv`) over opaque prelude types; new `thread` effect; structural

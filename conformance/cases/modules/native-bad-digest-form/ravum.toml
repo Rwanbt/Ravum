@@ -1,0 +1,7 @@
+[package]
+name = "native-bad-digest-form"
+version = "0.1.0"
+edition = "core-1.0"
+
+[native]
+demo = { kind = "static", path = "native", lib = "demo", sha256 = "abc" }

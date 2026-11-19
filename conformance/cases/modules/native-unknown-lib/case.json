@@ -1,0 +1,8 @@
+{
+  "id": "modules/native-unknown-lib",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-UNKNOWN-LIB"
+  ],
+  "notes": "MOD-5.18: extern \"C\" from \"demo\" with no [native] entry named demo."
+}

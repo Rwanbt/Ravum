@@ -1659,6 +1659,7 @@ fn a_lockfile_under_a_path_that_is_a_file_cannot_be_inspected() {
         version: "0.1.0".to_string(),
         edition: "core-1.0".to_string(),
         dependencies: Vec::new(),
+        native: Vec::new(),
     };
     let graph = graph::DepGraph::new(&not_a_dir, manifest);
     let mut diags = DiagnosticBag::new();

@@ -339,7 +339,7 @@ pub(super) fn parse_manifest(text: &str, file: FileId) -> (Option<PackageManifes
 
     for (name, section) in &parsed.sections {
         match name.as_str() {
-            "package" | "dependencies" => {}
+            "package" | "dependencies" | "native" => {}
             "build" | "scripts" => {
                 diags.push(Diagnostic::error(
                     "E-MOD-BUILD-SCRIPT",
@@ -506,6 +506,16 @@ pub(super) fn parse_manifest(text: &str, file: FileId) -> (Option<PackageManifes
     }
     dependencies.sort_by(|a, b| a.name.cmp(&b.name));
 
+    let mut native = Vec::new();
+    if let Some(section) = parsed.sections.get("native") {
+        for (lib_name, (value, span)) in &section.keys {
+            if let Some(decl) = parse_native_entry(lib_name, value, *span, &mut diags) {
+                native.push(decl);
+            }
+        }
+    }
+    native.sort_by(|a, b| a.name.cmp(&b.name));
+
     if diags.has_errors() {
         return (None, diags);
     }
@@ -515,6 +525,7 @@ pub(super) fn parse_manifest(text: &str, file: FileId) -> (Option<PackageManifes
             version,
             edition,
             dependencies,
+            native,
         }),
         diags,
     )

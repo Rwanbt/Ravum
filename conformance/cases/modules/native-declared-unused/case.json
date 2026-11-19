@@ -1,0 +1,5 @@
+{
+  "id": "modules/native-declared-unused",
+  "mode": "compile-pass",
+  "notes": "MOD-5.14, MOD-5.18: a well-formed [native] entry that no extern \"C\" from block names is accepted and not linked, so its file is neither read nor checked."
+}

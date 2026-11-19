@@ -1,0 +1,9 @@
+{
+  "id": "packages/native-in-dependency",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-MOD-NATIVE"
+  ],
+  "notes": "MOD-5.20: only the root package may declare [native]; a dependency that does is refused."
+}

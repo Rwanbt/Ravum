@@ -1,0 +1,8 @@
+{
+  "id": "modules/native-bad-digest-form",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-NATIVE"
+  ],
+  "notes": "MOD-5.14: sha256 must be 64 lowercase hexadecimal digits."
+}

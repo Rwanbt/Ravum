@@ -1,0 +1,5 @@
+use util;
+
+fn main() -> () effects(io, alloc) {
+    io::println(util::answer().to_string().as_str());
+}
