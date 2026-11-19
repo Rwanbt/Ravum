@@ -1,0 +1,14 @@
+fn sum_to(n: i64) -> i64 effects() {
+    let mut total: i64 = 0;
+    for i in 0..n {
+        total = total + (i as i64);
+    }
+    total
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let a: JoinHandle<i64> = thread::spawn(sum_to, 1000);
+    let b: JoinHandle<i64> = thread::spawn(sum_to, 10);
+    let total: i64 = thread::join(a) + thread::join(b);
+    io::println(total.to_string().as_str());
+}

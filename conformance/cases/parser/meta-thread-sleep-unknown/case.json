@@ -1,0 +1,8 @@
+{
+  "id": "parser/meta-thread-sleep-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "F-META-005 / CONC-1.2: the only concurrency primitives are spawn, join and std::sync channels; thread::sleep does not exist and is E-RES-UNKNOWN. (thread::spawn exists since RFC-E11-CONCURRENCY phase 1.)"
+}

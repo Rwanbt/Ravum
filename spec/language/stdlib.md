@@ -16,7 +16,7 @@
 | Catégorie | Noms |
 |---|---|
 | Types primitifs | `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool char ()`, `!` (Never) |
-| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17) |
+| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18) |
 | Constructeurs | `Some`, `None`, `Ok`, `Err` (qualifiés ou non, [`types.md`](types.md) TYP-10.2) |
 | Intrinsèques | `assert`, `assert_eq`, `panic`, `drop` |
 
@@ -27,6 +27,8 @@
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
 | `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) |
+| `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
+| `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |
 | `std::env` | `use std::env;` | `args`, `var` |
 | `std::process` | `use std::process;` | `exit` |
 | `std::math` | `use std::math;` | `abs`, `sqrt`, `floor`, `ceil`, `round`, `pow`, `min`, `max` (f64) |
@@ -605,7 +607,7 @@ fn main() { let s = fs::read_to_string("x")?; }
 | E/S riches | `File`, `BufReader`, `stdin()`, `stdout()`, `flush` | `E-RES-UNKNOWN` |
 | Processus | `Command`, `spawn`, `current_dir`, `env::set_var` | `E-RES-UNKNOWN` |
 | Temps | `Instant`, `Duration`, `SystemTime`, `sleep` | `E-RES-UNKNOWN` |
-| Threads | `thread::spawn`, `Mutex`, `Arc`, atomiques | `E-RES-UNKNOWN` / `E-UNSUPPORTED-EFFECT` |
+| État partagé | `Mutex`, `RwLock`, `Arc`, atomiques, `sleep` (threads et canaux : §18) | `E-RES-UNKNOWN` |
 | Réseau | `UdpSocket`, TLS, octets bruts, timeouts, DNS asynchrone (TCP texte : §17) | `E-RES-UNKNOWN` |
 | Math étendue | `asin`, `acos`, `atan`, `atan2`, `log2`, `hypot`, `PI` | `E-RES-UNKNOWN` |
 | Conversions | `From`/`Into`, `to_string` universel, `parse` générique | `E-RES-UNKNOWN` |
@@ -689,4 +691,64 @@ fn main() -> Result<(), Error> effects(io, net, alloc) {
 ```rv
 // NÉGATIF — E-EFF-PROFILE (net sous `pure`)
 fn main() -> () effects(net, alloc) { let r = net::listen("127.0.0.1:0"); drop(r); }
+```
+
+## 18. `std::thread` et `std::sync` (threads et canaux)
+
+Source : [`RFC-E11-CONCURRENCY`](../../docs/rfc/RFC-E11-CONCURRENCY.md) phase 1
+(`PROPOSED`, décisions D-18-2 et D-19-3). Ravum n'a ni closure, ni trait
+`Send`, ni état mutable partagé : un thread reçoit **une** valeur déplacée et
+communique par canaux. `JoinHandle<T>`, `Channel<T>`, `Sender<T>` et
+`Receiver<T>` sont des types **opaques** du prélude, non `Copy`.
+
+```rv
+pub fn spawn(worker: <fonction libre>, arg: A) -> JoinHandle<R> effects(thread, alloc)  // forme spéciale, STD-18.2
+pub fn join<T>(handle: JoinHandle<T>) -> T effects(thread)
+pub fn channel<T>() -> Channel<T> effects(thread, alloc)
+pub fn sender<T>(channel: &Channel<T>) -> Sender<T> effects(thread)
+pub fn clone_sender<T>(sender: &Sender<T>) -> Sender<T> effects(thread)
+pub fn receiver<T>(channel: Channel<T>) -> Receiver<T> effects(thread)
+pub fn send<T>(sender: &Sender<T>, value: T) -> bool effects(thread)
+pub fn recv<T>(receiver: &Receiver<T>) -> Option<T> effects(thread)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-18.1 | Un type est **transférable** s'il ne contient aucune référence (`&T`, `&mut T`, `&str`, tranche) hors des champs de types nominaux, qui ne peuvent porter que `&'static str` ([`types.md`](types.md) TYP-6.3). Le paramètre et le résultat d'un `spawn`, et l'élément d'un canal, doivent être transférables ; sinon `E-CONC-NOT-TRANSFERABLE`. | MUST |
+| STD-18.2 | `thread::spawn(f, arg)` exige que `f` **nomme** une fonction libre non générique, non `extern`, d'exactement un paramètre ; sinon `E-CONC-SPAWN-TARGET`. Aucune fonction n'est une valeur ailleurs (EXPR, `E-TYP-CALL`). | MUST |
+| STD-18.3 | `arg` est **déplacé** dans le thread : toute utilisation ultérieure est `E-OWN-USE-AFTER-MOVE`. | MUST |
+| STD-18.4 | Les effets de `f` sont ceux de l'appelant de `spawn`, en plus de `thread` et `alloc` ([`effects.md`](effects.md) §2). | MUST |
+| STD-18.5 | Une panique dans n'importe quel thread termine le **processus** avec `panic: <message>` et le code `1`, comme une panique de `main`. | MUST |
+| STD-18.6 | `join` attend la fin du thread et rend son résultat. Un `JoinHandle` détruit sans `join` attend la fin du thread : aucun thread ne survit à son handle. | MUST |
+| STD-18.7 | `receiver` consomme le canal. `recv` bloque jusqu'à une valeur, ou rend `None` quand tous les `Sender` obtenus du canal sont détruits. Les valeurs d'un même `Sender` arrivent dans l'ordre d'envoi. | MUST |
+| STD-18.8 | `send` rend `false` si le `Receiver` est détruit, `true` sinon ; il ne bloque pas. | MUST |
+| STD-18.9 | Pas d'état mutable partagé (`Mutex`, `Arc`, atomiques), pas de timeout, pas de `sleep` en 1.0 ; l'ordre d'exécution entre threads n'est pas spécifié. | MUST |
+
+```rv
+// POSITIF
+use std::io;
+use std::thread;
+
+fn sum_to(n: i64) -> i64 effects() {
+    let mut total: i64 = 0;
+    for i in 0..n { total = total + (i as i64); }
+    return total;
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let a: JoinHandle<i64> = thread::spawn(sum_to, 1000);
+    let b: JoinHandle<i64> = thread::spawn(sum_to, 10);
+    io::println((thread::join(a) + thread::join(b)).to_string().as_str());
+}
+```
+
+```rv
+// NÉGATIF — E-CONC-NOT-TRANSFERABLE (référence passée à un thread)
+fn show(s: &String) -> usize effects() { return s.len(); }
+fn main() -> () effects(thread, alloc) {
+    let t: String = String::from("x");
+    let h: JoinHandle<usize> = thread::spawn(show, &t);
+}
+// NÉGATIF — E-CONC-SPAWN-TARGET (une variable n'est pas une fonction)
+fn main2() -> () effects(thread, alloc) { let x: i64 = 3; let h: JoinHandle<i64> = thread::spawn(x, 1); }
 ```

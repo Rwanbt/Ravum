@@ -297,7 +297,12 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
                         out.edges.push(*item);
                     }
                 }
-                Some(crate::facts::CallTarget::BuiltinFn { path }) => add_builtin_path(path, out),
+                Some(crate::facts::CallTarget::BuiltinFn { path }) => {
+                    add_builtin_path(path, out);
+                    if let Some(worker) = facts.spawn_targets.get(&expr.id) {
+                        out.edges.push(*worker);
+                    }
+                }
                 Some(crate::facts::CallTarget::VariantCtor { .. })
                 | Some(crate::facts::CallTarget::Error)
                 | None => {}

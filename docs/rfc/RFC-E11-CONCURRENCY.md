@@ -41,6 +41,20 @@ C'est la règle `CONC-2.1` proposée ; elle remplace un système de traits
 
 ## 3. Surface proposée — phase 1 : threads et canaux
 
+> **Phase 1 implémentée** (2026-11-19) : [`stdlib.md`](../../spec/language/stdlib.md)
+> §18 (STD-18.1 à 18.9), [`concurrency.md`](../../spec/language/concurrency.md)
+> révisé, FeatureId F-STD-037, 10 cas de conformance, test de charge
+> `crates/ravum-lang-cli/tests/thread_stress.rs`. Écarts avec le texte
+> ci-dessous, retenus à l'implémentation :
+> - un canal se crée par `sync::channel()` qui rend un `Channel<T>` ; on en tire
+>   `sender(&c)` et `receiver(c)` (§3.1, sans `let (a, b)` ni turbofish) ;
+> - une panique dans un thread termine le processus (`panic:`, code 1) au lieu
+>   d'être relancée par `join` : c'est le comportement de `main`, et il est
+>   déterministe ;
+> - `send` rend `bool` (`false` si le récepteur est détruit) ;
+> - **pas encore fait** : le job TSan bloquant (§5) ; il reste une condition de
+>   `PASS` pour T6.
+
 Module `std::thread` et `std::sync`, effet **`thread`** (nouveau groupe) :
 
 ```rust

@@ -1,0 +1,9 @@
+fn work(n: i64) -> () effects(io, alloc) {
+    io::println(n.to_string().as_str());
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let h: JoinHandle<()> = thread::spawn(work, 7);
+    drop(h);
+    io::println("after");
+}

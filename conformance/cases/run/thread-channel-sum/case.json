@@ -1,0 +1,6 @@
+{
+  "id": "run/thread-channel-sum",
+  "mode": "run-pass",
+  "stdout_contains": "200\n10\n",
+  "notes": "STD-18.7: two producers share one channel through clone_sender; recv returns None once both senders are dropped with their threads. 2 x (0+10+20+30+40) = 200, 10 values; the sum does not depend on interleaving."
+}

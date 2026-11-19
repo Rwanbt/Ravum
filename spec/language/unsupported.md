@@ -116,10 +116,9 @@ fn f(v: Vec<i32>) {
 |---|---|---|---|---|
 | Réseau hors TCP texte | UDP, TLS, octets bruts, timeouts | `E-RES-UNKNOWN` | resolve | `std::net` TCP texte bloquant ([`stdlib.md`](stdlib.md) §17) |
 | Effet `async` | `effects(async)`, `async fn` | `E-UNSUPPORTED-EFFECT` / `E-UNSUPPORTED-ASYNC` | effects/parse | aucune |
-| Threads | `thread::spawn`, `JoinHandle` | `E-RES-UNKNOWN` | resolve | mono-thread |
-| Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | aucune |
-| Synchronisation | `Mutex`, `RwLock`, `Condvar`, `Arc` | `E-RES-UNKNOWN` | resolve | aucune |
-| Canaux | `std::sync::mpsc` | `E-RES-UNKNOWN` | resolve | fichiers/E-S |
+| Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |
+| Synchronisation | `Mutex`, `RwLock`, `Condvar`, `Arc` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |
+| Closure dans `spawn` | `thread::spawn(\|\| ...)` | `E-UNSUPPORTED-CLOSURE` | parse | `thread::spawn(fonction, argument)` |
 | Annulation / timeout | `select`, `recv_timeout` | `E-RES-UNKNOWN` | resolve | aucune |
 | Hard-RT certifié | profil `hard_rt`, WCET | `E-PARSE-EXPECTED` (profil inconnu → exit `2`) | CLI | `rt` **expérimental**, non certifié |
 | Thread audio / callback | API hôte, `process` audio | `E-RES-UNKNOWN` | resolve | hors périmètre |

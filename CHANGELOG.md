@@ -8,6 +8,12 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `std::thread` and `std::sync`: `thread::spawn(function, argument)`, `join`,
+  and channels (`channel`, `sender`, `clone_sender`, `receiver`, `send`,
+  `recv`) over opaque prelude types; new `thread` effect; structural
+  transferability (no reference crosses a thread) with `E-CONC-SPAWN-TARGET`
+  and `E-CONC-NOT-TRANSFERABLE` (RFC-E11-CONCURRENCY phase 1, F-STD-037).
+  `concurrency.md` is revised accordingly.
 - `std::net`: blocking text TCP (`listen`, `local_port`, `accept`, `connect`,
   `read_line`, `read_exact`, `write_str`), opaque prelude types `TcpListener`
   and `TcpStream`; the `net` effect is now producible and is refused under the

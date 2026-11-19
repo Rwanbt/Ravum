@@ -1,0 +1,10 @@
+fn boom(n: i64) -> i64 effects(panic) {
+    panic("worker failed");
+    n
+}
+
+fn main() -> () effects(io, thread, alloc, panic) {
+    let h: JoinHandle<i64> = thread::spawn(boom, 1);
+    let v: i64 = thread::join(h);
+    io::println(v.to_string().as_str());
+}

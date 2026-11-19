@@ -1,0 +1,8 @@
+{
+  "id": "types/spawn-target-not-function",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CONC-SPAWN-TARGET"
+  ],
+  "notes": "STD-18.2: the first argument of spawn must name a free function; a variable is refused."
+}

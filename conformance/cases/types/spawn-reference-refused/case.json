@@ -1,0 +1,8 @@
+{
+  "id": "types/spawn-reference-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CONC-NOT-TRANSFERABLE"
+  ],
+  "notes": "STD-18.1: a reference parameter cannot cross threads."
+}
