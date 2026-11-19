@@ -67,6 +67,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Changed
 
+- **Breaking (D-19-1):** a shift amount must be provably non-negative at compile time. An unsigned amount, or a constant of literals with a non-negative value, is accepted; any other signed amount, a variable included, is now `E-TYP-SHIFT` instead of compiling and panicking at run time. Applies to `<<`, `>>`, `<<=` and `>>=`.
+
 - Array-element moves are lowered at each access instead of being hoisted by a
   planner. `MovePlanner` is removed; `rustc` now checks every access, so a
   checker/backend disagreement becomes a compile error rather than a stale

@@ -1,0 +1,8 @@
+{
+  "id": "run/shift-signed-variable-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-SHIFT"
+  ],
+  "notes": "EXPR-3.4 (MUST, owner decision 2026-11-19): the sign of a signed non-constant amount is only known at run time, so it is refused at compile time (E-TYP-SHIFT), even when its value would be positive."
+}

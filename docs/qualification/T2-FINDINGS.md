@@ -2215,10 +2215,15 @@ chaque sortie mesurée avant d'être écrite :
 - EXPR-3.7, 3.8 : sous `test`, un test qui panique est `FAILED` et l'autre
   passe (`failed: 1`, `passed: 1`) ; `catch_unwind` → `E-RES-UNKNOWN`.
 
-### 40.1 Quantité de décalage négative connue seulement à l'exécution
+### 40.1 Quantité de décalage négative : refusée à la compilation (D-19-1)
 
-EXPR-3.4 refuse une quantité négative (`E-TYP-SHIFT`). Le checker ne peut le
-faire que pour un littéral : avec `let s: i64 = -1; a << s`, le programme
-compile et l'exécution s'arrête par un panic contrôlé. Aucun UB, ce qui reste
-dans l'esprit d'EXPR-3.3, mais la règle ne le dit pas. Proposition au Lead :
-préciser qu'une quantité négative non constante est un panic contrôlé.
+Constat : EXPR-3.4 refusait une quantité négative, mais seulement pour un
+littéral ; `let s: i64 = -1; a << s` compilait puis paniquait. Décision du
+responsable (D-19-1) : la détection doit avoir lieu à la compilation, même en
+variable. Le checker (`typeck/helpers.rs`, `shift_amount_refused`) accepte une
+quantité non signée ou une constante de littéraux de valeur `>= 0`, et refuse
+toute autre quantité signée (`E-TYP-SHIFT`), pour `<<`, `>>`, `<<=`, `>>=`.
+Quatre cas `run/shift-*` de plus. Impact mesuré : aucun exemple, application ni
+cas du corpus n'utilisait une quantité signée en variable ; trois tests de
+contrat du checker qui l'acceptaient sont mis à jour (`typeck_contracts2.rs`,
+`typeck_contracts3.rs`).
