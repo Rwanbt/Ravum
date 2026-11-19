@@ -24,6 +24,7 @@ Le design §5 énumère les limites de l'itération. Une liste en prose se perd 
 | Traits | `trait T { ... }` | `E-UNSUPPORTED-TRAIT` | parse | `struct`/`enum` + `impl` inhérent |
 | Bornes de type | `fn f<T: Ord>(...)` | `E-UNSUPPORTED-BOUNDS` | parse | génériques sans bornes |
 | `where` | `fn f<T>(...) where T: X` | `E-UNSUPPORTED-WHERE` | parse | aucune |
+| Identifiants Unicode | `let café = 1;` | `E-UNSUPPORTED-IDENT` | lex | identifiant ASCII (LEX-4.2) ; l'Unicode reste permis dans les littéraux (§8) |
 | `impl Trait` | `fn f() -> impl T` | `E-UNSUPPORTED-IMPL-TRAIT` | parse | type concret ou générique |
 | Objets-trait | `Box<dyn T>`, `dyn T` | `E-RES-UNKNOWN` (`dyn` est un identifiant valide, Q-LEX-1) | types | enum fermé |
 | HRTB | `for<'a> fn(...)` | `E-UNSUPPORTED-TRAIT` | parse | aucune |
