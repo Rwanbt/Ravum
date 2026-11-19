@@ -37,7 +37,13 @@ d'effet (BL-2 : coût 0).
 > **Implémenté** (phase réseau d'E11) : `spec/language/stdlib.md` §17,
 > FeatureId F-STD-036, cas `run/net-loopback-echo`,
 > `run/net-connect-refused-is-err`, `effects/net-refused-under-pure`.
-> HTTP (§4) n'est pas encore implémenté.
+> **HTTP (§4) implémenté** le 2026-11-19 : `stdlib.md` §19 (STD-19.1 à 19.8),
+> F-STD-038, cas `run/http-loopback-server`, `run/http-client-errors-are-err`,
+> `effects/http-refused-under-pure`, et le vertical `packages/http-notes`
+> (HTTP + SQLite, `crates/ravum-lang-cli/tests/http_notes.rs`). Écart : HTTP est
+> dans le **runtime**, pas en `.rv` : le texte de Ravum n'a ni `split`, ni
+> recherche, ni sous-chaîne (STD-9.11). La requête et la réponse sont des types
+> opaques lus par des fonctions d'accès ; les erreurs sont le type `Error`.
 
 ```rust
 fn listen(addr: &str) -> Result<TcpListener, Error> effects(net, alloc)

@@ -143,8 +143,10 @@ d'invalidation mesuré (36 éditions incrémentales). Le bloc DSP est reporté �
 
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 
-10 verticales exécutées. Absents : service HTTP + SQLite, DSP dans un hôte réel,
-E2E navigateur — DSP absent par décision de périmètre (A2), pas par oubli.
+10 verticales exécutées, plus le service HTTP + SQLite `packages/http-notes`
+(2026-11-19, D-19-8 ; `crates/ravum-lang-cli/tests/http_notes.rs`, Linux et
+macOS). Absents : DSP dans un hôte réel (E11, après le hot reload) ; le vertical
+HTTP + SQLite ne tourne pas sous Windows (pas de construction SQLite native).
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 

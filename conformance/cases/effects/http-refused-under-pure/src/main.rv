@@ -1,0 +1,4 @@
+fn main() -> () effects(net, alloc) {
+    let r: Result<HttpResponse, Error> = http::get("http://127.0.0.1:1/");
+    drop(r);
+}

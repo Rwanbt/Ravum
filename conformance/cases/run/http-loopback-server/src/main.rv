@@ -1,0 +1,54 @@
+fn serve(listener: TcpListener) -> () effects(net, alloc) {
+    let mut count: i32 = 0;
+    while count < 3 {
+        match net::accept(&listener) {
+            Ok(conn) => {
+                let mut stream: TcpStream = conn;
+                match http::read_request(&mut stream) {
+                    Ok(request) => {
+                        let mut reply: String = http::method(&request);
+                        reply.push_str(" ");
+                        reply.push_str(http::path(&request).as_str());
+                        reply.push_str(" ");
+                        reply.push_str(http::body(&request).as_str());
+                        let sent: Result<(), Error> = http::respond(&mut stream, 200, "text/plain", reply.as_str());
+                        drop(sent);
+                    }
+                    Err(e) => {
+                        drop(e);
+                        let sent: Result<(), Error> = http::respond(&mut stream, 400, "text/plain", "bad request");
+                        drop(sent);
+                    }
+                }
+            }
+            Err(e) => drop(e),
+        }
+        count = count + 1;
+    }
+}
+
+fn main() -> Result<(), Error> effects(io, net, thread, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut base: String = String::from("http://127.0.0.1:");
+    base.push_str(net::local_port(&listener).to_string().as_str());
+    let server: JoinHandle<()> = thread::spawn(serve, listener);
+    let mut a: String = base.clone();
+    a.push_str("/hello");
+    let r1: HttpResponse = http::get(a.as_str())?;
+    io::println(http::status(&r1).to_string().as_str());
+    io::println(http::response_body(&r1).as_str());
+    let mut b: String = base.clone();
+    b.push_str("/notes");
+    let r2: HttpResponse = http::post(b.as_str(), "text/plain", "body text")?;
+    io::println(http::response_body(&r2).as_str());
+    let mut c: String = String::from("127.0.0.1:");
+    c.push_str(base.replace("http://127.0.0.1:", "").as_str());
+    let mut raw: TcpStream = net::connect(c.as_str())?;
+    net::write_str(&mut raw, "NOT A REQUEST\r\n\r\n")?;
+    let line: Option<String> = net::read_line(&mut raw)?;
+    io::println(line.unwrap_or(String::from("")).as_str());
+    let tls: Result<HttpResponse, Error> = http::get("https://example.com/");
+    io::println(if tls.is_err() { "https refused" } else { "?" });
+    drop(server);
+    Ok(())
+}

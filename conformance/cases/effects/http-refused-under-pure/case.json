@@ -1,0 +1,9 @@
+{
+  "id": "effects/http-refused-under-pure",
+  "mode": "compile-fail",
+  "args": ["--profile", "pure"],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "STD-19.1: std::http carries the net effect, forbidden at the entry point of pure."
+}

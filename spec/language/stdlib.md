@@ -16,7 +16,7 @@
 | Catégorie | Noms |
 |---|---|
 | Types primitifs | `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool char ()`, `!` (Never) |
-| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18) |
+| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18), `CHandle` ([`abi.md`](abi.md) ABI-3.6), `HttpRequest`, `HttpResponse` (opaques, §19) |
 | Constructeurs | `Some`, `None`, `Ok`, `Err` (qualifiés ou non, [`types.md`](types.md) TYP-10.2) |
 | Intrinsèques | `assert`, `assert_eq`, `panic`, `drop` |
 
@@ -27,6 +27,7 @@
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
 | `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) |
+| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body` (§19) |
 | `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
 | `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |
 | `std::env` | `use std::env;` | `args`, `var` |
@@ -751,4 +752,53 @@ fn main() -> () effects(thread, alloc) {
 }
 // NÉGATIF — E-CONC-SPAWN-TARGET (une variable n'est pas une fonction)
 fn main2() -> () effects(thread, alloc) { let x: i64 = 3; let h: JoinHandle<i64> = thread::spawn(x, 1); }
+```
+
+## 19. `std::http` (HTTP/1.1 en clair)
+
+Source : [`RFC-E11-NET-HTTP`](../../docs/rfc/RFC-E11-NET-HTTP.md) §4
+(`PROPOSED`, décisions D-18-2 et D-19-8). HTTP est une bibliothèque sur
+`std::net`, implémentée dans le runtime : le texte de Ravum n'a ni `split`,
+ni recherche, ni sous-chaîne (STD-9.11), donc un analyseur écrit en `.rv`
+n'est pas possible en 1.0. `HttpRequest` et `HttpResponse` sont des types
+**opaques** du prélude, lus par des fonctions d'accès.
+
+```rv
+pub fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> effects(net, alloc)
+pub fn method(request: &HttpRequest) -> String effects(alloc)
+pub fn path(request: &HttpRequest) -> String effects(alloc)
+pub fn header(request: &HttpRequest, name: &str) -> Option<String> effects(alloc)
+pub fn body(request: &HttpRequest) -> String effects(alloc)
+pub fn respond(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Result<(), Error> effects(net, alloc)
+pub fn get(url: &str) -> Result<HttpResponse, Error> effects(net, alloc)
+pub fn post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> effects(net, alloc)
+pub fn status(response: &HttpResponse) -> u16
+pub fn response_body(response: &HttpResponse) -> String effects(alloc)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-19.1 | `read_request`, `respond`, `get` et `post` portent l'effet `net` ; il est interdit au point d'entrée de `pure` et de `rt`. | MUST |
+| STD-19.2 | `read_request` lit une ligne `MÉTHODE /chemin HTTP/1.1` (ou `HTTP/1.0`), les en-têtes jusqu'à la ligne vide, puis un corps de `Content-Length` octets (0 sans en-tête). Une ligne ou un chemin malformé, une autre version, ou `Transfer-Encoding` (dont `chunked`) rendent `Err`. | MUST |
+| STD-19.3 | Limites fixes : une ligne ≤ 8 KiB, au plus 100 en-têtes, un corps ≤ 16 MiB ; au-delà, `Err`. Les octets de la ligne, des en-têtes et du corps doivent être de l'UTF-8 strict, sinon `Err`. | MUST |
+| STD-19.4 | `header(request, nom)` compare les noms sans tenir compte de la casse ASCII et rend la valeur sans blancs en tête ni en queue, ou `None`. | MUST |
+| STD-19.5 | `respond` écrit une seule réponse complète : ligne de statut, `Content-Type`, `Content-Length`, `Connection: close`, puis le corps. Un statut hors de `100..=999` ou un `content_type` contenant `\r` ou `\n` rend `Err` (pas d'injection d'en-tête). | MUST |
+| STD-19.6 | `get` et `post` n'acceptent que `http://hôte[:port]/chemin` (port 80 par défaut), envoient `Connection: close` et lisent le corps par `Content-Length`, ou jusqu'à la fermeture. `https://` rend `Err` : il n'y a pas de TLS en 1.0. | MUST |
+| STD-19.7 | Toute erreur de connexion, de lecture ou de format est `Err`, jamais une panique. | MUST |
+| STD-19.8 | Une connexion par requête : ni keep-alive, ni pipelining, ni HTTP/2, ni TLS, ni compression. Un serveur Ravum 1.0 est destiné à la boucle locale et au réseau local. | MUST |
+
+```rv
+// POSITIF — répondre à une requête
+fn handle(stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc) {
+    let request: HttpRequest = http::read_request(stream)?;
+    let mut text: String = http::method(&request);
+    text.push_str(" ");
+    text.push_str(http::path(&request).as_str());
+    return http::respond(stream, 200, "text/plain", text.as_str());
+}
+```
+
+```rv
+// NÉGATIF — E-EFF-PROFILE (http sous `pure`)
+fn main() -> () effects(net, alloc) { let r = http::get("http://127.0.0.1:1/"); drop(r); }
 ```

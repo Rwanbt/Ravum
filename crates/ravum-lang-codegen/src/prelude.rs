@@ -283,6 +283,250 @@ pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error>
     }
 }
 
+/// An HTTP/1.1 request read from a connection (`std::http`, RFC-E11-NET-HTTP §4).
+pub struct HttpRequest {
+    method: String,
+    path: String,
+    headers: Vec<(String, String)>,
+    body: String,
+}
+
+/// An HTTP/1.1 response received by `http::get` / `http::post`.
+pub struct HttpResponse {
+    status: u16,
+    body: String,
+}
+
+const RV_HTTP_MAX_LINE: u64 = 8 * 1024;
+const RV_HTTP_MAX_HEADERS: usize = 100;
+const RV_HTTP_MAX_BODY: usize = 16 * 1024 * 1024;
+
+/// One CRLF- or LF-terminated line of at most `RV_HTTP_MAX_LINE` bytes.
+fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<Option<String>, Error> {
+    use std::io::{BufRead, Read};
+    let mut bytes = Vec::new();
+    match reader.by_ref().take(RV_HTTP_MAX_LINE + 1).read_until(b'\n', &mut bytes) {
+        Ok(0) => return Ok(None),
+        Ok(_) => {}
+        Err(error) => return Err(rv_net_error("cannot read from the connection", error)),
+    }
+    if bytes.last() != Some(&b'\n') {
+        return Err(Error::new("http: line too long or truncated"));
+    }
+    bytes.pop();
+    if bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    match String::from_utf8(bytes) {
+        Ok(line) => Ok(Some(line)),
+        Err(_) => Err(Error::new("http: header bytes are not valid UTF-8")),
+    }
+}
+
+/// Header lines up to the blank line; names are kept as received.
+fn rv_http_headers(
+    reader: &mut std::io::BufReader<std::net::TcpStream>,
+) -> Result<Vec<(String, String)>, Error> {
+    let mut headers = Vec::new();
+    loop {
+        let line = match rv_http_line(reader)? {
+            Some(line) => line,
+            None => return Err(Error::new("http: connection closed inside the headers")),
+        };
+        if line.is_empty() {
+            return Ok(headers);
+        }
+        if headers.len() == RV_HTTP_MAX_HEADERS {
+            return Err(Error::new("http: too many headers"));
+        }
+        match line.split_once(':') {
+            Some((name, value)) => headers.push((name.trim().to_string(), value.trim().to_string())),
+            None => return Err(Error::new("http: malformed header line")),
+        }
+    }
+}
+
+fn rv_http_find(headers: &[(String, String)], name: &str) -> Option<String> {
+    headers
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.clone())
+}
+
+/// The body announced by `Content-Length` (0 when absent), or `until_eof`.
+fn rv_http_read_body(
+    reader: &mut std::io::BufReader<std::net::TcpStream>,
+    headers: &[(String, String)],
+    until_eof: bool,
+) -> Result<String, Error> {
+    use std::io::Read;
+    if rv_http_find(headers, "transfer-encoding").is_some() {
+        return Err(Error::new("http: Transfer-Encoding is not supported"));
+    }
+    let mut bytes = Vec::new();
+    match rv_http_find(headers, "content-length") {
+        Some(text) => {
+            let length: usize = match text.parse() {
+                Ok(length) => length,
+                Err(_) => return Err(Error::new("http: invalid Content-Length")),
+            };
+            if length > RV_HTTP_MAX_BODY {
+                return Err(Error::new("http: body too large"));
+            }
+            bytes.resize(length, 0);
+            if let Err(error) = reader.read_exact(&mut bytes) {
+                return Err(rv_net_error("cannot read the body", error));
+            }
+        }
+        None if until_eof => {
+            if let Err(error) = reader
+                .by_ref()
+                .take(RV_HTTP_MAX_BODY as u64 + 1)
+                .read_to_end(&mut bytes)
+            {
+                return Err(rv_net_error("cannot read the body", error));
+            }
+            if bytes.len() > RV_HTTP_MAX_BODY {
+                return Err(Error::new("http: body too large"));
+            }
+        }
+        None => {}
+    }
+    match String::from_utf8(bytes) {
+        Ok(body) => Ok(body),
+        Err(_) => Err(Error::new("http: body is not valid UTF-8")),
+    }
+}
+
+pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
+    let line = match rv_http_line(&mut stream.reader)? {
+        Some(line) => line,
+        None => return Err(Error::new("http: connection closed before a request")),
+    };
+    let mut parts = line.split(' ');
+    let (method, path, version) = match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some(m), Some(p), Some(v), None) if !m.is_empty() && p.starts_with('/') => (m, p, v),
+        _ => return Err(Error::new("http: malformed request line")),
+    };
+    if version != "HTTP/1.1" && version != "HTTP/1.0" {
+        return Err(Error::new("http: unsupported HTTP version"));
+    }
+    let (method, path) = (method.to_string(), path.to_string());
+    let headers = rv_http_headers(&mut stream.reader)?;
+    let body = rv_http_read_body(&mut stream.reader, &headers, false)?;
+    Ok(HttpRequest { method, path, headers, body })
+}
+
+pub fn rv_http_method(request: &HttpRequest) -> String {
+    request.method.clone()
+}
+
+pub fn rv_http_path(request: &HttpRequest) -> String {
+    request.path.clone()
+}
+
+pub fn rv_http_header(request: &HttpRequest, name: &str) -> Option<String> {
+    rv_http_find(&request.headers, name)
+}
+
+pub fn rv_http_body(request: &HttpRequest) -> String {
+    request.body.clone()
+}
+
+fn rv_http_reason(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        400 => "Bad Request",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        500 => "Internal Server Error",
+        _ => "Status",
+    }
+}
+
+/// One complete response, then the connection is meant to close (HTTP-1.4).
+pub fn rv_http_respond(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Result<(), Error> {
+    if !(100..=999).contains(&status) || content_type.contains(['\r', '\n']) {
+        return Err(Error::new("http: invalid status or content type"));
+    }
+    let text = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        rv_http_reason(status),
+        content_type,
+        body.len(),
+        body
+    );
+    rv_net_write_str(stream, &text)
+}
+
+fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
+    if url.starts_with("https://") {
+        return Err(Error::new("http: https is not supported (no TLS in Core 1.0)"));
+    }
+    let rest = match url.strip_prefix("http://") {
+        Some(rest) => rest,
+        None => return Err(Error::new("http: the URL must start with http://")),
+    };
+    let (authority, path) = match rest.find('/') {
+        Some(index) => (&rest[..index], &rest[index..]),
+        None => (rest, "/"),
+    };
+    if authority.is_empty() || content_type.contains(['\r', '\n']) {
+        return Err(Error::new("http: invalid URL or content type"));
+    }
+    let address = if authority.contains(':') {
+        authority.to_string()
+    } else {
+        format!("{}:80", authority)
+    };
+    let mut stream = rv_net_connect(&address)?;
+    let request = format!(
+        "{} {} HTTP/1.1\r\nHost: {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        method,
+        path,
+        authority,
+        content_type,
+        body.len(),
+        body
+    );
+    rv_net_write_str(&mut stream, &request)?;
+    let line = match rv_http_line(&mut stream.reader)? {
+        Some(line) => line,
+        None => return Err(Error::new("http: connection closed before a response")),
+    };
+    let status: u16 = match line.split(' ').nth(1).map(|code| code.parse()) {
+        Some(Ok(status)) if line.starts_with("HTTP/1.") => status,
+        _ => return Err(Error::new("http: malformed status line")),
+    };
+    let headers = rv_http_headers(&mut stream.reader)?;
+    let body = rv_http_read_body(&mut stream.reader, &headers, true)?;
+    Ok(HttpResponse { status, body })
+}
+
+pub fn rv_http_get(url: &str) -> Result<HttpResponse, Error> {
+    rv_http_send(url, "GET", "text/plain", "")
+}
+
+pub fn rv_http_post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
+    rv_http_send(url, "POST", content_type, body)
+}
+
+pub fn rv_http_status(response: &HttpResponse) -> u16 {
+    response.status
+}
+
+pub fn rv_http_response_body(response: &HttpResponse) -> String {
+    response.body.clone()
+}
+
 /// A running thread (`std::thread`, RFC-E11-CONCURRENCY). Dropping a handle
 /// that was not joined joins it: no thread outlives its handle (CONC-3.5).
 pub struct JoinHandle<T> {

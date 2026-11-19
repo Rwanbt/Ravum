@@ -47,3 +47,4 @@ packages/sqlite/ravum.toml
 packages/sqlite/ravum.lock
 packages/sqlite/.ravum/
 packages/sqlite-notes/ravum.lock
+packages/http-notes/ravum.lock
