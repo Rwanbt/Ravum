@@ -230,7 +230,7 @@ pub(super) fn load_package_dir(
         // partially loaded program to the checker.
         if !diags.has_errors() {
             if let Some(program) = &program {
-                let natives = resolve_natives(&root, &manifest, program, &mut diags);
+                let natives = resolve_natives(&graph, program, &mut diags);
                 out.dependencies_digest = fold_native_digest(&out.dependencies_digest, &natives);
                 out.natives = natives;
             }

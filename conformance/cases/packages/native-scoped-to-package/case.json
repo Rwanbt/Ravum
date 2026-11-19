@@ -1,0 +1,9 @@
+{
+  "id": "packages/native-scoped-to-package",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-FFI-UNKNOWN-LIB"
+  ],
+  "notes": "MOD-5.20: a package resolves extern \"C\" from \"<name>\" against its own [native] section only; the dependency util cannot use the root package entry demo."
+}

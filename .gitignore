@@ -42,3 +42,8 @@ conventions.json
 mutants.out/
 mutants.out.old/
 mutants-*.out/
+packages/sqlite/native/
+packages/sqlite/ravum.toml
+packages/sqlite/ravum.lock
+packages/sqlite/.ravum/
+packages/sqlite-notes/ravum.lock

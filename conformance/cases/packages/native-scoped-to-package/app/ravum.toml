@@ -1,0 +1,10 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "core-1.0"
+
+[dependencies]
+util = { path = "../util" }
+
+[native]
+demo = { kind = "static", path = "native", lib = "demo", sha256 = "0000000000000000000000000000000000000000000000000000000000000000" }

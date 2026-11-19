@@ -153,6 +153,8 @@ impl NativeKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeLib {
     pub name: String,
+    /// The package whose `[native]` section declares it.
+    pub package: String,
     pub kind: NativeKind,
     /// Absolute directory passed to `rustc -L native=`.
     pub dir: PathBuf,

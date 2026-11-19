@@ -98,7 +98,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-MOD-MANIFEST` | modules | `ravum.toml` invalide, clé inconnue, nom/version malformés |
 | `E-MOD-DEPENDENCY` | modules | dépendance malformée (pas de `path`, nom≠`package.name`, cible sans `src/lib.rv`, conflit) |
 | `E-MOD-BUILD-SCRIPT` | modules | `build.rs`, `[build]`, script refusé |
-| `E-MOD-NATIVE` | modules | entrée `[native]` malformée, ou `[native]` dans une dépendance ([`modules.md`](modules.md) MOD-5.14, MOD-5.20) |
+| `E-MOD-NATIVE` | modules | entrée `[native]` malformée, ou même nom de bibliothèque lié par deux packages ([`modules.md`](modules.md) MOD-5.14, MOD-5.20) |
 | `E-MOD-NATIVE-PATH` | modules | `path` d'une bibliothèque native hors du package (MOD-5.15) |
 | `E-MOD-NATIVE-MISSING` | modules | fichier de bibliothèque native absent, ou aucun digest pour la plateforme (MOD-5.16) |
 | `E-MOD-NATIVE-DIGEST` | modules | digest du fichier différent du digest épinglé (MOD-5.17) |

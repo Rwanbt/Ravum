@@ -1,0 +1,78 @@
+fn render(value: sqlite::Value) -> String effects(alloc) {
+    match value {
+        sqlite::Value::Int(n) => n.to_string(),
+        sqlite::Value::Real(x) => x.to_string(),
+        sqlite::Value::Text(t) => t,
+        sqlite::Value::Null => String::from("NULL"),
+    }
+}
+
+/// Prints each row as `id name`; `pop` reads the columns from the last one.
+fn show(rows: Vec<sqlite::Row>) -> () effects(io, alloc, panic) {
+    let mut rest: Vec<sqlite::Row> = rows;
+    let mut lines: Vec<String> = Vec::new();
+    let mut done: bool = false;
+    while !done {
+        let next: Option<sqlite::Row> = rest.pop();
+        match next {
+            Some(row) => {
+                let mut values: Vec<sqlite::Value> = row.values;
+                let name: String = render(values.pop().unwrap());
+                let mut line: String = render(values.pop().unwrap());
+                line.push_str(" ");
+                line.push_str(name.as_str());
+                lines.push(line);
+            }
+            None => {
+                done = true;
+            }
+        }
+    }
+    let mut finished: bool = false;
+    while !finished {
+        let line: Option<String> = lines.pop();
+        match line {
+            Some(text) => io::println(text.as_str()),
+            None => {
+                finished = true;
+            }
+        }
+    }
+}
+
+fn main() -> Result<(), Error> effects(io, alloc, panic, unsafe, ffi) {
+    io::println(sqlite::version().as_str());
+    let db: sqlite::Db = sqlite::open_memory()?;
+    let made: i64 = sqlite::execute(&db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT UNIQUE)", Vec::new())?;
+    drop(made);
+    let mut p: Vec<sqlite::Value> = Vec::new();
+    p.push(sqlite::Value::Text(String::from("'; DROP TABLE t; --")));
+    let n: i64 = sqlite::execute(&db, "INSERT INTO t (name) VALUES (?1)", p)?;
+    io::println(n.to_string().as_str());
+    let mut q: Vec<sqlite::Value> = Vec::new();
+    q.push(sqlite::Value::Text(String::from("ada")));
+    let n2: i64 = sqlite::execute(&db, "INSERT INTO t (name) VALUES (?1)", q)?;
+    drop(n2);
+    sqlite::begin(&db)?;
+    let mut r: Vec<sqlite::Value> = Vec::new();
+    r.push(sqlite::Value::Text(String::from("ghost")));
+    let n3: i64 = sqlite::execute(&db, "INSERT INTO t (name) VALUES (?1)", r)?;
+    drop(n3);
+    sqlite::rollback(&db)?;
+    let mut d: Vec<sqlite::Value> = Vec::new();
+    d.push(sqlite::Value::Text(String::from("ada")));
+    let dup: Result<i64, Error> = sqlite::execute(&db, "INSERT INTO t (name) VALUES (?1)", d);
+    match dup {
+        Ok(_) => io::println("duplicate accepted"),
+        Err(e) => {
+            drop(e);
+            io::println("duplicate is Err");
+        }
+    }
+    let bad: Result<i64, Error> = sqlite::execute(&db, "SELEC nope", Vec::new());
+    io::println(if bad.is_err() { "syntax error is Err" } else { "?" });
+    let rows: Vec<sqlite::Row> = sqlite::query(&db, "SELECT id, name FROM t ORDER BY id", Vec::new())?;
+    show(rows);
+    sqlite::close(db);
+    Ok(())
+}

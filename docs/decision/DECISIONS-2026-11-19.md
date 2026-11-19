@@ -73,3 +73,18 @@ remplacement, refus si le schéma change **sauf** si le nouveau module fournit
 
 Réseau → threads → SQLite → hot reload → DSP. Les RFC restent `PROPOSED`
 jusqu'à leur ratification ; ces décisions fixent les choix de conception.
+
+## D-19-7 — SQLite livré comme paquet `.rv`
+
+**Décision du responsable :** SQLite est un **paquet** `.rv` (`packages/sqlite`),
+pas un module `std`. Sa bibliothèque native est construite par un script du
+dépôt, pas par la toolchain (MOD-5.10), et épinglée par digest. Un programme
+l'utilise par `[dependencies] sqlite = { path = "..." }`. Conséquence : une
+dépendance peut déclarer `[native]` ; ses entrées ne servent qu'à ses propres
+blocs `extern` (MOD-5.20 révisé).
+
+## D-19-8 — Vertical T9 suivant : HTTP + SQLite
+
+**Décision du responsable :** après SQLite, HTTP/1.1 au-dessus de `std::net`,
+puis un service HTTP + SQLite testé de bout en bout. Le hot reload et le bloc
+DSP viennent ensuite.

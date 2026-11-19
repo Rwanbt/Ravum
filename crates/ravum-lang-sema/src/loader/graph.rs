@@ -121,19 +121,6 @@ pub(super) fn collect_dependencies(
             graph.failed = true;
             continue;
         };
-        // NAT-1.1 / MOD-5.20: only the root package links native libraries.
-        if let Some(native) = target.native.first() {
-            diags.push(Diagnostic::error(
-                "E-MOD-NATIVE",
-                native.span,
-                format!(
-                    "dependency `{}` declares native library `{}`: only the root package may have a `[native]` section",
-                    dep.name, native.name
-                ),
-            ));
-            graph.failed = true;
-            continue;
-        }
         if target.name != dep.name {
             diags.push(Diagnostic::error(
                 "E-MOD-DEPENDENCY",

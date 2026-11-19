@@ -8,6 +8,7 @@
 
 use super::*;
 use ravum_lang_syntax::ast::{Item, ItemKind};
+use std::collections::BTreeSet;
 
 fn native_err(diags: &mut DiagnosticBag, code: &str, span: Span, message: impl Into<String>) {
     diags.push(Diagnostic::error(code, span, message));
@@ -161,46 +162,111 @@ fn library_file_name(kind: NativeKind, lib: &str) -> String {
     }
 }
 
-/// Names of the libraries named by `extern "C" from "<lib>"` in `program`,
-/// with the span of each first use. Every name must be declared in
-/// `[native]` (`E-FFI-UNKNOWN-LIB`, NAT-2.1).
-fn used_libraries(program: &Program) -> Vec<(String, Span)> {
-    fn walk(items: &[Item], out: &mut Vec<(String, Span)>) {
-        for item in items {
-            match &item.kind {
-                ItemKind::Extern(block) => {
-                    if let Some(lib) = &block.lib {
-                        if !out.iter().any(|(name, _)| *name == lib.name) {
-                            out.push((lib.name.clone(), lib.span));
-                        }
+/// Names of the libraries named by `extern "C" from "<lib>"` in `items`,
+/// with the span of each first use. Modules named in `skip` (the merged
+/// dependencies, at the root) are not entered.
+fn used_libraries(items: &[Item], skip: &BTreeSet<String>, out: &mut Vec<(String, Span)>) {
+    for item in items {
+        match &item.kind {
+            ItemKind::Extern(block) => {
+                if let Some(lib) = &block.lib {
+                    if !out.iter().any(|(name, _)| *name == lib.name) {
+                        out.push((lib.name.clone(), lib.span));
                     }
                 }
-                ItemKind::Mod(module) => walk(&module.items, out),
-                _ => {}
             }
+            ItemKind::Mod(module) => {
+                let merged = module
+                    .name
+                    .as_ref()
+                    .is_some_and(|name| skip.contains(&name.name));
+                if !merged {
+                    used_libraries(&module.items, &BTreeSet::new(), out);
+                }
+            }
+            _ => {}
         }
     }
-    let mut out = Vec::new();
-    walk(&program.root.items, &mut out);
+}
+
+/// Resolve and check the native libraries a loaded program uses (MOD-5.14 to
+/// MOD-5.20). Each package resolves the libraries its own `extern` blocks
+/// name against its own `[native]` section, relative to its own directory; a
+/// dependency's code is the module named after it at the program root.
+pub(super) fn resolve_natives(
+    graph: &DepGraph,
+    program: &Program,
+    diags: &mut DiagnosticBag,
+) -> Vec<NativeLib> {
+    let dependency_names: BTreeSet<String> = graph
+        .packages
+        .iter()
+        .skip(1)
+        .map(|package| package.manifest.name.clone())
+        .collect();
+    let mut out: Vec<NativeLib> = Vec::new();
+    for (index, package) in graph.packages.iter().enumerate() {
+        let mut used = Vec::new();
+        if index == 0 {
+            used_libraries(&program.root.items, &dependency_names, &mut used);
+        } else {
+            let module = program.root.items.iter().find_map(|item| match &item.kind {
+                ItemKind::Mod(module)
+                    if module
+                        .name
+                        .as_ref()
+                        .is_some_and(|name| name.name == package.manifest.name) =>
+                {
+                    Some(module)
+                }
+                _ => None,
+            });
+            if let Some(module) = module {
+                used_libraries(&module.items, &BTreeSet::new(), &mut used);
+            }
+        }
+        for native in resolve_package_natives(&package.dir, &package.manifest, used, diags) {
+            if let Some(other) = out.iter().find(|other| other.name == native.name) {
+                let span = package
+                    .manifest
+                    .native
+                    .iter()
+                    .find(|decl| decl.name == native.name)
+                    .map(|decl| decl.span)
+                    .unwrap_or_else(Span::dummy);
+                native_err(
+                    diags,
+                    "E-MOD-NATIVE",
+                    span,
+                    format!(
+                        "native library `{}` is declared by two packages (`{}` and `{}`); a program links one library per name",
+                        native.name, other.package, native.package
+                    ),
+                );
+                continue;
+            }
+            out.push(native);
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
-/// Resolve and check the native libraries a loaded program uses.
-pub(super) fn resolve_natives(
+fn resolve_package_natives(
     root: &Path,
     manifest: &PackageManifest,
-    program: &Program,
+    used: Vec<(String, Span)>,
     diags: &mut DiagnosticBag,
 ) -> Vec<NativeLib> {
     let platform = host_platform();
     let mut out = Vec::new();
-    for (name, use_span) in used_libraries(program) {
+    for (name, use_span) in used {
         let Some(decl) = manifest.native.iter().find(|decl| decl.name == name) else {
             native_err(
                 diags,
                 "E-FFI-UNKNOWN-LIB",
                 use_span,
-                format!("`extern \"C\" from \"{name}\"`: no `{name}` in the `[native]` section of ravum.toml (NAT-2.1)"),
+                format!("`extern \"C\" from \"{name}\"`: no `{name}` in the `[native]` section of the `ravum.toml` of package `{}` (NAT-2.1)", manifest.name),
             );
             continue;
         };
@@ -252,13 +318,13 @@ pub(super) fn resolve_natives(
         }
         out.push(NativeLib {
             name: name.clone(),
+            package: manifest.name.clone(),
             kind: decl.kind,
             dir,
             lib: decl.lib.clone(),
             digest: format!("sha256:{actual}"),
         });
     }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
