@@ -55,6 +55,9 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::pipeline::{self, BuildOptions};
 use crate::util;
 
+mod reload;
+pub(crate) use reload::run as run_reload;
+
 /// Poll interval (mission range: 200–400 ms).
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// Grace period granted to a short-lived child when `--max-rebuilds` ends the loop.

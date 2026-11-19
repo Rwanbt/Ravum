@@ -1,0 +1,14 @@
+struct State { count: i64 }
+
+fn init() -> State effects() {
+    State { count: 0 }
+}
+
+fn step(state: &State, line: String) -> State effects() {
+    drop(line);
+    State { count: state.count + 1 }
+}
+
+fn main() -> () effects() {
+    drop(init());
+}

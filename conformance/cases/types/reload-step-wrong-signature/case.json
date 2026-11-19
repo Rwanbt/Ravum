@@ -1,0 +1,10 @@
+{
+  "id": "types/reload-step-wrong-signature",
+  "mode": "compile-fail",
+  "args": [
+    "--reload"
+  ],
+  "expect_codes": [
+    "E-HR-ENTRY"
+  ]
+}

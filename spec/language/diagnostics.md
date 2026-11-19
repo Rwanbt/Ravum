@@ -164,6 +164,16 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-CONC-SPAWN-TARGET` | types | le premier argument de `thread::spawn` ne nomme pas une fonction libre non générique à un paramètre ([`stdlib.md`](stdlib.md) STD-18.2) |
 | `E-CONC-NOT-TRANSFERABLE` | types | type contenant une référence passé entre threads : paramètre ou résultat d'un `spawn`, élément d'un canal ([`stdlib.md`](stdlib.md) STD-18.1) |
 
+### 3.6.2 Rechargement à chaud
+
+Émis par `ravum-lang check --reload` et `ravum-lang watch --reload` seulement ([`reload.md`](reload.md)).
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-HR-ENTRY` | reload | `State`, `init`, `step` absents du module racine, ou signature différente du contrat ; `migrate` mal formée (HR-1.8, HR-1.7) |
+| `E-HR-STATE-TYPE` | reload | type de l'état sans forme canonique : générique, non utilisateur, fonction (HR-1.6) |
+| `E-HR-STATE-RESOURCE` | reload | référence ou ressource (socket, handle, canal, `CHandle`) dans l'état (HR-1.6) |
+
 ### 3.7 Avertissements
 
 | Code | Phase | Sens |

@@ -1,0 +1,14 @@
+struct State { listener: Option<TcpListener> }
+
+fn init() -> State effects() {
+    State { listener: None }
+}
+
+fn step(state: State, line: String) -> State effects() {
+    drop(line);
+    state
+}
+
+fn main() -> () effects() {
+    drop(init());
+}

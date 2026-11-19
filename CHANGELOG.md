@@ -8,6 +8,15 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `ravum-lang watch --reload`: hot reload with state preservation
+  (RFC-E11-HOT-RELOAD, D-19-5, `spec/language/reload.md`, F-META-033). A
+  program declares `State`, `init`, `step` and optionally `migrate`; each stdin
+  line is one event. A swap happens only between two events, a changed state
+  schema is refused unless `migrate` takes it, a panic in `step` reverts to the
+  previous module and replays the event, a broken build changes nothing. Each
+  module is a separate process; the state crosses a swap as canonical text.
+  `ravum-lang check --reload` checks the contract (`E-HR-ENTRY`,
+  `E-HR-STATE-TYPE`, `E-HR-STATE-RESOURCE`).
 - `std::http`: HTTP/1.1 in clear text over `std::net`, server side
   (`read_request`, accessors, `respond`) and client side (`get`, `post`), with
   fixed size limits; `https://` is an `Err` (no TLS). `packages/http-notes` is

@@ -53,6 +53,7 @@ pub fn run(
         test_mode: false,
         emit_rust,
         target,
+        reload: None,
     };
     let mut build_timings = BuildTimings::default();
     let result = pipeline::compile_program_with_timings(&frontend, &options, &mut build_timings);
