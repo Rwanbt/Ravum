@@ -1,0 +1,36 @@
+fn produce(out: Sender<i64>) -> () effects(thread) {
+    for i in 0..250 {
+        let sent: bool = sync::send(&out, i as i64);
+        drop(sent);
+    }
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let c: Channel<i64> = sync::channel();
+    let tx: Sender<i64> = sync::sender(&c);
+    let rx: Receiver<i64> = sync::receiver(c);
+    let a: JoinHandle<()> = thread::spawn(produce, sync::clone_sender(&tx));
+    let b: JoinHandle<()> = thread::spawn(produce, sync::clone_sender(&tx));
+    let d: JoinHandle<()> = thread::spawn(produce, sync::clone_sender(&tx));
+    let e: JoinHandle<()> = thread::spawn(produce, tx);
+    let mut sum: i64 = 0;
+    let mut count: i64 = 0;
+    let mut done: bool = false;
+    while !done {
+        match sync::recv(&rx) {
+            Some(v) => {
+                sum = sum + v;
+                count = count + 1;
+            }
+            None => {
+                done = true;
+            }
+        }
+    }
+    drop(a);
+    drop(b);
+    drop(d);
+    drop(e);
+    io::println(sum.to_string().as_str());
+    io::println(count.to_string().as_str());
+}

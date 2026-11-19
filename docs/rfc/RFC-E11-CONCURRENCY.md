@@ -52,8 +52,10 @@ C'est la règle `CONC-2.1` proposée ; elle remplace un système de traits
 >   d'être relancée par `join` : c'est le comportement de `main`, et il est
 >   déterministe ;
 > - `send` rend `bool` (`false` si le récepteur est détruit) ;
-> - **pas encore fait** : le job TSan bloquant (§5) ; il reste une condition de
->   `PASS` pour T6.
+> - **TSan bloquant** (§5) : `.github/workflows/tsan.yml` et
+>   `tools/tsan_run.py` (2026-11-19), sur tous les cas `run-pass` concurrents
+>   (threads, canaux, TCP, HTTP), 10 exécutions chacun, avec un témoin de course
+>   qui doit être signalé ; la bibliothèque standard n'est pas instrumentée.
 
 Module `std::thread` et `std::sync`, effet **`thread`** (nouveau groupe) :
 

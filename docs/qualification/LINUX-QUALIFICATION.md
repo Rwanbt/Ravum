@@ -92,9 +92,20 @@ Le workflow est déclenché par `workflow_dispatch` et par `push` sur `main`, `d
 | `miri` | `MIRIFLAGS=-Zmiri-disable-isolation RAVUM_FUZZ_ITERS=16 cargo +nightly miri test -p ravum-lang-syntax -p ravum-lang-sema --lib --tests` | contrôle dynamique Miri sur les crates du langage | **PASS** |
 | `fuzz` | `cargo +nightly test -p ravum-lang-syntax --test fuzz_lex_parse -- --ignored --test-threads=1` (garde souple sur `tests/fuzz_*.rs`) | budget long déterministe du fuzz lexer/parser | **PASS** — garde-fou souple, pas une campagne de fuzzing (§7) |
 | `wasm` | `cargo build --target wasm32-wasip1 examples/hello` puis `run --target wasm32-wasip1 examples/hello`, stdout `hello, ravum` | build et exécution WASI preview 1 via Node | **PASS** |
-| `tsan` | *(désactivé : `if: false`)* | **NOT_APPLICABLE** | **SKIP explicite** — `NOT_APPLICABLE (no threads/async in Core 1.0)` |
+| `tsan` | *(déplacé dans `.github/workflows/tsan.yml`, 2026-11-19)* | voir ci-dessous | — |
 
-### TSan — NOT_APPLICABLE (justifié)
+### TSan — réactivé (2026-11-19)
+
+Depuis la phase 1 de RFC-E11-CONCURRENCY (threads, canaux) et `std::net` /
+`std::http`, un chemin concurrent existe. TSan est un workflow **bloquant**
+séparé, [`tsan.yml`](../../.github/workflows/tsan.yml), exécuté aussi sur les
+pull requests : `tools/tsan_run.py` construit chaque cas `run-pass` concurrent
+avec `-Zsanitizer=thread` et l'exécute 10 fois ; un témoin contenant une vraie
+course doit être signalé, sinon le job échoue. Limite : la bibliothèque
+standard n'est pas reconstruite avec TSan. Le texte ci-dessous est
+l'historique de la décision antérieure.
+
+#### Historique — NOT_APPLICABLE (jusqu'au 2026-11-19)
 
 ThreadSanitizer qualifie du code concurrent. Ravum Core 1.0 est **mono-thread**
 et n'expose ni threads ni runtime asynchrone ; la FFI est **synchrone** et
