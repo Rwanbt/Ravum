@@ -218,6 +218,26 @@ générique : `Unsupported`.
 | 16 programmes (`&mut self` en chaîne, `self` par valeur, struct de structs, débordement et division par zéro dans une méthode) | natif = interpréteur, 4 traps (la machine n'a pas d'`impl`) |
 | **oracle indépendant** `ravum-lang-cli/tests/jit_print_rustc.rs` : 15 cas par `ravum-lang run` (rustc) et par le JIT | **sortie identique octet par octet** |
 
+## IR v1.2, suite — `const`
+
+`const` entiers et booléens (les seuls que le checker évalue) : valeur en
+expression, et motif de constante par chemin (`crate::K =>`, EXPR-5.8).
+
+**Deuxième bug trouvé dans la machine de référence** : son parseur traitait
+tout identifiant seul commençant par une majuscule comme une variante
+unitaire, donc `K =>` ne correspondait jamais. La spec dit le contraire :
+G-6.38 (« le pattern `IDENT` lie par valeur ») et G-6.41 (seuls `Some`,
+`None`, `Ok`, `Err` sont des motifs de constructeur sans qualification). Le
+checker, la voie `rustc` (vérifié : `1, 1, 1`) et le JIT lient. Correction
+d'une ligne dans `crates/ravum-core-machine/src/parser.rs`, plus le programme
+de corpus `o7-ident-pattern-binds.rv`. Le test différentiel machine ↔ binaire
+du CLI reste vert.
+
+| Test | Résultat |
+|---|---|
+| `const` en expression (bornes `i64::MAX`, `i8::MIN`, `u8::MAX`), débordement via une constante, `K =>` (liaison) | 4 programmes identiques sur les 3 moteurs, 1 trap |
+| motif de constante `crate::K` (la machine n'en a pas) | natif = interpréteur = valeurs calculées à la main |
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

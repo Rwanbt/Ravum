@@ -21,11 +21,14 @@
 
 use std::collections::BTreeMap;
 
+use ravum_lang_sema::facts::ConstValue;
 use ravum_lang_sema::syntax::ast::{
     self, Block as AstBlock, Expr, ExprKind, FnItem, ItemKind, PatKind, StmtKind,
 };
 use ravum_lang_sema::syntax::{NodeId, Span};
-use ravum_lang_sema::{CallTarget, CheckedProgram, MethodTarget, Resolution, Type, VariantKind};
+use ravum_lang_sema::{
+    CallTarget, CheckedProgram, ConstInfo, MethodTarget, Resolution, Type, VariantKind,
+};
 
 use crate::ir::*;
 
@@ -328,7 +331,13 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                     return unsupported(format!("non-`Copy` or generic enum `{}`", e.name.name));
                 }
             }
-            ItemKind::Const(_) => return unsupported("const"),
+            ItemKind::Const(c) => match checked.facts.consts.get(&item.id) {
+                Some(ConstInfo {
+                    value: ConstValue::Int(_) | ConstValue::Bool(_),
+                    ..
+                }) => {}
+                _ => return unsupported(format!("const `{}` of this type", c.name.name)),
+            },
             ItemKind::Impl(imp) => {
                 if !imp.generics.is_empty() {
                     return unsupported("generic impl");
@@ -688,7 +697,7 @@ impl<'a> FnLower<'a> {
 
     fn place(&mut self, e: &Expr) -> R<Place> {
         match &e.kind {
-            ExprKind::Path(p) if self.unit_variant(p).is_none() => {
+            ExprKind::Path(p) if self.unit_variant(p).is_none() && self.const_of(p).is_none() => {
                 let (l, t) = self.var_of_path(p)?;
                 if Layouts::is_agg(&t) {
                     Ok(Place::Mem {
@@ -921,6 +930,13 @@ impl<'a> FnLower<'a> {
                     value: Const::Bool(*b),
                 });
                 Ok(l)
+            }
+            ExprKind::Path(p) if self.const_of(p).is_some() => {
+                let Some(v) = self.const_of(p) else {
+                    unreachable!()
+                };
+                let ty = self.ty_of(e)?;
+                self.const_value(ty, &v)
             }
             ExprKind::Path(p) if self.unit_variant(p).is_some() => {
                 let v = self.unit_variant(p).unwrap_or(0);
@@ -1205,6 +1221,31 @@ impl<'a> FnLower<'a> {
         }
     }
 
+    /// The value of a `const` item named by `path`.
+    fn const_of(&self, path: &ast::Path) -> Option<ConstValue> {
+        match self.checked.facts.resolutions.get(&path.id) {
+            Some(Resolution::Item { item }) => {
+                self.checked.facts.consts.get(item).map(|c| c.value.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn const_value(&mut self, ty: Ty, v: &ConstValue) -> R<Local> {
+        match v {
+            ConstValue::Int(n) => self.int_const(ty, *n),
+            ConstValue::Bool(b) => {
+                let l = self.new_local(Ty::Bool);
+                self.emit(Inst::Const {
+                    dst: l,
+                    value: Const::Bool(*b),
+                });
+                Ok(l)
+            }
+            _ => unsupported("const of this type"),
+        }
+    }
+
     /// Variant index when `path` is a unit enum value (`E::A`, `None`).
     fn unit_variant(&self, path: &ast::Path) -> Option<usize> {
         match self.checked.facts.resolutions.get(&path.id) {
@@ -1350,6 +1391,24 @@ impl<'a> FnLower<'a> {
                     let sp = Self::sub_place(p, off, ft.clone())?;
                     self.pat_test(item, &sp, &ft, fail)?;
                 }
+                Ok(())
+            }
+            PatKind::Path(path) if self.const_of(path).is_some() => {
+                let Some(c) = self.const_of(path) else {
+                    unreachable!()
+                };
+                let ty = map_ty(t)?;
+                let k = self.const_value(ty, &c)?;
+                let v = self.read_place(p)?;
+                let ok = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: ok,
+                    op: BinOp::Eq,
+                    ty,
+                    lhs: v,
+                    rhs: k,
+                });
+                self.branch_or_fail(ok, fail);
                 Ok(())
             }
             PatKind::Path(path) => {

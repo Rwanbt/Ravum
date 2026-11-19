@@ -216,3 +216,41 @@ fn user_methods_agree_with_the_reference_machine() {
     assert_eq!(n, 16);
     assert!(traps >= 2, "traps: {traps}");
 }
+
+#[test]
+fn consts_agree_with_the_reference_machine() {
+    let consts = "const LIMIT: i64 = 9223372036854775807;\nconst LOW: i8 = -128;\nconst STEP: u8 = 255;\nconst ON: bool = true;\nconst K: i32 = -5;\n\n";
+    let mut programs = Vec::new();
+    for x in [-5i32, 0, 7] {
+        programs.push(format!(
+            "{consts}fn check() -> i64 effects() {{\n    let x: i32 = {x};\n    let mut r: i64 = match x {{\n        K => 1,\n        0 => 2,\n        _ => 3,\n    }};\n    if ON {{\n        r = r + (LOW as i64) + (STEP as i64);\n    }}\n    return r + (LIMIT - LIMIT) + (K as i64);\n}}\n"
+        ));
+    }
+    // Overflow through a constant at the boundary.
+    programs.push(format!(
+        "{consts}fn check() -> i64 effects() {{\n    let one: i64 = 1;\n    return LIMIT + one;\n}}\n"
+    ));
+    // `K =>` is a binding (G-6.38/G-6.41), so every `x` takes the first arm:
+    // r = 1, then 1 - 128 + 255 = 128, minus K (-5): 123 for all three.
+    let (n, traps) = judge(&programs);
+    assert_eq!((n, traps), (4, 1));
+    for p in &programs[..3] {
+        let ir = compile_source(p).unwrap();
+        assert_eq!(run(&ir, "check", DEFAULT_STEPS).render(), "value i64 123");
+    }
+
+    // A path is a constant pattern (EXPR-5.8); the reference machine has
+    // none, so the expected values are written by hand.
+    for (x, want) in [(-5, 1), (0, 2), (7, 3)] {
+        let src = format!(
+            "{consts}fn check() -> i64 effects() {{\n    let x: i32 = {x};\n    return match x {{\n        crate::K => 1,\n        0 => 2,\n        _ => 3,\n    }};\n}}\n"
+        );
+        let (n, _) = judge_with(std::slice::from_ref(&src), false);
+        assert_eq!(n, 1);
+        let ir = compile_source(&src).unwrap();
+        assert_eq!(
+            run(&ir, "check", DEFAULT_STEPS).render(),
+            format!("value i64 {want}")
+        );
+    }
+}
