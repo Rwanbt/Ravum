@@ -1,0 +1,8 @@
+{
+  "id": "ownership/private-field-write-is-resolve-error",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-PRIVATE"
+  ],
+  "notes": "OWN-7.3 (MUST): writing a private field from outside its module is E-RES-PRIVATE, not E-OWN-IMMUTABLE; visibility is checked first."
+}

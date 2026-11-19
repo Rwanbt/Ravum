@@ -439,7 +439,7 @@ L'ordre suivant est **normatif** pour que deux implémentations produisent les m
 |---|---|---|
 | OWN-11.1 | Une erreur d'une phase précoce **empêche** les phases suivantes sur le même nœud ; le compilateur ne doit pas produire un diagnostic d'ownership sur un programme dont les types sont invalides. | MUST |
 | OWN-11.2 | À l'intérieur d'une phase, les diagnostics sont triés par `(fichier, start_byte, code)` croissants — ordre **déterministe** (T3). | MUST |
-| OWN-11.3 | Le nombre de diagnostics d'ownership par fonction est borné (budget déterministe) ; au-delà, le compilateur émet un diagnostic unique `E-PARSE-TOO-LARGE` et s'arrête pour cette fonction. | MUST |
+| OWN-11.3 | Le nombre de diagnostics d'ownership par fonction est borné (budget déterministe) ; au-delà, le compilateur émet un diagnostic unique `E-OWN-LIMIT` et s'arrête pour cette fonction (borne : 50, strictement inférieure au budget par fichier de DIAG-1.7, qui reste `E-PARSE-TOO-LARGE`). | MUST |
 
 ## 12. Table de correspondance design → règles
 

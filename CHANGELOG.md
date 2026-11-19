@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Ownership contract (T2, `ownership.md`): FeatureIds F-OWN-017 to F-OWN-019 and 13 `ownership/*` cases (moves through loops, branches, arguments and `match`; place mutability; phase order and the per-function budget). OWN-11.3 now names `E-OWN-LIMIT`, the code the compiler emits.
+
 - Effects contract (T2, `effects.md`): FeatureId F-EFF-010 and five `effects/*` cases (unknown profile, inferred effects in JSON, no effect waiver, `String::new` is alloc, profile report).
 
 - Standard library contract (T2, `stdlib.md`): FeatureIds F-STD-033 to F-STD-035 and 14 `types/std-*` cases. STD-12.6 no longer forbids the explicit integer forms that RFC-RT-TRAPS added; STD-12.7 lists them.

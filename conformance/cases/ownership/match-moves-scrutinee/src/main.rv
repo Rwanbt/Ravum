@@ -1,0 +1,16 @@
+enum E {
+    A(String),
+    B,
+}
+
+fn main() {
+    let e = E::A(String::new());
+    match e {
+        E::A(s) => io::println(&s),
+        E::B => io::println("b"),
+    }
+    match e {
+        E::A(_) => io::println("a"),
+        E::B => io::println("b"),
+    }
+}

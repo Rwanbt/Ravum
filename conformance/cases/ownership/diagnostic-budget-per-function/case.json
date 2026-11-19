@@ -1,0 +1,9 @@
+{
+  "id": "ownership/diagnostic-budget-per-function",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE",
+    "E-OWN-LIMIT"
+  ],
+  "notes": "OWN-11.3 (MUST): ownership diagnostics are bounded per function (50). `main` has 60 uses after move: 50 E-OWN-USE-AFTER-MOVE then one E-OWN-LIMIT, and analysis of `main` stops. `other` is still analysed and reports its own error."
+}

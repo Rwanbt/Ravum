@@ -1,0 +1,7 @@
+fn eat(s: String) { }
+
+fn main() {
+    let s = String::new();
+    eat(s);
+    io::println(&s);
+}

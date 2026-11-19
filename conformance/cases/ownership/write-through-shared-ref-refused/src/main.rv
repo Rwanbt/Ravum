@@ -1,0 +1,8 @@
+fn set(r: &i64) {
+    *r = 2;
+}
+
+fn main() {
+    let x: i64 = 1;
+    set(&x);
+}

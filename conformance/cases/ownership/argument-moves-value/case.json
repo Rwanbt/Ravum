@@ -1,0 +1,8 @@
+{
+  "id": "ownership/argument-moves-value",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "OWN-5.8 (MUST): passing a movable value to a function moves it; reading it afterwards is E-OWN-USE-AFTER-MOVE."
+}

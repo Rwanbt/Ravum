@@ -1,0 +1,8 @@
+{
+  "id": "ownership/match-moves-scrutinee",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-DOUBLE-MOVE"
+  ],
+  "notes": "OWN-5.9 (MUST), EXPR-5.10: match on a movable value moves the scrutinee; matching it again with no use in between is a second move (E-OWN-DOUBLE-MOVE, OWN-5.2)."
+}

@@ -2133,3 +2133,31 @@ sable, aucune borne de temps ou de mémoire, aucun effet d'exécution) ; EFF-4.9
 or `run` n'a pas d'option `--profile` ; EFF-5.4 (effets du prélude non
 redéclarables) n'a pas de forme refusable : un utilisateur ne peut pas déclarer
 une fonction du prélude.
+
+## 38. Lot `ownership.md` : 11 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `ownership.md` passe de 11 non atteints à **0**
+(73 / 73) ; `features_coverage.py --strict` : 230/230 (1 exemption). FeatureIds
+F-OWN-017 (déplacements), F-OWN-018 (mutabilité), F-OWN-019 (phases et budget).
+Treize cas `ownership/*`, chaque code mesuré avant d'être écrit.
+
+### 38.1 OWN-11.3 nommait le mauvais code
+
+La spécification disait qu'au-delà du budget par fonction le compilateur émet
+`E-PARSE-TOO-LARGE`. Le compilateur émet `E-OWN-LIMIT` (enregistré dans
+`diagnostics.md`) après 50 diagnostics, et `own.rs` documente pourquoi : la borne
+par fonction doit rester sous le budget par fichier (100, DIAG-1.7), sinon elle
+ne serait jamais observable. Mesure : 60 usages après déplacement dans `main` →
+50 `E-OWN-USE-AFTER-MOVE` puis un `E-OWN-LIMIT` ; la fonction suivante est encore
+analysée. La règle est corrigée pour nommer `E-OWN-LIMIT` ; le budget par
+fichier reste `E-PARSE-TOO-LARGE`. Même traitement que COMPAT-3.6 et MOD-8.5.
+
+### 38.2 Deux déplacements par argument
+
+`eat(s); eat(s);` donne `E-OWN-USE-AFTER-MOVE`, alors que `let a = s; let b = s;`
+donne `E-OWN-DOUBLE-MOVE`. C'est conforme à OWN-5.1, qui range « passage en
+argument » parmi les usages d'une place `MOVED` ; OWN-5.2 ne vise que deux
+déplacements sans usage entre eux. Signalé pour lecture, aucun changement.
+
+OWN-11.2 (tri par `(fichier, start_byte, code)`) est tenu par le test
+`diagnostics_of_one_phase_are_sorted_by_file_byte_and_code` de `diagnostics_contract.rs` (DIAG-4.1).
