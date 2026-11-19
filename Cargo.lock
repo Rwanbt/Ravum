@@ -294,6 +294,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-lang-incr"
+version = "0.1.0"
+dependencies = [
+ "ravum-lang-sema",
+ "ravum-lang-syntax",
+ "sha2",
+]
+
+[[package]]
 name = "ravum-lang-lsp"
 version = "0.1.0"
 dependencies = [
