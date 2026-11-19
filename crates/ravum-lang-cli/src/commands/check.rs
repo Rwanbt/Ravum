@@ -14,8 +14,9 @@ pub fn run(
     locked: bool,
     request_timings: bool,
     rt_entry: Option<&str>,
+    reload: bool,
 ) -> i32 {
-    let (frontend, timings) = if request_timings {
+    let (mut frontend, timings) = if request_timings {
         pipeline::analyze_entry_with_timings(path, profile, locked, rt_entry)
     } else {
         (
@@ -23,6 +24,9 @@ pub fn run(
             AnalysisTimings::default(),
         )
     };
+    if reload {
+        let _ = pipeline::reload_contract(&mut frontend);
+    }
     let success = frontend.success();
 
     if json_output {

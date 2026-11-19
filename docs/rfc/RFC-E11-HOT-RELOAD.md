@@ -14,6 +14,28 @@
 > remplacement de fonctions au milieu d'un appel, ni préservation de threads ou
 > de connexions. L'état préservé est **une valeur déclarée**, de type fixé.
 
+## Avancement (2026-11-19)
+
+**Implémenté** : [`spec/language/reload.md`](../../spec/language/reload.md)
+(HR-1.1 à HR-1.8, HR-2.1 à HR-2.3), F-META-033, `ravum-lang watch --reload`
+et `ravum-lang check --reload`, 3 codes (`E-HR-ENTRY`, `E-HR-STATE-TYPE`,
+`E-HR-STATE-RESOURCE`), 5 cas de conformance `types/reload-*`, et les tests de
+§4 dans `crates/ravum-lang-cli/tests/hot_reload.rs` (10 000 événements et 20
+éditions → `{10000;}` ; schéma changé refusé ; `migrate` ; panique revenue à
+l'ancien module ; édition qui ne compile pas ; état riche conservé). Écarts
+retenus à l'implémentation :
+- le module est un **processus** piloté par un protocole ligne à ligne, pas un
+  `cdylib` chargé dans l'hôte : aucun `unsafe` ni chargement dynamique ; l'état
+  traverse le remplacement sous forme canonique, comme prévu en §3 ;
+- l'événement est une ligne de texte (`step(state: State, line: String)`), pas
+  un enum `Event` ; la fin de l'entrée tient lieu de `Stop` ;
+- les types utilisateur du schéma sont désignés par leur **rang**, pas par leur
+  nom : c'est ce qui permet à `migrate` de prendre un type qui reprend l'ancien
+  `State` sous un autre nom ;
+- `fn main` reste exigé (le programme est aussi un binaire ordinaire) ;
+- la ressource refusée par HR-1.6 couvre les types opaques du prélude ; `Db` du
+  paquet SQLite est un `CHandle` dans une struct, refusé de même.
+
 ## 1. État mesuré
 
 Gate T8 : `watch` reconstruit et **redémarre** ; aucun état n'est préservé.

@@ -668,6 +668,408 @@ where
 }
 "##;
 
+/// Reload runtime (RFC-E11-HOT-RELOAD), appended after [`PRELUDE`] only when a
+/// program is built with `GenOptions::reload`. Safe Rust only, like the
+/// prelude. It defines the canonical state text (HR-1.1, §3) and the line
+/// protocol that `ravum-lang watch --reload` speaks with the module.
+pub const RELOAD_PRELUDE: &str = r##"// ---------------------------------------------------------------------------
+// Ravum reload runtime (generated; do not edit by hand). Safe Rust only.
+// ---------------------------------------------------------------------------
+
+/// Canonical text of a state value: one line, fields in schema order.
+pub trait RvCanon: Sized {
+    fn rv_put(&self, out: &mut String);
+    fn rv_get(input: &mut RvReader) -> Result<Self, String>;
+}
+
+pub struct RvReader {
+    chars: Vec<char>,
+    pos: usize,
+}
+
+impl RvReader {
+    pub fn new(text: &str) -> RvReader {
+        RvReader { chars: text.chars().collect(), pos: 0 }
+    }
+    pub fn peek(&self) -> Option<char> {
+        self.chars.get(self.pos).copied()
+    }
+    pub fn next_char(&mut self) -> Result<char, String> {
+        let c = self.peek().ok_or_else(|| "unexpected end of state text".to_string())?;
+        self.pos += 1;
+        Ok(c)
+    }
+    pub fn expect(&mut self, wanted: char) -> Result<(), String> {
+        let c = self.next_char()?;
+        if c == wanted {
+            Ok(())
+        } else {
+            Err(format!("expected `{}` at {}, found `{}`", wanted, self.pos - 1, c))
+        }
+    }
+    pub fn token(&mut self) -> String {
+        let mut text = String::new();
+        while let Some(c) = self.peek() {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                text.push(c);
+                self.pos += 1;
+            } else {
+                break;
+            }
+        }
+        text
+    }
+    pub fn at_end(&self) -> bool {
+        self.pos == self.chars.len()
+    }
+}
+
+macro_rules! rv_canon_int {
+    ($($t:ty),*) => {$(
+        impl RvCanon for $t {
+            fn rv_put(&self, out: &mut String) {
+                out.push_str(&self.to_string());
+            }
+            fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+                let token = input.token();
+                token.parse::<$t>().map_err(|_| format!("invalid integer `{}`", token))
+            }
+        }
+    )*};
+}
+rv_canon_int!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize);
+
+impl RvCanon for f32 {
+    fn rv_put(&self, out: &mut String) {
+        out.push_str(&format!("x{:08x}", self.to_bits()));
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        input.expect('x')?;
+        let token = input.token();
+        u32::from_str_radix(&token, 16).map(f32::from_bits).map_err(|_| format!("invalid f32 `{}`", token))
+    }
+}
+
+impl RvCanon for f64 {
+    fn rv_put(&self, out: &mut String) {
+        out.push_str(&format!("x{:016x}", self.to_bits()));
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        input.expect('x')?;
+        let token = input.token();
+        u64::from_str_radix(&token, 16).map(f64::from_bits).map_err(|_| format!("invalid f64 `{}`", token))
+    }
+}
+
+impl RvCanon for bool {
+    fn rv_put(&self, out: &mut String) {
+        out.push(if *self { 't' } else { 'f' });
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        match input.next_char()? {
+            't' => Ok(true),
+            'f' => Ok(false),
+            other => Err(format!("invalid bool `{}`", other)),
+        }
+    }
+}
+
+impl RvCanon for () {
+    fn rv_put(&self, out: &mut String) {
+        out.push('u');
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        input.expect('u')
+    }
+}
+
+fn rv_put_text(text: &str, out: &mut String) {
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+fn rv_get_text(input: &mut RvReader) -> Result<String, String> {
+    input.expect('"')?;
+    let mut text = String::new();
+    loop {
+        match input.next_char()? {
+            '"' => return Ok(text),
+            '\\' => match input.next_char()? {
+                '\\' => text.push('\\'),
+                '"' => text.push('"'),
+                'n' => text.push('\n'),
+                'r' => text.push('\r'),
+                other => return Err(format!("invalid escape `\\{}`", other)),
+            },
+            c => text.push(c),
+        }
+    }
+}
+
+impl RvCanon for String {
+    fn rv_put(&self, out: &mut String) {
+        rv_put_text(self, out);
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        rv_get_text(input)
+    }
+}
+
+impl RvCanon for char {
+    fn rv_put(&self, out: &mut String) {
+        rv_put_text(&self.to_string(), out);
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        let text = rv_get_text(input)?;
+        let mut chars = text.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => Ok(c),
+            _ => Err("invalid char".to_string()),
+        }
+    }
+}
+
+fn rv_get_items<T: RvCanon>(input: &mut RvReader) -> Result<Vec<T>, String> {
+    input.expect('[')?;
+    let mut items = Vec::new();
+    while input.peek() != Some(']') {
+        items.push(T::rv_get(input)?);
+        input.expect(';')?;
+    }
+    input.expect(']')?;
+    Ok(items)
+}
+
+impl<T: RvCanon> RvCanon for Vec<T> {
+    fn rv_put(&self, out: &mut String) {
+        out.push('[');
+        for item in self {
+            item.rv_put(out);
+            out.push(';');
+        }
+        out.push(']');
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        rv_get_items(input)
+    }
+}
+
+impl<T: RvCanon, const N: usize> RvCanon for [T; N] {
+    fn rv_put(&self, out: &mut String) {
+        out.push('[');
+        for item in self.iter() {
+            item.rv_put(out);
+            out.push(';');
+        }
+        out.push(']');
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        let items: Vec<T> = rv_get_items(input)?;
+        let found = items.len();
+        items.try_into().map_err(|_| format!("expected {} array items, found {}", N, found))
+    }
+}
+
+impl<T: RvCanon> RvCanon for Option<T> {
+    fn rv_put(&self, out: &mut String) {
+        match self {
+            None => out.push('N'),
+            Some(value) => {
+                out.push('S');
+                value.rv_put(out);
+            }
+        }
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        match input.next_char()? {
+            'N' => Ok(None),
+            'S' => Ok(Some(T::rv_get(input)?)),
+            other => Err(format!("invalid option tag `{}`", other)),
+        }
+    }
+}
+
+impl<T: RvCanon, E: RvCanon> RvCanon for Result<T, E> {
+    fn rv_put(&self, out: &mut String) {
+        match self {
+            Ok(value) => {
+                out.push('O');
+                value.rv_put(out);
+            }
+            Err(value) => {
+                out.push('E');
+                value.rv_put(out);
+            }
+        }
+    }
+    fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+        match input.next_char()? {
+            'O' => Ok(Ok(T::rv_get(input)?)),
+            'E' => Ok(Err(E::rv_get(input)?)),
+            other => Err(format!("invalid result tag `{}`", other)),
+        }
+    }
+}
+
+macro_rules! rv_canon_tuple {
+    ($($name:ident),+) => {
+        impl<$($name: RvCanon),+> RvCanon for ($($name,)+) {
+            fn rv_put(&self, out: &mut String) {
+                #[allow(non_snake_case)]
+                let ($($name,)+) = self;
+                out.push('(');
+                $( $name.rv_put(out); out.push(';'); )+
+                out.push(')');
+            }
+            fn rv_get(input: &mut RvReader) -> Result<Self, String> {
+                input.expect('(')?;
+                let value = ($( { let item = $name::rv_get(input)?; input.expect(';')?; item }, )+);
+                input.expect(')')?;
+                Ok(value)
+            }
+        }
+    };
+}
+rv_canon_tuple!(A);
+rv_canon_tuple!(A, B);
+rv_canon_tuple!(A, B, C);
+rv_canon_tuple!(A, B, C, D);
+rv_canon_tuple!(A, B, C, D, E);
+rv_canon_tuple!(A, B, C, D, E, F);
+
+/// Enum tag: variant index, then `(`.
+pub fn rv_get_tag(input: &mut RvReader) -> Result<usize, String> {
+    let token = input.token();
+    let tag = token.parse::<usize>().map_err(|_| format!("invalid variant tag `{}`", token))?;
+    input.expect('(')?;
+    Ok(tag)
+}
+
+pub fn rv_canon_text<T: RvCanon>(value: &T) -> String {
+    let mut out = String::new();
+    value.rv_put(&mut out);
+    out
+}
+
+pub fn rv_canon_parse<T: RvCanon>(text: &str) -> Result<T, String> {
+    let mut input = RvReader::new(text);
+    let value = T::rv_get(&mut input)?;
+    if input.at_end() {
+        Ok(value)
+    } else {
+        Err("trailing text after the state".to_string())
+    }
+}
+
+/// Marker of a protocol reply on stdout; any other line is program output.
+const RV_REPLY: &str = "\u{1}rvr ";
+
+fn rv_reply(text: &str) {
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{}{}", RV_REPLY, text);
+    let _ = out.flush();
+}
+
+fn rv_one_line(text: &str) -> String {
+    text.replace('\n', " ").replace('\r', " ")
+}
+
+/// Run `body` and report a panic as `Err(message)` (the test hook captures it).
+fn rv_guard<R>(body: impl FnOnce() -> R) -> Result<R, String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => Ok(value),
+        Err(payload) => Err(rv_take_test_panic().unwrap_or_else(|| rv_panic_text(&*payload))),
+    }
+}
+
+/// Module side of the reload protocol. One command per stdin line; one reply
+/// per command. The state lives here between two `step` commands (HR-1.2); a
+/// panic in `step` or `migrate` leaves the previous state in place (HR-1.5).
+pub fn rv_reload_main<S: RvCanon + Clone, O: RvCanon>(
+    schema: &str,
+    old_schema: Option<&str>,
+    init: fn() -> S,
+    step: fn(S, String) -> S,
+    migrate: Option<fn(O) -> S>,
+) -> std::process::ExitCode {
+    crate::rv_install_test_panic_hook();
+    let stdin = std::io::stdin();
+    let mut state: Option<S> = None;
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match std::io::BufRead::read_line(&mut stdin.lock(), &mut line) {
+            Ok(0) | Err(_) => return std::process::ExitCode::SUCCESS,
+            Ok(_) => {}
+        }
+        let command = line.strip_suffix('\n').unwrap_or(&line);
+        let command = command.strip_suffix('\r').unwrap_or(command);
+        let (verb, rest) = match command.find(' ') {
+            Some(at) => (&command[..at], &command[at + 1..]),
+            None => (command, ""),
+        };
+        match verb {
+            "schema" => rv_reply(&format!("schema {} {}", schema, old_schema.unwrap_or("-"))),
+            "init" => match rv_guard(init) {
+                Ok(value) => {
+                    state = Some(value);
+                    rv_reply("ok");
+                }
+                Err(text) => rv_reply(&format!("panic {}", rv_one_line(&text))),
+            },
+            "load" => match rv_canon_parse::<S>(rest) {
+                Ok(value) => {
+                    state = Some(value);
+                    rv_reply("ok");
+                }
+                Err(text) => rv_reply(&format!("err {}", rv_one_line(&text))),
+            },
+            "migrate" => match (migrate, rv_canon_parse::<O>(rest)) {
+                (None, _) => rv_reply("err this module has no `migrate`"),
+                (Some(_), Err(text)) => rv_reply(&format!("err {}", rv_one_line(&text))),
+                (Some(convert), Ok(old)) => match rv_guard(move || convert(old)) {
+                    Ok(value) => {
+                        state = Some(value);
+                        rv_reply("ok");
+                    }
+                    Err(text) => rv_reply(&format!("panic {}", rv_one_line(&text))),
+                },
+            },
+            "step" => match &state {
+                None => rv_reply("err no state"),
+                Some(current) => {
+                    let before = current.clone();
+                    let event = rest.to_string();
+                    match rv_guard(move || step(before, event)) {
+                        Ok(value) => {
+                            state = Some(value);
+                            rv_reply("ok");
+                        }
+                        Err(text) => rv_reply(&format!("panic {}", rv_one_line(&text))),
+                    }
+                }
+            },
+            "dump" => match &state {
+                None => rv_reply("err no state"),
+                Some(current) => rv_reply(&format!("state {}", rv_canon_text(current))),
+            },
+            "quit" => return std::process::ExitCode::SUCCESS,
+            other => rv_reply(&format!("err unknown command `{}`", rv_one_line(other))),
+        }
+    }
+}
+"##;
+
 #[cfg(test)]
 mod tests {
     use super::PRELUDE;
@@ -679,6 +1081,10 @@ mod tests {
         assert!(PRELUDE.contains("pub fn rv_assert_eq<"));
         assert!(PRELUDE.contains("pub fn rv_test("));
         assert!(PRELUDE.contains("pub fn rv_test_result("));
+        // The reload runtime is safe Rust too, and holds the protocol entry.
+        assert!(!super::RELOAD_PRELUDE.contains("unsafe"));
+        assert!(!super::RELOAD_PRELUDE.contains("*mut "));
+        assert!(super::RELOAD_PRELUDE.contains("pub fn rv_reload_main<"));
         for forbidden in ["unsafe fn", "unsafe {", "transmute(", "*const ", "*mut "] {
             assert!(
                 !PRELUDE.contains(forbidden),

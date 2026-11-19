@@ -1,0 +1,10 @@
+{
+  "id": "types/reload-step-missing",
+  "mode": "compile-fail",
+  "args": [
+    "--reload"
+  ],
+  "expect_codes": [
+    "E-HR-ENTRY"
+  ]
+}

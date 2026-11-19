@@ -331,6 +331,21 @@ pub struct BuildTimings {
     pub rustc: Duration,
 }
 
+/// Check the reload contract (RFC-E11-HOT-RELOAD) of an analyzed program. Its
+/// diagnostics join the frontend's, so `success()` turns false on a refusal.
+pub fn reload_contract(frontend: &mut Frontend) -> Option<ravum_lang_sema::reload::ReloadContract> {
+    let checked = frontend.checked.as_ref()?;
+    match ravum_lang_sema::reload::reload_contract(checked) {
+        Ok(contract) => Some(contract),
+        Err(diags) => {
+            for diag in diags {
+                frontend.diags.push(diag);
+            }
+            None
+        }
+    }
+}
+
 pub fn render_diags(frontend: &Frontend) -> String {
     frontend.diags.render(&frontend.pkg.sources)
 }
@@ -551,6 +566,8 @@ pub struct BuildOptions {
     pub test_mode: bool,
     pub emit_rust: Option<PathBuf>,
     pub target: BuildTarget,
+    /// Build a reloadable module (RFC-E11-HOT-RELOAD) for `watch --reload`.
+    pub reload: Option<ravum_lang_sema::reload::ReloadContract>,
 }
 
 impl Default for BuildOptions {
@@ -560,6 +577,7 @@ impl Default for BuildOptions {
             test_mode: false,
             emit_rust: None,
             target: BuildTarget::Native,
+            reload: None,
         }
     }
 }
@@ -595,6 +613,9 @@ pub struct BuildIdentity {
     pub rustc: String,
     /// `ravum-lang-codegen <version>`.
     pub generator: String,
+    /// State schema digest of a reloadable module; `None` for every other build
+    /// (the identity text of those builds is unchanged).
+    pub reload_schema: Option<String>,
 }
 
 impl BuildIdentity {
@@ -639,6 +660,9 @@ impl BuildIdentity {
         text.push_str(&format!("target: {}\n", self.target));
         text.push_str(&format!("rustc: {}\n", self.rustc));
         text.push_str(&format!("generator: {}\n", self.generator));
+        if let Some(schema) = &self.reload_schema {
+            text.push_str(&format!("reload-schema: {schema}\n"));
+        }
         text
     }
 }
@@ -723,6 +747,14 @@ pub fn build_identity(frontend: &Frontend, options: &BuildOptions) -> BuildIdent
         target: options.target.rustc_triple().unwrap_or("host"),
         rustc: rustc_version().unwrap_or_else(|| "unknown".to_string()),
         generator: format!("ravum-lang-codegen {GENERATOR_VERSION}"),
+        reload_schema: options.reload.as_ref().map(|c| {
+            let old = c
+                .migrate
+                .as_ref()
+                .map(|(_, s)| s.digest.as_str())
+                .unwrap_or("-");
+            format!("{} {old}", c.state.digest)
+        }),
     };
     let digest = format!(
         "sha256:{}",
@@ -837,6 +869,8 @@ fn artifact_file_name(
         }
     } else if options.test_mode {
         format!("{crate_name}-tests{}", exe_suffix())
+    } else if options.reload.is_some() {
+        format!("{crate_name}-reload{}", exe_suffix())
     } else if is_library {
         format!("{crate_name}.rlib")
     } else {
@@ -895,6 +929,7 @@ pub fn compile_program_with_timings(
         source_comments: true,
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
+        reload: options.reload.clone(),
     };
     let codegen_started = Instant::now();
     let rust =

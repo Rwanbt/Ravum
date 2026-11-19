@@ -14,6 +14,7 @@ pub mod effects;
 pub mod facts;
 pub mod loader;
 mod own;
+pub mod reload;
 
 pub use own::{check_ownership, copy_types, is_copy_type};
 pub mod resolve;

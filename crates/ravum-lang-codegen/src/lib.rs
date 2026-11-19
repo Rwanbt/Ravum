@@ -30,6 +30,9 @@ pub struct GenOptions {
     pub test_mode: bool,
     /// Name used in the generated banner (never used for logic).
     pub crate_name: String,
+    /// Build a reloadable module (RFC-E11-HOT-RELOAD): the reload runtime and
+    /// protocol entry point replace the user `main`.
+    pub reload: Option<ravum_lang_sema::reload::ReloadContract>,
 }
 
 impl Default for GenOptions {
@@ -38,6 +41,7 @@ impl Default for GenOptions {
             source_comments: true,
             test_mode: false,
             crate_name: "ravum_program".to_string(),
+            reload: None,
         }
     }
 }

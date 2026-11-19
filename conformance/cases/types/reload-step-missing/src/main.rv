@@ -1,0 +1,9 @@
+struct State { count: i64 }
+
+fn init() -> State effects() {
+    State { count: 0 }
+}
+
+fn main() -> () effects() {
+    drop(init());
+}

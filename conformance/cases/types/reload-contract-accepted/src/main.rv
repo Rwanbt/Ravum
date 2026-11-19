@@ -1,0 +1,21 @@
+enum Phase { Idle, Busy(i64), Done { note: String } }
+struct Before { count: i64 }
+struct State { count: i64, phase: Phase, seen: Vec<String>, ratio: f64, tag: Option<char>, pair: (u8, bool), grid: [i32; 3] }
+
+fn init() -> State effects(alloc) {
+    State { count: 0, phase: Phase::Idle, seen: Vec::new(), ratio: 0.5, tag: None, pair: (1, true), grid: [0, 0, 0] }
+}
+
+fn migrate(old: Before) -> State effects(alloc) {
+    State { count: old.count, phase: Phase::Busy(old.count), seen: Vec::new(), ratio: 1.0, tag: Some('m'), pair: (0, false), grid: [1, 2, 3] }
+}
+
+fn step(state: State, line: String) -> State effects(alloc) {
+    let mut seen: Vec<String> = state.seen;
+    seen.push(line);
+    State { count: state.count + 1, phase: Phase::Done { note: String::from("ok") }, seen: seen, ratio: state.ratio, tag: state.tag, pair: state.pair, grid: state.grid }
+}
+
+fn main() -> () effects(alloc) {
+    drop(step(init(), String::from("x")));
+}

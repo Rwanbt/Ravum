@@ -1,0 +1,10 @@
+{
+  "id": "types/reload-state-generic",
+  "mode": "compile-fail",
+  "args": [
+    "--reload"
+  ],
+  "expect_codes": [
+    "E-HR-STATE-TYPE"
+  ]
+}

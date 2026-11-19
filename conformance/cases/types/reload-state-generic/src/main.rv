@@ -1,0 +1,15 @@
+struct Box2<T> { value: T }
+struct State { inner: Box2<i64> }
+
+fn init() -> State effects() {
+    State { inner: Box2 { value: 0 } }
+}
+
+fn step(state: State, line: String) -> State effects() {
+    drop(line);
+    state
+}
+
+fn main() -> () effects() {
+    drop(init());
+}

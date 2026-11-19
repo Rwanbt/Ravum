@@ -278,6 +278,7 @@ mod emitter_calls;
 mod emitter_expr;
 mod emitter_items;
 mod emitter_patterns;
+mod emitter_reload;
 mod emitter_types;
 mod emitter_value;
 
@@ -649,7 +650,13 @@ impl<'a> Emitter<'a> {
         buf.blank();
         buf.raw(PRELUDE);
         buf.blank();
-        self.emit_entry(&mut buf)?;
+        if let Some(contract) = &self.options.reload {
+            buf.raw(crate::prelude::RELOAD_PRELUDE);
+            buf.blank();
+            self.emit_reload_main(&mut buf, contract)?;
+        } else {
+            self.emit_entry(&mut buf)?;
+        }
         buf.blank();
         self.emit_module(&mut buf, &self.checked.program.root)?;
         Ok(buf.finish())
@@ -802,6 +809,9 @@ impl<'a> Emitter<'a> {
         let outer = self.shadowed_names.replace(shadowed);
         for item in &module.items {
             self.emit_item(buf, item)?;
+        }
+        if let Some(contract) = &self.options.reload {
+            self.emit_reload_items(buf, module, contract)?;
         }
         self.shadowed_names.replace(outer);
         buf.indent -= 1;
