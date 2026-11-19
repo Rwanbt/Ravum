@@ -3,8 +3,7 @@
 //! program over 127.0.0.1. The output is fixed: two notes created (one of
 //! them SQL-looking text, stored as text), listed, two 404s, listed again.
 //!
-//! Unix only: it builds `packages/sqlite`'s native library first.
-#![cfg(unix)]
+//! It builds `packages/sqlite`'s native library first (C toolchain required).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -16,7 +15,7 @@ fn the_http_sqlite_service_answers_its_scenario() {
         .and_then(|p| p.parent())
         .expect("repository root")
         .to_path_buf();
-    let built = Command::new("python3")
+    let built = Command::new(python())
         .arg("tools/build_sqlite_native.py")
         .current_dir(&repo)
         .output()
@@ -44,4 +43,13 @@ fn the_http_sqlite_service_answers_its_scenario() {
          POST /missing -> 404\nnot found\nGET /notes -> 200\n{list}"
     );
     assert_eq!(stdout, expected);
+}
+
+/// `python3` on Unix; on Windows the installer names it `python`.
+fn python() -> &'static str {
+    if cfg!(windows) {
+        "python"
+    } else {
+        "python3"
+    }
 }

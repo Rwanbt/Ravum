@@ -17,8 +17,9 @@ It takes the SQLite amalgamation from the `libsqlite3-sys` crate that
 SHA-256 digests pinned in the script, compiles it with
 `native-src/ravum_sqlite.c` into `native/<os>-<arch>/libravum_sqlite.a`, and
 writes `ravum.toml` with that library's digest for this platform. Both are
-build outputs and are not committed. Linux and macOS only; Windows is not
-supported yet.
+build outputs and are not committed. On Windows the script uses MSVC (`cl`
+and `lib`, found with `vswhere`) and writes
+`native/windows-x86_64/ravum_sqlite.lib`.
 
 ## Use it
 

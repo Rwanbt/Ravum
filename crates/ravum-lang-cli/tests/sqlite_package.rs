@@ -5,9 +5,8 @@
 //! violation and a syntax error are `Err` (DB-1.3), a rolled-back insert is
 //! gone, and the version is the pinned one (DB-1.7).
 //!
-//! Unix only, like `tools/build_sqlite_native.py` (it needs `cc`, `ar` and
-//! `python3`).
-#![cfg(unix)]
+//! Linux, macOS and Windows: `tools/build_sqlite_native.py` needs `python3`
+//! (`python` on Windows) and a C toolchain (`cc` + `ar`, or MSVC).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -23,7 +22,7 @@ fn repo() -> PathBuf {
 #[test]
 fn the_sqlite_package_runs_against_the_pinned_sqlite() {
     let repo = repo();
-    let built = Command::new("python3")
+    let built = Command::new(python())
         .arg("tools/build_sqlite_native.py")
         .current_dir(&repo)
         .output()
@@ -49,4 +48,13 @@ fn the_sqlite_package_runs_against_the_pinned_sqlite() {
         stdout,
         "3.54.1\n1\nduplicate is Err\nsyntax error is Err\n1 '; DROP TABLE t; --\n2 ada\n"
     );
+}
+
+/// `python3` on Unix; on Windows the installer names it `python`.
+fn python() -> &'static str {
+    if cfg!(windows) {
+        "python"
+    } else {
+        "python3"
+    }
 }

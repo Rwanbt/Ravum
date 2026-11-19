@@ -58,7 +58,7 @@ d'adaptation `native-src/ravum_sqlite.c`, `tools/build_sqlite_native.py` et
 (Linux, macOS). Écarts avec §6 : ce n'est pas `std::sqlite` mais un paquet ;
 pas d'effet `db` (un paquet ne masque pas `unsafe`/`ffi`, donc l'appelant les
 déclare) ; `sqlite::close` explicite, faute de destructeur (DB-1.4 n'est pas
-tenue) ; une seule requête active par connexion ; pas de Windows ; les
+tenue) ; une seule requête active par connexion ; Windows (MSVC) depuis le 2026-11-19, observé dans le job Windows `mvp` (`sqlite_package`, `http_notes`) ; les
 binaires ne sont pas publiés : le script les construit depuis une source
 épinglée. Défaut corrigé en passant : le wrapper d'une fonction `extern` d'une
 dépendance était appelé au chemin de la racine.
