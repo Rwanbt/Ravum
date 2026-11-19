@@ -204,6 +204,20 @@ passe par une variable typée.
 | `Option` : `is_some`/`is_none`/`unwrap_or` sur scalaires et charge tuple | 9 programmes identiques sur les 3 moteurs |
 | corpus `ravum-core-machine` | **54/60 identiques**, 0 divergence ; restent `u128` et `sin` (refus voulu) |
 
+## IR v1.2, suite — méthodes utilisateur
+
+`impl` non générique : fonctions associées (`S::new()`), `self` (copie),
+`&self`/`&mut self` (adresse du lieu, auto-référence ; une référence est
+transmise telle quelle), méthodes qui appellent des méthodes, retours
+d'agrégats. Nom IR d'une méthode : son chemin (`Acc::add`), donc deux types
+ne partagent jamais un nom (le hot swap compte les cases par nom). `impl`
+générique : `Unsupported`.
+
+| Oracle | Résultat |
+|---|---|
+| 16 programmes (`&mut self` en chaîne, `self` par valeur, struct de structs, débordement et division par zéro dans une méthode) | natif = interpréteur, 4 traps (la machine n'a pas d'`impl`) |
+| **oracle indépendant** `ravum-lang-cli/tests/jit_print_rustc.rs` : 15 cas par `ravum-lang run` (rustc) et par le JIT | **sortie identique octet par octet** |
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

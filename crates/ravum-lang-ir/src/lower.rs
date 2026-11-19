@@ -329,7 +329,17 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                 }
             }
             ItemKind::Const(_) => return unsupported("const"),
-            ItemKind::Impl(_) => return unsupported("impl"),
+            ItemKind::Impl(imp) => {
+                if !imp.generics.is_empty() {
+                    return unsupported("generic impl");
+                }
+                for sub in &imp.items {
+                    match &sub.kind {
+                        ItemKind::Fn(f) => fns.push((sub, f)),
+                        _ => return unsupported("non-method item in an impl"),
+                    }
+                }
+            }
             ItemKind::Mod(_) | ItemKind::ModDecl(_) => return unsupported("module"),
             ItemKind::Extern(_) => return unsupported("extern"),
         }
@@ -383,6 +393,8 @@ struct FnLower<'a> {
     sret: Option<Local>,
     /// The current block follows a terminator: nothing emitted there runs.
     dead: bool,
+    /// IR name: the plain name of a free function, `S::m` for a method.
+    name: String,
 }
 
 impl<'a> FnLower<'a> {
@@ -400,9 +412,18 @@ impl<'a> FnLower<'a> {
             checked.facts.fn_sigs.get(&item.id).ok_or_else(|| {
                 LowerError::MissingFact(format!("signature of `{}`", f.name.name))
             })?;
-        if sig.receiver.is_some() {
-            return unsupported("method");
-        }
+        // A method: the receiver is the first parameter (`self` by value, or
+        // `&self`/`&mut self` as an address); its IR name is its path
+        // (`S::m`) so that two types' methods never share a name.
+        let path = sig
+            .rust_path
+            .strip_prefix("crate::")
+            .unwrap_or(&sig.rust_path);
+        let name = if path.contains("::") {
+            path.to_string()
+        } else {
+            f.name.name.clone()
+        };
         let mut me = FnLower {
             checked,
             layouts,
@@ -419,6 +440,7 @@ impl<'a> FnLower<'a> {
             ret: sig.ret.clone(),
             sret: None,
             dead: false,
+            name,
         };
         map_ty(&sig.ret)?;
         if matches!(sig.ret, Type::Ref { .. }) {
@@ -456,7 +478,7 @@ impl<'a> FnLower<'a> {
             map_ty(&self.ret)?
         };
         Ok(Function {
-            name: f.name.name.clone(),
+            name: self.name.clone(),
             params,
             ret,
             locals: self.locals,
@@ -668,6 +690,25 @@ impl<'a> FnLower<'a> {
         match &e.kind {
             ExprKind::Path(p) if self.unit_variant(p).is_none() => {
                 let (l, t) = self.var_of_path(p)?;
+                if Layouts::is_agg(&t) {
+                    Ok(Place::Mem {
+                        addr: l,
+                        off: 0,
+                        ty: t,
+                    })
+                } else {
+                    Ok(Place::Reg(l))
+                }
+            }
+            ExprKind::SelfValue => {
+                let (l, t) = match self.checked.facts.resolutions.get(&e.id) {
+                    Some(Resolution::Local { name, decl, .. }) => self
+                        .vars
+                        .get(&(*decl, name.clone()))
+                        .cloned()
+                        .ok_or_else(|| LowerError::MissingFact("slot of `self`".into()))?,
+                    _ => return Err(LowerError::MissingFact("resolution of `self`".into())),
+                };
                 if Layouts::is_agg(&t) {
                     Ok(Place::Mem {
                         addr: l,
@@ -1147,7 +1188,10 @@ impl<'a> FnLower<'a> {
             ExprKind::Try(_) => unsupported("`?`"),
             ExprKind::Unsafe(_) => unsupported("unsafe"),
             ExprKind::Await(_) => unsupported("await"),
-            ExprKind::SelfValue => unsupported("self"),
+            ExprKind::SelfValue => {
+                let p = self.place(e)?;
+                self.read(p)
+            }
         }
     }
 
@@ -1701,6 +1745,10 @@ impl<'a> FnLower<'a> {
     fn method_call(&mut self, e: &Expr, recv: &Expr, name: &str, args: &[Expr]) -> R<Local> {
         let path = match self.checked.facts.methods.get(&e.id) {
             Some(MethodTarget::Builtin { path, .. }) => path.clone(),
+            Some(MethodTarget::User { item }) => {
+                let item = *item;
+                return self.user_method_call(e, recv, item, args);
+            }
             _ => return unsupported(format!("method call `.{name}()`")),
         };
         let un = match path.as_str() {
@@ -1970,6 +2018,73 @@ impl<'a> FnLower<'a> {
             }
             _ => unsupported(format!("`Option::{m}`")),
         }
+    }
+
+    /// A call to a user method: the receiver becomes the first argument — a
+    /// copy for `self`, the place's address for `&self`/`&mut self`
+    /// (auto-reference), or the reference itself when it already is one.
+    fn user_method_call(&mut self, e: &Expr, recv: &Expr, item: NodeId, args: &[Expr]) -> R<Local> {
+        let func = *self
+            .ids
+            .get(&item)
+            .ok_or_else(|| LowerError::Unsupported("method outside the root module".into()))?;
+        let sig = self
+            .checked
+            .facts
+            .fn_sigs
+            .get(&item)
+            .ok_or_else(|| LowerError::MissingFact("method signature".into()))?;
+        let by_ref = !matches!(sig.receiver, Some(ast::Receiver::ByValue));
+        let rt = self.type_of(recv)?;
+        let first = if by_ref {
+            if matches!(rt, Type::Ref { .. }) {
+                self.expr(recv)?
+            } else {
+                match self.place(recv)? {
+                    Place::Mem { addr, off, .. } => self.offset(addr, off),
+                    Place::Reg(_) => return unsupported("method on a scalar receiver"),
+                }
+            }
+        } else {
+            let (v, t) = if let Type::Ref { inner, .. } = &rt {
+                // `x.m()` with `x: &S` and `fn m(self)`: a copy of `*x`.
+                (self.expr(recv)?, (**inner).clone())
+            } else {
+                (self.expr(recv)?, rt.clone())
+            };
+            if Layouts::is_agg(&t) {
+                self.snapshot(v, &t)?
+            } else {
+                v
+            }
+        };
+        let mut vals = vec![first];
+        vals.extend(self.eval_args(args)?);
+        self.call_func(e, func, vals)
+    }
+
+    /// Emit a call to `func` with already-evaluated `vals`, adding the hidden
+    /// result address when the call returns an aggregate.
+    fn call_func(&mut self, e: &Expr, func: FuncId, vals: Vec<Local>) -> R<Local> {
+        let rt = self.type_of(e)?;
+        if Layouts::is_agg(&rt) {
+            let out = self.alloc(&rt)?;
+            let mut all = vec![out];
+            all.extend(vals);
+            self.emit(Inst::Call {
+                dst: None,
+                func,
+                args: all,
+            });
+            return Ok(out);
+        }
+        let dst = self.new_local(map_ty(&rt)?);
+        self.emit(Inst::Call {
+            dst: Some(dst),
+            func,
+            args: vals,
+        });
+        Ok(dst)
     }
 
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {

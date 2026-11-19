@@ -191,3 +191,28 @@ fn option_methods_agree_with_the_reference_machine() {
     let (n, _) = judge(&programs);
     assert_eq!(n, 9);
 }
+
+pub const ACC: &str = "struct Acc {\n    total: i64,\n    n: i32,\n}\n\nimpl Acc {\n    fn new(start: i64) -> Acc effects() {\n        return Acc { total: start, n: 0 };\n    }\n    fn add(&mut self, x: i64) -> () effects() {\n        self.total = self.total + x;\n        self.n = self.n + 1;\n    }\n    fn mean(&self) -> i64 effects() {\n        return self.total / (self.n as i64);\n    }\n    fn doubled(self) -> Acc effects() {\n        let mut c = self;\n        c.total = c.total * 2;\n        return c;\n    }\n    fn bump_all(&mut self, k: i64) -> () effects() {\n        self.add(k);\n        self.add(k);\n    }\n}\n\nstruct Pair {\n    a: Acc,\n    b: Acc,\n}\n\nimpl Pair {\n    fn new() -> Pair effects() {\n        return Pair { a: Acc::new(0), b: Acc::new(100) };\n    }\n    fn mean(&self) -> i64 effects() {\n        return self.a.mean() + self.b.mean();\n    }\n}\n\n";
+
+#[test]
+fn user_methods_agree_with_the_reference_machine() {
+    let mut programs = Vec::new();
+    for x in [0i64, 1, 5, -7, 9_223_372_036_854_775_000] {
+        for y in [1i64, 3, -2] {
+            programs.push(format!(
+                "{ACC}fn check() -> i64 effects() {{\n    let mut a = Acc::new({x});\n    a.add({y});\n    a.add(9);\n    let b = a.doubled();\n    a.bump_all({y});\n    let mut p = Pair::new();\n    p.a.add({y});\n    p.b.add(4);\n    let k: i64 = 1000;\n    return a.mean() * k + b.total + p.mean();\n}}\n"
+            ));
+        }
+    }
+    // A method whose receiver has no element yet: division by zero inside it.
+    programs.push(format!(
+        "{ACC}fn check() -> i64 effects() {{\n    let a = Acc::new(3);\n    return a.mean();\n}}\n"
+    ));
+    // The reference machine has no `impl`: native = interpreter here; the
+    // independent oracle for methods is the rustc build
+    // (`ravum-lang-cli/tests/jit_print_rustc.rs`).
+    let (n, traps) = judge_with(&programs, false);
+    eprintln!("IR v1.2 user methods: {n} programs, {traps} traps, native = interpreter");
+    assert_eq!(n, 16);
+    assert!(traps >= 2, "traps: {traps}");
+}
