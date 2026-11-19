@@ -50,6 +50,17 @@ pub const PRELUDE_CHANNEL_DEF: NodeId = NodeId::MAX - 4;
 pub const PRELUDE_SENDER_DEF: NodeId = NodeId::MAX - 5;
 pub const PRELUDE_RECEIVER_DEF: NodeId = NodeId::MAX - 6;
 
+/// `NodeId` réservé au handle C opaque `CHandle` (RFC-E11-SQLITE NAT-3.3) :
+/// un pointeur C que le code Ravum ne peut ni lire ni déréférencer, seulement
+/// recevoir d'une fonction `extern`, rendre à une autre, et comparer à nul.
+/// C'est le seul type opaque `Copy` du prélude.
+pub const PRELUDE_CHANDLE_DEF: NodeId = NodeId::MAX - 7;
+
+/// Le type `CHandle`.
+pub fn chandle_type() -> Type {
+    opaque_type(PRELUDE_CHANDLE_DEF, "CHandle")
+}
+
 /// Types opaques génériques du prélude : nom et `NodeId` réservé.
 pub const PRELUDE_GENERIC_OPAQUES: &[(&str, NodeId)] = &[
     ("JoinHandle", PRELUDE_JOIN_HANDLE_DEF),
@@ -65,6 +76,9 @@ pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
     }
     if def == PRELUDE_TCP_STREAM_DEF {
         return Some("TcpStream");
+    }
+    if def == PRELUDE_CHANDLE_DEF {
+        return Some("CHandle");
     }
     PRELUDE_GENERIC_OPAQUES
         .iter()
@@ -126,6 +140,11 @@ pub const PRELUDE_TYPES: &[&str] = &[
     "Error",
     "TcpListener",
     "TcpStream",
+    "JoinHandle",
+    "Channel",
+    "Sender",
+    "Receiver",
+    "CHandle",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -141,8 +160,9 @@ pub const PRELUDE_VALUES: &[&str] = &[
 ];
 
 /// Modules accessibles sans `use` (chemins canoniques).
-pub const PRELUDE_MODULES: &[&str] =
-    &["io", "fs", "net", "string", "math", "env", "process", "std"];
+pub const PRELUDE_MODULES: &[&str] = &[
+    "io", "fs", "net", "thread", "sync", "ffi", "string", "math", "env", "process", "std",
+];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
 pub fn builtin_root_module(name: &str) -> Option<&'static str> {
@@ -152,6 +172,7 @@ pub fn builtin_root_module(name: &str) -> Option<&'static str> {
         "net" => "std::net",
         "thread" => "std::thread",
         "sync" => "std::sync",
+        "ffi" => "std::ffi",
         "string" => "std::string",
         "math" => "std::math",
         "env" => "std::env",
@@ -169,6 +190,7 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std::net",
     "std::thread",
     "std::sync",
+    "std::ffi",
     "std::string",
     "std::math",
     "std::env",
@@ -384,6 +406,21 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["&Receiver<T>"],
         ret: "Option<T>",
         effects: THREAD,
+    },
+    // --- std::ffi (RFC-E11-SQLITE NAT-3.3) ---
+    BuiltinFnSig {
+        path: "std::ffi::null",
+        generics: &[],
+        params: &[],
+        ret: "CHandle",
+        effects: PURE,
+    },
+    BuiltinFnSig {
+        path: "std::ffi::is_null",
+        generics: &[],
+        params: &["CHandle"],
+        ret: "bool",
+        effects: PURE,
     },
     BuiltinFnSig {
         path: "std::process::exit",
@@ -603,6 +640,7 @@ pub fn prelude_type(name: &str) -> Option<Type> {
         "Error" => return Some(error_type()),
         "TcpListener" => return Some(opaque_type(PRELUDE_TCP_LISTENER_DEF, "TcpListener")),
         "TcpStream" => return Some(opaque_type(PRELUDE_TCP_STREAM_DEF, "TcpStream")),
+        "CHandle" => return Some(chandle_type()),
         _ => return None,
     })
 }

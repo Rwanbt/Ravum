@@ -59,6 +59,8 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "net::read_exact" => FreeBuiltin::Net("read_exact"),
         "net::write_str" => FreeBuiltin::Net("write_str"),
         "thread::spawn" => FreeBuiltin::Conc("thread_spawn"),
+        "ffi::null" => FreeBuiltin::Conc("ffi_null"),
+        "ffi::is_null" => FreeBuiltin::Conc("ffi_is_null"),
         "thread::join" => FreeBuiltin::Conc("thread_join"),
         "sync::channel" => FreeBuiltin::Conc("sync_channel"),
         "sync::sender" => FreeBuiltin::Conc("sync_sender"),

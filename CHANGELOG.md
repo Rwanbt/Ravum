@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- FFI boundary for native libraries (RFC-E11-SQLITE NAT-3.3): an opaque,
+  `Copy` `CHandle` (`ffi::null`, `ffi::is_null`), `&str` parameters passed as
+  pointer + length, and `Option<String>` returns copied from a C string
+  (`None` when NULL or not UTF-8). ABI-3.4 is widened under D-19-4
+  (F-FFI-004).
 - Native libraries: a `[native]` manifest section pins a pre-built static or
   dynamic library by SHA-256; `extern "C" from "<name>"` links to it through
   `rustc -L native=`/`-l`; the digests enter the build identity; five new

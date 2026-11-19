@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-owned-string-param-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "ABI-3.4: an owned String never crosses the boundary; pass &str (ABI-3.7)."
+}

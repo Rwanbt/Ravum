@@ -37,9 +37,23 @@ statique. Écarts avec le texte ci-dessous, retenus à l'implémentation :
 - une clé `sha256-<os>-<arch>` épingle une plateforme (§4) ;
 - une déclaration que rien n'utilise n'est ni lue ni liée (pas d'avertissement).
 
-**Pas encore fait** : NAT-3.3 (`extern type`, texte C), sans quoi l'API C de
-SQLite n'est pas appelable ; puis `std::sqlite` (§6) et la publication des
-binaires SQLite.
+**Fait — NAT-3.3, frontière élargie** ([`abi.md`](../../spec/language/abi.md)
+ABI-3.4, ABI-3.6 à 3.8, F-FFI-004). Au lieu d'`extern type` et de `&CStr` :
+- un seul type de handle, `CHandle` (pointeur C opaque, `Copy`, comparé à nul
+  par `ffi::null()` / `ffi::is_null`) : pas de nouvelle syntaxe, et aucun
+  pointeur brut n'apparaît dans le source ni dans le prélude ;
+- `&str` en paramètre passe en **pointeur + longueur** : pas de NUL final à
+  fabriquer, pas de troncature sur un NUL intérieur ;
+- `Option<String>` en retour copie une chaîne C terminée par NUL : `None` si
+  elle est nulle ou n'est pas de l'UTF-8.
+
+Une API C qui prend un pointeur de sortie (`sqlite3 **`) ou un destructeur
+n'est pas appelable directement : `std::sqlite` passera par une **petite
+bibliothèque d'adaptation C** livrée avec SQLite, qui expose des fonctions de
+cette forme.
+
+**Pas encore fait** : `std::sqlite` (§6), sa bibliothèque d'adaptation et la
+publication des binaires SQLite.
 
 ## 2. L1 — Déclaration dans le manifeste
 

@@ -1,0 +1,11 @@
+extern "C" {
+    fn rv_conf_open(path: &str) -> CHandle;
+    fn rv_conf_name(handle: CHandle) -> Option<String>;
+    fn rv_conf_close(handle: CHandle);
+}
+
+fn main() -> () effects(io) {
+    let h: CHandle = ffi::null();
+    let copy: CHandle = h;
+    io::println(if ffi::is_null(h) && ffi::is_null(copy) { "null" } else { "not null" });
+}
