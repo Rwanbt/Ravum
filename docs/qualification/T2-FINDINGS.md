@@ -2161,3 +2161,39 @@ déplacements sans usage entre eux. Signalé pour lecture, aucun changement.
 
 OWN-11.2 (tri par `(fichier, start_byte, code)`) est tenu par le test
 `diagnostics_of_one_phase_are_sorted_by_file_byte_and_code` de `diagnostics_contract.rs` (DIAG-4.1).
+
+## 39. Lots `features.md` et `unsupported.md` : 7 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `features.md` passe de 11 non atteints à **5**,
+`unsupported.md` de 8 à **7** ; `features_coverage.py --strict` : 231/231
+(1 exemption). FeatureId F-META-029, tenu par `tools/tests/test_feature_table.py`
+(4 tests) : FEAT-1.3 et 12.3 (ligne `unsupported` → code listé dans
+`unsupported.md` et cas `compile-fail` qui l'attend), FEAT-12.4 (code cité dans
+une ligne FeatureId → enregistré), FEAT-12.5 (lignes `experimental` = liste de la
+règle), FEAT-1.6 (aucun code `reserved`, aucun cas n'attend un code hors
+registre) ; FEAT-1.4 par `feature_ids.snapshot` ; UNS-0.2 par le cas
+`unsupported/unicode-ident`.
+
+### 39.1 Trou trouvé par le test : identifiants Unicode
+
+F-UNS-011 refuse `let café = 1;` avec `E-UNSUPPORTED-IDENT` (LEX-4.2), mais
+`unsupported.md` ne listait pas cette forme : FEAT-1.3 n'était pas tenue. La
+ligne est ajoutée en §2. Le test échouait avant l'ajout et passe après.
+
+### 39.2 FEAT-1.5 contredit le corpus (au Lead)
+
+FEAT-1.5 exige qu'un cas contienne `pass.rv`, `fail.rv` et `expected.json`. Le
+corpus réel (662 cas) utilise `case.json` + `src/main.rv`, un cas par
+direction, et le harnais ne lit que cette forme. Aucun cas ne suit FEAT-1.5.
+Recommandation : amender FEAT-1.5 pour décrire la forme `case.json` (déjà
+documentée dans `conformance/README.md`). Non modifié ici : c'est une décision
+de spécification.
+
+### 39.3 Non tracés, et pourquoi
+
+FEAT-1.1, FEAT-1.2, FEAT-12.1 définissent des statuts (aucune forme
+observable) ; FEAT-12.2 (« toute forme acceptée a une ligne ») n'est pas
+prouvable par un test fini, seulement réfutable par un audit. UNS-0.1 (même
+nature que FEAT-12.2), UNS-0.3 (autorité du checker : tenue par le contrat
+`check → build` de T2, pas par une ligne), UNS-9.1 à 9.5 (procédure de
+proposition d'extension, sans forme exécutable).

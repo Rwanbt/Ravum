@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Feature table contract (T2, `features.md`, `unsupported.md`): FeatureId F-META-029 and `tools/tests/test_feature_table.py`, which checks that every `unsupported` row has a listed code and a negative case, every cited code is registered, the `experimental` rows match FEAT-12.5 and no case expects an unregistered code. `unsupported.md` now lists Unicode identifiers (`E-UNSUPPORTED-IDENT`), which F-UNS-011 already refused.
+
 - Ownership contract (T2, `ownership.md`): FeatureIds F-OWN-017 to F-OWN-019 and 13 `ownership/*` cases (moves through loops, branches, arguments and `match`; place mutability; phase order and the per-function budget). OWN-11.3 now names `E-OWN-LIMIT`, the code the compiler emits.
 
 - Effects contract (T2, `effects.md`): FeatureId F-EFF-010 and five `effects/*` cases (unknown profile, inferred effects in JSON, no effect waiver, `String::new` is alloc, profile report).
