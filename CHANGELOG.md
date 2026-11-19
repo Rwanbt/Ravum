@@ -8,6 +8,10 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- Asynchronous TCP: `net::accept_async`, `net::connect_async`,
+  `net::read_line_async`, `net::write_str_async` (CONC-6.7). They share the
+  socket instead of borrowing it, never block the executor, and read the same
+  buffer as the blocking functions (RFC-E11-CONCURRENCY phase 2b).
 - `async fn`, `expr.await` and `std::task` (`block_on`, `spawn`,
   `yield_now`): a single-threaded FIFO executor in the runtime prelude, the
   `async` effect, `Future<T>`, and the codes `E-CONC-AWAIT-OUTSIDE` and

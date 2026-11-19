@@ -16,7 +16,7 @@
 | Catégorie | Noms |
 |---|---|
 | Types primitifs | `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool char ()`, `!` (Never) |
-| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18), `CHandle` ([`abi.md`](abi.md) ABI-3.6), `HttpRequest`, `HttpResponse` (opaques, §19) |
+| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18), `CHandle` ([`abi.md`](abi.md) ABI-3.6), `HttpRequest`, `HttpResponse` (opaques, §19), `Future<T>` ([`concurrency.md`](concurrency.md) §6) |
 | Constructeurs | `Some`, `None`, `Ok`, `Err` (qualifiés ou non, [`types.md`](types.md) TYP-10.2) |
 | Intrinsèques | `assert`, `assert_eq`, `panic`, `drop` |
 
@@ -26,7 +26,8 @@
 |---|---|---|
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
-| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) |
+| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) ; `accept_async`, `connect_async`, `read_line_async`, `write_str_async` ([`concurrency.md`](concurrency.md) CONC-6.7) |
+| `std::task` | `task::…` | `block_on`, `spawn`, `yield_now` ([`concurrency.md`](concurrency.md) §6) |
 | `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body` (§19) |
 | `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
 | `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |

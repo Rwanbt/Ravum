@@ -107,9 +107,11 @@ de l'annotation `let c: sync::Channel<String>`. Aucune exception de grammaire.
 > codes `E-CONC-AWAIT-OUTSIDE` et `E-CONC-REF-ACROSS-AWAIT`. Écarts retenus :
 > - CONC-6.3 est tenu de façon **conservatrice** : une `async fn` ne lie aucune
 >   référence du tout (pas seulement à travers un `.await`) ;
-> - pas encore d'**E/S asynchrone** (phase 2b) : `async` existe sans `net`
->   asynchrone, contrairement à « aucun `async` sans `net` » ci-dessous ; une
->   tâche qui bloque (canal, socket) bloque l'exécuteur ;
+> - **E/S asynchrones (phase 2b, 2026-11-19)** : CONC-6.7, `net::accept_async`,
+>   `connect_async`, `read_line_async`, `write_str_async` ; cas
+>   `run/async-net-echo` (serveur et clients sur un seul thread). `connect`
+>   reste bloquant au premier sondage ; pas d'HTTP asynchrone ; l'exécuteur
+>   dort 1 ms quand toutes les tâches attendent un socket (pas d'`epoll`) ;
 > - une `async fn` est libre, non générique et non `test` ;
 > - l'effet `async` doit être déclaré, comme les autres.
 

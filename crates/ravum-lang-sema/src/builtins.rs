@@ -251,6 +251,7 @@ const NET: &[Effect] = &[Effect::Net];
 const NET_ALLOC: &[Effect] = &[Effect::Net, Effect::Alloc];
 const THREAD: &[Effect] = &[Effect::Thread];
 const ASYNC: &[Effect] = &[Effect::Async];
+const NET_ASYNC: &[Effect] = &[Effect::Net, Effect::Async, Effect::Alloc];
 const THREAD_ALLOC: &[Effect] = &[Effect::Thread, Effect::Alloc];
 const ALLOC: &[Effect] = &[Effect::Alloc];
 const PANIC: &[Effect] = &[Effect::Panic];
@@ -380,6 +381,34 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["fn(A) -> R", "A"],
         ret: "JoinHandle<R>",
         effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::accept_async",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "Future<Result<TcpStream, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::connect_async",
+        generics: &[],
+        params: &["&str"],
+        ret: "Future<Result<TcpStream, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_line_async",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Future<Result<Option<String>, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::write_str_async",
+        generics: &[],
+        params: &["&mut TcpStream", "&str"],
+        ret: "Future<Result<(), Error>>",
+        effects: NET_ASYNC,
     },
     BuiltinFnSig {
         path: "std::task::block_on",

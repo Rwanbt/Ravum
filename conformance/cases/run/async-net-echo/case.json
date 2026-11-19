@@ -1,0 +1,6 @@
+{
+  "id": "run/async-net-echo",
+  "mode": "run-pass",
+  "stdout_contains": "echo one\necho two\ndone\n",
+  "notes": "CONC-6.7: asynchronous TCP; server and clients share one thread, so a blocking call would freeze the program."
+}

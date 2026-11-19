@@ -197,12 +197,28 @@ pub fn rv_fs_exists(path: &str) -> bool {
     std::path::Path::new(path).exists()
 }
 
+// The socket is shared (`Arc`) so that an `async` operation can own a handle to
+// it without borrowing the Ravum value: the future is `'static`, the Ravum
+// value stays usable, and buffered bytes are never lost between the blocking
+// and the asynchronous functions (they read the same `BufReader`).
 pub struct TcpListener {
-    inner: std::net::TcpListener,
+    inner: std::sync::Arc<std::net::TcpListener>,
 }
 
 pub struct TcpStream {
-    reader: std::io::BufReader<std::net::TcpStream>,
+    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+}
+
+fn rv_stream(socket: std::net::TcpStream) -> TcpStream {
+    TcpStream {
+        shared: std::sync::Arc::new(std::sync::Mutex::new(std::io::BufReader::new(socket))),
+    }
+}
+
+fn rv_reader(
+    stream: &TcpStream,
+) -> std::sync::MutexGuard<'_, std::io::BufReader<std::net::TcpStream>> {
+    stream.shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn rv_net_error(what: &str, error: std::io::Error) -> Error {
@@ -211,7 +227,9 @@ fn rv_net_error(what: &str, error: std::io::Error) -> Error {
 
 pub fn rv_net_listen(addr: &str) -> Result<TcpListener, Error> {
     match std::net::TcpListener::bind(addr) {
-        Ok(inner) => Ok(TcpListener { inner }),
+        Ok(inner) => Ok(TcpListener {
+            inner: std::sync::Arc::new(inner),
+        }),
         Err(error) => Err(rv_net_error(&format!("cannot listen on `{}`", addr), error)),
     }
 }
@@ -225,18 +243,14 @@ pub fn rv_net_local_port(listener: &TcpListener) -> u16 {
 
 pub fn rv_net_accept(listener: &TcpListener) -> Result<TcpStream, Error> {
     match listener.inner.accept() {
-        Ok((stream, _)) => Ok(TcpStream {
-            reader: std::io::BufReader::new(stream),
-        }),
+        Ok((stream, _)) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error("cannot accept a connection", error)),
     }
 }
 
 pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
     match std::net::TcpStream::connect(addr) {
-        Ok(stream) => Ok(TcpStream {
-            reader: std::io::BufReader::new(stream),
-        }),
+        Ok(stream) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error(&format!("cannot connect to `{}`", addr), error)),
     }
 }
@@ -244,7 +258,7 @@ pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
 pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> {
     use std::io::BufRead;
     let mut bytes = Vec::new();
-    match stream.reader.read_until(b'\n', &mut bytes) {
+    match rv_reader(stream).read_until(b'\n', &mut bytes) {
         Ok(0) => Ok(None),
         Ok(_) => {
             if bytes.last() == Some(&b'\n') {
@@ -265,7 +279,7 @@ pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error>
 pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
     use std::io::Read;
     let mut bytes = vec![0u8; count];
-    match stream.reader.read_exact(&mut bytes) {
+    match rv_reader(stream).read_exact(&mut bytes) {
         Ok(()) => match String::from_utf8(bytes) {
             Ok(text) => Ok(text),
             Err(_) => Err(Error::new("received bytes are not valid UTF-8")),
@@ -276,7 +290,8 @@ pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String,
 
 pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
     use std::io::Write;
-    let socket = stream.reader.get_mut();
+    let mut reader = rv_reader(stream);
+    let socket = reader.get_mut();
     match socket.write_all(text.as_bytes()).and_then(|_| socket.flush()) {
         Ok(()) => Ok(()),
         Err(error) => Err(rv_net_error("cannot write to the connection", error)),
@@ -399,7 +414,8 @@ fn rv_http_read_body(
 }
 
 pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
-    let line = match rv_http_line(&mut stream.reader)? {
+    let mut reader = rv_reader(stream);
+    let line = match rv_http_line(&mut *reader)? {
         Some(line) => line,
         None => return Err(Error::new("http: connection closed before a request")),
     };
@@ -412,8 +428,8 @@ pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         return Err(Error::new("http: unsupported HTTP version"));
     }
     let (method, path) = (method.to_string(), path.to_string());
-    let headers = rv_http_headers(&mut stream.reader)?;
-    let body = rv_http_read_body(&mut stream.reader, &headers, false)?;
+    let headers = rv_http_headers(&mut *reader)?;
+    let body = rv_http_read_body(&mut *reader, &headers, false)?;
     Ok(HttpRequest { method, path, headers, body })
 }
 
@@ -498,7 +514,8 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
         body
     );
     rv_net_write_str(&mut stream, &request)?;
-    let line = match rv_http_line(&mut stream.reader)? {
+    let mut reader = rv_reader(&stream);
+    let line = match rv_http_line(&mut *reader)? {
         Some(line) => line,
         None => return Err(Error::new("http: connection closed before a response")),
     };
@@ -506,8 +523,8 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
         Some(Ok(status)) if line.starts_with("HTTP/1.") => status,
         _ => return Err(Error::new("http: malformed status line")),
     };
-    let headers = rv_http_headers(&mut stream.reader)?;
-    let body = rv_http_read_body(&mut stream.reader, &headers, true)?;
+    let headers = rv_http_headers(&mut *reader)?;
+    let body = rv_http_read_body(&mut *reader, &headers, true)?;
     Ok(HttpResponse { status, body })
 }
 
@@ -568,16 +585,21 @@ pub fn rv_task_block_on<T>(main: Future<T>) -> T {
     let mut main = main;
     let mut result: Option<T> = None;
     loop {
+        let mut progressed = false;
+        RV_IO_WAITING.with(|flag| flag.set(false));
         if result.is_none() {
             if let std::task::Poll::Ready(value) = main.as_mut().poll(&mut context) {
                 result = Some(value);
+                progressed = true;
             }
         }
         let pending = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(0, |q| q.len()));
         for _ in 0..pending {
             let next = RV_TASKS.with(|tasks| tasks.borrow_mut().last_mut().and_then(|q| q.pop_front()));
             if let Some(mut task) = next {
-                if task.as_mut().poll(&mut context).is_pending() {
+                let pending = task.as_mut().poll(&mut context).is_pending();
+                progressed |= !pending;
+                if pending {
                     RV_TASKS.with(|tasks| {
                         if let Some(queue) = tasks.borrow_mut().last_mut() {
                             queue.push_back(task);
@@ -585,6 +607,11 @@ pub fn rv_task_block_on<T>(main: Future<T>) -> T {
                     });
                 }
             }
+        }
+        // Every task waits on a socket: sleep instead of spinning. A round with
+        // a completion, or with a task that only yielded, does not sleep.
+        if !progressed && RV_IO_WAITING.with(|flag| flag.get()) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
         let idle = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(true, |q| q.is_empty()));
         if idle {
@@ -628,6 +655,204 @@ impl std::future::Future for RvYield {
             std::task::Poll::Pending
         }
     }
+}
+
+thread_local! {
+    /// Set by an I/O future that returned `Pending` because the socket was not
+    /// ready; read by the executor to decide whether a round may sleep.
+    static RV_IO_WAITING: std::cell::Cell<bool> = std::cell::Cell::new(false);
+}
+
+fn rv_io_wait<T>(context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+    RV_IO_WAITING.with(|flag| flag.set(true));
+    context.waker().wake_by_ref();
+    std::task::Poll::Pending
+}
+
+fn rv_would_block(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::WouldBlock
+}
+
+fn rv_line_text(mut bytes: Vec<u8>) -> Result<Option<String>, Error> {
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+    }
+    match String::from_utf8(bytes) {
+        Ok(line) => Ok(Some(line)),
+        Err(_) => Err(Error::new("received bytes are not valid UTF-8")),
+    }
+}
+
+struct RvAccept {
+    listener: std::sync::Arc<std::net::TcpListener>,
+}
+
+impl std::future::Future for RvAccept {
+    type Output = Result<TcpStream, Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        if let Err(error) = self.listener.set_nonblocking(true) {
+            return std::task::Poll::Ready(Err(rv_net_error("cannot accept a connection", error)));
+        }
+        let accepted = self.listener.accept();
+        let _ = self.listener.set_nonblocking(false);
+        match accepted {
+            Ok((socket, _)) => {
+                // Some systems hand out the accepted socket non-blocking.
+                let _ = socket.set_nonblocking(false);
+                std::task::Poll::Ready(Ok(rv_stream(socket)))
+            }
+            Err(error) if rv_would_block(&error) => rv_io_wait(context),
+            Err(error) => {
+                std::task::Poll::Ready(Err(rv_net_error("cannot accept a connection", error)))
+            }
+        }
+    }
+}
+
+/// `net::accept_async`: a connection, without blocking the other tasks.
+pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
+    Box::pin(RvAccept {
+        listener: listener.inner.clone(),
+    })
+}
+
+/// `net::connect_async`: the connection itself is established on the first
+/// poll, blocking (no non-blocking `connect` in `std`); reads and writes on the
+/// stream never block the executor.
+pub fn rv_net_connect_async(addr: &str) -> Future<Result<TcpStream, Error>> {
+    let addr = addr.to_string();
+    Box::pin(async move { rv_net_connect(&addr) })
+}
+
+struct RvReadLine {
+    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    partial: Vec<u8>,
+}
+
+impl std::future::Future for RvReadLine {
+    type Output = Result<Option<String>, Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::io::BufRead;
+        let this = self.get_mut();
+        let shared = this.shared.clone();
+        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Err(error) = reader.get_ref().set_nonblocking(true) {
+            return std::task::Poll::Ready(Err(rv_net_error("cannot read from the connection", error)));
+        }
+        let outcome = loop {
+            let (found, used) = match reader.fill_buf() {
+                Ok(buffer) if buffer.is_empty() => {
+                    let bytes = std::mem::take(&mut this.partial);
+                    break if bytes.is_empty() {
+                        std::task::Poll::Ready(Ok(None))
+                    } else {
+                        std::task::Poll::Ready(rv_line_text(bytes))
+                    };
+                }
+                Ok(buffer) => match buffer.iter().position(|b| *b == b'\n') {
+                    Some(at) => {
+                        this.partial.extend_from_slice(&buffer[..=at]);
+                        (true, at + 1)
+                    }
+                    None => {
+                        this.partial.extend_from_slice(buffer);
+                        (false, buffer.len())
+                    }
+                },
+                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
+                Err(error) => {
+                    break std::task::Poll::Ready(Err(rv_net_error(
+                        "cannot read from the connection",
+                        error,
+                    )))
+                }
+            };
+            reader.consume(used);
+            if found {
+                break std::task::Poll::Ready(rv_line_text(std::mem::take(&mut this.partial)));
+            }
+        };
+        let _ = reader.get_ref().set_nonblocking(false);
+        outcome
+    }
+}
+
+/// `net::read_line_async`: the next line, `None` at end of stream.
+pub fn rv_net_read_line_async(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
+    Box::pin(RvReadLine {
+        shared: stream.shared.clone(),
+        partial: Vec::new(),
+    })
+}
+
+struct RvWrite {
+    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    data: Vec<u8>,
+    written: usize,
+}
+
+impl std::future::Future for RvWrite {
+    type Output = Result<(), Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::io::Write;
+        let this = self.get_mut();
+        let shared = this.shared.clone();
+        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let socket = reader.get_mut();
+        if let Err(error) = socket.set_nonblocking(true) {
+            return std::task::Poll::Ready(Err(rv_net_error("cannot write to the connection", error)));
+        }
+        let outcome = loop {
+            if this.written == this.data.len() {
+                break match socket.flush() {
+                    Ok(()) => std::task::Poll::Ready(Ok(())),
+                    Err(error) if rv_would_block(&error) => rv_io_wait(context),
+                    Err(error) => std::task::Poll::Ready(Err(rv_net_error(
+                        "cannot write to the connection",
+                        error,
+                    ))),
+                };
+            }
+            match socket.write(&this.data[this.written..]) {
+                Ok(0) => {
+                    break std::task::Poll::Ready(Err(Error::new(
+                        "cannot write to the connection: closed",
+                    )))
+                }
+                Ok(count) => this.written += count,
+                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
+                Err(error) => {
+                    break std::task::Poll::Ready(Err(rv_net_error(
+                        "cannot write to the connection",
+                        error,
+                    )))
+                }
+            }
+        };
+        let _ = socket.set_nonblocking(false);
+        outcome
+    }
+}
+
+/// `net::write_str_async`: the whole text, without blocking the other tasks.
+pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
+    Box::pin(RvWrite {
+        shared: stream.shared.clone(),
+        data: text.as_bytes().to_vec(),
+        written: 0,
+    })
 }
 
 /// A future that is pending once: the other ready tasks run before it resumes.
