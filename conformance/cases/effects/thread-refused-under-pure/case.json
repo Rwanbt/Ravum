@@ -1,0 +1,9 @@
+{
+  "id": "effects/thread-refused-under-pure",
+  "mode": "compile-fail",
+  "args": ["--profile", "pure"],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "STD-18 / EFF-4: thread is forbidden at the entry point of pure."
+}

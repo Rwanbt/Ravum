@@ -1051,7 +1051,11 @@ pub(crate) fn resolve_type_path(
 }
 
 pub(crate) fn is_builtin_type_name(name: &str) -> bool {
-    matches!(name, "Vec" | "Option" | "Result") || builtins::prelude_type(name).is_some()
+    matches!(name, "Vec" | "Option" | "Result")
+        || builtins::prelude_type(name).is_some()
+        || builtins::PRELUDE_GENERIC_OPAQUES
+            .iter()
+            .any(|(opaque, _)| *opaque == name)
 }
 
 pub(crate) fn prelude_nominal(
@@ -1075,6 +1079,13 @@ pub(crate) fn prelude_nominal(
                 Box::new(args[0].clone()),
                 Box::new(args[1].clone()),
             ))
+        }
+        _ if builtins::PRELUDE_GENERIC_OPAQUES
+            .iter()
+            .any(|(opaque, _)| *opaque == name) =>
+        {
+            expect_arity(name, 1, args.len(), span, diags)?;
+            builtins::generic_opaque(name, args[0].clone())
         }
         _ => {
             if !args.is_empty() {

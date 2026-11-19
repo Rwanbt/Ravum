@@ -17,6 +17,7 @@ pub enum Effect {
     Io,
     Fs,
     Net,
+    Thread,
     Alloc,
     Panic,
     Unsafe,
@@ -32,6 +33,7 @@ impl Effect {
             Effect::Io => "io",
             Effect::Fs => "fs",
             Effect::Net => "net",
+            Effect::Thread => "thread",
             Effect::Alloc => "alloc",
             Effect::Panic => "panic",
             Effect::Unsafe => "unsafe",
@@ -47,6 +49,7 @@ impl Effect {
             "io" => Effect::Io,
             "fs" => Effect::Fs,
             "net" => Effect::Net,
+            "thread" => Effect::Thread,
             "alloc" => Effect::Alloc,
             "panic" => Effect::Panic,
             "unsafe" => Effect::Unsafe,
@@ -139,6 +142,7 @@ impl Profile {
                 Effect::Io,
                 Effect::Fs,
                 Effect::Net,
+                Effect::Thread,
                 Effect::Alloc,
                 Effect::Panic,
                 Effect::Unsafe,
@@ -151,6 +155,7 @@ impl Profile {
                 Effect::Io,
                 Effect::Fs,
                 Effect::Net,
+                Effect::Thread,
                 Effect::Alloc,
                 Effect::Panic,
                 Effect::Unsafe,
@@ -444,6 +449,9 @@ pub struct Facts {
     /// only interprocedural provenance `own::is_static_ref` accepts; no builtin
     /// (notably `String::as_str`) is ever a member.
     pub static_str_fns: BTreeSet<NodeId>,
+    /// `thread::spawn(f, arg)` call node -> the free function `f` it runs
+    /// (RFC-E11-CONCURRENCY CONC-3.1). Its effects flow to the caller.
+    pub spawn_targets: BTreeMap<NodeId, NodeId>,
     /// Test functions in declaration order.
     pub test_fns: Vec<NodeId>,
     pub main_fn: Option<NodeId>,
@@ -538,10 +546,11 @@ mod tests {
     use super::*;
     use ravum_lang_syntax::source::SourceMap;
 
-    const ALL_EFFECTS: [Effect; 10] = [
+    const ALL_EFFECTS: [Effect; 11] = [
         Effect::Io,
         Effect::Fs,
         Effect::Net,
+        Effect::Thread,
         Effect::Alloc,
         Effect::Panic,
         Effect::Unsafe,

@@ -3,31 +3,32 @@
 > **Statut : DRAFT — CANDIDATE, non ratifiée.**
 > **Version : `core-1.0-draft.1`** · **Date : 2026-11-09** · **Portée : Ravum Core 1.0** · **Base : `dev` @ `5408d9b`** · **Source de conception : `docs/architecture/RAVUM-CORE-DESIGN.md` §3.6, §5.**
 >
-> Ce document est une **candidate**. Il **ne ratifie aucun ADR** (notamment pas ADR-008 « concurrence, synchronisation et annulation » ni ADR-024 « thread audio »). Aucune implémentation n'est revendiquée (`NOT_IMPLEMENTED`).
+> Ce document est une **candidate**. Il **ne ratifie aucun ADR** (notamment pas ADR-008 « concurrence, synchronisation et annulation » ni ADR-024 « thread audio »).
+>
+> **Révision du 2026-11-19.** Les décisions [D-18-2](../../docs/decision/DECISIONS-2026-11-18.md) et [D-19-3](../../docs/decision/DECISIONS-2026-11-19.md) mettent la concurrence dans la 1.0 ([`RFC-E11-CONCURRENCY`](../../docs/rfc/RFC-E11-CONCURRENCY.md)). La phase 1 (threads et canaux, [`stdlib.md`](stdlib.md) §18) est implémentée ; la phase 2 (`async`) ne l'est pas encore.
 
-## 1. Décision : aucune concurrence en Core 1.0
+## 1. Décision : threads et canaux, sans état partagé
 
 | ID | Règle | Niveau |
 |---|---|---|
-| CONC-1.1 | Core 1.0 est **mono-thread** : un programme s'exécute sur un seul thread logique, séquentiellement. | MUST |
-| CONC-1.2 | Il n'existe **aucune** primitive de concurrence : ni `thread`, ni `spawn`, ni `join`, ni `Mutex`, ni `RwLock`, ni `Arc`, ni `atomic`, ni canal, ni `async`/`await`, ni `select`, ni domaine parallèle. | MUST |
-| CONC-1.3 | Les groupes d'effets `async` et `rt` ne sont **pas** des mécanismes d'exécution : `async` est refusé à la déclaration (`E-UNSUPPORTED-EFFECT`) et `rt` est réservé, sans sémantique ([`effects.md`](effects.md)). | MUST |
+| CONC-1.1 | Un programme qui n'appelle pas `thread::spawn` s'exécute sur **un seul** thread, séquentiellement. Avec `spawn`, il exécute plusieurs threads ([`stdlib.md`](stdlib.md) §18). | MUST |
+| CONC-1.2 | Les **seules** primitives de concurrence sont `thread::spawn`, `thread::join` et les canaux de `std::sync`. Il n'existe ni `Mutex`, ni `RwLock`, ni `Arc`, ni `atomic`, ni `select`, ni `sleep`, ni domaine parallèle ; `async`/`await` attend la phase 2. | MUST |
+| CONC-1.3 | Le groupe d'effets `thread` marque toute fonction qui crée un thread ou utilise un canal. `async` est refusé à la déclaration (`E-UNSUPPORTED-EFFECT`) jusqu'à la phase 2 ; `rt` est réservé, sans sémantique ([`effects.md`](effects.md)). | MUST |
 | CONC-1.4 | La seule « concurrence » possible est **externe** au langage : plusieurs processus `ravum-lang run` lancés par l'utilisateur. Ils ne partagent aucun état mémoire ; les interactions passent par le système de fichiers ou les E/S standard, hors du modèle Ravum. | MUST |
-| CONC-1.5 | Aucun programme Ravum ne peut créer, lire ou écrire un état partagé entre deux threads. | MUST |
+| CONC-1.5 | Aucun programme Ravum ne peut créer, lire ou écrire un état **mutable partagé** entre deux threads : une valeur est déplacée dans un thread (STD-18.3) ou envoyée par un canal, jamais partagée. | MUST |
 
 ```rv
-// POSITIF — un seul thread, séquentiel
-fn main() {
-    let mut n = 0;
-    for i in 0..10 { n += i; }
-    io::println(n.to_string().as_str());
+// POSITIF — un thread de calcul, résultat rendu par join
+fn carre(n: i64) -> i64 effects() { return n * n; }
+fn main() -> () effects(io, thread, alloc) {
+    let h: JoinHandle<i64> = thread::spawn(carre, 12);
+    io::println(thread::join(h).to_string().as_str());
 }
 ```
 
 ```rv
-// NÉGATIF — E-RES-UNKNOWN (aucune API thread)
-use std::thread;
-fn main() { let h = thread::spawn(f); }
+// NÉGATIF — E-RES-UNKNOWN (aucun état partagé)
+fn main() { let m = Mutex::new(0); }
 // NÉGATIF — E-UNSUPPORTED-ASYNC
 async fn f() { }
 // NÉGATIF — E-UNSUPPORTED-EFFECT (déclaration du groupe async)
@@ -38,13 +39,13 @@ fn g() effects(async) { }
 
 | ID | Non-promesse | Niveau |
 |---|---|---|
-| CONC-2.1 | Le langage **ne promet pas** « data races impossibles » comme théorème : il n'y a pas de mémoire partagée entre threads, donc la question est **vide** en Core 1.0. Aucune preuve, aucun modèle mémoire, aucun `PROVED` n'est revendiqué. | MUST |
-| CONC-2.2 | Il n'existe **aucun** `Send`/`Sync`, aucun marqueur de transfert, aucune borne de concurrence. Les génériques n'ont pas de bornes ([`types.md`](types.md) TYP-11.6). | MUST |
-| CONC-2.3 | Il n'existe **aucun** ordre mémoire, aucune barrière, aucune sémantique d'atomicité — pas même `Relaxed`. | MUST |
-| CONC-2.4 | Aucune garantie de « fairness », de « pas de deadlock », ni de « pas de famine » : ces propriétés sont hors modèle. | MUST |
+| CONC-2.1 | L'absence de course de données découle de deux règles vérifiées : aucun état mutable partagé (CONC-1.5) et aucune référence ne traverse un thread (STD-18.1). C'est une propriété **testée** (corpus, TSan), jamais `PROVED` ; aucun modèle mémoire n'est revendiqué. | MUST |
+| CONC-2.2 | Il n'existe **aucun** trait `Send`/`Sync` ni borne de concurrence : la transférabilité est **structurelle** (un type sans référence, STD-18.1). Les génériques n'ont pas de bornes ([`types.md`](types.md) TYP-11.6). | MUST |
+| CONC-2.3 | Il n'existe **aucun** ordre mémoire exposé, aucune barrière, aucune atomique. Le seul ordre garanti est celui des canaux : une valeur envoyée est reçue après son envoi, et les valeurs d'un même `Sender` arrivent dans l'ordre (STD-18.7). | MUST |
+| CONC-2.4 | Aucune garantie de « fairness », de « pas de deadlock », ni de « pas de famine » : un `recv` sur un canal dont un `Sender` reste vivant peut attendre indéfiniment. | MUST |
 | CONC-2.5 | Aucune garantie de latence, de gigue, ni de temps réel. `rt` est **expérimental** et ne certifie **pas** le hard-RT (design §3.6, [`effects.md`](effects.md) EFF-4.6). | MUST |
-| CONC-2.6 | Le panic termine **le processus** en mode `run` (aucun destructeur) ; en mode `test`, le runner capture l'*unwind* et marque le test en échec. Il n'y a ni propagation inter-thread, ni `catch_unwind` utilisateur, ni déroulement observable (Q-EXPR-1). | MUST |
-| CONC-2.7 | Aucune garantie sur le nombre de cœurs utilisés : un programme Core 1.0 en utilise **un**. | MUST |
+| CONC-2.6 | Le panic de **n'importe quel thread** termine **le processus** en mode `run` (`panic: <message>`, code `1`, STD-18.5) ; en mode `test`, le runner capture l'*unwind* et marque le test en échec. Il n'y a ni `catch_unwind` utilisateur, ni déroulement observable (Q-EXPR-1). | MUST |
+| CONC-2.7 | Aucune garantie sur le nombre de cœurs utilisés ni sur l'ordonnancement des threads. | MUST |
 
 ```text
 // NÉGATIF — affirmations interdites dans un rapport :
@@ -61,28 +62,28 @@ fn g() effects(async) { }
 | CONC-3.1 | **INV-05** (thread temps réel) n'est pas applicable à un programme Core 1.0 qui n'a pas de callback audio : aucun appel audio, aucune allocation en callback, aucune activation à chaud (`UNSUPPORTED`, T8). | MUST |
 | CONC-3.2 | Le profil `rt` vérifie l'**absence d'effets interdits** dans le graphe d'appels, pas l'absence de préemption, d'interruption ou de défaut de cache. Un rapport `rt` ne doit jamais contenir `CERTIFIED`. | MUST |
 | CONC-3.3 | Aucun mécanisme de « scheduler annulable » n'existe dans le langage ; l'annulation et le rejet de résultats périmés sont des propriétés du **daemon** (hors périmètre `spec/language/`). | MUST |
-| CONC-3.4 | Le déterminisme d'exécution est **total** en Core 1.0 : un programme sans `env::args`/`env::var`/`io::read_line`/`fs` produit la même sortie à chaque exécution. | MUST |
+| CONC-3.4 | Un programme sans `thread::spawn`, `env::args`, `env::var`, `io::read_line`, `fs` ni `net` produit la même sortie à chaque exécution. Avec des threads, l'entrelacement n'est pas spécifié : la sortie n'est reproductible que si elle n'en dépend pas. | MUST |
 
 ## 4. Conditions d'extension future
 
-Une extension concurrence ne peut être envisagée que si **toutes** les conditions suivantes sont réunies et **ratifiées par décision humaine** :
+Une extension concurrence ne peut être envisagée que si **toutes** les conditions suivantes sont réunies et **ratifiées par décision humaine**. Pour la phase 1, la décision humaine est D-18-2 et D-19-3 ; l'état de chaque condition est dans la colonne de droite.
 
-| # | Condition | Prérequis |
-|---|---|---|
-| 1 | Un cas d'usage réel et mesuré justifie le coût (P0-I, INV-10) | étude, pas préférence |
-| 2 | Un **modèle mémoire** est spécifié (ordre, atomicité, barrières) | ADR-008 accepté |
-| 3 | La propriété de transfert est définie sans traits (équivalent structurel de `Send`) | [`types.md`](types.md) Q-TYP-5 |
-| 4 | Les règles d'emprunt sont **étendues** au-delà de l'instruction (sinon aucune synchronisation n'est exprimable) | [`ownership.md`](ownership.md) Q-OWN-3 |
-| 5 | `unsafe` et FFI restent **absents** ou sont audités séparément | ADR-009 |
-| 6 | Un oracle indépendant existe (INV-12) et la conformance est différentielle | [`core-machine.md`](core-machine.md) |
-| 7 | Le hard-RT éventuel est un **programme séparé** avec plateforme qualifiée | ADR-006/024 |
-| 8 | La compatibilité est versionnée (édition `core-1.x` → `core-2.0`) | [`compatibility.md`](compatibility.md) |
+| # | Condition | Prérequis | État phase 1 (2026-11-19) |
+|---|---|---|---|
+| 1 | Un cas d'usage réel et mesuré justifie le coût (P0-I, INV-10) | étude, pas préférence | décision du responsable (D-18-2), cas T6/T9 |
+| 2 | Un **modèle mémoire** est spécifié (ordre, atomicité, barrières) | ADR-008 accepté | sans état partagé, seul l'ordre des canaux existe (CONC-2.3) ; ADR-008 reste `PROPOSED` |
+| 3 | La propriété de transfert est définie sans traits (équivalent structurel de `Send`) | [`types.md`](types.md) Q-TYP-5 | **fait** : STD-18.1 |
+| 4 | Les règles d'emprunt sont **étendues** au-delà de l'instruction (sinon aucune synchronisation n'est exprimable) | [`ownership.md`](ownership.md) Q-OWN-3 | non requis : aucune référence ne traverse un thread |
+| 5 | `unsafe` et FFI restent **absents** ou sont audités séparément | ADR-009 | inchangé : le runtime de threads n'a pas d'`unsafe` |
+| 6 | Un oracle indépendant existe (INV-12) et la conformance est différentielle | [`core-machine.md`](core-machine.md) | la machine de référence refuse `thread` (hors cœur pur) ; corpus de conformance |
+| 7 | Le hard-RT éventuel est un **programme séparé** avec plateforme qualifiée | ADR-006/024 | non concerné |
+| 8 | La compatibilité est versionnée (édition `core-1.x` → `core-2.0`) | [`compatibility.md`](compatibility.md) | avant la 1.0 : aucune version publiée n'est cassée |
 
 | ID | Règle | Niveau |
 |---|---|---|
 | CONC-4.1 | Aucune extension concurrence ne peut être introduite comme « expérimentale » sans les conditions 1–3 : elle changerait le modèle de sûreté. | MUST |
 | CONC-4.2 | Une extension **MUST NOT** affaiblir les garanties existantes (non-échappement des références, absence d'`unsafe fn` et de pointeurs bruts ; les blocs `unsafe` et la FFI scalaire restent des frontières explicites, pas des capacités de concurrence). | MUST |
-| CONC-4.3 | Les groupes d'effets `async`/`rt` existent pour **réserver** la syntaxe ; ils ne constituent pas une feuille de route implicite. | MUST |
+| CONC-4.3 | Le groupe `async` est réservé pour la phase 2 de RFC-E11-CONCURRENCY (D-19-3) ; `rt` reste réservé, sans feuille de route implicite. | MUST |
 | CONC-4.4 | Toute API de concurrence future devra être **dans `std`**, versionnée, et refusée `fail-closed` sur une plateforme non supportée. | MUST |
 
 ## 5. Questions ouvertes

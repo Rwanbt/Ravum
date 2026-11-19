@@ -43,6 +43,51 @@ pub fn error_type() -> Type {
 pub const PRELUDE_TCP_LISTENER_DEF: NodeId = NodeId::MAX - 1;
 pub const PRELUDE_TCP_STREAM_DEF: NodeId = NodeId::MAX - 2;
 
+/// `NodeId` réservés aux types opaques génériques de `std::thread` et
+/// `std::sync` (RFC-E11-CONCURRENCY §3). Chacun prend un argument de type.
+pub const PRELUDE_JOIN_HANDLE_DEF: NodeId = NodeId::MAX - 3;
+pub const PRELUDE_CHANNEL_DEF: NodeId = NodeId::MAX - 4;
+pub const PRELUDE_SENDER_DEF: NodeId = NodeId::MAX - 5;
+pub const PRELUDE_RECEIVER_DEF: NodeId = NodeId::MAX - 6;
+
+/// Types opaques génériques du prélude : nom et `NodeId` réservé.
+pub const PRELUDE_GENERIC_OPAQUES: &[(&str, NodeId)] = &[
+    ("JoinHandle", PRELUDE_JOIN_HANDLE_DEF),
+    ("Channel", PRELUDE_CHANNEL_DEF),
+    ("Sender", PRELUDE_SENDER_DEF),
+    ("Receiver", PRELUDE_RECEIVER_DEF),
+];
+
+/// Nom Rust du prélude pour un `NodeId` réservé à un type opaque.
+pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
+    if def == PRELUDE_TCP_LISTENER_DEF {
+        return Some("TcpListener");
+    }
+    if def == PRELUDE_TCP_STREAM_DEF {
+        return Some("TcpStream");
+    }
+    PRELUDE_GENERIC_OPAQUES
+        .iter()
+        .find(|(_, id)| *id == def)
+        .map(|(name, _)| *name)
+}
+
+/// Builtins typés par une règle dédiée du checker, pas par leur ligne de
+/// table : leur signature décrit la forme, elle n'est pas analysable comme un
+/// type. `thread::spawn` prend une **fonction nommée** (STD-18.2), et Ravum n'a
+/// pas de type fonction.
+pub const SPECIAL_FORM_FNS: &[&str] = &["std::thread::spawn"];
+
+/// Type opaque générique du prélude (`JoinHandle<T>`, `Sender<T>`, ...).
+pub fn generic_opaque(name: &str, arg: Type) -> Option<Type> {
+    let (name, def) = PRELUDE_GENERIC_OPAQUES.iter().find(|(n, _)| *n == name)?;
+    Some(Type::Nominal {
+        def: *def,
+        name: (*name).to_string(),
+        args: vec![arg],
+    })
+}
+
 fn opaque_type(def: NodeId, name: &str) -> Type {
     Type::Nominal {
         def,
@@ -105,6 +150,8 @@ pub fn builtin_root_module(name: &str) -> Option<&'static str> {
         "io" => "std::io",
         "fs" => "std::fs",
         "net" => "std::net",
+        "thread" => "std::thread",
+        "sync" => "std::sync",
         "string" => "std::string",
         "math" => "std::math",
         "env" => "std::env",
@@ -120,6 +167,8 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std::io",
     "std::fs",
     "std::net",
+    "std::thread",
+    "std::sync",
     "std::string",
     "std::math",
     "std::env",
@@ -156,6 +205,8 @@ const FS: &[Effect] = &[Effect::Fs];
 const FS_ALLOC: &[Effect] = &[Effect::Fs, Effect::Alloc];
 const NET: &[Effect] = &[Effect::Net];
 const NET_ALLOC: &[Effect] = &[Effect::Net, Effect::Alloc];
+const THREAD: &[Effect] = &[Effect::Thread];
+const THREAD_ALLOC: &[Effect] = &[Effect::Thread, Effect::Alloc];
 const ALLOC: &[Effect] = &[Effect::Alloc];
 const PANIC: &[Effect] = &[Effect::Panic];
 const PURE: &[Effect] = &[];
@@ -274,6 +325,65 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["&mut TcpStream", "&str"],
         ret: "Result<(), Error>",
         effects: NET_ALLOC,
+    },
+    // --- std::thread, std::sync (RFC-E11-CONCURRENCY §3) ---
+    // `spawn` is typed by a dedicated rule (its first argument names a free
+    // function, CONC-3.1); this row only registers the path and its effects.
+    BuiltinFnSig {
+        path: "std::thread::spawn",
+        generics: &["A", "R"],
+        params: &["fn(A) -> R", "A"],
+        ret: "JoinHandle<R>",
+        effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::thread::join",
+        generics: &["T"],
+        params: &["JoinHandle<T>"],
+        ret: "T",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::channel",
+        generics: &["T"],
+        params: &[],
+        ret: "Channel<T>",
+        effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::sync::sender",
+        generics: &["T"],
+        params: &["&Channel<T>"],
+        ret: "Sender<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::clone_sender",
+        generics: &["T"],
+        params: &["&Sender<T>"],
+        ret: "Sender<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::receiver",
+        generics: &["T"],
+        params: &["Channel<T>"],
+        ret: "Receiver<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::send",
+        generics: &["T"],
+        params: &["&Sender<T>", "T"],
+        ret: "bool",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::recv",
+        generics: &["T"],
+        params: &["&Receiver<T>"],
+        ret: "Option<T>",
+        effects: THREAD,
     },
     BuiltinFnSig {
         path: "std::process::exit",
@@ -1071,6 +1181,15 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
         }
         return Some(Type::Tuple(items));
     }
+    for (name, _) in PRELUDE_GENERIC_OPAQUES {
+        if let Some(inner) = t
+            .strip_prefix(*name)
+            .and_then(|s| s.strip_prefix('<'))
+            .and_then(|s| s.strip_suffix('>'))
+        {
+            return generic_opaque(name, type_from_str(inner, env)?);
+        }
+    }
     for (prefix, wrap) in [("Vec<", 0usize), ("Option<", 1usize), ("Result<", 2usize)] {
         if let Some(inner) = t.strip_prefix(prefix).and_then(|s| s.strip_suffix('>')) {
             let parts = split_top_level(inner, ',')?;
@@ -1204,7 +1323,13 @@ mod tests {
 
     #[test]
     fn every_builtin_fn_parses() {
+        assert_eq!(SPECIAL_FORM_FNS, &["std::thread::spawn"]);
         for sig in BUILTIN_FNS {
+            if SPECIAL_FORM_FNS.contains(&sig.path) {
+                // Its result still parses; its first parameter is a function name.
+                assert!(fn_ret_type(sig) != Type::Error, "{}", sig.path);
+                continue;
+            }
             assert!(
                 fn_ret_type(sig) != Type::Error,
                 "retour illisible: {}",

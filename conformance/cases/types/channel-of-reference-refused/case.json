@@ -1,0 +1,8 @@
+{
+  "id": "types/channel-of-reference-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CONC-NOT-TRANSFERABLE"
+  ],
+  "notes": "STD-18.1: a channel cannot carry references."
+}

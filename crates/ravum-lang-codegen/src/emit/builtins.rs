@@ -17,6 +17,9 @@ pub(super) enum FreeBuiltin {
     /// `std::net::<name>`, emitted as `crate::rv_net_<name>(args)`
     /// (RFC-E11-NET-HTTP §3).
     Net(&'static str),
+    /// `std::thread::<name>` / `std::sync::<name>`, emitted as
+    /// `crate::rv_<module>_<name>(args)` (RFC-E11-CONCURRENCY §3).
+    Conc(&'static str),
     Exit,
     Panic,
     Assert,
@@ -55,6 +58,14 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "net::read_line" => FreeBuiltin::Net("read_line"),
         "net::read_exact" => FreeBuiltin::Net("read_exact"),
         "net::write_str" => FreeBuiltin::Net("write_str"),
+        "thread::spawn" => FreeBuiltin::Conc("thread_spawn"),
+        "thread::join" => FreeBuiltin::Conc("thread_join"),
+        "sync::channel" => FreeBuiltin::Conc("sync_channel"),
+        "sync::sender" => FreeBuiltin::Conc("sync_sender"),
+        "sync::clone_sender" => FreeBuiltin::Conc("sync_clone_sender"),
+        "sync::receiver" => FreeBuiltin::Conc("sync_receiver"),
+        "sync::send" => FreeBuiltin::Conc("sync_send"),
+        "sync::recv" => FreeBuiltin::Conc("sync_recv"),
         "process::exit" | "exit" => FreeBuiltin::Exit,
         "panic::panic" | "panic" => FreeBuiltin::Panic,
         "panic::assert" | "assert" => FreeBuiltin::Assert,

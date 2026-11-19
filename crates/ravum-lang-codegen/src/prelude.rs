@@ -283,6 +283,87 @@ pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error>
     }
 }
 
+/// A running thread (`std::thread`, RFC-E11-CONCURRENCY). Dropping a handle
+/// that was not joined joins it: no thread outlives its handle (CONC-3.5).
+pub struct JoinHandle<T> {
+    inner: Option<std::thread::JoinHandle<T>>,
+}
+
+impl<T> Drop for JoinHandle<T> {
+    fn drop(&mut self) {
+        if let Some(handle) = self.inner.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
+    worker: fn(A) -> R,
+    arg: A,
+) -> JoinHandle<R> {
+    JoinHandle {
+        inner: Some(std::thread::spawn(move || worker(arg))),
+    }
+}
+
+/// A panic in any thread ends the process through the run-mode hook
+/// (`panic: <message>`, exit code 1), so `join` only sees finished threads.
+pub fn rv_thread_join<T>(mut handle: JoinHandle<T>) -> T {
+    match handle.inner.take() {
+        Some(inner) => match inner.join() {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        },
+        None => panic!("thread handle already joined"),
+    }
+}
+
+pub struct Channel<T> {
+    sender: std::sync::mpsc::Sender<T>,
+    receiver: std::sync::mpsc::Receiver<T>,
+}
+
+pub struct Sender<T> {
+    inner: std::sync::mpsc::Sender<T>,
+}
+
+pub struct Receiver<T> {
+    inner: std::sync::mpsc::Receiver<T>,
+}
+
+pub fn rv_sync_channel<T>() -> Channel<T> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    Channel { sender, receiver }
+}
+
+pub fn rv_sync_sender<T>(channel: &Channel<T>) -> Sender<T> {
+    Sender {
+        inner: channel.sender.clone(),
+    }
+}
+
+pub fn rv_sync_clone_sender<T>(sender: &Sender<T>) -> Sender<T> {
+    Sender {
+        inner: sender.inner.clone(),
+    }
+}
+
+/// Consumes the channel: its own sender is dropped, so `recv` returns `None`
+/// once every `Sender` taken from it is gone (CONC-4.2).
+pub fn rv_sync_receiver<T>(channel: Channel<T>) -> Receiver<T> {
+    Receiver {
+        inner: channel.receiver,
+    }
+}
+
+pub fn rv_sync_send<T>(sender: &Sender<T>, value: T) -> bool {
+    sender.inner.send(value).is_ok()
+}
+
+pub fn rv_sync_recv<T>(receiver: &Receiver<T>) -> Option<T> {
+    receiver.inner.recv().ok()
+}
+
 pub fn rv_exit(code: i32) -> ! {
     std::process::exit(code)
 }

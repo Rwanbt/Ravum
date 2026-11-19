@@ -64,7 +64,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
-| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté (`net`, `unsafe`, `ffi`, `async`) |
+| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté (`async`) |
 | `E-UNSUPPORTED-EDITION` | modules | `edition` de `ravum.toml` inconnue |
 | `E-UNSUPPORTED-RANGE` | parse | `..`/`..=` hors `for`, slicing `&v[a..b]`, `..base` |
 | `E-UNSUPPORTED-CLOSURE` | parse | `|x| e` |
@@ -151,6 +151,13 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-EFF-UNKNOWN` | effects | nom d'effet inconnu (pas un des 9 groupes) |
 | `E-EFF-UNDECLARED` | effects | effet inféré absent de la déclaration majorante |
 | `E-EFF-PROFILE` | effects | effet interdit par le profil `pure` ou `rt` |
+
+### 3.6.1 Concurrence
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-CONC-SPAWN-TARGET` | types | le premier argument de `thread::spawn` ne nomme pas une fonction libre non générique à un paramètre ([`stdlib.md`](stdlib.md) STD-18.2) |
+| `E-CONC-NOT-TRANSFERABLE` | types | type contenant une référence passé entre threads : paramètre ou résultat d'un `spawn`, élément d'un canal ([`stdlib.md`](stdlib.md) STD-18.1) |
 
 ### 3.7 Avertissements
 

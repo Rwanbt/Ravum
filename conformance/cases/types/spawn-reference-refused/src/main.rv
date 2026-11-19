@@ -1,0 +1,9 @@
+fn show(s: &String) -> usize effects() {
+    s.len()
+}
+
+fn main() -> () effects(thread, alloc) {
+    let text: String = String::from("x");
+    let h: JoinHandle<usize> = thread::spawn(show, &text);
+    drop(h);
+}

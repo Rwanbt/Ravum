@@ -1,0 +1,7 @@
+{
+  "id": "run/thread-panic-ends-process",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic: worker failed",
+  "notes": "STD-18.5: a panic in a spawned thread ends the process with `panic: <message>` and exit code 1, like a panic in main."
+}

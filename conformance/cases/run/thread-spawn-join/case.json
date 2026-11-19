@@ -1,0 +1,6 @@
+{
+  "id": "run/thread-spawn-join",
+  "mode": "run-pass",
+  "stdout_contains": "499545\n",
+  "notes": "STD-18.2, STD-18.6: two threads run a named function on a moved argument; join returns each result. 0+..+999 = 499500, 0+..+9 = 45."
+}
