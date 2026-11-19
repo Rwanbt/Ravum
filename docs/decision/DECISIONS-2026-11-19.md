@@ -45,3 +45,31 @@ binaire panique (`attempt to calculate the remainder with overflow`) et que
 **Décision :** `MIN % -1` est un **trap**, comme `MIN / -1` (EXPR-3.1).
 `core-machine.md` §5 est aligné ; l'oracle et son corpus suivent. Le
 compilateur ne change pas.
+
+## D-19-3 — Concurrence : threads, canaux **et** `async` dans la 1.0
+
+**Décision du responsable :** la 1.0 contient les deux phases de
+[`RFC-E11-CONCURRENCY`](../rfc/RFC-E11-CONCURRENCY.md) : threads et canaux
+(phase 1), puis `async`/`.await` sur un exécuteur déterministe (phase 2). La
+phase 1 est livrée d'abord ; T6 n'est `PASS` qu'avec les deux.
+
+## D-19-4 — SQLite : dépendances natives générales
+
+**Décision du responsable :** au lieu d'un runtime natif fermé, Ravum gagne un
+**mécanisme général de dépendances natives** (L1–L4 de
+`RFC-P2-VERTICALS-BLOCKERS` §3.3). SQLite est la première dépendance qui
+l'utilise. [`RFC-E11-SQLITE`](../rfc/RFC-E11-SQLITE.md) est réécrite en ce
+sens ; cela élargit D7 (FFI), dont la frontière doit être réécrite dans la
+même RFC.
+
+## D-19-5 — Hot reload : `init`/`step` avec `migrate`
+
+**Décision du responsable :** modèle `init`/`step` de
+[`RFC-E11-HOT-RELOAD`](../rfc/RFC-E11-HOT-RELOAD.md), état sérialisé au
+remplacement, refus si le schéma change **sauf** si le nouveau module fournit
+`migrate` (HR-1.7 passe de SHOULD à MUST dans la 1.0).
+
+## D-19-6 — Ordre d'implémentation d'E11
+
+Réseau → threads → SQLite → hot reload → DSP. Les RFC restent `PROPOSED`
+jusqu'à leur ratification ; ces décisions fixent les choix de conception.

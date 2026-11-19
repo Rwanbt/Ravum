@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-E11-HOT-RELOAD` |
-| Statut | **`PROPOSED`** — aucune implémentation avant décision du responsable sur §7 |
+| Statut | **`PROPOSED`** — modèle fixé par [D-19-5](../decision/DECISIONS-2026-11-19.md) : `init`/`step` avec `migrate` |
 | Date | 2026-11-19 |
 | Auteur | agent de développement |
 | Origine | [D-18-2](../decision/DECISIONS-2026-11-18.md) ; ferme T8 avec RFC-E11-DSP-BLOCK |
@@ -51,7 +51,7 @@ entre deux appels de `step`. À chaque édition acceptée :
 | HR-1.4 | Un module qui ne compile pas, ou dont l'ABI diffère, est refusé ; l'ancien continue (fail-closed, P0-C). | MUST |
 | HR-1.5 | Une panique dans `step` du nouveau module restaure l'état d'avant l'appel et revient à l'ancien module. | MUST |
 | HR-1.6 | `State` doit être transférable (sans référence, CONC-2.1) et sans ressource (`Stream`, `Db`, `Handle` refusés : `E-HR-STATE-RESOURCE`). | MUST |
-| HR-1.7 | Migration explicite (optionnelle) : `fn migrate(old: OldState) -> State` où `OldState` reprend le schéma précédent ; sans elle, HR-1.3 s'applique. | SHOULD |
+| HR-1.7 | Migration explicite (optionnelle) : `fn migrate(old: OldState) -> State` où `OldState` reprend le schéma précédent ; sans elle, HR-1.3 s'applique. | MUST (D-19-5) |
 
 ## 3. Transport de l'état entre deux modules
 
@@ -91,5 +91,5 @@ RFC partagent le digest de schéma (HR-1.1) et la politique de refus.
 
 1. Accepter le modèle `init`/`step` plutôt qu'un hot patch général.
 2. Accepter la sérialisation au remplacement (§3).
-3. `migrate` (HR-1.7) dans la 1.0 ou non.
+3. ~~`migrate` dans la 1.0~~ — tranché par D-19-5 : oui.
 4. Les quatre tests de §4 comme définition de « 0 perte » pour T8.

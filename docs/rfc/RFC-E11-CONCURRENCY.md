@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-E11-CONCURRENCY` |
-| Statut | **`PROPOSED`** — aucune implémentation avant décision du responsable sur §7 |
+| Statut | **`PROPOSED`** — périmètre fixé par [D-19-3](../decision/DECISIONS-2026-11-19.md) : phases 1 **et** 2 dans la 1.0 |
 | Date | 2026-11-19 |
 | Auteur | agent de développement |
 | Origine | [D-18-2](../decision/DECISIONS-2026-11-18.md) (périmètre 1.0 élargi) ; ferme une partie de T6 |
@@ -95,7 +95,7 @@ d'E/S réseau (RFC-E11-NET). Aucun `async` sans `net` : seul, il n'apporte rien
 | CONC-6.2 | L'ordre d'exécution des tâches prêtes est FIFO et reproductible pour une même suite d'événements d'E/S. | MUST |
 | CONC-6.3 | Une référence ne traverse pas un `.await` (`E-CONC-REF-ACROSS-AWAIT`) : pas d'emprunt suspendu. | MUST |
 
-**Recommandation** : livrer la phase 1 et la phase 2 **séparément**. La phase 2
+**D-19-3** : les deux phases sont dans la 1.0, livrées **séparément** (phase 1 d'abord). La phase 2
 est la plus coûteuse (nouveau modèle d'exécution, états d'emprunt à travers les
 suspensions) ; un serveur HTTP 1.0 peut s'écrire en phase 1 avec un thread par
 connexion.
@@ -121,5 +121,5 @@ Aucune ligne de code n'est écrite par cette RFC.
 
 1. Accepter CONC-2.1 (transférable = sans référence) comme substitut de `Send`.
 2. Nom du groupe d'effet : `thread` (proposé) ou `async`/`concurrency`.
-3. Phase 2 (`async`) dans la 1.0, ou phase 1 seule suffit pour fermer T6.
+3. ~~Phase 2 dans la 1.0~~ — tranché par D-19-3 : oui.
 4. TSan bloquant comme condition de `PASS` de T6.

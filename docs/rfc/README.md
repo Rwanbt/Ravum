@@ -42,7 +42,7 @@ Ce répertoire contient les **propositions d'ingénierie** qui ne sont ni des AD
 | [RFC-DEV-TOOLS](RFC-DEV-TOOLS.md) | Installation locale des outils de vérification Miri et `cargo-mutants` (déjà utilisés en CI) | `ACCEPTED` (2026-11-14) | 2026-11-14 | aucun (demande d'outils ; rien installé) | — |
 | [RFC-E11-CONCURRENCY](RFC-E11-CONCURRENCY.md) | E11 : threads + canaux (« transférable = sans référence »), `async` déterministe en phase 2, TSan bloquant | `PROPOSED` | 2026-11-19 | aucun | — |
 | [RFC-E11-NET-HTTP](RFC-E11-NET-HTTP.md) | E11 : effet `net` activé, `std::net` TCP texte, HTTP/1.1 en bibliothèque, sans TLS | `PROPOSED` | 2026-11-19 | aucun | 023 |
-| [RFC-E11-SQLITE](RFC-E11-SQLITE.md) | E11 : SQLite par un runtime natif fermé livré avec la toolchain (`--extern`), effet `db`, requêtes paramétrées | `PROPOSED` | 2026-11-19 | `ravum-store` (Rust) | 023, 025 |
+| [RFC-E11-SQLITE](RFC-E11-SQLITE.md) | E11 : dépendances natives générales (`[native]`, digest, `-L`/`-l`, D7 élargi), puis `std::sqlite` en `.rv` (D-19-4) | `PROPOSED` | 2026-11-19 | `ravum-store` (Rust) | 023, 025 |
 | [RFC-E11-HOT-RELOAD](RFC-E11-HOT-RELOAD.md) | E11 : modèle `init`/`step`, digest de schéma d'état, remplacement entre deux étapes, refus fail-closed | `PROPOSED` | 2026-11-19 | `ravum-patch-host` (ABI DSP) | 012, 020 |
 | [RFC-E11-DSP-BLOCK](RFC-E11-DSP-BLOCK.md) | E11 : réouverture du bloc DSP (A2 annulée par D-18-2), profil `rt`, digest commun au hot reload | `PROPOSED` | 2026-11-19 | `ravum-patch-host`, `examples/dsp-gain-iir` | — |
 
