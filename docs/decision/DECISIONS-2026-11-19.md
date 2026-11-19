@@ -22,11 +22,9 @@ dans la plateforme Rust).
 | **A2** (2026-11-14) | Bloc DSP / hot swap Ravum reporté à la 1.1 | ADR-021/024 sont des points d'architecture prévus |
 | **A3** (2026-11-14) | Backend natif voie C hors 1.0 | ADR-018 (backend rapide) est un point prévu |
 
-**Question au responsable (V1-Q1)** : V1 annule-t-elle A2 et A3 (les deux
-reviennent dans le périmètre 1.0) ? Tant que non répondu : A2/A3 restent en
-vigueur dans le registre, et **D2 reste non prononçable**.
+**V1-Q1 — TRANCHÉE (2026-11-19)** : oui, **A2 et A3 sont annulées** ; bloc DSP/hot swap Ravum et backend direct (voie C) reviennent dans le périmètre 1.0.
 
-## 2. Gates proposés pour V1 (`PROPOSED`)
+## 2. Gates V1 — **VALIDÉS par le responsable (2026-11-19)**, inscrits au registre
 
 | Gate | ADR | Critère de validation proposé | État mesuré au 2026-11-19 |
 |---|---|---|---|

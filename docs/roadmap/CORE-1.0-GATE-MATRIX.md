@@ -52,6 +52,8 @@ commandes.
 
 ## 2. Matrice
 
+> **V1 (2026-11-19, responsable)** : D2 exige tous les points d'architecture prévus implémentés et validés ; A2 et A3 annulés ; gates T13–T19 ajoutés — [DECISIONS-2026-11-19](../decision/DECISIONS-2026-11-19.md).
+
 | Gate | État | Ce qui est prouvé | Ce qui manque / échoue | Blocage |
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
@@ -67,6 +69,13 @@ commandes.
 | T10 | `PARTIAL` | 1 740 tests workspace ; conformance 503 cas avec build vérifié bloquant ; smoke 43/0/0 ; contrats Python ; Miri + fuzz smoke en CI ; couverture sema+codegen ~90 % (objectif 100 % inscrit) ; mutation ciblée rejouée en CI | Audit externe absent ; couverture loin de 100 % sur `emit.rs`/`loader.rs` ; fuzz complet non rejoué ; aucune mesure de performance au repos | Audit externe |
 | T11 | `PARTIAL` | Installateur rejoué en CI ; SBOM déterministe ; provenance émise/vérifiée ; licence réconciliée ; build bit-à-bit ; mécanisme de signature OpenSSH qualifié | Aucune clé de projet ni ancre de confiance ; reproductibilité inter-machines limitée | Décision humaine D9 (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
+| T13 | `FAIL` | Parsing mis en cache par fichier | Typage/ownership/effets recalculés sur tout le paquet ; pas d'incrémental par fonction (ADR-012/020) | Implémentation (V1) |
+| T14 | `FAIL` | `--emit-ir` (dump de débogage) | IR stable versionnée consommée par ≥ 2 backends (ADR-010) | Implémentation (V1) |
+| T15 | `NOT_STARTED` | — | Backend de développement direct (voie C, Cranelift ou équivalent), oracle 0 divergence vs voie B, gain mesuré (ADR-018) — réintégré par V1 (annule A3) | Implémentation (V1) |
+| T16 | `FAIL` | Hot swap démontré côté plateforme Rust ; `ravum-lang watch` = redémarrage fail-closed | Swap atomique de fonction `.rv` en processus vivant, migration d'état ou refus, bloc DSP, 0 alloc callback (ADR-021/022/024) — réintégré par V1 (annule A2) | Implémentation (V1) |
+| T17 | `NOT_STARTED` | — | Profil déterministe vérifié, replay par seed (ADR-016/007) | Implémentation (V1) |
+| T18 | `NOT_STARTED` | `assert`/`panic` | Contrats `requires`/`ensures`/invariants avec statut honnête (ADR-004/028) | Implémentation (V1) |
+| T19 | `PARTIAL` | Diagnostics JSON à codes stables | Liens diagnostic→contrat→preuve→test versionnés (ADR-027/040) | Implémentation (V1) |
 
 ## 3. Détail par gate
 
