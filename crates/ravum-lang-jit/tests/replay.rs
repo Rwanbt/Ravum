@@ -85,6 +85,7 @@ fn live_session() -> (SessionLog, Vec<f32>) {
         log.swaps.push(Swap {
             at_sample: at,
             module: by_gen[&g].clone(),
+            snapshot_at: None,
         });
     }
     (log, out)
@@ -141,16 +142,19 @@ fn inconsistent_or_unknown_logs_are_refused() {
         Swap {
             at_sample: 100,
             module: m.clone(),
+            snapshot_at: None,
         },
         Swap {
             at_sample: 50,
             module: m.clone(),
+            snapshot_at: None,
         },
     ];
     assert!(matches!(replay(&log), Err(ReplayError::BadLog(_))));
     log.swaps = vec![Swap {
         at_sample: 10_000,
         module: m,
+        snapshot_at: None,
     }];
     assert!(matches!(replay(&log), Err(ReplayError::BadLog(_))));
 
@@ -167,6 +171,7 @@ fn inconsistent_or_unknown_logs_are_refused() {
     log.swaps = vec![Swap {
         at_sample: 10,
         module: wider,
+        snapshot_at: None,
     }];
     match replay(&log) {
         Err(ReplayError::Refused { swap: 1, refusal }) => {
@@ -179,4 +184,67 @@ fn inconsistent_or_unknown_logs_are_refused() {
         .to_json()
         .replace("ravum-hot-session-1", "ravum-hot-session-9");
     assert!(SessionLog::from_json(&json).is_err());
+}
+
+const V1: &str = "struct State {\n    z1: f32,\n    z2: f32,\n}\n\nfn init() -> State effects() {\n    return State { z1: 0.0, z2: 0.0 };\n}\n\nfn process_sample(state: &mut State, input: f32) -> f32 effects() {\n    let y = 0.2 * input + state.z1;\n    state.z1 = 0.4 * input + 0.5 * y + state.z2;\n    state.z2 = 0.2 * input - 0.25 * y;\n    return y;\n}\n";
+
+const V2: &str = "struct Before {\n    z1: f32,\n    z2: f32,\n}\n\nstruct State {\n    z1: f32,\n    z2: f32,\n    gain: f32,\n}\n\nfn init() -> State effects() {\n    return State { z1: 0.0, z2: 0.0, gain: 1.0 };\n}\n\nfn migrate(old: Before) -> State effects() {\n    return State { z1: old.z1, z2: old.z2, gain: 3.0 };\n}\n\nfn process_sample(state: &mut State, input: f32) -> f32 effects() {\n    let y = 0.2 * input + state.z1;\n    state.z1 = 0.4 * input + 0.5 * y + state.z2;\n    state.z2 = 0.2 * input - 0.25 * y;\n    return y * state.gain;\n}\n";
+
+#[test]
+fn a_live_migration_is_reproduced_bit_for_bit_by_its_log() {
+    let start = compile_source(V1).unwrap();
+    let v2 = compile_source(V2).unwrap();
+    let (mut engine, mut rt) = HotEngine::start(&start, "process_sample").unwrap();
+    let inputs = signal(BLOCK * 200);
+    let rt_inputs = inputs.clone();
+    let audio = std::thread::spawn(move || {
+        let mut out = Vec::with_capacity(rt_inputs.len());
+        let (mut snap, mut adopt) = (None, None);
+        for b in 0..200 {
+            let ev = rt.poll_event();
+            if ev.snapshot {
+                snap = Some((b * BLOCK) as u64);
+            }
+            if ev.adopted {
+                adopt = Some((b * BLOCK) as u64);
+            }
+            for x in &rt_inputs[b * BLOCK..(b + 1) * BLOCK] {
+                out.push(rt.process_sample(*x));
+            }
+            std::thread::sleep(Duration::from_micros(1333));
+        }
+        (out, snap, adopt)
+    });
+    std::thread::sleep(Duration::from_millis(60));
+    engine.update(&v2).unwrap();
+    while engine.migration_pending() {
+        engine.collect_migration().unwrap();
+        std::thread::yield_now();
+    }
+    let (live, snap, adopt) = audio.join().unwrap();
+    let (snap, adopt) = (snap.expect("snapshot"), adopt.expect("adoption"));
+    let mut log = SessionLog::new("process_sample", start);
+    log.inputs = inputs;
+    log.swaps.push(Swap {
+        at_sample: adopt,
+        module: v2,
+        snapshot_at: Some(snap),
+    });
+    let log = SessionLog::from_json(&log.to_json()).unwrap();
+    let d0 = digest(&live);
+    for _ in 0..20 {
+        assert_eq!(digest(&replay(&log).unwrap()), d0);
+    }
+    eprintln!(
+        "T17 replay with migration: snapshot at {snap}, adoption at {adopt} ({} samples not in the migrated state), 21/21 identical",
+        adopt - snap
+    );
+    // Negative (power): the snapshot instant matters when samples ran
+    // between it and the adoption; taking it at the adoption instead
+    // changes the output.
+    if adopt > snap {
+        let mut at_adoption = log.clone();
+        at_adoption.swaps[0].snapshot_at = Some(adopt);
+        assert_ne!(digest(&replay(&at_adoption).unwrap()), d0);
+    }
 }

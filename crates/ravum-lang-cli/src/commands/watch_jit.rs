@@ -227,6 +227,16 @@ fn attempt(file: &Path, entry_opt: Option<&str>, session: &mut Option<Session>) 
         Some(s) => match s.engine.update(&ir) {
             Ok(report) => {
                 s.runner.poll();
+                if report.migration_pending {
+                    // HR-1.7, editor side: the poll above took the state
+                    // snapshot; convert it with `migrate`, then adopt.
+                    if let Err(r) = s.engine.collect_migration() {
+                        say(&format!("[ravum] refused: {r}; previous version kept"));
+                        return false;
+                    }
+                    s.runner.poll();
+                    say("[ravum] state migrated with `migrate` (HR-1.7)");
+                }
                 s.engine.collect();
                 let names = if report.recompiled.is_empty() {
                     "none".to_string()

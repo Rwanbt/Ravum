@@ -44,23 +44,68 @@ pub fn state_info(
     for item in &checked.program.root.items {
         if let ItemKind::Struct(st) = &item.kind {
             if st.name.name == "State" {
-                let schema =
-                    ravum_lang_sema::reload::schema(checked, item.id, item.span).map_err(|_| {
-                        lower::LowerError::Unsupported("`State` has no canonical schema".into())
-                    })?;
-                let ty = ravum_lang_sema::Type::Nominal {
-                    def: item.id,
-                    name: st.name.name.clone(),
-                    args: Vec::new(),
-                };
-                let layout = lower::Layouts::new(checked).layout(&ty)?;
-                return Ok(Some(ir::StateInfo {
-                    text: schema.text,
-                    digest: schema.digest,
-                    size: layout.size,
-                    align: layout.align,
-                }));
+                return schema_info(checked, item.id, &st.name.name).map(Some);
             }
+        }
+    }
+    Ok(None)
+}
+
+/// HR-1.1 schema and memory layout of the user type `def`.
+fn schema_info(
+    checked: &ravum_lang_sema::CheckedProgram,
+    def: ravum_lang_sema::syntax::NodeId,
+    name: &str,
+) -> Result<ir::StateInfo, lower::LowerError> {
+    let span = checked
+        .program
+        .root
+        .items
+        .iter()
+        .find(|i| i.id == def)
+        .map(|i| i.span)
+        .ok_or_else(|| lower::LowerError::Unsupported("schema of a nested type".into()))?;
+    let schema = ravum_lang_sema::reload::schema(checked, def, span)
+        .map_err(|_| lower::LowerError::Unsupported(format!("`{name}` has no canonical schema")))?;
+    let ty = ravum_lang_sema::Type::Nominal {
+        def,
+        name: name.to_string(),
+        args: Vec::new(),
+    };
+    let layout = lower::Layouts::new(checked).layout(&ty)?;
+    Ok(ir::StateInfo {
+        text: schema.text,
+        digest: schema.digest,
+        size: layout.size,
+        align: layout.align,
+    })
+}
+
+/// Schema of `T` in `fn migrate(old: T) -> State` (HR-1.7), if declared.
+pub fn migrate_info(
+    checked: &ravum_lang_sema::CheckedProgram,
+) -> Result<Option<ir::StateInfo>, lower::LowerError> {
+    use ravum_lang_sema::syntax::ast::ItemKind;
+    for item in &checked.program.root.items {
+        if let ItemKind::Fn(f) = &item.kind {
+            if f.name.name != "migrate" {
+                continue;
+            }
+            let sig = checked.facts.fn_sigs.get(&item.id);
+            return match sig.map(|s| (s.params.as_slice(), &s.ret)) {
+                Some((
+                    [ravum_lang_sema::facts::ParamSig {
+                        ty: ravum_lang_sema::Type::Nominal { def, name, args },
+                        ..
+                    }],
+                    ravum_lang_sema::Type::Nominal { name: ret, .. },
+                )) if args.is_empty() && ret == "State" => {
+                    schema_info(checked, *def, name).map(Some)
+                }
+                _ => Err(lower::LowerError::Unsupported(
+                    "`migrate` must be `fn migrate(old: T) -> State` (HR-1.8)".into(),
+                )),
+            };
         }
     }
     Ok(None)
@@ -92,6 +137,7 @@ pub fn compile_source(src: &str) -> Result<Module, CompileError> {
         Some(checked) if errors.is_empty() => {
             let mut m = lower::lower(&checked).map_err(CompileError::Lower)?;
             m.state = state_info(&checked).map_err(CompileError::Lower)?;
+            m.migrate_from = migrate_info(&checked).map_err(CompileError::Lower)?;
             Ok(m)
         }
         _ => Err(CompileError::Rejected(errors)),

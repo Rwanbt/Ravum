@@ -367,6 +367,7 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
         version: IR_VERSION.to_string(),
         functions,
         state: None,
+        migrate_from: None,
     };
     m.validate().map_err(LowerError::MissingFact)?;
     Ok(m)

@@ -319,6 +319,10 @@ pub struct Module {
     /// `struct State` of the root module, when there is one.
     #[serde(default)]
     pub state: Option<StateInfo>,
+    /// Schema of the parameter `T` of `fn migrate(old: T) -> State`
+    /// (HR-1.7), when the module declares one.
+    #[serde(default)]
+    pub migrate_from: Option<StateInfo>,
 }
 
 impl Module {

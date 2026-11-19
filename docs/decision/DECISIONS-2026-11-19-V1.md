@@ -55,3 +55,18 @@ tant que le responsable ne l'a pas tranché.
 `hashbrown@0.15.5`, `bitflags@1.3.2`, `windows-sys@0.52.0` (tirées par
 Cranelift 0.116 / regalloc2 / region). `multiple-versions = "deny"` reste en
 vigueur pour tout autre doublon.
+
+
+## V1-M1 — `migrate` (HR-1.7) sur la voie JIT : migration côté éditeur
+
+Décision du responsable (2026-11-19), choisie parmi trois options (côté
+éditeur ; sur le thread audio ; garder le refus) : **côté éditeur**.
+
+- Le thread temps réel ne fait qu'une copie de ses mots d'état dans une zone
+  d'atomiques préallouée, puis échange des `Box` à l'adoption : ni
+  allocation, ni libération, ni exécution de `migrate` (AGENTS.md, INV-05).
+- Écart assumé vis-à-vis de HR-1.2 : les échantillons traités entre
+  l'instantané et l'adoption ne font pas partie de l'état migré (mesuré :
+  un bloc, 64 échantillons ≈ 1,3 ms à 48 kHz). Le journal de session (T17)
+  enregistre les deux instants, donc le replay reste exact.
+- Implémentation et preuves : [rapport T16 §9](../reports/T16-NATIVE-HOT-SWAP.md).

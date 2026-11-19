@@ -32,6 +32,12 @@ pub struct Swap {
     /// Index of the first input sample processed by this version.
     pub at_sample: u64,
     pub module: Module,
+    /// For a state migration (HR-1.7): index of the sample before which the
+    /// runner took the state snapshot `migrate` converted. Samples in
+    /// `[snapshot_at, at_sample)` ran on the old version and are not part
+    /// of the migrated state (decision of 2026-11-19, editor-side migration).
+    #[serde(default)]
+    pub snapshot_at: Option<u64>,
 }
 
 /// Everything needed to reproduce a session.
@@ -84,7 +90,11 @@ pub fn replay(log: &SessionLog) -> Result<Vec<f32>, ReplayError> {
     let n = log.inputs.len() as u64;
     let mut last = 0u64;
     for (k, s) in log.swaps.iter().enumerate() {
-        if (k > 0 && s.at_sample <= last) || s.at_sample > n {
+        let first = s.snapshot_at.unwrap_or(s.at_sample);
+        if (k > 0 && (s.at_sample <= last || first < last))
+            || s.at_sample > n
+            || first > s.at_sample
+        {
             return Err(ReplayError::BadLog(format!(
                 "swap {k} at sample {} (previous {last}, {n} inputs)",
                 s.at_sample
@@ -101,11 +111,35 @@ pub fn replay(log: &SessionLog) -> Result<Vec<f32>, ReplayError> {
     let dsp = log.start.state.is_some();
     let mut out = Vec::with_capacity(log.inputs.len());
     let mut next = 0;
+    let mut migrating = false;
     for (i, x) in log.inputs.iter().enumerate() {
-        while next < log.swaps.len() && log.swaps[next].at_sample == i as u64 {
-            engine
+        while next < log.swaps.len()
+            && log.swaps[next].snapshot_at == Some(i as u64)
+            && !engine.migration_pending()
+            && log.swaps[next].at_sample >= i as u64
+            && !migrating
+        {
+            let r = engine
                 .update(&log.swaps[next].module)
                 .map_err(|r| refused(next + 1, r))?;
+            if !r.migration_pending || !rt.poll_event().snapshot {
+                return Err(ReplayError::BadLog(format!(
+                    "swap {next}: logged as a migration, but it is not one"
+                )));
+            }
+            engine
+                .collect_migration()
+                .map_err(|r| refused(next + 1, r))?;
+            migrating = true;
+        }
+        while next < log.swaps.len() && log.swaps[next].at_sample == i as u64 {
+            if migrating {
+                migrating = false;
+            } else {
+                engine
+                    .update(&log.swaps[next].module)
+                    .map_err(|r| refused(next + 1, r))?;
+            }
             engine.collect();
             if !rt.poll() {
                 return Err(ReplayError::BadLog(format!(

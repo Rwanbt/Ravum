@@ -230,3 +230,30 @@ fn watch_jit_shows_what_main_prints_and_follows_an_edit() {
     );
     assert!(child.wait().unwrap().success());
 }
+
+#[test]
+fn watch_jit_migrates_a_wider_state_with_migrate() {
+    let v1 = "struct State {\n    z1: f32,\n}\n\nfn init() -> State effects() {\n    return State { z1: 0.0 };\n}\n\nfn process_sample(state: &mut State, input: f32) -> f32 effects() {\n    let y = input * 0.5 + state.z1 * 0.5;\n    state.z1 = y;\n    return y;\n}\n";
+    let v2 = "struct Before {\n    z1: f32,\n}\n\nstruct State {\n    z1: f32,\n    gain: f32,\n}\n\nfn init() -> State effects() {\n    return State { z1: 0.0, gain: 1.0 };\n}\n\nfn migrate(old: Before) -> State effects() {\n    return State { z1: old.z1, gain: 2.0 };\n}\n\nfn process_sample(state: &mut State, input: f32) -> f32 effects() {\n    let y = input * 0.5 + state.z1 * 0.5;\n    state.z1 = y;\n    return y * state.gain;\n}\n";
+    let dir = package("migrate", v1);
+    let file = dir.join("src/main.rv");
+    let (mut child, rx) = spawn(&[
+        "watch",
+        "--backend",
+        "jit",
+        "--max-rebuilds",
+        "1",
+        dir.to_str().unwrap(),
+    ]);
+    until(&rx, "process_sample: 4096 samples");
+    std::thread::sleep(Duration::from_millis(30));
+    std::fs::write(&file, v2).unwrap();
+    let lines = until(&rx, "process_sample: 4096 samples");
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("state migrated with `migrate`")),
+        "{lines:?}"
+    );
+    assert!(child.wait().unwrap().success());
+}

@@ -55,7 +55,13 @@ présentes dans le workspace (`serde`, `serde_json`, `sha2`).
   ordonnancement virtualisés, replay par seed) n'est pas fait. Il touche la
   stdlib et le checker, partagés avec l'autre ligne de travail.
 
-## Décision requise (non tranchée) : `migrate` (HR-1.7) sur la voie JIT
+## Décision prise (V1-M1, 2026-11-19) : `migrate` côté éditeur
+
+Le responsable a choisi l'option 1 ci-dessous ; implémentée (rapport T16 §9).
+Le journal enregistre `snapshot_at` pour qu'une migration se rejoue à
+l'identique (21/21).
+
+### Options présentées
 
 AGENTS.md interdit « migration » au callback audio. Deux options, à trancher
 par le responsable :
@@ -70,8 +76,8 @@ par le responsable :
    C'est exact, mais cela contredit AGENTS.md, et le coût de `migrate` n'est
    pas borné.
 
-Sans décision, la voie JIT continue de **refuser** tout changement de schéma
-(`StateSchemaChanged`, HR-1.3). C'est le comportement fail-closed.
+Sans `migrate` compatible, la voie JIT continue de **refuser** tout changement
+de schéma (`StateSchemaChanged`, HR-1.3).
 
 ## Commandes
 

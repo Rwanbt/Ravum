@@ -108,7 +108,7 @@ que `DSP_STATE_SCHEMA_V1_TEXT` de la voie `rustc` (asserté par le test).
 - L'état est un tampon possédé par le `RtRunner` (alloué côté éditeur) ;
   `init` y écrit une fois, côté éditeur.
 - `update` refuse un changement de digest d'état (`StateSchemaChanged`,
-  HR-1.3) ; `migrate` (HR-1.7) n'est **pas** supporté sur cette voie.
+  HR-1.3), sauf `migrate` (HR-1.7, voir §9).
 - Avant chaque appel, l'état est copié dans un tampon de secours préalloué ;
   sur trap, l'état est restauré avant le retour à la version précédente
   (HR-1.5).
@@ -192,8 +192,40 @@ pour une entrée temps réel (INV-05). Autres chaînes (`String`, `&s`) :
 | `ravum-lang-cli/tests/jit_print_rustc.rs` : même programme par `ravum-lang run` (rustc) et par le JIT | **sortie identique octet par octet** (33 lignes) |
 | `watch_jit` : `main` qui imprime, puis édition d'une fonction | `total=42` puis `total=100`, `1 recompiled (label)` |
 
+## 9. Ajout du 2026-11-19 — `migrate` (HR-1.7), côté éditeur (décision V1-M1)
+
+Un module dont `State` change est accepté quand sa fonction
+`fn migrate(old: T) -> State` prend un `T` dont le schéma HR-1.1 est le schéma
+courant (calculé par `reload::schema`, champ `Module::migrate_from`).
+Protocole :
+
+1. `update` construit la version, demande un instantané et rend
+   `migration_pending: true` ; rien n'est publié.
+2. Au point sûr suivant, le runner copie ses mots d'état dans une zone
+   d'atomiques préallouée (4 096 mots au plus) : ni allocation, ni verrou.
+3. `collect`/`collect_migration` (éditeur) exécute `migrate` compilé sur
+   l'instantané, dans des tampons alloués par l'éditeur, puis publie la
+   version avec ces tampons. Un trap dans `migrate` refuse le module.
+4. À l'adoption, le runner échange ses tampons contre ceux de la version
+   (`Box` déplacées) ; les anciens partent avec la version quittée et sont
+   libérés côté éditeur. Un retour arrière (HR-1.5) rend à la version
+   précédente **son** schéma et son état tel qu'à l'adoption.
+
+| Test (`tests/migrate.rs`, `tests/replay.rs`, CLI `watch_jit.rs`) | Résultat |
+|---|---|
+| migration sans échantillon entre instantané et adoption | sortie = référence Rust **bit à bit** (état conservé, gain ×3) |
+| **négatif** : `migrate` depuis un autre schéma | `StateSchemaChanged`, aucun instantané demandé |
+| **négatif** : `migrate` qui divise par zéro | `Refusal::Invalid("migrate trapped: division by zero")`, rien de publié, bloc inchangé ; une migration correcte passe ensuite |
+| **négatif** : nouvelle version qui déclenche un trap après migration | retour à l'ancienne version **et** à l'ancien état ; sortie = ancien filtre |
+| thread temps réel | **0 allocation / 0 libération**, 1 instantané, 1 adoption |
+| session réelle avec migration, rejouée | **21/21 identiques** ; écart mesuré instantané → adoption : 64 échantillons (1 bloc) ; **négatif** : instantané déplacé → sortie différente |
+| `watch --backend jit` : `State` élargi avec `migrate` | `state migrated with \`migrate\` (HR-1.7)` |
+
+Limite assumée (V1-M1) : les échantillons entre instantané et adoption ne
+sont pas dans l'état migré (écart à HR-1.2, documenté).
+
 ## Suite proposée
 
-1. ~~IR v1.1 et bloc DSP avec état~~ (fait, §7) ; reste `migrate` (HR-1.7).
+1. ~~IR v1.1 et bloc DSP avec état~~ (fait, §7) ; ~~`migrate` (HR-1.7)~~ (fait, §9).
 2. ~~`ravum-lang watch --backend jit`~~ (fait, §8).
 3. Brancher le `RtRunner` sur l'hôte audio existant (`ravum-patch-host`).

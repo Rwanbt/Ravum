@@ -72,8 +72,9 @@ pub enum Refusal {
     EntrySignature(String),
     Invalid(String),
     Codegen(String),
-    /// The schema of `struct State` changed (HR-1.3): the running version and
-    /// its state continue. `migrate` (HR-1.7) is not supported on this path.
+    /// The schema of `struct State` changed (HR-1.3) and the module has no
+    /// `migrate` taking the current schema (HR-1.7): the running version and
+    /// its state continue.
     StateSchemaChanged {
         old: String,
         new: String,
@@ -103,17 +104,40 @@ impl From<JitError> for Refusal {
     }
 }
 
+/// The state buffers (state, pre-call backup) of one state schema.
+#[derive(Debug)]
+pub struct StateBufs {
+    state: Box<[u64]>,
+    backup: Box<[u64]>,
+}
+
 /// One immutable version of the call table.
 #[derive(Debug)]
 pub struct Version {
     pub generation: u64,
     table: Box<[usize]>,
     entry_slot: u32,
+    /// Buffers this version runs on when it becomes current, if they differ
+    /// from the runner's (a migrated state, or after adoption the state the
+    /// version left behind — so a rollback finds its own schema again).
+    /// Allocated and freed on the editor side only.
+    bufs: Option<StateBufs>,
 }
+
+/// Largest state (in 8-byte words) a migration snapshot can carry.
+pub const MAX_SNAPSHOT_WORDS: usize = 4096;
 
 /// The single exchange point between the two threads.
 #[derive(Debug, Default)]
 pub struct Mailbox {
+    /// Migration (HR-1.7, editor side): the editor sets `snapshot_request`;
+    /// at its next safepoint the runner copies its state words into
+    /// `snapshot` (preallocated atomics, no allocation), stores their count
+    /// and bumps `snapshot_seq`.
+    snapshot_request: std::sync::atomic::AtomicBool,
+    pub snapshot_seq: AtomicU64,
+    snapshot_len: AtomicU64,
+    snapshot: Box<[AtomicU64]>,
     pending: AtomicPtr<Version>,
     retired: AtomicPtr<Version>,
     /// Generation the runner executes, and the one it keeps for rollback.
@@ -132,10 +156,23 @@ impl Drop for Mailbox {
     }
 }
 
+/// What one safepoint did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PollEvent {
+    /// The state was copied for a pending migration.
+    pub snapshot: bool,
+    /// A new version became current.
+    pub adopted: bool,
+}
+
 /// What an accepted update did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateReport {
     pub generation: u64,
+    /// The state schema changes through `migrate` (HR-1.7): the version is
+    /// published by [`HotEngine::collect`] once the runner has sent its
+    /// state snapshot.
+    pub migration_pending: bool,
     /// Functions compiled for this version.
     pub recompiled: Vec<String>,
     /// Functions whose previous machine code is reused as is.
@@ -161,6 +198,9 @@ pub struct HotEngine {
     kind: EntryKind,
     /// HR-1.1 digest of `struct State` (DSP entry only).
     state_digest: Option<String>,
+    /// A built version waiting for the runner's state snapshot (HR-1.7):
+    /// (version, its module, the snapshot sequence number to wait past).
+    migrating: Option<(Box<Version>, Module, u64)>,
 }
 
 /// Real-time side: calls the entry and switches versions at safepoints.
@@ -203,7 +243,15 @@ impl HotEngine {
             generation: 0,
             messages: Vec::new(),
             msg_ids: BTreeMap::new(),
-            mailbox: Arc::new(Mailbox::default()),
+            mailbox: Arc::new({
+                let mut mb = Mailbox::default();
+                if kind == EntryKind::DspF32 {
+                    // Preallocated here, on the editor side.
+                    mb.snapshot = (0..MAX_SNAPSHOT_WORDS).map(|_| AtomicU64::new(0)).collect();
+                }
+                mb
+            }),
+            migrating: None,
             entry: entry.to_string(),
             kind,
             state_digest: None,
@@ -319,8 +367,13 @@ impl HotEngine {
                 .unwrap_or_default();
             let old = self.state_digest.clone().unwrap_or_default();
             if new != old {
-                return Err(Refusal::StateSchemaChanged { old, new });
+                return self.begin_migration(ir, old, new);
             }
+        }
+        if self.migrating.is_some() {
+            return Err(Refusal::Invalid(
+                "a state migration is in progress; retry after it is published".into(),
+            ));
         }
         let (version, report) = self.build(ir)?;
         let fresh = Box::into_raw(version);
@@ -431,6 +484,7 @@ impl HotEngine {
             .collect();
         let report = UpdateReport {
             generation,
+            migration_pending: false,
             recompiled,
             reused: ir.functions.len() - which.len(),
             compile_time: started.elapsed(),
@@ -439,13 +493,131 @@ impl HotEngine {
             generation,
             table: table.into_boxed_slice(),
             entry_slot,
+            bufs: None,
         });
         Ok((version, report))
     }
 
+    /// HR-1.3/HR-1.7: a changed state schema is accepted only when the
+    /// module's `migrate` takes exactly the current schema. The version is
+    /// built now; it is published once the runner's snapshot arrives.
+    fn begin_migration(
+        &mut self,
+        ir: &Module,
+        old: String,
+        new: String,
+    ) -> Result<UpdateReport, Refusal> {
+        let from = ir.migrate_from.as_ref().map(|m| m.digest.clone());
+        if from.as_deref() != Some(old.as_str()) || ir.func_id("migrate").is_none() {
+            return Err(Refusal::StateSchemaChanged { old, new });
+        }
+        if self.migrating.is_some() {
+            return Err(Refusal::Invalid(
+                "a state migration is already in progress".into(),
+            ));
+        }
+        let st = ir.state.as_ref().ok_or_else(|| {
+            Refusal::EntrySignature(format!(
+                "{}: a DSP block declares `struct State`",
+                self.entry
+            ))
+        })?;
+        let words = (st.size as usize).div_ceil(8).max(1);
+        let old_words = ir
+            .migrate_from
+            .as_ref()
+            .map(|m| (m.size as usize).div_ceil(8).max(1))
+            .unwrap_or(1);
+        if words > MAX_SNAPSHOT_WORDS || old_words > MAX_SNAPSHOT_WORDS {
+            return Err(Refusal::Invalid(format!(
+                "state larger than {MAX_SNAPSHOT_WORDS} words cannot be migrated"
+            )));
+        }
+        let (version, mut report) = self.build(ir)?;
+        let seq = self.mailbox.snapshot_seq.load(SeqCst);
+        self.mailbox.snapshot_request.store(true, SeqCst);
+        self.migrating = Some((version, ir.clone(), seq));
+        report.migration_pending = true;
+        Ok(report)
+    }
+
+    /// Whether a migration is waiting for the runner's snapshot.
+    pub fn migration_pending(&self) -> bool {
+        self.migrating.is_some()
+    }
+
+    /// Run `migrate` on the snapshot (editor side) and publish the version
+    /// with its new state. A trap in `migrate` refuses the module (HR-1.7).
+    fn finish_migration(&mut self) -> Result<(), Refusal> {
+        let ready = matches!(&self.migrating, Some((_, _, seq))
+            if self.mailbox.snapshot_seq.load(SeqCst) > *seq);
+        if !ready {
+            return Ok(());
+        }
+        let (mut version, ir, _) = self.migrating.take().expect("checked above");
+        let n = self.mailbox.snapshot_len.load(SeqCst) as usize;
+        let mut old: Box<[u64]> = (0..n)
+            .map(|i| self.mailbox.snapshot[i].load(SeqCst))
+            .collect();
+        let st = ir.state.as_ref().expect("checked in begin_migration");
+        let words = (st.size as usize).div_ceil(8).max(1);
+        let mut state = vec![0u64; words].into_boxed_slice();
+        let id = ir.func_id("migrate").expect("checked in begin_migration");
+        let slot = self.slots["migrate"] as usize;
+        let f = &ir.functions[id as usize];
+        if f.params != 2 || f.ret != Ty::Unit {
+            return Err(Refusal::EntrySignature(
+                "migrate: expected fn(old: T) -> State".into(),
+            ));
+        }
+        let mut ctx = Ctx {
+            code: 0,
+            depth: 0,
+            fuel: DEFAULT_FUEL,
+            table: version.table.as_ptr() as usize,
+            out: 0,
+        };
+        exec::call2::<usize, usize, u8>(
+            version.table[slot] as *const u8,
+            state.as_mut_ptr() as usize,
+            old.as_mut_ptr() as usize,
+            &mut ctx,
+        );
+        if ctx.code != 0 {
+            // Not published. Its `live` entry stays: the engine's table, and
+            // so every later version, may reuse this version's machine code;
+            // `collect` drops the entry once a newer generation is active.
+            return Err(Refusal::Invalid(format!(
+                "migrate trapped: {}",
+                self.trap_message(ctx.code as u64).unwrap_or("fault")
+            )));
+        }
+        version.bufs = Some(StateBufs {
+            backup: vec![0u64; words].into_boxed_slice(),
+            state,
+        });
+        self.state_digest = Some(st.digest.clone());
+        let stale = self.mailbox.pending.swap(Box::into_raw(version), SeqCst);
+        if let Some(g) = raw::reclaim(stale) {
+            self.live.remove(&g);
+        }
+        Ok(())
+    }
+
     /// Free what the runner has retired and the machine code no live version
-    /// uses any more. Editor side only.
+    /// uses any more; finish a migration whose snapshot has arrived. Editor
+    /// side only. A migration refused here (trap in `migrate`) is returned.
+    pub fn collect_migration(&mut self) -> Result<(), Refusal> {
+        let r = self.finish_migration();
+        self.collect();
+        r
+    }
+
+    /// Free what the runner has retired and the machine code no live version
+    /// uses any more. Editor side only. Also finishes a pending migration
+    /// (see [`HotEngine::collect_migration`] to observe its refusal).
     pub fn collect(&mut self) {
+        let _ = self.finish_migration();
         if let Some(g) = raw::reclaim(self.mailbox.retired.swap(std::ptr::null_mut(), SeqCst)) {
             let _ = g;
         }
@@ -494,13 +666,38 @@ impl RtRunner {
     /// Safepoint: adopt the pending version if there is one. Wait-free, no
     /// allocation. Returns whether the version changed.
     pub fn poll(&mut self) -> bool {
-        if self.previous.is_some() && !self.mailbox.retired.load(SeqCst).is_null() {
-            return false; // the editor has not collected yet; retry later
+        self.poll_event().adopted
+    }
+
+    /// [`RtRunner::poll`], also reporting whether a migration snapshot was
+    /// taken (a session log records both instants, T17).
+    pub fn poll_event(&mut self) -> PollEvent {
+        let mut ev = PollEvent::default();
+        if self.mailbox.snapshot_request.swap(false, SeqCst) {
+            // A copy of a few words into preallocated atomics: no
+            // allocation, no lock, no migration work here (INV-05).
+            let n = self.state.len().min(self.mailbox.snapshot.len());
+            for i in 0..n {
+                self.mailbox.snapshot[i].store(self.state[i], SeqCst);
+            }
+            self.mailbox.snapshot_len.store(n as u64, SeqCst);
+            self.mailbox.snapshot_seq.fetch_add(1, SeqCst);
+            ev.snapshot = true;
         }
-        let Some(next) = raw::take(&self.mailbox.pending) else {
-            return false;
+        if self.previous.is_some() && !self.mailbox.retired.load(SeqCst).is_null() {
+            return ev; // the editor has not collected yet; retry later
+        }
+        let Some(mut next) = raw::take(&self.mailbox.pending) else {
+            return ev;
         };
-        let old = std::mem::replace(&mut self.current, next);
+        // A migrated version brings its own buffers: swap them in (moves of
+        // `Box`es, no allocation) and leave ours with the version we quit.
+        let left = self.swap_bufs(&mut next);
+        let mut old = std::mem::replace(&mut self.current, next);
+        if left.is_some() {
+            old.bufs = left;
+        }
+        ev.adopted = true;
         if let Some(prev) = self.previous.replace(old) {
             self.mailbox.retired.store(Box::into_raw(prev), SeqCst);
         }
@@ -509,7 +706,17 @@ impl RtRunner {
         self.mailbox
             .active_generation
             .store(self.current.generation, SeqCst);
-        true
+        ev
+    }
+
+    /// If `v` carries buffers, make them the runner's and return the
+    /// runner's previous ones.
+    fn swap_bufs(&mut self, v: &mut Version) -> Option<StateBufs> {
+        let b = v.bufs.take()?;
+        Some(StateBufs {
+            state: std::mem::replace(&mut self.state, b.state),
+            backup: std::mem::replace(&mut self.backup, b.backup),
+        })
     }
 
     pub fn generation(&self) -> u64 {
@@ -520,8 +727,14 @@ impl RtRunner {
     fn roll_back(&mut self, code: u32) -> bool {
         self.mailbox.last_trap.store(code as u64, SeqCst);
         match self.previous.take() {
-            Some(prev) => {
-                let bad = std::mem::replace(&mut self.current, prev);
+            Some(mut prev) => {
+                // Back to the previous version's own state if it ran on
+                // another schema (it was left with it at adoption).
+                let left = self.swap_bufs(&mut prev);
+                let mut bad = std::mem::replace(&mut self.current, prev);
+                if left.is_some() {
+                    bad.bufs = left;
+                }
                 self.mailbox
                     .rolled_back_generation
                     .store(bad.generation, SeqCst);
@@ -676,6 +889,7 @@ fn serde_json_like(f: &Function) -> String {
         version: ravum_lang_ir::IR_VERSION.to_string(),
         functions: vec![f.clone()],
         state: None,
+        migrate_from: None,
     }
     .to_json()
 }
