@@ -1,0 +1,6 @@
+{
+  "id": "types/if-literal-adapts-to-branch",
+  "mode": "run-pass",
+  "stdout_contains": "5\n",
+  "notes": "TYP-13.3 (MUST): a literal in one branch takes the type of the other branch (`2` becomes i64)."
+}

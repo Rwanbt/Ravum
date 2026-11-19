@@ -1,0 +1,4 @@
+fn main() {
+    let x: f32 = 4.0;
+    let _y = math::sqrt(x);
+}

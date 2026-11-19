@@ -1,0 +1,6 @@
+{
+  "id": "run/shift-constant-expr-accepted",
+  "mode": "run-pass",
+  "stdout_contains": "8\n",
+  "notes": "EXPR-3.4 (MUST): a constant amount of literals with a non-negative value is accepted."
+}

@@ -1,0 +1,10 @@
+// oracle: value i32 5
+// MACH-3.2: shadowing creates a new binding.
+fn check() -> i32 effects() {
+    let x: i32 = 2;
+    let y = {
+        let x: i32 = 3;
+        x
+    };
+    return x + y;
+}

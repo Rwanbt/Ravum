@@ -1,0 +1,8 @@
+fn bump(a: i128) -> i128 {
+    return a + 1;
+}
+
+fn main() {
+    let a: i128 = 170141183460469231731687303715884105727;
+    io::println(&bump(a).to_string());
+}

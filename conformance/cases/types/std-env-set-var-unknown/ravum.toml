@@ -1,0 +1,4 @@
+[package]
+name = "types-std-env-set-var-unknown"
+version = "0.1.0"
+edition = "core-1.0"

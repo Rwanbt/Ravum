@@ -1,0 +1,8 @@
+{
+  "id": "effects/string-new-is-alloc",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "EFF-6.5, EFF-5.3: every String/Vec construction is alloc; a function declared `effects()` that calls `String::new` is refused, never widened silently."
+}

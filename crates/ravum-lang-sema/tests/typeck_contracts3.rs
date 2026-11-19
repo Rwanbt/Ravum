@@ -513,7 +513,7 @@ fn every_compound_assignment_operator_is_accepted() {
     // others emitted `E-UNSUPPORTED-COMPOUND-ASSIGN`.
     accept(
         r#"
-fn integers(a: i32, b: i32) -> i32 {
+fn integers(a: i32, b: i32, s: u32) -> i32 {
     let mut x = a;
     x += b;
     x -= b;
@@ -523,8 +523,8 @@ fn integers(a: i32, b: i32) -> i32 {
     x &= b;
     x |= b;
     x ^= b;
-    x <<= b;
-    x >>= b;
+    x <<= s;
+    x >>= s;
     return x;
 }
 "#,
@@ -560,10 +560,11 @@ fn booleans(p: bool, q: bool) -> bool {
 #[test]
 fn compound_assignment_shift_allows_different_integer_widths() {
     // EXPR-3.4 / check_binary: the two shift operands are integers, their
-    // widths may differ; the result has the left operand's type.
+    // widths may differ; the result has the left operand's type. The amount
+    // is unsigned: a signed amount is refused (owner decision 2026-11-19).
     accept(
         r#"
-fn f(a: i32, b: i64) -> i32 {
+fn f(a: i32, b: u64) -> i32 {
     let mut x = a;
     x <<= b;
     x >>= b;

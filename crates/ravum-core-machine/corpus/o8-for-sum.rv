@@ -1,0 +1,13 @@
+// oracle: value i32 6
+// O8, §10 example: somme(4) = 0 + 1 + 2 + 3.
+fn somme(n: i32) -> i32 effects() {
+    let mut s = 0;
+    for i in 0..n {
+        s += i;
+    }
+    return s;
+}
+
+fn check() -> i32 effects() {
+    return somme(4);
+}

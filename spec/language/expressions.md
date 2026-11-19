@@ -57,7 +57,7 @@ fn g(n: i32) -> bool { return n && true; }
 | EXPR-3.1 | Le débordement entier (`+ - *`, y compris `i32::MIN / -1` et `-i32::MIN`) provoque un **panic contrôlé** dans **tous** les profils, debug comme release (`-C overflow-checks=on`, design §3.3). Il n'existe **aucune** arithmétique enveloppante implicite. | MUST |
 | EXPR-3.2 | La division entière par zéro et le reste par zéro provoquent un **panic contrôlé** (`panic: division by zero` / `remainder by zero`). | MUST |
 | EXPR-3.3 | Un décalage dont la quantité est `>= largeur_bits(gauche)` provoque un **panic contrôlé**, y compris à droite. Les décalages ne sont **jamais** masqués (`& 31`) ni transformés en UB. | MUST |
-| EXPR-3.4 | La quantité de décalage peut avoir n'importe quel type entier ; elle est comparée à la largeur du type de gauche après conversion exacte. Une valeur négative (type signé) est `< largeur` mais représente un comportement non défini : elle est **refusée** (`E-TYP-SHIFT`), voir Q-EXPR-2. | MUST |
+| EXPR-3.4 | La quantité de décalage peut avoir n'importe quel type entier **non signé** ; elle est comparée à la largeur du type de gauche après conversion exacte. Une quantité doit être **prouvée positive ou nulle à la compilation** : un type non signé, ou une constante de littéraux (`3`, `1 + 2`) dont la valeur est `>= 0`. Toute autre quantité de type signé, variable comprise, est **refusée** (`E-TYP-SHIFT`) quelle que soit sa valeur à l'exécution ; de même pour `<<=` et `>>=` (décision D-19-1, `docs/decision/DECISIONS-2026-11-19.md`). | MUST |
 | EXPR-3.5 | La division entière tronque vers zéro ; le reste a le signe du **dividende** (`-7 / 2 == -3`, `-7 % 2 == -1`). | MUST |
 | EXPR-3.6 | `i128`/`u128` suivent les mêmes règles ; aucun mode « wrapping » n'est exposé. | MUST |
 | EXPR-3.7 | Le panic est un **arrêt contrôlé** : message `panic: <msg>` sur stderr, code de sortie `1`. En mode **`run`**, le runtime installe un hook qui imprime puis appelle `exit(1)` : **aucun destructeur n'est exécuté** (l'ordre de drop est ignoré). En mode **`test`**, le runner capture le déroulement (*unwind*) et marque le test en échec sans tuer les autres tests. | MUST |
@@ -338,7 +338,7 @@ fn g() { assert_eq(1); }
 | `E-TYP-TRY` | `?` hors contexte compatible |
 | `E-TYP-INDEX` | indexation invalide (type ou type non indexable) |
 | `E-TYP-CAST` | `as` hors paires admises |
-| `E-TYP-SHIFT` | décalage négatif |
+| `E-TYP-SHIFT` | quantité de décalage négative ou non prouvée positive |
 | `E-TYP-LITERAL-RANGE` | littéral hors du type inféré |
 | `E-TYP-AMBIGUOUS` | inférence non résolue |
 | `E-OWN-IMMUTABLE` | affectation d'une place immuable |
@@ -351,7 +351,7 @@ fn g() { assert_eq(1); }
 ## 13. Questions ouvertes
 
 - **Q-EXPR-1 (résolue par le Lead)** — En mode `run`, panique = **arrêt sans destructeurs** (hook qui imprime puis `exit(1)`) ; en mode `test`, le runner capture l'*unwind* et marque le test en échec. Les destructeurs ne s'exécutent donc jamais sur un panic, et l'ordre de drop n'est pas observable (OWN-9.6).
-- **Q-EXPR-2** — EXPR-3.4 refuse statiquement un décalage négatif. Une alternative est un panic runtime. Le refus statique n'est possible que si la valeur est connue ; pour une valeur dynamique, la règle est un panic runtime (`panic: negative shift`). Clarifier la formulation finale.
+- **Q-EXPR-2 (fermée, D-19-1)** — Une quantité de décalage non prouvée positive à la compilation est refusée (`E-TYP-SHIFT`), y compris en variable de type signé ; il n'y a pas de panic runtime pour un décalage négatif.
 - **Q-EXPR-3** — Un `loop` sans `break` diverge ; aucun avertissement n'existe (liste fermée). Un futur lint exigerait un code `W-*` ratifié.
 - **Q-EXPR-4** — Sans `f64::to_bits`, l'identité bit-à-bit des flottants n'est **pas** observable ; l'oracle de conformance ne peut vérifier que des prédicats IEEE (`==`, `<`), pas la représentation de `NaN`. Si une vérification stricte est nécessaire, ajouter `math::to_bits(x: f64) -> u64` / `from_bits` — extension non prévue par le design.
 - **Q-EXPR-5** — Le débordement de pile (récursion profonde) n'est pas spécifié : le processus peut être tué par l'OS (code de sortie non déterministe). Le design ne le mentionne pas. Recommandation : documenter comme « non spécifié, ne pas s'y fier » et ne pas le tester en conformance.

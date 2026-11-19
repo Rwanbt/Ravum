@@ -1,0 +1,6 @@
+{
+  "id": "types/std-math-sqrt-f32-as-f64",
+  "mode": "run-pass",
+  "stdout_contains": "2\n",
+  "notes": "STD-6.1: convert with `as`."
+}

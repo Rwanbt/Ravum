@@ -1,0 +1,9 @@
+// oracle: value bool true
+// O2, MACH-4.2: the right operand of || is not reduced when the left is true.
+fn boom() -> bool effects(panic) {
+    panic("evaluated");
+}
+
+fn check() -> bool effects(panic) {
+    return true || boom();
+}

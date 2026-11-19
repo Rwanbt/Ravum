@@ -1,0 +1,8 @@
+{
+  "id": "run/shift-negative-literal-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-SHIFT"
+  ],
+  "notes": "EXPR-3.4 (MUST): a negative shift amount is refused (E-TYP-SHIFT)."
+}

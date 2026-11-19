@@ -1,0 +1,5 @@
+// oracle: value i32 -2
+fn check() -> i32 effects() {
+    let a: f64 = -2.9;
+    return a as i32;
+}

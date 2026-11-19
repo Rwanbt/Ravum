@@ -521,7 +521,8 @@ pub fn abs(self) -> Self effects()
 | STD-12.3 | Les méthodes `f64` sont équivalentes aux fonctions `math` (§6), sauf `powf(y)` qui correspond à `math::pow(self, y)` — **précision non garantie** (libm). | MUST |
 | STD-12.4 | `abs()` sur un entier signé égale la valeur absolue ; sur `MIN` (`i8::MIN` … `i128::MIN`), elle **déborde** → panic contrôlé (trap intrinsèque, non suivi comme effet). | MUST |
 | STD-12.5 | `u8…u128`, `usize`, `bool`, `char` n'ont **pas** de méthode `abs()` (`E-RES-UNKNOWN`). | MUST |
-| STD-12.6 | Aucune autre méthode primitive : pas de `pow`, `count_ones`, `wrapping_add`, `checked_add`, `saturating_*`, `clamp`, `is_nan`, `to_bits`, `from_bits`, `parse` (utiliser `std::string`). | MUST |
+| STD-12.6 | Aucune autre méthode primitive que celles de ce paragraphe et de STD-12.7 : pas de `pow`, `count_ones`, `clamp`, `is_nan`, `to_bits`, `from_bits`, `parse` (utiliser `std::string`). | MUST |
+| STD-12.7 | Sur tout type entier, les formes arithmétiques explicites de [RFC-RT-TRAPS](../../docs/rfc/RFC-RT-TRAPS.md) (`ACCEPTED` 2026-11-14) : `wrapping_add/sub/mul/neg` et `saturating_add/sub/mul/neg` rendent le type de l'opérande ; `checked_add/sub/mul/div/rem/neg` rendent `Option<T>` (`None` sur débordement ou division par zéro). Ce sont les seules formes admises dans le profil `rt` (EFF-4). | MUST |
 
 ```rv
 // POSITIF

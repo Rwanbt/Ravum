@@ -1,0 +1,5 @@
+{
+  "id": "ownership/mutable-places-accept-writes",
+  "mode": "compile-pass",
+  "notes": "OWN-7.1 (MUST): `let mut` bindings, fields through `&mut`, and elements of a mutable Vec are mutable places."
+}

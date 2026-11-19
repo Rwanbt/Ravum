@@ -1,4 +1,5 @@
 use super::*;
+use ravum_lang_syntax::ast::BinOp;
 
 // ---------------------------------------------------------------------------
 // Aides libres
@@ -141,14 +142,39 @@ pub(super) fn is_untyped_num_literal(expr: &Expr) -> bool {
     }
 }
 
-pub(super) fn is_negative_int_literal(expr: &Expr) -> bool {
-    matches!(
-        &expr.kind,
+/// EXPR-3.4: a shift amount must be provably non-negative at compile time.
+/// That holds for an unsigned amount and for a constant integer expression
+/// (literals combined with `+ - * / %`) whose value is non-negative. Any other
+/// amount of a signed type is refused, since its sign is only known at run time.
+pub(super) fn shift_amount_refused(amount: &Expr, amount_ty: &Type) -> bool {
+    match literal_int_value(amount) {
+        Some(value) => value < 0,
+        None => amount_ty.is_signed_int(),
+    }
+}
+
+/// The value of an integer expression made only of literals, or `None`.
+/// Overflow and division by zero also give `None` (not provably constant).
+fn literal_int_value(expr: &Expr) -> Option<i128> {
+    match &expr.kind {
+        ExprKind::Int { value, .. } => i128::try_from(*value).ok(),
         ExprKind::Unary {
             op: UnOp::Neg,
             expr,
-        } if matches!(expr.kind, ExprKind::Int { .. })
-    )
+        } => literal_int_value(expr)?.checked_neg(),
+        ExprKind::Binary { op, lhs, rhs } => {
+            let (l, r) = (literal_int_value(lhs)?, literal_int_value(rhs)?);
+            match op {
+                BinOp::Add => l.checked_add(r),
+                BinOp::Sub => l.checked_sub(r),
+                BinOp::Mul => l.checked_mul(r),
+                BinOp::Div => l.checked_div(r),
+                BinOp::Rem => l.checked_rem(r),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
 }
 
 pub(super) fn method_self_kind(ty: &Type) -> Option<MethodSelfKind> {

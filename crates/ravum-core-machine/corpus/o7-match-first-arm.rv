@@ -1,0 +1,19 @@
+// oracle: value i32 2
+// O7, MACH-4.5: arms in order, the first matching one wins.
+enum Shape {
+    Dot,
+    Line(i32),
+    Square(i32, i32),
+}
+
+fn area(s: Shape) -> i32 effects() {
+    return match s {
+        Shape::Dot => 0,
+        Shape::Line(n) => n,
+        Shape::Square(a, b) => a * b,
+    };
+}
+
+fn check() -> i32 effects() {
+    return area(Shape::Line(2)) + area(Shape::Dot);
+}

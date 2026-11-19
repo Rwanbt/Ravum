@@ -1,0 +1,72 @@
+fn eat(s: String) { }
+
+fn main() {
+    let s = String::new();
+    eat(s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+    io::println(&s);
+}
+
+fn other() {
+    let t = String::new();
+    eat(t);
+    io::println(&t);
+}

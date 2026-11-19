@@ -1,0 +1,8 @@
+{
+  "id": "run/shift-signed-compound-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-SHIFT"
+  ],
+  "notes": "EXPR-3.4 (MUST): the same rule holds for `<<=` / `>>=`."
+}

@@ -1,0 +1,5 @@
+{
+  "id": "ownership/phases-clean-program-passes",
+  "mode": "compile-pass",
+  "notes": "OWN-11.1 (MUST): the accepting side; a well-typed program goes through every phase, and a value re-initialised after a move is accepted with no diagnostic."
+}

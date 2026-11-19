@@ -1,0 +1,8 @@
+{
+  "id": "run/shift-negative-constant-expr-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-SHIFT"
+  ],
+  "notes": "EXPR-3.4 (MUST): a constant amount made of literals is evaluated; `2 - 5` is negative and refused."
+}

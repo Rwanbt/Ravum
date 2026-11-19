@@ -643,11 +643,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             B::Shl | B::Shr => {
                 if l_ty.is_int() && r_ty.is_int() {
-                    if is_negative_int_literal(rhs) {
+                    if shift_amount_refused(rhs, &r_ty) {
                         self.error(
                             "E-TYP-SHIFT",
                             rhs.span,
-                            "shift amount must not be negative".to_string(),
+                            "shift amount must be unsigned or a non-negative constant".to_string(),
                         );
                     }
                     l_ty
@@ -917,14 +917,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             B::Shl | B::Shr => {
                 // EXPR-3.4 : comme pour `<<`/`>>`, les deux opérandes doivent
                 // être entiers mais leurs types peuvent différer (le résultat a
-                // le type de la gauche) ; un décalage littéral négatif est
-                // refusé statiquement.
+                // le type de la gauche) ; une quantité dont le signe n'est pas
+                // prouvé positif à la compilation est refusée.
                 if target_ty.is_int() && value_ty.is_int() {
-                    if is_negative_int_literal(value) {
+                    if shift_amount_refused(value, &value_ty) {
                         self.error(
                             "E-TYP-SHIFT",
                             value.span,
-                            "shift amount must not be negative".to_string(),
+                            "shift amount must be unsigned or a non-negative constant".to_string(),
                         );
                     }
                 } else {

@@ -1,0 +1,9 @@
+// oracle: panic: attempt to add with overflow
+// O3, MACH-5.1: 255 + 1 in u8 traps, no wrap.
+fn f(a: u8) -> u8 effects() {
+    return a + 1;
+}
+
+fn check() -> u8 effects() {
+    return f(255);
+}

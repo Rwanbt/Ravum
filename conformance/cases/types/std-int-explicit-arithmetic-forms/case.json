@@ -1,0 +1,6 @@
+{
+  "id": "types/std-int-explicit-arithmetic-forms",
+  "mode": "run-pass",
+  "stdout_contains": "-128 127 none 7\n",
+  "notes": "STD-12.7 (RFC-RT-TRAPS): `wrapping_add` wraps (127 -> -128), `saturating_add` saturates (127), `checked_add` is `None` on overflow, `checked_div` is `Some` otherwise."
+}

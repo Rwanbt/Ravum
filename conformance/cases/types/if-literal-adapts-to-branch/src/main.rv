@@ -1,0 +1,6 @@
+fn main() {
+    let c = true;
+    let a: i64 = 5;
+    let x = if c { a } else { 2 };
+    io::println(&x.to_string());
+}

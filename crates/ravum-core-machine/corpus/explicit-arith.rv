@@ -1,0 +1,6 @@
+// oracle: value i32 -2147483648
+// RFC-RT-TRAPS: wrapping_add wraps, it never traps.
+fn check() -> i32 effects() {
+    let a: i32 = 2147483647;
+    return a.wrapping_add(1);
+}

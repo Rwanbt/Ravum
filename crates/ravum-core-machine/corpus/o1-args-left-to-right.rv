@@ -1,0 +1,16 @@
+// oracle: panic: first
+// O1, MACH-4.3: arguments are reduced left to right before the call.
+fn boom(tag: i32) -> i32 effects(panic) {
+    if tag == 1 {
+        panic("first");
+    }
+    panic("second");
+}
+
+fn pair(a: i32, b: i32) -> i32 effects(panic) {
+    return a + b;
+}
+
+fn check() -> i32 effects(panic) {
+    return pair(boom(1), boom(2));
+}

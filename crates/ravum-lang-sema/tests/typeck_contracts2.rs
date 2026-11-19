@@ -1130,13 +1130,65 @@ fn f(a: bool, b: bool) -> bool {
 "#,
         "E-TYP-CMP",
     );
-    // A shift amount may be a variable (only literals are range-checked).
+    // EXPR-3.4 (owner decision 2026-11-19): a shift amount must be provably
+    // non-negative at compile time. An unsigned variable is accepted ...
     accept(
+        r#"
+fn f(a: i32, b: u32) -> i32 {
+    return a << b;
+}
+"#,
+    );
+    // ... a signed variable is refused, whatever its value at run time ...
+    expect_code(
         r#"
 fn f(a: i32, b: i32) -> i32 {
     return a << b;
 }
 "#,
+        "E-TYP-SHIFT",
+    );
+    // ... and a constant of literals is evaluated.
+    accept(
+        r#"
+fn f(a: i32) -> i32 {
+    return a << (1 + 2);
+}
+"#,
+    );
+    expect_code(
+        r#"
+fn f(a: i32) -> i32 {
+    return a >> (2 - 5);
+}
+"#,
+        "E-TYP-SHIFT",
+    );
+    // Every operator of the constant evaluator, and its refusals.
+    accept(
+        r#"
+fn f(a: i32) -> i32 {
+    return a << (2 * 3) >> (9 / 3) << (7 % 4) >> -(-1);
+}
+"#,
+    );
+    // A literal combined with `&` is not evaluated: it stays a signed amount.
+    expect_code(
+        r#"
+fn f(a: i32) -> i32 {
+    return a << (3 & 1);
+}
+"#,
+        "E-TYP-SHIFT",
+    );
+    // Division by zero is not a provable constant either.
+    expect_code(
+        r#"
+fn f(a: i32) -> i32 {
+    return a << (1 / 0);
+}
+"#,
+        "E-TYP-SHIFT",
     );
 }
 

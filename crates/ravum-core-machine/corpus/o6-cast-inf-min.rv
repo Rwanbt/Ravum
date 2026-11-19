@@ -1,0 +1,5 @@
+// oracle: value i8 -128
+fn check() -> i8 effects() {
+    let z: f64 = 0.0;
+    return (-1.0 / z) as i8;
+}

@@ -1,0 +1,6 @@
+{
+  "id": "run/float-no-fused-multiply-add",
+  "mode": "run-pass",
+  "stdout_contains": "0\n0\n",
+  "notes": "ABI-4.4 (MUST): the backend fuses no float operations. 0.1 * 10.0 - 1.0 is 0 when rounded after the product (a fused multiply-add gives 5.55e-17), and (1e16 + 1) - 1e16 is 0 without reassociation."
+}

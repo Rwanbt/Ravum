@@ -1,0 +1,9 @@
+fn f(tag: &str, v: i64) -> i64 {
+    io::println(tag);
+    return v;
+}
+
+fn main() {
+    let s = f("a", 1) + f("b", 2) * f("c", 3);
+    io::println(&s.to_string());
+}

@@ -1,0 +1,8 @@
+{
+  "id": "types/std-int-pow-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "STD-12.6: no `pow` method on integers."
+}

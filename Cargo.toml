@@ -21,6 +21,7 @@ members = [
   "crates/ravum-lang-codegen",
   "crates/ravum-lang-cli",
   "crates/ravum-lang-lsp",
+  "crates/ravum-core-machine",
   "tools/conformance",
   "apps/ravum-demo-host",
   "apps/ravum-todo",

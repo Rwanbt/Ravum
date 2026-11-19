@@ -17,6 +17,7 @@ Run with: python -m unittest discover -s tools/tests -v
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -81,3 +82,13 @@ class RepositoryRootTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BackendUsesRustcOnlyThroughItsCli(unittest.TestCase):
+    """ABI-2.7 (INV-11): no dependency on rustc's private crates."""
+
+    def test_no_rustc_private_crate_in_the_lockfile(self) -> None:
+        lock = (REPO / "Cargo.lock").read_text(encoding="utf-8")
+        names = re.findall(r'^name = "([^"]+)"', lock, re.M)
+        private = sorted(n for n in names if n.startswith(("rustc_", "rustc-ap-")))
+        self.assertEqual(private, [])

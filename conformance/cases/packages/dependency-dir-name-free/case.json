@@ -1,0 +1,7 @@
+{
+  "id": "packages/dependency-dir-name-free",
+  "mode": "run-pass",
+  "stdout_contains": "1\n",
+  "project": "app",
+  "notes": "MOD-5.12, MOD-6.1: the package `util` lives in directory `lib`; only the dependency key must match `package.name`. `util::v` is the item `v` of its `src/lib.rv` root."
+}

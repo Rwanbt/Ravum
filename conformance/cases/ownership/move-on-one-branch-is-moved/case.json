@@ -1,0 +1,8 @@
+{
+  "id": "ownership/move-on-one-branch-is-moved",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "OWN-5.7 (MUST): after a branch merge the place is MOVED if any path moved it, even though the else path did not."
+}

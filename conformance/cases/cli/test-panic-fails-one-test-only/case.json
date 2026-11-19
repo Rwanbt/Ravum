@@ -1,0 +1,13 @@
+{
+  "id": "cli/test-panic-fails-one-test-only",
+  "mode": "cli",
+  "args": [
+    "test",
+    "--json",
+    "."
+  ],
+  "exit_code": 1,
+  "stdout_contains": "\"failed\":1,\"filtered\":0,\"ignored\":0,\"passed\":1",
+  "expect_json_schema_version": 1,
+  "notes": "EXPR-3.7, EXPR-3.8 (MUST): under `test` a panic marks that test FAILED and the other tests still run (1 failed, 1 passed); only the runner intercepts it."
+}

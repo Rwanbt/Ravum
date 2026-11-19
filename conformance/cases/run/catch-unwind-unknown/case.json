@@ -1,0 +1,8 @@
+{
+  "id": "run/catch-unwind-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "EXPR-3.8 (MUST): there is no user `catch_unwind`; the name does not exist (E-RES-UNKNOWN)."
+}

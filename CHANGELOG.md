@@ -9,6 +9,27 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Reference interpreter of the pure core (`crates/ravum-core-machine`, `core-machine.md`): its own lexer, parser and evaluator, no dependency, a 59-program corpus covering obligations O1 to O10, and a differential test that builds and runs 54 of them with `ravum-lang` and compares the results (54 agree). FeatureId F-META-032; the F-META-006 coverage exemption is revoked, strict coverage is 236/236 with no exemption.
+
+- Backend fidelity contract (T2, `abi.md`, `concurrency.md`): FeatureId F-META-031, three `run/*` cases (primitive bounds, left-to-right calls, no fused multiply-add or reassociation) and a test that no `rt` report claims certification.
+
+- Edition contract (T2, `compatibility.md`): FeatureId F-META-030, two `cli/*` cases showing that `--version` and `spec_version` say draft, and a test that a changed source is rebuilt rather than served from an earlier build (COMPAT-4.5).
+
+- Types and expressions contract (T2, `types.md`, `expressions.md`): FeatureIds F-TYP-028 and F-EXPR-019 and ten cases (one type per `if`, `as` limited, total, left-chained and identity; shift amounts, `i128` overflow, panic under `run` and `test`, no `catch_unwind`).
+
+- Feature table contract (T2, `features.md`, `unsupported.md`): FeatureId F-META-029 and `tools/tests/test_feature_table.py`, which checks that every `unsupported` row has a listed code and a negative case, every cited code is registered, the `experimental` rows match FEAT-12.5 and no case expects an unregistered code. `unsupported.md` now lists Unicode identifiers (`E-UNSUPPORTED-IDENT`), which F-UNS-011 already refused.
+
+- Ownership contract (T2, `ownership.md`): FeatureIds F-OWN-017 to F-OWN-019 and 13 `ownership/*` cases (moves through loops, branches, arguments and `match`; place mutability; phase order and the per-function budget). OWN-11.3 now names `E-OWN-LIMIT`, the code the compiler emits.
+
+- Effects contract (T2, `effects.md`): FeatureId F-EFF-010 and five `effects/*` cases (unknown profile, inferred effects in JSON, no effect waiver, `String::new` is alloc, profile report).
+
+- Standard library contract (T2, `stdlib.md`): FeatureIds F-STD-033 to F-STD-035 and 14 `types/std-*` cases. STD-12.6 no longer forbids the explicit integer forms that RFC-RT-TRAPS added; STD-12.7 lists them.
+
+- Concurrency contract as of Core 1.0 (T2, `concurrency.md`): FeatureId F-META-028, five `unsupported/*` cases and an execution determinism test. It describes the state before the E11 concurrency RFC.
+- Modules contract (T2, `modules.md`): FeatureIds F-MOD-014 to F-MOD-016 and 12 conformance cases (module file resolution, manifest and dependency graph, use of a dependency). MOD-8.5 now names `E-MOD-DUPLICATE`, as the registry does.
+
+- ABI contract (T2, `abi.md`): FeatureIds F-META-024 to F-META-027 citing the existing backend audits and FFI cases, two cases on the emitted Rust file, and a test that refuses any `rustc_*` crate in `Cargo.lock` (ABI-2.7).
+
 - Compatibility contract (T2, `compatibility.md`): FeatureIds F-META-019 to F-META-023, 6 conformance cases, `tests/compat_contract.rs` (digest follows a dependency path, an invalid lockfile is left untouched) and append-only snapshots of rule ids and feature ids. COMPAT-3.6 now names `W-DEPRECATED` and COMPAT-4.2 `E-MOD-DUPLICATE`, as the registry does.
 - `run --json` (DIAG-8.1, D-18-5): one JSON object on stdout with the program's exit code, `summary.executed` and `summary.program_exit_code`; the program's own stdout goes to stderr.
 
@@ -31,6 +52,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Fixed
 
+- `mod Foo;` no longer resolves `src/foo.rv` on case-insensitive file systems (macOS, Windows): a module file must carry exactly the module's name, so the verdict no longer depends on the OS (MOD-2.6, MOD-1.6).
+- Loader messages no longer contain absolute machine paths (DIAG-6.8, DIAG-7.5): `module `b` not found: neither `/tmp/…/src/b.rv` …` now reads `src/b.rv`, and a sibling dependency is shown as `../lib/…`. The rewrite is done once, when the diagnostics leave the loader, so it covers all of its ~60 messages.
+
 - An operand already in error no longer produces a second `E-TYP-MISMATCH` through a binary operator (`y + 1` with `y` unknown reported `<error>`; DIAG-4.2).
 
 - Lexer conformance to `lexical.md` (found by the T2 lexical cases): a lone
@@ -48,6 +72,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   (DIAG-5.2, DIAG-5.6, LEX-9.3), in JSON and in `file:line:col`.
 
 ### Changed
+
+- `core-machine.md` §5 (D-19-2): `MIN % -1` is a trap, like `MIN / -1`; it used to say `0`, which the backend never did.
+- **Breaking (D-19-1):** a shift amount must be provably non-negative at compile time. An unsigned amount, or a constant of literals with a non-negative value, is accepted; any other signed amount, a variable included, is now `E-TYP-SHIFT` instead of compiling and panicking at run time. Applies to `<<`, `>>`, `<<=` and `>>=`.
 
 - Array-element moves are lowered at each access instead of being hoisted by a
   planner. `MovePlanner` is removed; `rustc` now checks every access, so a

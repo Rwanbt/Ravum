@@ -1,0 +1,8 @@
+{
+  "id": "ownership/mut-self-receiver-needs-mutable-place",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "OWN-7.4 (MUST), TYP-3.2: a `&mut self` receiver needs a mutable place; `push` on a non-`mut` binding is E-OWN-IMMUTABLE."
+}

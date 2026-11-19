@@ -1944,3 +1944,379 @@ comportement de l'outil : COMPAT-1.2, 2.1 à 2.8, 3.1 à 3.6, 4.5, 5.2, 6.1 à 6
 6.5, 7.2, 7.3, 7.5, 7.6. Aucun cas de conformance ne peut les exercer sur une
 seule édition. Leur contrôle relève de la revue (D2, ratification) ; les seules
 parties mécanisables le sont déjà (instantanés d'identifiants et de codes).
+
+## 33. Lot `abi.md` : 14 MUST sur 35 tracés, une contradiction à arbitrer (2026-11-18)
+
+### 33.1 Mesure
+
+`python3 tools/must_audit.py` : `abi.md` passe de 35 non atteints à **21** ;
+global 816 MUST, **206** non atteints ; `features_coverage.py --strict` :
+219/219 (1 exemption). FeatureIds F-META-024 à F-META-027.
+
+La plupart des preuves existaient déjà sans être citées : `backend_audit.rs`
+(absence d'`unsafe` hors wrapper FFI, déterminisme du Rust généré sur tout le
+corpus, contrôles de débordement et de bornes) et les cas `types/ffi-*`,
+`run/ffi-*`, `run/integer-*`, `run/panic`. Ajouts : deux cas sur le fichier
+émis (`cli/abi-emit-rust-forbids-unsafe` : `#![forbid(unsafe_code)]` ;
+`cli/abi-emit-rust-includes-prelude` : hook de panic dans le fichier unique) et
+un test qui refuse toute crate `rustc_*` dans `Cargo.lock` (ABI-2.7).
+
+Observation : au premier passage, `cli/abi-emit-rust-forbids-unsafe` a échoué
+une fois sans détail affiché ; 20 passages suivants ont réussi (0/15 échec en
+boucle). La cause n'est pas identifiée ; la CI sur trois OS dira si elle se
+reproduit.
+
+### 33.2 Contradiction à arbitrer : ABI-4.7 et le `#![allow]` du prélude
+
+ABI-4.7 dit : « un avertissement `rustc` est un défaut à corriger, pas à
+masquer (`#[allow]` interdit) ». Le fichier généré commence par un
+`#![allow(...)]` de crate qui couvre 17 lints, dont `arithmetic_overflow` et
+`unconditional_panic`. Ces deux-là sont voulus : sans eux, `rustc` refuserait
+à la compilation un débordement que la spécification veut voir paniquer à
+l'exécution (`backend_audit.rs` : `audit_constant_foldable_panics_are_runtime_panics`).
+Les autres (`unused_*`, `non_snake_case`…) masquent des avertissements sur du
+code généré.
+
+L'implémentation ne respecte donc pas le texte, et le texte ne décrit pas une
+contrainte tenable telle quelle. ABI-4.7 n'est pas tracé. Deux issues :
+
+1. **Recommandé** : amender ABI-4.7 en « une seule liste `allow` fixe, de
+   crate, documentée lint par lint et auditée par un test ; aucun `allow` local ;
+   aucun avertissement hors de cette liste ». Le test d'audit fige la liste.
+2. Retirer l'`allow` et faire émettre au backend du code sans avertissement :
+   travail important (noms, variables inutilisées), et `arithmetic_overflow`
+   reste nécessaire pour la sémantique des paniques.
+
+### 33.3 Non tracés, avec la raison
+
+| Règles | Raison |
+|---|---|
+| ABI-1.1 à 1.4, 2.9, 2.10, 5.1 à 5.3, 6.1 à 6.4 | énoncés de **refus** ou de non-garantie (« aucun ABI », « aucune garantie de layout ») : rien d'observable à exercer |
+| ABI-2.1, 2.6, 4.4 | sémantique du source et ordre d'évaluation : couverts indirectement par tout le corpus `run/*`, mais aucune ligne de `features.md` ne les cite comme règle |
+| ABI-2.8 | tailles des primitifs : pas d'opérateur `size_of` en Core 1.0 ; seules les bornes sont observables |
+| ABI-4.1 | un `CheckedProgram` invalide est un bug interne, pas une entrée |
+| ABI-4.7 | contradiction, §33.2 |
+| ABI-4.8, 4.9 | non-engagements (temps de compilation, format de `--emit-rust`/`--emit-ir`) |
+
+## 34. Lot `modules.md` : 18 MUST de plus tracés, un défaut DIAG-6.8 trouvé (2026-11-18)
+
+### 34.1 Mesure
+
+`python3 tools/must_audit.py` : `modules.md` passe de 21 non atteints à **3** ;
+global 816 MUST, **188** non atteints ; `features_coverage.py --strict` :
+222/222 (1 exemption). FeatureIds F-MOD-014 à F-MOD-016.
+
+Douze cas ajoutés, chacun mesuré avant d'être écrit : résolution des fichiers
+(`mod x;` d'un module fichier non racine → `src/x.rv` ; d'un module inline →
+`src/m/x.rv` ; casse exacte ; fichier absent), manifeste et graphe
+(auto-dépendance, `git`, plage `^1.0`), usage d'une dépendance (répertoire
+libre, item privé, dépendance non déclarée, effets propagés, `io.println`).
+
+### 34.2 Texte aligné
+
+MOD-8.5 annonçait `E-MOD-DEPENDENCY` pour deux packages de même nom ; le
+registre et le loader émettent `E-MOD-DUPLICATE` (même correction que
+COMPAT-4.2, §32.2).
+
+### 34.3 Défaut trouvé : chemins absolus dans les messages du loader
+
+`mod gone;` produit : « module `b` not found: neither
+`/tmp/.../src/b.rv` nor `/tmp/.../src/b/mod.rv` exists ». Le message contient
+le chemin absolu de la machine, ce que DIAG-6.8 et DIAG-7.5 interdisent. Le
+défaut n'est pas propre à ce message : environ 60 messages du loader
+(`crates.rs`, `digest.rs`, `files.rs`, `fsutil.rs`, `graph.rs`, `lockfile.rs`)
+écrivent `path.display()`. `tests/diagnostics_contract.rs` ne l'a pas vu parce
+que son programme n'a pas d'erreur de module. Correction : PR dédiée qui suit
+ce lot (chemins relatifs à la racine du package, et un cas par famille de
+message dans le test de contrat).
+
+### 34.4 Défaut trouvé par la CI : la casse sur macOS et Windows
+
+Le cas `modules/module-name-case-sensitive` passait sous Linux et échouait sous
+macOS et Windows (CI de #178, commit 33b9d9e : `check --json: exit 0`). Sur un
+système de fichiers insensible à la casse, `mod Foo;` trouvait `src/foo.rv` :
+le même source était accepté ou refusé selon l'OS, ce que MOD-2.6 (« ne dépend
+ni [...] de la casse ») et MOD-1.6 interdisent. Correction : un candidat ne
+compte que si le répertoire contient une entrée de nom **exactement** égal
+(`has_exact_entry`, comparaison octet à octet de la liste du répertoire).
+
+### 34.4 Non tracés
+
+MOD-6.5 (aucun plugin : rien d'observable), MOD-6.6 (dépendances compilées
+depuis la source : invariant de construction), MOD-8.6 (compatibilité
+déclarative : non-engagement).
+## 35. Lot `concurrency.md` : 8 MUST sur 20 tracés, état d'avant le RFC E11 (2026-11-18)
+
+### 35.1 Mesure
+
+`python3 tools/must_audit.py` : `concurrency.md` passe de 20 non atteints à
+**12** ; `features_coverage.py --strict` : 220/220 (1 exemption). FeatureId
+F-META-028. Cinq cas `unsupported/*` (`Mutex`, `Arc`, `effects(async)`,
+`async { }`, `T: Send`), chacun mesuré avant d'être écrit, et
+`crates/ravum-lang-cli/tests/exec_determinism.rs` (CONC-3.4 : quatre exécutions
+d'un programme fermé donnent les mêmes octets).
+
+### 35.2 Portée
+
+D-18-2 met la concurrence dans la 1.0 (étape E11) : le RFC de concurrence
+réécrira `concurrency.md`. F-META-028 décrit donc l'**état actuel** (« aucune
+primitive ») et devra être remplacé, sous un nouvel identifiant (FEAT-1.4), le
+jour où le RFC est accepté. Les cas `unsupported/*` changeront alors de verdict
+par décision, pas par accident.
+
+### 35.3 Non tracés
+
+CONC-1.4, 2.1, 2.3, 2.4, 2.5, 2.7, 3.1, 3.3, 4.1, 4.2, 4.4 : énoncés de
+non-garantie ou de politique d'évolution, rien d'observable. CONC-3.2 (« un
+rapport `rt` ne contient jamais `CERTIFIED` ») est vérifiable mais pas par un
+cas : il faudrait une assertion d'absence ; à ajouter au test de contrat du
+profil `rt` lors du lot `effects.md`.
+
+## 36. Lot `stdlib.md` : 10 MUST de plus tracés, une contradiction à arbitrer (2026-11-19)
+
+### 36.1 Mesure
+
+`python3 tools/must_audit.py` : `stdlib.md` passe de 16 non atteints à **6** ;
+dénominateur 817 MUST (STD-12.7 ajouté, §36.2) ; `features_coverage.py
+--strict` : 225/225 (1 exemption). FeatureIds F-STD-033 à 035. Quatorze cas
+`types/std-*`, chacun mesuré avant d'être écrit (liste fermée, `impl String`,
+ajustements implicites, effets de `env::args`, absence d'écriture
+d'environnement et de mode d'ouverture, formes arithmétiques explicites).
+
+### 36.2 Texte aligné sur un RFC accepté
+
+STD-12.6 interdisait `wrapping_add`, `checked_add` et `saturating_*`, alors que
+[RFC-RT-TRAPS](../rfc/RFC-RT-TRAPS.md) (`ACCEPTED` le 2026-11-14) les a ajoutés
+(commit 21533dd), et que les cas `effects/rt-trap-*` s'en servent. Le code avait
+suivi le RFC, pas la spécification. STD-12.6 ne les cite plus, et **STD-12.7**
+(nouvel identifiant, ajouté à `tools/rule_ids.snapshot`) décrit les 14 formes
+réellement implémentées : `wrapping_add/sub/mul/neg`, `saturating_add/sub/mul/neg`,
+`checked_add/sub/mul/div/rem/neg`.
+
+### 36.3 Contradiction à arbitrer : STD-1.1 et les modules sans `use`
+
+STD-1.1 (et `modules.md` §8) dit : « aucun module n'est dans le prélude :
+`io::println` exige `use std::io;` ». L'implémentation résout `io`, `fs`,
+`string`, `math`, `env` et `process` sans `use` (`builtins::PRELUDE_MODULES`),
+et quasiment tout le corpus et tous les exemples en dépendent. STD-1.1 n'est
+pas tracé.
+
+1. **Recommandé** : amender STD-1.1 et `modules.md` §8 pour dire ce que fait
+   l'outil (les modules `std` sont des racines résolues sans `use` ; `use
+   std::io;` reste admis), en gardant le refus de `io.println` (MOD-6.7, déjà
+   tracé). Aucun programme existant ne change.
+2. Appliquer le texte : faire échouer tout `io::println` sans `use`. Cela
+   casse presque tous les cas et exemples ; c'est une rupture de langage.
+
+### 36.4 Non tracés
+
+STD-1.1 (§36.3), STD-1.2 (std non déclarable : invariant du loader),
+STD-1.4 (signatures normatives : couvert par l'ensemble des cas `run/*`, sans
+lien de règle), STD-1.7 (messages non stables : non-engagement), STD-3.1
+(aucune normalisation de chemin à l'exécution : nécessite un cas avec E/S
+fichier hors du répertoire du cas), STD-6.8 (pas de garantie de précision :
+non-engagement).
+
+## 37. Lot `effects.md` : 6 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `effects.md` passe de 15 non atteints à **9** ;
+`features_coverage.py --strict` : 227/227 (1 exemption). FeatureId F-EFF-010.
+Cinq cas `effects/*`, chacun mesuré avant d'être écrit : profil inconnu →
+sortie 2 (EFF-4.10) ; `summary.effects` expose l'ensemble inféré (`twice` : `[]`,
+`main` : `io, alloc`) (EFF-5.5) ; `#[allow(effects)]` → `E-UNSUPPORTED-ATTR`
+(EFF-5.6) ; `String::new` dans `effects()` → `E-EFF-UNDECLARED`, jamais élargi
+(EFF-5.3, EFF-6.5) ; le rapport `--profile pure` nomme son profil (EFF-6.7).
+
+Non tracés : EFF-4.8, 5.1, 5.2, 6.1 à 6.3, 6.6 (non-garanties : aucun bac à
+sable, aucune borne de temps ou de mémoire, aucun effet d'exécution) ; EFF-4.9
+(un profil ne change pas la sémantique) demanderait d'exécuter sous un profil,
+or `run` n'a pas d'option `--profile` ; EFF-5.4 (effets du prélude non
+redéclarables) n'a pas de forme refusable : un utilisateur ne peut pas déclarer
+une fonction du prélude.
+
+## 38. Lot `ownership.md` : 11 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `ownership.md` passe de 11 non atteints à **0**
+(73 / 73) ; `features_coverage.py --strict` : 230/230 (1 exemption). FeatureIds
+F-OWN-017 (déplacements), F-OWN-018 (mutabilité), F-OWN-019 (phases et budget).
+Treize cas `ownership/*`, chaque code mesuré avant d'être écrit.
+
+### 38.1 OWN-11.3 nommait le mauvais code
+
+La spécification disait qu'au-delà du budget par fonction le compilateur émet
+`E-PARSE-TOO-LARGE`. Le compilateur émet `E-OWN-LIMIT` (enregistré dans
+`diagnostics.md`) après 50 diagnostics, et `own.rs` documente pourquoi : la borne
+par fonction doit rester sous le budget par fichier (100, DIAG-1.7), sinon elle
+ne serait jamais observable. Mesure : 60 usages après déplacement dans `main` →
+50 `E-OWN-USE-AFTER-MOVE` puis un `E-OWN-LIMIT` ; la fonction suivante est encore
+analysée. La règle est corrigée pour nommer `E-OWN-LIMIT` ; le budget par
+fichier reste `E-PARSE-TOO-LARGE`. Même traitement que COMPAT-3.6 et MOD-8.5.
+
+### 38.2 Deux déplacements par argument
+
+`eat(s); eat(s);` donne `E-OWN-USE-AFTER-MOVE`, alors que `let a = s; let b = s;`
+donne `E-OWN-DOUBLE-MOVE`. C'est conforme à OWN-5.1, qui range « passage en
+argument » parmi les usages d'une place `MOVED` ; OWN-5.2 ne vise que deux
+déplacements sans usage entre eux. Signalé pour lecture, aucun changement.
+
+OWN-11.2 (tri par `(fichier, start_byte, code)`) est tenu par le test
+`diagnostics_of_one_phase_are_sorted_by_file_byte_and_code` de `diagnostics_contract.rs` (DIAG-4.1).
+
+## 39. Lots `features.md` et `unsupported.md` : 7 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `features.md` passe de 11 non atteints à **5**,
+`unsupported.md` de 8 à **7** ; `features_coverage.py --strict` : 231/231
+(1 exemption). FeatureId F-META-029, tenu par `tools/tests/test_feature_table.py`
+(4 tests) : FEAT-1.3 et 12.3 (ligne `unsupported` → code listé dans
+`unsupported.md` et cas `compile-fail` qui l'attend), FEAT-12.4 (code cité dans
+une ligne FeatureId → enregistré), FEAT-12.5 (lignes `experimental` = liste de la
+règle), FEAT-1.6 (aucun code `reserved`, aucun cas n'attend un code hors
+registre) ; FEAT-1.4 par `feature_ids.snapshot` ; UNS-0.2 par le cas
+`unsupported/unicode-ident`.
+
+### 39.1 Trou trouvé par le test : identifiants Unicode
+
+F-UNS-011 refuse `let café = 1;` avec `E-UNSUPPORTED-IDENT` (LEX-4.2), mais
+`unsupported.md` ne listait pas cette forme : FEAT-1.3 n'était pas tenue. La
+ligne est ajoutée en §2. Le test échouait avant l'ajout et passe après.
+
+### 39.2 FEAT-1.5 contredit le corpus (au Lead)
+
+FEAT-1.5 exige qu'un cas contienne `pass.rv`, `fail.rv` et `expected.json`. Le
+corpus réel (662 cas) utilise `case.json` + `src/main.rv`, un cas par
+direction, et le harnais ne lit que cette forme. Aucun cas ne suit FEAT-1.5.
+Recommandation : amender FEAT-1.5 pour décrire la forme `case.json` (déjà
+documentée dans `conformance/README.md`). Non modifié ici : c'est une décision
+de spécification.
+
+### 39.3 Non tracés, et pourquoi
+
+FEAT-1.1, FEAT-1.2, FEAT-12.1 définissent des statuts (aucune forme
+observable) ; FEAT-12.2 (« toute forme acceptée a une ligne ») n'est pas
+prouvable par un test fini, seulement réfutable par un audit. UNS-0.1 (même
+nature que FEAT-12.2), UNS-0.3 (autorité du checker : tenue par le contrat
+`check → build` de T2, pas par une ligne), UNS-9.1 à 9.5 (procédure de
+proposition d'extension, sans forme exécutable).
+
+## 40. Lots `types.md` et `expressions.md` : 10 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `types.md` passe de 6 non atteints à **0**
+(94 / 94), `expressions.md` de 4 à **0** (86 / 86) ; `features_coverage.py
+--strict` : 233/233 (1 exemption). FeatureIds F-TYP-028 et F-EXPR-019, dix cas,
+chaque sortie mesurée avant d'être écrite :
+
+- TYP-13.3 : branches `i32`/`bool` → `E-TYP-MISMATCH` ; `if c { a } else { 2 }`
+  avec `a: i64` affiche `5`.
+- TYP-13.5 à 13.9 : `String as i64` et `&i64 as i64` → `E-TYP-CAST` ;
+  `NaN as i32` = `0`, `1e300 as i32` = `2147483647`, `-1e300 as i32` =
+  `-2147483648`, `300 as u8 as i64` = `44`, `7 as i32` = `7`, sans panic.
+- EXPR-3.4 : `a << -1` → `E-TYP-SHIFT` ; une quantité `u8` décale un `i64`.
+- EXPR-3.6, 3.7 : débordement `i128` → `panic:`, sortie 1.
+- EXPR-3.7, 3.8 : sous `test`, un test qui panique est `FAILED` et l'autre
+  passe (`failed: 1`, `passed: 1`) ; `catch_unwind` → `E-RES-UNKNOWN`.
+
+### 40.1 Quantité de décalage négative : refusée à la compilation (D-19-1)
+
+Constat : EXPR-3.4 refusait une quantité négative, mais seulement pour un
+littéral ; `let s: i64 = -1; a << s` compilait puis paniquait. Décision du
+responsable (D-19-1) : la détection doit avoir lieu à la compilation, même en
+variable. Le checker (`typeck/helpers.rs`, `shift_amount_refused`) accepte une
+quantité non signée ou une constante de littéraux de valeur `>= 0`, et refuse
+toute autre quantité signée (`E-TYP-SHIFT`), pour `<<`, `>>`, `<<=`, `>>=`.
+Quatre cas `run/shift-*` de plus. Impact mesuré : aucun exemple, application ni
+cas du corpus n'utilisait une quantité signée en variable ; trois tests de
+contrat du checker qui l'acceptaient sont mis à jour (`typeck_contracts2.rs`,
+`typeck_contracts3.rs`).
+
+## 41. `compatibility.md`, 2ᵉ lot : 5 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `compatibility.md` passe de 25 non atteints à
+**20** (19 / 39) ; `features_coverage.py --strict` : 234/234 (1 exemption).
+FeatureId F-META-030 :
+
+- COMPAT-1.2 : `--version` affiche `core-1.0-draft.1` et chaque rapport JSON
+  porte `"spec_version":"core-1.0-draft.1"` (cas `cli/version-says-draft`,
+  `cli/json-spec-version-says-draft`).
+- COMPAT-2.8 : seule `core-1.0` est acceptée, `core-2.0` → `E-UNSUPPORTED-EDITION`.
+- COMPAT-3.6 : tests unitaires de `deprecation.rs` (registre vide, un
+  `W-DEPRECATED` par usage d'un chemin déprécié, programme accepté).
+- COMPAT-4.5 : `recompile_from_source.rs` lance `run`, change la source (même
+  longueur, même chemin de binaire), relance : la nouvelle sortie est affichée.
+- COMPAT-7.6 : une forme refusée par `core-1.0` reste refusée.
+
+Non tracés, et pourquoi : COMPAT-2.1 à 2.7, 3.1 à 3.5 décrivent ce qu'une
+**évolution future** du langage a le droit de faire ; aucune édition ratifiée
+n'existe, il n'y a rien à exécuter (le gel des codes publiés est déjà tenu par
+`diagnostic_codes.snapshot`, DIAG-9). COMPAT-5.2 oblige les **consommateurs**,
+pas l'outil. COMPAT-6.1 à 6.5 et 7.2 à 7.5 décrivent la procédure humaine de
+migration et de rollback ; ils relèvent du dossier de release (T11, T12), pas
+d'un cas de conformance.
+
+## 42. `abi.md` et `concurrency.md`, 2ᵉ lot : 3 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `abi.md` 16 / 35, `concurrency.md` 9 / 20 ;
+`features_coverage.py --strict` : 235/235 (1 exemption). FeatureId F-META-031,
+chaque sortie mesurée avant d'être écrite :
+
+- ABI-2.8 : `u8` 255, `i8` -128, `u16` 65535, `i32` 2147483647, `u64`
+  18446744073709551615, `i128` minimum ; `let a: u8 = 256` → `E-TYP-LITERAL-RANGE`.
+- ABI-4.4 : `f("a", 1) + f("b", 2) * f("c", 3)` affiche `a`, `b`, `c` puis `7` ;
+  `0.1 * 10.0 - 1.0` affiche `0` (une FMA donnerait `5.55e-17`) et
+  `(1e16 + 1) - 1e16` affiche `0` (une réassociation donnerait `1`).
+- CONC-3.2 : `rt_profile_claims.rs` lance `check --profile rt`, texte et JSON,
+  sur un programme accepté et un programme refusé : aucun ne contient
+  `CERTIFIED`.
+
+Non tracés, et pourquoi : ABI-1.x, 2.9, 2.10, 4.8, 4.9, 5.x, 6.x et CONC-2.x,
+3.1, 3.3, 4.x sont des **non-garanties** ou des conditions sur une extension
+future (rien à exécuter : on ne teste pas l'absence d'une promesse). ABI-2.1 et
+2.6 sont tenus en pratique par le contrat `check → build` de T2, sans ligne
+propre. ABI-4.1 (un `CheckedProgram` invalide n'atteint jamais le backend)
+demanderait d'observer l'absence de binaire, ce que le harnais ne sait pas
+affirmer. ABI-4.7 reste en arbitrage (`#![allow]` du fichier généré, §33.2).
+CONC-1.4 et 2.7 (un seul cœur, concurrence externe) ne sont pas mesurables par
+un cas.
+
+## 43. `core-machine.md` : l'interpréteur de référence existe (2026-11-19)
+
+Décision du responsable : construire l'oracle. `crates/ravum-core-machine` a son
+propre lexer, son parser et son évaluateur, sans aucune dépendance (test
+`independence.rs`). Il implémente §2 à §7 : valeurs typées, littéraux typés par
+leur contexte, traps de §5, court-circuit, ordre gauche→droite, `for` à bornes
+évaluées une fois, `return`/`break`/`continue`, budget d'étapes (`diverge`),
+limite de profondeur (`fault: stack-limit`), refus des fonctions libm
+(`fault: unsupported-libm`) et d'une version de spec inconnue.
+
+Mesures :
+
+- corpus de l'oracle : 59 programmes, chacun avec son résultat attendu en tête,
+  O1 à O10 couverts (`tests/corpus.rs`) ;
+- comparaison différentielle (`crates/ravum-lang-cli/tests/core_machine_differential.rs`) :
+  54 programmes compilés et exécutés par `ravum-lang`, **54 accords** ; les 5
+  autres (`diverge`, `fault`) sont exclus comme le demande Q-MACH-3.
+
+`must_audit.py` : `core-machine.md` passe de 40 non atteints à **9** (31 / 40) ;
+`features_coverage.py --strict` : 236/236 **sans exemption**.
+
+### 43.1 Ce que la comparaison a trouvé
+
+Huit désaccords au premier passage, tous instruits, aucun toléré :
+
+- six venaient de mon corpus (une fonction qui appelle `panic` doit déclarer
+  `effects(panic)`) ;
+- un venait de l'oracle : il acceptait les or-patterns et les range patterns,
+  que Core 1.0 refuse ; il les refuse désormais (`fault`) ;
+- **un était une contradiction de la spec** : `core-machine.md` §5 disait
+  `MIN % -1 = 0`, le binaire panique et `RFC-RT-TRAPS` range `% -1` parmi les
+  débordements. Décision D-19-2 : c'est un trap ; §5 est aligné.
+
+### 43.2 Non tracés, et pourquoi
+
+MACH-2.2 (`&str` réduit aux littéraux : le corpus ne compare pas de texte),
+MACH-5.3 (traps identiques dans tous les profils : propriété du backend, tenue
+par les cas `run/*` existants, pas par l'oracle), MACH-6.1, 6.4, 6.6 (formes
+que le checker refuse avant l'oracle), MACH-7.4 (non-garantie), MACH-8.4, 8.5
+et 9.1 (règles d'usage des résultats, sans forme exécutable).
+
+L'exemption F-META-006 est **révoquée** : sa condition de réexamen (« dès
+qu'une machine abstraite exécutable existe ») est atteinte.

@@ -1,0 +1,9 @@
+// oracle: fault: outside the pure core: or-patterns are not part of Core 1.0
+// The machine refuses what Core 1.0 refuses (E-UNSUPPORTED-TOKEN).
+fn check() -> i32 effects() {
+    let n: i32 = 1;
+    return match n {
+        1 | 2 => 1,
+        _ => 0,
+    };
+}

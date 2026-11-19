@@ -1,0 +1,10 @@
+fn eat(s: String) { }
+
+fn main() {
+    let s = String::new();
+    let c = true;
+    if c {
+        eat(s);
+    }
+    io::println(&s);
+}

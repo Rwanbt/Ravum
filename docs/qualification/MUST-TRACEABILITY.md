@@ -8,12 +8,22 @@
 ## 1. Résultat en une phrase
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
-> `diagnostics.md` #169 et `compatibility.md`)** : `tools/must_audit.py` compte **816 énoncés MUST** et
-> **215 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 023
-> ajoutés) ; **598 / 816** sont atteignables par un FeatureId, **218**
-> ne le sont pas ; couverture stricte **215/215** (1 exemption).
-> `diagnostics.md` : 40 / 45 ; `compatibility.md` : 14 / 39 (25 règles de
-> gouvernance, `T2-FINDINGS` §32). Le texte ci-dessous est la
+> `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178,
+> `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md` #184, `types.md` et `expressions.md` #185, `compatibility.md` (2ᵉ lot) #186, `abi.md` et `concurrency.md` (2ᵉ lot) #187, `core-machine.md`)** : `tools/must_audit.py`
+> compte **817 énoncés MUST** (STD-12.7 ajouté) et **236 FeatureIds** (F-LEX-009
+> à 015, F-SYN-036 à 040, F-META-009 à 028, F-MOD-014 à 016, F-STD-033 à 035,
+> F-EFF-010, F-OWN-017 à 019, F-META-029, F-TYP-028, F-EXPR-019, F-META-030 à 032 ajoutés) ; **720 / 817** sont atteignables par un FeatureId, **97**
+> ne le sont pas ; couverture stricte **236/236**, **sans exemption** (F-META-006 révoquée : l'oracle existe). `core-machine.md` :
+> 31 / 40 (`T2-FINDINGS` §43). `abi.md` : 16 / 35,
+> `concurrency.md` : 9 / 20 (`T2-FINDINGS` §42). `compatibility.md` :
+> 19 / 39 (`T2-FINDINGS` §41). `types.md` : 94 / 94,
+> `expressions.md` : 86 / 86 (`T2-FINDINGS` §40). `features.md` : 6 / 11,
+> `unsupported.md` : 1 / 8 (`T2-FINDINGS` §39). `ownership.md` :
+> 73 / 73 (`T2-FINDINGS` §38). `effects.md` :
+> 35 / 44 (`T2-FINDINGS` §37). `modules.md` : 64 / 67 ;
+> `concurrency.md` : 8 / 20 (`T2-FINDINGS` §35) ; `stdlib.md` : 86 / 92 (§36). `diagnostics.md` : 40 / 45 ;
+> `compatibility.md` : 14 / 39 (25 règles de gouvernance, `T2-FINDINGS` §32) ;
+> `abi.md` : 14 / 35 (`T2-FINDINGS` §33). Le texte ci-dessous est la
 > mesure d'origine, conservée.
 
 **Confirmé, et l'écart est grand :** `spec/language/` contient **807 énoncés

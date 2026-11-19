@@ -1,0 +1,3 @@
+fn main() {
+    let _r = catch_unwind(1);
+}

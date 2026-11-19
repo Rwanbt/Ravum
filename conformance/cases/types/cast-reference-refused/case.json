@@ -1,0 +1,8 @@
+{
+  "id": "types/cast-reference-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-CAST"
+  ],
+  "notes": "TYP-13.8 (MUST): `as` never applies to a reference."
+}

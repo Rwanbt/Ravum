@@ -1,0 +1,9 @@
+// oracle: panic: index out of bounds
+fn f(i: usize) -> i32 effects() {
+    let a: [i32; 3] = [1, 2, 3];
+    return a[i];
+}
+
+fn check() -> i32 effects() {
+    return f(3);
+}
