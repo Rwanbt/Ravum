@@ -1,0 +1,16 @@
+struct P {
+    x: i64,
+}
+
+fn set(r: &mut P) {
+    r.x = 2;
+}
+
+fn main() {
+    let mut p = P { x: 1 };
+    set(&mut p);
+    let mut v: Vec<i64> = Vec::new();
+    v.push(1);
+    v[0] = 3;
+    io::println(&p.x.to_string());
+}

@@ -1,0 +1,10 @@
+fn eat(s: String) { }
+
+fn main() {
+    let mut s = String::new();
+    eat(s);
+    s = String::new();
+    let n: i64 = 1;
+    io::println(&n.to_string());
+    io::println(&s);
+}

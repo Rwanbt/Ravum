@@ -1,0 +1,8 @@
+{
+  "id": "ownership/write-through-shared-ref-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "OWN-7.2 (MUST): mutability does not propagate through a shared reference; `*r = ...` with `r: &i64` is E-OWN-IMMUTABLE."
+}

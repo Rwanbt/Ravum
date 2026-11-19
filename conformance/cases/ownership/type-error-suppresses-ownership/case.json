@@ -1,0 +1,8 @@
+{
+  "id": "ownership/type-error-suppresses-ownership",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "OWN-11.1 (MUST): an error of an earlier phase stops later phases; this program also uses a moved value, but only E-TYP-MISMATCH is reported."
+}

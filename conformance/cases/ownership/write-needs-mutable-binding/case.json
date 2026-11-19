@@ -1,0 +1,8 @@
+{
+  "id": "ownership/write-needs-mutable-binding",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-IMMUTABLE"
+  ],
+  "notes": "OWN-7.1 (MUST): a write needs a mutable place; a `let` binding without `mut` is E-OWN-IMMUTABLE."
+}

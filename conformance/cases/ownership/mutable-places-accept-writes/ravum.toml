@@ -1,0 +1,4 @@
+[package]
+name = "ownership-mutable-places-accept-writes"
+version = "0.1.0"
+edition = "core-1.0"

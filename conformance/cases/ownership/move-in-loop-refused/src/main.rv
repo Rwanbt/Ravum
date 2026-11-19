@@ -1,0 +1,10 @@
+fn eat(s: String) { }
+
+fn main() {
+    let s = String::new();
+    let mut i: i64 = 0;
+    while i < 2 {
+        eat(s);
+        i = i + 1;
+    }
+}
