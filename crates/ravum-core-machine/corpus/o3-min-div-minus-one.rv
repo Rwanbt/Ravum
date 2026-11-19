@@ -1,0 +1,8 @@
+// oracle: panic: attempt to divide with overflow
+fn f(a: i32, b: i32) -> i32 effects() {
+    return a / b;
+}
+
+fn check() -> i32 effects() {
+    return f(-2147483648, -1);
+}

@@ -1,0 +1,8 @@
+// oracle: value i64 7
+fn check() -> i64 effects() {
+    let a: Option<i64> = Some(7);
+    return match a {
+        Some(v) => v,
+        None => 0,
+    };
+}

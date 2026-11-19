@@ -1,0 +1,6 @@
+// oracle: value f32 0.3
+fn check() -> f32 effects() {
+    let a: f32 = 0.1;
+    let b: f32 = 0.2;
+    return a + b;
+}

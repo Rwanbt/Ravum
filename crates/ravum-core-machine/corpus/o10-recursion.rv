@@ -1,0 +1,12 @@
+// oracle: value u64 6765
+// O10, MACH-4.7: recursion, result identical to the backend.
+fn fib(n: u64) -> u64 effects() {
+    if n < 2 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+fn check() -> u64 effects() {
+    return fib(20);
+}

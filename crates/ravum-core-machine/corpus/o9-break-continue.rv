@@ -1,0 +1,17 @@
+// oracle: value i32 9
+// O9, MACH-4.6: continue and break act on the innermost loop.
+fn check() -> i32 effects() {
+    let mut s: i32 = 0;
+    let mut i: i32 = 0;
+    loop {
+        i += 1;
+        if i % 2 == 0 {
+            continue;
+        }
+        if i > 5 {
+            break;
+        }
+        s += i;
+    }
+    return s;
+}

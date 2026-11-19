@@ -1,0 +1,8 @@
+// oracle: panic: attempt to multiply with overflow
+fn f(a: i64) -> i64 effects() {
+    return a * a;
+}
+
+fn check() -> i64 effects() {
+    return f(4294967296);
+}

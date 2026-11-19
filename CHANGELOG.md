@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Reference interpreter of the pure core (`crates/ravum-core-machine`, `core-machine.md`): its own lexer, parser and evaluator, no dependency, a 59-program corpus covering obligations O1 to O10, and a differential test that builds and runs 54 of them with `ravum-lang` and compares the results (54 agree). FeatureId F-META-032; the F-META-006 coverage exemption is revoked, strict coverage is 236/236 with no exemption.
+
 - Backend fidelity contract (T2, `abi.md`, `concurrency.md`): FeatureId F-META-031, three `run/*` cases (primitive bounds, left-to-right calls, no fused multiply-add or reassociation) and a test that no `rt` report claims certification.
 
 - Edition contract (T2, `compatibility.md`): FeatureId F-META-030, two `cli/*` cases showing that `--version` and `spec_version` say draft, and a test that a changed source is rebuilt rather than served from an earlier build (COMPAT-4.5).
@@ -71,6 +73,7 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Changed
 
+- `core-machine.md` §5 (D-19-2): `MIN % -1` is a trap, like `MIN / -1`; it used to say `0`, which the backend never did.
 - **Breaking (D-19-1):** a shift amount must be provably non-negative at compile time. An unsigned amount, or a constant of literals with a non-negative value, is accepted; any other signed amount, a variable included, is now `E-TYP-SHIFT` instead of compiling and panicking at run time. Applies to `<<`, `>>`, `<<=` and `>>=`.
 
 - Array-element moves are lowered at each access instead of being hoisted by a

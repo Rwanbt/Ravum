@@ -1,0 +1,11 @@
+// oracle: panic: attempt to multiply with overflow
+fn fact(n: u64) -> u64 effects() {
+    if n == 0 {
+        return 1;
+    }
+    return n * fact(n - 1);
+}
+
+fn check() -> u64 effects() {
+    return fact(21);
+}

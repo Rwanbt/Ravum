@@ -1,0 +1,8 @@
+// oracle: value u8 128
+fn f(a: u8, n: u32) -> u8 effects() {
+    return a << n;
+}
+
+fn check() -> u8 effects() {
+    return f(1, 7);
+}

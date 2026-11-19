@@ -1,0 +1,10 @@
+// oracle: value bool true
+// O5, §5 example: x != x is true iff x is NaN.
+fn h(x: f64) -> bool effects() {
+    return x != x;
+}
+
+fn check() -> bool effects() {
+    let z: f64 = 0.0;
+    return h(z / z);
+}

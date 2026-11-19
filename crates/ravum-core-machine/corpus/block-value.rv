@@ -1,0 +1,9 @@
+// oracle: value i32 4
+// MACH-6.3: the value of a block is its tail expression.
+fn check() -> i32 effects() {
+    let v = {
+        let a: i32 = 2;
+        a * 2
+    };
+    return v;
+}

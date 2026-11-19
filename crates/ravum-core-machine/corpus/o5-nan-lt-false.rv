@@ -1,0 +1,6 @@
+// oracle: value bool false
+fn check() -> bool effects() {
+    let z: f64 = 0.0;
+    let n = z / z;
+    return n < 1.0 || n >= 1.0;
+}

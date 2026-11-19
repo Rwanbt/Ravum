@@ -1,0 +1,9 @@
+// oracle: value u8 27
+// O3, §5 example: 26 + 1 in u8.
+fn f(a: u8) -> u8 effects() {
+    return a + 1;
+}
+
+fn check() -> u8 effects() {
+    return f(26);
+}

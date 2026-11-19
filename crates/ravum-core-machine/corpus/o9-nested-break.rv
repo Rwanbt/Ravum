@@ -1,0 +1,13 @@
+// oracle: value i32 6
+fn check() -> i32 effects() {
+    let mut s: i32 = 0;
+    for i in 0..3 {
+        for j in 0..10 {
+            if j > i {
+                break;
+            }
+            s += 1;
+        }
+    }
+    return s;
+}

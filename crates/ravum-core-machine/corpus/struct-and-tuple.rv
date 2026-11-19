@@ -1,0 +1,16 @@
+// oracle: value i32 11
+// MACH-2.3: a mutation replaces the binding.
+struct P {
+    x: i32,
+    y: i32,
+}
+
+fn check() -> i32 effects() {
+    let mut p = P { x: 1, y: 2 };
+    p.x = 4;
+    let mut t: (i32, i32) = (3, 0);
+    t.1 = 2;
+    let mut a: [i32; 2] = [0, 0];
+    a[1] = t.0;
+    return p.x + p.y + t.1 + a[1];
+}

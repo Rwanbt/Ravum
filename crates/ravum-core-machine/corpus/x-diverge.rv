@@ -1,0 +1,8 @@
+// oracle: diverge: 1000000
+// §10, MACH-7.1: the budget runs out; inconclusive, never a proof.
+fn check() -> i32 effects() {
+    let mut x: i32 = 0;
+    loop {
+        x = x.wrapping_add(1);
+    }
+}

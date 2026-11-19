@@ -1,0 +1,5 @@
+// oracle: value u8 255
+fn check() -> u8 effects() {
+    let a: u8 = 200;
+    return a.saturating_add(100);
+}
