@@ -1,9 +1,12 @@
 {
   "id": "effects/unsupported-async",
   "mode": "compile-fail",
-  "expect_codes": [
-    "E-UNSUPPORTED-EFFECT"
+  "args": [
+    "--profile",
+    "pure"
   ],
-  "unsupported": true,
-  "notes": "`async` is a known group that cannot be produced yet (RFC-E11-CONCURRENCY phase 2, D-19-3). `net` was refused here until RFC-E11-NET-HTTP activated it."
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "The async effect is producible since D-19-9; the pure profile still refuses it (EFF-6, CONC-6.4)."
 }

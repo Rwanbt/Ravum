@@ -5,8 +5,8 @@ name: tsan
 # Blocking: every concurrent `run-pass` conformance case (threads, channels,
 # TCP, HTTP) is built with `-Zsanitizer=thread` and run 10 times; any report
 # fails the job. A positive control (a real data race) must be reported, so a
-# green job cannot come from missing instrumentation. Limit: the standard
-# library is not rebuilt with TSan (see `tools/tsan_run.py`). A green job is an
+# green job cannot come from missing instrumentation. The standard library is
+# rebuilt with TSan (`-Zbuild-std`); no report is suppressed. A green job is an
 # observation on this corpus and commit, never a proof of race freedom.
 
 on:
@@ -30,8 +30,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust (stable pinned to 1.95.0, as rust-toolchain.toml)
         uses: dtolnay/rust-toolchain@1.95.0
-      - name: Install nightly Rust (for -Zsanitizer=thread)
+      - name: Install nightly Rust with rust-src (for -Zsanitizer=thread and -Zbuild-std)
         uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
       - name: Show toolchains
         run: |
           rustc --version

@@ -1,0 +1,29 @@
+async fn worker(name: String, n: i64) -> () effects(io, alloc, async) {
+    for i in 0..n {
+        io::println(&format_line(&name, i));
+        task::yield_now().await;
+    }
+}
+
+fn format_line(name: &str, i: i64) -> String effects(alloc) {
+    let mut s: String = String::from(name);
+    s.push_str(" ");
+    s.push_str(&i.to_string());
+    s
+}
+
+async fn double(x: i64) -> i64 effects(async) {
+    x * 2
+}
+
+async fn run() -> i64 effects(io, alloc, async) {
+    task::spawn(worker(String::from("a"), 3));
+    task::spawn(worker(String::from("b"), 2));
+    let v: i64 = double(21).await;
+    v
+}
+
+fn main() -> () effects(io, alloc, async) {
+    let r: i64 = task::block_on(run());
+    io::println(&r.to_string());
+}

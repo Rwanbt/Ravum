@@ -1,0 +1,5 @@
+async fn f(x: &str) -> i64 effects(async) {
+    1
+}
+
+fn main() { }

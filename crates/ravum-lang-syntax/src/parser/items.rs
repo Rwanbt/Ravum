@@ -39,6 +39,16 @@ impl<'a> Parser<'a> {
             TokenKind::Kw(Kw::Trait) => self.unsupported_item("E-UNSUPPORTED-TRAIT", "`trait`"),
             TokenKind::Kw(Kw::Where) => self.unsupported_item("E-UNSUPPORTED-WHERE", "`where`"),
             TokenKind::Kw(Kw::Extern) => self.parse_extern_block(),
+            TokenKind::Kw(Kw::Async) if self.peek_kw(1, Kw::Fn) => {
+                self.bump(); // `async`
+                match self.parse_fn_item(false) {
+                    Some(ItemKind::Fn(mut f)) => {
+                        f.is_async = true;
+                        Some(ItemKind::Fn(f))
+                    }
+                    other => other,
+                }
+            }
             TokenKind::Kw(Kw::Async) => self.unsupported_item("E-UNSUPPORTED-ASYNC", "`async`"),
             TokenKind::Kw(Kw::Unsafe) => self.unsupported_item("E-UNSUPPORTED-UNSAFE", "`unsafe`"),
             TokenKind::Kw(Kw::Move) => self.unsupported_item("E-UNSUPPORTED-MOVE", "`move`"),
@@ -549,6 +559,7 @@ impl<'a> Parser<'a> {
             effects,
             body,
             is_test,
+            is_async: false,
             span: self.span_from(start),
         }))
     }

@@ -56,7 +56,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSUPPORTED-TRAIT` | parse | `trait`, borne `T: X`, `dyn T` |
 | `E-UNSUPPORTED-ATTR` | parse | attribut `#[...]` / `#![...]` |
 | `E-UNSUPPORTED-MACRO` | parse | `nom!(...)` / `macro_rules!` |
-| `E-UNSUPPORTED-ASYNC` | parse | `async`, `await` |
+| `E-UNSUPPORTED-ASYNC` | parse | bloc `async`, méthode `async`, `async fn` générique ou `test` ([`concurrency.md`](concurrency.md) CONC-6.5) |
 | `E-UNSUPPORTED-UNSAFE` | parse | `unsafe fn`, pointeurs bruts, opérations non vérifiées (le bloc `unsafe { }` est supporté) |
 | `E-UNSUPPORTED-EXTERN` | parse | `extern "C" fn` avec corps (le bloc `extern "C" { ... }` est supporté) |
 | `E-UNSUPPORTED-ABI` | parse | ABI autre que `"C"` dans un bloc `extern` |
@@ -65,7 +65,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
-| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté (`async`) |
+| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté ; aucun ne l'est depuis D-19-9 (`async` produit) : code conservé, plus émis |
 | `E-UNSUPPORTED-EDITION` | modules | `edition` de `ravum.toml` inconnue |
 | `E-UNSUPPORTED-RANGE` | parse | `..`/`..=` hors `for`, slicing `&v[a..b]`, `..base` |
 | `E-UNSUPPORTED-CLOSURE` | parse | `|x| e` |
@@ -162,6 +162,8 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | Code | Phase | Sens |
 |---|---|---|
 | `E-CONC-SPAWN-TARGET` | types | le premier argument de `thread::spawn` ne nomme pas une fonction libre non générique à un paramètre ([`stdlib.md`](stdlib.md) STD-18.2) |
+| `E-CONC-AWAIT-OUTSIDE` | types | `.await` hors d'une `async fn` ([`concurrency.md`](concurrency.md) CONC-6.1) |
+| `E-CONC-REF-ACROSS-AWAIT` | types | référence liée dans une `async fn` : paramètre, `let`, motif ou résultat (CONC-6.3) |
 | `E-CONC-NOT-TRANSFERABLE` | types | type contenant une référence passé entre threads : paramètre ou résultat d'un `spawn`, élément d'un canal ([`stdlib.md`](stdlib.md) STD-18.1) |
 
 ### 3.6.2 Rechargement à chaud

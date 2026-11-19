@@ -1,0 +1,7 @@
+async fn h() -> i64 effects(async) {
+    2
+}
+
+fn main() -> () effects(async) {
+    let v: i64 = h().await;
+}

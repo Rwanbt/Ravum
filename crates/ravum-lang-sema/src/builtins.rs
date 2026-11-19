@@ -60,6 +60,10 @@ pub const PRELUDE_CHANDLE_DEF: NodeId = NodeId::MAX - 7;
 pub const PRELUDE_HTTP_REQUEST_DEF: NodeId = NodeId::MAX - 8;
 pub const PRELUDE_HTTP_RESPONSE_DEF: NodeId = NodeId::MAX - 9;
 
+/// `NodeId` réservé au type opaque générique `Future<T>` (RFC-E11-CONCURRENCY
+/// phase 2) : la valeur rendue par l'appel d'une `async fn`.
+pub const PRELUDE_FUTURE_DEF: NodeId = NodeId::MAX - 10;
+
 /// Le type `CHandle`.
 pub fn chandle_type() -> Type {
     opaque_type(PRELUDE_CHANDLE_DEF, "CHandle")
@@ -71,6 +75,7 @@ pub const PRELUDE_GENERIC_OPAQUES: &[(&str, NodeId)] = &[
     ("Channel", PRELUDE_CHANNEL_DEF),
     ("Sender", PRELUDE_SENDER_DEF),
     ("Receiver", PRELUDE_RECEIVER_DEF),
+    ("Future", PRELUDE_FUTURE_DEF),
 ];
 
 /// Nom Rust du prélude pour un `NodeId` réservé à un type opaque.
@@ -157,6 +162,7 @@ pub const PRELUDE_TYPES: &[&str] = &[
     "CHandle",
     "HttpRequest",
     "HttpResponse",
+    "Future",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -173,7 +179,8 @@ pub const PRELUDE_VALUES: &[&str] = &[
 
 /// Modules accessibles sans `use` (chemins canoniques).
 pub const PRELUDE_MODULES: &[&str] = &[
-    "io", "fs", "net", "thread", "sync", "ffi", "http", "string", "math", "env", "process", "std",
+    "io", "fs", "net", "thread", "sync", "task", "ffi", "http", "string", "math", "env", "process",
+    "std",
 ];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
@@ -184,6 +191,7 @@ pub fn builtin_root_module(name: &str) -> Option<&'static str> {
         "net" => "std::net",
         "thread" => "std::thread",
         "sync" => "std::sync",
+        "task" => "std::task",
         "ffi" => "std::ffi",
         "http" => "std::http",
         "string" => "std::string",
@@ -242,6 +250,7 @@ const FS_ALLOC: &[Effect] = &[Effect::Fs, Effect::Alloc];
 const NET: &[Effect] = &[Effect::Net];
 const NET_ALLOC: &[Effect] = &[Effect::Net, Effect::Alloc];
 const THREAD: &[Effect] = &[Effect::Thread];
+const ASYNC: &[Effect] = &[Effect::Async];
 const THREAD_ALLOC: &[Effect] = &[Effect::Thread, Effect::Alloc];
 const ALLOC: &[Effect] = &[Effect::Alloc];
 const PANIC: &[Effect] = &[Effect::Panic];
@@ -371,6 +380,27 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["fn(A) -> R", "A"],
         ret: "JoinHandle<R>",
         effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::task::block_on",
+        generics: &["T"],
+        params: &["Future<T>"],
+        ret: "T",
+        effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::spawn",
+        generics: &[],
+        params: &["Future<()>"],
+        ret: "()",
+        effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::yield_now",
+        generics: &[],
+        params: &[],
+        ret: "Future<()>",
+        effects: ASYNC,
     },
     BuiltinFnSig {
         path: "std::thread::join",

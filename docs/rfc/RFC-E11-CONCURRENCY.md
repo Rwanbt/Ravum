@@ -55,7 +55,7 @@ C'est la règle `CONC-2.1` proposée ; elle remplace un système de traits
 > - **TSan bloquant** (§5) : `.github/workflows/tsan.yml` et
 >   `tools/tsan_run.py` (2026-11-19), sur tous les cas `run-pass` concurrents
 >   (threads, canaux, TCP, HTTP), 10 exécutions chacun, avec un témoin de course
->   qui doit être signalé ; la bibliothèque standard n'est pas instrumentée.
+>   qui doit être signalé ; la std est reconstruite avec TSan (`-Zbuild-std`).
 
 Module `std::thread` et `std::sync`, effet **`thread`** (nouveau groupe) :
 
@@ -99,6 +99,19 @@ turbofish aussi. Proposition : `sync::channel()` rend une struct
 de l'annotation `let c: sync::Channel<String>`. Aucune exception de grammaire.
 
 ## 4. Surface proposée — phase 2 : `async`
+
+> **Phase 2a implémentée** (2026-11-19, [D-19-9](../decision/DECISIONS-2026-11-19.md)) :
+> [`concurrency.md`](../../spec/language/concurrency.md) §6 (CONC-6.1 à 6.6),
+> F-STD-039, `await` mot-clé, `async fn` libre, `Future<T>`, `std::task`
+> (`block_on`, `spawn`, `yield_now`), exécuteur FIFO dans le prélude (Rust sûr),
+> codes `E-CONC-AWAIT-OUTSIDE` et `E-CONC-REF-ACROSS-AWAIT`. Écarts retenus :
+> - CONC-6.3 est tenu de façon **conservatrice** : une `async fn` ne lie aucune
+>   référence du tout (pas seulement à travers un `.await`) ;
+> - pas encore d'**E/S asynchrone** (phase 2b) : `async` existe sans `net`
+>   asynchrone, contrairement à « aucun `async` sans `net` » ci-dessous ; une
+>   tâche qui bloque (canal, socket) bloque l'exécuteur ;
+> - une `async fn` est libre, non générique et non `test` ;
+> - l'effet `async` doit être déclaré, comme les autres.
 
 Proposition **minimale et déterministe** : `async fn` + `.await`, un exécuteur
 **mono-thread à ordre fixé** (FIFO des tâches prêtes), seulement des futures

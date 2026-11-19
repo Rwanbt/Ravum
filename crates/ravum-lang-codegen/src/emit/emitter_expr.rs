@@ -21,6 +21,7 @@ impl<'a> Emitter<'a> {
                 | ExprKind::Array(_)
                 | ExprKind::ArrayRepeat { .. }
                 | ExprKind::Try(_)
+                | ExprKind::Await(_)
         )
     }
 
@@ -194,6 +195,7 @@ impl<'a> Emitter<'a> {
                 Ok(text)
             }
             ExprKind::Try(inner) => Ok(format!("{}?", self.operand(inner, indent)?)),
+            ExprKind::Await(inner) => Ok(format!("{}.await", self.operand(inner, indent)?)),
             ExprKind::Return(value) => match value {
                 Some(value) => Ok(format!("return {}", self.expr(value, indent)?)),
                 None => Ok("return".to_string()),

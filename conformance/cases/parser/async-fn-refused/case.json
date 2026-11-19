@@ -4,5 +4,5 @@
   "expect_codes": [
     "E-UNSUPPORTED-ASYNC"
   ],
-  "notes": "G-3.10: `async fn` is E-UNSUPPORTED-ASYNC."
+  "notes": "G-3.10: an async method is E-UNSUPPORTED-ASYNC; only a free async fn is accepted (RFC-E11-CONCURRENCY phase 2, D-19-9)."
 }

@@ -170,9 +170,10 @@ pub(super) fn expr_returns_are_static(
             expr_returns_are_static(base, facts, seen, env)
                 && expr_returns_are_static(index, facts, seen, env)
         }
-        ExprKind::Unary { expr, .. } | ExprKind::Cast { expr, .. } | ExprKind::Try(expr) => {
-            expr_returns_are_static(expr, facts, seen, env)
-        }
+        ExprKind::Unary { expr, .. }
+        | ExprKind::Cast { expr, .. }
+        | ExprKind::Try(expr)
+        | ExprKind::Await(expr) => expr_returns_are_static(expr, facts, seen, env),
         ExprKind::Binary { lhs, rhs, .. } => {
             expr_returns_are_static(lhs, facts, seen, env)
                 && expr_returns_are_static(rhs, facts, seen, env)

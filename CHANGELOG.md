@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `async fn`, `expr.await` and `std::task` (`block_on`, `spawn`,
+  `yield_now`): a single-threaded FIFO executor in the runtime prelude, the
+  `async` effect, `Future<T>`, and the codes `E-CONC-AWAIT-OUTSIDE` and
+  `E-CONC-REF-ACROSS-AWAIT` (RFC-E11-CONCURRENCY phase 2a, D-19-9, F-STD-039).
+  **Breaking:** `await` is now a reserved keyword.
 - ThreadSanitizer as a blocking workflow (`.github/workflows/tsan.yml`,
   `tools/tsan_run.py`): every concurrent `run-pass` case is built with
   `-Zsanitizer=thread` and run 10 times, with a positive control that must be

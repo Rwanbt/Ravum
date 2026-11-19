@@ -56,6 +56,13 @@ pub fn infer_and_check(
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
         let mut effects = FnEffects::default();
+        if f.is_async {
+            // CONC-6.4: an `async fn` carries the `async` effect.
+            effects.direct.insert(Effect::Async);
+            effects
+                .sources
+                .push((Effect::Async, "`async fn`".to_string()));
+        }
         walk_block(&f.body, facts, &mut effects);
         direct.insert(*id, effects);
     }
@@ -330,7 +337,7 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             walk_expr(base, facts, out);
             walk_expr(index, facts, out);
         }
-        ExprKind::Unary { expr, .. } => walk_expr(expr, facts, out),
+        ExprKind::Unary { expr, .. } | ExprKind::Await(expr) => walk_expr(expr, facts, out),
         ExprKind::Binary { lhs, rhs, .. } => {
             walk_expr(lhs, facts, out);
             walk_expr(rhs, facts, out);

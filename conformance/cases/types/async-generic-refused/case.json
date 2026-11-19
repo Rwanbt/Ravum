@@ -1,0 +1,8 @@
+{
+  "id": "types/async-generic-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ASYNC"
+  ],
+  "notes": "CONC-6.5: an async fn is free, non-generic, non-test in Core 1.0."
+}

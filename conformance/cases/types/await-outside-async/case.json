@@ -1,0 +1,8 @@
+{
+  "id": "types/await-outside-async",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CONC-AWAIT-OUTSIDE"
+  ],
+  "notes": "CONC-6.1: .await only inside an async fn."
+}

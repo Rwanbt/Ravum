@@ -174,7 +174,7 @@ pub(crate) fn resolve_fn_header(
         }
     }
 
-    let ret = ctx.resolve_type(&f.ret);
+    let mut ret = ctx.resolve_type(&f.ret);
     // `!` is legal only as the *whole* return type of a divergent function: a
     // compound such as `Vec<!>` or `Result<!, E>` is not inhabitable.
     if contains_never(&ret) && !matches!(ret, Type::Never) {
@@ -222,6 +222,11 @@ pub(crate) fn resolve_fn_header(
         let module_path = world.modules[module].path.clone();
         join_path(&module_path, &rust_ident(&f.name.name))
     });
+    if f.is_async {
+        // An `async fn` call yields a future of its declared result (CONC-6.1).
+        ret = crate::builtins::generic_opaque("Future", ret).unwrap_or(Type::Error);
+        facts.async_fns.insert(item.id);
+    }
     let sig = FnSig {
         item: item.id,
         rust_path,

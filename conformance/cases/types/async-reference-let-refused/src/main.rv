@@ -1,0 +1,7 @@
+async fn h() -> i64 effects(async, alloc) {
+    let s: String = String::from("a");
+    let r: &String = &s;
+    1
+}
+
+fn main() { }

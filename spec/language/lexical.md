@@ -108,17 +108,17 @@ as    break   const   continue  crate   else    enum    extern  static
 false fn      for     if        impl    in      let     loop
 match mod     move    mut       pub     return  self    Self
 struct super  test    trait     true    unsafe  use     where
-while async   type
+while async   await   type
 ```
 
 Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans ajout. Un token qui n'y figure pas est un identifiant.
 
 | ID | Règle | Niveau |
 |---|---|---|
-| LEX-5.1 | Les **35** mots-clés ci-dessus sont réservés dans **toutes** les positions ; ils ne peuvent pas servir d'identifiant. `static` et `type` sont réservés (Q-LEX-1) mais **non supportés** à l'usage : `E-UNSUPPORTED-STATIC` / `E-UNSUPPORTED-TYPE-ALIAS`. | MUST |
+| LEX-5.1 | Les **36** mots-clés ci-dessus sont réservés dans **toutes** les positions ; ils ne peuvent pas servir d'identifiant. `static` et `type` sont réservés (Q-LEX-1) mais **non supportés** à l'usage : `E-UNSUPPORTED-STATIC` / `E-UNSUPPORTED-TYPE-ALIAS`. | MUST |
 | LEX-5.2 | `Self`, `self`, `crate`, `super` ont un sens de chemin (§ [`modules.md`](modules.md)) ; `Self` n'est valide que dans un `impl`. | MUST |
 | LEX-5.3 | `true`/`false` sont des littéraux booléens, pas des identifiants ni des constantes du prélude. | MUST |
-| LEX-5.4 | Les mots-clés réservés sont **reconnus par le lexer**. Ceux qui n'ont pas de construction Core 1.0 (`move`, `trait`, `where`, `async`) sont rejetés par le parser avec le code `E-UNSUPPORTED-*` correspondant (§ [`unsupported.md`](unsupported.md)). `extern` et `unsafe` ont une construction supportée (bloc `extern "C" { ... }`, bloc `unsafe { ... }`) ; seules leurs autres formes (`unsafe fn`, `extern "C" fn` avec corps) sont refusées (`E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`). Aucune forme n'est acceptée silencieusement. | MUST |
+| LEX-5.4 | Les mots-clés réservés sont **reconnus par le lexer**. Ceux qui n'ont pas de construction Core 1.0 (`move`, `trait`, `where`) sont rejetés par le parser avec le code `E-UNSUPPORTED-*` correspondant (§ [`unsupported.md`](unsupported.md)). `async` et `await` ont une construction supportée depuis D-19-9 (`async fn` libre, `expr.await`, [`concurrency.md`](concurrency.md) §6) ; les autres formes d'`async` (bloc, méthode) sont refusées (`E-UNSUPPORTED-ASYNC`). `extern` et `unsafe` ont une construction supportée (bloc `extern "C" { ... }`, bloc `unsafe { ... }`) ; seules leurs autres formes (`unsafe fn`, `extern "C" fn` avec corps) sont refusées (`E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`). Aucune forme n'est acceptée silencieusement. | MUST |
 
 ### 5.2 Mots-clés contextuels
 
@@ -134,10 +134,9 @@ Cette liste est **exhaustive** : elle est celle du design §3, reproduite sans a
 
 ### 5.3 Mots **non** réservés — conséquence assumée
 
-`ref`, `dyn`, `await`, `box`, `yield`, `union`, `macro`, `final`, `abstract`, `override`, `virtual`, `package`, `interface`, `implements` **ne figurent pas** dans la liste réservée : ce sont des **identifiants valides** en Core 1.0 (le codegen les mangle). Conséquences normatives :
-- `let ref = 1;`, `let dyn = 2;`, `let await = 3;` sont **acceptés** (identifiants).
+`ref`, `dyn`, `box`, `yield`, `union`, `macro`, `final`, `abstract`, `override`, `virtual`, `package`, `interface`, `implements` **ne figurent pas** dans la liste réservée : ce sont des **identifiants valides** en Core 1.0 (le codegen les mangle). Conséquences normatives :
+- `let ref = 1;`, `let dyn = 2;` sont **acceptés** (identifiants). `await` était dans cette liste jusqu'à D-19-9 (2026-11-19) ; c'est désormais un mot-clé, et `let await = 3;` est `E-PARSE-EXPECTED`.
 - `dyn T` en position de type est un nom de type inconnu (`E-RES-UNKNOWN`), pas `E-UNSUPPORTED-TRAIT`.
-- `x.await` est un accès de champ inconnu (`E-TYP-FIELD`), pas `E-UNSUPPORTED-ASYNC` ; `x.await()` est une méthode inconnue.
 - `ref x` en pattern est un motif de liaison `ref` suivi d'un token inattendu (`E-PARSE-EXPECTED`).
 
 > `static` et `type` **sont réservés** (35 mots-clés, §5.1) mais non supportés à l'usage :
@@ -374,7 +373,7 @@ keyword       = "as" | "break" | "const" | "continue" | "crate" | "else" | "enum
               | "extern" | "false" | "fn" | "for" | "if" | "impl" | "in" | "let"
               | "loop" | "match" | "mod" | "move" | "mut" | "pub" | "return"
               | "self" | "Self" | "static" | "struct" | "super" | "test" | "trait" | "true"
-              | "type" | "unsafe" | "use" | "where" | "while" | "async" ;
+              | "type" | "unsafe" | "use" | "where" | "while" | "async" | "await" ;
 
 ident         = ident_start { ident_cont } ;            (* ASCII seulement *)
 ident_start   = "A".."Z" | "a".."z" | "_" ;

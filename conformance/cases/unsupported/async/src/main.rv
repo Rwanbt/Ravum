@@ -1,5 +1,3 @@
-async fn fetch() {
-}
-
 fn main() {
+    let f = async { 1 };
 }

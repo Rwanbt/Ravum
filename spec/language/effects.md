@@ -21,7 +21,7 @@ Dix groupes, exactement ceux du design §3.6 :
 | `thread` | threads et canaux (`std::thread`, `std::sync`, [`stdlib.md`](stdlib.md) §18) | oui | oui |
 | `unsafe` | code non vérifié (bloc `unsafe`) | **oui** (bloc `unsafe`) | oui |
 | `ffi` | frontière étrangère (appel `extern`) | **oui** (appel `extern`) | oui |
-| `async` | exécution asynchrone | **non implémenté** | refusé : `E-UNSUPPORTED-EFFECT` |
+| `async` | exécution asynchrone (`async fn`, `std::task`) | implémenté (D-19-9) | produit par toute `async fn` et `task::*` ([`concurrency.md`](concurrency.md) §6) |
 
 > `unsafe` et `ffi` sont désormais **inférés** : un bloc `unsafe { ... }` ajoute
 > `unsafe`, un appel de fonction `extern` ajoute `unsafe` + `ffi`. Ils restent
@@ -52,7 +52,7 @@ fn reservé() effects(fs, rt) { }          // `rt` déclarable, jamais inféré
 // NÉGATIF — E-EFF-UNKNOWN
 fn f() effects(network) { }
 // NÉGATIF — E-UNSUPPORTED-EFFECT (groupe non implémenté)
-fn j() effects(async) { }
+fn j() effects(async) { drop(task::yield_now()); }   // accepté depuis D-19-9
 ```
 
 ```rv
@@ -142,7 +142,7 @@ Un profil est un **mode de vérification** choisi par `--profile` (`check`, `bui
 | EFF-4.4 | `pure` interdit `alloc` : un programme `pure` ne peut donc utiliser ni `String`, ni `Vec`, ni aucune conversion texte, ni `println`. Il est limité aux scalaires, tuples, tableaux, structs/enums `Copy` et mathématiques `f64`. | MUST |
 | EFF-4.5 | `pure` n'implique **pas** l'absence de panic runtime : le débordement, la division par zéro et l'index hors bornes peuvent toujours survenir (les traps arithmétiques ne sont pas des effets). Un programme `pure` peut terminer par un panic (voir Q-EFF-2). | MUST |
 | EFF-4.6 | `rt` est **expérimental** : il est vérifié, mais aucun résultat ne peut être présenté comme certification temps réel, WCET, ni hard-RT (design §3.6 ; `docs/specs/04-temps-reel.md`). Le libellé d'un rapport doit contenir `PARTIAL`/`EXPERIMENTAL`, jamais `RT-CERTIFIED`. | MUST |
-| EFF-4.7 | `rt` interdit `io fs net thread alloc panic unsafe ffi async rt`. Comme `async` est inacceptable à la déclaration, les interdits effectifs sont `io fs net thread alloc panic unsafe ffi` (+ `rt` si déclaré). | MUST |
+| EFF-4.7 | `rt` interdit `io fs net thread alloc panic unsafe ffi async rt`. Les interdits effectifs comprennent `async` depuis qu'il est produit (D-19-9) (+ `rt` si déclaré). | MUST |
 | EFF-4.8 | Aucun profil n'est une **garantie de sécurité d'exécution** : voir §6. | MUST |
 | EFF-4.9 | Le profil ne change **jamais** la sémantique du programme accepté : il ne fait qu'ajouter des refus. Deux programmes identiques acceptés sous `core` et `pure` ont le même comportement. | MUST |
 | EFF-4.10 | Un profil inconnu (`--profile hard_rt`) est un usage invalide : code de sortie `2` (et non `1`). | MUST |

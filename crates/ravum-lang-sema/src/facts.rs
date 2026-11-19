@@ -61,9 +61,10 @@ impl Effect {
         })
     }
 
-    /// Effects that are declared but cannot be produced in Core 1.0.
+    /// Effects that are declared but cannot be produced in Core 1.0. Empty
+    /// since `async` became producible (RFC-E11-CONCURRENCY phase 2, D-19-9).
     pub fn is_unsupported(&self) -> bool {
-        matches!(self, Effect::Async)
+        false
     }
 }
 
@@ -452,6 +453,9 @@ pub struct Facts {
     /// `thread::spawn(f, arg)` call node -> the free function `f` it runs
     /// (RFC-E11-CONCURRENCY CONC-3.1). Its effects flow to the caller.
     pub spawn_targets: BTreeMap<NodeId, NodeId>,
+    /// `async fn` items (RFC-E11-CONCURRENCY phase 2). Their `FnSig::ret` is
+    /// `Future<T>`; the body is checked against `T`.
+    pub async_fns: BTreeSet<NodeId>,
     /// Test functions in declaration order.
     pub test_fns: Vec<NodeId>,
     pub main_fn: Option<NodeId>,
@@ -581,14 +585,12 @@ mod tests {
         }
     }
 
-    /// EFF-6.x: `async` is declared but cannot be produced yet; `net` is
-    /// producible since RFC-E11-NET-HTTP (D-18-2). The split is what
-    /// `E-UNSUPPORTED-*` classification keys on.
+    /// Every effect is producible: `net` since RFC-E11-NET-HTTP (D-18-2),
+    /// `async` since RFC-E11-CONCURRENCY phase 2 (D-19-9).
     #[test]
-    fn only_async_is_unsupported() {
+    fn no_effect_is_unsupported() {
         for effect in ALL_EFFECTS {
-            let expected = matches!(effect, Effect::Async);
-            assert_eq!(effect.is_unsupported(), expected, "{effect:?}");
+            assert!(!effect.is_unsupported(), "{effect:?}");
         }
     }
 

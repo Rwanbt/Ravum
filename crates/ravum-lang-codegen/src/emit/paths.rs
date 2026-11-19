@@ -352,7 +352,7 @@ pub(super) fn collect_expr<'a>(
                 collect_expr(bound, out, receivers);
             }
         }
-        ExprKind::Try(inner) => collect_expr(inner, out, receivers),
+        ExprKind::Try(inner) | ExprKind::Await(inner) => collect_expr(inner, out, receivers),
         ExprKind::Return(Some(value)) => collect_expr(value, out, receivers),
         _ => {}
     }
@@ -606,7 +606,7 @@ impl<'e, 'a> PathPlanner<'e, 'a> {
             ExprKind::Unary { op, expr: inner } => {
                 self.walk_expr(inner, matches!(op, UnOp::RefMut));
             }
-            ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) => {
+            ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) | ExprKind::Await(inner) => {
                 self.walk_expr(inner, false);
             }
             ExprKind::Binary { lhs, rhs, .. } => {
