@@ -114,7 +114,7 @@ fn f(v: Vec<i32>) {
 
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
-| Effet `net` | `effects(net)`, toute API réseau | `E-UNSUPPORTED-EFFECT` | effects | aucune |
+| Réseau hors TCP texte | UDP, TLS, octets bruts, timeouts | `E-RES-UNKNOWN` | resolve | `std::net` TCP texte bloquant ([`stdlib.md`](stdlib.md) §17) |
 | Effet `async` | `effects(async)`, `async fn` | `E-UNSUPPORTED-EFFECT` / `E-UNSUPPORTED-ASYNC` | effects/parse | aucune |
 | Threads | `thread::spawn`, `JoinHandle` | `E-RES-UNKNOWN` | resolve | mono-thread |
 | Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | aucune |

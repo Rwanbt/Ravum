@@ -14,6 +14,9 @@ pub(super) enum FreeBuiltin {
     FsReadToString,
     FsWriteString,
     FsExists,
+    /// `std::net::<name>`, emitted as `crate::rv_net_<name>(args)`
+    /// (RFC-E11-NET-HTTP §3).
+    Net(&'static str),
     Exit,
     Panic,
     Assert,
@@ -45,6 +48,13 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "fs::read_to_string" | "read_to_string" => FreeBuiltin::FsReadToString,
         "fs::write_string" | "write_string" => FreeBuiltin::FsWriteString,
         "fs::exists" | "exists" => FreeBuiltin::FsExists,
+        "net::listen" => FreeBuiltin::Net("listen"),
+        "net::local_port" => FreeBuiltin::Net("local_port"),
+        "net::accept" => FreeBuiltin::Net("accept"),
+        "net::connect" => FreeBuiltin::Net("connect"),
+        "net::read_line" => FreeBuiltin::Net("read_line"),
+        "net::read_exact" => FreeBuiltin::Net("read_exact"),
+        "net::write_str" => FreeBuiltin::Net("write_str"),
         "process::exit" | "exit" => FreeBuiltin::Exit,
         "panic::panic" | "panic" => FreeBuiltin::Panic,
         "panic::assert" | "assert" => FreeBuiltin::Assert,

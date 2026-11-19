@@ -8,6 +8,10 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `std::net`: blocking text TCP (`listen`, `local_port`, `accept`, `connect`,
+  `read_line`, `read_exact`, `write_str`), opaque prelude types `TcpListener`
+  and `TcpStream`; the `net` effect is now producible and is refused under the
+  `pure` and `rt` profiles (RFC-E11-NET-HTTP, F-STD-036). `async` stays refused.
 - Five `PROPOSED` RFCs for the widened 1.0 scope (D-18-2, step E11):
   concurrency, TCP/HTTP, SQLite, hot reload with state preservation, DSP
   block (`docs/rfc/RFC-E11-*.md`). Nothing is implemented yet.

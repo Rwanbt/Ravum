@@ -30,25 +30,30 @@ d'effet (BL-2 : coût 0).
 | ID | Règle proposée | Niveau |
 |---|---|---|
 | NET-1.1 | Toute fonction de `std::net` et `std::http` porte l'effet `net`. | MUST |
-| NET-1.2 | `net` est refusé sous les profils `core` et `rt` (`E-EFF-PROFILE`). | MUST |
+| NET-1.2 | `net` est refusé au point d'entrée des profils `pure` et `rt` (`E-EFF-PROFILE`) ; le profil `core` n'interdit aucun effet. | MUST |
 
 ## 3. `std::net` (TCP bloquant)
 
+> **Implémenté** (phase réseau d'E11) : `spec/language/stdlib.md` §17,
+> FeatureId F-STD-036, cas `run/net-loopback-echo`,
+> `run/net-connect-refused-is-err`, `effects/net-refused-under-pure`.
+> HTTP (§4) n'est pas encore implémenté.
+
 ```rust
-fn listen(addr: &str) -> Result<Listener, NetError> effects(net)
-fn accept(l: &Listener) -> Result<Stream, NetError> effects(net)
-fn connect(addr: &str) -> Result<Stream, NetError> effects(net)
-fn read_line(s: &mut Stream) -> Result<Option<String>, NetError> effects(net)
-fn read_exact(s: &mut Stream, n: usize) -> Result<String, NetError> effects(net)
-fn write_str(s: &mut Stream, text: &str) -> Result<(), NetError> effects(net)
-fn local_port(l: &Listener) -> u16 effects(net)
+fn listen(addr: &str) -> Result<TcpListener, Error> effects(net, alloc)
+fn accept(l: &TcpListener) -> Result<TcpStream, Error> effects(net, alloc)
+fn connect(addr: &str) -> Result<TcpStream, Error> effects(net, alloc)
+fn read_line(s: &mut TcpStream) -> Result<Option<String>, Error> effects(net, alloc)
+fn read_exact(s: &mut TcpStream, n: usize) -> Result<String, Error> effects(net, alloc)
+fn write_str(s: &mut TcpStream, text: &str) -> Result<(), Error> effects(net, alloc)
+fn local_port(l: &TcpListener) -> u16 effects(net)
 ```
 
 | ID | Règle proposée | Niveau |
 |---|---|---|
-| NET-2.1 | Les données lues sont du **texte UTF-8** ; un octet invalide rend `Err(NetError::InvalidUtf8)`, jamais une substitution. | MUST |
+| NET-2.1 | Les données lues sont du **texte UTF-8** ; un octet invalide rend `Err`, jamais une substitution. | MUST |
 | NET-2.2 | `listen("127.0.0.1:0")` choisit un port éphémère, lisible par `local_port` (tests hermétiques, BL-11). | MUST |
-| NET-2.3 | Une erreur système devient `Err`, jamais une panique. `NetError` est un enum fermé : `AddrInUse`, `ConnectionRefused`, `ConnectionReset`, `InvalidAddress`, `InvalidUtf8`, `Other(String)`. | MUST |
+| NET-2.3 | Une erreur système devient `Err(Error)`, jamais une panique. Comme pour `std::fs`, l'erreur est le type prélude `Error` : son message est illustratif et non stable (STD-1.7). Un enum d'erreurs fermé reste possible plus tard sans casser le code qui ne fait que propager. | MUST |
 | NET-2.4 | `Listener` et `Stream` sont transférables (RFC-E11-CONCURRENCY CONC-2.1) : un thread par connexion est écrivable. | MUST |
 | NET-2.5 | Pas de timeout en 1.0 tant qu'aucune horloge n'existe (BL-4) ; à écrire dans `unsupported.md`. | MUST |
 
