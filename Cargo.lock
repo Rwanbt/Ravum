@@ -306,6 +306,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-lang-ir"
+version = "0.1.0"
+dependencies = [
+ "ravum-core-machine",
+ "ravum-lang-sema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ravum-lang-lsp"
 version = "0.1.0"
 dependencies = [

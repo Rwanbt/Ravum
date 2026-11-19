@@ -1,0 +1,306 @@
+//! IR v1 data model: a control-flow graph of basic blocks over typed,
+//! mutable local slots. Every operation that can trap says so in its
+//! semantics; backends must implement the exact trap conditions and messages.
+
+use serde::{Deserialize, Serialize};
+
+/// Version of the IR contract. Any change to the data model or to the
+/// semantics of an operation bumps it; a consumer refuses an unknown version.
+pub const IR_VERSION: &str = "ravum-ir-1";
+
+/// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
+/// targets are 64-bit).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Ty {
+    I8,
+    I16,
+    I32,
+    I64,
+    Isize,
+    U8,
+    U16,
+    U32,
+    U64,
+    Usize,
+    F32,
+    F64,
+    Bool,
+    Unit,
+}
+
+impl Ty {
+    pub fn is_int(self) -> bool {
+        self.int_bits().is_some()
+    }
+    pub fn is_float(self) -> bool {
+        matches!(self, Ty::F32 | Ty::F64)
+    }
+    pub fn is_signed(self) -> bool {
+        matches!(self, Ty::I8 | Ty::I16 | Ty::I32 | Ty::I64 | Ty::Isize)
+    }
+    pub fn int_bits(self) -> Option<u32> {
+        Some(match self {
+            Ty::I8 | Ty::U8 => 8,
+            Ty::I16 | Ty::U16 => 16,
+            Ty::I32 | Ty::U32 => 32,
+            Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize => 64,
+            _ => return None,
+        })
+    }
+    /// Source-level name, as `Outcome` renders it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Ty::I8 => "i8",
+            Ty::I16 => "i16",
+            Ty::I32 => "i32",
+            Ty::I64 => "i64",
+            Ty::Isize => "isize",
+            Ty::U8 => "u8",
+            Ty::U16 => "u16",
+            Ty::U32 => "u32",
+            Ty::U64 => "u64",
+            Ty::Usize => "usize",
+            Ty::F32 => "f32",
+            Ty::F64 => "f64",
+            Ty::Bool => "bool",
+            Ty::Unit => "()",
+        }
+    }
+}
+
+/// Index of a local slot in its function. Parameters are slots `0..params`.
+pub type Local = u32;
+/// Index of a basic block in its function. Block 0 is the entry.
+pub type BlockId = u32;
+/// Index of a function in the module.
+pub type FuncId = u32;
+
+/// A constant. Integers are stored as the two's-complement bit pattern of
+/// their type (sign-extended into `i128` for signed types); floats as bits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Const {
+    Int { ty: Ty, value: i128 },
+    F32Bits(u32),
+    F64Bits(u64),
+    Bool(bool),
+    Unit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BinOp {
+    /// Checked: traps `attempt to add with overflow`.
+    Add,
+    /// Checked: traps `attempt to subtract with overflow`.
+    Sub,
+    /// Checked: traps `attempt to multiply with overflow`.
+    Mul,
+    /// Ints: traps `division by zero` (EXPR-3.2) / `attempt to divide with
+    /// overflow` (MIN / -1, EXPR-3.1); truncates toward zero. Floats: IEEE.
+    Div,
+    /// Ints: traps `remainder by zero` (EXPR-3.2) / `attempt to calculate
+    /// the remainder with overflow` (MIN % -1, D-19-2); sign of the dividend.
+    /// Floats: IEEE `fmod`.
+    Rem,
+    BitAnd,
+    BitOr,
+    BitXor,
+    /// Traps `shift out of range` when the amount is >= bits (EXPR-3.3).
+    /// The amount operand is always a `U64` slot.
+    Shl,
+    /// Traps `shift out of range` when the amount is >= bits (EXPR-3.3).
+    /// Arithmetic for signed types, logical for unsigned.
+    Shr,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UnOp {
+    /// Ints: checked, traps `attempt to negate with overflow`. Floats: sign flip.
+    Neg,
+    /// Bool: logical not. Ints: bitwise not.
+    Not,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Inst {
+    Const {
+        dst: Local,
+        value: Const,
+    },
+    Copy {
+        dst: Local,
+        src: Local,
+    },
+    /// `ty` is the operand type; comparisons produce `Bool`.
+    Bin {
+        dst: Local,
+        op: BinOp,
+        ty: Ty,
+        lhs: Local,
+        rhs: Local,
+    },
+    Un {
+        dst: Local,
+        op: UnOp,
+        ty: Ty,
+        src: Local,
+    },
+    /// `as` cast with Rust semantics: int↔int wraps/extends, float→int
+    /// saturates (NaN → 0), int→float rounds to nearest, bool→int is 0/1.
+    Cast {
+        dst: Local,
+        from: Ty,
+        to: Ty,
+        src: Local,
+    },
+    /// Call; a trap inside the callee propagates.
+    Call {
+        dst: Option<Local>,
+        func: FuncId,
+        args: Vec<Local>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Term {
+    Jump(BlockId),
+    Branch {
+        cond: Local,
+        then_to: BlockId,
+        else_to: BlockId,
+    },
+    Return(Option<Local>),
+    /// Controlled stop with a message (`panic` or a language trap).
+    Trap(String),
+    /// Never reached when the program was accepted by the checker.
+    Unreachable,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Block {
+    pub insts: Vec<Inst>,
+    pub term: Term,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Function {
+    pub name: String,
+    pub params: u32,
+    pub ret: Ty,
+    pub locals: Vec<Ty>,
+    pub blocks: Vec<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Module {
+    pub version: String,
+    pub functions: Vec<Function>,
+}
+
+impl Module {
+    pub fn func_id(&self, name: &str) -> Option<FuncId> {
+        self.functions
+            .iter()
+            .position(|f| f.name == name)
+            .map(|i| i as FuncId)
+    }
+
+    /// Serialize to the canonical JSON form.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("IR serialization cannot fail")
+    }
+
+    /// Parse JSON, refusing an unknown version (fail-closed).
+    pub fn from_json(text: &str) -> Result<Module, String> {
+        let m: Module = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        if m.version != IR_VERSION {
+            return Err(format!(
+                "unsupported IR version `{}` (expected `{IR_VERSION}`)",
+                m.version
+            ));
+        }
+        m.validate()?;
+        Ok(m)
+    }
+
+    /// Structural validation: every index in range, every block terminated.
+    pub fn validate(&self) -> Result<(), String> {
+        for f in &self.functions {
+            let nl = f.locals.len() as u32;
+            let nb = f.blocks.len() as u32;
+            if f.params > nl || nb == 0 {
+                return Err(format!("{}: bad params or no block", f.name));
+            }
+            let l = |x: Local| {
+                if x < nl {
+                    Ok(())
+                } else {
+                    Err(format!("{}: local {x} out of range", f.name))
+                }
+            };
+            let b = |x: BlockId| {
+                if x < nb {
+                    Ok(())
+                } else {
+                    Err(format!("{}: block {x} out of range", f.name))
+                }
+            };
+            for blk in &f.blocks {
+                for i in &blk.insts {
+                    match i {
+                        Inst::Const { dst, .. } => l(*dst)?,
+                        Inst::Copy { dst, src }
+                        | Inst::Un { dst, src, .. }
+                        | Inst::Cast { dst, src, .. } => {
+                            l(*dst)?;
+                            l(*src)?
+                        }
+                        Inst::Bin { dst, lhs, rhs, .. } => {
+                            l(*dst)?;
+                            l(*lhs)?;
+                            l(*rhs)?
+                        }
+                        Inst::Call { dst, func, args } => {
+                            if let Some(d) = dst {
+                                l(*d)?
+                            }
+                            for a in args {
+                                l(*a)?
+                            }
+                            let callee = self
+                                .functions
+                                .get(*func as usize)
+                                .ok_or_else(|| format!("{}: func {func} out of range", f.name))?;
+                            if callee.params as usize != args.len() {
+                                return Err(format!(
+                                    "{}: arity mismatch calling {}",
+                                    f.name, callee.name
+                                ));
+                            }
+                        }
+                    }
+                }
+                match &blk.term {
+                    Term::Jump(t) => b(*t)?,
+                    Term::Branch {
+                        cond,
+                        then_to,
+                        else_to,
+                    } => {
+                        l(*cond)?;
+                        b(*then_to)?;
+                        b(*else_to)?
+                    }
+                    Term::Return(Some(x)) => l(*x)?,
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+}
