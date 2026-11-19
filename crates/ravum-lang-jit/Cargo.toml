@@ -1,0 +1,19 @@
+[package]
+name = "ravum-lang-jit"
+description = "Ravum language: native development backend (gate T15) compiling IR v1 to machine code with Cranelift, in process"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ravum-lang-ir = { path = "../ravum-lang-ir" }
+cranelift-codegen = "0.116"
+cranelift-frontend = "0.116"
+cranelift-jit = "0.116"
+cranelift-module = "0.116"
+cranelift-native = "0.116"
+
+[dev-dependencies]
+ravum-core-machine = { path = "../ravum-core-machine" }

@@ -1,0 +1,102 @@
+# T14 et T15 — IR v1 et backend natif Cranelift (2026-11-19)
+
+> Gates **T14** (ADR-010) et **T15** (ADR-018), V1
+> ([DECISIONS-2026-11-19-V1](../decision/DECISIONS-2026-11-19-V1.md)).
+> Les deux passent `FAIL`/`NOT_STARTED` → **`PARTIAL`**. Aucun `PROVED`.
+
+## Objectif
+
+Sortir `rustc` de la boucle de développement : une IR propre au langage,
+consommée par un interpréteur de référence et par un backend natif en
+processus, avec une sémantique **identique** vérifiée par oracle.
+
+## Modification (nouveaux crates, aucun crate existant modifié)
+
+| Crate | Rôle | `unsafe` |
+|---|---|---|
+| `crates/ravum-lang-ir` | IR v1 (`ravum-ir-1`) : CFG de blocs sur des slots typés ; JSON versionné ; `validate()` fail-closed ; abaissement depuis `CheckedProgram` (types pris dans les faits du checker, jamais réinférés) ; interpréteur de référence | `forbid` |
+| `crates/ravum-lang-jit` | Cranelift 0.116 → code machine en mémoire. Overflows vérifiés explicitement ; traps sans déroulement (code stocké dans un `Ctx`, propagé à chaque appel) ; compteur de profondeur (512) et carburant de boucles → `fault`/`diverge` au lieu d'un crash ou d'un blocage | `deny` + 1 site audité (#7 de `UNSAFE-INVENTORY.md`) |
+
+Sous-ensemble IR v1 : entiers ≤ 64 bits, `f32`/`f64`, `bool`, `()`,
+fonctions du module racine, `let`, affectations, `if`, `while`, `loop`,
+`for i in a..b`, `break`/`continue`/`return`, arithmétique vérifiée, `as`,
+`panic("littéral")`. Tout le reste → `Unsupported` explicite.
+
+**Messages de trap** : alignés sur la **spec** (EXPR-3.2/3.3,
+`core-machine.md` §5 : `division by zero`, `remainder by zero`,
+`shift out of range`). Constat : le backend `rustc` actuel émet les messages de
+Rust (`attempt to divide by zero`…) ; la conformité de ce backend à EXPR-3.2
+n'est pas examinée ici (`NOT_REVIEWED`).
+
+## Tests
+
+| Test | Résultat |
+|---|---|
+| `ravum-lang-ir` `oracle::ir_interpreter_agrees_with_the_reference_machine` — 59 programmes de `ravum-core-machine` (oracle **indépendant** du compilateur) | **41 identiques, 0 divergence**, 14 `Unsupported` (méthodes, `math::*`, tableaux, `u128`, enum/match, struct, motif de `for`), 3 refusés par le checker (attendu) |
+| `oracle::json_round_trip_is_lossless_and_versioned` | aller-retour JSON identique ; **négatifs** : version inconnue refusée, slot hors bornes refusé |
+| `oracle::unsupported_constructs_are_refused_not_approximated` | **négatif** : struct, méthode, tuple → `Unsupported` |
+| `ravum-lang-jit` `differential::native_code_agrees_with_interpreter_and_reference_machine` | 42 programmes : natif = interpréteur = machine, **0 divergence** |
+| `differential::native_code_agrees_with_interpreter_on_generated_programs` — générateur déterministe (10 types entiers × 10 opérateurs × valeurs limites, casts vers 12 types, flottants saturants) | **1 805 programmes, 131 traps, 0 divergence** ; test de puissance : ≥ 500 programmes et ≥ 50 traps exigés |
+| `differential::deep_recursion_and_endless_loops_are_reported_not_crashes` | **négatif** : récursion infinie → `fault: call depth limit` ; boucle infinie → `diverge` |
+
+Tests exécutés en debug (vérificateur Cranelift **actif**) et en release.
+
+## Mesure de build (même source, même machine)
+
+`cargo test -p ravum-lang-jit --release --test differential jit_build_time -- --ignored --nocapture`
+pour le JIT ; `ravum-lang build` (release du CLI, `.ravum`/`target` effacés, 5
+exécutions) pour la voie `rustc`. Programme synthétique `synthetic(n)` du test.
+
+| Fonctions (lignes) | voie `rustc` (`build` complet) | JIT : front (parse+check+lower) + Cranelift | Gain |
+|---|---|---|---|
+| 100 (1 207) | 370–394 ms | 5,7 + 11,6 ≈ **17 ms** | ≈ ×21 |
+| 800 (9 607) | 725–796 ms | 66,7 + 83,9 ≈ **150 ms** | ≈ ×4,8 |
+
+Corrections de performance trouvées en mesurant : import des seules fonctions
+appelées (l'import de toutes était quadratique), bloc de sortie unique par
+fonction, `opt_level=none`, allocateur `single_pass`, vérificateur désactivé
+en release seulement. Limites : une seule machine, conteneur partagé 4 cœurs ;
+la voie `rustc` inclut l'édition de liens et l'écriture du binaire, le JIT
+non ; à 800 fonctions le front (66 ms) devient la moitié du coût — c'est là que
+T13 étape 2 (vérification par item) prend son sens.
+
+## Bloquant : politique `cargo-deny` — **décision du responsable**
+
+Sur `dev` sans ces changements, `cargo deny check` est vert. Avec le JIT :
+
+- **15 refus de licence** : les crates Cranelift sont sous
+  `Apache-2.0 WITH LLVM-exception`, absente de `deny.toml` `[licenses].allow`
+  (l'exception LLVM ne fait qu'**élargir** les droits d'Apache-2.0) ;
+- **3 doublons** (`multiple-versions = "deny"`) : `hashbrown` (3 versions),
+  `bitflags`, `windows-sys`, tirés par Cranelift.
+
+Je n'ai **pas** modifié `deny.toml` (ne jamais affaiblir une validation pour
+obtenir du vert). Les versions récentes de Cranelift (0.137) exigent
+`rustc 1.97` (le dépôt épingle 1.95) et gardent les doublons. La CI `mvp`
+(qui lance `cargo-deny`) ne tourne pas sur cette branche ; **une PR vers `dev`
+serait rouge** tant que ce point n'est pas tranché.
+
+## Commandes
+
+```
+cargo test -p ravum-lang-ir -- --nocapture
+cargo test -p ravum-lang-jit -- --nocapture
+cargo test -p ravum-lang-jit --release -- --nocapture
+cargo clippy -p ravum-lang-ir -p ravum-lang-jit --all-targets -- -D warnings
+cargo fmt --all -- --check
+cargo deny check
+```
+
+## Contexte
+
+Linux x86_64 (conteneur cloud, 4 cœurs), `rustc 1.95.0 (59807616e 2026-04-14)`,
+Cranelift 0.116.1, branche `claude/trusting-cerf-4hhv5a` fusionnée avec
+`origin/dev` `bb8d5a2`. État : `TESTED`.
+
+## Suite proposée
+
+1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires
+   (`abs`, `checked_*`, `saturating_*`, `wrapping_*`), `math::*`, `i128`.
+2. `ravum-lang run --backend jit` dans le CLI (touche un crate partagé).
+3. T16 : le JIT rend le hot swap naturel (table d'indirection par fonction) ;
+   à articuler avec `RFC-E11-HOT-RELOAD` déjà présent côté `rustc` sur `dev`.
