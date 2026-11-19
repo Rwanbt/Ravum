@@ -165,6 +165,13 @@ Exemple réel (sortie du CLI) :
 | **négatif** : signature de l'entrée changée | `refused: entry \`check\` changed signature` |
 | analyse des options | `--backend jit` exclut `--run`/`--reload`/`--release` ; backend inconnu refusé ; `--entry` seul refusé ; défaut = `rustc` |
 
+Non-régression (même branche, après l'ajout) : `cargo test -p ravum-lang-cli
+--no-fail-fast` → **21 groupes, 167 passés / 0 échec / 3 ignorés** (dont les
+tests `watch`, `hot_reload` et `dsp_block` de la voie `rustc`) ;
+`cargo run -p ravum-conformance -- run` → **727 cas : 725 PASS / 0 FAIL /
+2 SKIP** (sans `--verify-build` : `build_verified: false`, ce n'est pas une
+preuve de build).
+
 Limites : un seul fichier (pas de `mod x;`) ; pas de sortie d'E/S (`io::println`
 n'est pas dans l'IR) : l'entrée rend une valeur ; pas de vrai périphérique
 audio ; fin par Ctrl+C (aucun processus enfant à arrêter).
