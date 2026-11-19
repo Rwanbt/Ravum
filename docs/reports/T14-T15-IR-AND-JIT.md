@@ -93,6 +93,28 @@ Linux x86_64 (conteneur cloud, 4 cœurs), `rustc 1.95.0 (59807616e 2026-04-14)`,
 Cranelift 0.116.1, branche `claude/trusting-cerf-4hhv5a` fusionnée avec
 `origin/dev` `bb8d5a2`. État : `TESTED`.
 
+## IR v1.1 (ajout du 2026-11-19)
+
+Mémoire explicite : type `Ptr`, emplacements de pile par fonction,
+`Load`/`Store` à décalage fixe, `PtrAdd` (index déjà vérifié). Les agrégats
+`Copy` (structs, tuples, tableaux de taille fixe) vivent en mémoire et sont
+**copiés** à chaque liaison, affectation, argument par valeur et retour (par
+adresse de résultat) : deux variables ne partagent jamais leur stockage.
+`&`/`&mut` désignent un lieu en mémoire ; une référence vers un scalaire local
+est refusée. Tout index est comparé à la longueur avant que l'adresse existe.
+L'interpréteur a une mémoire d'octets dont chaque accès est vérifié (un accès
+hors zone est une faute, jamais une valeur).
+
+| Oracle | Résultat |
+|---|---|
+| corpus `ravum-core-machine` | **44/59 identiques** (41 en v1), 0 divergence ; `struct-and-tuple`, `o3-index-out-of-bounds`, `o8-for-bounds-once` passent |
+| 600 programmes agrégats générés (structs imbriquées, tableaux de structs, passage par valeur, retours d'agrégats, `&mut`, traps de bornes et de dépassement) | natif = interpréteur, **0 divergence**, 340 traps |
+| dont 300 sans `&mut` comparés à la **machine indépendante** | **300/300 identiques** |
+| tous les tests v1 (1 805 générés, corpus, hot swap) | inchangés |
+
+Écart de spec relevé : EXPR-7.6 demande `index out of bounds: the len is N but
+the index is i` ; la machine de référence et l'IR donnent la forme courte.
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

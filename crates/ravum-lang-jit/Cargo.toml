@@ -16,4 +16,5 @@ cranelift-module = "0.116"
 cranelift-native = "0.116"
 
 [dev-dependencies]
+ravum-lang-sema = { workspace = true }
 ravum-core-machine = { path = "../ravum-core-machine" }

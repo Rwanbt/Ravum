@@ -823,6 +823,16 @@ pub(crate) mod exec {
         let f: extern "C" fn(A, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
         f(a, ctx as *mut Ctx)
     }
+
+    /// Same argument, for the DSP entry `(state: usize, x: B, *mut Ctx) -> R`:
+    /// `state` is the address of a live, exclusively borrowed, 8-byte aligned
+    /// buffer at least as large as `State` (`StateInfo::size`); compiled code
+    /// only accesses it at offsets inside that layout (bounds-checked
+    /// indexing, fixed field offsets).
+    pub fn call2<A, B, R>(code: *const u8, a: A, b: B, ctx: &mut Ctx) -> R {
+        let f: extern "C" fn(A, B, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
+        f(a, b, ctx as *mut Ctx)
+    }
 }
 
 impl Compiled {

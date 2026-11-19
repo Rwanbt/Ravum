@@ -42,6 +42,9 @@ use crate::{compile_funcs, exec, new_jit_module, Ctx, JitError, CODE_TRAP0, DEFA
 pub enum EntryKind {
     F32ToF32,
     F64ToF64,
+    /// `fn process_sample(state: &mut State, input: f32) -> f32` with a
+    /// host-owned `struct State` (RFC-E11-DSP-BLOCK surface).
+    DspF32,
 }
 
 impl EntryKind {
@@ -49,6 +52,9 @@ impl EntryKind {
         match (f.params, f.locals.first(), f.ret) {
             (1, Some(Ty::F32), Ty::F32) => Some(EntryKind::F32ToF32),
             (1, Some(Ty::F64), Ty::F64) => Some(EntryKind::F64ToF64),
+            (2, Some(Ty::Ptr), Ty::F32) if f.locals.get(1) == Some(&Ty::F32) => {
+                Some(EntryKind::DspF32)
+            }
             _ => None,
         }
     }
@@ -62,6 +68,12 @@ pub enum Refusal {
     EntrySignature(String),
     Invalid(String),
     Codegen(String),
+    /// The schema of `struct State` changed (HR-1.3): the running version and
+    /// its state continue. `migrate` (HR-1.7) is not supported on this path.
+    StateSchemaChanged {
+        old: String,
+        new: String,
+    },
 }
 
 impl std::fmt::Display for Refusal {
@@ -71,6 +83,9 @@ impl std::fmt::Display for Refusal {
             Refusal::EntrySignature(e) => write!(f, "entry `{e}` changed signature"),
             Refusal::Invalid(e) => write!(f, "invalid IR: {e}"),
             Refusal::Codegen(e) => write!(f, "code generation failed: {e}"),
+            Refusal::StateSchemaChanged { old, new } => {
+                write!(f, "state schema changed ({old} -> {new})")
+            }
         }
     }
 }
@@ -140,6 +155,8 @@ pub struct HotEngine {
     mailbox: Arc<Mailbox>,
     entry: String,
     kind: EntryKind,
+    /// HR-1.1 digest of `struct State` (DSP entry only).
+    state_digest: Option<String>,
 }
 
 /// Real-time side: calls the entry and switches versions at safepoints.
@@ -150,6 +167,10 @@ pub struct RtRunner {
     ctx: Ctx,
     kind: EntryKind,
     fuel: u64,
+    /// Host-owned state (DSP entry), 8-byte aligned, and the copy taken
+    /// before each call so a trapping version cannot leave it half-written.
+    state: Box<[u64]>,
+    backup: Box<[u64]>,
 }
 
 fn signature(f: &Function) -> (Vec<Ty>, Ty) {
@@ -181,8 +202,24 @@ impl HotEngine {
             mailbox: Arc::new(Mailbox::default()),
             entry: entry.to_string(),
             kind,
+            state_digest: None,
+        };
+        let words = if kind == EntryKind::DspF32 {
+            let st = ir.state.as_ref().ok_or_else(|| {
+                Refusal::EntrySignature(format!("{entry}: a DSP block declares `struct State`"))
+            })?;
+            engine.state_digest = Some(st.digest.clone());
+            (st.size as usize).div_ceil(8).max(1)
+        } else {
+            1
         };
         let version = engine.build(ir)?.0;
+        // Allocated here, on the editor side, never on the real-time thread.
+        let mut state = vec![0u64; words].into_boxed_slice();
+        let backup = vec![0u64; words].into_boxed_slice();
+        if kind == EntryKind::DspF32 {
+            engine.run_init(ir, &version, &mut state)?;
+        }
         engine
             .mailbox
             .active_generation
@@ -199,8 +236,44 @@ impl HotEngine {
             },
             kind,
             fuel: DEFAULT_FUEL,
+            state,
+            backup,
         };
         Ok((engine, runner))
+    }
+
+    /// Run `fn init() -> State` (lowered with its result address) once into
+    /// the state buffer, on the editor side. Without `init`, the state is
+    /// zero.
+    fn run_init(&self, ir: &Module, v: &Version, state: &mut [u64]) -> Result<(), Refusal> {
+        let Some(id) = ir.func_id("init") else {
+            return Ok(());
+        };
+        let f = &ir.functions[id as usize];
+        if f.params != 1 || f.locals[0] != Ty::Ptr || f.ret != Ty::Unit {
+            return Err(Refusal::EntrySignature(
+                "init: expected fn() -> State".into(),
+            ));
+        }
+        let slot = self.slots["init"] as usize;
+        let mut ctx = Ctx {
+            code: 0,
+            depth: 0,
+            fuel: DEFAULT_FUEL,
+            table: v.table.as_ptr() as usize,
+        };
+        exec::call1::<usize, u8>(
+            v.table[slot] as *const u8,
+            state.as_mut_ptr() as usize,
+            &mut ctx,
+        );
+        if ctx.code != 0 {
+            return Err(Refusal::Invalid(format!(
+                "init stopped with code {}",
+                ctx.code
+            )));
+        }
+        Ok(())
     }
 
     pub fn mailbox(&self) -> &Arc<Mailbox> {
@@ -226,6 +299,17 @@ impl HotEngine {
             .ok_or_else(|| Refusal::EntryMissing(self.entry.clone()))?;
         if EntryKind::of(&ir.functions[id as usize]) != Some(self.kind) {
             return Err(Refusal::EntrySignature(self.entry.clone()));
+        }
+        if self.kind == EntryKind::DspF32 {
+            let new = ir
+                .state
+                .as_ref()
+                .map(|s| s.digest.clone())
+                .unwrap_or_default();
+            let old = self.state_digest.clone().unwrap_or_default();
+            if new != old {
+                return Err(Refusal::StateSchemaChanged { old, new });
+            }
         }
         let (version, report) = self.build(ir)?;
         let fresh = Box::into_raw(version);
@@ -447,6 +531,32 @@ impl RtRunner {
         0.0
     }
 
+    /// Process one sample of a DSP block (`process_sample(&mut State, f32)`).
+    /// Same contract, plus HR-1.5: a trapping call's partial writes to the
+    /// state are undone before the previous version re-runs the sample.
+    pub fn process_sample(&mut self, x: f32) -> f32 {
+        assert_eq!(self.kind, EntryKind::DspF32);
+        self.backup.copy_from_slice(&self.state);
+        let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+        if code == 0 {
+            return y;
+        }
+        self.state.copy_from_slice(&self.backup);
+        if self.roll_back(code) {
+            let (y, code) = call_dsp(&mut self.ctx, self.fuel, &self.current, &mut self.state, x);
+            if code == 0 {
+                return y;
+            }
+            self.state.copy_from_slice(&self.backup);
+        }
+        0.0
+    }
+
+    /// Read-only view of the host-owned state (for tests and hosts).
+    pub fn state_words(&self) -> &[u64] {
+        &self.state
+    }
+
     /// Process one sample (entry `fn(f64) -> f64`). Same contract.
     pub fn process_f64(&mut self, x: f64) -> f64 {
         assert_eq!(self.kind, EntryKind::F64ToF64);
@@ -481,6 +591,16 @@ fn call_f64(ctx: &mut Ctx, fuel: u64, v: &Version, x: f64) -> (f64, u32) {
     ctx.table = v.table.as_ptr() as usize;
     let code = v.table[v.entry_slot as usize] as *const u8;
     let y = exec::call1::<f64, f64>(code, x, ctx);
+    (y, ctx.code)
+}
+
+fn call_dsp(ctx: &mut Ctx, fuel: u64, v: &Version, state: &mut [u64], x: f32) -> (f32, u32) {
+    ctx.code = 0;
+    ctx.depth = 0;
+    ctx.fuel = fuel;
+    ctx.table = v.table.as_ptr() as usize;
+    let code = v.table[v.entry_slot as usize] as *const u8;
+    let y = exec::call2::<usize, f32, f32>(code, state.as_mut_ptr() as usize, x, ctx);
     (y, ctx.code)
 }
 

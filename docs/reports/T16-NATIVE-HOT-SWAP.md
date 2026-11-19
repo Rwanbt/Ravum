@@ -98,10 +98,31 @@ cargo deny check licenses
 Linux x86_64 (conteneur cloud, 4 cœurs, partagé), `rustc 1.95.0`,
 Cranelift 0.116.1, branche `claude/trusting-cerf-4hhv5a`. État : `TESTED`.
 
+## 7. Ajout du 2026-11-19 — bloc DSP avec état (IR v1.1)
+
+Surface de RFC-E11-DSP-BLOCK : `struct State { z1: f32, z2: f32 }`,
+`fn init() -> State`, `fn process_sample(state: &mut State, input: f32) -> f32`.
+Le schéma est calculé par `ravum_lang_sema::reload::schema` : **même texte**
+que `DSP_STATE_SCHEMA_V1_TEXT` de la voie `rustc` (asserté par le test).
+
+- L'état est un tampon possédé par le `RtRunner` (alloué côté éditeur) ;
+  `init` y écrit une fois, côté éditeur.
+- `update` refuse un changement de digest d'état (`StateSchemaChanged`,
+  HR-1.3) ; `migrate` (HR-1.7) n'est **pas** supporté sur cette voie.
+- Avant chaque appel, l'état est copié dans un tampon de secours préalloué ;
+  sur trap, l'état est restauré avant le retour à la version précédente
+  (HR-1.5).
+
+| Test (`tests/dsp_hot.rs`) | Résultat |
+|---|---|
+| biquad, 10 000 échantillons | natif = interpréteur = Rust de référence, **bit à bit** |
+| remplacement de `b0` à l'échantillon 1 000 | 1 fonction recompilée ; sortie = référence qui change de coefficient au même échantillon, **état conservé** |
+| **négatif** : champ ajouté à `State` | `StateSchemaChanged`, rien de publié, sortie inchangée |
+| **négatif** : nouvelle version qui écrit `z1` puis divise par zéro | état restauré, retour arrière, sortie = ancien filtre, `division by zero` remonté |
+| thread temps réel, 20 éditions | **0 alloc / 0 libération**, édition→activation p50 ≈ 1,4 ms, p95 ≈ 1,4 ms (release), 3 modules vivants |
+
 ## Suite proposée
 
-1. IR v1.1 : structs/tableaux `Copy` et `&mut` vers un état possédé par l'hôte,
-   pour l'entrée `process_sample(&mut State, f32) -> f32` de RFC-E11-DSP-BLOCK,
-   avec le même digest de schéma (HR-1.1) et `migrate` (HR-1.7).
+1. ~~IR v1.1 et bloc DSP avec état~~ (fait, §7) ; reste `migrate` (HR-1.7).
 2. `ravum-lang watch --backend jit` (touche le CLI, crate partagé).
 3. Brancher le `RtRunner` sur l'hôte audio existant (`ravum-patch-host`).

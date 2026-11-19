@@ -61,6 +61,7 @@ Statut : `TESTED`, non audité (D4).
 | 7b | `crates/ravum-lang-jit/src/lib.rs`, `mod exec::call1` | `transmute::<*const u8, extern "C" fn(A, *mut Ctx) -> R>` | appeler l'entrée `fn(f32)->f32` / `fn(f64)->f64` | même argument que #7 ; `A`/`R` fixés par `EntryKind`, vérifié sur la signature IR avant toute publication |
 | 8 | `crates/ravum-lang-jit/src/hot.rs`, `mod raw::{take, reclaim}` | `Box::from_raw` | rendre une `Box<Version>` passée par la boîte aux lettres atomique | chaque pointeur non nul vient de `Box::into_raw` et sort de son emplacement par un `swap` atomique : un seul côté le reprend |
 | 9 | idem, `raw::free_module` | `JITModule::free_memory` | libérer le code machine d'anciennes versions | appelé seulement pour un module qu'aucune version vivante ne référence ; une version cesse d'être vivante quand le thread temps réel publie (`active_generation`/`previous_generation`) qu'il en tient de plus récentes ; il n'exécute du code que dans `process_*`, via la version qu'il tient |
+| 7c | `crates/ravum-lang-jit/src/lib.rs`, `mod exec::call2` (IR v1.1, DSP) | `transmute::<*const u8, extern "C" fn(A, B, *mut Ctx) -> R>` | appeler `process_sample(&mut State, f32)` | même argument que #7 ; l'état est un tampon `Box<[u64]>` possédé par le `RtRunner`, aligné sur 8, de taille ≥ `StateInfo::size`, emprunté exclusivement pendant l'appel ; le code n'y accède qu'à des décalages de champs fixes ou via un index vérifié |
 
 ## 3. Ce que l'inventaire ne couvre pas
 
