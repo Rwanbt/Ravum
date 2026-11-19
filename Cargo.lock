@@ -548,6 +548,9 @@ dependencies = [
  "ravum-core-machine",
  "ravum-lang-ir",
  "ravum-lang-sema",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

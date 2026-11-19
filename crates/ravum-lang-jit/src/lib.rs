@@ -21,6 +21,7 @@
 #![deny(unsafe_code)]
 
 pub mod hot;
+pub mod replay;
 
 use std::collections::BTreeMap;
 

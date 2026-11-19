@@ -14,6 +14,9 @@ cranelift-frontend = "0.116"
 cranelift-jit = "0.116"
 cranelift-module = "0.116"
 cranelift-native = "0.116"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 ravum-lang-sema = { workspace = true }
