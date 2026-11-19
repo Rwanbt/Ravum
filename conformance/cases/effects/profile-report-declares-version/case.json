@@ -1,0 +1,15 @@
+{
+  "id": "effects/profile-report-declares-version",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "--profile",
+    "pure",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "\"profile\":\"pure\"",
+  "expect_json_schema_version": 1,
+  "notes": "EFF-6.7: a profile report states the profile (and, as every report, `spec_version`); its result is success or failure, never a proof."
+}

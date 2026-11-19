@@ -1,0 +1,6 @@
+fn f() effects(io) {
+    let _a = env::args();
+}
+fn main() {
+    f();
+}

@@ -1,0 +1,6 @@
+{
+  "id": "types/std-string-ref-to-str-argument",
+  "mode": "run-pass",
+  "stdout_contains": "2\n",
+  "notes": "STD-1.6: `&String -> &str` in argument position is one of the two implicit adjustments."
+}

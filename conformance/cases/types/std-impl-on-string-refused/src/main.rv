@@ -1,0 +1,4 @@
+impl String {
+    fn f(&self) { }
+}
+fn main() { }

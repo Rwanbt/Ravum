@@ -1,0 +1,8 @@
+{
+  "id": "types/std-fs-append-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "STD-3.6: no append mode."
+}

@@ -1,0 +1,6 @@
+fn f() effects() {
+    let _s = String::new();
+}
+fn main() {
+    f();
+}

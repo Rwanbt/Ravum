@@ -9,6 +9,10 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Effects contract (T2, `effects.md`): FeatureId F-EFF-010 and five `effects/*` cases (unknown profile, inferred effects in JSON, no effect waiver, `String::new` is alloc, profile report).
+
+- Standard library contract (T2, `stdlib.md`): FeatureIds F-STD-033 to F-STD-035 and 14 `types/std-*` cases. STD-12.6 no longer forbids the explicit integer forms that RFC-RT-TRAPS added; STD-12.7 lists them.
+
 - Concurrency contract as of Core 1.0 (T2, `concurrency.md`): FeatureId F-META-028, five `unsupported/*` cases and an execution determinism test. It describes the state before the E11 concurrency RFC.
 - Modules contract (T2, `modules.md`): FeatureIds F-MOD-014 to F-MOD-016 and 12 conformance cases (module file resolution, manifest and dependency graph, use of a dependency). MOD-8.5 now names `E-MOD-DUPLICATE`, as the registry does.
 

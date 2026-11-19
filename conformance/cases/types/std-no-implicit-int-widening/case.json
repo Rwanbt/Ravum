@@ -1,0 +1,8 @@
+{
+  "id": "types/std-no-implicit-int-widening",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "STD-1.6: no other implicit conversion; `i32` is not widened to `i64`."
+}

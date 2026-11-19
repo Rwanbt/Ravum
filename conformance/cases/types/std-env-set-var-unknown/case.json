@@ -1,0 +1,8 @@
+{
+  "id": "types/std-env-set-var-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "STD-4.5: no environment write."
+}

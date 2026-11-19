@@ -8,12 +8,14 @@
 ## 1. Résultat en une phrase
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
-> `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178
-> et `concurrency.md`)** : `tools/must_audit.py` compte **816 énoncés MUST** et
-> **223 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 028,
-> F-MOD-014 à 016 ajoutés) ; **636 / 816** sont atteignables par un FeatureId,
-> **180** ne le sont pas ; couverture stricte **223/223** (1 exemption).
-> `modules.md` : 64 / 67 ; `concurrency.md` : 8 / 20 (`T2-FINDINGS` §35). `diagnostics.md` : 40 / 45 ;
+> `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178,
+> `concurrency.md` #180, `stdlib.md` #181 et `effects.md`)** : `tools/must_audit.py`
+> compte **817 énoncés MUST** (STD-12.7 ajouté) et **227 FeatureIds** (F-LEX-009
+> à 015, F-SYN-036 à 040, F-META-009 à 028, F-MOD-014 à 016, F-STD-033 à 035,
+> F-EFF-010 ajoutés) ; **653 / 817** sont atteignables par un FeatureId, **164**
+> ne le sont pas ; couverture stricte **227/227** (1 exemption). `effects.md` :
+> 35 / 44 (`T2-FINDINGS` §37). `modules.md` : 64 / 67 ;
+> `concurrency.md` : 8 / 20 (`T2-FINDINGS` §35) ; `stdlib.md` : 86 / 92 (§36). `diagnostics.md` : 40 / 45 ;
 > `compatibility.md` : 14 / 39 (25 règles de gouvernance, `T2-FINDINGS` §32) ;
 > `abi.md` : 14 / 35 (`T2-FINDINGS` §33). Le texte ci-dessous est la
 > mesure d'origine, conservée.

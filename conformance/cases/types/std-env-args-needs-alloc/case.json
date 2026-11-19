@@ -1,0 +1,8 @@
+{
+  "id": "types/std-env-args-needs-alloc",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "STD-4.4, STD-1.8: `env::args` has the effects io + alloc; declaring only io is E-EFF-UNDECLARED."
+}

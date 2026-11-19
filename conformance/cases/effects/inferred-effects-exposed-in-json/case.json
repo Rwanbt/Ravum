@@ -1,0 +1,13 @@
+{
+  "id": "effects/inferred-effects-exposed-in-json",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout_contains": "{\"declared\":null,\"effects\":[],\"is_test\":false,\"name\":\"twice\"",
+  "expect_json_schema_version": 1,
+  "notes": "EFF-5.5: the inferred effect set of every function is in `check --json` (`summary.effects`): `twice` is pure, `main` has io + alloc."
+}
