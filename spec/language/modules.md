@@ -242,7 +242,7 @@ extern "C" from "demo" {
 | MOD-5.17 | Le digest SHA-256 du fichier **MUST** égaler le digest épinglé ; sinon `E-MOD-NATIVE-DIGEST` et rien n'est lié. | MUST |
 | MOD-5.18 | `extern "C" from "<nom>" { ... }` lie ses fonctions à la bibliothèque `<nom>`, qui **MUST** figurer dans `[native]` (`E-FFI-UNKNOWN-LIB`). Seules les bibliothèques nommées par un tel bloc sont liées. Un bloc sans `from` désigne la bibliothèque C du système, comme avant. | MUST |
 | MOD-5.19 | Les digests des bibliothèques liées entrent dans `dependencies_digest`, donc dans l'identité de build. `build` affiche chaque bibliothèque liée et son digest ; `<artefact>.build.json` les liste sous `natives`. | MUST |
-| MOD-5.20 | Seul le package racine peut avoir une section `[native]` ; une dépendance qui en déclare une est `E-MOD-NATIVE`. | MUST |
+| MOD-5.20 | Chaque package, racine ou dépendance, peut avoir une section `[native]` (décision D-19-7). Ses entrées ne servent qu'à ses **propres** blocs `extern "C" from` et ses chemins sont relatifs à **son** répertoire : un package ne peut pas utiliser une entrée déclarée par un autre (`E-FFI-UNKNOWN-LIB`). Deux packages qui lient chacun une bibliothèque de même nom sont `E-MOD-NATIVE`. | MUST |
 | MOD-5.21 | Le code natif n'est **pas vérifié** : chaque appel reste dans `unsafe` et porte les effets `unsafe` et `ffi` ([`abi.md`](abi.md) §3) ; les types admis à la frontière restent les primitives scalaires. | MUST |
 
 ## 6. Import d'une dépendance

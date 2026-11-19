@@ -1,0 +1,207 @@
+// Ravum SQLite package (RFC-E11-SQLITE §6, decision D-19-7).
+//
+// A thin, safe layer over the C adapter in `native-src/ravum_sqlite.c`. Every
+// value reaches SQL through a prepared-statement parameter: no API of this
+// package splices a value into SQL text (DB-1.2). Every SQLite error is an
+// `Err`, never a panic (DB-1.3). Build the native library first:
+// `python3 tools/build_sqlite_native.py`.
+
+extern "C" from "ravum_sqlite" {
+    fn rvs_open(path: &str) -> CHandle;
+    fn rvs_status(conn: CHandle) -> i32;
+    fn rvs_errmsg(conn: CHandle) -> Option<String>;
+    fn rvs_version() -> Option<String>;
+    fn rvs_close(conn: CHandle);
+    fn rvs_prepare(conn: CHandle, sql: &str) -> i32;
+    fn rvs_bind_null(conn: CHandle, index: i32) -> i32;
+    fn rvs_bind_int(conn: CHandle, index: i32, value: i64) -> i32;
+    fn rvs_bind_real(conn: CHandle, index: i32, value: f64) -> i32;
+    fn rvs_bind_text(conn: CHandle, index: i32, text: &str) -> i32;
+    fn rvs_step(conn: CHandle) -> i32;
+    fn rvs_column_count(conn: CHandle) -> i32;
+    fn rvs_column_type(conn: CHandle, column: i32) -> i32;
+    fn rvs_column_int(conn: CHandle, column: i32) -> i64;
+    fn rvs_column_real(conn: CHandle, column: i32) -> f64;
+    fn rvs_column_text(conn: CHandle, column: i32) -> Option<String>;
+    fn rvs_finalize(conn: CHandle) -> i32;
+    fn rvs_changes(conn: CHandle) -> i64;
+}
+
+const ROW: i32 = 100;
+const DONE: i32 = 101;
+
+/// An open connection. Close it with `close`: Ravum has no destructor.
+pub struct Db {
+    conn: CHandle,
+}
+
+/// One SQL value. There is no BLOB in 1.0 (DB-1.6).
+pub enum Value {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(String),
+}
+
+pub struct Row {
+    pub values: Vec<Value>,
+}
+
+/// The SQLite library version, e.g. `3.54.1` (DB-1.7).
+pub fn version() -> String {
+    match unsafe { rvs_version() } {
+        Some(text) => text,
+        None => String::from("unknown"),
+    }
+}
+
+fn last_error(conn: CHandle, code: i32) -> Error {
+    let mut text: String = String::from("sqlite error ");
+    text.push_str(code.to_string().as_str());
+    text.push_str(": ");
+    match unsafe { rvs_errmsg(conn) } {
+        Some(message) => text.push_str(message.as_str()),
+        None => text.push_str("unknown error"),
+    }
+    Error::new(text.as_str())
+}
+
+/// Open (or create) a database file.
+pub fn open(path: &str) -> Result<Db, Error> {
+    let conn: CHandle = unsafe { rvs_open(path) };
+    if ffi::is_null(conn) {
+        return Err(Error::new("sqlite: out of memory"));
+    }
+    let status: i32 = unsafe { rvs_status(conn) };
+    if status != 0 {
+        let error: Error = last_error(conn, status);
+        unsafe { rvs_close(conn) };
+        return Err(error);
+    }
+    Ok(Db { conn: conn })
+}
+
+/// A private in-memory database, gone when it is closed.
+pub fn open_memory() -> Result<Db, Error> {
+    open(":memory:")
+}
+
+pub fn close(db: Db) {
+    unsafe { rvs_close(db.conn) };
+}
+
+fn bind_one(conn: CHandle, index: i32, value: Value) -> i32 {
+    match value {
+        Value::Null => unsafe { rvs_bind_null(conn, index) },
+        Value::Int(n) => unsafe { rvs_bind_int(conn, index, n) },
+        Value::Real(x) => unsafe { rvs_bind_real(conn, index, x) },
+        Value::Text(text) => unsafe { rvs_bind_text(conn, index, text.as_str()) },
+    }
+}
+
+/// Prepare `sql` and bind `params` to `?1`, `?2`, ... in order.
+fn prepare(db: &Db, sql: &str, params: Vec<Value>) -> Result<(), Error> {
+    let status: i32 = unsafe { rvs_prepare(db.conn, sql) };
+    if status != 0 {
+        return Err(last_error(db.conn, status));
+    }
+    let mut rest: Vec<Value> = params;
+    let mut done: bool = false;
+    while !done {
+        let index: i32 = rest.len() as i32;
+        match rest.pop() {
+            Some(value) => {
+                let bound: i32 = bind_one(db.conn, index, value);
+                if bound != 0 {
+                    let error: Error = last_error(db.conn, bound);
+                    let finalized: i32 = unsafe { rvs_finalize(db.conn) };
+                    drop(finalized);
+                    return Err(error);
+                }
+            }
+            None => {
+                done = true;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run a statement that returns no row; the number of rows it changed.
+pub fn execute(db: &Db, sql: &str, params: Vec<Value>) -> Result<i64, Error> {
+    prepare(db, sql, params)?;
+    let status: i32 = unsafe { rvs_step(db.conn) };
+    let finalized: i32 = unsafe { rvs_finalize(db.conn) };
+    drop(finalized);
+    if status != DONE && status != ROW {
+        return Err(last_error(db.conn, status));
+    }
+    Ok(unsafe { rvs_changes(db.conn) })
+}
+
+fn column(conn: CHandle, index: i32) -> Result<Value, Error> {
+    let kind: i32 = unsafe { rvs_column_type(conn, index) };
+    if kind == 1 {
+        return Ok(Value::Int(unsafe { rvs_column_int(conn, index) }));
+    }
+    if kind == 2 {
+        return Ok(Value::Real(unsafe { rvs_column_real(conn, index) }));
+    }
+    if kind == 3 {
+        return match unsafe { rvs_column_text(conn, index) } {
+            Some(text) => Ok(Value::Text(text)),
+            None => Err(Error::new("sqlite: a text column is not valid UTF-8")),
+        };
+    }
+    if kind == 5 {
+        return Ok(Value::Null);
+    }
+    Err(Error::new("sqlite: BLOB columns are not supported"))
+}
+
+/// Run a query and return every row.
+pub fn query(db: &Db, sql: &str, params: Vec<Value>) -> Result<Vec<Row>, Error> {
+    prepare(db, sql, params)?;
+    let mut rows: Vec<Row> = Vec::new();
+    let columns: i32 = unsafe { rvs_column_count(db.conn) };
+    let mut status: i32 = unsafe { rvs_step(db.conn) };
+    while status == ROW {
+        let mut values: Vec<Value> = Vec::new();
+        for i in 0..columns {
+            match column(db.conn, i) {
+                Ok(value) => values.push(value),
+                Err(error) => {
+                    let finalized: i32 = unsafe { rvs_finalize(db.conn) };
+                    drop(finalized);
+                    return Err(error);
+                }
+            }
+        }
+        rows.push(Row { values: values });
+        status = unsafe { rvs_step(db.conn) };
+    }
+    let finalized: i32 = unsafe { rvs_finalize(db.conn) };
+    drop(finalized);
+    if status != DONE {
+        return Err(last_error(db.conn, status));
+    }
+    Ok(rows)
+}
+
+pub fn begin(db: &Db) -> Result<(), Error> {
+    let changed: i64 = execute(db, "BEGIN", Vec::new())?;
+    drop(changed);
+    Ok(())
+}
+
+pub fn commit(db: &Db) -> Result<(), Error> {
+    let changed: i64 = execute(db, "COMMIT", Vec::new())?;
+    drop(changed);
+    Ok(())
+}
+
+pub fn rollback(db: &Db) -> Result<(), Error> {
+    let changed: i64 = execute(db, "ROLLBACK", Vec::new())?;
+    drop(changed);
+    Ok(())
+}

@@ -309,7 +309,10 @@ pub(crate) fn resolve_extern_block(
             }
             (params, ret)
         };
-        let rust_path = format!("crate::rvm_ffi_wrap_{}", f.id);
+        // The wrapper is emitted in the module of the `extern` block (a
+        // dependency's block lives in that dependency's module).
+        let module_path = world.modules[module].path.clone();
+        let rust_path = join_path(&module_path, &format!("rvm_ffi_wrap_{}", f.id));
         facts.item_paths.insert(f.id, rust_path.clone());
         facts.extern_symbols.insert(f.id, f.name.name.clone());
         let sig = FnSig {

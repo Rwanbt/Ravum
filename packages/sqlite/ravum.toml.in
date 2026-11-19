@@ -1,0 +1,7 @@
+[package]
+name = "sqlite"
+version = "0.1.0"
+edition = "core-1.0"
+
+[native]
+ravum_sqlite = { kind = "static", path = "native/{os}-{arch}", lib = "ravum_sqlite", sha256-@PLATFORM@ = "@SHA256@" }

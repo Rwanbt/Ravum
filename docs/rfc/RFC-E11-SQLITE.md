@@ -52,8 +52,16 @@ n'est pas appelable directement : `std::sqlite` passera par une **petite
 bibliothèque d'adaptation C** livrée avec SQLite, qui expose des fonctions de
 cette forme.
 
-**Pas encore fait** : `std::sqlite` (§6), sa bibliothèque d'adaptation et la
-publication des binaires SQLite.
+**Fait — SQLite, paquet `.rv` (D-19-7)** : `packages/sqlite`, sa bibliothèque
+d'adaptation `native-src/ravum_sqlite.c`, `tools/build_sqlite_native.py` et
+`packages/sqlite-notes`, exécuté par `crates/ravum-lang-cli/tests/sqlite_package.rs`
+(Linux, macOS). Écarts avec §6 : ce n'est pas `std::sqlite` mais un paquet ;
+pas d'effet `db` (un paquet ne masque pas `unsafe`/`ffi`, donc l'appelant les
+déclare) ; `sqlite::close` explicite, faute de destructeur (DB-1.4 n'est pas
+tenue) ; une seule requête active par connexion ; pas de Windows ; les
+binaires ne sont pas publiés : le script les construit depuis une source
+épinglée. Défaut corrigé en passant : le wrapper d'une fonction `extern` d'une
+dépendance était appelé au chemin de la racine.
 
 ## 2. L1 — Déclaration dans le manifeste
 

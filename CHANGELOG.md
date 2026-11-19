@@ -8,6 +8,11 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `packages/sqlite`: SQLite 3.54.1 as a Ravum package (D-19-7) over a small C
+  adapter, built from the amalgamation pinned through `Cargo.lock` by
+  `tools/build_sqlite_native.py`; prepared-statement parameters only, every
+  error an `Err`. `packages/sqlite-notes` runs in a Unix test. A dependency may
+  now declare `[native]` for its own `extern` blocks (MOD-5.20 revised).
 - FFI boundary for native libraries (RFC-E11-SQLITE NAT-3.3): an opaque,
   `Copy` `CHandle` (`ffi::null`, `ffi::is_null`), `&str` parameters passed as
   pointer + length, and `Option<String>` returns copied from a C string
@@ -74,6 +79,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 - DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
 ### Fixed
+- The safe wrapper of an `extern` function declared in a dependency is now
+  called at its own module path; it was called at the crate root and the
+  generated Rust did not compile.
 
 - `mod Foo;` no longer resolves `src/foo.rv` on case-insensitive file systems (macOS, Windows): a module file must carry exactly the module's name, so the verdict no longer depends on the OS (MOD-2.6, MOD-1.6).
 - Loader messages no longer contain absolute machine paths (DIAG-6.8, DIAG-7.5): `module `b` not found: neither `/tmp/…/src/b.rv` …` now reads `src/b.rv`, and a sibling dependency is shown as `../lib/…`. The rewrite is done once, when the diagnostics leave the loader, so it covers all of its ~60 messages.
@@ -111,6 +119,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   Generated Rust is byte-identical on the examples and the conformance corpus.
 
 ### Fixed
+- The safe wrapper of an `extern` function declared in a dependency is now
+  called at its own module path; it was called at the crate root and the
+  generated Rust did not compile.
 
 - `run/power-array-move-write-region-nested`: `check` accepted the program but
   `build` emitted a plain `a[0]`/`a[1]` and `rustc` rejected it with `E0508`.

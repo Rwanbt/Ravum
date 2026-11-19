@@ -1,0 +1,7 @@
+{
+  "id": "packages/extern-in-dependency",
+  "mode": "run-pass",
+  "project": "app",
+  "stdout_contains": "7\n",
+  "notes": "ABI-3.3: the safe wrapper of an extern function is emitted in the module of its extern block; a dependency that declares one is callable (regression: its path assumed the crate root)."
+}
