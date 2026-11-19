@@ -9,6 +9,8 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 
 ### Added
 
+- Backend fidelity contract (T2, `abi.md`, `concurrency.md`): FeatureId F-META-031, three `run/*` cases (primitive bounds, left-to-right calls, no fused multiply-add or reassociation) and a test that no `rt` report claims certification.
+
 - Edition contract (T2, `compatibility.md`): FeatureId F-META-030, two `cli/*` cases showing that `--version` and `spec_version` say draft, and a test that a changed source is rebuilt rather than served from an earlier build (COMPAT-4.5).
 
 - Types and expressions contract (T2, `types.md`, `expressions.md`): FeatureIds F-TYP-028 and F-EXPR-019 and ten cases (one type per `if`, `as` limited, total, left-chained and identity; shift amounts, `i128` overflow, panic under `run` and `test`, no `catch_unwind`).

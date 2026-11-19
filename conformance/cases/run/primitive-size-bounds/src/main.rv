@@ -1,0 +1,14 @@
+fn main() {
+    let a: u8 = 255;
+    let b: i8 = -128;
+    let c: u16 = 65535;
+    let d: i32 = 2147483647;
+    let e: u64 = 18446744073709551615;
+    let f: i128 = -170141183460469231731687303715884105728;
+    io::println(&a.to_string());
+    io::println(&b.to_string());
+    io::println(&c.to_string());
+    io::println(&d.to_string());
+    io::println(&e.to_string());
+    io::println(&f.to_string());
+}
