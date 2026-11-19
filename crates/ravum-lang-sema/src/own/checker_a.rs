@@ -539,6 +539,10 @@ impl<'a> OwnChecker<'a> {
                     self.eval_value(bound);
                 }
             }
+            ExprKind::Await(inner) => {
+                // `.await` consumes its future (a `Future<T>` is never `Copy`).
+                self.eval_value(inner);
+            }
             ExprKind::Try(inner) => {
                 // `?` may leave the function on the error path; the normal path
                 // simply continues with the payload.

@@ -4,5 +4,6 @@
   "expect_codes": [
     "E-UNSUPPORTED-ASYNC"
   ],
-  "unsupported": true
+  "unsupported": true,
+  "notes": "`async` blocks stay refused; `async fn` is accepted since D-19-9."
 }

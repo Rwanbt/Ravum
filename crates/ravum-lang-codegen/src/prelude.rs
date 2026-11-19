@@ -541,6 +541,100 @@ impl<T> Drop for JoinHandle<T> {
     }
 }
 
+// --- std::task: single-threaded FIFO executor (RFC-E11-CONCURRENCY phase 2) ---
+
+/// Value of a call to an `async fn`: a boxed future, polled by `task::block_on`.
+pub type Future<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T>>>;
+
+struct RvNoopWake;
+
+impl std::task::Wake for RvNoopWake {
+    fn wake(self: std::sync::Arc<Self>) {}
+}
+
+thread_local! {
+    /// One FIFO queue of spawned tasks per running `block_on` (innermost last).
+    static RV_TASKS: std::cell::RefCell<Vec<std::collections::VecDeque<Future<()>>>> =
+        std::cell::RefCell::new(Vec::new());
+}
+
+/// Run `main` to completion, then every task it spawned (CONC-6.2): each round
+/// polls `main` first, then each ready task once, in spawn order. The order
+/// depends only on the program, never on timing.
+pub fn rv_task_block_on<T>(main: Future<T>) -> T {
+    let waker = std::task::Waker::from(std::sync::Arc::new(RvNoopWake));
+    let mut context = std::task::Context::from_waker(&waker);
+    RV_TASKS.with(|tasks| tasks.borrow_mut().push(std::collections::VecDeque::new()));
+    let mut main = main;
+    let mut result: Option<T> = None;
+    loop {
+        if result.is_none() {
+            if let std::task::Poll::Ready(value) = main.as_mut().poll(&mut context) {
+                result = Some(value);
+            }
+        }
+        let pending = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(0, |q| q.len()));
+        for _ in 0..pending {
+            let next = RV_TASKS.with(|tasks| tasks.borrow_mut().last_mut().and_then(|q| q.pop_front()));
+            if let Some(mut task) = next {
+                if task.as_mut().poll(&mut context).is_pending() {
+                    RV_TASKS.with(|tasks| {
+                        if let Some(queue) = tasks.borrow_mut().last_mut() {
+                            queue.push_back(task);
+                        }
+                    });
+                }
+            }
+        }
+        let idle = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(true, |q| q.is_empty()));
+        if idle {
+            if let Some(value) = result.take() {
+                RV_TASKS.with(|tasks| {
+                    tasks.borrow_mut().pop();
+                });
+                return value;
+            }
+        }
+    }
+}
+
+/// Queue a task on the innermost running `task::block_on`.
+pub fn rv_task_spawn(task: Future<()>) {
+    let queued = RV_TASKS.with(|tasks| match tasks.borrow_mut().last_mut() {
+        Some(queue) => {
+            queue.push_back(task);
+            true
+        }
+        None => false,
+    });
+    if !queued {
+        panic!("task::spawn outside task::block_on");
+    }
+}
+
+struct RvYield(bool);
+
+impl std::future::Future for RvYield {
+    type Output = ();
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<()> {
+        if self.0 {
+            std::task::Poll::Ready(())
+        } else {
+            self.0 = true;
+            context.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }
+    }
+}
+
+/// A future that is pending once: the other ready tasks run before it resumes.
+pub fn rv_task_yield_now() -> Future<()> {
+    Box::pin(RvYield(false))
+}
+
 pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
     worker: fn(A) -> R,
     arg: A,

@@ -411,14 +411,39 @@ fn main() -> Result<(), Error> { return f(); }
         error(&result, "E-EFF-UNKNOWN");
     }
 
+    /// CONC-6.1: `.await` turns a `Future<T>` into `T` inside an `async fn`,
+    /// is refused outside one, and refuses a value that is not a future.
     #[test]
-    fn unsupported_effect_is_reported() {
-        let (result, _) = run(
-            "src/main.rv",
-            r#"fn main() -> () effects(async) { }"#,
-            Profile::Core,
-        );
-        error(&result, "E-UNSUPPORTED-EFFECT");
+    fn await_is_typed_and_confined_to_async_fns() {
+        let ok = r#"async fn two() -> i64 effects(async) { 2 }
+async fn four() -> i64 effects(async) { let x: i64 = two().await; x * 2 }
+fn main() -> () effects(async) { let v: i64 = task::block_on(four()); drop(v); }"#;
+        let (result, _) = run("src/main.rv", ok, Profile::Core);
+        assert!(result.checked.is_some(), "{:?}", result.diags);
+        let outside = r#"async fn two() -> i64 effects(async) { 2 }
+fn main() -> () effects(async) { let v: i64 = two().await; drop(v); }"#;
+        let (result, _) = run("src/main.rv", outside, Profile::Core);
+        error(&result, "E-CONC-AWAIT-OUTSIDE");
+        let not_future = r#"async fn f() -> i64 effects(async) { let x: i64 = 1; x.await }
+fn main() { }"#;
+        let (result, _) = run("src/main.rv", not_future, Profile::Core);
+        error(&result, "E-TYP-MISMATCH");
+        let reference = r#"async fn f(s: &str) -> i64 effects(async) { 1 }
+fn main() { }"#;
+        let (result, _) = run("src/main.rv", reference, Profile::Core);
+        error(&result, "E-CONC-REF-ACROSS-AWAIT");
+    }
+
+    /// D-19-9: `async` is producible since RFC-E11-CONCURRENCY phase 2, so a
+    /// declared `effects(async)` is accepted under `core` and refused at the
+    /// entry point of `pure` (no effect group is unsupported any more).
+    #[test]
+    fn async_effect_is_accepted_under_core_and_refused_under_pure() {
+        let source = r#"fn main() -> () effects(async) { drop(task::yield_now()); }"#;
+        let (core, _) = run("src/main.rv", source, Profile::Core);
+        assert!(core.checked.is_some(), "async refused under core");
+        let (pure, _) = run("src/main.rv", source, Profile::Pure);
+        error(&pure, "E-EFF-PROFILE");
     }
 
     /// RFC-E11-NET-HTTP NET-1.1: `net` is producible under `core` and is
@@ -808,7 +833,9 @@ mod fact_coverage_tests {
                     walk_expr(bound, exprs, paths, pats, types);
                 }
             }
-            ExprKind::Try(inner) => walk_expr(inner, exprs, paths, pats, types),
+            ExprKind::Try(inner) | ExprKind::Await(inner) => {
+                walk_expr(inner, exprs, paths, pats, types)
+            }
             ExprKind::Return(Some(v)) => walk_expr(v, exprs, paths, pats, types),
             _ => {}
         }

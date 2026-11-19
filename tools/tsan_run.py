@@ -2,7 +2,7 @@
 """ThreadSanitizer qualification of Ravum's concurrent path (RFC-E11-CONCURRENCY §5).
 
 Every `run-pass` conformance case whose source uses `thread::`, `sync::`,
-`net::` or `http::` is built by `ravum-lang build` through a rustc wrapper that
+`task::`, `net::` or `http::` is built by `ravum-lang build` through a rustc wrapper that
 adds `-Zsanitizer=thread`, then executed several times with
 `TSAN_OPTIONS=halt_on_error=1`. Any ThreadSanitizer report, non-zero exit or
 missing stdout line fails the run.
@@ -37,7 +37,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "conformance" / "cases"
-MARKERS = ("thread::", "sync::", "net::", "http::")
+MARKERS = ("thread::", "sync::", "task::", "net::", "http::")
 
 RACE = """static mut COUNTER: u64 = 0;
 fn main() {

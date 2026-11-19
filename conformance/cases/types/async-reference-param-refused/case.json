@@ -1,0 +1,8 @@
+{
+  "id": "types/async-reference-param-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CONC-REF-ACROSS-AWAIT"
+  ],
+  "notes": "CONC-6.3: an async fn binds no reference."
+}

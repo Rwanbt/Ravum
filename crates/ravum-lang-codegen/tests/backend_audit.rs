@@ -514,6 +514,7 @@ fn make_fn(
             effects: None,
             body,
             is_test,
+            is_async: false,
             span: span(),
         }),
         span: span(),

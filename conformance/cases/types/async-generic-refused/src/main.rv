@@ -1,0 +1,5 @@
+async fn h<T>(x: T) -> T effects(async) {
+    x
+}
+
+fn main() { }

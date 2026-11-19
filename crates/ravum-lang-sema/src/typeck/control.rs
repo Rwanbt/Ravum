@@ -270,6 +270,36 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         ty
     }
 
+    /// `future.await` (CONC-6.1): only inside an `async fn`; `Future<T>` → `T`.
+    pub(super) fn check_await(&mut self, expr: &Expr, inner: &Expr) -> Type {
+        let inner_ty = self.check_expr(inner, None);
+        if !self.in_async_fn() {
+            self.error(
+                "E-CONC-AWAIT-OUTSIDE",
+                expr.span,
+                "`.await` is only valid inside an `async fn`; use `task::block_on` elsewhere"
+                    .to_string(),
+            );
+            return Type::Error;
+        }
+        match self.resolve_vars(&inner_ty) {
+            Type::Nominal { def, mut args, .. }
+                if def == crate::builtins::PRELUDE_FUTURE_DEF && args.len() == 1 =>
+            {
+                args.remove(0)
+            }
+            Type::Error => Type::Error,
+            other => {
+                self.error(
+                    "E-TYP-MISMATCH",
+                    inner.span,
+                    format!("`.await` expects a `Future<T>`, found `{other}`"),
+                );
+                Type::Error
+            }
+        }
+    }
+
     pub(super) fn check_try(&mut self, expr: &Expr, inner: &Expr) -> Type {
         let inner_ty = self.check_expr(inner, None);
         if self.in_const || self.current_fn.is_none() {

@@ -13,7 +13,7 @@
 |---|---|---|
 | CONC-1.1 | Un programme qui n'appelle pas `thread::spawn` s'exécute sur **un seul** thread, séquentiellement. Avec `spawn`, il exécute plusieurs threads ([`stdlib.md`](stdlib.md) §18). | MUST |
 | CONC-1.2 | Les **seules** primitives de concurrence sont `thread::spawn`, `thread::join` et les canaux de `std::sync`. Il n'existe ni `Mutex`, ni `RwLock`, ni `Arc`, ni `atomic`, ni `select`, ni `sleep`, ni domaine parallèle ; `async`/`await` attend la phase 2. | MUST |
-| CONC-1.3 | Le groupe d'effets `thread` marque toute fonction qui crée un thread ou utilise un canal. `async` est refusé à la déclaration (`E-UNSUPPORTED-EFFECT`) jusqu'à la phase 2 ; `rt` est réservé, sans sémantique ([`effects.md`](effects.md)). | MUST |
+| CONC-1.3 | Le groupe d'effets `thread` marque toute fonction qui crée un thread ou utilise un canal. `async` marque toute `async fn` et tout appel de `std::task` (§6, D-19-9) ; `rt` est réservé, sans sémantique ([`effects.md`](effects.md)). | MUST |
 | CONC-1.4 | La seule « concurrence » possible est **externe** au langage : plusieurs processus `ravum-lang run` lancés par l'utilisateur. Ils ne partagent aucun état mémoire ; les interactions passent par le système de fichiers ou les E/S standard, hors du modèle Ravum. | MUST |
 | CONC-1.5 | Aucun programme Ravum ne peut créer, lire ou écrire un état **mutable partagé** entre deux threads : une valeur est déplacée dans un thread (STD-18.3) ou envoyée par un canal, jamais partagée. | MUST |
 
@@ -29,10 +29,10 @@ fn main() -> () effects(io, thread, alloc) {
 ```rv
 // NÉGATIF — E-RES-UNKNOWN (aucun état partagé)
 fn main() { let m = Mutex::new(0); }
-// NÉGATIF — E-UNSUPPORTED-ASYNC
-async fn f() { }
-// NÉGATIF — E-UNSUPPORTED-EFFECT (déclaration du groupe async)
-fn g() effects(async) { }
+// NÉGATIF — E-UNSUPPORTED-ASYNC (bloc async ; `async fn` est accepté, §6)
+fn f() { let x = async { 1 }; }
+// NÉGATIF — E-EFF-PROFILE (async sous le profil pure)
+async fn g() -> i64 effects(async) { 1 }
 ```
 
 ## 2. Ce que le langage ne promet pas
@@ -83,8 +83,35 @@ Une extension concurrence ne peut être envisagée que si **toutes** les conditi
 |---|---|---|
 | CONC-4.1 | Aucune extension concurrence ne peut être introduite comme « expérimentale » sans les conditions 1–3 : elle changerait le modèle de sûreté. | MUST |
 | CONC-4.2 | Une extension **MUST NOT** affaiblir les garanties existantes (non-échappement des références, absence d'`unsafe fn` et de pointeurs bruts ; les blocs `unsafe` et la FFI scalaire restent des frontières explicites, pas des capacités de concurrence). | MUST |
-| CONC-4.3 | Le groupe `async` est réservé pour la phase 2 de RFC-E11-CONCURRENCY (D-19-3) ; `rt` reste réservé, sans feuille de route implicite. | MUST |
+| CONC-4.3 | Le groupe `async` est produit depuis la phase 2 de RFC-E11-CONCURRENCY (D-19-3, D-19-9, §6) ; `rt` reste réservé, sans feuille de route implicite. | MUST |
 | CONC-4.4 | Toute API de concurrence future devra être **dans `std`**, versionnée, et refusée `fail-closed` sur une plateforme non supportée. | MUST |
+
+
+## 6. `async fn`, `.await` et `std::task` (phase 2, D-19-9)
+
+```rv
+async fn double(x: i64) -> i64 effects(async) { x * 2 }
+
+async fn run() -> i64 effects(async) {
+    task::spawn(worker());          // tâche en file, exécutée en FIFO
+    task::yield_now().await;        // laisse passer les autres tâches prêtes
+    double(21).await
+}
+
+fn main() -> () effects(io, async) {
+    let r: i64 = task::block_on(run());
+    io::println(&r.to_string());
+}
+```
+
+| ID | Règle | Niveau |
+|---|---|---|
+| CONC-6.1 | L'appel d'une `async fn` déclarée `-> T` rend un `Future<T>` sans rien exécuter ; `f.await` sur un `Future<T>` rend `T`. `.await` hors d'une `async fn` est `E-CONC-AWAIT-OUTSIDE` ; sur un autre type, `E-TYP-MISMATCH`. Un `Future<T>` n'est ni `Copy` ni clonable : `.await` le consomme. | MUST |
+| CONC-6.2 | `task::block_on(f)` exécute `f` jusqu'à son terme, puis chaque tâche lancée par `task::spawn` ; à chaque tour, `f` est sondé d'abord, puis chaque tâche une fois, dans l'ordre de lancement. L'ordre d'exécution ne dépend que du programme, jamais du temps. | MUST |
+| CONC-6.3 | Une `async fn` ne lie aucune référence : ni paramètre, ni `let`, ni motif de type référence, ni résultat référence (`E-CONC-REF-ACROSS-AWAIT`). Aucun emprunt ne peut donc être vivant à un `.await`. | MUST |
+| CONC-6.4 | Toute `async fn` et toute fonction de `std::task` portent l'effet `async`, qui se propage comme les autres ; les profils `pure` et `rt` le refusent (`E-EFF-PROFILE`). | MUST |
+| CONC-6.5 | Une `async fn` est une fonction libre de module, non générique et non `test` ; une méthode `async` ou un bloc `async { }` sont `E-UNSUPPORTED-ASYNC`. | MUST |
+| CONC-6.6 | `task::spawn(f: Future<()>)` hors d'un `task::block_on` en cours panique ; `task::yield_now()` rend un futur en attente une seule fois. L'exécuteur est mono-thread : une tâche qui bloque (canal, socket bloquant) bloque toutes les autres. Aucune E/S asynchrone n'existe encore (phase 2b). | MUST |
 
 ## 5. Questions ouvertes
 

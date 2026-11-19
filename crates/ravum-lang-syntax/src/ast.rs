@@ -249,6 +249,8 @@ pub struct FnItem {
     pub effects: Option<Vec<Ident>>,
     pub body: Block,
     pub is_test: bool,
+    /// `async fn` (RFC-E11-CONCURRENCY phase 2): a call yields a `Future<T>`.
+    pub is_async: bool,
     pub span: Span,
 }
 
@@ -533,6 +535,8 @@ pub struct Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     Unit,
+    /// `expr.await` (RFC-E11-CONCURRENCY CONC-6.1).
+    Await(Box<Expr>),
     Int {
         value: u128,
         suffix: Option<IntTy>,

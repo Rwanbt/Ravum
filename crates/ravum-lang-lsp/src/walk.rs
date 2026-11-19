@@ -339,7 +339,7 @@ impl AstIndex {
                     self.walk_expr(bound);
                 }
             }
-            ExprKind::Try(inner) => self.walk_expr(inner),
+            ExprKind::Try(inner) | ExprKind::Await(inner) => self.walk_expr(inner),
             ExprKind::Return(value) => {
                 if let Some(value) = value {
                     self.walk_expr(value);

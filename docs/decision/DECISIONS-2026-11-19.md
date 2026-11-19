@@ -88,3 +88,12 @@ blocs `extern` (MOD-5.20 révisé).
 **Décision du responsable :** après SQLite, HTTP/1.1 au-dessus de `std::net`,
 puis un service HTTP + SQLite testé de bout en bout. Le hot reload et le bloc
 DSP viennent ensuite.
+
+## D-19-9 — `async` : `.await` devient un mot-clé
+
+**Décision du responsable :** la phase 2 de RFC-E11-CONCURRENCY prend la
+surface de la RFC, `async fn` et `expr.await`, avec un exécuteur mono-thread à
+ordre FIFO (`std::task`). `await` devient un **mot-clé réservé** ; c'est un
+changement de LEX-5.1/§5.3 et de G-6.34 : un programme qui utilisait `await`
+comme nom ne compile plus (`E-PARSE-EXPECTED`). L'alternative écartée était des
+builtins sans mot-clé (`task::await(f)`).

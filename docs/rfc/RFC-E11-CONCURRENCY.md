@@ -100,6 +100,19 @@ de l'annotation `let c: sync::Channel<String>`. Aucune exception de grammaire.
 
 ## 4. Surface proposée — phase 2 : `async`
 
+> **Phase 2a implémentée** (2026-11-19, [D-19-9](../decision/DECISIONS-2026-11-19.md)) :
+> [`concurrency.md`](../../spec/language/concurrency.md) §6 (CONC-6.1 à 6.6),
+> F-STD-039, `await` mot-clé, `async fn` libre, `Future<T>`, `std::task`
+> (`block_on`, `spawn`, `yield_now`), exécuteur FIFO dans le prélude (Rust sûr),
+> codes `E-CONC-AWAIT-OUTSIDE` et `E-CONC-REF-ACROSS-AWAIT`. Écarts retenus :
+> - CONC-6.3 est tenu de façon **conservatrice** : une `async fn` ne lie aucune
+>   référence du tout (pas seulement à travers un `.await`) ;
+> - pas encore d'**E/S asynchrone** (phase 2b) : `async` existe sans `net`
+>   asynchrone, contrairement à « aucun `async` sans `net` » ci-dessous ; une
+>   tâche qui bloque (canal, socket) bloque l'exécuteur ;
+> - une `async fn` est libre, non générique et non `test` ;
+> - l'effet `async` doit être déclaré, comme les autres.
+
 Proposition **minimale et déterministe** : `async fn` + `.await`, un exécuteur
 **mono-thread à ordre fixé** (FIFO des tâches prêtes), seulement des futures
 d'E/S réseau (RFC-E11-NET). Aucun `async` sans `net` : seul, il n'apporte rien

@@ -75,7 +75,12 @@ impl<'a> Emitter<'a> {
         signature.push_str(&params.join(", "));
         signature.push(')');
         let ret = self.type_node(&fun.ret)?;
-        if ret != "()" {
+        if fun.is_async {
+            // CONC-6.1: an `async fn` returns a boxed future of its result; the
+            // body runs, unchanged, inside `async move` (its parameters own no
+            // reference, CONC-6.3, so the future is `'static`).
+            signature.push_str(&format!(" -> crate::Future<{ret}>"));
+        } else if ret != "()" {
             signature.push_str(&format!(" -> {ret}"));
         }
         signature.push(' ');
@@ -84,7 +89,11 @@ impl<'a> Emitter<'a> {
         // `expr` consults the plan when it reaches a projection or an index.
         *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body);
         let body = self.block_text(buf.indent, &fun.body)?;
-        buf.line(&format!("{signature}{body}"));
+        if fun.is_async {
+            buf.line(&format!("{signature}{{ Box::pin(async move {body}) }}"));
+        } else {
+            buf.line(&format!("{signature}{body}"));
+        }
         Ok(())
     }
 

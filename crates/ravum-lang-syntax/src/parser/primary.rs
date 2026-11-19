@@ -36,6 +36,16 @@ impl<'a> Parser<'a> {
                 let dot_span = self.cur_span();
                 self.bump();
                 match self.kind().clone() {
+                    TokenKind::Kw(Kw::Await) => {
+                        self.bump();
+                        let span = self.span_from(start);
+                        let id = self.id();
+                        expr = Expr {
+                            id,
+                            kind: ExprKind::Await(Box::new(expr)),
+                            span,
+                        };
+                    }
                     TokenKind::Ident(name) => {
                         let ident_span = self.cur_span();
                         self.bump();
