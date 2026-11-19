@@ -1446,6 +1446,50 @@ mod tests {
         }
     }
 
+    /// Every opaque prelude type resolves by name, carries its reserved id,
+    /// and maps back to the same Rust name; the reserved ids are distinct.
+    #[test]
+    fn every_opaque_prelude_type_round_trips() {
+        let plain = [
+            ("TcpListener", PRELUDE_TCP_LISTENER_DEF),
+            ("TcpStream", PRELUDE_TCP_STREAM_DEF),
+            ("CHandle", PRELUDE_CHANDLE_DEF),
+            ("HttpRequest", PRELUDE_HTTP_REQUEST_DEF),
+            ("HttpResponse", PRELUDE_HTTP_RESPONSE_DEF),
+        ];
+        let mut ids = vec![PRELUDE_ERROR_DEF];
+        for (name, def) in plain {
+            assert!(PRELUDE_TYPES.contains(&name), "{name}");
+            assert_eq!(
+                prelude_type(name),
+                Some(Type::Nominal {
+                    def,
+                    name: name.to_string(),
+                    args: Vec::new(),
+                }),
+                "{name}"
+            );
+            assert_eq!(prelude_opaque_name(def), Some(name));
+            ids.push(def);
+        }
+        for (name, def) in PRELUDE_GENERIC_OPAQUES {
+            assert!(PRELUDE_TYPES.contains(name), "{name}");
+            assert_eq!(prelude_opaque_name(*def), Some(*name));
+            let ty = generic_opaque(name, Type::I64).expect(name);
+            assert!(
+                matches!(ty, Type::Nominal { def: d, ref args, .. } if d == *def && args == &vec![Type::I64])
+            );
+            ids.push(*def);
+        }
+        assert_eq!(generic_opaque("Vec", Type::I64), None);
+        assert_eq!(prelude_opaque_name(0), None);
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "reserved ids must be distinct");
+        assert_eq!(chandle_type(), prelude_type("CHandle").unwrap());
+    }
+
     #[test]
     fn every_builtin_fn_parses() {
         assert_eq!(SPECIAL_FORM_FNS, &["std::thread::spawn"]);
