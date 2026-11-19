@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/mutex-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "CONC-1.2: there is no `Mutex`; the name is unknown."
+}
