@@ -21,6 +21,26 @@ Le pipeline appelle `rustc` sur un seul fichier, sans `-L`, `-l` ni `--extern` ;
 `sqlite3_open_v2` donne `LNK2019` (sonde #8). Il manque les quatre éléments
 L1–L4. D-19-4 choisit de les construire **en général**, pas pour SQLite seul.
 
+## Avancement (2026-11-19)
+
+**Fait — mécanisme de dépendances natives (L1–L3, NAT-1, NAT-2)** :
+[`modules.md`](../../spec/language/modules.md) §5.1 (MOD-5.14 à 5.21),
+5 codes de diagnostic, 7 cas de conformance et
+`crates/ravum-lang-cli/tests/native_link.rs`, qui lie une bibliothèque C
+statique. Écarts avec le texte ci-dessous, retenus à l'implémentation :
+- la déclaration est une table en ligne, `[native] nom = { … }`, sur le modèle
+  de `[dependencies]` (le manifeste n'accepte pas `[native.nom]`) ;
+- le digest épinglé **vit dans le manifeste**, qui est sous contrôle de
+  version, et il est **replié dans `dependencies_digest`**, donc dans
+  l'identité de build. `ravum.lock` n'est pas modifié ; c'est ce qui remplace
+  NAT-1.4 ;
+- une clé `sha256-<os>-<arch>` épingle une plateforme (§4) ;
+- une déclaration que rien n'utilise n'est ni lue ni liée (pas d'avertissement).
+
+**Pas encore fait** : NAT-3.3 (`extern type`, texte C), sans quoi l'API C de
+SQLite n'est pas appelable ; puis `std::sqlite` (§6) et la publication des
+binaires SQLite.
+
 ## 2. L1 — Déclaration dans le manifeste
 
 ```toml

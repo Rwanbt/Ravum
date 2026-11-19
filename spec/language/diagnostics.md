@@ -61,6 +61,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSUPPORTED-EXTERN` | parse | `extern "C" fn` avec corps (le bloc `extern "C" { ... }` est supporté) |
 | `E-UNSUPPORTED-ABI` | parse | ABI autre que `"C"` dans un bloc `extern` |
 | `E-FFI-TYPE` | resolve | paramètre/retour `extern` non FFI-sûr |
+| `E-FFI-UNKNOWN-LIB` | modules | `extern "C" from "<nom>"` sans entrée `<nom>` dans `[native]` ([`modules.md`](modules.md) MOD-5.18) |
 | `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
@@ -97,6 +98,10 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-MOD-MANIFEST` | modules | `ravum.toml` invalide, clé inconnue, nom/version malformés |
 | `E-MOD-DEPENDENCY` | modules | dépendance malformée (pas de `path`, nom≠`package.name`, cible sans `src/lib.rv`, conflit) |
 | `E-MOD-BUILD-SCRIPT` | modules | `build.rs`, `[build]`, script refusé |
+| `E-MOD-NATIVE` | modules | entrée `[native]` malformée, ou `[native]` dans une dépendance ([`modules.md`](modules.md) MOD-5.14, MOD-5.20) |
+| `E-MOD-NATIVE-PATH` | modules | `path` d'une bibliothèque native hors du package (MOD-5.15) |
+| `E-MOD-NATIVE-MISSING` | modules | fichier de bibliothèque native absent, ou aucun digest pour la plateforme (MOD-5.16) |
+| `E-MOD-NATIVE-DIGEST` | modules | digest du fichier différent du digest épinglé (MOD-5.17) |
 | `E-MOD-BOTH-ROOTS` | modules | `src/main.rv` **et** `src/lib.rv` présents (interdit, Q-MOD-1) |
 | `E-MOD-LOCK` | modules | `lockfile_version` inconnu ou lockfile illisible |
 

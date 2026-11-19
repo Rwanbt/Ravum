@@ -169,7 +169,7 @@ util = { path = "../util" }
 |---|---|---|
 | MOD-5.1 | Un package est un répertoire contenant `ravum.toml` à sa racine. Un `ravum.toml` illisible ou TOML invalide est `E-MOD-MANIFEST`. | MUST |
 | MOD-5.2 | `[package]` exige `name`, `version`, `edition`. `name` vérifie `[a-z][a-z0-9_-]*` (`E-MOD-MANIFEST` sinon) ; `version` vérifie `MAJOR.MINOR.PATCH` avec des entiers décimaux sans zéro de tête (`E-MOD-MANIFEST`) ; `edition` **MUST** valoir `core-1.0` (`E-UNSUPPORTED-EDITION`). | MUST |
-| MOD-5.3 | Toute clé inconnue dans `ravum.toml` est `E-MOD-MANIFEST` (manifeste strict : pas de clé « ignorée »). Aucune section `[build]`, `[scripts]`, `[features]`, `[profile]` n'existe. | MUST |
+| MOD-5.3 | Toute clé inconnue dans `ravum.toml` est `E-MOD-MANIFEST` (manifeste strict : pas de clé « ignorée »). Les seules sections sont `[package]`, `[dependencies]` et `[native]` (§5.1) ; aucune section `[build]`, `[scripts]`, `[features]`, `[profile]` n'existe. | MUST |
 | MOD-5.4 | `[dependencies]` est optionnel. Chaque entrée est `nom = { path = "..." }`. Aucune autre forme (`version = "..."` seule, `git = ...`, `registry = ...`, table vide) n'est acceptée : `E-MOD-DEPENDENCY`. | MUST |
 | MOD-5.5 | Le nom d'une dépendance (clé) **MUST** être égal à `package.name` du package cible : `E-MOD-DEPENDENCY`. Deux clés identiques sont impossibles (TOML), deux dépendances résolvant le même répertoire sont `E-MOD-DEPENDENCY`. | MUST |
 | MOD-5.6 | `path` est **relatif** au répertoire du manifeste, peut contenir `..` (ex. `../util`) sans dépasser la profondeur **8**, ne peut pas être absolu, ne peut pas traverser un lien symbolique, et **MUST** désigner un répertoire contenant un `ravum.toml` valide. Violations : `E-MOD-DEPENDENCY` (forme), `E-MOD-PATH-ESCAPE` (absolu, profondeur), `E-MOD-PATH` (symlink), `E-MOD-RESERVED-NAME` (nom réservé). | MUST |
@@ -215,6 +215,35 @@ version = "0.2.0"
 edition = "core-1.0"
 license = "MIT"        # clé non supportée en Core 1.0
 ```
+
+### 5.1 Bibliothèques natives : `[native]`
+
+Source : [`RFC-E11-SQLITE`](../../docs/rfc/RFC-E11-SQLITE.md) §2–§5, décision
+D-19-4 (dépendances natives générales). Une bibliothèque native est un fichier
+**déjà compilé**, fourni avec le package et épinglé par son digest ; la
+toolchain ne compile, ne télécharge et n'exécute rien (MOD-5.10 reste vrai).
+
+```toml
+[native]
+demo = { kind = "static", path = "native/{os}-{arch}", lib = "demo", sha256 = "3c06…0630" }
+```
+
+```rv
+extern "C" from "demo" {
+    fn demo_triple(x: i32) -> i32;
+}
+```
+
+| ID | Règle | Niveau |
+|---|---|---|
+| MOD-5.14 | `[native]` est optionnel. Chaque entrée est `nom = { kind, path, lib, sha256 }` : `kind` vaut `static` ou `dylib`, `lib` est le nom passé à l'éditeur de liens, `sha256` est 64 chiffres hexadécimaux minuscules. Une clé `sha256-<os>-<arch>` épingle une plateforme précise et prime sur `sha256`. Toute autre forme est `E-MOD-NATIVE`. | MUST |
+| MOD-5.15 | `path` est relatif au package et n'en sort pas : ni absolu, ni `..`, ni `:` (`E-MOD-NATIVE-PATH`). `{os}` et `{arch}` y sont remplacés par la plateforme hôte. | MUST |
+| MOD-5.16 | Le fichier attendu est `lib<lib>.a` (`static`), `lib<lib>.so` ou `lib<lib>.dylib` (`dylib`), et `<lib>.lib` sous Windows, dans `path`. S'il est illisible, ou si aucun digest ne couvre la plateforme, c'est `E-MOD-NATIVE-MISSING` (plateforme nommée), jamais un repli. | MUST |
+| MOD-5.17 | Le digest SHA-256 du fichier **MUST** égaler le digest épinglé ; sinon `E-MOD-NATIVE-DIGEST` et rien n'est lié. | MUST |
+| MOD-5.18 | `extern "C" from "<nom>" { ... }` lie ses fonctions à la bibliothèque `<nom>`, qui **MUST** figurer dans `[native]` (`E-FFI-UNKNOWN-LIB`). Seules les bibliothèques nommées par un tel bloc sont liées. Un bloc sans `from` désigne la bibliothèque C du système, comme avant. | MUST |
+| MOD-5.19 | Les digests des bibliothèques liées entrent dans `dependencies_digest`, donc dans l'identité de build. `build` affiche chaque bibliothèque liée et son digest ; `<artefact>.build.json` les liste sous `natives`. | MUST |
+| MOD-5.20 | Seul le package racine peut avoir une section `[native]` ; une dépendance qui en déclare une est `E-MOD-NATIVE`. | MUST |
+| MOD-5.21 | Le code natif n'est **pas vérifié** : chaque appel reste dans `unsafe` et porte les effets `unsafe` et `ffi` ([`abi.md`](abi.md) §3) ; les types admis à la frontière restent les primitives scalaires. | MUST |
 
 ## 6. Import d'une dépendance
 

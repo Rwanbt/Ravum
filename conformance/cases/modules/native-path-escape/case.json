@@ -1,0 +1,8 @@
+{
+  "id": "modules/native-path-escape",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-NATIVE-PATH"
+  ],
+  "notes": "MOD-5.15: a native library path must stay inside the package."
+}

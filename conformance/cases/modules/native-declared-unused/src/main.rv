@@ -1,0 +1,3 @@
+fn main() -> () effects(io) {
+    io::println("no native call");
+}

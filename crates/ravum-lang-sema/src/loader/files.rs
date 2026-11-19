@@ -229,6 +229,13 @@ pub(super) fn load_package_dir(
         // Module/parse errors are discovered while loading: never hand a
         // partially loaded program to the checker.
         if !diags.has_errors() {
+            if let Some(program) = &program {
+                let natives = resolve_natives(&root, &manifest, program, &mut diags);
+                out.dependencies_digest = fold_native_digest(&out.dependencies_digest, &natives);
+                out.natives = natives;
+            }
+        }
+        if !diags.has_errors() {
             out.program = program;
         }
         out.lib_program = lib_program;

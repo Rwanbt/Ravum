@@ -411,6 +411,20 @@ impl<'a> Parser<'a> {
             self.recover_item();
             return None;
         }
+        // `from "<lib>"`: `from` is a contextual word, not a keyword.
+        let lib = if matches!(self.kind(), TokenKind::Ident(word) if word == "from") {
+            self.bump();
+            if let TokenKind::Str(value) = self.kind().clone() {
+                let span = self.cur_span();
+                self.bump();
+                Some(Ident::new(value, span))
+            } else {
+                self.expected("library name string after `from`");
+                None
+            }
+        } else {
+            None
+        };
         if !self.at(Punct::LBrace) {
             self.expected("`{`");
             self.recover_item();
@@ -461,6 +475,7 @@ impl<'a> Parser<'a> {
         }
         Some(ItemKind::Extern(ExternBlock {
             abi,
+            lib,
             fns,
             span: self.span_from(start),
         }))

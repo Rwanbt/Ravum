@@ -16,7 +16,7 @@
 
 ### Pourquoi
 
-1. **Aucun besoin réel** : la seule frontière native est une **FFI minimale expérimentale** (`extern "C"` avec primitives scalaires, appelable dans `unsafe`), sans plugin, sans bibliothèque précompilée, sans registre public, et sans ABI Ravum stable. Les packages sont compilés **depuis la source** dans un seul programme ([`modules.md`](modules.md) MOD-6.6).
+1. **Aucun besoin réel** : la seule frontière native est une **FFI minimale expérimentale** (`extern "C"` avec primitives scalaires, appelable dans `unsafe`), sans plugin, sans registre public ; une bibliothèque précompilée n'entre que par `[native]`, épinglée par digest ([`modules.md`](modules.md) §5.1), et sans ABI Ravum stable. Les packages sont compilés **depuis la source** dans un seul programme ([`modules.md`](modules.md) MOD-6.6).
 2. **Le layout n'est pas observable** : sans pointeur, `size_of`, `transmute`, ni type FFI composé, aucun programme ne peut dépendre d'une disposition d'octets ([`types.md`](types.md) TYP-12). Figer un ABI n'apporterait aucune garantie utilisable et créerait une dette irréversible.
 3. **Le backend est provisoire** : la voie B (`rustc` comme générateur de code) est retenue pour cette itération, la voie C (IR propre → Cranelift) est expérimentale. Un ABI figé maintenant lierait le langage à un backend non ratifié.
 4. **Fail-closed** : un ABI implicite (« ça marche par accident ») est plus dangereux qu'une absence déclarée. L'absence est explicite et testable.
@@ -28,7 +28,7 @@
 |---|---|---|
 | ABI-2.1 | **Sémantique du source** : pour un programme accepté, le comportement observable (E/S, `panic`, code de sortie, valeurs rendues) est celui spécifié dans [`expressions.md`](expressions.md), [`stdlib.md`](stdlib.md) et [`core-machine.md`](core-machine.md). | MUST |
 | ABI-2.2 | **Déterminisme du compilateur** : mêmes sources + même configuration ⇒ mêmes diagnostics, même binaire fonctionnellement équivalent, même code Rust généré (hors commentaires de mapping si le chemin change). | MUST |
-| ABI-2.3 | **Auto-contenu** : le code généré est un **unique fichier Rust autonome**, prélude inclus, sans dépendance hors `std`, compilable par `rustc --edition 2021` (design §4). | MUST |
+| ABI-2.3 | **Auto-contenu** : le code généré est un **unique fichier Rust autonome**, prélude inclus, sans dépendance hors `std`, compilable par `rustc --edition 2021` (design §4). Seules les bibliothèques de `[native]` s'y ajoutent, à l'édition de liens (`-L native=`, `-l`). | MUST |
 | ABI-2.4 | **Auditabilité** : le code généré contient, avant chaque item/instruction, un commentaire `// rv: <fichier>:<ligne>` permettant de relier le Rust émis au source Ravum ; `--emit-rust FILE` l'écrit. | MUST |
 | ABI-2.5 | **Pas de `unsafe` généré hors frontière FFI** : pour un programme **sans `extern`**, le backend **MUST NOT** émettre de bloc `unsafe`, d'appel `unsafe`, ni de pointeur brut. Pour un programme avec `extern`, il émet **exactement** un wrapper `unsafe` par fonction `extern` (sous `deny(unsafe_code)`), et rien d'autre. | MUST |
 | ABI-2.6 | **Pas de contournement du checker** : le backend ne « répare » aucune erreur, n'insère aucune conversion implicite supplémentaire, ne réintroduit aucun effet non déclaré. | MUST |

@@ -941,6 +941,20 @@ pub fn compile_program_with_timings(
     if let Some(triple) = options.target.rustc_triple() {
         command.arg("--target").arg(triple);
     }
+    // Native libraries declared in `[native]` and used by an
+    // `extern "C" from "<lib>"` block, digests already checked by the loader
+    // (RFC-E11-SQLITE NAT-2). Their digests are in `dependencies_digest`, so
+    // these arguments are covered by the build identity.
+    for native in &frontend.pkg.natives {
+        command
+            .arg("-L")
+            .arg(format!(
+                "native={}",
+                util::strip_verbatim(&native.dir).display()
+            ))
+            .arg("-l")
+            .arg(format!("{}={}", native.kind.name(), native.lib));
+    }
     if is_library {
         command.arg("--crate-type").arg("lib");
     }
@@ -1015,7 +1029,14 @@ pub fn compile_program_with_timings(
         None => stable_generated,
     };
     let manifest = stable_artifact.with_file_name(format!("{file_name}.build.json"));
-    let manifest_json = build_manifest(&identity, options, &crate_name, is_library, &file_name);
+    let manifest_json = build_manifest(
+        &identity,
+        options,
+        &crate_name,
+        is_library,
+        &file_name,
+        &frontend.pkg.natives,
+    );
     util::write_bytes_atomic(&manifest, manifest_json.as_bytes()).map_err(BuildError::Write)?;
 
     Ok(Artifacts {
@@ -1036,6 +1057,7 @@ fn build_manifest(
     crate_name: &str,
     is_library: bool,
     file_name: &str,
+    natives: &[ravum_lang_sema::loader::NativeLib],
 ) -> String {
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1046,6 +1068,15 @@ fn build_manifest(
         "identity": identity.digest,
         "source_digest": identity.source_digest,
         "dependencies_digest": identity.dependencies_digest,
+        "natives": natives
+            .iter()
+            .map(|native| json!({
+                "name": native.name,
+                "kind": native.kind.name(),
+                "lib": native.lib,
+                "digest": native.digest,
+            }))
+            .collect::<Vec<_>>(),
         "artifact": file_name,
         "crate_name": crate_name,
         "crate_kind": identity.crate_kind,

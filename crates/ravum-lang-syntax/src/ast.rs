@@ -217,6 +217,10 @@ pub enum ItemKind {
 pub struct ExternBlock {
     /// Nom de l'ABI (`C` uniquement en Core 1.0).
     pub abi: Ident,
+    /// Bibliothèque native nommée par `extern "C" from "<lib>" { ... }`
+    /// (RFC-E11-SQLITE NAT-2.1) ; elle doit être déclarée dans `[native]` du
+    /// manifeste. `None` : symboles de la bibliothèque C du système.
+    pub lib: Option<Ident>,
     pub fns: Vec<ExternFn>,
     pub span: Span,
 }

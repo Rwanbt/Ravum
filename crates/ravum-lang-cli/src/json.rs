@@ -158,6 +158,7 @@ pub fn phase_for_code(code: &str) -> &'static str {
         "E-UNSUPPORTED-DROP-IMPL" => "parse",
         // Declared-effect and FFI-safety checks run in the resolver.
         "E-UNSUPPORTED-EFFECT" | "E-FFI-TYPE" => "resolve",
+        "E-FFI-UNKNOWN-LIB" => "modules",
         "E-UNSAFE-CONTEXT" => "types",
         // DIAG-1.10: reported where a builtin path is resolved.
         "W-DEPRECATED" => "resolve",

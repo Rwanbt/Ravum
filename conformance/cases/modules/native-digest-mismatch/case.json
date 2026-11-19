@@ -1,0 +1,8 @@
+{
+  "id": "modules/native-digest-mismatch",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-MOD-NATIVE-DIGEST"
+  ],
+  "notes": "MOD-5.17: the file exists (libdemo.a, and demo.lib for Windows) but its digest differs from the pinned one; nothing is linked."
+}

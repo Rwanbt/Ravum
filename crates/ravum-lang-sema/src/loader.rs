@@ -118,6 +118,49 @@ pub struct DependencyDecl {
     pub span: Span,
 }
 
+/// One `[native]` entry (RFC-E11-SQLITE NAT-1): a pre-built native library
+/// the package links. `path` is relative to the package; `{os}` and `{arch}`
+/// are replaced by the host platform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDecl {
+    pub name: String,
+    pub kind: NativeKind,
+    pub path: String,
+    pub lib: String,
+    /// `(platform, hex)`: `""` for the plain `sha256` key, `"<os>-<arch>"`
+    /// for a `sha256-<os>-<arch>` key.
+    pub sha256: Vec<(String, String)>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeKind {
+    Static,
+    Dylib,
+}
+
+impl NativeKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            NativeKind::Static => "static",
+            NativeKind::Dylib => "dylib",
+        }
+    }
+}
+
+/// A native library resolved on disk, its digest checked, and used by at
+/// least one `extern "C" from "<name>"` block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeLib {
+    pub name: String,
+    pub kind: NativeKind,
+    /// Absolute directory passed to `rustc -L native=`.
+    pub dir: PathBuf,
+    pub lib: String,
+    /// `sha256:<hex>` of the library file.
+    pub digest: String,
+}
+
 /// Strict, validated `ravum.toml` content.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageManifest {
@@ -126,6 +169,8 @@ pub struct PackageManifest {
     pub edition: String,
     /// Sorted by dependency name (deterministic).
     pub dependencies: Vec<DependencyDecl>,
+    /// `[native]` entries, sorted by name.
+    pub native: Vec<NativeDecl>,
 }
 
 /// A resolved local dependency (transitive entries included).
@@ -311,6 +356,10 @@ pub struct LoadedPackage {
     /// Aggregate `sha256:<hex>` of the resolved dependencies (empty digest when
     /// there is no dependency).
     pub dependencies_digest: String,
+    /// Native libraries the program links (RFC-E11-SQLITE NAT-1, NAT-2).
+    /// Their digests are folded into `dependencies_digest`, so they are part
+    /// of the build identity.
+    pub natives: Vec<NativeLib>,
     pub lockfile_state: LockfileState,
     /// Wall-clock time spent in the parser while loading this package (all
     /// files, dependencies included). Additive measurement for `--timings`;
@@ -403,6 +452,7 @@ impl LoadedPackage {
             crate_kind: None,
             dependencies: Vec::new(),
             dependencies_digest: empty_dependencies_digest(),
+            natives: Vec::new(),
             lockfile_state: LockfileState::NotApplicable,
             parse_time: Duration::ZERO,
             loaded_files: Vec::new(),
@@ -421,6 +471,7 @@ mod files;
 mod fsutil;
 mod graph;
 mod lockfile;
+mod native;
 mod paths;
 mod sha256;
 mod toml;
@@ -432,6 +483,7 @@ use files::*;
 use fsutil::*;
 use graph::*;
 use lockfile::*;
+use native::*;
 pub use sha256::sha256_hex;
 use sha256::Sha256;
 use toml::*;
