@@ -1,0 +1,12 @@
+{
+  "id": "cli/json-spec-version-says-draft",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--json",
+    "."
+  ],
+  "stdout_contains": "\"spec_version\":\"core-1.0-draft.",
+  "expect_json_schema_version": 1,
+  "notes": "COMPAT-1.2 (MUST): every JSON report carries `spec_version` and it says draft."
+}

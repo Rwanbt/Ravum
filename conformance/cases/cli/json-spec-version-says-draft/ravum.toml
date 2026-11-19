@@ -1,0 +1,4 @@
+[package]
+name = "cli-json-spec-version-says-draft"
+version = "0.1.0"
+edition = "core-1.0"
