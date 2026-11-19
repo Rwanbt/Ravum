@@ -14,6 +14,27 @@
 > WCET. Elle relie le compilateur à un hôte qui a **mesuré** 0 allocation au
 > callback sur des tests ; elle ne qualifie pas une plateforme audio.
 
+## Avancement (2026-11-19)
+
+**Implémenté** : [`spec/language/reload.md`](../../spec/language/reload.md) §3
+(DSP-1.1 à DSP-1.5), F-META-034, `ravum-lang build --emit dsp-block` et
+`check --dsp-block`, codes `E-DSP-ENTRY` et `E-DSP-STATE-TYPE`, export
+`ravum_state_schema` et `ExpectedAbi::dsp_with_state_schema()` /
+`RejectReason::StateSchemaChanged` dans l'hôte, `docs/ffi/SAFETY.md` §8, et
+`crates/ravum-lang-cli/tests/dsp_block.rs` (différentiel bit à bit sur 10
+signaux ; 10 000 blocs, 20 remplacements, 0 allocation et 0 désallocation au
+callback ; refus de schéma). Écarts retenus :
+- l'**ABI DSP 2 est inchangée** : l'état est celui que l'hôte possède déjà,
+  `{ z1: f32, z2: f32 }`, et non une struct libre (§1 point 3) ; l'élargir
+  demande une nouvelle ABI, donc la ratification de §6 point 1 ;
+- `process_sample(&mut State, f32) -> f32` par échantillon au lieu d'un
+  tableau de 64 : aucune taille de bloc fixée (DSP-1.5 de cette RFC sans
+  objet) ;
+- la vérification du digest est **optionnelle** côté hôte (`dsp()` garde le
+  contrat historique, que les fixtures existantes respectent) ;
+- non fait : le test de bout en bout de `examples/dsp-gain-iir` (§4) et le
+  fondu (`MAX_FADE_FRAMES`) mesuré sur un bloc `.rv`.
+
 ## 1. Ce qui change par rapport à RFC-RV-DSP-BLOCK-1
 
 RFC-RV-DSP-BLOCK-1 attendait trois ratifications : l'ABI, le digest de schéma

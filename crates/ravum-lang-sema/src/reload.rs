@@ -400,3 +400,106 @@ fn type_text(
         )),
     }
 }
+
+/// Codes of the DSP block contract (RFC-E11-DSP-BLOCK, `reload.md` §5).
+pub const E_DSP_ENTRY: &str = "E-DSP-ENTRY";
+pub const E_DSP_STATE_TYPE: &str = "E-DSP-STATE-TYPE";
+
+/// Name of the per-sample entry of a DSP block.
+pub const DSP_ENTRY: &str = "process_sample";
+
+/// Schema text of the host-owned DSP state (`ravum_protocol::DSP_STATE_SCHEMA_V1_TEXT`,
+/// repeated here because the checker depends on no host crate; a CLI test
+/// asserts that both texts are equal).
+pub const DSP_STATE_SCHEMA_V1_TEXT: &str = "#0=struct{z1:f32;z2:f32;}\n";
+
+/// The checked contract of a DSP block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DspContract {
+    pub state: StateSchema,
+    pub process: NodeId,
+}
+
+/// Check the DSP block contract: `struct State` with the host state schema and
+/// `fn process_sample(state: &mut State, input: f32) -> f32` in the root module.
+pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnostic>> {
+    let root = &checked.program.root;
+    let whole = root.span;
+    let mut state_item = None;
+    let mut process_item = None;
+    for item in &root.items {
+        match &item.kind {
+            ItemKind::Struct(s) if s.name.name == "State" => {
+                state_item = Some((item.id, item.span))
+            }
+            ItemKind::Enum(e) if e.name.name == "State" => state_item = Some((item.id, item.span)),
+            ItemKind::Fn(f) if f.name.name == DSP_ENTRY => {
+                process_item = Some((item.id, item.span))
+            }
+            _ => {}
+        }
+    }
+    let Some((state_def, state_span)) = state_item else {
+        return Err(vec![Diagnostic::error(
+            E_DSP_ENTRY,
+            whole,
+            "a DSP block declares a struct `State` in its root module",
+        )]);
+    };
+    let mut diags = Vec::new();
+    let state = match schema(checked, state_def, state_span) {
+        Ok(s) if s.text == DSP_STATE_SCHEMA_V1_TEXT => Some(s),
+        Ok(_) => {
+            diags.push(Diagnostic::error(
+                E_DSP_STATE_TYPE,
+                state_span,
+                "the state of a DSP block is the host state `struct State { z1: f32, z2: f32 }`",
+            ));
+            None
+        }
+        Err(_) => {
+            diags.push(Diagnostic::error(
+                E_DSP_STATE_TYPE,
+                state_span,
+                "the state of a DSP block is the host state `struct State { z1: f32, z2: f32 }`",
+            ));
+            None
+        }
+    };
+    let process = match process_item {
+        None => {
+            diags.push(Diagnostic::error(
+                E_DSP_ENTRY,
+                whole,
+                "a DSP block declares `fn process_sample(state: &mut State, input: f32) -> f32`",
+            ));
+            None
+        }
+        Some((id, span)) => {
+            let ok = checked.facts.fn_sigs.get(&id).is_some_and(|sig| {
+                let state_ref = matches!(&sig.params.first().map(|p| &p.ty),
+                    Some(Type::Ref { mutable: true, inner })
+                        if matches!(inner.as_ref(), Type::Nominal { def, args, .. } if *def == state_def && args.is_empty()));
+                sig.generics.is_empty()
+                    && sig.params.len() == 2
+                    && state_ref
+                    && sig.params[1].ty == Type::F32
+                    && sig.ret == Type::F32
+            });
+            if ok {
+                Some(id)
+            } else {
+                diags.push(Diagnostic::error(
+                    E_DSP_ENTRY,
+                    span,
+                    "`process_sample` must be `fn process_sample(state: &mut State, input: f32) -> f32`",
+                ));
+                None
+            }
+        }
+    };
+    match (state, process) {
+        (Some(state), Some(process)) if diags.is_empty() => Ok(DspContract { state, process }),
+        _ => Err(diags),
+    }
+}

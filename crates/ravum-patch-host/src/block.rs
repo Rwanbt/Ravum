@@ -180,6 +180,32 @@ pub fn prepare_block(path: &Path, expected: &ExpectedAbi) -> Result<PreparedBloc
     let started = Instant::now();
     let lib = DeferredLibrary::open(path).map_err(|detail| RejectReason::LoadFailed { detail })?;
     let validated = validate_loaded(lib, path, expected)?;
+    if let Some(wanted) = &expected.state_schema {
+        let schema_fn: unsafe extern "C" fn() -> *const std::os::raw::c_char = unsafe {
+            validated.lib.symbol(b"ravum_state_schema\0")
+        }
+        .map_err(|_| RejectReason::MissingExport {
+            symbol: ravum_protocol::DSP_STATE_SCHEMA_EXPORT.to_owned(),
+        })?;
+        // SAFETY: the symbol has the declared signature (checked ABI version 2
+        // and manifest above); a null pointer is refused before it is read.
+        let raw = unsafe { schema_fn() };
+        let found = if raw.is_null() {
+            String::new()
+        } else {
+            // SAFETY: non-null, NUL-terminated by the module contract; the text
+            // is copied before the library can be unloaded.
+            unsafe { std::ffi::CStr::from_ptr(raw) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        if &found != wanted {
+            return Err(RejectReason::StateSchemaChanged {
+                expected: wanted.clone(),
+                found,
+            });
+        }
+    }
     let process: BlockFn =
         unsafe { validated.lib.symbol(b"ravum_process_block\0") }.map_err(|_| {
             RejectReason::MissingExport {

@@ -201,3 +201,86 @@ impl Emitter<'_> {
         Ok(())
     }
 }
+
+impl Emitter<'_> {
+    /// The DSP block ABI (`ravum-protocol/src/dsp.rs`, DSP_ABI_VERSION 2) around
+    /// the user's `process_sample`, emitted inside the root module.
+    ///
+    /// This is the only `unsafe` of a DSP block (DSP-1.3): one module, written by
+    /// the generator, never by the user. It turns the host's raw block pointers
+    /// into slices, copies the host state into the Ravum `State` (same schema,
+    /// checked by `dsp_contract` and by the host), runs one call per sample and
+    /// writes the state back. It allocates nothing.
+    pub(super) fn emit_dsp_wrapper(
+        &self,
+        buf: &mut Buf,
+        contract: &ravum_lang_sema::reload::DspContract,
+    ) -> Result<(), CodegenError> {
+        let state = self.type_path(contract.state.def)?;
+        let process = self.item_path(contract.process)?;
+        let fields: Vec<String> = self.checked.facts.structs[&contract.state.def]
+            .fields
+            .iter()
+            .map(|f| f.rust_name.clone())
+            .collect();
+        let manifest = format!(
+            "{{\\\"schema_version\\\":1,\\\"patch_id\\\":\\\"{}\\\",\\\"export\\\":\\\"ravum_process_block\\\",\\\"signature\\\":\\\"block:f32->f32+state:v1\\\",\\\"author\\\":\\\"ravum-lang\\\"}}",
+            self.options.crate_name
+        );
+        let lines = [
+            String::new(),
+            "#[allow(unsafe_code)]".to_string(),
+            "pub mod rv_dsp_abi {".to_string(),
+            "    #[repr(C)]".to_string(),
+            "    pub struct RvHostState {".to_string(),
+            "        pub z1: f32,".to_string(),
+            "        pub z2: f32,".to_string(),
+            "    }".to_string(),
+            format!("    const MANIFEST: &[u8] = b\"{manifest}\\0\";"),
+            format!("    const STATE_SCHEMA: &[u8] = b\"{}\\0\";", contract.state.digest),
+            "    #[no_mangle]".to_string(),
+            "    pub extern \"C\" fn ravum_abi_version() -> u32 {".to_string(),
+            "        2".to_string(),
+            "    }".to_string(),
+            "    #[no_mangle]".to_string(),
+            "    pub extern \"C\" fn ravum_manifest_v1() -> *const std::os::raw::c_char {".to_string(),
+            "        MANIFEST.as_ptr() as *const std::os::raw::c_char".to_string(),
+            "    }".to_string(),
+            "    #[no_mangle]".to_string(),
+            "    pub extern \"C\" fn ravum_state_schema() -> *const std::os::raw::c_char {".to_string(),
+            "        STATE_SCHEMA.as_ptr() as *const std::os::raw::c_char".to_string(),
+            "    }".to_string(),
+            "    /// # Safety".to_string(),
+            "    /// `input` and `output` hold `frames` samples, `state` is a valid".to_string(),
+            "    /// host state; none is retained after the call.".to_string(),
+            "    #[no_mangle]".to_string(),
+            "    pub unsafe extern \"C\" fn ravum_process_block(input: *const f32, output: *mut f32, frames: u32, state: *mut RvHostState) {".to_string(),
+            "        if input.is_null() || output.is_null() || state.is_null() || frames == 0 {".to_string(),
+            "            return;".to_string(),
+            "        }".to_string(),
+            "        let n = frames as usize;".to_string(),
+            "        // SAFETY: the host passes valid, non-overlapping buffers of `n` samples.".to_string(),
+            "        let input = unsafe { std::slice::from_raw_parts(input, n) };".to_string(),
+            "        let output = unsafe { std::slice::from_raw_parts_mut(output, n) };".to_string(),
+            "        // SAFETY: the host owns the state and passes it for this call only.".to_string(),
+            "        let host = unsafe { &mut *state };".to_string(),
+            format!(
+                "        let mut rv_state = {state} {{ {} }};",
+                fields.iter().map(|f| format!("{f}: host.{f}")).collect::<Vec<_>>().join(", ")
+            ),
+            "        for (x, y) in input.iter().zip(output.iter_mut()) {".to_string(),
+            format!("            *y = {process}(&mut rv_state, *x);"),
+            "        }".to_string(),
+            format!(
+                "        {}",
+                fields.iter().map(|f| format!("host.{f} = rv_state.{f};")).collect::<Vec<_>>().join(" ")
+            ),
+            "    }".to_string(),
+            "}".to_string(),
+        ];
+        for line in lines {
+            buf.line(&line);
+        }
+        Ok(())
+    }
+}

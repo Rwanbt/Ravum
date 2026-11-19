@@ -173,6 +173,8 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-HR-ENTRY` | reload | `State`, `init`, `step` absents du module racine, ou signature différente du contrat ; `migrate` mal formée (HR-1.8, HR-1.7) |
 | `E-HR-STATE-TYPE` | reload | type de l'état sans forme canonique : générique, non utilisateur, fonction (HR-1.6) |
 | `E-HR-STATE-RESOURCE` | reload | référence ou ressource (socket, handle, canal, `CHandle`) dans l'état (HR-1.6) |
+| `E-DSP-ENTRY` | reload | `State` ou `process_sample` absents du module racine, ou signature différente de `fn(state: &mut State, input: f32) -> f32` (DSP-1.2) ; émis par `--dsp-block` / `--emit dsp-block` |
+| `E-DSP-STATE-TYPE` | reload | état d'un bloc DSP différent de l'état hôte `struct State { z1: f32, z2: f32 }` (DSP-1.2) |
 
 ### 3.7 Avertissements
 

@@ -26,6 +26,7 @@ pub fn dispatch(command: Command) -> i32 {
             timings,
             rt_entry,
             reload,
+            dsp_block,
         } => check::run(
             &path,
             json,
@@ -34,6 +35,7 @@ pub fn dispatch(command: Command) -> i32 {
             timings,
             rt_entry.as_deref(),
             reload,
+            dsp_block,
         ),
         Command::Build {
             path,
@@ -43,6 +45,7 @@ pub fn dispatch(command: Command) -> i32 {
             target,
             timings,
             rt_entry,
+            dsp_block,
         } => build::run(
             &path,
             release,
@@ -51,6 +54,7 @@ pub fn dispatch(command: Command) -> i32 {
             target,
             timings,
             rt_entry.as_deref(),
+            dsp_block,
         ),
         Command::Run {
             path,

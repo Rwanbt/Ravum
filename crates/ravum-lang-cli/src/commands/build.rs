@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::pipeline::{self, AnalysisTimings, BuildOptions, BuildTarget, BuildTimings};
 use crate::util;
 
+#[allow(clippy::too_many_arguments)] // one parameter per CLI flag, passed through unchanged
 pub fn run(
     path: &Path,
     release: bool,
@@ -14,6 +15,7 @@ pub fn run(
     target: BuildTarget,
     request_timings: bool,
     rt_entry: Option<&str>,
+    dsp_block: bool,
 ) -> i32 {
     // `build` has no `--profile` flag: without `--rt-entry` it keeps the
     // historical Core analysis; with `--rt-entry` (T6) the analysis applies the
@@ -24,12 +26,18 @@ pub fn run(
     } else {
         Profile::Core
     };
-    let (frontend, analysis) = if request_timings {
-        pipeline::analyze_entry_with_timings(path, profile, false, rt_entry)
+    let (frontend, analysis, dsp) = if dsp_block {
+        let (frontend, dsp) = pipeline::analyze_dsp(path, false);
+        (frontend, AnalysisTimings::default(), dsp)
+    } else if request_timings {
+        let (frontend, analysis) =
+            pipeline::analyze_entry_with_timings(path, profile, false, rt_entry);
+        (frontend, analysis, None)
     } else {
         (
             pipeline::analyze_with_entry(path, profile, false, rt_entry),
             AnalysisTimings::default(),
+            None,
         )
     };
     if !frontend.success() {
@@ -54,6 +62,7 @@ pub fn run(
         emit_rust,
         target,
         reload: None,
+        dsp,
     };
     let mut build_timings = BuildTimings::default();
     let result = pipeline::compile_program_with_timings(&frontend, &options, &mut build_timings);

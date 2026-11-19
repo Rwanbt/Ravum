@@ -346,6 +346,41 @@ pub fn reload_contract(frontend: &mut Frontend) -> Option<ravum_lang_sema::reloa
     }
 }
 
+/// Analyze a DSP block: the contract first (Core analysis, `E-DSP-*`), then the
+/// `rt` profile from `process_sample` (DSP-1.1). The returned frontend is the
+/// `rt` one when the contract holds.
+pub fn analyze_dsp(
+    path: &Path,
+    locked: bool,
+) -> (Frontend, Option<ravum_lang_sema::reload::DspContract>) {
+    let mut frontend = analyze(path, Profile::Core, locked);
+    let Some(_) = dsp_contract(&mut frontend) else {
+        return (frontend, None);
+    };
+    let mut rt = analyze_with_entry(
+        path,
+        Profile::Rt,
+        locked,
+        Some(ravum_lang_sema::reload::DSP_ENTRY),
+    );
+    let contract = dsp_contract(&mut rt);
+    (rt, contract)
+}
+
+/// Check the DSP block contract (RFC-E11-DSP-BLOCK) of an analyzed program.
+pub fn dsp_contract(frontend: &mut Frontend) -> Option<ravum_lang_sema::reload::DspContract> {
+    let checked = frontend.checked.as_ref()?;
+    match ravum_lang_sema::reload::dsp_contract(checked) {
+        Ok(contract) => Some(contract),
+        Err(diags) => {
+            for diag in diags {
+                frontend.diags.push(diag);
+            }
+            None
+        }
+    }
+}
+
 pub fn render_diags(frontend: &Frontend) -> String {
     frontend.diags.render(&frontend.pkg.sources)
 }
@@ -568,6 +603,8 @@ pub struct BuildOptions {
     pub target: BuildTarget,
     /// Build a reloadable module (RFC-E11-HOT-RELOAD) for `watch --reload`.
     pub reload: Option<ravum_lang_sema::reload::ReloadContract>,
+    /// Build a DSP block `cdylib` (RFC-E11-DSP-BLOCK, `build --emit dsp-block`).
+    pub dsp: Option<ravum_lang_sema::reload::DspContract>,
 }
 
 impl Default for BuildOptions {
@@ -578,6 +615,7 @@ impl Default for BuildOptions {
             emit_rust: None,
             target: BuildTarget::Native,
             reload: None,
+            dsp: None,
         }
     }
 }
@@ -747,14 +785,23 @@ pub fn build_identity(frontend: &Frontend, options: &BuildOptions) -> BuildIdent
         target: options.target.rustc_triple().unwrap_or("host"),
         rustc: rustc_version().unwrap_or_else(|| "unknown".to_string()),
         generator: format!("ravum-lang-codegen {GENERATOR_VERSION}"),
-        reload_schema: options.reload.as_ref().map(|c| {
-            let old = c
-                .migrate
-                .as_ref()
-                .map(|(_, s)| s.digest.as_str())
-                .unwrap_or("-");
-            format!("{} {old}", c.state.digest)
-        }),
+        reload_schema: options
+            .reload
+            .as_ref()
+            .map(|c| {
+                let old = c
+                    .migrate
+                    .as_ref()
+                    .map(|(_, s)| s.digest.as_str())
+                    .unwrap_or("-");
+                format!("{} {old}", c.state.digest)
+            })
+            .or_else(|| {
+                options
+                    .dsp
+                    .as_ref()
+                    .map(|c| format!("dsp-block {}", c.state.digest))
+            }),
     };
     let digest = format!(
         "sha256:{}",
@@ -869,6 +916,12 @@ fn artifact_file_name(
         }
     } else if options.test_mode {
         format!("{crate_name}-tests{}", exe_suffix())
+    } else if options.dsp.is_some() {
+        format!(
+            "{}{crate_name}{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        )
     } else if options.reload.is_some() {
         format!("{crate_name}-reload{}", exe_suffix())
     } else if is_library {
@@ -930,6 +983,7 @@ pub fn compile_program_with_timings(
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
         reload: options.reload.clone(),
+        dsp: options.dsp.clone(),
     };
     let codegen_started = Instant::now();
     let rust =
@@ -948,7 +1002,7 @@ pub fn compile_program_with_timings(
     util::write_bytes_atomic(&intermediate, rust.as_bytes()).map_err(BuildError::Write)?;
 
     let file_name = artifact_file_name(frontend, options, &crate_name, is_library);
-    let stable_dir = if is_library {
+    let stable_dir = if is_library || options.dsp.is_some() {
         cache.join("lib")
     } else {
         cache.join("bin")
@@ -992,6 +1046,8 @@ pub fn compile_program_with_timings(
     }
     if is_library {
         command.arg("--crate-type").arg("lib");
+    } else if options.dsp.is_some() {
+        command.arg("--crate-type").arg("cdylib");
     }
     // Incremental compilation, debug builds only (phase 3.3). The directory is
     // derived data: it is not part of the build identity, the published

@@ -1,0 +1,13 @@
+struct State { z1: f32, z2: f32 }
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    let y: f32 = 0.5 * input + 0.5 * state.z1;
+    state.z2 = state.z1;
+    state.z1 = y;
+    y
+}
+
+fn main() -> () effects() {
+    let mut s: State = State { z1: 0.0, z2: 0.0 };
+    drop(process_sample(&mut s, 1.0));
+}

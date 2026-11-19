@@ -50,7 +50,11 @@ quatre crates portent `#![forbid(unsafe_code)]`, le CLI porte
   encadre le wrapper `rvm_ffi_wrap_<id>`. Ce n'est pas un site `unsafe` du
   compilateur, mais c'est un `unsafe` du **produit** : il est couvert par les
   tests backend (un seul `unsafe`, `link_name` correct) et par
-  [`SAFETY.md`](SAFETY.md) §2.
+  [`SAFETY.md`](SAFETY.md) §2. Un **bloc DSP** (`build --emit dsp-block`,
+  RFC-E11-DSP-BLOCK DSP-1.3) porte de même `#![deny(unsafe_code)]` et un seul
+  `#[allow(unsafe_code)]`, sur le module généré `rv_dsp_abi` : il convertit les
+  pointeurs de bloc de l'hôte en tranches, recopie l'état hôte (`z1`, `z2`)
+  dans `State` et retour ; voir [`SAFETY.md`](SAFETY.md) §8.
 - **La bibliothèque C appelée.** Elle n'est pas compilée par Ravum ; aucun
   inventaire ne peut la borner. C'est la phrase TCB de `SAFETY.md` §1.
 - **Les dépendances.** L'inventaire porte sur les crates du langage, pas sur

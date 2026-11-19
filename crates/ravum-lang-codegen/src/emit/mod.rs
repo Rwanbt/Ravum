@@ -637,7 +637,7 @@ impl<'a> Emitter<'a> {
             buf.line(&format!("// rv source: {}", first.path));
         }
         buf.line("#![allow(dead_code, unused_variables, unused_mut, unused_assignments, unused_imports, unused_parens, unused_braces, unused_labels, unused_must_use, unused_comparisons, non_snake_case, non_camel_case_types, non_upper_case_globals, unreachable_code, unreachable_patterns, arithmetic_overflow, unconditional_panic)]");
-        if self.program_uses_extern() {
+        if self.program_uses_extern() || self.options.dsp.is_some() {
             // FFI programs need `unsafe` for the generated extern wrappers only.
             // `deny` (not `allow`) keeps the guarantee "zero unsafe outside the
             // generated wrappers": each wrapper carries a local
@@ -654,6 +654,8 @@ impl<'a> Emitter<'a> {
             buf.raw(crate::prelude::RELOAD_PRELUDE);
             buf.blank();
             self.emit_reload_main(&mut buf, contract)?;
+        } else if self.options.dsp.is_some() {
+            // A `cdylib` has no entry point: the host calls the exported block.
         } else {
             self.emit_entry(&mut buf)?;
         }
@@ -812,6 +814,11 @@ impl<'a> Emitter<'a> {
         }
         if let Some(contract) = &self.options.reload {
             self.emit_reload_items(buf, module, contract)?;
+        }
+        if let Some(contract) = &self.options.dsp {
+            if module.id == self.checked.program.root.id {
+                self.emit_dsp_wrapper(buf, contract)?;
+            }
         }
         self.shadowed_names.replace(outer);
         buf.indent -= 1;

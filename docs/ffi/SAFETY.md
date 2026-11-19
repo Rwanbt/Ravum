@@ -182,3 +182,22 @@ native ».
 - Il ne prétend pas que la frontière est inutile : il mesure qu'elle est
   **étroite, scalaire et visible**, ce qui est précisément ce qui la rend
   auditable.
+
+## 8. Bloc DSP généré (RFC-E11-DSP-BLOCK DSP-1.3)
+
+`ravum-lang build --emit dsp-block` produit un `cdylib` dont le seul `unsafe`
+est le module généré `rv_dsp_abi`, sous un `#[allow(unsafe_code)]` local ; le
+fichier porte `#![deny(unsafe_code)]`, donc tout autre `unsafe` fait échouer le
+build. L'utilisateur n'écrit aucun `unsafe` : son code est `process_sample`,
+vérifié sous le profil `rt`.
+
+| Opération | Justification |
+|---|---|
+| `slice::from_raw_parts(input, n)` / `from_raw_parts_mut(output, n)` | l'hôte (`ravum-patch-host`, `BlockModule::process_block`) passe deux tampons distincts de `n` échantillons valides pendant l'appel ; un pointeur nul ou `n = 0` rend sans rien faire |
+| `&mut *state` | l'état appartient à l'hôte, `#[repr(C)] { z1: f32, z2: f32 }` des deux côtés ; le digest de schéma (`ravum_state_schema`) est vérifié par l'hôte avant tout appel (DSP-1.4) |
+| exports `extern "C"` (`ravum_abi_version`, `ravum_manifest_v1`, `ravum_state_schema`) | rendent des constantes statiques terminées par NUL |
+
+Une panique dans `process_sample` traverse une frontière `extern "C"` : le
+processus s'arrête (comportement de Rust), elle n'est pas rattrapée. Le profil
+`rt` ne garantit pas l'absence de panique (RFC-RT-TRAPS).
+

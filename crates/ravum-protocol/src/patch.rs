@@ -112,6 +112,9 @@ pub enum RejectReason {
     },
     /// The required verification did not reach a passing `tested` status.
     NotVerified { verification_status: String },
+    /// The module's state schema digest differs from the host's state
+    /// (RFC-E11-DSP-BLOCK DSP-1.4, `reload.md` HR-1.3).
+    StateSchemaChanged { expected: String, found: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -23,3 +23,8 @@ serde_json = { workspace = true }
 # Reference interpreter, compared to the backend (core-machine.md §8, O10).
 # A dev-dependency only: the machine itself depends on no compiler crate.
 ravum-core-machine = { path = "../ravum-core-machine" }
+# DSP block end-to-end test (RFC-E11-DSP-BLOCK): the real host loads the
+# `cdylib` built from `.rv`; the harness counts allocations on the callback.
+ravum-protocol = { workspace = true }
+ravum-patch-host = { workspace = true }
+ravum-dsp-harness = { workspace = true }
