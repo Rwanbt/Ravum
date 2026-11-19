@@ -1,0 +1,4 @@
+fn main() {
+    let x: f32 = 4.0;
+    io::println(&math::sqrt(x as f64).to_string());
+}

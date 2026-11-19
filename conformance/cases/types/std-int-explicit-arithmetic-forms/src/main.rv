@@ -1,0 +1,22 @@
+fn main() {
+    let a: i8 = 127;
+    let w = a.wrapping_add(1);
+    let s = a.saturating_add(1);
+    let c = match a.checked_add(1) {
+        Some(_) => "some",
+        None => "none",
+    };
+    let d: i32 = 21;
+    let q = match d.checked_div(3) {
+        Some(v) => v,
+        None => 0,
+    };
+    let mut out = w.to_string();
+    out.push_str(" ");
+    out.push_str(&s.to_string());
+    out.push_str(" ");
+    out.push_str(c);
+    out.push_str(" ");
+    out.push_str(&q.to_string());
+    io::println(&out);
+}

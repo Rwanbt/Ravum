@@ -1,0 +1,8 @@
+{
+  "id": "types/std-impl-on-string-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-IMPL-SELF-TYPE"
+  ],
+  "notes": "STD-1.5: prelude methods are inherent; no user `impl` on a prelude type."
+}

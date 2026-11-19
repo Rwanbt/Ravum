@@ -1,0 +1,3 @@
+fn main() {
+    let _r = fs::append_string("x", "y");
+}

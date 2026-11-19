@@ -8,12 +8,13 @@
 ## 1. Résultat en une phrase
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
-> `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177 et `modules.md`)** :
-> `tools/must_audit.py` compte **816 énoncés MUST** et **222 FeatureIds**
-> (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à 027, F-MOD-014 à 016
-> ajoutés) ; **628 / 816** sont atteignables par un FeatureId, **188** ne le
-> sont pas ; couverture stricte **222/222** (1 exemption). `modules.md` :
-> 64 / 67. `diagnostics.md` : 40 / 45 ;
+> `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178
+> et `stdlib.md`)** : `tools/must_audit.py` compte **817 énoncés MUST** (STD-12.7
+> ajouté) et **225 FeatureIds** (F-LEX-009 à 015, F-SYN-036 à 040, F-META-009 à
+> 027, F-MOD-014 à 016, F-STD-033 à 035 ajoutés) ; **639 / 817** sont
+> atteignables par un FeatureId, **178** ne le sont pas ; couverture stricte
+> **225/225** (1 exemption). `modules.md` : 64 / 67 ; `stdlib.md` : 86 / 92
+> (`T2-FINDINGS` §36). `diagnostics.md` : 40 / 45 ;
 > `compatibility.md` : 14 / 39 (25 règles de gouvernance, `T2-FINDINGS` §32) ;
 > `abi.md` : 14 / 35 (`T2-FINDINGS` §33). Le texte ci-dessous est la
 > mesure d'origine, conservée.

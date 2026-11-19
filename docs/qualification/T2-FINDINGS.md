@@ -2045,3 +2045,48 @@ compte que si le répertoire contient une entrée de nom **exactement** égal
 MOD-6.5 (aucun plugin : rien d'observable), MOD-6.6 (dépendances compilées
 depuis la source : invariant de construction), MOD-8.6 (compatibilité
 déclarative : non-engagement).
+
+## 36. Lot `stdlib.md` : 10 MUST de plus tracés, une contradiction à arbitrer (2026-11-19)
+
+### 36.1 Mesure
+
+`python3 tools/must_audit.py` : `stdlib.md` passe de 16 non atteints à **6** ;
+dénominateur 817 MUST (STD-12.7 ajouté, §36.2) ; `features_coverage.py
+--strict` : 225/225 (1 exemption). FeatureIds F-STD-033 à 035. Quatorze cas
+`types/std-*`, chacun mesuré avant d'être écrit (liste fermée, `impl String`,
+ajustements implicites, effets de `env::args`, absence d'écriture
+d'environnement et de mode d'ouverture, formes arithmétiques explicites).
+
+### 36.2 Texte aligné sur un RFC accepté
+
+STD-12.6 interdisait `wrapping_add`, `checked_add` et `saturating_*`, alors que
+[RFC-RT-TRAPS](../rfc/RFC-RT-TRAPS.md) (`ACCEPTED` le 2026-11-14) les a ajoutés
+(commit 21533dd), et que les cas `effects/rt-trap-*` s'en servent. Le code avait
+suivi le RFC, pas la spécification. STD-12.6 ne les cite plus, et **STD-12.7**
+(nouvel identifiant, ajouté à `tools/rule_ids.snapshot`) décrit les 14 formes
+réellement implémentées : `wrapping_add/sub/mul/neg`, `saturating_add/sub/mul/neg`,
+`checked_add/sub/mul/div/rem/neg`.
+
+### 36.3 Contradiction à arbitrer : STD-1.1 et les modules sans `use`
+
+STD-1.1 (et `modules.md` §8) dit : « aucun module n'est dans le prélude :
+`io::println` exige `use std::io;` ». L'implémentation résout `io`, `fs`,
+`string`, `math`, `env` et `process` sans `use` (`builtins::PRELUDE_MODULES`),
+et quasiment tout le corpus et tous les exemples en dépendent. STD-1.1 n'est
+pas tracé.
+
+1. **Recommandé** : amender STD-1.1 et `modules.md` §8 pour dire ce que fait
+   l'outil (les modules `std` sont des racines résolues sans `use` ; `use
+   std::io;` reste admis), en gardant le refus de `io.println` (MOD-6.7, déjà
+   tracé). Aucun programme existant ne change.
+2. Appliquer le texte : faire échouer tout `io::println` sans `use`. Cela
+   casse presque tous les cas et exemples ; c'est une rupture de langage.
+
+### 36.4 Non tracés
+
+STD-1.1 (§36.3), STD-1.2 (std non déclarable : invariant du loader),
+STD-1.4 (signatures normatives : couvert par l'ensemble des cas `run/*`, sans
+lien de règle), STD-1.7 (messages non stables : non-engagement), STD-3.1
+(aucune normalisation de chemin à l'exécution : nécessite un cas avec E/S
+fichier hors du répertoire du cas), STD-6.8 (pas de garantie de précision :
+non-engagement).

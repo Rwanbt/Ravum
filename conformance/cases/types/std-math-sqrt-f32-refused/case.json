@@ -1,0 +1,8 @@
+{
+  "id": "types/std-math-sqrt-f32-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "STD-6.1: no f32 variant of `math` functions."
+}
