@@ -175,3 +175,19 @@ fn a_match_binding_is_a_copy_not_an_alias() {
     let (n, _) = judge(&[src]);
     assert_eq!(n, 1);
 }
+
+#[test]
+fn option_methods_agree_with_the_reference_machine() {
+    let mut programs = Vec::new();
+    for v in ["Some(7)", "None", "Some(-9223372036854775808)", "Some(0)"] {
+        for d in ["3", "-1"] {
+            programs.push(format!(
+                "fn check() -> i64 effects() {{\n    let a: Option<i64> = {v};\n    let d: i64 = {d};\n    let k: i64 = 1000;\n    let mut r: i64 = a.unwrap_or(d);\n    if a.is_some() {{\n        r = r + k;\n    }}\n    if a.is_none() {{\n        r = r - k;\n    }}\n    return r;\n}}\n"
+            ));
+        }
+    }
+    // Aggregate payload: `unwrap_or` copies the tuple.
+    programs.push("fn check() -> i64 effects() {\n    let a: Option<(i32, i64)> = Some((4, 5));\n    let b: Option<(i32, i64)> = None;\n    let d0: (i32, i64) = (0, 0);\n    let d1: (i32, i64) = (1, 2);\n    let x = a.unwrap_or(d0);\n    let y = b.unwrap_or(d1);\n    let h: i64 = 100;\n    let t: i64 = 10;\n    return (x.0 as i64) * h + x.1 * t + (y.0 as i64) + y.1;\n}\n".to_string());
+    let (n, _) = judge(&programs);
+    assert_eq!(n, 9);
+}

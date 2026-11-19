@@ -144,6 +144,10 @@ pub enum BinOp {
     OverflowsAdd,
     OverflowsSub,
     OverflowsMul,
+    /// `f64` only (IR v1.2, `math::min`/`math::max`, STD-6.5): a NaN operand
+    /// yields the other; `min(-0.0, +0.0) = -0.0`, `max(-0.0, +0.0) = +0.0`.
+    MathMin,
+    MathMax,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,6 +169,9 @@ pub enum UnOp {
     Floor,
     /// IR v1.2, `f64` only: round toward +inf.
     Ceil,
+    /// IR v1.2, `f64` only (`math::round`, STD-6.3): nearest, ties away
+    /// from zero.
+    Round,
 }
 
 /// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).
@@ -468,7 +475,7 @@ pub fn un_op_accepts(op: UnOp, ty: Ty) -> bool {
         UnOp::Not => ty.is_int() || ty == Ty::Bool,
         UnOp::Abs => (ty.is_int() && ty.is_signed()) || ty == Ty::F64,
         UnOp::WrappingNeg | UnOp::SaturatingNeg => ty.is_int() && ty.is_signed(),
-        UnOp::Sqrt | UnOp::Floor | UnOp::Ceil => ty == Ty::F64,
+        UnOp::Sqrt | UnOp::Floor | UnOp::Ceil | UnOp::Round => ty == Ty::F64,
     }
 }
 
@@ -477,9 +484,9 @@ pub fn un_op_accepts(op: UnOp, ty: Ty) -> bool {
 pub fn bin_op_accepts(op: BinOp, ty: Ty) -> bool {
     use BinOp::*;
     match op {
-        WrappingAdd | WrappingSub | WrappingMul | SaturatingAdd | SaturatingSub | SaturatingMul => {
-            ty.is_int()
-        }
+        WrappingAdd | WrappingSub | WrappingMul | SaturatingAdd | SaturatingSub | SaturatingMul
+        | OverflowsAdd | OverflowsSub | OverflowsMul => ty.is_int(),
+        MathMin | MathMax => ty == Ty::F64,
         _ => true,
     }
 }

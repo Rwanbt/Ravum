@@ -1722,6 +1722,9 @@ impl<'a> FnLower<'a> {
             _ => None,
         };
         let ty = self.ty_of(recv)?;
+        if let Some(m) = path.strip_prefix("Option::") {
+            return self.option_method(e, recv, m, args);
+        }
         if let Some(m) = path.strip_prefix("int::checked_") {
             return self.checked_method(e, recv, m, args, ty);
         }
@@ -1894,6 +1897,81 @@ impl<'a> FnLower<'a> {
         unsupported("`io::print*` of a string other than a literal or `x.to_string()`")
     }
 
+    /// `Option::{is_some, is_none, unwrap_or}`. `unwrap` stays `Unsupported`:
+    /// its panic text differs between the spec machine and the rustc path.
+    fn option_method(&mut self, e: &Expr, recv: &Expr, m: &str, args: &[Expr]) -> R<Local> {
+        let ot = self.type_of(recv)?;
+        if !matches!(ot, Type::Option(_)) {
+            return unsupported(format!("`Option::{m}` on `{ot}`"));
+        }
+        let p = self.place(recv)?;
+        let Place::Mem { addr, off, .. } = p else {
+            return Err(LowerError::MissingFact("option in a register".into()));
+        };
+        let tag = self.new_local(Ty::U32);
+        self.emit(Inst::Load {
+            dst: tag,
+            ty: Ty::U32,
+            addr,
+            offset: off,
+        });
+        let one = self.tag_const(1);
+        let some = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: some,
+            op: BinOp::Eq,
+            ty: Ty::U32,
+            lhs: tag,
+            rhs: one,
+        });
+        match (m, args) {
+            ("is_some", []) => Ok(some),
+            ("is_none", []) => {
+                let d = self.new_local(Ty::Bool);
+                self.emit(Inst::Un {
+                    dst: d,
+                    op: UnOp::Not,
+                    ty: Ty::Bool,
+                    src: some,
+                });
+                Ok(d)
+            }
+            ("unwrap_or", [default]) => {
+                let t = self.type_of(e)?;
+                let agg = Layouts::is_agg(&t);
+                let result = if agg {
+                    self.alloc(&t)?
+                } else {
+                    self.new_local(map_ty(&t)?)
+                };
+                // Receiver, then argument (O1): the default is evaluated
+                // whatever the tag, as a call argument would be.
+                let d = self.expr(default)?;
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: some,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                let (foff, ft) = self.layouts.variant_fields(&ot, 1)?[0].clone();
+                let v = self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft,
+                })?;
+                self.join_value(result, v, &t, agg)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                self.join_value(result, d, &t, agg)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                Ok(result)
+            }
+            _ => unsupported(format!("`Option::{m}`")),
+        }
+    }
+
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {
         match self.checked.facts.calls.get(&e.id) {
             Some(CallTarget::UserFn { item }) => {
@@ -1976,6 +2054,53 @@ impl<'a> FnLower<'a> {
                     });
                 }
                 Ok(self.unit())
+            }
+            Some(CallTarget::BuiltinFn { path }) if path.starts_with("std::math::") => {
+                let name = &path["std::math::".len()..];
+                let un = match name {
+                    "abs" => Some(UnOp::Abs),
+                    "sqrt" => Some(UnOp::Sqrt),
+                    "floor" => Some(UnOp::Floor),
+                    "ceil" => Some(UnOp::Ceil),
+                    "round" => Some(UnOp::Round),
+                    _ => None,
+                };
+                let bin = match name {
+                    "min" => Some(BinOp::MathMin),
+                    "max" => Some(BinOp::MathMax),
+                    _ => None,
+                };
+                // `pow` and the libm functions stay outside the verifiable
+                // core (MACH-5.4): refused, never approximated.
+                match (un, bin, args) {
+                    (Some(op), None, [a]) if self.ty_of(a)? == Ty::F64 => {
+                        let src = self.expr(a)?;
+                        let dst = self.new_local(Ty::F64);
+                        self.emit(Inst::Un {
+                            dst,
+                            op,
+                            ty: Ty::F64,
+                            src,
+                        });
+                        Ok(dst)
+                    }
+                    (None, Some(op), [a, b])
+                        if self.ty_of(a)? == Ty::F64 && self.ty_of(b)? == Ty::F64 =>
+                    {
+                        let lhs = self.expr(a)?;
+                        let rhs = self.expr(b)?;
+                        let dst = self.new_local(Ty::F64);
+                        self.emit(Inst::Bin {
+                            dst,
+                            op,
+                            ty: Ty::F64,
+                            lhs,
+                            rhs,
+                        });
+                        Ok(dst)
+                    }
+                    _ => unsupported(format!("builtin `{path}`")),
+                }
             }
             Some(CallTarget::BuiltinFn { path }) if path == "Option::Some" => {
                 let vals = self.eval_args(args)?;

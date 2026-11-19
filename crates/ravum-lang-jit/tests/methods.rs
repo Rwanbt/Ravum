@@ -203,3 +203,105 @@ fn validate_refuses_a_method_operation_on_the_wrong_type() {
         "Sqrt on an integer accepted"
     );
 }
+
+/// Hard `f64` inputs for `math::*`: ties (STD-6.3), the 2^52 boundary where
+/// every value is an integer, signed zeros, infinities and NaN (built at run
+/// time from `z = 0.0`).
+const MATH_VALUES: &[&str] = &[
+    "0.5",
+    "-0.5",
+    "1.5",
+    "-1.5",
+    "2.5",
+    "-2.5",
+    "0.49999999999999994",
+    "-0.49999999999999994",
+    "4503599627370495.5",
+    "-4503599627370495.5",
+    "4503599627370497.0",
+    "1.0e300",
+    "0.0",
+    "-0.0",
+    "-7.25",
+    "2.0",
+    "1.0 / z",
+    "-1.0 / z",
+    "z / z",
+];
+
+#[test]
+fn math_functions_agree_with_interpreter_and_reference_machine() {
+    let mut n = 0;
+    let mut failures = Vec::new();
+    let mut check = |src: String| {
+        let ir = compile_source(&src).unwrap_or_else(|e| panic!("{e:?}\n{src}"));
+        let interp = run(&ir, "check", DEFAULT_STEPS).render();
+        let native = compile(&ir).unwrap().run("check", DEFAULT_FUEL).render();
+        let m = ravum_core_machine::run(
+            &src,
+            "check",
+            ravum_core_machine::SPEC_VERSION,
+            ravum_core_machine::DEFAULT_BUDGET,
+        )
+        .render();
+        // Bits matter: -0 vs +0 is the point of STD-6.5; the render shows
+        // the sign of zero, and `1.0 / r` separates them further below.
+        if native != interp || native != m {
+            failures.push(format!(
+                "native `{native}` interp `{interp}` machine `{m}`\n{src}"
+            ));
+        }
+        n += 1;
+    };
+    for x in MATH_VALUES {
+        for f in ["abs", "sqrt", "floor", "ceil", "round"] {
+            check(format!(
+                "fn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let x: f64 = {x};\n    let r = math::{f}(x);\n    return r;\n}}\n"
+            ));
+        }
+        for y in MATH_VALUES {
+            for f in ["min", "max"] {
+                check(format!(
+                    "fn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let r = math::{f}({x}, {y});\n    let one: f64 = 1.0;\n    return one / r;\n}}\n"
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} failures:\n{}",
+        failures.len(),
+        failures
+            .iter()
+            .take(8)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n---\n")
+    );
+    eprintln!("IR v1.2 math::*: {n} programs, native = interpreter = machine");
+    assert!(n >= 800, "{n}");
+}
+
+#[test]
+fn validate_refuses_integer_only_and_float_only_ops_on_the_wrong_type() {
+    use ravum_lang_ir::ir::{BinOp, Inst};
+    // Forged IR: `OverflowsAdd` on f64, `MathMin` on i64 — never produced by
+    // the lowering, must never reach a backend.
+    let src = "fn check() -> i64 effects() {\n    let a: i64 = 1;\n    let b: i64 = 2;\n    return a + b;\n}\n";
+    let ir = compile_source(src).unwrap();
+    for (op, ty) in [
+        (BinOp::OverflowsAdd, ravum_lang_ir::ir::Ty::F64),
+        (BinOp::MathMin, ravum_lang_ir::ir::Ty::I64),
+        (BinOp::WrappingMul, ravum_lang_ir::ir::Ty::F64),
+    ] {
+        let mut m = ir.clone();
+        m.functions[0].blocks[0].insts.push(Inst::Bin {
+            dst: 0,
+            op,
+            ty,
+            lhs: 0,
+            rhs: 0,
+        });
+        assert!(m.validate().is_err(), "{op:?} on {ty:?} accepted");
+    }
+}

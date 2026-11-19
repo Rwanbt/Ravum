@@ -182,6 +182,28 @@ Limite de la machine relevée (pas de l'IR) : dans un bras `None => -77`,
 la machine type le littéral en `i32` alors que le `match` est `i64` ; l'oracle
 passe par une variable typée.
 
+## IR v1.2, suite — `math::*` et méthodes d'`Option`
+
+- `math::abs/sqrt/floor/ceil` (opérations existantes), `math::round` (`UnOp::Round`,
+  égalité loin de zéro, STD-6.3 : `trunc` puis ±1 si `|x - trunc(x)| ≥ 0,5`,
+  soustraction exacte), `math::min/max` (`BinOp::MathMin/MathMax`, STD-6.5 :
+  NaN → l'autre opérande, `min(-0.0, +0.0) = -0.0`). `pow` et la libm
+  (`sin`…) restent refusés (MACH-5.4). Les **méthodes** `f64::min/max/round`
+  restent `Unsupported` : leur règle (Rust) n'est pas STD-6.5.
+- `Option::is_some/is_none/unwrap_or` (receveur puis argument, O1) ;
+  `unwrap` reste `Unsupported` (texte de panique différent entre machine et
+  voie `rustc`).
+- **Trou de validation corrigé** : `bin_op_accepts` ne refusait pas
+  `Overflows*` sur un flottant (un remplacement de texte précédent n'avait pas
+  pris après `cargo fmt`). Test négatif ajouté (IR forgée `OverflowsAdd`/f64,
+  `MathMin`/i64, `WrappingMul`/f64 → refusées).
+
+| Oracle | Résultat |
+|---|---|
+| `math::*` : 19 valeurs difficiles (égalités ±0,5/±1,5/±2,5, `0.49999999999999994`, `4503599627370495.5`, ±0, ±inf, NaN) × 5 fonctions + 19² paires × `min`/`max` (résultat inversé pour distinguer ±0) | **817 programmes, natif = interpréteur = machine** |
+| `Option` : `is_some`/`is_none`/`unwrap_or` sur scalaires et charge tuple | 9 programmes identiques sur les 3 moteurs |
+| corpus `ravum-core-machine` | **54/60 identiques**, 0 divergence ; restent `u128` et `sin` (refus voulu) |
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

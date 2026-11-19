@@ -565,6 +565,20 @@ impl Gen<'_, '_> {
                     (UnOp::Sqrt, _) => self.b.ins().sqrt(x),
                     (UnOp::Floor, _) => self.b.ins().floor(x),
                     (UnOp::Ceil, _) => self.b.ins().ceil(x),
+                    (UnOp::Round, _) => {
+                        // Ties away from zero (STD-6.3): t = trunc(x); one
+                        // more unit toward x's sign when |x - t| >= 0.5.
+                        // `x - t` is exact; NaN and ±inf fall through as t.
+                        let t = self.b.ins().trunc(x);
+                        let d = self.b.ins().fsub(x, t);
+                        let ad = self.b.ins().fabs(d);
+                        let half = self.b.ins().f64const(0.5);
+                        let far = self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, ad, half);
+                        let one = self.b.ins().f64const(1.0);
+                        let unit = self.b.ins().fcopysign(one, x);
+                        let up = self.b.ins().fadd(t, unit);
+                        self.b.ins().select(far, up, t)
+                    }
                 };
                 self.set(*dst, v);
             }
@@ -734,6 +748,35 @@ impl Gen<'_, '_> {
         fmodf: cranelift_codegen::ir::FuncRef,
     ) -> Value {
         use BinOp::*;
+        if matches!(op, MathMin | MathMax) {
+            // STD-6.5: NaN yields the other operand; on equality (only ±0
+            // can differ) min keeps a negative x, max a non-negative x.
+            let min = op == MathMin;
+            let x_nan = self.b.ins().fcmp(FloatCC::Unordered, x, x);
+            let y_nan = self.b.ins().fcmp(FloatCC::Unordered, y, y);
+            let lt = self.b.ins().fcmp(
+                if min {
+                    FloatCC::LessThan
+                } else {
+                    FloatCC::GreaterThan
+                },
+                x,
+                y,
+            );
+            let eq = self.b.ins().fcmp(FloatCC::Equal, x, y);
+            let bits = self.b.ins().bitcast(types::I64, MemFlags::new(), x);
+            let neg = self.b.ins().icmp_imm(IntCC::SignedLessThan, bits, 0);
+            let keep_eq = if min {
+                neg
+            } else {
+                self.b.ins().bxor_imm(neg, 1)
+            };
+            let on_eq = self.b.ins().band(eq, keep_eq);
+            let pick_x = self.b.ins().bor(lt, on_eq);
+            let pick_x = self.b.ins().bor(pick_x, y_nan);
+            let r = self.b.ins().select(pick_x, x, y);
+            return self.b.ins().select(x_nan, y, r);
+        }
         if ty.is_float() {
             return match op {
                 Add => self.b.ins().fadd(x, y),
@@ -753,7 +796,7 @@ impl Gen<'_, '_> {
                 Ge => self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y),
                 BitAnd | BitOr | BitXor | Shl | Shr | WrappingAdd | WrappingSub | WrappingMul
                 | SaturatingAdd | SaturatingSub | SaturatingMul | OverflowsAdd | OverflowsSub
-                | OverflowsMul => {
+                | OverflowsMul | MathMin | MathMax => {
                     unreachable!("rejected by the checker / `validate`")
                 }
             };
@@ -761,6 +804,7 @@ impl Gen<'_, '_> {
         let signed = ty.is_signed();
         let bits = ty.int_bits().unwrap_or(8);
         match op {
+            MathMin | MathMax => unreachable!("handled above; `validate` keeps it to f64"),
             Add | Sub | Mul => {
                 let (r, bad) = self.overflowing(op, ty, x, y);
                 self.trap_msg_if(

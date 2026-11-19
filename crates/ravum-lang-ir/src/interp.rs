@@ -469,6 +469,7 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
             WrappingAdd => Ok(Val::Int(ty, wrap(ty, x.wrapping_add(y)))),
             WrappingSub => Ok(Val::Int(ty, wrap(ty, x.wrapping_sub(y)))),
             WrappingMul => Ok(Val::Int(ty, wrap(ty, x.wrapping_mul(y)))),
+            MathMin | MathMax => Err(Stop::Fault("math::min/max on an integer".into())),
             OverflowsAdd | OverflowsSub | OverflowsMul => {
                 let (lo, hi) = range(ty);
                 let exact = match op {
@@ -491,6 +492,24 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
                 Ok(Val::Int(ty, v.clamp(lo, hi)))
             }
         },
+        (Val::F64(x), Val::F64(y)) if op == MathMin || op == MathMax => {
+            // STD-6.5, written independently of the machine's code.
+            Ok(Val::F64(if x.is_nan() {
+                y
+            } else if y.is_nan() {
+                x
+            } else if x == y {
+                if (op == MathMin) == x.is_sign_negative() {
+                    x
+                } else {
+                    y
+                }
+            } else if (op == MathMin) == (x < y) {
+                x
+            } else {
+                y
+            }))
+        }
         (Val::F64(x), Val::F64(y)) => fbin(op, x, y, Val::F64),
         (Val::F32(x), Val::F32(y)) => fbin(op, x, y, Val::F32),
         (Val::Bool(x), Val::Bool(y)) => Ok(Val::Bool(match op {
@@ -554,6 +573,7 @@ fn un(op: UnOp, ty: Ty, a: Val) -> Result<Val, Stop> {
         (UnOp::Sqrt, Val::F64(x)) => Ok(Val::F64(x.sqrt())),
         (UnOp::Floor, Val::F64(x)) => Ok(Val::F64(x.floor())),
         (UnOp::Ceil, Val::F64(x)) => Ok(Val::F64(x.ceil())),
+        (UnOp::Round, Val::F64(x)) => Ok(Val::F64(x.round())),
         _ => Err(Stop::Fault("bad unary operand".into())),
     }
 }
