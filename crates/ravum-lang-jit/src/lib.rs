@@ -20,6 +20,8 @@
 
 #![deny(unsafe_code)]
 
+pub mod hot;
+
 use std::collections::BTreeMap;
 
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -34,7 +36,7 @@ use ravum_lang_ir::ir::{BinOp, Const, Inst, Module, Term, Ty, UnOp};
 
 /// Runtime context shared by all compiled functions of one run.
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Ctx {
     /// 0 = running; 1 = call depth limit; 2 = fuel exhausted; >= 3 = trap
     /// message index + 3.
@@ -42,6 +44,10 @@ pub struct Ctx {
     pub depth: u32,
     /// Remaining loop back-edges.
     pub fuel: u64,
+    /// Address of the call table (`[usize]`, one code address per slot).
+    /// Every call goes through it: this indirection is what lets the hot-swap
+    /// engine replace a single function (T16).
+    pub table: usize,
 }
 
 pub const MAX_DEPTH: u32 = 512;
@@ -49,12 +55,13 @@ pub const DEFAULT_FUEL: u64 = 1_000_000_000;
 
 const CODE_DEPTH: u32 = 1;
 const CODE_FUEL: u32 = 2;
-const CODE_TRAP0: u32 = 3;
+pub(crate) const CODE_TRAP0: u32 = 3;
 
 /// A compiled IR module, ready to run.
 pub struct Compiled {
-    module: JITModule,
-    funcs: Vec<FuncId>,
+    // Owns the machine code the table points to.
+    _module: JITModule,
+    table: Box<[usize]>,
     ir: Module,
     messages: Vec<String>,
 }
@@ -94,9 +101,8 @@ extern "C" fn rv_fmodf(a: f32, b: f32) -> f32 {
     a % b
 }
 
-/// Compile every function of `ir`.
-pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
-    ir.validate().map_err(JitError::Invalid)?;
+/// A fresh JIT module with the development-backend settings.
+pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
     // Development backend: compile fast; the release path stays on rustc/LLVM.
     // The IR is validated above (`Module::validate`) and the differential
     // tests run debug builds with Cranelift's verifier on, so release builds
@@ -123,21 +129,64 @@ pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
     let mut jb = JITBuilder::with_isa(isa, default_libcall_names());
     jb.symbol("rv_fmod", rv_fmod as *const u8);
     jb.symbol("rv_fmodf", rv_fmodf as *const u8);
-    let mut module = JITModule::new(jb);
-    let ptr = module.target_config().pointer_type();
+    Ok(JITModule::new(jb))
+}
 
+/// Compile every function of `ir`.
+pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
+    ir.validate().map_err(JitError::Invalid)?;
+    let mut module = new_jit_module()?;
+    let all: Vec<usize> = (0..ir.functions.len()).collect();
+    let slots: Vec<u32> = (0..ir.functions.len() as u32).collect();
+    let mut messages = Vec::new();
+    let mut msg_ids = BTreeMap::new();
+    let ids = compile_funcs(&mut module, ir, &all, &slots, &mut messages, &mut msg_ids)?;
+    let table: Box<[usize]> = ids
+        .iter()
+        .map(|(_, id)| module.get_finalized_function(*id) as usize)
+        .collect();
+    Ok(Compiled {
+        _module: module,
+        table,
+        ir: ir.clone(),
+        messages,
+    })
+}
+
+fn signature_of(
+    module: &JITModule,
+    f: &ravum_lang_ir::ir::Function,
+) -> cranelift_codegen::ir::Signature {
+    let ptr = module.target_config().pointer_type();
+    let mut sig = module.make_signature();
+    for p in &f.locals[..f.params as usize] {
+        sig.params.push(AbiParam::new(cl_ty(*p)));
+    }
+    sig.params.push(AbiParam::new(ptr));
+    sig.returns.push(AbiParam::new(cl_ty(f.ret)));
+    sig
+}
+
+/// Compile the functions `which` (IR indices) of `ir` into `module` and
+/// finalize it. A call to IR function `k` goes through table slot
+/// `slot_of[k]`. Trap messages are interned in `messages` (shared across
+/// modules so codes stay stable across hot swaps).
+pub(crate) fn compile_funcs(
+    module: &mut JITModule,
+    ir: &Module,
+    which: &[usize],
+    slot_of: &[u32],
+    messages: &mut Vec<String>,
+    msg_ids: &mut BTreeMap<String, u32>,
+) -> Result<Vec<(usize, FuncId)>, JitError> {
     let mut funcs = Vec::new();
-    for (i, f) in ir.functions.iter().enumerate() {
-        let mut sig = module.make_signature();
-        for p in &f.locals[..f.params as usize] {
-            sig.params.push(AbiParam::new(cl_ty(*p)));
-        }
-        sig.params.push(AbiParam::new(ptr));
-        sig.returns.push(AbiParam::new(cl_ty(f.ret)));
+    for &i in which {
+        let f = &ir.functions[i];
+        let sig = signature_of(module, f);
         let id = module
             .declare_function(&format!("rv_f{i}"), Linkage::Local, &sig)
             .map_err(|e| JitError::Codegen(e.to_string()))?;
-        funcs.push(id);
+        funcs.push((i, id));
     }
     let mut fmod_sig = module.make_signature();
     fmod_sig.params.push(AbiParam::new(types::F64));
@@ -154,27 +203,29 @@ pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
         .declare_function("rv_fmodf", Linkage::Import, &fmodf_sig)
         .map_err(|e| JitError::Codegen(e.to_string()))?;
 
-    let mut messages: Vec<String> = Vec::new();
-    let mut msg_ids: BTreeMap<String, u32> = BTreeMap::new();
     let mut fctx = FunctionBuilderContext::new();
     let mut ctx: Context = module.make_context();
-    for (i, f) in ir.functions.iter().enumerate() {
+    for &(i, fid) in &funcs {
+        let f = &ir.functions[i];
         ctx.func.signature = module
             .declarations()
-            .get_function_decl(funcs[i])
+            .get_function_decl(fid)
             .signature
             .clone();
         {
             let mut b = FunctionBuilder::new(&mut ctx.func, &mut fctx);
             // Import only the callees this function uses: importing every
             // function into every function is quadratic in the module size.
-            let mut callee_refs: BTreeMap<u32, cranelift_codegen::ir::FuncRef> = BTreeMap::new();
+            let mut callee_refs: BTreeMap<u32, (cranelift_codegen::ir::SigRef, u32)> =
+                BTreeMap::new();
             for blk in &f.blocks {
                 for inst in &blk.insts {
                     if let Inst::Call { func, .. } = inst {
-                        callee_refs.entry(*func).or_insert_with(|| {
-                            module.declare_func_in_func(funcs[*func as usize], b.func)
-                        });
+                        if !callee_refs.contains_key(func) {
+                            let sig = signature_of(module, &ir.functions[*func as usize]);
+                            let sref = b.import_signature(sig);
+                            callee_refs.insert(*func, (sref, slot_of[*func as usize]));
+                        }
                     }
                 }
             }
@@ -209,8 +260,8 @@ pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
                 vars,
                 ctxp,
                 ret: f.ret,
-                messages: &mut messages,
-                msg_ids: &mut msg_ids,
+                messages: &mut *messages,
+                msg_ids: &mut *msg_ids,
                 stop: None,
             };
             // Depth check on entry.
@@ -276,19 +327,14 @@ pub fn compile(ir: &Module) -> Result<Compiled, JitError> {
             g.b.finalize();
         }
         module
-            .define_function(funcs[i], &mut ctx)
+            .define_function(fid, &mut ctx)
             .map_err(|e| JitError::Codegen(format!("{}: {e:?}", f.name)))?;
         module.clear_context(&mut ctx);
     }
     module
         .finalize_definitions()
         .map_err(|e| JitError::Codegen(e.to_string()))?;
-    Ok(Compiled {
-        module,
-        funcs,
-        ir: ir.clone(),
-        messages,
-    })
+    Ok(funcs)
 }
 
 fn zero(b: &mut FunctionBuilder, t: Ty) -> Value {
@@ -400,7 +446,7 @@ impl Gen<'_, '_> {
     fn inst(
         &mut self,
         inst: &Inst,
-        callees: &BTreeMap<u32, cranelift_codegen::ir::FuncRef>,
+        callees: &BTreeMap<u32, (cranelift_codegen::ir::SigRef, u32)>,
         fmod: cranelift_codegen::ir::FuncRef,
         fmodf: cranelift_codegen::ir::FuncRef,
         fns: &[ravum_lang_ir::ir::Function],
@@ -457,7 +503,17 @@ impl Gen<'_, '_> {
             Inst::Call { dst, func, args } => {
                 let mut vals: Vec<Value> = args.iter().map(|a| self.get(*a)).collect();
                 vals.push(self.ctxp);
-                let call = self.b.ins().call(callees[func], &vals);
+                // Indirect call through the table in `Ctx` (offset 16).
+                let (sref, slot) = callees[func];
+                let table = self
+                    .b
+                    .ins()
+                    .load(types::I64, MemFlags::trusted(), self.ctxp, 16);
+                let addr =
+                    self.b
+                        .ins()
+                        .load(types::I64, MemFlags::trusted(), table, (slot as i32) * 8);
+                let call = self.b.ins().call_indirect(sref, addr, &vals);
                 let r = self.b.inst_results(call)[0];
                 let code = self
                     .b
@@ -686,7 +742,7 @@ impl Gen<'_, '_> {
     }
 }
 
-mod exec {
+pub(crate) mod exec {
     //! The single `unsafe` site of the crate.
     //!
     //! SAFETY argument: `code` comes from `JITModule::get_finalized_function`
@@ -705,6 +761,13 @@ mod exec {
         let f: extern "C" fn(*mut Ctx) -> R = unsafe { std::mem::transmute(code) };
         f(ctx as *mut Ctx)
     }
+
+    /// Same argument, for a one-parameter entry `(A, *mut Ctx) -> R` (the
+    /// hot-swap entry kinds check the IR signature before calling).
+    pub fn call1<A, R>(code: *const u8, a: A, ctx: &mut Ctx) -> R {
+        let f: extern "C" fn(A, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
+        f(a, ctx as *mut Ctx)
+    }
 }
 
 impl Compiled {
@@ -717,11 +780,12 @@ impl Compiled {
         if f.params != 0 {
             return RunOutcome::Fault(format!("`{entry}` takes arguments"));
         }
-        let code = self.module.get_finalized_function(self.funcs[id as usize]);
+        let code = self.table[id as usize] as *const u8;
         let mut ctx = Ctx {
             code: 0,
             depth: 0,
             fuel,
+            table: self.table.as_ptr() as usize,
         };
         let val = match f.ret {
             Ty::I8 => Val::Int(Ty::I8, exec::call::<i8>(code, &mut ctx) as i128),

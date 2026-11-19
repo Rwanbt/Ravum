@@ -54,6 +54,14 @@ sur la validation de l'IR (`Module::validate`), le vérificateur Cranelift (acti
 en debug) et l'oracle différentiel (`crates/ravum-lang-jit/tests/differential.rs`).
 Statut : `TESTED`, non audité (D4).
 
+### Ajout du 2026-11-19 — hot swap natif (T16, V1) — **audit humain requis**
+
+| # | Site | Code | Pourquoi `unsafe` | Argument de sûreté |
+|---|---|---|---|---|
+| 7b | `crates/ravum-lang-jit/src/lib.rs`, `mod exec::call1` | `transmute::<*const u8, extern "C" fn(A, *mut Ctx) -> R>` | appeler l'entrée `fn(f32)->f32` / `fn(f64)->f64` | même argument que #7 ; `A`/`R` fixés par `EntryKind`, vérifié sur la signature IR avant toute publication |
+| 8 | `crates/ravum-lang-jit/src/hot.rs`, `mod raw::{take, reclaim}` | `Box::from_raw` | rendre une `Box<Version>` passée par la boîte aux lettres atomique | chaque pointeur non nul vient de `Box::into_raw` et sort de son emplacement par un `swap` atomique : un seul côté le reprend |
+| 9 | idem, `raw::free_module` | `JITModule::free_memory` | libérer le code machine d'anciennes versions | appelé seulement pour un module qu'aucune version vivante ne référence ; une version cesse d'être vivante quand le thread temps réel publie (`active_generation`/`previous_generation`) qu'il en tient de plus récentes ; il n'exécute du code que dans `process_*`, via la version qu'il tient |
+
 ## 3. Ce que l'inventaire ne couvre pas
 
 - **Le code généré.** `ravum-lang-codegen` produit un fichier Rust qui porte
