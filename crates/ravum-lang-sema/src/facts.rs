@@ -412,8 +412,30 @@ impl OwnFacts {
     }
 }
 
+/// A function whose body an incremental driver reuses (T13 step 2): the
+/// checker skips its body and assumes these effect facts, taken from the
+/// previous check of the same, unchanged function.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReusedBody {
+    pub direct: EffectSet,
+    pub edges: Vec<NodeId>,
+    /// Imports the body used (`module index:display`), marked used again.
+    pub used_imports: Vec<String>,
+    /// The function was in `Facts::static_str_fns`.
+    pub static_str: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
+    /// T13 step 2, set by an incremental driver **before** checking: bodies
+    /// not to check again. Their facts are absent from the result, which is
+    /// then good for diagnostics only (never for code generation).
+    pub reuse_bodies: BTreeMap<NodeId, ReusedBody>,
+    /// Effects a function's own body produces (without callees), per
+    /// function: what a driver stores to reuse the body later.
+    pub direct_effects: BTreeMap<NodeId, EffectSet>,
+    /// Imports each checked function body used (`module index:display`).
+    pub fn_used_imports: BTreeMap<NodeId, Vec<String>>,
     /// Function item id → user functions it calls (the effects phase's
     /// call graph; T19 uses it to link a contract to the tests reaching it).
     pub call_graph: BTreeMap<NodeId, Vec<NodeId>>,

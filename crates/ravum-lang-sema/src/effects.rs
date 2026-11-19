@@ -55,6 +55,19 @@ pub fn infer_and_check(
     let fns = collect_fns(program);
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
+        if let Some(r) = facts.reuse_bodies.get(id) {
+            // T13 step 2: the body is unchanged; its direct effects and calls
+            // are the previous check's.
+            direct.insert(
+                *id,
+                FnEffects {
+                    direct: r.direct.clone(),
+                    sources: Vec::new(),
+                    edges: r.edges.clone(),
+                },
+            );
+            continue;
+        }
         let mut effects = FnEffects::default();
         if f.is_async {
             // CONC-6.4: an `async fn` carries the `async` effect.
@@ -65,6 +78,9 @@ pub fn infer_and_check(
         }
         walk_block(&f.body, facts, &mut effects);
         direct.insert(*id, effects);
+    }
+    for (id, e) in &direct {
+        facts.direct_effects.insert(*id, e.direct.clone());
     }
     // Point fixe sur le graphe d'appels (monotone, borné par 10 effets).
     let mut composed: BTreeMap<NodeId, EffectSet> = direct

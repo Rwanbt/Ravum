@@ -513,6 +513,7 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
+                        uses: Cell::new(0),
                     },
                     diags,
                 );
@@ -528,6 +529,7 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
+                        uses: Cell::new(0),
                     },
                     diags,
                 );
@@ -543,6 +545,7 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
+                        uses: Cell::new(0),
                     },
                     diags,
                 );
@@ -566,6 +569,7 @@ pub(crate) fn resolve_imports(world: &mut World, diags: &mut DiagnosticBag) {
                         span: use_item.span,
                         display,
                         used: Cell::new(false),
+                        uses: Cell::new(0),
                     },
                     diags,
                 );

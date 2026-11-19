@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 ravum-lang-syntax = { workspace = true }
+ravum-lang-sema = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-ravum-lang-sema = { workspace = true }

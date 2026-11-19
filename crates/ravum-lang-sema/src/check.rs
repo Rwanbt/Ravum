@@ -112,7 +112,7 @@ fn later_phases_on_valid_functions(
     sources: &SourceMap,
     options: &CheckOptions,
     rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
-) -> Option<DiagnosticBag> {
+) -> Option<(DiagnosticBag, DriverFacts)> {
     let files = file_infos(sources);
     let profile = options.profile;
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
@@ -137,7 +137,13 @@ fn later_phases_on_valid_functions(
                 rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
             crate::traps::check_rt_traps(&checked, &mut bag, reachable.as_ref());
         }
-        bag
+        let df = DriverFacts {
+            direct_effects: checked.facts.direct_effects.clone(),
+            call_graph,
+            fn_used_imports: checked.facts.fn_used_imports.clone(),
+            static_str_fns: checked.facts.static_str_fns.clone(),
+        };
+        (bag, df)
     }))
     .ok()
 }
@@ -147,6 +153,55 @@ pub fn check_entry_with_timings(
     sources: &SourceMap,
     options: &CheckOptions,
     rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> (CheckResult, PhaseTimings) {
+    let mut out = DriverFacts::default();
+    check_core(
+        program,
+        sources,
+        options,
+        rt_entry,
+        Default::default(),
+        &mut out,
+    )
+}
+
+/// What an incremental driver keeps from a check, whatever its outcome:
+/// per-function direct effects and the call graph (empty when the effects
+/// phase did not run).
+#[derive(Debug, Clone, Default)]
+pub struct DriverFacts {
+    pub direct_effects:
+        std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::EffectSet>,
+    pub call_graph: std::collections::BTreeMap<
+        ravum_lang_syntax::ast::NodeId,
+        Vec<ravum_lang_syntax::ast::NodeId>,
+    >,
+    pub fn_used_imports: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, Vec<String>>,
+    pub static_str_fns: std::collections::BTreeSet<ravum_lang_syntax::ast::NodeId>,
+}
+
+/// T13 step 2: check `program` without re-checking the bodies in `reuse`
+/// (their results come from the driver's cache). The result's diagnostics
+/// cover the other functions and every non-function item; its facts are
+/// incomplete when `reuse` is not empty (diagnostics only, never codegen).
+pub fn check_reusing(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+) -> (CheckResult, DriverFacts) {
+    let mut out = DriverFacts::default();
+    let (r, _) = check_core(program, sources, options, None, reuse, &mut out);
+    (r, out)
+}
+
+fn check_core(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+    driver: &mut DriverFacts,
 ) -> (CheckResult, PhaseTimings) {
     let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
@@ -166,7 +221,10 @@ pub fn check_entry_with_timings(
 
     let program = program.clone();
     let mut world = World::build(&program);
-    let mut facts = Facts::default();
+    let mut facts = Facts {
+        reuse_bodies: reuse,
+        ..Facts::default()
+    };
 
     let started = Instant::now();
     // `resolve_with_world`/`typecheck_with_world` return "no error"; where
@@ -229,8 +287,9 @@ pub fn check_entry_with_timings(
         let started = Instant::now();
         let later = later_phases_on_valid_functions(program, facts, sources, options, rt_entry);
         timings.effects = started.elapsed();
-        if let Some(later) = later {
+        if let Some((later, df)) = later {
             keep_outside(&mut diags, later, &faulty);
+            *driver = df;
         }
         diags.sort();
         return (CheckResult::failed(diags), timings);
@@ -257,6 +316,10 @@ pub fn check_entry_with_timings(
     );
     timings.effects = started.elapsed();
     checked.facts.call_graph = call_graph.clone();
+    driver.call_graph = call_graph.clone();
+    driver.fn_used_imports = checked.facts.fn_used_imports.clone();
+    driver.static_str_fns = checked.facts.static_str_fns.clone();
+    driver.direct_effects = checked.facts.direct_effects.clone();
 
     let started = Instant::now();
     let own_facts = own::check_ownership(&checked, &mut diags);

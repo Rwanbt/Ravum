@@ -37,6 +37,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod driver;
+
 use ravum_lang_syntax::ast::{Item, ItemKind, Module};
 use ravum_lang_syntax::lexer;
 use ravum_lang_syntax::token::{Token, TokenKind};
@@ -143,8 +145,13 @@ impl Plan {
 
 /// Parse `src` and compute the fingerprints of every item.
 pub fn fingerprint_source(src: &str) -> FileFingerprints {
+    let parsed = parser::parse_file(0, src);
+    fingerprint_parsed(src, &parsed)
+}
+
+/// [`fingerprint_source`] for a file already parsed (as file 0).
+pub fn fingerprint_parsed(src: &str, parsed: &parser::ParseResult) -> FileFingerprints {
     let file: FileId = 0;
-    let parsed = parser::parse_file(file, src);
     let (tokens, _) = lexer::lex(file, src, false);
     let mut out = FileFingerprints {
         items: BTreeMap::new(),
@@ -409,8 +416,13 @@ impl Walker<'_> {
     }
 
     fn tokens_in(&self, span: Span) -> Vec<&'_ Token> {
-        self.tokens
+        // Tokens are in source order: binary-search the first one at or
+        // after `span.start` (a linear scan per item was quadratic: 1.75 s
+        // for 3 000 functions).
+        let first = self.tokens.partition_point(|t| t.span.start < span.start);
+        self.tokens[first..]
             .iter()
+            .take_while(|t| t.span.start < span.end || t.span.end <= span.end)
             .filter(|t| {
                 !matches!(t.kind, TokenKind::Eof | TokenKind::Comment(_))
                     && t.span.start >= span.start

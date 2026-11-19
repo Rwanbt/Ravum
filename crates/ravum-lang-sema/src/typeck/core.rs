@@ -248,8 +248,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let index = self.vars.len();
         self.vars.push(None);
         self.var_spans.push(span);
+        // The displayed name counts from the function's first variable: a
+        // message never depends on how many bodies were checked before it
+        // (T13 step 2: reused bodies are not checked again).
         Type::Param {
-            name: format!("${index}"),
+            name: format!("${}", index - self.fn_var_base.min(index)),
             index: VAR_BASE + index,
         }
     }
@@ -683,6 +686,58 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // ------------------------------------------------------------------
 
     pub(super) fn check_fn(
+        &mut self,
+        module: ModuleId,
+        item: NodeId,
+        decl_span: Span,
+        f: &FnItem,
+        impl_ctx: Option<(Type, Vec<String>)>,
+    ) {
+        if self.facts.reuse_bodies.contains_key(&item) {
+            return; // T13 step 2: the driver reuses this body's results
+        }
+        let before = self.import_uses();
+        self.fn_var_base = self.vars.len();
+        self.check_fn_inner(module, item, decl_span, f, impl_ctx);
+        let after = self.import_uses();
+        let used: Vec<String> = after
+            .into_iter()
+            .zip(before)
+            .filter(|((_, a), (_, b))| a > b)
+            .map(|((k, _), _)| k)
+            .collect();
+        self.facts.fn_used_imports.insert(item, used);
+    }
+
+    /// `module index:display` and use count of every import.
+    fn import_uses(&self) -> Vec<(String, u32)> {
+        let mut out = Vec::new();
+        for (m, module) in self.world.modules.iter().enumerate() {
+            for i in &module.imports {
+                out.push((format!("{m}:{}", i.display), i.uses.get()));
+            }
+        }
+        out
+    }
+
+    /// T13 step 2: a reused body's imports count as used again.
+    pub(super) fn mark_reused_imports(&self) {
+        let keys: std::collections::BTreeSet<&String> = self
+            .facts
+            .reuse_bodies
+            .values()
+            .flat_map(|r| r.used_imports.iter())
+            .collect();
+        for (m, module) in self.world.modules.iter().enumerate() {
+            for i in &module.imports {
+                if keys.contains(&format!("{m}:{}", i.display)) {
+                    i.mark_used();
+                }
+            }
+        }
+    }
+
+    fn check_fn_inner(
         &mut self,
         module: ModuleId,
         item: NodeId,
