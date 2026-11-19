@@ -16,7 +16,7 @@
 //!
 //! The crate is `#![deny(unsafe_code)]`. The only exception is the
 //! [`exec`] module, which turns a finalized code pointer into a callable
-//! function: see its safety argument.
+//! function and hosts the `io::print*` callback: see its safety arguments.
 
 #![deny(unsafe_code)]
 
@@ -32,7 +32,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, FuncId, Linkage, Module as _};
 use ravum_lang_ir::interp::{range, RunOutcome, Val};
-use ravum_lang_ir::ir::{BinOp, Const, Inst, Module, Term, Ty, UnOp};
+use ravum_lang_ir::ir::{BinOp, Const, Inst, Module, PrintArg, Stream, Term, Ty, UnOp};
 
 /// Runtime context shared by all compiled functions of one run.
 #[repr(C)]
@@ -48,6 +48,10 @@ pub struct Ctx {
     /// Every call goes through it: this indirection is what lets the hot-swap
     /// engine replace a single function (T16).
     pub table: usize,
+    /// Address of the run's [`exec::OutputSink`] (`io::print*`, IR v1.2), or
+    /// 0 when the entry may not print (real-time entries: refused statically
+    /// by the hot-swap engine; a print reaching a 0 sink writes nothing).
+    pub out: usize,
 }
 
 pub const MAX_DEPTH: u32 = 512;
@@ -129,6 +133,7 @@ pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
     let mut jb = JITBuilder::with_isa(isa, default_libcall_names());
     jb.symbol("rv_fmod", rv_fmod as *const u8);
     jb.symbol("rv_fmodf", rv_fmodf as *const u8);
+    jb.symbol("rv_print", exec::rv_print as *const u8);
     Ok(JITModule::new(jb))
 }
 
@@ -203,6 +208,15 @@ pub(crate) fn compile_funcs(
         .declare_function("rv_fmodf", Linkage::Import, &fmodf_sig)
         .map_err(|e| JitError::Codegen(e.to_string()))?;
 
+    let ptr_ty = module.target_config().pointer_type();
+    let mut print_sig = module.make_signature();
+    for t in [ptr_ty, types::I32, types::I32, types::I64] {
+        print_sig.params.push(AbiParam::new(t));
+    }
+    let print = module
+        .declare_function("rv_print", Linkage::Import, &print_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
+
     let mut fctx = FunctionBuilderContext::new();
     let mut ctx: Context = module.make_context();
     for &(i, fid) in &funcs {
@@ -231,6 +245,7 @@ pub(crate) fn compile_funcs(
             }
             let fmod_ref = module.declare_func_in_func(fmod, b.func);
             let fmodf_ref = module.declare_func_in_func(fmodf, b.func);
+            let print_ref = module.declare_func_in_func(print, b.func);
             let blocks: Vec<_> = f.blocks.iter().map(|_| b.create_block()).collect();
             let vars: Vec<Variable> = f
                 .locals
@@ -290,7 +305,12 @@ pub(crate) fn compile_funcs(
             for (bi, blk) in f.blocks.iter().enumerate() {
                 g.b.switch_to_block(blocks[bi]);
                 for inst in &blk.insts {
-                    g.inst(inst, &callee_refs, fmod_ref, fmodf_ref, &ir.functions);
+                    g.inst(
+                        inst,
+                        &callee_refs,
+                        [fmod_ref, fmodf_ref, print_ref],
+                        &ir.functions,
+                    );
                 }
                 match &blk.term {
                     Term::Jump(t) => {
@@ -461,11 +481,43 @@ impl Gen<'_, '_> {
         &mut self,
         inst: &Inst,
         callees: &BTreeMap<u32, (cranelift_codegen::ir::SigRef, u32)>,
-        fmod: cranelift_codegen::ir::FuncRef,
-        fmodf: cranelift_codegen::ir::FuncRef,
+        hosts: [cranelift_codegen::ir::FuncRef; 3],
         fns: &[ravum_lang_ir::ir::Function],
     ) {
+        let [fmod, fmodf, print] = hosts;
         match inst {
+            Inst::Print { stream, arg } => {
+                let (kind, bits) = match arg {
+                    PrintArg::Text(t) => {
+                        let id = self.msg(t) - CODE_TRAP0;
+                        (0, self.b.ins().iconst(types::I64, id as i64))
+                    }
+                    PrintArg::Value { ty, src } => {
+                        let x = self.get(*src);
+                        match *ty {
+                            Ty::F64 => (3, self.b.ins().bitcast(types::I64, MemFlags::new(), x)),
+                            Ty::F32 => {
+                                let w = self.b.ins().bitcast(types::I32, MemFlags::new(), x);
+                                (4, self.b.ins().uextend(types::I64, w))
+                            }
+                            Ty::Bool => (5, self.b.ins().uextend(types::I64, x)),
+                            t if cl_ty(t) == types::I64 => (if t.is_signed() { 1 } else { 2 }, x),
+                            t if t.is_signed() => (1, self.b.ins().sextend(types::I64, x)),
+                            _ => (2, self.b.ins().uextend(types::I64, x)),
+                        }
+                    }
+                };
+                let k = self.b.ins().iconst(types::I32, kind);
+                let st = self.b.ins().iconst(
+                    types::I32,
+                    match stream {
+                        Stream::Stdout => 0,
+                        Stream::Stderr => 1,
+                    },
+                );
+                let ctxp = self.ctxp;
+                self.b.ins().call(print, &[ctxp, k, st, bits]);
+            }
             Inst::Const { dst, value } => {
                 let v = match *value {
                     Const::Int { ty, value } => self.b.ins().iconst(cl_ty(ty), value as i64),
@@ -877,7 +929,8 @@ impl Gen<'_, '_> {
 }
 
 pub(crate) mod exec {
-    //! The single `unsafe` site of the crate.
+    //! The `unsafe` sites of the crate (#7, #7b, #7c, #7d of
+    //! `docs/ffi/UNSAFE-INVENTORY.md`).
     //!
     //! SAFETY argument: `code` comes from `JITModule::get_finalized_function`
     //! for a function this crate declared with the signature
@@ -912,6 +965,58 @@ pub(crate) mod exec {
         let f: extern "C" fn(A, B, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
         f(a, b, ctx as *mut Ctx)
     }
+
+    /// Output buffer of one run (`Ctx::out`), with the interned texts.
+    pub struct OutputSink {
+        pub out: ravum_lang_ir::interp::Output,
+        texts: *const String,
+        n: usize,
+    }
+
+    impl OutputSink {
+        pub fn new(texts: &[String]) -> Self {
+            OutputSink {
+                out: Default::default(),
+                texts: texts.as_ptr(),
+                n: texts.len(),
+            }
+        }
+    }
+
+    /// Host function called by compiled `Inst::Print` (site #7d).
+    ///
+    /// SAFETY argument: compiled code passes its own `ctx`, the exclusive
+    /// `&mut Ctx` of the running call (see `call*`). `ctx.out` is 0 or the
+    /// address of an `OutputSink` that lives on the caller's stack for the
+    /// whole call (`run_with_output`, `RtRunner::run_nullary_with_output`)
+    /// and that nothing else touches meanwhile; its `texts` slice is the
+    /// message table borrowed for the same duration, and a text index is
+    /// checked against its length (an out-of-range index prints nothing).
+    pub extern "C" fn rv_print(ctx: *mut Ctx, kind: u32, stream: u32, bits: u64) {
+        let ctx = unsafe { &mut *ctx };
+        if ctx.out == 0 {
+            return;
+        }
+        let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
+        let text = match kind {
+            0 => {
+                if bits as usize >= sink.n {
+                    return;
+                }
+                unsafe { (*sink.texts.add(bits as usize)).clone() }
+            }
+            1 => (bits as i64).to_string(),
+            2 => bits.to_string(),
+            3 => f64::from_bits(bits).to_string(),
+            4 => f32::from_bits(bits as u32).to_string(),
+            _ => (bits != 0).to_string(),
+        };
+        if stream == 0 {
+            sink.out.stdout.push_str(&text);
+        } else {
+            sink.out.stderr.push_str(&text);
+        }
+    }
 }
 
 impl Compiled {
@@ -930,8 +1035,41 @@ impl Compiled {
             depth: 0,
             fuel,
             table: self.table.as_ptr() as usize,
+            out: 0,
         };
         call_nullary(code, &mut ctx, f.ret, &self.messages)
+    }
+
+    /// [`Compiled::run`], also returning what the program printed.
+    pub fn run_with_output(
+        &self,
+        entry: &str,
+        fuel: u64,
+    ) -> (RunOutcome, ravum_lang_ir::interp::Output) {
+        let Some(id) = self.ir.func_id(entry) else {
+            return (
+                RunOutcome::Fault(format!("no function `{entry}`")),
+                Default::default(),
+            );
+        };
+        let f = &self.ir.functions[id as usize];
+        if f.params != 0 {
+            return (
+                RunOutcome::Fault(format!("`{entry}` takes arguments")),
+                Default::default(),
+            );
+        }
+        let code = self.table[id as usize] as *const u8;
+        let mut sink = exec::OutputSink::new(&self.messages);
+        let mut ctx = Ctx {
+            code: 0,
+            depth: 0,
+            fuel,
+            table: self.table.as_ptr() as usize,
+            out: &mut sink as *mut exec::OutputSink as usize,
+        };
+        let r = call_nullary(code, &mut ctx, f.ret, &self.messages);
+        (r, sink.out)
     }
 }
 

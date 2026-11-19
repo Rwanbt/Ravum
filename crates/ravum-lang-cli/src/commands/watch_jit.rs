@@ -15,7 +15,8 @@
 //! Scope: a single-file program (`src/main.rv`, else `src/lib.rv`, or the
 //! file given). Entry: `process_sample` when the file declares a DSP block
 //! (the block is driven with a deterministic test signal: no audio device),
-//! otherwise `--entry NAME` (default `main`), a function without parameters.
+//! otherwise `--entry NAME` (default `main`), a function without parameters;
+//! what it prints with `io::print*` is shown before its result.
 //! The default backend (`rustc`) remains the reference for builds.
 
 use std::path::{Path, PathBuf};
@@ -141,7 +142,16 @@ impl Session {
                 ));
             }
         } else {
-            let outcome = self.runner.run_nullary(self.engine.messages());
+            let (outcome, out) = self.runner.run_nullary_with_output(self.engine.messages());
+            // The program's own output, as it printed it, then the result.
+            if !out.stdout.is_empty() {
+                use std::io::Write;
+                print!("{}", out.stdout);
+                let _ = std::io::stdout().flush();
+            }
+            if !out.stderr.is_empty() {
+                eprint!("{}", out.stderr);
+            }
             say(&format!("[ravum] {}() -> {}", self.entry, outcome.render()));
         }
     }

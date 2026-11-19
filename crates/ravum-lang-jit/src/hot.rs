@@ -237,6 +237,7 @@ impl HotEngine {
                 depth: 0,
                 fuel: DEFAULT_FUEL,
                 table: 0,
+                out: 0,
             },
             kind,
             fuel: DEFAULT_FUEL,
@@ -265,6 +266,7 @@ impl HotEngine {
             depth: 0,
             fuel: DEFAULT_FUEL,
             table: v.table.as_ptr() as usize,
+            out: 0,
         };
         exec::call1::<usize, u8>(
             v.table[slot] as *const u8,
@@ -338,6 +340,19 @@ impl HotEngine {
     fn build(&mut self, ir: &Module) -> Result<(Box<Version>, UpdateReport), Refusal> {
         let started = Instant::now();
         ir.validate().map_err(Refusal::Invalid)?;
+        // INV-05: no I/O on the real-time thread. Conservative: any `Print`
+        // anywhere in the module refuses a real-time entry.
+        if !matches!(self.kind, EntryKind::Nullary(_))
+            && ir.functions.iter().any(|f| {
+                f.blocks
+                    .iter()
+                    .any(|b| b.insts.iter().any(|i| matches!(i, Inst::Print { .. })))
+            })
+        {
+            return Err(Refusal::Invalid(
+                "`io::print*` in a module with a real-time entry (INV-05)".into(),
+            ));
+        }
         // Stage slot assignments; committed only once compilation succeeded.
         let mut slots = self.slots.clone();
         let mut slot_of = Vec::with_capacity(ir.functions.len());
@@ -563,6 +578,21 @@ impl RtRunner {
 
     /// Run a no-argument entry once with the current version (not a
     /// real-time call: the outcome is decoded with allocation).
+    /// [`RtRunner::run_nullary`], also returning what the entry printed.
+    pub fn run_nullary_with_output(
+        &mut self,
+        messages: &[String],
+    ) -> (
+        ravum_lang_ir::interp::RunOutcome,
+        ravum_lang_ir::interp::Output,
+    ) {
+        let mut sink = crate::exec::OutputSink::new(messages);
+        self.ctx.out = &mut sink as *mut crate::exec::OutputSink as usize;
+        let r = self.run_nullary(messages);
+        self.ctx.out = 0;
+        (r, sink.out)
+    }
+
     pub fn run_nullary(&mut self, messages: &[String]) -> ravum_lang_ir::interp::RunOutcome {
         let EntryKind::Nullary(ret) = self.kind else {
             panic!("run_nullary on a {:?} entry", self.kind);

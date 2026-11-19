@@ -100,19 +100,31 @@ pub fn wrap(ty: Ty, v: i128) -> i128 {
 
 /// Run `entry` with no argument.
 pub fn run(module: &Module, entry: &str, steps: u64) -> RunOutcome {
+    run_with_output(module, entry, steps).0
+}
+
+/// [`run`], also returning what the program printed (up to the stop).
+pub fn run_with_output(module: &Module, entry: &str, steps: u64) -> (RunOutcome, Output) {
     let Some(id) = module.func_id(entry) else {
-        return RunOutcome::Fault(format!("no function `{entry}`"));
+        return (
+            RunOutcome::Fault(format!("no function `{entry}`")),
+            Output::default(),
+        );
     };
     if module.functions[id as usize].params != 0 {
-        return RunOutcome::Fault(format!("`{entry}` takes arguments"));
+        return (
+            RunOutcome::Fault(format!("`{entry}` takes arguments")),
+            Output::default(),
+        );
     }
     let mut m = Machine::new(module, steps, 0);
-    match m.call(id, &[], 0) {
+    let r = match m.call(id, &[], 0) {
         Ok(v) => RunOutcome::Value(v),
         Err(Stop::Panic(s)) => RunOutcome::Panic(s),
         Err(Stop::Diverge) => RunOutcome::Diverge,
         Err(Stop::Fault(s)) => RunOutcome::Fault(s),
-    }
+    };
+    (r, m.out)
 }
 
 /// Bytes of memory the interpreter gives a run (stack + host state).
@@ -163,6 +175,16 @@ struct Machine<'m> {
     steps: u64,
     mem: Vec<u8>,
     sp: usize,
+    /// `io::print*` output, in program order.
+    out: Output,
+}
+
+/// Text written by a run (`io::print`/`println` → `stdout`, `eprintln` →
+/// `stderr`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Output {
+    pub stdout: String,
+    pub stderr: String,
 }
 
 impl<'m> Machine<'m> {
@@ -172,6 +194,7 @@ impl<'m> Machine<'m> {
             steps,
             mem: vec![0; MEMORY],
             sp: (STATE_BASE + state_size).div_ceil(16) * 16,
+            out: Output::default(),
         }
     }
 
@@ -310,6 +333,16 @@ impl<'m> Machine<'m> {
                         };
                         let a = ptr(slots[*base as usize])? + i * *scale as i128;
                         slots[*dst as usize] = Val::Int(Ty::Ptr, a);
+                    }
+                    Inst::Print { stream, arg } => {
+                        let text = match arg {
+                            PrintArg::Text(t) => t.clone(),
+                            PrintArg::Value { src, .. } => slots[*src as usize].text(),
+                        };
+                        match stream {
+                            Stream::Stdout => self.out.stdout.push_str(&text),
+                            Stream::Stderr => self.out.stderr.push_str(&text),
+                        }
                     }
                     Inst::Call { dst, func, args } => {
                         let vals: Vec<Val> = args.iter().map(|a| slots[*a as usize]).collect();

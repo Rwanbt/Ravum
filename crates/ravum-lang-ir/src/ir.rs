@@ -167,8 +167,29 @@ pub enum UnOp {
     Ceil,
 }
 
+/// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// What a [`Inst::Print`] writes: a literal text, or a scalar formatted like
+/// its `to_string` (Rust `Display`: the same text as the `rustc` backend).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PrintArg {
+    Text(String),
+    Value { ty: Ty, src: Local },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Inst {
+    /// IR v1.2: append to the run's output buffer (effect `io`). Never
+    /// allowed in a real-time entry (the hot-swap engine refuses it).
+    Print {
+        stream: Stream,
+        arg: PrintArg,
+    },
     Const {
         dst: Local,
         value: Const,
@@ -345,6 +366,14 @@ impl Module {
                 for i in &blk.insts {
                     match i {
                         Inst::Const { dst, .. } => l(*dst)?,
+                        Inst::Print { arg, .. } => {
+                            if let PrintArg::Value { ty, src } = arg {
+                                l(*src)?;
+                                if !(ty.is_int() || ty.is_float() || *ty == Ty::Bool) {
+                                    return Err(format!("{}: print of {ty:?}", f.name));
+                                }
+                            }
+                        }
                         Inst::Copy { dst, src } | Inst::Cast { dst, src, .. } => {
                             l(*dst)?;
                             l(*src)?

@@ -1850,6 +1850,50 @@ impl<'a> FnLower<'a> {
         Ok(result)
     }
 
+    /// The `&str` argument of `io::print*`: a string literal, or the text of a
+    /// scalar, `&x.to_string()` / `x.to_string().as_str()`. Any other string
+    /// is `Unsupported` (no `String` in the IR).
+    fn print_arg(&mut self, a: &Expr) -> R<PrintArg> {
+        if let ExprKind::Str(t) = &a.kind {
+            return Ok(PrintArg::Text(t.clone()));
+        }
+        let to_string = match &a.kind {
+            ExprKind::Unary {
+                op: ast::UnOp::Ref,
+                expr,
+            } => Some(&**expr),
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } if method.name == "as_str" && args.is_empty() => Some(&**receiver),
+            _ => None,
+        };
+        if let Some(Expr {
+            id,
+            kind:
+                ExprKind::MethodCall {
+                    receiver,
+                    method,
+                    args,
+                },
+            ..
+        }) = to_string
+        {
+            let scalar_text = matches!(
+                self.checked.facts.methods.get(id),
+                Some(MethodTarget::Builtin { path, .. })
+                    if matches!(path.as_str(), "int::to_string" | "float::to_string" | "bool::to_string")
+            );
+            if method.name == "to_string" && args.is_empty() && scalar_text {
+                let ty = self.ty_of(receiver)?;
+                let src = self.expr(receiver)?;
+                return Ok(PrintArg::Value { ty, src });
+            }
+        }
+        unsupported("`io::print*` of a string other than a literal or `x.to_string()`")
+    }
+
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {
         match self.checked.facts.calls.get(&e.id) {
             Some(CallTarget::UserFn { item }) => {
@@ -1908,6 +1952,30 @@ impl<'a> FnLower<'a> {
                 let vals = self.eval_args(args)?;
                 let t = self.type_of(e)?;
                 self.construct(&t, variant, vals)
+            }
+            Some(CallTarget::BuiltinFn { path })
+                if matches!(
+                    path.as_str(),
+                    "std::io::println" | "std::io::print" | "std::io::eprintln"
+                ) =>
+            {
+                let [arg] = args else {
+                    return Err(LowerError::MissingFact("print arity".into()));
+                };
+                let stream = if path == "std::io::eprintln" {
+                    Stream::Stderr
+                } else {
+                    Stream::Stdout
+                };
+                let arg = self.print_arg(arg)?;
+                self.emit(Inst::Print { stream, arg });
+                if path != "std::io::print" {
+                    self.emit(Inst::Print {
+                        stream,
+                        arg: PrintArg::Text("\n".into()),
+                    });
+                }
+                Ok(self.unit())
             }
             Some(CallTarget::BuiltinFn { path }) if path == "Option::Some" => {
                 let vals = self.eval_args(args)?;

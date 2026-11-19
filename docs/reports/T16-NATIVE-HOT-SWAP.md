@@ -172,9 +172,25 @@ tests `watch`, `hot_reload` et `dsp_block` de la voie `rustc`) ;
 2 SKIP** (sans `--verify-build` : `build_verified: false`, ce n'est pas une
 preuve de build).
 
-Limites : un seul fichier (pas de `mod x;`) ; pas de sortie d'E/S (`io::println`
-n'est pas dans l'IR) : l'entrée rend une valeur ; pas de vrai périphérique
+Limites : un seul fichier (pas de `mod x;`) ; pas de vrai périphérique
 audio ; fin par Ctrl+C (aucun processus enfant à arrêter).
+
+**Ajout (IR v1.2) — sortie `io::print*`.** `Inst::Print` écrit un littéral ou
+le texte d'un scalaire (`&x.to_string()`, `x.to_string().as_str()`) ;
+formatage `Display` de Rust côté hôte, donc le même texte que la voie `rustc`.
+La sortie va dans un tampon de l'exécution (site `unsafe` #7d) et `watch`
+l'affiche avant le résultat de l'entrée. Un module qui imprime est **refusé**
+pour une entrée temps réel (INV-05). Autres chaînes (`String`, `&s`) :
+`Unsupported`.
+
+| Test | Résultat |
+|---|---|
+| `ravum-lang-jit/tests/print.rs` : 13 types × valeurs limites, `f64`/`f32` (±0, ±inf, NaN, `1e21`, `1e-7`, `0.30000000000000004`, `16777217.0`) | natif = interpréteur, octet par octet, stdout et stderr |
+| sortie avant un trap, ordre du programme | conservés, identiques |
+| **négatif** : entrée `fn(f32) -> f32` qui imprime | `Refusal::Invalid` (INV-05) |
+| **négatif** : `io::println(&s)` avec `s: String` | `Unsupported` |
+| `ravum-lang-cli/tests/jit_print_rustc.rs` : même programme par `ravum-lang run` (rustc) et par le JIT | **sortie identique octet par octet** (33 lignes) |
+| `watch_jit` : `main` qui imprime, puis édition d'une fonction | `total=42` puis `total=100`, `1 recompiled (label)` |
 
 ## Suite proposée
 
