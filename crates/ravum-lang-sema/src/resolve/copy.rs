@@ -111,6 +111,9 @@ pub(crate) fn type_is_copy(
                 && type_is_copy(err, world, facts, state, stack, reported, diags)
         }
         Type::Nominal { def, .. } => {
+            if *def == builtins::PRELUDE_CHANDLE_DEF {
+                return true;
+            }
             if *def == builtins::PRELUDE_ERROR_DEF || world.nominal_kind(*def).is_none() {
                 return false;
             }

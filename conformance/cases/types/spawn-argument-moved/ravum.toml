@@ -1,0 +1,4 @@
+[package]
+name = "spawn-argument-moved"
+version = "0.1.0"
+edition = "core-1.0"

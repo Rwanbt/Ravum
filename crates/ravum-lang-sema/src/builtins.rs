@@ -39,6 +39,92 @@ pub fn error_type() -> Type {
     }
 }
 
+/// `NodeId` réservés aux types opaques de `std::net` (RFC-E11-NET-HTTP).
+pub const PRELUDE_TCP_LISTENER_DEF: NodeId = NodeId::MAX - 1;
+pub const PRELUDE_TCP_STREAM_DEF: NodeId = NodeId::MAX - 2;
+
+/// `NodeId` réservés aux types opaques génériques de `std::thread` et
+/// `std::sync` (RFC-E11-CONCURRENCY §3). Chacun prend un argument de type.
+pub const PRELUDE_JOIN_HANDLE_DEF: NodeId = NodeId::MAX - 3;
+pub const PRELUDE_CHANNEL_DEF: NodeId = NodeId::MAX - 4;
+pub const PRELUDE_SENDER_DEF: NodeId = NodeId::MAX - 5;
+pub const PRELUDE_RECEIVER_DEF: NodeId = NodeId::MAX - 6;
+
+/// `NodeId` réservé au handle C opaque `CHandle` (RFC-E11-SQLITE NAT-3.3) :
+/// un pointeur C que le code Ravum ne peut ni lire ni déréférencer, seulement
+/// recevoir d'une fonction `extern`, rendre à une autre, et comparer à nul.
+/// C'est le seul type opaque `Copy` du prélude.
+pub const PRELUDE_CHANDLE_DEF: NodeId = NodeId::MAX - 7;
+
+/// `NodeId` réservés aux types opaques de `std::http` (RFC-E11-NET-HTTP §4).
+pub const PRELUDE_HTTP_REQUEST_DEF: NodeId = NodeId::MAX - 8;
+pub const PRELUDE_HTTP_RESPONSE_DEF: NodeId = NodeId::MAX - 9;
+
+/// `NodeId` réservé au type opaque générique `Future<T>` (RFC-E11-CONCURRENCY
+/// phase 2) : la valeur rendue par l'appel d'une `async fn`.
+pub const PRELUDE_FUTURE_DEF: NodeId = NodeId::MAX - 10;
+
+/// Le type `CHandle`.
+pub fn chandle_type() -> Type {
+    opaque_type(PRELUDE_CHANDLE_DEF, "CHandle")
+}
+
+/// Types opaques génériques du prélude : nom et `NodeId` réservé.
+pub const PRELUDE_GENERIC_OPAQUES: &[(&str, NodeId)] = &[
+    ("JoinHandle", PRELUDE_JOIN_HANDLE_DEF),
+    ("Channel", PRELUDE_CHANNEL_DEF),
+    ("Sender", PRELUDE_SENDER_DEF),
+    ("Receiver", PRELUDE_RECEIVER_DEF),
+    ("Future", PRELUDE_FUTURE_DEF),
+];
+
+/// Nom Rust du prélude pour un `NodeId` réservé à un type opaque.
+pub fn prelude_opaque_name(def: NodeId) -> Option<&'static str> {
+    if def == PRELUDE_TCP_LISTENER_DEF {
+        return Some("TcpListener");
+    }
+    if def == PRELUDE_TCP_STREAM_DEF {
+        return Some("TcpStream");
+    }
+    if def == PRELUDE_CHANDLE_DEF {
+        return Some("CHandle");
+    }
+    if def == PRELUDE_HTTP_REQUEST_DEF {
+        return Some("HttpRequest");
+    }
+    if def == PRELUDE_HTTP_RESPONSE_DEF {
+        return Some("HttpResponse");
+    }
+    PRELUDE_GENERIC_OPAQUES
+        .iter()
+        .find(|(_, id)| *id == def)
+        .map(|(name, _)| *name)
+}
+
+/// Builtins typés par une règle dédiée du checker, pas par leur ligne de
+/// table : leur signature décrit la forme, elle n'est pas analysable comme un
+/// type. `thread::spawn` prend une **fonction nommée** (STD-18.2), et Ravum n'a
+/// pas de type fonction.
+pub const SPECIAL_FORM_FNS: &[&str] = &["std::thread::spawn"];
+
+/// Type opaque générique du prélude (`JoinHandle<T>`, `Sender<T>`, ...).
+pub fn generic_opaque(name: &str, arg: Type) -> Option<Type> {
+    let (name, def) = PRELUDE_GENERIC_OPAQUES.iter().find(|(n, _)| *n == name)?;
+    Some(Type::Nominal {
+        def: *def,
+        name: (*name).to_string(),
+        args: vec![arg],
+    })
+}
+
+fn opaque_type(def: NodeId, name: &str) -> Type {
+    Type::Nominal {
+        def,
+        name: name.to_string(),
+        args: Vec::new(),
+    }
+}
+
 /// Vrai si `ty` est le type prélude `Error`.
 pub fn is_error_type(ty: &Type) -> bool {
     matches!(ty, Type::Nominal { def, .. } if *def == PRELUDE_ERROR_DEF)
@@ -46,8 +132,37 @@ pub fn is_error_type(ty: &Type) -> bool {
 
 /// Noms de types réservés par le prélude (collision = `E-RES-CONFLICT`).
 pub const PRELUDE_TYPES: &[&str] = &[
-    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize", "usize", "f32",
-    "f64", "bool", "char", "String", "Vec", "Option", "Result", "Error",
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "i128",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "u128",
+    "isize",
+    "usize",
+    "f32",
+    "f64",
+    "bool",
+    "char",
+    "String",
+    "Vec",
+    "Option",
+    "Result",
+    "Error",
+    "TcpListener",
+    "TcpStream",
+    "JoinHandle",
+    "Channel",
+    "Sender",
+    "Receiver",
+    "CHandle",
+    "HttpRequest",
+    "HttpResponse",
+    "Future",
 ];
 
 /// Noms de valeurs réservés par le prélude (collision = `E-RES-CONFLICT`).
@@ -63,13 +178,22 @@ pub const PRELUDE_VALUES: &[&str] = &[
 ];
 
 /// Modules accessibles sans `use` (chemins canoniques).
-pub const PRELUDE_MODULES: &[&str] = &["io", "fs", "string", "math", "env", "process", "std"];
+pub const PRELUDE_MODULES: &[&str] = &[
+    "io", "fs", "net", "thread", "sync", "task", "ffi", "http", "string", "math", "env", "process",
+    "std",
+];
 
 /// Module builtin canonique (`std::io`, ...) pour un nom racine non qualifié.
 pub fn builtin_root_module(name: &str) -> Option<&'static str> {
     Some(match name {
         "io" => "std::io",
         "fs" => "std::fs",
+        "net" => "std::net",
+        "thread" => "std::thread",
+        "sync" => "std::sync",
+        "task" => "std::task",
+        "ffi" => "std::ffi",
+        "http" => "std::http",
         "string" => "std::string",
         "math" => "std::math",
         "env" => "std::env",
@@ -84,6 +208,11 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std",
     "std::io",
     "std::fs",
+    "std::net",
+    "std::thread",
+    "std::sync",
+    "std::ffi",
+    "std::http",
     "std::string",
     "std::math",
     "std::env",
@@ -118,6 +247,12 @@ const IO: &[Effect] = &[Effect::Io];
 const IO_ALLOC: &[Effect] = &[Effect::Io, Effect::Alloc];
 const FS: &[Effect] = &[Effect::Fs];
 const FS_ALLOC: &[Effect] = &[Effect::Fs, Effect::Alloc];
+const NET: &[Effect] = &[Effect::Net];
+const NET_ALLOC: &[Effect] = &[Effect::Net, Effect::Alloc];
+const THREAD: &[Effect] = &[Effect::Thread];
+const ASYNC: &[Effect] = &[Effect::Async];
+const NET_ASYNC: &[Effect] = &[Effect::Net, Effect::Async, Effect::Alloc];
+const THREAD_ALLOC: &[Effect] = &[Effect::Thread, Effect::Alloc];
 const ALLOC: &[Effect] = &[Effect::Alloc];
 const PANIC: &[Effect] = &[Effect::Panic];
 const PURE: &[Effect] = &[];
@@ -186,6 +321,250 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         params: &["&str"],
         ret: "bool",
         effects: FS,
+    },
+    // --- std::net (RFC-E11-NET-HTTP §3) ---
+    BuiltinFnSig {
+        path: "std::net::listen",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<TcpListener, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::local_port",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "u16",
+        effects: NET,
+    },
+    BuiltinFnSig {
+        path: "std::net::accept",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "Result<TcpStream, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::connect",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<TcpStream, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_line",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Result<Option<String>, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_exact",
+        generics: &[],
+        params: &["&mut TcpStream", "usize"],
+        ret: "Result<String, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::write_str",
+        generics: &[],
+        params: &["&mut TcpStream", "&str"],
+        ret: "Result<(), Error>",
+        effects: NET_ALLOC,
+    },
+    // --- std::thread, std::sync (RFC-E11-CONCURRENCY §3) ---
+    // `spawn` is typed by a dedicated rule (its first argument names a free
+    // function, CONC-3.1); this row only registers the path and its effects.
+    BuiltinFnSig {
+        path: "std::thread::spawn",
+        generics: &["A", "R"],
+        params: &["fn(A) -> R", "A"],
+        ret: "JoinHandle<R>",
+        effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::net::accept_async",
+        generics: &[],
+        params: &["&TcpListener"],
+        ret: "Future<Result<TcpStream, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::connect_async",
+        generics: &[],
+        params: &["&str"],
+        ret: "Future<Result<TcpStream, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::read_line_async",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Future<Result<Option<String>, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::net::write_str_async",
+        generics: &[],
+        params: &["&mut TcpStream", "&str"],
+        ret: "Future<Result<(), Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::block_on",
+        generics: &["T"],
+        params: &["Future<T>"],
+        ret: "T",
+        effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::spawn",
+        generics: &[],
+        params: &["Future<()>"],
+        ret: "()",
+        effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::yield_now",
+        generics: &[],
+        params: &[],
+        ret: "Future<()>",
+        effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::thread::join",
+        generics: &["T"],
+        params: &["JoinHandle<T>"],
+        ret: "T",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::channel",
+        generics: &["T"],
+        params: &[],
+        ret: "Channel<T>",
+        effects: THREAD_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::sync::sender",
+        generics: &["T"],
+        params: &["&Channel<T>"],
+        ret: "Sender<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::clone_sender",
+        generics: &["T"],
+        params: &["&Sender<T>"],
+        ret: "Sender<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::receiver",
+        generics: &["T"],
+        params: &["Channel<T>"],
+        ret: "Receiver<T>",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::send",
+        generics: &["T"],
+        params: &["&Sender<T>", "T"],
+        ret: "bool",
+        effects: THREAD,
+    },
+    BuiltinFnSig {
+        path: "std::sync::recv",
+        generics: &["T"],
+        params: &["&Receiver<T>"],
+        ret: "Option<T>",
+        effects: THREAD,
+    },
+    // --- std::http (RFC-E11-NET-HTTP §4) ---
+    BuiltinFnSig {
+        path: "std::http::read_request",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Result<HttpRequest, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::method",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::path",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::header",
+        generics: &[],
+        params: &["&HttpRequest", "&str"],
+        ret: "Option<String>",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::body",
+        generics: &[],
+        params: &["&HttpRequest"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::respond",
+        generics: &[],
+        params: &["&mut TcpStream", "u16", "&str", "&str"],
+        ret: "Result<(), Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::get",
+        generics: &[],
+        params: &["&str"],
+        ret: "Result<HttpResponse, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::post",
+        generics: &[],
+        params: &["&str", "&str", "&str"],
+        ret: "Result<HttpResponse, Error>",
+        effects: NET_ALLOC,
+    },
+    BuiltinFnSig {
+        path: "std::http::status",
+        generics: &[],
+        params: &["&HttpResponse"],
+        ret: "u16",
+        effects: PURE,
+    },
+    BuiltinFnSig {
+        path: "std::http::response_body",
+        generics: &[],
+        params: &["&HttpResponse"],
+        ret: "String",
+        effects: ALLOC,
+    },
+    // --- std::ffi (RFC-E11-SQLITE NAT-3.3) ---
+    BuiltinFnSig {
+        path: "std::ffi::null",
+        generics: &[],
+        params: &[],
+        ret: "CHandle",
+        effects: PURE,
+    },
+    BuiltinFnSig {
+        path: "std::ffi::is_null",
+        generics: &[],
+        params: &["CHandle"],
+        ret: "bool",
+        effects: PURE,
     },
     BuiltinFnSig {
         path: "std::process::exit",
@@ -403,6 +782,11 @@ pub fn prelude_type(name: &str) -> Option<Type> {
         "char" => Type::Char,
         "String" => Type::String,
         "Error" => return Some(error_type()),
+        "TcpListener" => return Some(opaque_type(PRELUDE_TCP_LISTENER_DEF, "TcpListener")),
+        "TcpStream" => return Some(opaque_type(PRELUDE_TCP_STREAM_DEF, "TcpStream")),
+        "CHandle" => return Some(chandle_type()),
+        "HttpRequest" => return Some(opaque_type(PRELUDE_HTTP_REQUEST_DEF, "HttpRequest")),
+        "HttpResponse" => return Some(opaque_type(PRELUDE_HTTP_RESPONSE_DEF, "HttpResponse")),
         _ => return None,
     })
 }
@@ -981,6 +1365,15 @@ pub fn type_from_str(text: &str, env: &[(&str, Type)]) -> Option<Type> {
         }
         return Some(Type::Tuple(items));
     }
+    for (name, _) in PRELUDE_GENERIC_OPAQUES {
+        if let Some(inner) = t
+            .strip_prefix(*name)
+            .and_then(|s| s.strip_prefix('<'))
+            .and_then(|s| s.strip_suffix('>'))
+        {
+            return generic_opaque(name, type_from_str(inner, env)?);
+        }
+    }
     for (prefix, wrap) in [("Vec<", 0usize), ("Option<", 1usize), ("Result<", 2usize)] {
         if let Some(inner) = t.strip_prefix(prefix).and_then(|s| s.strip_suffix('>')) {
             let parts = split_top_level(inner, ',')?;
@@ -1112,9 +1505,59 @@ mod tests {
         }
     }
 
+    /// Every opaque prelude type resolves by name, carries its reserved id,
+    /// and maps back to the same Rust name; the reserved ids are distinct.
+    #[test]
+    fn every_opaque_prelude_type_round_trips() {
+        let plain = [
+            ("TcpListener", PRELUDE_TCP_LISTENER_DEF),
+            ("TcpStream", PRELUDE_TCP_STREAM_DEF),
+            ("CHandle", PRELUDE_CHANDLE_DEF),
+            ("HttpRequest", PRELUDE_HTTP_REQUEST_DEF),
+            ("HttpResponse", PRELUDE_HTTP_RESPONSE_DEF),
+        ];
+        let mut ids = vec![PRELUDE_ERROR_DEF];
+        for (name, def) in plain {
+            assert!(PRELUDE_TYPES.contains(&name), "{name}");
+            assert_eq!(
+                prelude_type(name),
+                Some(Type::Nominal {
+                    def,
+                    name: name.to_string(),
+                    args: Vec::new(),
+                }),
+                "{name}"
+            );
+            assert_eq!(prelude_opaque_name(def), Some(name));
+            ids.push(def);
+        }
+        for (name, def) in PRELUDE_GENERIC_OPAQUES {
+            assert!(PRELUDE_TYPES.contains(name), "{name}");
+            assert_eq!(prelude_opaque_name(*def), Some(*name));
+            let ty = generic_opaque(name, Type::I64).expect(name);
+            assert!(
+                matches!(ty, Type::Nominal { def: d, ref args, .. } if d == *def && args == &vec![Type::I64])
+            );
+            ids.push(*def);
+        }
+        assert_eq!(generic_opaque("Vec", Type::I64), None);
+        assert_eq!(prelude_opaque_name(0), None);
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "reserved ids must be distinct");
+        assert_eq!(chandle_type(), prelude_type("CHandle").unwrap());
+    }
+
     #[test]
     fn every_builtin_fn_parses() {
+        assert_eq!(SPECIAL_FORM_FNS, &["std::thread::spawn"]);
         for sig in BUILTIN_FNS {
+            if SPECIAL_FORM_FNS.contains(&sig.path) {
+                // Its result still parses; its first parameter is a function name.
+                assert!(fn_ret_type(sig) != Type::Error, "{}", sig.path);
+                continue;
+            }
             assert!(
                 fn_ret_type(sig) != Type::Error,
                 "retour illisible: {}",

@@ -1,0 +1,8 @@
+extern "C" from "demo" {
+    fn demo_triple(x: i32) -> i32;
+}
+
+fn main() -> () effects(io, alloc, unsafe, ffi) {
+    let v: i32 = unsafe { demo_triple(14) };
+    io::println(v.to_string().as_str());
+}

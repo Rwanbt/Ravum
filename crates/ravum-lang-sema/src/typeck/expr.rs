@@ -4,6 +4,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     pub(super) fn check_expr_inner(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
         match &expr.kind {
             ExprKind::Unit => Type::Unit,
+            ExprKind::Await(inner) => self.check_await(expr, inner),
             ExprKind::Int { value, suffix } => {
                 self.check_int_literal(expr, *value, *suffix, expected)
             }

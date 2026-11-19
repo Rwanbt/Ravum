@@ -41,6 +41,18 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         deferred: bool,
         decl: Span,
     ) {
+        // CONC-6.3: no borrow is held across a suspension. Conservative and
+        // sound: an `async fn` binds no reference at all (parameter, `let` or
+        // pattern), so no reference can be live at an `.await`.
+        if self.in_async_fn() && !super::calls::is_transferable(&ty) && !ty.is_error() {
+            self.error(
+                "E-CONC-REF-ACROSS-AWAIT",
+                decl,
+                format!(
+                    "`{name}` has type `{ty}`: an `async fn` may not bind a reference, which could be held across an `.await`"
+                ),
+            );
+        }
         // Every binding site (parameter, `let`, pattern) runs inside the
         // scope its function, block or arm pushed.
         let scope = self
@@ -56,6 +68,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 decl,
             },
         );
+    }
+
+    /// `true` while checking the body of an `async fn`.
+    pub(super) fn in_async_fn(&self) -> bool {
+        !self.in_const
+            && self
+                .current_fn
+                .is_some_and(|item| self.facts.async_fns.contains(&item))
     }
 
     pub(super) fn lookup_local(&self, name: &str) -> Option<Local> {
@@ -688,7 +708,33 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 .collect(),
         };
         self.self_ty = impl_ctx.as_ref().map(|(t, _)| t.clone());
-        self.fn_ret = sig.ret.clone();
+        // An `async fn` body produces the declared result; callers see `Future<T>`.
+        let body_ret = if self.facts.async_fns.contains(&item) {
+            match &sig.ret {
+                Type::Nominal { args, .. } if args.len() == 1 => args[0].clone(),
+                other => other.clone(),
+            }
+        } else {
+            sig.ret.clone()
+        };
+        self.fn_ret = body_ret.clone();
+        if self.facts.async_fns.contains(&item) {
+            if !super::calls::is_transferable(&body_ret) {
+                self.error(
+                    "E-CONC-REF-ACROSS-AWAIT",
+                    decl_span,
+                    format!("an `async fn` may not return the reference type `{body_ret}`"),
+                );
+            }
+            if !sig.generics.is_empty() || sig.receiver.is_some() || f.is_test {
+                self.error(
+                    "E-UNSUPPORTED-ASYNC",
+                    decl_span,
+                    "an `async fn` is a free, non-generic, non-test function in Core 1.0"
+                        .to_string(),
+                );
+            }
+        }
         self.current_fn = Some(item);
         self.in_const = false;
         self.loop_depth = 0;
@@ -701,7 +747,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
             self.bind_local(&param.name, param.ty.clone(), mutable, false, decl_span);
         }
-        let body_ty = self.check_block(&f.body, Some(&sig.ret));
+        let body_ty = self.check_block(&f.body, Some(&body_ret));
         // DIAG-1.6: `W-OWN-UNUSED-VARIABLE` is one of the two warnings Core 1.0
         // documents. A binding is unused when no path resolved it inside the
         // function; shadowing is handled conservatively (a name used once counts
@@ -717,7 +763,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
         }
         let body_ty = self.resolve_vars(&body_ty);
-        let ret = self.resolve_vars(&sig.ret);
+        let ret = self.resolve_vars(&body_ret);
         // G-5.11 / TYP-1.6: a function declared `-> !` must have a divergent
         // body. `compatible` treats `!` as bottom in both directions, so the
         // normal body check below cannot catch a body that has type `()`.

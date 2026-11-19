@@ -217,6 +217,10 @@ pub enum ItemKind {
 pub struct ExternBlock {
     /// Nom de l'ABI (`C` uniquement en Core 1.0).
     pub abi: Ident,
+    /// Bibliothèque native nommée par `extern "C" from "<lib>" { ... }`
+    /// (RFC-E11-SQLITE NAT-2.1) ; elle doit être déclarée dans `[native]` du
+    /// manifeste. `None` : symboles de la bibliothèque C du système.
+    pub lib: Option<Ident>,
     pub fns: Vec<ExternFn>,
     pub span: Span,
 }
@@ -245,6 +249,8 @@ pub struct FnItem {
     pub effects: Option<Vec<Ident>>,
     pub body: Block,
     pub is_test: bool,
+    /// `async fn` (RFC-E11-CONCURRENCY phase 2): a call yields a `Future<T>`.
+    pub is_async: bool,
     pub span: Span,
 }
 
@@ -529,6 +535,8 @@ pub struct Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     Unit,
+    /// `expr.await` (RFC-E11-CONCURRENCY CONC-6.1).
+    Await(Box<Expr>),
     Int {
         value: u128,
         suffix: Option<IntTy>,

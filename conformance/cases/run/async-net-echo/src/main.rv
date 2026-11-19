@@ -1,0 +1,60 @@
+// Server and clients are tasks of ONE thread: with blocking sockets the
+// first `accept` or `read_line` would freeze every other task.
+async fn serve(listener: TcpListener, connections: i64) -> () effects(net, async, alloc, io) {
+    for i in 0..connections {
+        match net::accept_async(&listener).await {
+            Ok(stream) => task::spawn(echo(stream)),
+            Err(e) => io::println("accept failed"),
+        }
+    }
+}
+
+async fn echo(stream: TcpStream) -> () effects(net, async, alloc) {
+    let mut s: TcpStream = stream;
+    match net::read_line_async(&mut s).await {
+        Ok(Some(line)) => {
+            let mut reply: String = String::from("echo ");
+            reply.push_str(&line);
+            reply.push_str("\n");
+            drop(net::write_str_async(&mut s, &reply).await);
+        }
+        Ok(None) => {}
+        Err(e) => {}
+    }
+}
+
+async fn client(port: u16, name: String) -> () effects(net, async, alloc, io) {
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(&port.to_string());
+    match net::connect_async(&addr).await {
+        Ok(stream) => {
+            let mut s: TcpStream = stream;
+            let mut line: String = name;
+            line.push_str("\n");
+            drop(net::write_str_async(&mut s, &line).await);
+            match net::read_line_async(&mut s).await {
+                Ok(Some(reply)) => io::println(&reply),
+                Ok(None) => io::println("closed"),
+                Err(e) => io::println("read failed"),
+            }
+        }
+        Err(e) => io::println("connect failed"),
+    }
+}
+
+async fn run() -> () effects(net, async, alloc, io) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let port: u16 = net::local_port(&listener);
+            task::spawn(serve(listener, 2));
+            client(port, String::from("one")).await;
+            client(port, String::from("two")).await;
+        }
+        Err(e) => io::println("listen failed"),
+    }
+}
+
+fn main() -> () effects(net, async, alloc, io) {
+    task::block_on(run());
+    io::println("done");
+}

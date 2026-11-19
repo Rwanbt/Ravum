@@ -1,0 +1,10 @@
+{
+  "id": "types/dsp-block-state-type",
+  "mode": "compile-fail",
+  "args": [
+    "--dsp-block"
+  ],
+  "expect_codes": [
+    "E-DSP-STATE-TYPE"
+  ]
+}

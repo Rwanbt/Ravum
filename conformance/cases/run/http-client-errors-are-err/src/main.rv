@@ -1,0 +1,14 @@
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut url: String = String::from("http://127.0.0.1:");
+    url.push_str(net::local_port(&listener).to_string().as_str());
+    url.push_str("/");
+    drop(listener);
+    let refused: Result<HttpResponse, Error> = http::get(url.as_str());
+    io::println(if refused.is_err() { "refused is Err" } else { "?" });
+    let scheme: Result<HttpResponse, Error> = http::get("ftp://127.0.0.1/");
+    io::println(if scheme.is_err() { "scheme is Err" } else { "?" });
+    let tls: Result<HttpResponse, Error> = http::get("https://127.0.0.1/");
+    io::println(if tls.is_err() { "https is Err" } else { "?" });
+    Ok(())
+}

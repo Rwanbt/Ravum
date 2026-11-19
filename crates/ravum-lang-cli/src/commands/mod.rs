@@ -25,7 +25,18 @@ pub fn dispatch(command: Command) -> i32 {
             locked,
             timings,
             rt_entry,
-        } => check::run(&path, json, profile, locked, timings, rt_entry.as_deref()),
+            reload,
+            dsp_block,
+        } => check::run(
+            &path,
+            json,
+            profile,
+            locked,
+            timings,
+            rt_entry.as_deref(),
+            reload,
+            dsp_block,
+        ),
         Command::Build {
             path,
             release,
@@ -34,6 +45,7 @@ pub fn dispatch(command: Command) -> i32 {
             target,
             timings,
             rt_entry,
+            dsp_block,
         } => build::run(
             &path,
             release,
@@ -42,6 +54,7 @@ pub fn dispatch(command: Command) -> i32 {
             target,
             timings,
             rt_entry.as_deref(),
+            dsp_block,
         ),
         Command::Run {
             path,
@@ -54,7 +67,14 @@ pub fn dispatch(command: Command) -> i32 {
             run,
             release,
             max_rebuilds,
-        } => watch::run(&path, run, release, max_rebuilds),
+            reload,
+        } => {
+            if reload {
+                watch::run_reload(&path, release)
+            } else {
+                watch::run(&path, run, release, max_rebuilds)
+            }
+        }
         Command::Test { path, filter, json } => test::run(&path, filter.as_deref(), json),
         Command::Fmt { path, check } => fmt::run(&path, check),
         Command::Lint { path, deny } => lint::run(&path, &deny),

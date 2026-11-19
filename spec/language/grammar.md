@@ -71,7 +71,7 @@ self_param     = "&" [ "mut" ] "self" | "self" ;
 | G-3.7 | `self_param` est obligatoire en premier paramètre d'une méthode d'`impl` qui porte `self` ; une fonction associée n'a pas de `self`. Un `self` hors `impl` produit `E-RES-SELF`. | MUST |
 | G-3.8 | Aucune valeur de retour « nulle part » : `->` sans type est `E-PARSE-EXPECTED`. | MUST |
 | G-3.9 | Le corps d'un `fn` est **toujours** un bloc `{ ... }`. `fn f();` (déclaration sans corps) est `E-PARSE-EXPECTED`. | MUST |
-| G-3.10 | `unsafe fn`, `extern "C" fn` (définition avec corps) et `async fn` sont reconnus puis refusés : `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`, `E-UNSUPPORTED-ASYNC`. En revanche `extern "C" { fn f(...); }` est accepté (ABI `"C"` seulement, `E-UNSUPPORTED-ABI` sinon ; paramètres/retour FFI-sûrs, `E-FFI-TYPE` sinon). | MUST |
+| G-3.10 | `unsafe fn` et `extern "C" fn` (définition avec corps) sont reconnus puis refusés : `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN`. `async fn` est accepté comme item libre de module (D-19-9, [`concurrency.md`](concurrency.md) §6) ; dans un `impl`, `async` est `E-UNSUPPORTED-ASYNC`. En revanche `extern "C" { fn f(...); }` est accepté (ABI `"C"` seulement, `E-UNSUPPORTED-ABI` sinon ; paramètres/retour FFI-sûrs, `E-FFI-TYPE` sinon). | MUST |
 | G-3.11 | `extern_item` n'est valide qu'au niveau module (pas dans un `impl`, pas dans un `fn`). Chaque `extern_fn` se termine par `;`, sans corps. | MUST |
 
 ```rv
@@ -409,7 +409,7 @@ for_iterable   = or_expr ".." or_expr        (* plage entière exclusive *)
 | G-6.31 | `t.0.1` est refusé (`E-PARSE-UNEXPECTED`) : il faut `(t.0).0`. Les indices de champ ne se chaînent pas sans parenthèses. | MUST |
 | G-6.32 | Un appel de fonction ordinaire ne peut pas être suivi d'un littéral de bloc ambigu : `f { x }` n'est pas une syntaxe de Core 1.0. Un `struct_expr` exige qu'un type soit identifiable ; dans `if x { }`, `x` n'est jamais traité comme un type de struct. Le parser **désactive** la lecture de `struct_expr` dans la condition d'un `if`/`while`/`match` (règle de lookahead 2, G-6.35). | MUST |
 | G-6.33 | Il n'y a **aucune** expression de fermeture (`\|x\| x + 1`) : `E-UNSUPPORTED-CLOSURE`. | MUST |
-| G-6.34 | Il n'y a **aucun** `async` : `E-UNSUPPORTED-ASYNC`. `await` n'est pas un mot-clé ([`lexical.md`](lexical.md) §5) : `x.await` est un champ ou une méthode inconnus. Aucun `move` : `E-UNSUPPORTED-MOVE` (code dédié du registre). | MUST |
+| G-6.34 | Un bloc `async { ... }` est `E-UNSUPPORTED-ASYNC`. `expr.await` est une expression postfixe (même précédence que l'accès de champ) ; `await` est un mot-clé ([`lexical.md`](lexical.md) §5, D-19-9). Aucun `move` : `E-UNSUPPORTED-MOVE` (code dédié du registre). | MUST |
 | G-6.35 | **Désambiguïsation `Type { ... }` vs bloc** : en position de condition (`if`, `while`, `match` scrutinee), une séquence `path {` est **toujours** interprétée comme la fin de la condition suivie d'un bloc, jamais comme un littéral de struct. Un littéral de struct en condition exige des parenthèses : `if (P { x: 1 }) == p { }`. | MUST |
 
 ```rv
@@ -503,7 +503,7 @@ expr_path      = ( "crate" | "super" | "self" | IDENT ) { "::" ( IDENT | "self" 
 | `trait`, `impl Trait`, `where`, bornes | `E-UNSUPPORTED-TRAIT`, `E-UNSUPPORTED-IMPL-TRAIT`, `E-UNSUPPORTED-WHERE`, `E-UNSUPPORTED-BOUNDS` |
 | `dyn T` | `E-RES-UNKNOWN` (`dyn` = identifiant valide) |
 | closures `\|x\| e` | `E-UNSUPPORTED-CLOSURE` |
-| `async`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-MOVE` (`await` est un identifiant, [`lexical.md`](lexical.md) §5) |
+| bloc `async`, méthode `async`, `move` | `E-UNSUPPORTED-ASYNC`, `E-UNSUPPORTED-MOVE` |
 | `unsafe`, `extern`, pointeurs bruts | `E-UNSUPPORTED-UNSAFE`, `E-UNSUPPORTED-EXTERN` (`*const`/`*mut` → `E-UNSUPPORTED-UNSAFE`) |
 | `macro!`, `macro_rules!` | `E-UNSUPPORTED-MACRO` |
 | `static` | `E-UNSUPPORTED-STATIC` (`static` est un mot-clé réservé, Q-LEX-1) |

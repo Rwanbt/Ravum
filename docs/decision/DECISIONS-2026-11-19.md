@@ -45,3 +45,55 @@ binaire panique (`attempt to calculate the remainder with overflow`) et que
 **Décision :** `MIN % -1` est un **trap**, comme `MIN / -1` (EXPR-3.1).
 `core-machine.md` §5 est aligné ; l'oracle et son corpus suivent. Le
 compilateur ne change pas.
+
+## D-19-3 — Concurrence : threads, canaux **et** `async` dans la 1.0
+
+**Décision du responsable :** la 1.0 contient les deux phases de
+[`RFC-E11-CONCURRENCY`](../rfc/RFC-E11-CONCURRENCY.md) : threads et canaux
+(phase 1), puis `async`/`.await` sur un exécuteur déterministe (phase 2). La
+phase 1 est livrée d'abord ; T6 n'est `PASS` qu'avec les deux.
+
+## D-19-4 — SQLite : dépendances natives générales
+
+**Décision du responsable :** au lieu d'un runtime natif fermé, Ravum gagne un
+**mécanisme général de dépendances natives** (L1–L4 de
+`RFC-P2-VERTICALS-BLOCKERS` §3.3). SQLite est la première dépendance qui
+l'utilise. [`RFC-E11-SQLITE`](../rfc/RFC-E11-SQLITE.md) est réécrite en ce
+sens ; cela élargit D7 (FFI), dont la frontière doit être réécrite dans la
+même RFC.
+
+## D-19-5 — Hot reload : `init`/`step` avec `migrate`
+
+**Décision du responsable :** modèle `init`/`step` de
+[`RFC-E11-HOT-RELOAD`](../rfc/RFC-E11-HOT-RELOAD.md), état sérialisé au
+remplacement, refus si le schéma change **sauf** si le nouveau module fournit
+`migrate` (HR-1.7 passe de SHOULD à MUST dans la 1.0).
+
+## D-19-6 — Ordre d'implémentation d'E11
+
+Réseau → threads → SQLite → hot reload → DSP. Les RFC restent `PROPOSED`
+jusqu'à leur ratification ; ces décisions fixent les choix de conception.
+
+## D-19-7 — SQLite livré comme paquet `.rv`
+
+**Décision du responsable :** SQLite est un **paquet** `.rv` (`packages/sqlite`),
+pas un module `std`. Sa bibliothèque native est construite par un script du
+dépôt, pas par la toolchain (MOD-5.10), et épinglée par digest. Un programme
+l'utilise par `[dependencies] sqlite = { path = "..." }`. Conséquence : une
+dépendance peut déclarer `[native]` ; ses entrées ne servent qu'à ses propres
+blocs `extern` (MOD-5.20 révisé).
+
+## D-19-8 — Vertical T9 suivant : HTTP + SQLite
+
+**Décision du responsable :** après SQLite, HTTP/1.1 au-dessus de `std::net`,
+puis un service HTTP + SQLite testé de bout en bout. Le hot reload et le bloc
+DSP viennent ensuite.
+
+## D-19-9 — `async` : `.await` devient un mot-clé
+
+**Décision du responsable :** la phase 2 de RFC-E11-CONCURRENCY prend la
+surface de la RFC, `async fn` et `expr.await`, avec un exécuteur mono-thread à
+ordre FIFO (`std::task`). `await` devient un **mot-clé réservé** ; c'est un
+changement de LEX-5.1/§5.3 et de G-6.34 : un programme qui utilisait `await`
+comme nom ne compile plus (`E-PARSE-EXPECTED`). L'alternative écartée était des
+builtins sans mot-clé (`task::await(f)`).

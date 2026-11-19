@@ -21,6 +21,24 @@ pub const DSP_EXPORT: &str = "ravum_process_block";
 /// Changing the state layout requires a new signature, not a silent reinterpretation.
 pub const DSP_SIGNATURE: &str = "block:f32->f32+state:v1";
 
+/// Exported symbol giving the module's state schema digest (RFC-E11-DSP-BLOCK
+/// DSP-1.4): a NUL-terminated lowercase hexadecimal SHA-256.
+pub const DSP_STATE_SCHEMA_EXPORT: &str = "ravum_state_schema";
+
+/// Canonical text of [`DspState`] in the state schema format shared with hot
+/// reload (`spec/language/reload.md` HR-1.1). A Ravum block whose state has
+/// another schema is refused at compile time and, if forged, by the host.
+pub const DSP_STATE_SCHEMA_V1_TEXT: &str = "#0=struct{z1:f32;z2:f32;}\n";
+
+/// SHA-256 (lowercase hex) of [`DSP_STATE_SCHEMA_V1_TEXT`].
+pub fn dsp_state_schema_v1_digest() -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(DSP_STATE_SCHEMA_V1_TEXT.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 /// Host-owned processing state.
 ///
 /// `#[repr(C)]` and fixed-size on purpose: the layout **is** the contract. Fixtures
@@ -77,6 +95,15 @@ mod tests {
     fn state_layout_is_two_f32_and_stable() {
         assert_eq!(std::mem::size_of::<DspState>(), 8);
         assert_eq!(std::mem::align_of::<DspState>(), 4);
+    }
+
+    #[test]
+    fn state_schema_digest_is_the_sha256_of_the_v1_text() {
+        let digest = dsp_state_schema_v1_digest();
+        assert_eq!(digest.len(), 64);
+        assert!(digest
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]

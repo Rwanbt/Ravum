@@ -56,15 +56,16 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-UNSUPPORTED-TRAIT` | parse | `trait`, borne `T: X`, `dyn T` |
 | `E-UNSUPPORTED-ATTR` | parse | attribut `#[...]` / `#![...]` |
 | `E-UNSUPPORTED-MACRO` | parse | `nom!(...)` / `macro_rules!` |
-| `E-UNSUPPORTED-ASYNC` | parse | `async`, `await` |
+| `E-UNSUPPORTED-ASYNC` | parse | bloc `async`, méthode `async`, `async fn` générique ou `test` ([`concurrency.md`](concurrency.md) CONC-6.5) |
 | `E-UNSUPPORTED-UNSAFE` | parse | `unsafe fn`, pointeurs bruts, opérations non vérifiées (le bloc `unsafe { }` est supporté) |
 | `E-UNSUPPORTED-EXTERN` | parse | `extern "C" fn` avec corps (le bloc `extern "C" { ... }` est supporté) |
 | `E-UNSUPPORTED-ABI` | parse | ABI autre que `"C"` dans un bloc `extern` |
 | `E-FFI-TYPE` | resolve | paramètre/retour `extern` non FFI-sûr |
+| `E-FFI-UNKNOWN-LIB` | modules | `extern "C" from "<nom>"` sans entrée `<nom>` dans `[native]` ([`modules.md`](modules.md) MOD-5.18) |
 | `E-UNSAFE-CONTEXT` | types | appel de fonction `extern` hors bloc `unsafe` |
 | `E-UNSUPPORTED-WHERE` | parse | clause `where` |
 | `E-UNSUPPORTED-IMPL-TRAIT` | parse | `impl Trait` en position de type |
-| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté (`net`, `unsafe`, `ffi`, `async`) |
+| `E-UNSUPPORTED-EFFECT` | resolve | déclaration d'un effet non implémenté ; aucun ne l'est depuis D-19-9 (`async` produit) : code conservé, plus émis |
 | `E-UNSUPPORTED-EDITION` | modules | `edition` de `ravum.toml` inconnue |
 | `E-UNSUPPORTED-RANGE` | parse | `..`/`..=` hors `for`, slicing `&v[a..b]`, `..base` |
 | `E-UNSUPPORTED-CLOSURE` | parse | `|x| e` |
@@ -97,6 +98,10 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-MOD-MANIFEST` | modules | `ravum.toml` invalide, clé inconnue, nom/version malformés |
 | `E-MOD-DEPENDENCY` | modules | dépendance malformée (pas de `path`, nom≠`package.name`, cible sans `src/lib.rv`, conflit) |
 | `E-MOD-BUILD-SCRIPT` | modules | `build.rs`, `[build]`, script refusé |
+| `E-MOD-NATIVE` | modules | entrée `[native]` malformée, ou même nom de bibliothèque lié par deux packages ([`modules.md`](modules.md) MOD-5.14, MOD-5.20) |
+| `E-MOD-NATIVE-PATH` | modules | `path` d'une bibliothèque native hors du package (MOD-5.15) |
+| `E-MOD-NATIVE-MISSING` | modules | fichier de bibliothèque native absent, ou aucun digest pour la plateforme (MOD-5.16) |
+| `E-MOD-NATIVE-DIGEST` | modules | digest du fichier différent du digest épinglé (MOD-5.17) |
 | `E-MOD-BOTH-ROOTS` | modules | `src/main.rv` **et** `src/lib.rv` présents (interdit, Q-MOD-1) |
 | `E-MOD-LOCK` | modules | `lockfile_version` inconnu ou lockfile illisible |
 
@@ -151,6 +156,27 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-EFF-UNKNOWN` | effects | nom d'effet inconnu (pas un des 9 groupes) |
 | `E-EFF-UNDECLARED` | effects | effet inféré absent de la déclaration majorante |
 | `E-EFF-PROFILE` | effects | effet interdit par le profil `pure` ou `rt` |
+
+### 3.6.1 Concurrence
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-CONC-SPAWN-TARGET` | types | le premier argument de `thread::spawn` ne nomme pas une fonction libre non générique à un paramètre ([`stdlib.md`](stdlib.md) STD-18.2) |
+| `E-CONC-AWAIT-OUTSIDE` | types | `.await` hors d'une `async fn` ([`concurrency.md`](concurrency.md) CONC-6.1) |
+| `E-CONC-REF-ACROSS-AWAIT` | types | référence liée dans une `async fn` : paramètre, `let`, motif ou résultat (CONC-6.3) |
+| `E-CONC-NOT-TRANSFERABLE` | types | type contenant une référence passé entre threads : paramètre ou résultat d'un `spawn`, élément d'un canal ([`stdlib.md`](stdlib.md) STD-18.1) |
+
+### 3.6.2 Rechargement à chaud
+
+Émis par `ravum-lang check --reload` et `ravum-lang watch --reload` seulement ([`reload.md`](reload.md)).
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-HR-ENTRY` | reload | `State`, `init`, `step` absents du module racine, ou signature différente du contrat ; `migrate` mal formée (HR-1.8, HR-1.7) |
+| `E-HR-STATE-TYPE` | reload | type de l'état sans forme canonique : générique, non utilisateur, fonction (HR-1.6) |
+| `E-HR-STATE-RESOURCE` | reload | référence ou ressource (socket, handle, canal, `CHandle`) dans l'état (HR-1.6) |
+| `E-DSP-ENTRY` | reload | `State` ou `process_sample` absents du module racine, ou signature différente de `fn(state: &mut State, input: f32) -> f32` (DSP-1.2) ; émis par `--dsp-block` / `--emit dsp-block` |
+| `E-DSP-STATE-TYPE` | reload | état d'un bloc DSP différent de l'état hôte `struct State { z1: f32, z2: f32 }` (DSP-1.2) |
 
 ### 3.7 Avertissements
 

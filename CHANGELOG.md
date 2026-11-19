@@ -8,6 +8,70 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `packages/sqlite` builds on Windows with MSVC (`tools/build_sqlite_native.py`,
+  `vswhere` + `vcvars64.bat`, `/Brepro`); the SQLite and HTTP + SQLite
+  end-to-end tests run on Windows CI.
+- Asynchronous TCP: `net::accept_async`, `net::connect_async`,
+  `net::read_line_async`, `net::write_str_async` (CONC-6.7). They share the
+  socket instead of borrowing it, never block the executor, and read the same
+  buffer as the blocking functions (RFC-E11-CONCURRENCY phase 2b).
+- `async fn`, `expr.await` and `std::task` (`block_on`, `spawn`,
+  `yield_now`): a single-threaded FIFO executor in the runtime prelude, the
+  `async` effect, `Future<T>`, and the codes `E-CONC-AWAIT-OUTSIDE` and
+  `E-CONC-REF-ACROSS-AWAIT` (RFC-E11-CONCURRENCY phase 2a, D-19-9, F-STD-039).
+  **Breaking:** `await` is now a reserved keyword.
+- ThreadSanitizer as a blocking workflow (`.github/workflows/tsan.yml`,
+  `tools/tsan_run.py`): every concurrent `run-pass` case is built with
+  `-Zsanitizer=thread` and run 10 times, with a positive control that must be
+  reported; replaces the disabled `NOT_APPLICABLE` job (RFC-E11-CONCURRENCY §5).
+- `ravum-lang build --emit dsp-block`: a `.rv` DSP block built as a `cdylib`
+  for the block host (DSP ABI 2, unchanged), checked under the `rt` profile
+  from `process_sample`, exporting its state schema digest
+  (`ravum_state_schema`) that the host checks with
+  `ExpectedAbi::dsp_with_state_schema()` (RFC-E11-DSP-BLOCK, F-META-034).
+  `check --dsp-block`; codes `E-DSP-ENTRY`, `E-DSP-STATE-TYPE`.
+- `ravum-lang watch --reload`: hot reload with state preservation
+  (RFC-E11-HOT-RELOAD, D-19-5, `spec/language/reload.md`, F-META-033). A
+  program declares `State`, `init`, `step` and optionally `migrate`; each stdin
+  line is one event. A swap happens only between two events, a changed state
+  schema is refused unless `migrate` takes it, a panic in `step` reverts to the
+  previous module and replays the event, a broken build changes nothing. Each
+  module is a separate process; the state crosses a swap as canonical text.
+  `ravum-lang check --reload` checks the contract (`E-HR-ENTRY`,
+  `E-HR-STATE-TYPE`, `E-HR-STATE-RESOURCE`).
+- `std::http`: HTTP/1.1 in clear text over `std::net`, server side
+  (`read_request`, accessors, `respond`) and client side (`get`, `post`), with
+  fixed size limits; `https://` is an `Err` (no TLS). `packages/http-notes` is
+  the HTTP + SQLite vertical for T9, run in a Unix test (RFC-E11-NET-HTTP §4,
+  D-19-8, F-STD-038).
+- `packages/sqlite`: SQLite 3.54.1 as a Ravum package (D-19-7) over a small C
+  adapter, built from the amalgamation pinned through `Cargo.lock` by
+  `tools/build_sqlite_native.py`; prepared-statement parameters only, every
+  error an `Err`. `packages/sqlite-notes` runs in a Unix test. A dependency may
+  now declare `[native]` for its own `extern` blocks (MOD-5.20 revised).
+- FFI boundary for native libraries (RFC-E11-SQLITE NAT-3.3): an opaque,
+  `Copy` `CHandle` (`ffi::null`, `ffi::is_null`), `&str` parameters passed as
+  pointer + length, and `Option<String>` returns copied from a C string
+  (`None` when NULL or not UTF-8). ABI-3.4 is widened under D-19-4
+  (F-FFI-004).
+- Native libraries: a `[native]` manifest section pins a pre-built static or
+  dynamic library by SHA-256; `extern "C" from "<name>"` links to it through
+  `rustc -L native=`/`-l`; the digests enter the build identity; five new
+  diagnostics (`E-MOD-NATIVE*`, `E-FFI-UNKNOWN-LIB`). First step of
+  RFC-E11-SQLITE (D-19-4); no SQLite binding yet.
+- `std::thread` and `std::sync`: `thread::spawn(function, argument)`, `join`,
+  and channels (`channel`, `sender`, `clone_sender`, `receiver`, `send`,
+  `recv`) over opaque prelude types; new `thread` effect; structural
+  transferability (no reference crosses a thread) with `E-CONC-SPAWN-TARGET`
+  and `E-CONC-NOT-TRANSFERABLE` (RFC-E11-CONCURRENCY phase 1, F-STD-037).
+  `concurrency.md` is revised accordingly.
+- `std::net`: blocking text TCP (`listen`, `local_port`, `accept`, `connect`,
+  `read_line`, `read_exact`, `write_str`), opaque prelude types `TcpListener`
+  and `TcpStream`; the `net` effect is now producible and is refused under the
+  `pure` and `rt` profiles (RFC-E11-NET-HTTP, F-STD-036). `async` stays refused.
+- Five `PROPOSED` RFCs for the widened 1.0 scope (D-18-2, step E11):
+  concurrency, TCP/HTTP, SQLite, hot reload with state preservation, DSP
+  block (`docs/rfc/RFC-E11-*.md`). Nothing is implemented yet.
 
 - Reference interpreter of the pure core (`crates/ravum-core-machine`, `core-machine.md`): its own lexer, parser and evaluator, no dependency, a 59-program corpus covering obligations O1 to O10, and a differential test that builds and runs 54 of them with `ravum-lang` and compares the results (54 agree). FeatureId F-META-032; the F-META-006 coverage exemption is revoked, strict coverage is 236/236 with no exemption.
 
@@ -51,6 +115,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 - DIAG-1.9: a binding whose name starts with `_` is never reported unused.
 
 ### Fixed
+- The safe wrapper of an `extern` function declared in a dependency is now
+  called at its own module path; it was called at the crate root and the
+  generated Rust did not compile.
 
 - `mod Foo;` no longer resolves `src/foo.rv` on case-insensitive file systems (macOS, Windows): a module file must carry exactly the module's name, so the verdict no longer depends on the OS (MOD-2.6, MOD-1.6).
 - Loader messages no longer contain absolute machine paths (DIAG-6.8, DIAG-7.5): `module `b` not found: neither `/tmp/…/src/b.rv` …` now reads `src/b.rv`, and a sibling dependency is shown as `../lib/…`. The rewrite is done once, when the diagnostics leave the loader, so it covers all of its ~60 messages.
@@ -88,6 +155,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
   Generated Rust is byte-identical on the examples and the conformance corpus.
 
 ### Fixed
+- The safe wrapper of an `extern` function declared in a dependency is now
+  called at its own module path; it was called at the crate root and the
+  generated Rust did not compile.
 
 - `run/power-array-move-write-region-nested`: `check` accepted the program but
   `build` emitted a plain `a[0]`/`a[1]` and `rustc` rejected it with `E0508`.

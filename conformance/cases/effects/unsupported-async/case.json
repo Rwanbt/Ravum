@@ -1,0 +1,12 @@
+{
+  "id": "effects/unsupported-async",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "pure"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "The async effect is producible since D-19-9; the pure profile still refuses it (EFF-6, CONC-6.4)."
+}

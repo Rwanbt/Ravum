@@ -60,7 +60,7 @@ struct P { x: i32 }
 |---|---|---|---|---|
 | Closures | `|x| x + 1` | `E-UNSUPPORTED-CLOSURE` | parse | fonction nommée ; pas de capture |
 | `move` | `move |x| ...`, item `move` | `E-UNSUPPORTED-MOVE` | parse | aucune |
-| `async`/`await` | `async fn`, `.await` | `E-UNSUPPORTED-ASYNC` | parse | aucune |
+| bloc `async`, méthode `async` | `async { }`, `impl S { async fn f(self) }` | `E-UNSUPPORTED-ASYNC` | parse | `async fn` libre et `.await` acceptés depuis D-19-9 |
 | `unsafe fn` | `unsafe fn f() {}` | `E-UNSUPPORTED-UNSAFE` | parse | bloc `unsafe { }` + `extern "C"` |
 | Pointeurs bruts | `*const T`, `*mut T`, `&raw` | `E-UNSUPPORTED-UNSAFE` | parse | références `&T`/`&mut T` |
 | Décalage de pointeur | `ptr.offset(n)` | `E-RES-UNKNOWN` | resolve | indexation |
@@ -114,12 +114,10 @@ fn f(v: Vec<i32>) {
 
 | Fonctionnalité | Forme refusée | Code | Phase | Alternative Core 1.0 |
 |---|---|---|---|---|
-| Effet `net` | `effects(net)`, toute API réseau | `E-UNSUPPORTED-EFFECT` | effects | aucune |
-| Effet `async` | `effects(async)`, `async fn` | `E-UNSUPPORTED-EFFECT` / `E-UNSUPPORTED-ASYNC` | effects/parse | aucune |
-| Threads | `thread::spawn`, `JoinHandle` | `E-RES-UNKNOWN` | resolve | mono-thread |
-| Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | aucune |
-| Synchronisation | `Mutex`, `RwLock`, `Condvar`, `Arc` | `E-RES-UNKNOWN` | resolve | aucune |
-| Canaux | `std::sync::mpsc` | `E-RES-UNKNOWN` | resolve | fichiers/E-S |
+| Réseau hors TCP texte | UDP, TLS (`https://`), HTTP/2, keep-alive, octets bruts, timeouts | `E-RES-UNKNOWN` (ou `Err` à l'exécution pour `https://`) | resolve | `std::net` TCP texte bloquant et `std::http` HTTP/1.1 en clair ([`stdlib.md`](stdlib.md) §17, §19) |
+| Atomiques | `AtomicUsize`, `Ordering::*` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |
+| Synchronisation | `Mutex`, `RwLock`, `Condvar`, `Arc` | `E-RES-UNKNOWN` | resolve | canaux `std::sync` ([`stdlib.md`](stdlib.md) §18) |
+| Closure dans `spawn` | `thread::spawn(\|\| ...)` | `E-UNSUPPORTED-CLOSURE` | parse | `thread::spawn(fonction, argument)` |
 | Annulation / timeout | `select`, `recv_timeout` | `E-RES-UNKNOWN` | resolve | aucune |
 | Hard-RT certifié | profil `hard_rt`, WCET | `E-PARSE-EXPECTED` (profil inconnu → exit `2`) | CLI | `rt` **expérimental**, non certifié |
 | Thread audio / callback | API hôte, `process` audio | `E-RES-UNKNOWN` | resolve | hors périmètre |
@@ -200,7 +198,7 @@ Ces éléments sont souvent supposés `UNSUPPORTED` à tort :
 ## 10. Questions ouvertes
 
 - **Q-UNS-1 (résolue par le Lead)** — Tous les codes nécessaires sont désormais canoniques (`E-MOD-MANIFEST/DEPENDENCY/BUILD-SCRIPT/LOCK/BOTH-ROOTS/PATH-ESCAPE/RESERVED-NAME`, `E-OWN-IMMUTABLE`, `E-TYP-RECURSIVE/CONST`, `E-UNSUPPORTED-DROP-IMPL`) ; `E-RES-VISIBILITY` est remplacé par `E-RES-PRIVATE`. Aucun code réservé.
-- **Q-UNS-2 (résolue par le Lead)** — `static` et `type` sont **réservés** (`E-UNSUPPORTED-TOKEN` à l'usage) ; `ref`, `dyn`, `await` sont des **identifiants valides** : `dyn T` → `E-RES-UNKNOWN`, `x.await` → `E-RES-UNKNOWN`, `ref x` en pattern → `E-PARSE-EXPECTED`.
+- **Q-UNS-2 (résolue par le Lead)** — `static` et `type` sont **réservés** (`E-UNSUPPORTED-TOKEN` à l'usage) ; `ref`, `dyn` sont des **identifiants valides** : `dyn T` → `E-RES-UNKNOWN`, `ref x` en pattern → `E-PARSE-EXPECTED`. `await` est un mot-clé depuis D-19-9 (2026-11-19).
 - **Q-UNS-3** — Les fonctionnalités de plateforme (GPU, mobile, `no_std`, WASM navigateur) n'ont **aucun** code de diagnostic : elles sont absentes du CLI, ou refusées comme cible (`wasm32-unknown-unknown` → exit 2). `wasm32-wasip1` est supporté et n'est donc pas concerné. Faut-il une sous-commande `ravum-lang targets` listant explicitement `UNSUPPORTED` pour éviter l'ambiguïté « ça n'existe pas » vs « ce n'est pas fait » ?
 - **Q-UNS-4** — `impl Trait`, `dyn`, `where` sont refusés avec des codes distincts ; `Box`/`Rc` avec `E-RES-UNKNOWN`. Cette granularité hétérogène est-elle acceptable pour les agents qui réparent ? Recommandation : oui, mais le message doit toujours nommer la fonctionnalité.
 - **Q-UNS-5** — Le hot swap est `UNSUPPORTED` alors qu'il est un objectif produit (`docs/specs/03`). Il doit rester hors de `spec/language/` (c'est une propriété de runtime/daemon) ; à clarifier dans le design pour éviter une promesse implicite.

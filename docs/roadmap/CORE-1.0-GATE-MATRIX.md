@@ -50,6 +50,8 @@ commandes.
 | Licence | `MIT OR Apache-2.0`, 23/23 membres du workspace |
 | CI `dev` | **8/8 runs verts** sur `228abee` (Linux, macOS, Windows evidence, MVP, coverage, contracts, docs, VS Code) |
 
+> **Demande de décision finale E10 :** [`E10-FINAL-DECISION-REQUEST-2026-11-19.md`](../decision/E10-FINAL-DECISION-REQUEST-2026-11-19.md).
+
 ## 2. Matrice
 
 > **V1 (2026-11-19, responsable)** : D2 exige tous les points d'architecture prévus implémentés et validés ; A2 et A3 annulés ; gates T13–T19 ajoutés — [DECISIONS-2026-11-19](../decision/DECISIONS-2026-11-19-V1.md).
@@ -58,14 +60,14 @@ commandes.
 |---|---|---|---|---|
 | T0 | `PASS` | Corpus de sécurité du socle vert (overlays, publication Git, reprise après crash, journal, concurrence, symlinks, chemins hostiles) | — | — |
 | T1 | `PARTIAL` | Voies A et B réelles (`check→build→run`), parité A/B mesurée | **Voie C hors périmètre 1.0** ; pas de parité A/B/C ; choix final non ratifié | Décision humaine (ADR) |
-| T2 | `PARTIAL` | **2026-11-19 : FeatureIds 236/236 sans exemption (F-META-006 révoquée, l'interpréteur de référence existe), MUST 720/817, 97 sans FeatureId ; comparaison différentielle oracle ↔ backend : 54/54 accords** (lots `lexical.md`, `grammar.md`, `diagnostics.md`, `compatibility.md`, `abi.md`, `modules.md`, `concurrency.md`, `stdlib.md`, `effects.md`, `ownership.md`, `features.md`, `unsupported.md`, `types.md` et `expressions.md`). Mesure antérieure : **FeatureIds : 188/188** tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` **mesuré et bloquant** (`--verify-build` : périmètre **222/222**, vérifiés 124, implicites 98, échoués 0), **aucune forme ouverte connue** (divergence `power-array-move-write-region-nested` fermée le 2026-11-15, `RFC-OWN-ARRAY-ELEMENTS.md`) | **La seconde métrique change le verdict** : 811 énoncés MUST, **467/811** seulement atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). L'exemption `F-META-006` est **approuvée** (2026-11-12, réexamen 2027-02-12) mais sans oracle | Dette tracée (D10) : 344 MUST non mappés, pas un blocage de release |
+| T2 | `PARTIAL` | **2026-11-19 (E10) : FeatureIds 244/244, MUST 876 dont 95 sans FeatureId (`must_audit.py`).** Mesure antérieure du même jour : **FeatureIds 236/236 sans exemption (F-META-006 révoquée, l'interpréteur de référence existe), MUST 720/817, 97 sans FeatureId ; comparaison différentielle oracle ↔ backend : 54/54 accords** (lots `lexical.md`, `grammar.md`, `diagnostics.md`, `compatibility.md`, `abi.md`, `modules.md`, `concurrency.md`, `stdlib.md`, `effects.md`, `ownership.md`, `features.md`, `unsupported.md`, `types.md` et `expressions.md`). Mesure antérieure : **FeatureIds : 188/188** tracés et satisfaits au critère strict (187 par cas + 1 exemption vérifiée) ; 108 codes enregistrés / 126 émis / 0 hors registre ; contrat `check → build` **mesuré et bloquant** (`--verify-build` : périmètre **222/222**, vérifiés 124, implicites 98, échoués 0), **aucune forme ouverte connue** (divergence `power-array-move-write-region-nested` fermée le 2026-11-15, `RFC-OWN-ARRAY-ELEMENTS.md`) | **La seconde métrique change le verdict** : 811 énoncés MUST, **467/811** seulement atteignables par un FeatureId, **344** sans FeatureId (`must_audit.py`). L'exemption `F-META-006` est **approuvée** (2026-11-12, réexamen 2027-02-12) mais sans oracle | Dette tracée (D10) : 344 MUST non mappés, pas un blocage de release |
 | T3 | `PASS` | Lexer/parser/AST réels, **1129 tests**, fuzz complet rejoué (2 campagnes, 0 échec), Miri Linux rejoué en CI (164 tests, 0 échec) + Miri Windows partiel, formateur idempotent, 8 défauts frontend corrigés | — (divergences de codes restantes traitées sous T2/D8 ; plus aucun code hors registre) | — |
 | T4 | `BLOCKED` | Typechecker, borrow checker, cas adversariaux internes | **Audit externe humain absent** | Audit externe |
 | T5 | `PASS` | Binaires natifs réels Windows (smoke 43 PASS) et Linux (CI) ; WASI exécuté ; `build` publie une identité déterministe et un artefact atomique | ABI stable non revendiquée ; sanitizers non exécutés | — |
-| T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale scalaire (C-FFI-1 à 10 approuvés) | Threads, réseau, async explicitement `UNSUPPORTED` | — |
+| T6 | `PARTIAL` | Stdlib core/io/fs/string/vec/math + FFI minimale scalaire (C-FFI-1 à 10 approuvés) ; threads et canaux (STD-18), TCP (STD-17), HTTP/1.1 (STD-19), bibliothèques natives et SQLite ; TSan bloquant sur le corpus concurrent (`.github/workflows/tsan.yml`, std reconstruite avec TSan) | `async` : TCP asynchrone, mais `connect` bloquant et pas d'HTTP asynchrone ; TSan vert en CI depuis #198 | Implémentation |
 | T7 | `PASS` | CLI complète ; LSP réel (11 tests client) ; harnais VS Code stabilisé ; 10/10 au repos, 10/10 sous charge, job CI `vscode-e2e` vert | Flakiness E2E ordinaire d'une suite Electron ; Windows/macOS non couverts par ce job | — |
-| T8 | `PARTIAL` | `watch` fail-closed ; overlays/snapshots ; oracle cold vs warm | Pas de préservation d'état ; pas d'ABI de patch ; bloc DSP reporté à la 1.1 (A2) | Implémentation |
-| T9 | `PARTIAL` | 10 verticales `.rv` exécutées, dont `examples/file-store` | HTTP + SQLite, DSP hôte, E2E navigateur absents ; DSP reporté à la 1.1 (A2) | Implémentation + décision D6/D7 |
+| T8 | `PARTIAL` | `watch` fail-closed ; overlays/snapshots ; oracle cold vs warm ; `watch --reload` avec préservation d'état ([`reload.md`](../../spec/language/reload.md), 6 tests « 0 perte » dans `crates/ravum-lang-cli/tests/hot_reload.rs`) ; bloc DSP `.rv` chargé par l'hôte (`build --emit dsp-block`, différentiel bit à bit, 0 allocation au callback sur 10 000 blocs et 20 remplacements, `tests/dsp_block.rs`) | État DSP limité à `{ z1, z2 }` (ABI 2 non ratifiée) ; vertical `examples/dsp-gain-iir` non branché ; fondu non mesuré sur un bloc `.rv` | Implémentation |
+| T9 | `PARTIAL` | 10 verticales `.rv` exécutées, dont `examples/file-store` ; HTTP + SQLite (`packages/http-notes`, Linux, macOS, Windows) ; bloc DSP `.rv` dans l'hôte réel (`tests/dsp_block.rs`) | `examples/dsp-gain-iir` non branché sur l'hôte ; E2E navigateur absent (D-18-2 a annulé le report A2 du DSP) | Implémentation |
 | T10 | `PARTIAL` | 1 740 tests workspace ; conformance 503 cas avec build vérifié bloquant ; smoke 43/0/0 ; contrats Python ; Miri + fuzz smoke en CI ; couverture sema+codegen ~90 % (objectif 100 % inscrit) ; mutation ciblée rejouée en CI | Audit externe absent ; couverture loin de 100 % sur `emit.rs`/`loader.rs` ; fuzz complet non rejoué ; aucune mesure de performance au repos | Audit externe |
 | T11 | `PARTIAL` | Installateur rejoué en CI ; SBOM déterministe ; provenance émise/vérifiée ; licence réconciliée ; build bit-à-bit ; mécanisme de signature OpenSSH qualifié | Aucune clé de projet ni ancre de confiance ; reproductibilité inter-machines limitée | Décision humaine D9 (custody de clé) |
 | T12 | `BLOCKED` | Dossier de RC interne, PR, rapports, matrice | Dogfooding indépendant, Go/No-Go humain | Décision humaine |
@@ -152,8 +154,10 @@ d'invalidation mesuré (36 éditions incrémentales). Le bloc DSP est reporté �
 
 ### T9 — Applications réelles `.rv` — `PARTIAL`
 
-10 verticales exécutées. Absents : service HTTP + SQLite, DSP dans un hôte réel,
-E2E navigateur — DSP absent par décision de périmètre (A2), pas par oubli.
+10 verticales exécutées, plus le service HTTP + SQLite `packages/http-notes`
+(2026-11-19, D-19-8 ; `crates/ravum-lang-cli/tests/http_notes.rs`, Linux,
+macOS et Windows). Bloc DSP `.rv` dans l'hôte réel : `tests/dsp_block.rs` ;
+le vertical `examples/dsp-gain-iir` n'y est pas encore branché.
 
 ### T10 — Qualification intensive et audits — `PARTIAL`
 

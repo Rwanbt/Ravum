@@ -141,6 +141,63 @@ fn ast_ffi_safe(ty: &AstType) -> bool {
     }
 }
 
+/// How one `extern` parameter or return crosses the C boundary (NAT-3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FfiKind {
+    Scalar,
+    Handle,
+    Text,
+    OptString,
+}
+
+fn ffi_scalar(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::Isize
+            | Type::Usize
+            | Type::F32
+            | Type::F64
+            | Type::Bool
+            | Type::Unit
+    )
+}
+
+fn ffi_is_handle(ty: &Type) -> bool {
+    matches!(ty, Type::Nominal { def, .. } if *def == ravum_lang_sema::builtins::PRELUDE_CHANDLE_DEF)
+}
+
+fn ffi_param_kind(ty: &Type) -> Option<FfiKind> {
+    if ffi_scalar(ty) {
+        Some(FfiKind::Scalar)
+    } else if ffi_is_handle(ty) {
+        Some(FfiKind::Handle)
+    } else if matches!(ty, Type::Ref { mutable: false, inner } if **inner == Type::Str) {
+        Some(FfiKind::Text)
+    } else {
+        None
+    }
+}
+
+fn ffi_return_kind(ty: &Type) -> Option<FfiKind> {
+    if ffi_scalar(ty) {
+        Some(FfiKind::Scalar)
+    } else if ffi_is_handle(ty) {
+        Some(FfiKind::Handle)
+    } else if matches!(ty, Type::Option(inner) if **inner == Type::String) {
+        Some(FfiKind::OptString)
+    } else {
+        None
+    }
+}
+
 /// Entry point object kept stable for `lib.rs`: build it and call `generate`.
 pub struct Generator<'a> {
     pub checked: &'a CheckedProgram,
@@ -221,6 +278,7 @@ mod emitter_calls;
 mod emitter_expr;
 mod emitter_items;
 mod emitter_patterns;
+mod emitter_reload;
 mod emitter_types;
 mod emitter_value;
 
@@ -579,7 +637,7 @@ impl<'a> Emitter<'a> {
             buf.line(&format!("// rv source: {}", first.path));
         }
         buf.line("#![allow(dead_code, unused_variables, unused_mut, unused_assignments, unused_imports, unused_parens, unused_braces, unused_labels, unused_must_use, unused_comparisons, non_snake_case, non_camel_case_types, non_upper_case_globals, unreachable_code, unreachable_patterns, arithmetic_overflow, unconditional_panic)]");
-        if self.program_uses_extern() {
+        if self.program_uses_extern() || self.options.dsp.is_some() {
             // FFI programs need `unsafe` for the generated extern wrappers only.
             // `deny` (not `allow`) keeps the guarantee "zero unsafe outside the
             // generated wrappers": each wrapper carries a local
@@ -592,7 +650,15 @@ impl<'a> Emitter<'a> {
         buf.blank();
         buf.raw(PRELUDE);
         buf.blank();
-        self.emit_entry(&mut buf)?;
+        if let Some(contract) = &self.options.reload {
+            buf.raw(crate::prelude::RELOAD_PRELUDE);
+            buf.blank();
+            self.emit_reload_main(&mut buf, contract)?;
+        } else if self.options.dsp.is_some() {
+            // A `cdylib` has no entry point: the host calls the exported block.
+        } else {
+            self.emit_entry(&mut buf)?;
+        }
         buf.blank();
         self.emit_module(&mut buf, &self.checked.program.root)?;
         Ok(buf.finish())
@@ -746,6 +812,14 @@ impl<'a> Emitter<'a> {
         for item in &module.items {
             self.emit_item(buf, item)?;
         }
+        if let Some(contract) = &self.options.reload {
+            self.emit_reload_items(buf, module, contract)?;
+        }
+        if let Some(contract) = &self.options.dsp {
+            if module.id == self.checked.program.root.id {
+                self.emit_dsp_wrapper(buf, contract)?;
+            }
+        }
         self.shadowed_names.replace(outer);
         buf.indent -= 1;
         buf.line("}");
@@ -792,69 +866,122 @@ impl<'a> Emitter<'a> {
                 .extern_symbols
                 .get(&f.id)
                 .ok_or_else(|| err(format!("missing extern symbol for node {}", f.id)))?;
+            // Without a checked signature (a hand-built `CheckedProgram`), only
+            // the scalar subset checked on the syntax tree is emitted.
+            let sig = self.facts().fn_sigs.get(&f.id);
             // Defence in depth: the checker already rejects non-FFI-safe
             // signatures (`E-FFI-TYPE`), but the generator must never emit an
             // ABI-unsafe declaration even when it is driven from a hand-built
             // `CheckedProgram` (audit finding F0b).
-            let mut decls = Vec::new();
-            let mut args = Vec::new();
-            for param in &f.params {
-                match &param.kind {
-                    ParamKind::Binding { name, ty, .. } => {
-                        if !ast_ffi_safe(ty) {
-                            return Err(err(format!(
-                                "extern function `{}` parameter `{}` has a non-FFI-safe type",
-                                f.name.name, name.name
-                            )));
-                        }
-                        let name = mangle_ident(&name.name);
-                        // Foreign declarations take a plain pattern (Rust forbids
-                        // `mut` there) and keep the elided text lifetime: a `&str`
-                        // argument is a view valid for the call (STD-9.3).
-                        decls.push(format!(
-                            "{name}: {}",
-                            self.type_node_pos(ty, TypePos::Param)?
-                        ));
-                        args.push(name);
+            let mut c_decls = Vec::new();
+            let mut rv_decls = Vec::new();
+            let mut c_args = Vec::new();
+            for (index, param) in f.params.iter().enumerate() {
+                let ParamKind::Binding { name, ty, .. } = &param.kind else {
+                    return Err(err(format!(
+                        "`self` is not allowed in an extern function (node {})",
+                        f.id
+                    )));
+                };
+                let name = mangle_ident(&name.name);
+                let kind = match sig.and_then(|sig| sig.params.get(index)) {
+                    Some(param_sig) => ffi_param_kind(&param_sig.ty),
+                    None => Some(FfiKind::Scalar),
+                };
+                match kind {
+                    Some(FfiKind::Scalar) if ast_ffi_safe(ty) => {
+                        // Foreign declarations take a plain pattern (Rust
+                        // forbids `mut` there).
+                        let rust = self.type_node_pos(ty, TypePos::Param)?;
+                        c_decls.push(format!("{name}: {rust}"));
+                        rv_decls.push(format!("{name}: {rust}"));
+                        c_args.push(name);
                     }
-                    ParamKind::Receiver(_) => {
+                    // NAT-3.3: a handle crosses as an untyped C pointer.
+                    Some(FfiKind::Handle) => {
+                        c_decls.push(format!("{name}: *mut ::core::ffi::c_void"));
+                        rv_decls.push(format!("{name}: crate::CHandle"));
+                        c_args.push(format!("{name}.0 as *mut ::core::ffi::c_void"));
+                    }
+                    // NAT-3.3: text crosses as a pointer and a byte length,
+                    // so an interior NUL is never a truncation.
+                    Some(FfiKind::Text) => {
+                        c_decls.push(format!("{name}_ptr: *const u8, {name}_len: usize"));
+                        rv_decls.push(format!("{name}: &str"));
+                        c_args.push(format!("{name}.as_ptr(), {name}.len()"));
+                    }
+                    _ => {
                         return Err(err(format!(
-                            "`self` is not allowed in an extern function (node {})",
-                            f.id
-                        )));
+                            "extern function `{}` parameter `{name}` has a non-FFI-safe type",
+                            f.name.name
+                        )))
                     }
                 }
             }
-            if !ast_ffi_safe(&f.ret) {
-                return Err(err(format!(
-                    "extern function `{}` returns a non-FFI-safe type",
-                    f.name.name
-                )));
-            }
-            let ret = self.type_node(&f.ret)?;
-            let ret_suffix = if ret == "()" {
-                String::new()
-            } else {
-                format!(" -> {ret}")
+            let ret_kind = match sig {
+                Some(sig) => ffi_return_kind(&sig.ret),
+                None => Some(FfiKind::Scalar),
             };
-            let params = decls.join(", ");
+            let (c_ret, rv_ret, convert) = match ret_kind {
+                Some(FfiKind::Scalar) if ast_ffi_safe(&f.ret) => {
+                    let ret = self.type_node(&f.ret)?;
+                    (ret.clone(), ret, None)
+                }
+                Some(FfiKind::Handle) => (
+                    "*mut ::core::ffi::c_void".to_string(),
+                    "crate::CHandle".to_string(),
+                    Some("crate::CHandle(result as usize)"),
+                ),
+                // NAT-3.3: a NUL-terminated C string, copied; NULL or invalid
+                // UTF-8 is `None`, never a lossy substitution.
+                Some(FfiKind::OptString) => (
+                    "*const ::core::ffi::c_char".to_string(),
+                    "Option<String>".to_string(),
+                    Some(
+                        "if result.is_null() { None } else { \
+                         ::std::ffi::CStr::from_ptr(result).to_str().ok().map(String::from) }",
+                    ),
+                ),
+                _ => {
+                    return Err(err(format!(
+                        "extern function `{}` returns a non-FFI-safe type",
+                        f.name.name
+                    )))
+                }
+            };
+            let suffix = |ret: &str| {
+                if ret == "()" {
+                    String::new()
+                } else {
+                    format!(" -> {ret}")
+                }
+            };
             buf.line("extern \"C\" {");
             buf.indent += 1;
             buf.line(&format!("#[link_name = {}]", string_literal(symbol)));
-            buf.line(&format!("fn rvm_ffi_{}({params}){ret_suffix};", f.id));
+            buf.line(&format!(
+                "fn rvm_ffi_{}({}){};",
+                f.id,
+                c_decls.join(", "),
+                suffix(&c_ret)
+            ));
             buf.indent -= 1;
             buf.line("}");
             buf.line("#[allow(unsafe_code)]");
             buf.line(&format!(
-                "pub fn rvm_ffi_wrap_{}({params}){ret_suffix} {{",
-                f.id
+                "pub fn rvm_ffi_wrap_{}({}){} {{",
+                f.id,
+                rv_decls.join(", "),
+                suffix(&rv_ret)
             ));
             buf.indent += 1;
-            buf.line(&format!(
-                "unsafe {{ rvm_ffi_{}({}) }}",
-                f.id,
-                args.join(", ")
-            ));
+            let call = format!("rvm_ffi_{}({})", f.id, c_args.join(", "));
+            // Exactly one `unsafe` block per wrapper (ABI-2.5): the call and,
+            // for a C string, its read.
+            match convert {
+                None => buf.line(&format!("unsafe {{ {call} }}")),
+                Some(convert) => buf.line(&format!("unsafe {{ let result = {call}; {convert} }}")),
+            }
             buf.indent -= 1;
             buf.line("}");
         }

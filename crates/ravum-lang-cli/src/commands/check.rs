@@ -7,6 +7,7 @@ use crate::json;
 use crate::pipeline::{self, AnalysisTimings, Frontend};
 use crate::util;
 
+#[allow(clippy::too_many_arguments)] // one parameter per CLI flag, passed through unchanged
 pub fn run(
     path: &Path,
     json_output: bool,
@@ -14,8 +15,15 @@ pub fn run(
     locked: bool,
     request_timings: bool,
     rt_entry: Option<&str>,
+    reload: bool,
+    dsp_block: bool,
 ) -> i32 {
-    let (frontend, timings) = if request_timings {
+    let (mut frontend, timings) = if dsp_block {
+        (
+            pipeline::analyze_dsp(path, locked).0,
+            AnalysisTimings::default(),
+        )
+    } else if request_timings {
         pipeline::analyze_entry_with_timings(path, profile, locked, rt_entry)
     } else {
         (
@@ -23,6 +31,9 @@ pub fn run(
             AnalysisTimings::default(),
         )
     };
+    if reload {
+        let _ = pipeline::reload_contract(&mut frontend);
+    }
     let success = frontend.success();
 
     if json_output {

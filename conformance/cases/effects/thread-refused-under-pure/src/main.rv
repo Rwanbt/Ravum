@@ -1,0 +1,8 @@
+fn one(n: i64) -> i64 effects() {
+    n
+}
+
+fn main() -> () effects(thread, alloc) {
+    let h: JoinHandle<i64> = thread::spawn(one, 1);
+    drop(h);
+}

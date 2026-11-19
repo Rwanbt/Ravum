@@ -331,6 +331,56 @@ pub struct BuildTimings {
     pub rustc: Duration,
 }
 
+/// Check the reload contract (RFC-E11-HOT-RELOAD) of an analyzed program. Its
+/// diagnostics join the frontend's, so `success()` turns false on a refusal.
+pub fn reload_contract(frontend: &mut Frontend) -> Option<ravum_lang_sema::reload::ReloadContract> {
+    let checked = frontend.checked.as_ref()?;
+    match ravum_lang_sema::reload::reload_contract(checked) {
+        Ok(contract) => Some(contract),
+        Err(diags) => {
+            for diag in diags {
+                frontend.diags.push(diag);
+            }
+            None
+        }
+    }
+}
+
+/// Analyze a DSP block: the contract first (Core analysis, `E-DSP-*`), then the
+/// `rt` profile from `process_sample` (DSP-1.1). The returned frontend is the
+/// `rt` one when the contract holds.
+pub fn analyze_dsp(
+    path: &Path,
+    locked: bool,
+) -> (Frontend, Option<ravum_lang_sema::reload::DspContract>) {
+    let mut frontend = analyze(path, Profile::Core, locked);
+    let Some(_) = dsp_contract(&mut frontend) else {
+        return (frontend, None);
+    };
+    let mut rt = analyze_with_entry(
+        path,
+        Profile::Rt,
+        locked,
+        Some(ravum_lang_sema::reload::DSP_ENTRY),
+    );
+    let contract = dsp_contract(&mut rt);
+    (rt, contract)
+}
+
+/// Check the DSP block contract (RFC-E11-DSP-BLOCK) of an analyzed program.
+pub fn dsp_contract(frontend: &mut Frontend) -> Option<ravum_lang_sema::reload::DspContract> {
+    let checked = frontend.checked.as_ref()?;
+    match ravum_lang_sema::reload::dsp_contract(checked) {
+        Ok(contract) => Some(contract),
+        Err(diags) => {
+            for diag in diags {
+                frontend.diags.push(diag);
+            }
+            None
+        }
+    }
+}
+
 pub fn render_diags(frontend: &Frontend) -> String {
     frontend.diags.render(&frontend.pkg.sources)
 }
@@ -551,6 +601,10 @@ pub struct BuildOptions {
     pub test_mode: bool,
     pub emit_rust: Option<PathBuf>,
     pub target: BuildTarget,
+    /// Build a reloadable module (RFC-E11-HOT-RELOAD) for `watch --reload`.
+    pub reload: Option<ravum_lang_sema::reload::ReloadContract>,
+    /// Build a DSP block `cdylib` (RFC-E11-DSP-BLOCK, `build --emit dsp-block`).
+    pub dsp: Option<ravum_lang_sema::reload::DspContract>,
 }
 
 impl Default for BuildOptions {
@@ -560,6 +614,8 @@ impl Default for BuildOptions {
             test_mode: false,
             emit_rust: None,
             target: BuildTarget::Native,
+            reload: None,
+            dsp: None,
         }
     }
 }
@@ -595,6 +651,9 @@ pub struct BuildIdentity {
     pub rustc: String,
     /// `ravum-lang-codegen <version>`.
     pub generator: String,
+    /// State schema digest of a reloadable module; `None` for every other build
+    /// (the identity text of those builds is unchanged).
+    pub reload_schema: Option<String>,
 }
 
 impl BuildIdentity {
@@ -639,6 +698,9 @@ impl BuildIdentity {
         text.push_str(&format!("target: {}\n", self.target));
         text.push_str(&format!("rustc: {}\n", self.rustc));
         text.push_str(&format!("generator: {}\n", self.generator));
+        if let Some(schema) = &self.reload_schema {
+            text.push_str(&format!("reload-schema: {schema}\n"));
+        }
         text
     }
 }
@@ -723,6 +785,23 @@ pub fn build_identity(frontend: &Frontend, options: &BuildOptions) -> BuildIdent
         target: options.target.rustc_triple().unwrap_or("host"),
         rustc: rustc_version().unwrap_or_else(|| "unknown".to_string()),
         generator: format!("ravum-lang-codegen {GENERATOR_VERSION}"),
+        reload_schema: options
+            .reload
+            .as_ref()
+            .map(|c| {
+                let old = c
+                    .migrate
+                    .as_ref()
+                    .map(|(_, s)| s.digest.as_str())
+                    .unwrap_or("-");
+                format!("{} {old}", c.state.digest)
+            })
+            .or_else(|| {
+                options
+                    .dsp
+                    .as_ref()
+                    .map(|c| format!("dsp-block {}", c.state.digest))
+            }),
     };
     let digest = format!(
         "sha256:{}",
@@ -837,6 +916,14 @@ fn artifact_file_name(
         }
     } else if options.test_mode {
         format!("{crate_name}-tests{}", exe_suffix())
+    } else if options.dsp.is_some() {
+        format!(
+            "{}{crate_name}{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        )
+    } else if options.reload.is_some() {
+        format!("{crate_name}-reload{}", exe_suffix())
     } else if is_library {
         format!("{crate_name}.rlib")
     } else {
@@ -895,6 +982,8 @@ pub fn compile_program_with_timings(
         source_comments: true,
         test_mode: options.test_mode,
         crate_name: crate_name.clone(),
+        reload: options.reload.clone(),
+        dsp: options.dsp.clone(),
     };
     let codegen_started = Instant::now();
     let rust =
@@ -913,7 +1002,7 @@ pub fn compile_program_with_timings(
     util::write_bytes_atomic(&intermediate, rust.as_bytes()).map_err(BuildError::Write)?;
 
     let file_name = artifact_file_name(frontend, options, &crate_name, is_library);
-    let stable_dir = if is_library {
+    let stable_dir = if is_library || options.dsp.is_some() {
         cache.join("lib")
     } else {
         cache.join("bin")
@@ -941,8 +1030,24 @@ pub fn compile_program_with_timings(
     if let Some(triple) = options.target.rustc_triple() {
         command.arg("--target").arg(triple);
     }
+    // Native libraries declared in `[native]` and used by an
+    // `extern "C" from "<lib>"` block, digests already checked by the loader
+    // (RFC-E11-SQLITE NAT-2). Their digests are in `dependencies_digest`, so
+    // these arguments are covered by the build identity.
+    for native in &frontend.pkg.natives {
+        command
+            .arg("-L")
+            .arg(format!(
+                "native={}",
+                util::strip_verbatim(&native.dir).display()
+            ))
+            .arg("-l")
+            .arg(format!("{}={}", native.kind.name(), native.lib));
+    }
     if is_library {
         command.arg("--crate-type").arg("lib");
+    } else if options.dsp.is_some() {
+        command.arg("--crate-type").arg("cdylib");
     }
     // Incremental compilation, debug builds only (phase 3.3). The directory is
     // derived data: it is not part of the build identity, the published
@@ -1015,7 +1120,14 @@ pub fn compile_program_with_timings(
         None => stable_generated,
     };
     let manifest = stable_artifact.with_file_name(format!("{file_name}.build.json"));
-    let manifest_json = build_manifest(&identity, options, &crate_name, is_library, &file_name);
+    let manifest_json = build_manifest(
+        &identity,
+        options,
+        &crate_name,
+        is_library,
+        &file_name,
+        &frontend.pkg.natives,
+    );
     util::write_bytes_atomic(&manifest, manifest_json.as_bytes()).map_err(BuildError::Write)?;
 
     Ok(Artifacts {
@@ -1036,6 +1148,7 @@ fn build_manifest(
     crate_name: &str,
     is_library: bool,
     file_name: &str,
+    natives: &[ravum_lang_sema::loader::NativeLib],
 ) -> String {
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1046,6 +1159,15 @@ fn build_manifest(
         "identity": identity.digest,
         "source_digest": identity.source_digest,
         "dependencies_digest": identity.dependencies_digest,
+        "natives": natives
+            .iter()
+            .map(|native| json!({
+                "name": native.name,
+                "kind": native.kind.name(),
+                "lib": native.lib,
+                "digest": native.digest,
+            }))
+            .collect::<Vec<_>>(),
         "artifact": file_name,
         "crate_name": crate_name,
         "crate_kind": identity.crate_kind,

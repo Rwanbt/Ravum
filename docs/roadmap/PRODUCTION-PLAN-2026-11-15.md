@@ -99,6 +99,8 @@ sortie, SHA, CI verte.
   Un RFC `PROPOSED`, puis une implémentation, pour chaque fonctionnalité :
   concurrence, réseau et HTTP, SQLite, hot reload avec préservation d'état,
   bloc DSP. Ferme T6, T8 et T9.
+  **RFC écrites le 2026-11-19, toutes `PROPOSED`** : `docs/rfc/RFC-E11-*.md`
+  (5). Implémentation en attente des décisions listées en §7 de chaque RFC.
 - [ ] **E12 — T2 : FeatureId et cas pour les 344 MUST sans test
   ([D-18-1](../decision/DECISIONS-2026-11-18.md)).**
 - [ ] **E10 — Demande de décision finale** : audit, ratification, Go/No-Go.

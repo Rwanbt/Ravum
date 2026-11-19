@@ -1,0 +1,8 @@
+{
+  "id": "types/ffi-str-return-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-FFI-TYPE"
+  ],
+  "notes": "ABI-3.4: &str is a parameter type only; a returned C string is Option<String> (ABI-3.8)."
+}

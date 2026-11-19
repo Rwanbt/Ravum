@@ -239,6 +239,11 @@ impl<'a> Emitter<'a> {
         if name == "Error" {
             return Ok("crate::Error".to_string());
         }
+        // Opaque prelude types of `std::net`, `std::thread` and `std::sync`
+        // (RFC-E11-NET-HTTP §3, RFC-E11-CONCURRENCY §3).
+        if let Some(opaque) = ravum_lang_sema::builtins::prelude_opaque_name(def) {
+            return Ok(format!("crate::{opaque}"));
+        }
         Err(err(format!(
             "cannot resolve nominal type `{name}` (definition node {def}) to a Rust path"
         )))

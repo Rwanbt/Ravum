@@ -1,0 +1,6 @@
+extern "C" {
+    fn f(s: Option<String>);
+}
+
+fn main() {
+}

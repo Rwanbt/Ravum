@@ -1203,7 +1203,7 @@ fn collect_expr(expr: &Expr, out: &mut Vec<NodeId>) {
                 collect_expr(end, out);
             }
         }
-        ExprKind::Try(inner) => collect_expr(inner, out),
+        ExprKind::Try(inner) | ExprKind::Await(inner) => collect_expr(inner, out),
         ExprKind::Return(value) => {
             if let Some(value) = value {
                 collect_expr(value, out);
@@ -1279,7 +1279,9 @@ fn errors_have_stable_codes_and_exact_spans() {
         ("struct S { x: }", "E-PARSE-EXPECTED", 14),
         ("trait T {}", "E-UNSUPPORTED-TRAIT", 0),
         ("unsafe fn f() {}", "E-UNSUPPORTED-UNSAFE", 0),
-        ("async fn f() {}", "E-UNSUPPORTED-ASYNC", 0),
+        // `async fn` is accepted since D-19-9; `async` before anything else is not.
+        ("async struct S;", "E-UNSUPPORTED-ASYNC", 0),
+        ("fn f() { async { 1 } }", "E-UNSUPPORTED-ASYNC", 9),
         ("extern \"C\" fn f() {}", "E-UNSUPPORTED-EXTERN", 0),
         ("#[derive(Clone)]\nstruct S;", "E-UNSUPPORTED-ATTR", 0),
         ("fn f<T>() where T: X {}", "E-UNSUPPORTED-WHERE", 10),

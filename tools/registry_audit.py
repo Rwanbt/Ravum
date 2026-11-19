@@ -33,7 +33,7 @@ CODE_LITERAL = re.compile(r'"((?:E|W)-[A-Z0-9-]+)"')
 # `crates/ravum-lang-cli/src/json.rs` maps a *prefix* to a phase ("E-TYP" ->
 # "types"); those literals are not emitted codes. Same for the `E-OWN-` fragment
 # used to build messages.
-PREFIX_LITERALS = {"E-LEX", "E-PARSE", "E-RES", "E-TYP", "E-OWN", "E-OWN-", "E-EFF",
+PREFIX_LITERALS = {"E-LEX", "E-PARSE", "E-RES", "E-TYP", "E-OWN", "E-OWN-", "E-EFF", "E-CONC",
                    "E-MOD", "E-UNSUPPORTED", "E-IO", "E-CODEGEN", "W-OWN", "W-RES"}
 # Codes produced by the toolchain itself (build, doctor, wasm runner) rather than
 # by the language; the registry covers language diagnostics.

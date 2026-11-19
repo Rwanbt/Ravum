@@ -24,7 +24,8 @@ pub use diagnostics::{
     Diagnostic, DiagnosticSet, DiagnosticSpan, Severity, DIAGNOSTICS_SCHEMA_VERSION,
 };
 pub use dsp::{
-    DspBlockTimings, DspSessionReport, DspState, DSP_ABI_VERSION, DSP_EXPORT, DSP_SIGNATURE,
+    dsp_state_schema_v1_digest, DspBlockTimings, DspSessionReport, DspState, DSP_ABI_VERSION,
+    DSP_EXPORT, DSP_SIGNATURE, DSP_STATE_SCHEMA_EXPORT, DSP_STATE_SCHEMA_V1_TEXT,
 };
 pub use evidence::{EvidenceRecord, VerificationStatus, EVIDENCE_SCHEMA_VERSION};
 pub use ids::{ActiveVersionId, ArtifactId, BuildContextId, SnapshotId, VerificationKey};

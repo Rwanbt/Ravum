@@ -1,0 +1,13 @@
+struct State { z1: f32, z2: f32 }
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects(alloc) {
+    let mut history: Vec<f32> = Vec::new();
+    history.push(input);
+    state.z1 = input;
+    input
+}
+
+fn main() -> () effects(alloc) {
+    let mut s: State = State { z1: 0.0, z2: 0.0 };
+    drop(process_sample(&mut s, 1.0));
+}

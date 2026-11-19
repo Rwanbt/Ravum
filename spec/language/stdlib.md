@@ -16,7 +16,7 @@
 | Catégorie | Noms |
 |---|---|
 | Types primitifs | `i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 isize usize f32 f64 bool char ()`, `!` (Never) |
-| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error` |
+| Types du prélude | `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `Error`, `TcpListener`, `TcpStream` (opaques, §17), `JoinHandle<T>`, `Channel<T>`, `Sender<T>`, `Receiver<T>` (opaques, §18), `CHandle` ([`abi.md`](abi.md) ABI-3.6), `HttpRequest`, `HttpResponse` (opaques, §19), `Future<T>` ([`concurrency.md`](concurrency.md) §6) |
 | Constructeurs | `Some`, `None`, `Ok`, `Err` (qualifiés ou non, [`types.md`](types.md) TYP-10.2) |
 | Intrinsèques | `assert`, `assert_eq`, `panic`, `drop` |
 
@@ -26,6 +26,11 @@
 |---|---|---|
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
+| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) ; `accept_async`, `connect_async`, `read_line_async`, `write_str_async` ([`concurrency.md`](concurrency.md) CONC-6.7) |
+| `std::task` | `task::…` | `block_on`, `spawn`, `yield_now` ([`concurrency.md`](concurrency.md) §6) |
+| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body` (§19) |
+| `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
+| `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |
 | `std::env` | `use std::env;` | `args`, `var` |
 | `std::process` | `use std::process;` | `exit` |
 | `std::math` | `use std::math;` | `abs`, `sqrt`, `floor`, `ceil`, `round`, `pow`, `min`, `max` (f64) |
@@ -604,8 +609,8 @@ fn main() { let s = fs::read_to_string("x")?; }
 | E/S riches | `File`, `BufReader`, `stdin()`, `stdout()`, `flush` | `E-RES-UNKNOWN` |
 | Processus | `Command`, `spawn`, `current_dir`, `env::set_var` | `E-RES-UNKNOWN` |
 | Temps | `Instant`, `Duration`, `SystemTime`, `sleep` | `E-RES-UNKNOWN` |
-| Threads | `thread::spawn`, `Mutex`, `Arc`, atomiques | `E-RES-UNKNOWN` / `E-UNSUPPORTED-EFFECT` |
-| Réseau | `TcpStream`, `UdpSocket` | `E-RES-UNKNOWN` / `E-UNSUPPORTED-EFFECT` |
+| État partagé | `Mutex`, `RwLock`, `Arc`, atomiques, `sleep` (threads et canaux : §18) | `E-RES-UNKNOWN` |
+| Réseau | `UdpSocket`, TLS, octets bruts, timeouts, DNS asynchrone (TCP texte : §17) | `E-RES-UNKNOWN` |
 | Math étendue | `asin`, `acos`, `atan`, `atan2`, `log2`, `hypot`, `PI` | `E-RES-UNKNOWN` |
 | Conversions | `From`/`Into`, `to_string` universel, `parse` générique | `E-RES-UNKNOWN` |
 | Panic | `catch_unwind`, `Result` de panic, `assert!` avec message | `E-RES-UNKNOWN` |
@@ -638,3 +643,163 @@ fn main() { let s = fs::read_to_string("x")?; }
 - **Q-STD-8** — `assert(bool)` sans message (STD-8.6) : la liste du Lead ne prévoit pas de second argument. Un message est souhaitable pour les tests ; à ajouter ou non.
 - **Q-STD-9** — `String::new()` et `String::from()` sont des ajouts minimaux nécessaires (construction) absents de la liste exacte du Lead ; `string::from` les couvre fonctionnellement. À ratifier.
 - **Q-STD-10** — Les opérations texte possédées coûtent une allocation par appel (`trim`, `lines`, `replace`). Aucun chiffre n'est publié ; une mesure réelle est nécessaire avant toute affirmation de performance.
+
+## 17. `std::net` (TCP texte bloquant)
+
+Source : [`RFC-E11-NET-HTTP`](../../docs/rfc/RFC-E11-NET-HTTP.md) §3
+(`PROPOSED`, décision D-18-2). `TcpListener` et `TcpStream` sont des types
+**opaques** du prélude : ni champ, ni méthode, ni constructeur littéral ; ils
+ne sont pas `Copy`, et leur destruction ferme la socket.
+
+```rv
+pub fn listen(addr: &str) -> Result<TcpListener, Error> effects(net, alloc)
+pub fn local_port(listener: &TcpListener) -> u16 effects(net)
+pub fn accept(listener: &TcpListener) -> Result<TcpStream, Error> effects(net, alloc)
+pub fn connect(addr: &str) -> Result<TcpStream, Error> effects(net, alloc)
+pub fn read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> effects(net, alloc)
+pub fn read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> effects(net, alloc)
+pub fn write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> effects(net, alloc)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-17.1 | Toute fonction de `std::net` porte l'effet `net` ; `net` est interdit au point d'entrée des profils `pure` et `rt` (`E-EFF-PROFILE`, [`effects.md`](effects.md) EFF-4). | MUST |
+| STD-17.2 | `listen("127.0.0.1:0")` choisit un port éphémère ; `local_port` le rend (tests hermétiques). | MUST |
+| STD-17.3 | Toute erreur système (adresse invalide, port occupé, connexion refusée ou réinitialisée) rend `Err(Error)`, jamais une panique. | MUST |
+| STD-17.4 | Les octets reçus sont du **texte UTF-8 strict** : un octet invalide rend `Err`, jamais une substitution. | MUST |
+| STD-17.5 | `read_line` rend `Ok(None)` à la fin du flux, sinon la ligne **sans** son `\n` final ni un `\r` qui le précède. | MUST |
+| STD-17.6 | `read_exact(s, n)` lit exactement `n` octets ; une fin de flux avant `n` octets rend `Err`. | MUST |
+| STD-17.7 | `write_str` écrit tous les octets UTF-8 puis vide le tampon, ou rend `Err`. | MUST |
+| STD-17.8 | Tous les appels sont **bloquants** ; il n'y a ni timeout, ni TLS, ni UDP, ni octets bruts en 1.0. | MUST |
+
+```rv
+// POSITIF — échange sur la boucle locale, un seul processus
+use std::io;
+use std::net;
+
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(net::local_port(&listener).to_string().as_str());
+    let mut client: TcpStream = net::connect(addr.as_str())?;
+    let mut server: TcpStream = net::accept(&listener)?;
+    net::write_str(&mut client, "ping\n")?;
+    let got: Option<String> = net::read_line(&mut server)?;
+    io::println(got.unwrap_or(String::from("")).as_str());
+    return Ok(());
+}
+```
+
+```rv
+// NÉGATIF — E-EFF-PROFILE (net sous `pure`)
+fn main() -> () effects(net, alloc) { let r = net::listen("127.0.0.1:0"); drop(r); }
+```
+
+## 18. `std::thread` et `std::sync` (threads et canaux)
+
+Source : [`RFC-E11-CONCURRENCY`](../../docs/rfc/RFC-E11-CONCURRENCY.md) phase 1
+(`PROPOSED`, décisions D-18-2 et D-19-3). Ravum n'a ni closure, ni trait
+`Send`, ni état mutable partagé : un thread reçoit **une** valeur déplacée et
+communique par canaux. `JoinHandle<T>`, `Channel<T>`, `Sender<T>` et
+`Receiver<T>` sont des types **opaques** du prélude, non `Copy`.
+
+```rv
+pub fn spawn(worker: <fonction libre>, arg: A) -> JoinHandle<R> effects(thread, alloc)  // forme spéciale, STD-18.2
+pub fn join<T>(handle: JoinHandle<T>) -> T effects(thread)
+pub fn channel<T>() -> Channel<T> effects(thread, alloc)
+pub fn sender<T>(channel: &Channel<T>) -> Sender<T> effects(thread)
+pub fn clone_sender<T>(sender: &Sender<T>) -> Sender<T> effects(thread)
+pub fn receiver<T>(channel: Channel<T>) -> Receiver<T> effects(thread)
+pub fn send<T>(sender: &Sender<T>, value: T) -> bool effects(thread)
+pub fn recv<T>(receiver: &Receiver<T>) -> Option<T> effects(thread)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-18.1 | Un type est **transférable** s'il ne contient aucune référence (`&T`, `&mut T`, `&str`, tranche) hors des champs de types nominaux, qui ne peuvent porter que `&'static str` ([`types.md`](types.md) TYP-6.3). Le paramètre et le résultat d'un `spawn`, et l'élément d'un canal, doivent être transférables ; sinon `E-CONC-NOT-TRANSFERABLE`. | MUST |
+| STD-18.2 | `thread::spawn(f, arg)` exige que `f` **nomme** une fonction libre non générique, non `extern`, d'exactement un paramètre ; sinon `E-CONC-SPAWN-TARGET`. Aucune fonction n'est une valeur ailleurs (EXPR, `E-TYP-CALL`). | MUST |
+| STD-18.3 | `arg` est **déplacé** dans le thread : toute utilisation ultérieure est `E-OWN-USE-AFTER-MOVE`. | MUST |
+| STD-18.4 | Les effets de `f` sont ceux de l'appelant de `spawn`, en plus de `thread` et `alloc` ([`effects.md`](effects.md) §2). | MUST |
+| STD-18.5 | Une panique dans n'importe quel thread termine le **processus** avec `panic: <message>` et le code `1`, comme une panique de `main`. | MUST |
+| STD-18.6 | `join` attend la fin du thread et rend son résultat. Un `JoinHandle` détruit sans `join` attend la fin du thread : aucun thread ne survit à son handle. | MUST |
+| STD-18.7 | `receiver` consomme le canal. `recv` bloque jusqu'à une valeur, ou rend `None` quand tous les `Sender` obtenus du canal sont détruits. Les valeurs d'un même `Sender` arrivent dans l'ordre d'envoi. | MUST |
+| STD-18.8 | `send` rend `false` si le `Receiver` est détruit, `true` sinon ; il ne bloque pas. | MUST |
+| STD-18.9 | Pas d'état mutable partagé (`Mutex`, `Arc`, atomiques), pas de timeout, pas de `sleep` en 1.0 ; l'ordre d'exécution entre threads n'est pas spécifié. | MUST |
+
+```rv
+// POSITIF
+use std::io;
+use std::thread;
+
+fn sum_to(n: i64) -> i64 effects() {
+    let mut total: i64 = 0;
+    for i in 0..n { total = total + (i as i64); }
+    return total;
+}
+
+fn main() -> () effects(io, thread, alloc) {
+    let a: JoinHandle<i64> = thread::spawn(sum_to, 1000);
+    let b: JoinHandle<i64> = thread::spawn(sum_to, 10);
+    io::println((thread::join(a) + thread::join(b)).to_string().as_str());
+}
+```
+
+```rv
+// NÉGATIF — E-CONC-NOT-TRANSFERABLE (référence passée à un thread)
+fn show(s: &String) -> usize effects() { return s.len(); }
+fn main() -> () effects(thread, alloc) {
+    let t: String = String::from("x");
+    let h: JoinHandle<usize> = thread::spawn(show, &t);
+}
+// NÉGATIF — E-CONC-SPAWN-TARGET (une variable n'est pas une fonction)
+fn main2() -> () effects(thread, alloc) { let x: i64 = 3; let h: JoinHandle<i64> = thread::spawn(x, 1); }
+```
+
+## 19. `std::http` (HTTP/1.1 en clair)
+
+Source : [`RFC-E11-NET-HTTP`](../../docs/rfc/RFC-E11-NET-HTTP.md) §4
+(`PROPOSED`, décisions D-18-2 et D-19-8). HTTP est une bibliothèque sur
+`std::net`, implémentée dans le runtime : le texte de Ravum n'a ni `split`,
+ni recherche, ni sous-chaîne (STD-9.11), donc un analyseur écrit en `.rv`
+n'est pas possible en 1.0. `HttpRequest` et `HttpResponse` sont des types
+**opaques** du prélude, lus par des fonctions d'accès.
+
+```rv
+pub fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> effects(net, alloc)
+pub fn method(request: &HttpRequest) -> String effects(alloc)
+pub fn path(request: &HttpRequest) -> String effects(alloc)
+pub fn header(request: &HttpRequest, name: &str) -> Option<String> effects(alloc)
+pub fn body(request: &HttpRequest) -> String effects(alloc)
+pub fn respond(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Result<(), Error> effects(net, alloc)
+pub fn get(url: &str) -> Result<HttpResponse, Error> effects(net, alloc)
+pub fn post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> effects(net, alloc)
+pub fn status(response: &HttpResponse) -> u16
+pub fn response_body(response: &HttpResponse) -> String effects(alloc)
+```
+
+| ID | Sémantique | Niveau |
+|---|---|---|
+| STD-19.1 | `read_request`, `respond`, `get` et `post` portent l'effet `net` ; il est interdit au point d'entrée de `pure` et de `rt`. | MUST |
+| STD-19.2 | `read_request` lit une ligne `MÉTHODE /chemin HTTP/1.1` (ou `HTTP/1.0`), les en-têtes jusqu'à la ligne vide, puis un corps de `Content-Length` octets (0 sans en-tête). Une ligne ou un chemin malformé, une autre version, ou `Transfer-Encoding` (dont `chunked`) rendent `Err`. | MUST |
+| STD-19.3 | Limites fixes : une ligne ≤ 8 KiB, au plus 100 en-têtes, un corps ≤ 16 MiB ; au-delà, `Err`. Les octets de la ligne, des en-têtes et du corps doivent être de l'UTF-8 strict, sinon `Err`. | MUST |
+| STD-19.4 | `header(request, nom)` compare les noms sans tenir compte de la casse ASCII et rend la valeur sans blancs en tête ni en queue, ou `None`. | MUST |
+| STD-19.5 | `respond` écrit une seule réponse complète : ligne de statut, `Content-Type`, `Content-Length`, `Connection: close`, puis le corps. Un statut hors de `100..=999` ou un `content_type` contenant `\r` ou `\n` rend `Err` (pas d'injection d'en-tête). | MUST |
+| STD-19.6 | `get` et `post` n'acceptent que `http://hôte[:port]/chemin` (port 80 par défaut), envoient `Connection: close` et lisent le corps par `Content-Length`, ou jusqu'à la fermeture. `https://` rend `Err` : il n'y a pas de TLS en 1.0. | MUST |
+| STD-19.7 | Toute erreur de connexion, de lecture ou de format est `Err`, jamais une panique. | MUST |
+| STD-19.8 | Une connexion par requête : ni keep-alive, ni pipelining, ni HTTP/2, ni TLS, ni compression. Un serveur Ravum 1.0 est destiné à la boucle locale et au réseau local. | MUST |
+
+```rv
+// POSITIF — répondre à une requête
+fn handle(stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc) {
+    let request: HttpRequest = http::read_request(stream)?;
+    let mut text: String = http::method(&request);
+    text.push_str(" ");
+    text.push_str(http::path(&request).as_str());
+    return http::respond(stream, 200, "text/plain", text.as_str());
+}
+```
+
+```rv
+// NÉGATIF — E-EFF-PROFILE (http sous `pure`)
+fn main() -> () effects(net, alloc) { let r = http::get("http://127.0.0.1:1/"); drop(r); }
+```

@@ -30,6 +30,12 @@ pub struct GenOptions {
     pub test_mode: bool,
     /// Name used in the generated banner (never used for logic).
     pub crate_name: String,
+    /// Build a reloadable module (RFC-E11-HOT-RELOAD): the reload runtime and
+    /// protocol entry point replace the user `main`.
+    pub reload: Option<ravum_lang_sema::reload::ReloadContract>,
+    /// Build a DSP block `cdylib` (RFC-E11-DSP-BLOCK): no `main`, the block ABI
+    /// wrapper is emitted in the root module.
+    pub dsp: Option<ravum_lang_sema::reload::DspContract>,
 }
 
 impl Default for GenOptions {
@@ -38,6 +44,8 @@ impl Default for GenOptions {
             source_comments: true,
             test_mode: false,
             crate_name: "ravum_program".to_string(),
+            reload: None,
+            dsp: None,
         }
     }
 }

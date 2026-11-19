@@ -1,0 +1,7 @@
+{
+  "id": "types/reload-contract-accepted",
+  "mode": "compile-pass",
+  "args": [
+    "--reload"
+  ]
+}

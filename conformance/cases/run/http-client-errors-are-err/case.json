@@ -1,0 +1,6 @@
+{
+  "id": "run/http-client-errors-are-err",
+  "mode": "run-pass",
+  "stdout_contains": "refused is Err\nscheme is Err\nhttps is Err\n",
+  "notes": "STD-19.6, STD-19.7: a refused connection, a non-http scheme and https:// are each an Err, never a panic. No network access: the port comes from a dropped local listener."
+}

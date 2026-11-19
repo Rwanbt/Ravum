@@ -1,0 +1,10 @@
+fn take(v: Vec<i64>) -> usize effects() {
+    v.len()
+}
+
+fn main() -> () effects(thread, alloc) {
+    let v: Vec<i64> = Vec::new();
+    let h: JoinHandle<usize> = thread::spawn(take, v);
+    let n: usize = v.len();
+    drop(h);
+}

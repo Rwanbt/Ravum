@@ -153,7 +153,7 @@ impl Ctx<'_> {
             ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
                 self.expr(base);
             }
-            ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) => {
+            ExprKind::Cast { expr: inner, .. } | ExprKind::Try(inner) | ExprKind::Await(inner) => {
                 self.expr(inner);
             }
             ExprKind::Assign { target, value } => {
@@ -534,7 +534,8 @@ fn scan_expr(expr: &Expr, var: &str, base: Option<&str>, found: &mut bool) {
         }
         ExprKind::Unary { expr: inner, .. }
         | ExprKind::Cast { expr: inner, .. }
-        | ExprKind::Try(inner) => scan_expr(inner, var, base, found),
+        | ExprKind::Try(inner)
+        | ExprKind::Await(inner) => scan_expr(inner, var, base, found),
         ExprKind::Binary { lhs, rhs, .. } => {
             scan_expr(lhs, var, base, found);
             scan_expr(rhs, var, base, found);

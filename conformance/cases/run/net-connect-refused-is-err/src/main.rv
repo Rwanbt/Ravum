@@ -1,0 +1,9 @@
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(net::local_port(&listener).to_string().as_str());
+    drop(listener);
+    let r: Result<TcpStream, Error> = net::connect(addr.as_str());
+    io::println(if r.is_ok() { "connect: ok" } else { "connect: err" });
+    Ok(())
+}

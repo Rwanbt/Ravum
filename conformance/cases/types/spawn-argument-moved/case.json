@@ -1,0 +1,8 @@
+{
+  "id": "types/spawn-argument-moved",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-OWN-USE-AFTER-MOVE"
+  ],
+  "notes": "STD-18.3: the argument of spawn is moved into the thread."
+}

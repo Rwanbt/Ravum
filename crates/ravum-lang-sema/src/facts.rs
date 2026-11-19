@@ -17,6 +17,7 @@ pub enum Effect {
     Io,
     Fs,
     Net,
+    Thread,
     Alloc,
     Panic,
     Unsafe,
@@ -32,6 +33,7 @@ impl Effect {
             Effect::Io => "io",
             Effect::Fs => "fs",
             Effect::Net => "net",
+            Effect::Thread => "thread",
             Effect::Alloc => "alloc",
             Effect::Panic => "panic",
             Effect::Unsafe => "unsafe",
@@ -47,6 +49,7 @@ impl Effect {
             "io" => Effect::Io,
             "fs" => Effect::Fs,
             "net" => Effect::Net,
+            "thread" => Effect::Thread,
             "alloc" => Effect::Alloc,
             "panic" => Effect::Panic,
             "unsafe" => Effect::Unsafe,
@@ -58,9 +61,10 @@ impl Effect {
         })
     }
 
-    /// Effects that are declared but cannot be produced in Core 1.0.
+    /// Effects that are declared but cannot be produced in Core 1.0. Empty
+    /// since `async` became producible (RFC-E11-CONCURRENCY phase 2, D-19-9).
     pub fn is_unsupported(&self) -> bool {
-        matches!(self, Effect::Async | Effect::Net)
+        false
     }
 }
 
@@ -139,6 +143,7 @@ impl Profile {
                 Effect::Io,
                 Effect::Fs,
                 Effect::Net,
+                Effect::Thread,
                 Effect::Alloc,
                 Effect::Panic,
                 Effect::Unsafe,
@@ -151,6 +156,7 @@ impl Profile {
                 Effect::Io,
                 Effect::Fs,
                 Effect::Net,
+                Effect::Thread,
                 Effect::Alloc,
                 Effect::Panic,
                 Effect::Unsafe,
@@ -444,6 +450,12 @@ pub struct Facts {
     /// only interprocedural provenance `own::is_static_ref` accepts; no builtin
     /// (notably `String::as_str`) is ever a member.
     pub static_str_fns: BTreeSet<NodeId>,
+    /// `thread::spawn(f, arg)` call node -> the free function `f` it runs
+    /// (RFC-E11-CONCURRENCY CONC-3.1). Its effects flow to the caller.
+    pub spawn_targets: BTreeMap<NodeId, NodeId>,
+    /// `async fn` items (RFC-E11-CONCURRENCY phase 2). Their `FnSig::ret` is
+    /// `Future<T>`; the body is checked against `T`.
+    pub async_fns: BTreeSet<NodeId>,
     /// Test functions in declaration order.
     pub test_fns: Vec<NodeId>,
     pub main_fn: Option<NodeId>,
@@ -538,10 +550,11 @@ mod tests {
     use super::*;
     use ravum_lang_syntax::source::SourceMap;
 
-    const ALL_EFFECTS: [Effect; 10] = [
+    const ALL_EFFECTS: [Effect; 11] = [
         Effect::Io,
         Effect::Fs,
         Effect::Net,
+        Effect::Thread,
         Effect::Alloc,
         Effect::Panic,
         Effect::Unsafe,
@@ -572,14 +585,12 @@ mod tests {
         }
     }
 
-    /// EFF-6.x: `async` and `net` are declared but cannot be produced in
-    /// Core 1.0; every other group is producible. The split is what
-    /// `E-UNSUPPORTED-*` classification keys on.
+    /// Every effect is producible: `net` since RFC-E11-NET-HTTP (D-18-2),
+    /// `async` since RFC-E11-CONCURRENCY phase 2 (D-19-9).
     #[test]
-    fn only_async_and_net_are_unsupported() {
+    fn no_effect_is_unsupported() {
         for effect in ALL_EFFECTS {
-            let expected = matches!(effect, Effect::Async | Effect::Net);
-            assert_eq!(effect.is_unsupported(), expected, "{effect:?}");
+            assert!(!effect.is_unsupported(), "{effect:?}");
         }
     }
 

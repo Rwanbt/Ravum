@@ -1,2 +1,11 @@
-fn f() effects(async) { }
-fn main() { }
+async fn f() -> i64 effects(async) {
+    1
+}
+
+fn process() -> () effects(async) {
+    drop(task::block_on(f()));
+}
+
+fn main() -> () effects(async) {
+    process();
+}

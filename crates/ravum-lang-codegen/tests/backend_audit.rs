@@ -514,6 +514,7 @@ fn make_fn(
             effects: None,
             body,
             is_test,
+            is_async: false,
             span: span(),
         }),
         span: span(),
@@ -2900,6 +2901,7 @@ fn extern_program(use_text_parameter: bool) -> ExternProgram {
         vis: Vis::Public(span()),
         kind: ItemKind::Extern(ExternBlock {
             abi,
+            lib: None,
             fns: vec![extern_fn],
             span: span(),
         }),
@@ -3037,6 +3039,7 @@ fn extern_program_with_types(param: Option<&str>, ret: &str) -> CheckedProgram {
         vis: Vis::Public(span()),
         kind: ItemKind::Extern(ExternBlock {
             abi: b.ident("C"),
+            lib: None,
             fns: vec![extern_fn],
             span: span(),
         }),

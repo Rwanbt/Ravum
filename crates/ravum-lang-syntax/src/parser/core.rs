@@ -127,6 +127,10 @@ impl<'a> Parser<'a> {
         matches!(&self.peek_at(n).kind, TokenKind::Punct(q) if *q == p)
     }
 
+    pub(super) fn peek_kw(&self, n: usize, k: Kw) -> bool {
+        matches!(&self.peek_at(n).kind, TokenKind::Kw(q) if *q == k)
+    }
+
     pub(super) fn peek_ident(&self) -> bool {
         matches!(&self.peek_at(1).kind, TokenKind::Ident(_))
     }

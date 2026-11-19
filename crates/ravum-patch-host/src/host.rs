@@ -22,6 +22,10 @@ pub struct ExpectedAbi {
     pub abi_version: u32,
     pub export: String,
     pub signature: String,
+    /// Required state schema digest (`ravum_state_schema`), for a host that
+    /// checks it (RFC-E11-DSP-BLOCK DSP-1.4). `None` keeps the historical
+    /// contract, under which modules export no schema.
+    pub state_schema: Option<String>,
 }
 
 impl Default for ExpectedAbi {
@@ -30,6 +34,7 @@ impl Default for ExpectedAbi {
             abi_version: PATCH_ABI_VERSION,
             export: COMPUTE_EXPORT.to_owned(),
             signature: COMPUTE_SIGNATURE.to_owned(),
+            state_schema: None,
         }
     }
 }
@@ -42,6 +47,18 @@ impl ExpectedAbi {
             abi_version: ravum_protocol::DSP_ABI_VERSION,
             export: ravum_protocol::DSP_EXPORT.to_owned(),
             signature: ravum_protocol::DSP_SIGNATURE.to_owned(),
+            state_schema: None,
+        }
+    }
+
+    /// The DSP contract plus the state schema check: a module must export
+    /// `ravum_state_schema` and it must name the host's [`DspState`] schema.
+    ///
+    /// [`DspState`]: ravum_protocol::DspState
+    pub fn dsp_with_state_schema() -> Self {
+        Self {
+            state_schema: Some(ravum_protocol::dsp_state_schema_v1_digest()),
+            ..Self::dsp()
         }
     }
 }

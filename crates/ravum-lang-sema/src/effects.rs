@@ -56,6 +56,13 @@ pub fn infer_and_check(
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
         let mut effects = FnEffects::default();
+        if f.is_async {
+            // CONC-6.4: an `async fn` carries the `async` effect.
+            effects.direct.insert(Effect::Async);
+            effects
+                .sources
+                .push((Effect::Async, "`async fn`".to_string()));
+        }
         walk_block(&f.body, facts, &mut effects);
         direct.insert(*id, effects);
     }
@@ -297,7 +304,12 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
                         out.edges.push(*item);
                     }
                 }
-                Some(crate::facts::CallTarget::BuiltinFn { path }) => add_builtin_path(path, out),
+                Some(crate::facts::CallTarget::BuiltinFn { path }) => {
+                    add_builtin_path(path, out);
+                    if let Some(worker) = facts.spawn_targets.get(&expr.id) {
+                        out.edges.push(*worker);
+                    }
+                }
                 Some(crate::facts::CallTarget::VariantCtor { .. })
                 | Some(crate::facts::CallTarget::Error)
                 | None => {}
@@ -325,7 +337,7 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             walk_expr(base, facts, out);
             walk_expr(index, facts, out);
         }
-        ExprKind::Unary { expr, .. } => walk_expr(expr, facts, out),
+        ExprKind::Unary { expr, .. } | ExprKind::Await(expr) => walk_expr(expr, facts, out),
         ExprKind::Binary { lhs, rhs, .. } => {
             walk_expr(lhs, facts, out);
             walk_expr(rhs, facts, out);

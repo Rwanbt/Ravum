@@ -1,0 +1,138 @@
+// T9 vertical (D-19-8): an HTTP/1.1 service that stores notes in SQLite.
+//
+// The server runs on its own thread with its own connection and answers
+// `requests` requests, one connection per request (HTTP-1.4):
+//   POST /notes   body = the note text  -> 201, `created <id>`
+//   GET  /notes                        -> 200, one `<id> <text>` per line
+//   anything else                      -> 404 / 405
+// `main` is the client: it drives a fixed scenario on 127.0.0.1, port 0, and
+// prints what it receives, so the whole run is reproducible.
+
+fn note_lines(db: &sqlite::Db) -> Result<String, Error> effects(alloc, panic, unsafe, ffi) {
+    let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT id, body FROM notes ORDER BY id DESC", Vec::new())?;
+    let mut rest: Vec<sqlite::Row> = rows;
+    let mut text: String = String::new();
+    let mut done: bool = false;
+    while !done {
+        let next: Option<sqlite::Row> = rest.pop();
+        match next {
+            Some(row) => {
+                let mut values: Vec<sqlite::Value> = row.values;
+                let body: sqlite::Value = values.pop().unwrap();
+                let id: sqlite::Value = values.pop().unwrap();
+                match id {
+                    sqlite::Value::Int(n) => text.push_str(n.to_string().as_str()),
+                    _ => text.push_str("?"),
+                }
+                text.push_str(" ");
+                match body {
+                    sqlite::Value::Text(t) => text.push_str(t.as_str()),
+                    _ => text.push_str("?"),
+                }
+                text.push_str("\n");
+            }
+            None => {
+                done = true;
+            }
+        }
+    }
+    Ok(text)
+}
+
+fn handle(db: &sqlite::Db, stream: &mut TcpStream) -> Result<(), Error> effects(net, alloc, panic, unsafe, ffi) {
+    let request: HttpRequest = http::read_request(stream)?;
+    let method: String = http::method(&request);
+    let path: String = http::path(&request);
+    if path.as_str() != "/notes" {
+        return http::respond(stream, 404, "text/plain", "not found\n");
+    }
+    if method.as_str() == "POST" {
+        let mut params: Vec<sqlite::Value> = Vec::new();
+        params.push(sqlite::Value::Text(http::body(&request)));
+        let changed: i64 = sqlite::execute(db, "INSERT INTO notes (body) VALUES (?1)", params)?;
+        drop(changed);
+        let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT last_insert_rowid()", Vec::new())?;
+        let mut rest: Vec<sqlite::Row> = rows;
+        let mut reply: String = String::from("created ");
+        match rest.pop() {
+            Some(row) => {
+                let mut values: Vec<sqlite::Value> = row.values;
+                match values.pop() {
+                    Some(sqlite::Value::Int(n)) => reply.push_str(n.to_string().as_str()),
+                    _ => reply.push_str("?"),
+                }
+            }
+            None => reply.push_str("?"),
+        }
+        reply.push_str("\n");
+        return http::respond(stream, 201, "text/plain", reply.as_str());
+    }
+    if method.as_str() == "GET" {
+        let text: String = note_lines(db)?;
+        return http::respond(stream, 200, "text/plain", text.as_str());
+    }
+    http::respond(stream, 405, "text/plain", "method not allowed\n")
+}
+
+fn serve_all(db: &sqlite::Db, listener: &TcpListener, requests: i32) -> () effects(net, alloc, panic, unsafe, ffi) {
+    let mut served: i32 = 0;
+    while served < requests {
+        match net::accept(listener) {
+            Ok(conn) => {
+                let mut stream: TcpStream = conn;
+                let outcome: Result<(), Error> = handle(db, &mut stream);
+                if outcome.is_err() {
+                    let sent: Result<(), Error> = http::respond(&mut stream, 500, "text/plain", "error\n");
+                    drop(sent);
+                }
+            }
+            Err(e) => drop(e),
+        }
+        served = served + 1;
+    }
+}
+
+fn serve(job: (TcpListener, i32)) -> () effects(net, alloc, panic, unsafe, ffi) {
+    match job {
+        (listener, requests) => {
+            let db: sqlite::Db = sqlite::open_memory().unwrap();
+            let made: i64 = sqlite::execute(&db, "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)", Vec::new()).unwrap();
+            drop(made);
+            serve_all(&db, &listener, requests);
+            sqlite::close(db);
+        }
+    }
+}
+
+fn call(base: &str, method: &str, path: &str, body: &str) -> Result<(), Error> effects(io, net, alloc) {
+    let mut url: String = String::from(base);
+    url.push_str(path);
+    let response: HttpResponse = if method == "POST" {
+        http::post(url.as_str(), "text/plain", body)?
+    } else {
+        http::get(url.as_str())?
+    };
+    let mut line: String = String::from(method);
+    line.push_str(" ");
+    line.push_str(path);
+    line.push_str(" -> ");
+    line.push_str(http::status(&response).to_string().as_str());
+    io::println(line.as_str());
+    io::print(http::response_body(&response).as_str());
+    Ok(())
+}
+
+fn main() -> Result<(), Error> effects(io, net, thread, alloc, panic, unsafe, ffi) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut base: String = String::from("http://127.0.0.1:");
+    base.push_str(net::local_port(&listener).to_string().as_str());
+    let server: JoinHandle<()> = thread::spawn(serve, (listener, 6));
+    call(base.as_str(), "POST", "/notes", "buy milk")?;
+    call(base.as_str(), "POST", "/notes", "'); DROP TABLE notes; --")?;
+    call(base.as_str(), "GET", "/notes", "")?;
+    call(base.as_str(), "GET", "/missing", "")?;
+    call(base.as_str(), "POST", "/missing", "x")?;
+    call(base.as_str(), "GET", "/notes", "")?;
+    thread::join(server);
+    Ok(())
+}

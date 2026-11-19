@@ -1,0 +1,6 @@
+{
+  "id": "run/http-loopback-server",
+  "mode": "run-pass",
+  "stdout_contains": "200\nGET /hello \nPOST /notes body text\nHTTP/1.1 400 Bad Request\nhttps refused\n",
+  "notes": "STD-19: an HTTP/1.1 server on a thread answers three connections on 127.0.0.1 (port 0): a GET, a POST with a body, and a malformed request line (400). http::get refuses https:// (no TLS). Hermetic, one process."
+}

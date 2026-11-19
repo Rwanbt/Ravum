@@ -174,7 +174,7 @@ pub(crate) fn resolve_fn_header(
         }
     }
 
-    let ret = ctx.resolve_type(&f.ret);
+    let mut ret = ctx.resolve_type(&f.ret);
     // `!` is legal only as the *whole* return type of a divergent function: a
     // compound such as `Vec<!>` or `Result<!, E>` is not inhabitable.
     if contains_never(&ret) && !matches!(ret, Type::Never) {
@@ -222,6 +222,11 @@ pub(crate) fn resolve_fn_header(
         let module_path = world.modules[module].path.clone();
         join_path(&module_path, &rust_ident(&f.name.name))
     });
+    if f.is_async {
+        // An `async fn` call yields a future of its declared result (CONC-6.1).
+        ret = crate::builtins::generic_opaque("Future", ret).unwrap_or(Type::Error);
+        facts.async_fns.insert(item.id);
+    }
     let sig = FnSig {
         item: item.id,
         rust_path,
@@ -277,12 +282,12 @@ pub(crate) fn resolve_extern_block(
                             );
                         }
                         let resolved = ctx.resolve_type(ty);
-                        if !ffi_safe(&resolved) {
+                        if !ffi_safe_param(&resolved) {
                             ctx.error(
                                 "E-FFI-TYPE",
                                 ty.span,
                                 format!(
-                                    "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool` or `()` (i128/u128 are not admitted)",
+                                    "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool`, `()` or `CHandle`; a parameter may also be `&str` and a return `Option<String>` (i128/u128 are not admitted)",
                                     resolved.display()
                                 ),
                             );
@@ -297,19 +302,22 @@ pub(crate) fn resolve_extern_block(
                 }
             }
             let ret = ctx.resolve_type(&f.ret);
-            if !ffi_safe(&ret) {
+            if !ffi_safe_return(&ret) {
                 ctx.error(
                     "E-FFI-TYPE",
                     f.ret.span,
                     format!(
-                        "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool` or `()` (i128/u128 are not admitted)",
+                        "type `{}` is not FFI-safe in Core 1.0; extern parameters and returns must be `i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`/`u64`, `isize`/`usize`, `f32`/`f64`, `bool`, `()` or `CHandle`; a parameter may also be `&str` and a return `Option<String>` (i128/u128 are not admitted)",
                         ret.display()
                     ),
                 );
             }
             (params, ret)
         };
-        let rust_path = format!("crate::rvm_ffi_wrap_{}", f.id);
+        // The wrapper is emitted in the module of the `extern` block (a
+        // dependency's block lives in that dependency's module).
+        let module_path = world.modules[module].path.clone();
+        let rust_path = join_path(&module_path, &format!("rvm_ffi_wrap_{}", f.id));
         facts.item_paths.insert(f.id, rust_path.clone());
         facts.extern_symbols.insert(f.id, f.name.name.clone());
         let sig = FnSig {
@@ -340,6 +348,24 @@ pub(crate) fn resolve_extern_block(
 /// résolution, donc avant que le backend ne voie la signature. La liste jumelle
 /// du backend (`emit.rs::ast_ffi_safe`) doit encore être alignée (agent E) ;
 /// d'ici là, `ffi_safe` est la seule barrière et le test C-FFI-1 le vérifie.
+/// A parameter of an `extern` function: a scalar, a `CHandle`, or `&str`,
+/// passed to C as a pointer and a byte length (NAT-3.3).
+pub(crate) fn ffi_safe_param(ty: &Type) -> bool {
+    ffi_safe(ty)
+        || is_chandle(ty)
+        || matches!(ty, Type::Ref { mutable: false, inner } if **inner == Type::Str)
+}
+
+/// A return of an `extern` function: a scalar, a `CHandle`, or
+/// `Option<String>` read from a NUL-terminated C string (NAT-3.3).
+pub(crate) fn ffi_safe_return(ty: &Type) -> bool {
+    ffi_safe(ty) || is_chandle(ty) || matches!(ty, Type::Option(inner) if **inner == Type::String)
+}
+
+fn is_chandle(ty: &Type) -> bool {
+    matches!(ty, Type::Nominal { def, .. } if *def == builtins::PRELUDE_CHANDLE_DEF)
+}
+
 pub(crate) fn ffi_safe(ty: &Type) -> bool {
     matches!(
         ty,
@@ -1051,7 +1077,11 @@ pub(crate) fn resolve_type_path(
 }
 
 pub(crate) fn is_builtin_type_name(name: &str) -> bool {
-    matches!(name, "Vec" | "Option" | "Result") || builtins::prelude_type(name).is_some()
+    matches!(name, "Vec" | "Option" | "Result")
+        || builtins::prelude_type(name).is_some()
+        || builtins::PRELUDE_GENERIC_OPAQUES
+            .iter()
+            .any(|(opaque, _)| *opaque == name)
 }
 
 pub(crate) fn prelude_nominal(
@@ -1075,6 +1105,13 @@ pub(crate) fn prelude_nominal(
                 Box::new(args[0].clone()),
                 Box::new(args[1].clone()),
             ))
+        }
+        _ if builtins::PRELUDE_GENERIC_OPAQUES
+            .iter()
+            .any(|(opaque, _)| *opaque == name) =>
+        {
+            expect_arity(name, 1, args.len(), span, diags)?;
+            builtins::generic_opaque(name, args[0].clone())
         }
         _ => {
             if !args.is_empty() {

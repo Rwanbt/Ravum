@@ -1,0 +1,10 @@
+{
+  "id": "types/dsp-block-entry-missing",
+  "mode": "compile-fail",
+  "args": [
+    "--dsp-block"
+  ],
+  "expect_codes": [
+    "E-DSP-ENTRY"
+  ]
+}

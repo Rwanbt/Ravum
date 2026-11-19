@@ -1,0 +1,6 @@
+{
+  "id": "packages/native-in-dependency",
+  "mode": "compile-pass",
+  "project": "app",
+  "notes": "MOD-5.20 (D-19-7): a dependency may declare [native]; an entry that none of its extern blocks names is neither read nor linked."
+}

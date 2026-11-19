@@ -1,0 +1,6 @@
+{
+  "id": "run/net-loopback-echo",
+  "mode": "run-pass",
+  "stdout_contains": "server got: ping\nclient got: pong\n",
+  "notes": "NET-2.2: listen on 127.0.0.1:0, connect to the ephemeral port, accept, exchange one line each way. Single process, loopback only, no Internet (hermetic)."
+}

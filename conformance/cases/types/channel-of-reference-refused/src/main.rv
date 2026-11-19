@@ -1,0 +1,4 @@
+fn main() -> () effects(thread, alloc) {
+    let c: Channel<&str> = sync::channel();
+    drop(c);
+}

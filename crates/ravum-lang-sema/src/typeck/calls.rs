@@ -89,6 +89,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             ValuePath::AssocFn(id) => {
                 self.check_user_fn_call(*id, args, expected, expr.span, Some(*id))
             }
+            ValuePath::BuiltinFn(path) if *path == "std::thread::spawn" => {
+                self.check_thread_spawn(expr.id, args, expr.span)
+            }
             ValuePath::BuiltinFn(path) => {
                 if let Some(assoc) = builtins::builtin_assoc_fn(path) {
                     self.check_builtin_assoc_call(assoc, args, expected, expr.span)
@@ -350,6 +353,103 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
     }
 
+    /// `thread::spawn(f, arg)` (RFC-E11-CONCURRENCY CONC-3.1, CONC-3.2):
+    /// `f` names a non-generic free function of exactly one parameter, `arg`
+    /// is moved into the new thread, and both the parameter and the result
+    /// are transferable (CONC-2.1). Returns `JoinHandle<R>`.
+    fn check_thread_spawn(&mut self, call: NodeId, args: &[Expr], span: Span) -> Type {
+        if args.len() != 2 {
+            self.error(
+                "E-TYP-ARITY",
+                span,
+                format!(
+                    "`std::thread::spawn` expects 2 argument(s), found {}",
+                    args.len()
+                ),
+            );
+            for arg in args {
+                self.check_expr(arg, None);
+            }
+            return Type::Error;
+        }
+        let (target, worker) = (&args[0], &args[1]);
+        let names_local = matches!(&target.kind, ExprKind::Path(path)
+            if path.root == PathRoot::Plain
+                && path.segments.len() == 1
+                && self.lookup_local(&path.segments[0].name.name).is_some());
+        let item = match &target.kind {
+            _ if names_local => {
+                self.check_expr(target, None);
+                None
+            }
+            ExprKind::Path(path) => {
+                match resolve::resolve_value_path(self.world, self.module, &self.generics, path) {
+                    Ok(ValuePath::Item(id)) if self.world.fns.contains_key(&id) => {
+                        self.record_value_resolution(path, &ValuePath::Item(id));
+                        Some(id)
+                    }
+                    Ok(other) => {
+                        self.record_value_resolution(path, &other);
+                        None
+                    }
+                    Err(error) => {
+                        self.emit_path_error(target.span, &error);
+                        self.facts.resolutions.insert(path.id, Resolution::Error);
+                        self.facts.expr_types.insert(target.id, Type::Error);
+                        self.check_expr(worker, None);
+                        return Type::Error;
+                    }
+                }
+            }
+            _ => None,
+        };
+        let sig = item.and_then(|id| self.facts.fn_sigs.get(&id).cloned());
+        let Some(sig) = sig.filter(|sig| {
+            !sig.is_extern
+                && sig.generics.is_empty()
+                && sig.receiver.is_none()
+                && sig.params.len() == 1
+        }) else {
+            self.error(
+                "E-CONC-SPAWN-TARGET",
+                target.span,
+                "the first argument of `thread::spawn` must name a non-generic free function of one parameter".to_string(),
+            );
+            if !names_local {
+                self.facts.expr_types.insert(target.id, Type::Error);
+            }
+            self.check_expr(worker, None);
+            return Type::Error;
+        };
+        self.facts.expr_types.insert(target.id, sig.ret.clone());
+        let param = sig.params[0].ty.clone();
+        let found = self.check_arg(worker, &param);
+        if found != param && !matches!(found, Type::Error | Type::Never) {
+            self.error(
+                "E-TYP-MISMATCH",
+                worker.span,
+                format!(
+                    "argument 2 of `thread::spawn`: `{}` expects `{param}`, found `{found}`",
+                    sig.name
+                ),
+            );
+        }
+        for (what, ty) in [("parameter", &param), ("result", &sig.ret)] {
+            if !is_transferable(ty) {
+                self.error(
+                    "E-CONC-NOT-TRANSFERABLE",
+                    target.span,
+                    format!(
+                        "the {what} type `{ty}` of `{}` holds a reference and cannot cross threads",
+                        sig.name
+                    ),
+                );
+            }
+        }
+        self.facts.spawn_targets.insert(call, sig.item);
+        builtins::generic_opaque("JoinHandle", sig.ret.clone()).unwrap_or(Type::Error)
+    }
+
     pub(super) fn check_builtin_fn_call(
         &mut self,
         sig: builtins::BuiltinFnSig,
@@ -360,10 +460,14 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         if sig.path == "std::panic::assert_eq" {
             return self.check_assert_eq(args, sig.path);
         }
+        // Parameters and result share one instantiation, so a generic result
+        // (`join(h: JoinHandle<T>) -> T`) is tied to its arguments.
+        let mut mapping: BTreeMap<usize, Type> = BTreeMap::new();
         let params: Vec<Type> = builtins::fn_param_types(&sig)
             .iter()
-            .map(|p| self.instantiate(p, span))
+            .map(|p| self.instantiate_with(p, span, &mut mapping))
             .collect();
+        let ret_pattern = self.instantiate_with(&builtins::fn_ret_type(&sig), span, &mut mapping);
         if args.len() != params.len() {
             self.error(
                 "E-TYP-ARITY",
@@ -398,11 +502,20 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 self.check_expr(arg, None);
             }
         }
-        let ret = self.resolve_vars(&substitute(&builtins::fn_ret_type(&sig), &subst));
+        let ret = self.resolve_vars(&substitute(&ret_pattern, &subst));
         if let Some(expected) = expected {
             self.unify_pattern(&ret, expected, &mut subst);
         }
-        self.resolve_vars(&ret)
+        let ret = self.resolve_vars(&ret);
+        // CONC-4.1: a channel carries only transferable values.
+        if sig.path == "std::sync::channel" && !is_transferable(&ret) {
+            self.error(
+                "E-CONC-NOT-TRANSFERABLE",
+                span,
+                format!("`{ret}` holds a reference and cannot cross threads"),
+            );
+        }
+        ret
     }
 
     /// True when the expression can be borrowed mutably: a `let mut` binding, a
@@ -775,4 +888,19 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
     // ------------------------------------------------------------------
     // Méthodes
     // ------------------------------------------------------------------
+}
+
+/// CONC-2.1: a type is transferable between threads when it holds no
+/// reference. A nominal type is transferable when its type arguments are: its
+/// own fields can only hold `&'static str`, the one reference that may be
+/// stored (TYP-6.3).
+pub(crate) fn is_transferable(ty: &Type) -> bool {
+    match ty {
+        Type::Ref { .. } | Type::Slice(_) | Type::Str => false,
+        Type::Array { elem, .. } | Type::Vec(elem) | Type::Option(elem) => is_transferable(elem),
+        Type::Result(ok, err) => is_transferable(ok) && is_transferable(err),
+        Type::Tuple(items) => items.iter().all(is_transferable),
+        Type::Nominal { args, .. } => args.iter().all(is_transferable),
+        _ => true,
+    }
 }

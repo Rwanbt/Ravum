@@ -26,6 +26,10 @@ pub enum Command {
         timings: bool,
         /// `--rt-entry <chemin::de::fonction>`: the `rt` entry point (T6).
         rt_entry: Option<String>,
+        /// `--reload`: also check the reloadable-program contract.
+        reload: bool,
+        /// `--dsp-block`: check the DSP block contract and the `rt` profile.
+        dsp_block: bool,
     },
     Build {
         path: PathBuf,
@@ -37,6 +41,8 @@ pub enum Command {
         /// `--rt-entry <chemin::de::fonction>`: check the build with the `rt`
         /// rules applied to the functions reachable from this entry (T6).
         rt_entry: Option<String>,
+        /// `--emit dsp-block`: build a DSP block `cdylib` (RFC-E11-DSP-BLOCK).
+        dsp_block: bool,
     },
     Run {
         path: PathBuf,
@@ -50,6 +56,8 @@ pub enum Command {
         release: bool,
         /// Internal test hook: stop after N change-triggered rebuilds.
         max_rebuilds: Option<u64>,
+        /// `--reload`: hot reload with state preservation (RFC-E11-HOT-RELOAD).
+        reload: bool,
     },
     Test {
         path: PathBuf,
@@ -173,11 +181,15 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut locked = false;
     let mut timings = false;
     let mut rt_entry: Option<String> = None;
+    let mut reload = false;
+    let mut dsp_block = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
+            "--reload" => reload = true,
+            "--dsp-block" => dsp_block = true,
             "--locked" => locked = true,
             "--timings" => timings = true,
             "--profile" => {
@@ -211,6 +223,8 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         locked,
         timings,
         rt_entry,
+        reload,
+        dsp_block,
     })
 }
 
@@ -236,11 +250,21 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
     let mut target = BuildTarget::Native;
     let mut timings = false;
     let mut rt_entry: Option<String> = None;
+    let mut dsp_block = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--release" => release = true,
+            "--emit" => match option_value(rest, &mut i, "--emit")?.as_str() {
+                "dsp-block" => dsp_block = true,
+                other => {
+                    return Err(format!(
+                        "unknown `--emit` value `{other}`; expected `dsp-block`"
+                    ))
+                }
+            },
+            "--emit=dsp-block" => dsp_block = true,
             "--emit-ir" => emit_ir = true,
             "--timings" => timings = true,
             "--emit-rust" => {
@@ -271,6 +295,13 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if dsp_block && (rt_entry.is_some() || target.is_wasm()) {
+        return Err(
+            "`--emit dsp-block` fixes the `rt` entry (`process_sample`) and the host target; \
+             it takes neither `--rt-entry` nor `--target`"
+                .to_string(),
+        );
+    }
     Ok(Command::Build {
         path: path.unwrap_or_else(default_path),
         release,
@@ -279,6 +310,7 @@ fn parse_build(rest: &[String]) -> Result<Command, String> {
         target,
         timings,
         rt_entry,
+        dsp_block,
     })
 }
 
@@ -325,11 +357,13 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
     let mut run = false;
     let mut release = false;
     let mut max_rebuilds: Option<u64> = None;
+    let mut reload = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--run" => run = true,
+            "--reload" => reload = true,
             "--release" => release = true,
             "--max-rebuilds" => {
                 let value = option_value(rest, &mut i, "--max-rebuilds")?;
@@ -347,11 +381,18 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if reload && (run || max_rebuilds.is_some()) {
+        return Err(
+            "`--reload` runs the module itself; it takes neither `--run` nor `--max-rebuilds`"
+                .to_string(),
+        );
+    }
     Ok(Command::Watch {
         path: path.unwrap_or_else(default_path),
         run,
         release,
         max_rebuilds,
+        reload,
     })
 }
 
@@ -516,7 +557,7 @@ COMMANDS:
                                         Check, generate Rust and compile it with `rustc`
     run [PATH] [--json] [--target TRIPLE] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
-    watch [PATH] [--run] [--release]    Poll sources and rebuild on change (alias: `dev`)
+    watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
     test [PATH] [--filter TEXT] [--json]
                                         Build the test runner, run it, parse `test ... ok/FAILED`
     fmt [PATH] [--check]                Format every `.rv` file, or verify with `--check`
@@ -778,14 +819,56 @@ mod tests {
                     run,
                     release,
                     max_rebuilds,
+                    reload,
                 }) => {
                     assert_eq!(path, PathBuf::from("pkg"));
                     assert!(run);
                     assert!(release);
                     assert_eq!(max_rebuilds, Some(2));
+                    assert!(!reload);
                 }
                 other => panic!("unexpected {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn watch_reload_parses_and_excludes_run() {
+        match parse(&args(&["watch", "--reload", "pkg"])).unwrap() {
+            Invocation::Command(Command::Watch { reload, run, .. }) => {
+                assert!(reload);
+                assert!(!run);
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(parse(&args(&["watch", "--reload", "--run"])).is_err());
+        assert!(parse(&args(&["watch", "--reload", "--max-rebuilds", "1"])).is_err());
+        match parse(&args(&["check", "--reload", "pkg"])).unwrap() {
+            Invocation::Command(Command::Check { reload, .. }) => assert!(reload),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_emit_dsp_block_parses_and_fixes_the_entry() {
+        match parse(&args(&["build", "--emit", "dsp-block", "pkg"])).unwrap() {
+            Invocation::Command(Command::Build { dsp_block, .. }) => assert!(dsp_block),
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(parse(&args(&["build", "--emit=dsp-block"])).is_ok());
+        assert!(parse(&args(&["build", "--emit", "wat"])).is_err());
+        assert!(parse(&args(&["build", "--emit", "dsp-block", "--rt-entry", "f"])).is_err());
+        assert!(parse(&args(&[
+            "build",
+            "--emit",
+            "dsp-block",
+            "--target",
+            "wasm32-wasip1"
+        ]))
+        .is_err());
+        match parse(&args(&["check", "--dsp-block"])).unwrap() {
+            Invocation::Command(Command::Check { dsp_block, .. }) => assert!(dsp_block),
+            other => panic!("unexpected {other:?}"),
         }
     }
 
