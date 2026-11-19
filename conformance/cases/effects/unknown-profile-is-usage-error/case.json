@@ -1,0 +1,13 @@
+{
+  "id": "effects/unknown-profile-is-usage-error",
+  "mode": "cli",
+  "args": [
+    "check",
+    "--profile",
+    "hard_rt",
+    "."
+  ],
+  "exit_code": 2,
+  "stderr_contains": "invalid profile `hard_rt`",
+  "notes": "EFF-4.10: an unknown profile is a usage error, exit 2 (not 1)."
+}

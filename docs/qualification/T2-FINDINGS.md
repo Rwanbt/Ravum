@@ -2116,3 +2116,20 @@ lien de règle), STD-1.7 (messages non stables : non-engagement), STD-3.1
 (aucune normalisation de chemin à l'exécution : nécessite un cas avec E/S
 fichier hors du répertoire du cas), STD-6.8 (pas de garantie de précision :
 non-engagement).
+
+## 37. Lot `effects.md` : 6 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `effects.md` passe de 15 non atteints à **9** ;
+`features_coverage.py --strict` : 227/227 (1 exemption). FeatureId F-EFF-010.
+Cinq cas `effects/*`, chacun mesuré avant d'être écrit : profil inconnu →
+sortie 2 (EFF-4.10) ; `summary.effects` expose l'ensemble inféré (`twice` : `[]`,
+`main` : `io, alloc`) (EFF-5.5) ; `#[allow(effects)]` → `E-UNSUPPORTED-ATTR`
+(EFF-5.6) ; `String::new` dans `effects()` → `E-EFF-UNDECLARED`, jamais élargi
+(EFF-5.3, EFF-6.5) ; le rapport `--profile pure` nomme son profil (EFF-6.7).
+
+Non tracés : EFF-4.8, 5.1, 5.2, 6.1 à 6.3, 6.6 (non-garanties : aucun bac à
+sable, aucune borne de temps ou de mémoire, aucun effet d'exécution) ; EFF-4.9
+(un profil ne change pas la sémantique) demanderait d'exécuter sous un profil,
+or `run` n'a pas d'option `--profile` ; EFF-5.4 (effets du prélude non
+redéclarables) n'a pas de forme refusable : un utilisateur ne peut pas déclarer
+une fonction du prélude.

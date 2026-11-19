@@ -1,0 +1,3 @@
+#[allow(effects)]
+fn f() { }
+fn main() { }
