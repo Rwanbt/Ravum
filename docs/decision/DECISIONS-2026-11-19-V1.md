@@ -38,3 +38,12 @@ dans la plateforme Rust).
 
 Les ADR restants (000–041) doivent être passés en revue texte intégral pour
 compléter cette table ; état actuel de cette revue : `NOT_REVIEWED`.
+
+## V1-L1 — Licence de Cranelift (2026-11-19)
+
+**Énoncé du responsable** : « oui autorise la licence ». `deny.toml`
+`[licenses].allow` reçoit `Apache-2.0 WITH LLVM-exception` (Cranelift, backend
+JIT de T15). **Non couvert par cette décision** : les 3 doublons de versions
+(`hashbrown`, `bitflags`, `windows-sys`) refusés par `[bans]
+multiple-versions = "deny"` ; `cargo deny check` reste rouge sur ce seul point
+tant que le responsable ne l'a pas tranché.

@@ -14,6 +14,10 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
+    # Cranelift (backend JIT, T15). Autorisée par le responsable le 2026-11-19
+    # (V1-L1, docs/decision/DECISIONS-2026-11-19-V1.md). L'exception LLVM
+    # n'ajoute que des droits par rapport à Apache-2.0.
+    "Apache-2.0 WITH LLVM-exception",
 ]
 confidence-threshold = 0.8
 
