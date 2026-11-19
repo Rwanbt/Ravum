@@ -175,10 +175,8 @@ fn scalar_methods_agree_with_interpreter_and_reference_machine() {
 #[test]
 fn unsupported_methods_are_refused_not_approximated() {
     for (decl, call) in [
-        (
-            "let a: i32 = 3;",
-            "match a.checked_add(1) { Some(v) => v as i64, None => 0 }",
-        ),
+        // `checked_*` is covered since enums/`match` (IR v1.2); `max` is not.
+        ("let a: f64 = 2.5;", "a.max(1.0) as i64"),
         ("let a: f64 = 2.5;", "a.round() as i64"),
         ("let a: f64 = 2.5;", "a.min(1.0) as i64"),
         ("let a: f64 = 2.5;", "a.powf(2.0) as i64"),

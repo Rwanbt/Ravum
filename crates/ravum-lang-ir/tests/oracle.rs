@@ -113,7 +113,8 @@ fn json_round_trip_is_lossless_and_versioned() {
 #[test]
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
-        "enum E {\n    A,\n    B,\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
+        // IR v1.2 covers `Copy` enums without generics; a generic one is not.
+        "enum E<T> {\n    A(T),\n    B,\n}\nfn check() -> i32 effects() {\n    let e: E<i32> = E::A(1);\n    return 0;\n}\n",
         // IR v1.2 covers `wrapping_*`/`abs`; `round` (ties away from zero)
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",

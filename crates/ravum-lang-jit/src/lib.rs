@@ -699,7 +699,8 @@ impl Gen<'_, '_> {
                 Gt => self.b.ins().fcmp(FloatCC::GreaterThan, x, y),
                 Ge => self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y),
                 BitAnd | BitOr | BitXor | Shl | Shr | WrappingAdd | WrappingSub | WrappingMul
-                | SaturatingAdd | SaturatingSub | SaturatingMul => {
+                | SaturatingAdd | SaturatingSub | SaturatingMul | OverflowsAdd | OverflowsSub
+                | OverflowsMul => {
                     unreachable!("rejected by the checker / `validate`")
                 }
             };
@@ -718,6 +719,14 @@ impl Gen<'_, '_> {
                     },
                 );
                 r
+            }
+            OverflowsAdd | OverflowsSub | OverflowsMul => {
+                let base = match op {
+                    OverflowsAdd => Add,
+                    OverflowsSub => Sub,
+                    _ => Mul,
+                };
+                self.overflowing(base, ty, x, y).1
             }
             WrappingAdd => self.b.ins().iadd(x, y),
             WrappingSub => self.b.ins().isub(x, y),

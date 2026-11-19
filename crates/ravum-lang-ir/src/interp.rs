@@ -436,6 +436,15 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
             WrappingAdd => Ok(Val::Int(ty, wrap(ty, x.wrapping_add(y)))),
             WrappingSub => Ok(Val::Int(ty, wrap(ty, x.wrapping_sub(y)))),
             WrappingMul => Ok(Val::Int(ty, wrap(ty, x.wrapping_mul(y)))),
+            OverflowsAdd | OverflowsSub | OverflowsMul => {
+                let (lo, hi) = range(ty);
+                let exact = match op {
+                    OverflowsAdd => Some(x + y),
+                    OverflowsSub => Some(x - y),
+                    _ => x.checked_mul(y),
+                };
+                Ok(Val::Bool(!exact.is_some_and(|v| (lo..=hi).contains(&v))))
+            }
             SaturatingAdd | SaturatingSub | SaturatingMul => {
                 let (lo, hi) = range(ty);
                 let exact = match op {

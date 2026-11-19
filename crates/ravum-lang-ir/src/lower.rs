@@ -25,7 +25,7 @@ use ravum_lang_sema::syntax::ast::{
     self, Block as AstBlock, Expr, ExprKind, FnItem, ItemKind, PatKind, StmtKind,
 };
 use ravum_lang_sema::syntax::{NodeId, Span};
-use ravum_lang_sema::{CallTarget, CheckedProgram, MethodTarget, Resolution, Type};
+use ravum_lang_sema::{CallTarget, CheckedProgram, MethodTarget, Resolution, Type, VariantKind};
 
 use crate::ir::*;
 
@@ -73,10 +73,17 @@ pub fn map_ty(t: &Type) -> R<Ty> {
         Type::F64 => Ty::F64,
         Type::Bool => Ty::Bool,
         Type::Unit | Type::Never => Ty::Unit,
-        Type::Ref { .. } | Type::Nominal { .. } | Type::Tuple(_) | Type::Array { .. } => Ty::Ptr,
+        Type::Ref { .. }
+        | Type::Nominal { .. }
+        | Type::Tuple(_)
+        | Type::Array { .. }
+        | Type::Option(_) => Ty::Ptr,
         other => return unsupported(format!("type `{other}`")),
     })
 }
+
+/// Fields `(offset, type)` of one aggregate or variant.
+type FieldList = Vec<(u32, Type)>;
 
 /// Memory layout of a value type.
 #[derive(Debug, Clone)]
@@ -106,19 +113,105 @@ impl<'a> Layouts<'a> {
     fn is_agg(t: &Type) -> bool {
         matches!(
             t,
-            Type::Nominal { .. } | Type::Tuple(_) | Type::Array { .. }
+            Type::Nominal { .. } | Type::Tuple(_) | Type::Array { .. } | Type::Option(_)
         )
     }
 
-    /// Fields of an aggregate: (offset, type), in declaration order.
+    /// Payload types of each variant when `t` is an enum (`Option<T>`: `None`
+    /// is variant 0, `Some` variant 1), `None` for any other type.
+    fn variants(&self, t: &Type) -> R<Option<Vec<Vec<Type>>>> {
+        match t {
+            Type::Option(inner) => Ok(Some(vec![vec![], vec![(**inner).clone()]])),
+            Type::Nominal { def, args, .. } => {
+                let Some(info) = self.checked.facts.enums.get(def) else {
+                    return Ok(None);
+                };
+                if !args.is_empty() || !info.generics.is_empty() {
+                    return unsupported("generic enum");
+                }
+                if !info.is_copy {
+                    return unsupported(format!("non-`Copy` enum `{}`", info.name));
+                }
+                Ok(Some(
+                    info.variants
+                        .iter()
+                        .map(|v| match v.kind {
+                            VariantKind::Struct => v.fields.iter().map(|f| f.ty.clone()).collect(),
+                            _ => v.tuple_types.clone(),
+                        })
+                        .collect(),
+                ))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Enum layout: a `u32` tag at offset 0, then every variant's payload laid
+    /// out like a tuple from the same offset. Returns the layout and, per
+    /// variant, its fields `(offset, type)`.
+    fn enum_layout(&self, vs: &[Vec<Type>]) -> R<(Layout, Vec<FieldList>)> {
+        let mut align = 4;
+        for v in vs {
+            for t in v {
+                align = align.max(self.layout(t)?.align);
+            }
+        }
+        let start = round_up(4, align);
+        let mut end = start;
+        let mut out = Vec::new();
+        for v in vs {
+            let mut off = start;
+            let mut fs = Vec::new();
+            for t in v {
+                let l = self.layout(t)?;
+                off = round_up(off, l.align);
+                fs.push((off, t.clone()));
+                off += l.size;
+            }
+            end = end.max(off);
+            out.push(fs);
+        }
+        Ok((
+            Layout {
+                size: round_up(end, align),
+                align,
+            },
+            out,
+        ))
+    }
+
+    /// Fields `(offset, type)` of variant `v` of enum type `t`.
+    fn variant_fields(&self, t: &Type, v: usize) -> R<Vec<(u32, Type)>> {
+        let vs = self
+            .variants(t)?
+            .ok_or_else(|| LowerError::MissingFact("variant of a non-enum".into()))?;
+        let (_, fs) = self.enum_layout(&vs)?;
+        fs.get(v)
+            .cloned()
+            .ok_or_else(|| LowerError::MissingFact("variant index".into()))
+    }
+
+    /// Fields of an aggregate: (offset, type), in declaration order. An enum
+    /// is copied as raw words (its payload depends on the tag), so its
+    /// "fields" are the aligned words that cover it.
     fn fields(&self, t: &Type) -> R<Vec<(u32, Type)>> {
+        if let Some(vs) = self.variants(t)? {
+            let (l, _) = self.enum_layout(&vs)?;
+            let (w, wt) = match l.align {
+                8.. => (8, Type::U64),
+                4 => (4, Type::U32),
+                2 => (2, Type::U16),
+                _ => (1, Type::U8),
+            };
+            return Ok((0..l.size / w).map(|i| (i * w, wt.clone())).collect());
+        }
         let tys: Vec<Type> = match t {
             Type::Nominal { def, args, .. } => {
                 if !args.is_empty() {
                     return unsupported("generic struct");
                 }
                 let Some(info) = self.checked.facts.structs.get(def) else {
-                    return unsupported("enum");
+                    return Err(LowerError::MissingFact("struct info".into()));
                 };
                 info.fields.iter().map(|f| f.ty.clone()).collect()
             }
@@ -152,6 +245,9 @@ impl<'a> Layouts<'a> {
                     size: stride * (*len as u32),
                     align: l.align.max(1),
                 });
+            }
+            if let Some(vs) = self.variants(t)? {
+                return Ok(self.enum_layout(&vs)?.0);
             }
             let fields = self.fields(t)?;
             let mut align = 1;
@@ -226,7 +322,12 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                     return unsupported(format!("non-`Copy` struct `{}`", s.name.name));
                 }
             }
-            ItemKind::Enum(_) => return unsupported("enum"),
+            ItemKind::Enum(e) => {
+                let info = checked.facts.enums.get(&item.id);
+                if !info.is_some_and(|i| i.is_copy && i.generics.is_empty()) {
+                    return unsupported(format!("non-`Copy` or generic enum `{}`", e.name.name));
+                }
+            }
             ItemKind::Const(_) => return unsupported("const"),
             ItemKind::Impl(_) => return unsupported("impl"),
             ItemKind::Mod(_) | ItemKind::ModDecl(_) => return unsupported("module"),
@@ -565,7 +666,7 @@ impl<'a> FnLower<'a> {
 
     fn place(&mut self, e: &Expr) -> R<Place> {
         match &e.kind {
-            ExprKind::Path(p) => {
+            ExprKind::Path(p) if self.unit_variant(p).is_none() => {
                 let (l, t) = self.var_of_path(p)?;
                 if Layouts::is_agg(&t) {
                     Ok(Place::Mem {
@@ -780,6 +881,11 @@ impl<'a> FnLower<'a> {
                 });
                 Ok(l)
             }
+            ExprKind::Path(p) if self.unit_variant(p).is_some() => {
+                let v = self.unit_variant(p).unwrap_or(0);
+                let t = self.type_of(e)?;
+                self.construct(&t, v, Vec::new())
+            }
             ExprKind::Path(_)
             | ExprKind::Field { .. }
             | ExprKind::TupleIndex { .. }
@@ -882,6 +988,42 @@ impl<'a> FnLower<'a> {
                     self.store_value(dst, off, v, &fty)?;
                 }
                 Ok(dst)
+            }
+            ExprKind::StructLit { path, fields } if self.variant_of(path).is_some() => {
+                let Some((enum_item, v)) = self.variant_of(path) else {
+                    unreachable!()
+                };
+                let t = self.type_of(e)?;
+                let names: Vec<String> = self
+                    .checked
+                    .facts
+                    .enums
+                    .get(&enum_item)
+                    .and_then(|i| i.variants.get(v))
+                    .map(|vi| vi.fields.iter().map(|f| f.name.clone()).collect())
+                    .ok_or_else(|| LowerError::MissingFact("variant fields".into()))?;
+                // Initializers run in source order; stored by declaration order.
+                let mut vals: Vec<Option<(Local, Type)>> = vec![None; names.len()];
+                for fi in fields {
+                    let i = names
+                        .iter()
+                        .position(|n| *n == fi.name.name)
+                        .ok_or_else(|| LowerError::MissingFact("variant field".into()))?;
+                    let ft = self.type_of(&fi.value)?;
+                    let val = self.expr(&fi.value)?;
+                    // A private copy: a later initializer must not see it change.
+                    let val = if Layouts::is_agg(&ft) {
+                        self.snapshot(val, &ft)?
+                    } else {
+                        val
+                    };
+                    vals[i] = Some((val, ft));
+                }
+                let vals = vals
+                    .into_iter()
+                    .map(|v| v.ok_or_else(|| LowerError::MissingFact("missing field".into())))
+                    .collect::<R<Vec<_>>>()?;
+                self.construct(&t, v, vals.into_iter().map(|(l, _)| l).collect())
             }
             ExprKind::StructLit { fields, .. } => {
                 let t = self.type_of(e)?;
@@ -998,7 +1140,7 @@ impl<'a> FnLower<'a> {
                 method,
                 args,
             } => self.method_call(e, receiver, &method.name, args),
-            ExprKind::Match { .. } => unsupported("match"),
+            ExprKind::Match { scrutinee, arms } => self.match_expr(e, scrutinee, arms),
             ExprKind::Str(_) => unsupported("string"),
             ExprKind::Char(_) => unsupported("char"),
             ExprKind::Range { .. } => unsupported("range outside `for`"),
@@ -1007,6 +1149,317 @@ impl<'a> FnLower<'a> {
             ExprKind::Await(_) => unsupported("await"),
             ExprKind::SelfValue => unsupported("self"),
         }
+    }
+
+    // ---- enums and `match` (IR v1.2) ------------------------------------
+
+    /// `Some((enum, variant))` when `path` names a user enum variant.
+    fn variant_of(&self, path: &ast::Path) -> Option<(NodeId, usize)> {
+        match self.checked.facts.resolutions.get(&path.id) {
+            Some(Resolution::Variant { enum_item, variant }) => Some((*enum_item, *variant)),
+            _ => None,
+        }
+    }
+
+    /// Variant index when `path` is a unit enum value (`E::A`, `None`).
+    fn unit_variant(&self, path: &ast::Path) -> Option<usize> {
+        match self.checked.facts.resolutions.get(&path.id) {
+            Some(Resolution::Variant { variant, .. }) => Some(*variant),
+            Some(Resolution::BuiltinConst { path }) if path == "Option::None" => Some(0),
+            _ => None,
+        }
+    }
+
+    /// Evaluate call arguments left to right; aggregates are snapshotted so a
+    /// later argument cannot change an earlier one.
+    fn eval_args(&mut self, args: &[Expr]) -> R<Vec<Local>> {
+        let mut out = Vec::new();
+        for a in args {
+            let t = self.type_of(a)?;
+            let v = self.expr(a)?;
+            out.push(if Layouts::is_agg(&t) {
+                self.snapshot(v, &t)?
+            } else {
+                v
+            });
+        }
+        Ok(out)
+    }
+
+    fn tag_const(&mut self, v: usize) -> Local {
+        let l = self.new_local(Ty::U32);
+        self.emit(Inst::Const {
+            dst: l,
+            value: Const::Int {
+                ty: Ty::U32,
+                value: v as i128,
+            },
+        });
+        l
+    }
+
+    /// A fresh enum value of type `t`: tag `v`, payload `vals`.
+    fn construct(&mut self, t: &Type, v: usize, vals: Vec<Local>) -> R<Local> {
+        let fields = self.layouts.variant_fields(t, v)?;
+        if fields.len() != vals.len() {
+            return Err(LowerError::MissingFact("variant arity".into()));
+        }
+        let dst = self.alloc(t)?;
+        let tag = self.tag_const(v);
+        self.emit(Inst::Store {
+            ty: Ty::U32,
+            addr: dst,
+            offset: 0,
+            src: tag,
+        });
+        for ((off, ft), val) in fields.into_iter().zip(vals) {
+            self.store_value(dst, off, val, &ft)?;
+        }
+        Ok(dst)
+    }
+
+    /// `match`: arms are tried in order (O7); the first whose pattern
+    /// matches binds its variables (by copy) and runs.
+    fn match_expr(&mut self, e: &Expr, scrutinee: &Expr, arms: &[ast::MatchArm]) -> R<Local> {
+        let t = self.type_of(e)?;
+        let agg = Layouts::is_agg(&t);
+        let result = if agg {
+            self.alloc(&t)?
+        } else {
+            self.new_local(map_ty(&t)?)
+        };
+        let st = self.type_of(scrutinee)?;
+        if matches!(st, Type::Ref { .. }) {
+            return unsupported("`match` on a reference");
+        }
+        let place = match self.place(scrutinee)? {
+            Place::Reg(l) => Place::Reg(l),
+            Place::Mem { addr, off, ty } => Place::Mem { addr, off, ty },
+        };
+        let join = self.new_block();
+        for arm in arms {
+            let next = self.new_block();
+            self.pat_test(&arm.pat, &place, &st, next)?;
+            self.pat_bind(&arm.pat, &place, &st)?;
+            let v = self.expr(&arm.body)?;
+            self.join_value(result, v, &t, agg)?;
+            self.set_term(Term::Jump(join));
+            self.switch_to(next);
+        }
+        // The checker proved exhaustiveness; reaching here is a compiler bug,
+        // reported as a fault, never a value.
+        self.set_term(Term::Unreachable);
+        self.switch_to(join);
+        Ok(result)
+    }
+
+    /// Sub-place of `p` at `off` with type `ty` (`p` is in memory).
+    fn sub_place(p: &Place, off: u32, ty: Type) -> R<Place> {
+        match p {
+            Place::Mem { addr, off: o, .. } => Ok(Place::Mem {
+                addr: *addr,
+                off: o + off,
+                ty,
+            }),
+            Place::Reg(_) => Err(LowerError::MissingFact("field of a register".into())),
+        }
+    }
+
+    /// Continue in the current block when `pat` matches the value at `p`;
+    /// jump to `fail` otherwise.
+    fn pat_test(&mut self, pat: &ast::Pat, p: &Place, t: &Type, fail: BlockId) -> R<()> {
+        match &pat.kind {
+            PatKind::Wild | PatKind::Binding { .. } => Ok(()),
+            PatKind::Lit(lit) => {
+                let ty = map_ty(t)?;
+                let k = match lit {
+                    ast::LitPat::Int { value, neg, .. } => {
+                        let v = *value as i128;
+                        self.int_const(ty, if *neg { -v } else { v })?
+                    }
+                    ast::LitPat::Float { text, .. } => self.float_const(ty, text, false)?,
+                    ast::LitPat::Bool(b) => {
+                        let l = self.new_local(Ty::Bool);
+                        self.emit(Inst::Const {
+                            dst: l,
+                            value: Const::Bool(*b),
+                        });
+                        l
+                    }
+                    _ => return unsupported("char or string pattern"),
+                };
+                let v = self.read_place(p)?;
+                let ok = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: ok,
+                    op: BinOp::Eq,
+                    ty,
+                    lhs: v,
+                    rhs: k,
+                });
+                self.branch_or_fail(ok, fail);
+                Ok(())
+            }
+            PatKind::Tuple(items) => {
+                let fields = self.layouts.fields(t)?;
+                for (item, (off, ft)) in items.iter().zip(fields) {
+                    let sp = Self::sub_place(p, off, ft.clone())?;
+                    self.pat_test(item, &sp, &ft, fail)?;
+                }
+                Ok(())
+            }
+            PatKind::Path(path) => {
+                let v = self.pat_variant(path)?;
+                self.tag_test(p, v, fail)
+            }
+            PatKind::Variant { path, fields } => {
+                let v = self.pat_variant(path)?;
+                self.tag_test(p, v, fail)?;
+                for (sub, off, ft) in self.variant_subpats(path, fields, t, v)? {
+                    let sp = Self::sub_place(p, off, ft.clone())?;
+                    self.pat_test(sub, &sp, &ft, fail)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Bind the variables of a pattern that matched the value at `p`.
+    fn pat_bind(&mut self, pat: &ast::Pat, p: &Place, t: &Type) -> R<()> {
+        match &pat.kind {
+            PatKind::Binding { name, .. } => {
+                let slot = if Layouts::is_agg(t) {
+                    let Place::Mem { addr, off, .. } = p else {
+                        return Err(LowerError::MissingFact("aggregate in a register".into()));
+                    };
+                    let a = self.offset(*addr, *off);
+                    self.snapshot(a, t)?
+                } else {
+                    let v = self.read_place(p)?;
+                    let slot = self.new_local(map_ty(t)?);
+                    self.emit(Inst::Copy { dst: slot, src: v });
+                    slot
+                };
+                self.vars
+                    .insert((pat.span, name.name.clone()), (slot, t.clone()));
+                Ok(())
+            }
+            PatKind::Tuple(items) => {
+                let fields = self.layouts.fields(t)?;
+                for (item, (off, ft)) in items.iter().zip(fields) {
+                    let sp = Self::sub_place(p, off, ft.clone())?;
+                    self.pat_bind(item, &sp, &ft)?;
+                }
+                Ok(())
+            }
+            PatKind::Variant { path, fields } => {
+                let v = self.pat_variant(path)?;
+                for (sub, off, ft) in self.variant_subpats(path, fields, t, v)? {
+                    let sp = Self::sub_place(p, off, ft.clone())?;
+                    self.pat_bind(sub, &sp, &ft)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn read_place(&mut self, p: &Place) -> R<Local> {
+        match p {
+            Place::Reg(l) => Ok(*l),
+            Place::Mem { addr, off, ty } => self.read(Place::Mem {
+                addr: *addr,
+                off: *off,
+                ty: ty.clone(),
+            }),
+        }
+    }
+
+    fn pat_variant(&self, path: &ast::Path) -> R<usize> {
+        match self.checked.facts.resolutions.get(&path.id) {
+            Some(Resolution::Variant { variant, .. }) => Ok(*variant),
+            Some(Resolution::BuiltinConst { path }) if path == "Option::None" => Ok(0),
+            Some(Resolution::BuiltinFn { path }) if path == "Option::Some" => Ok(1),
+            Some(Resolution::BuiltinFn { path }) => unsupported(format!("`{path}` pattern")),
+            Some(Resolution::Item { .. }) => unsupported("constant pattern"),
+            _ => Err(LowerError::MissingFact("pattern resolution".into())),
+        }
+    }
+
+    /// Sub-patterns of a variant pattern with the offset and type of the
+    /// payload field each one matches.
+    fn variant_subpats<'p>(
+        &self,
+        path: &ast::Path,
+        fields: &'p ast::VariantPatFields,
+        t: &Type,
+        v: usize,
+    ) -> R<Vec<(&'p ast::Pat, u32, Type)>> {
+        let layout = self.layouts.variant_fields(t, v)?;
+        match fields {
+            ast::VariantPatFields::Tuple(pats) => Ok(pats
+                .iter()
+                .zip(layout)
+                .map(|(p, (off, ft))| (p, off, ft))
+                .collect()),
+            ast::VariantPatFields::Struct(fps) => {
+                let Some((enum_item, _)) = self.variant_of(path) else {
+                    return Err(LowerError::MissingFact("struct variant".into()));
+                };
+                let names: Vec<String> = self
+                    .checked
+                    .facts
+                    .enums
+                    .get(&enum_item)
+                    .and_then(|i| i.variants.get(v))
+                    .map(|vi| vi.fields.iter().map(|f| f.name.clone()).collect())
+                    .ok_or_else(|| LowerError::MissingFact("variant fields".into()))?;
+                fps.iter()
+                    .map(|fp| {
+                        let i = names
+                            .iter()
+                            .position(|n| *n == fp.name.name)
+                            .ok_or_else(|| LowerError::MissingFact("variant field".into()))?;
+                        let (off, ft) = layout[i].clone();
+                        Ok((&fp.pat, off, ft))
+                    })
+                    .collect()
+            }
+        }
+    }
+
+    fn tag_test(&mut self, p: &Place, v: usize, fail: BlockId) -> R<()> {
+        let Place::Mem { addr, off, .. } = p else {
+            return Err(LowerError::MissingFact("enum in a register".into()));
+        };
+        let tag = self.new_local(Ty::U32);
+        self.emit(Inst::Load {
+            dst: tag,
+            ty: Ty::U32,
+            addr: *addr,
+            offset: *off,
+        });
+        let k = self.tag_const(v);
+        let ok = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: ok,
+            op: BinOp::Eq,
+            ty: Ty::U32,
+            lhs: tag,
+            rhs: k,
+        });
+        self.branch_or_fail(ok, fail);
+        Ok(())
+    }
+
+    fn branch_or_fail(&mut self, ok: Local, fail: BlockId) {
+        let cont = self.new_block();
+        self.set_term(Term::Branch {
+            cond: ok,
+            then_to: cont,
+            else_to: fail,
+        });
+        self.switch_to(cont);
     }
 
     fn join_value(&mut self, result: Local, v: Local, t: &Type, agg: bool) -> R<()> {
@@ -1269,6 +1722,9 @@ impl<'a> FnLower<'a> {
             _ => None,
         };
         let ty = self.ty_of(recv)?;
+        if let Some(m) = path.strip_prefix("int::checked_") {
+            return self.checked_method(e, recv, m, args, ty);
+        }
         match (un, bin, args) {
             (Some(op), None, []) if crate::ir::un_op_accepts(op, ty) => {
                 let src = self.expr(recv)?;
@@ -1293,6 +1749,105 @@ impl<'a> FnLower<'a> {
             }
             _ => unsupported(format!("method call `.{name}()` (`{path}`)")),
         }
+    }
+
+    /// `int::checked_*` → `Option<T>`: `None` exactly when the plain
+    /// operation would trap (overflow, division or remainder by zero), else
+    /// `Some(result)`. The operation itself only runs on the `Some` path.
+    fn checked_method(
+        &mut self,
+        e: &Expr,
+        recv: &Expr,
+        m: &str,
+        args: &[Expr],
+        ty: Ty,
+    ) -> R<Local> {
+        if !ty.is_int() {
+            return unsupported("`checked_*` on a non-integer");
+        }
+        let t = self.type_of(e)?;
+        let a = self.expr(recv)?;
+        let b = match (m, args) {
+            ("neg", []) => None,
+            (_, [arg]) if self.ty_of(arg)? == ty => Some(self.expr(arg)?),
+            _ => return unsupported(format!("`checked_{m}` call shape")),
+        };
+        let boolean = |me: &mut Self, op: BinOp, ty: Ty, l: Local, r: Local| {
+            let d = me.new_local(Ty::Bool);
+            me.emit(Inst::Bin {
+                dst: d,
+                op,
+                ty,
+                lhs: l,
+                rhs: r,
+            });
+            d
+        };
+        let (bad, op): (Local, Option<BinOp>) = match (m, b) {
+            ("add", Some(b)) => (
+                boolean(self, BinOp::OverflowsAdd, ty, a, b),
+                Some(BinOp::WrappingAdd),
+            ),
+            ("sub", Some(b)) => (
+                boolean(self, BinOp::OverflowsSub, ty, a, b),
+                Some(BinOp::WrappingSub),
+            ),
+            ("mul", Some(b)) => (
+                boolean(self, BinOp::OverflowsMul, ty, a, b),
+                Some(BinOp::WrappingMul),
+            ),
+            ("div" | "rem", Some(b)) => {
+                let zero = self.int_const(ty, 0)?;
+                let mut bad = boolean(self, BinOp::Eq, ty, b, zero);
+                if ty.is_signed() {
+                    let min = self.int_const(ty, crate::interp::range(ty).0)?;
+                    let m1 = self.int_const(ty, -1)?;
+                    let x = boolean(self, BinOp::Eq, ty, a, min);
+                    let y = boolean(self, BinOp::Eq, ty, b, m1);
+                    let both = boolean(self, BinOp::BitAnd, Ty::Bool, x, y);
+                    bad = boolean(self, BinOp::BitOr, Ty::Bool, bad, both);
+                }
+                (bad, Some(if m == "div" { BinOp::Div } else { BinOp::Rem }))
+            }
+            ("neg", None) if ty.is_signed() => {
+                let min = self.int_const(ty, crate::interp::range(ty).0)?;
+                (boolean(self, BinOp::Eq, ty, a, min), None)
+            }
+            _ => return unsupported(format!("`checked_{m}`")),
+        };
+        let result = self.alloc(&t)?;
+        let (none_b, some_b, join) = (self.new_block(), self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: bad,
+            then_to: none_b,
+            else_to: some_b,
+        });
+        self.switch_to(none_b);
+        let none = self.construct(&t, 0, Vec::new())?;
+        self.copy(result, 0, none, 0, &t)?;
+        self.set_term(Term::Jump(join));
+        self.switch_to(some_b);
+        let v = self.new_local(ty);
+        match (op, b) {
+            (Some(op), Some(b)) => self.emit(Inst::Bin {
+                dst: v,
+                op,
+                ty,
+                lhs: a,
+                rhs: b,
+            }),
+            _ => self.emit(Inst::Un {
+                dst: v,
+                op: UnOp::WrappingNeg,
+                ty,
+                src: a,
+            }),
+        }
+        let some = self.construct(&t, 1, vec![v])?;
+        self.copy(result, 0, some, 0, &t)?;
+        self.set_term(Term::Jump(join));
+        self.switch_to(join);
+        Ok(result)
     }
 
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {
@@ -1348,6 +1903,17 @@ impl<'a> FnLower<'a> {
                 }
                 _ => unsupported("`panic` with a non-literal message"),
             },
+            Some(CallTarget::VariantCtor { variant, .. }) => {
+                let variant = *variant;
+                let vals = self.eval_args(args)?;
+                let t = self.type_of(e)?;
+                self.construct(&t, variant, vals)
+            }
+            Some(CallTarget::BuiltinFn { path }) if path == "Option::Some" => {
+                let vals = self.eval_args(args)?;
+                let t = self.type_of(e)?;
+                self.construct(&t, 1, vals)
+            }
             Some(CallTarget::BuiltinFn { path }) => unsupported(format!("builtin `{path}`")),
             Some(other) => unsupported(format!("call target {other:?}")),
             None => Err(LowerError::MissingFact("call target".into())),

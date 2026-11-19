@@ -148,6 +148,40 @@ Tests ajustés (aucun cas négatif retiré) : dans
 `wrapping_add`/`abs`, désormais couverts, sont remplacés par `round`/`min`,
 toujours hors IR.
 
+## IR v1.2, suite — `enum`, `Option`, `match`, `checked_*`
+
+- **Disposition** : un enum `Copy` non générique (et `Option<T>`, `None` = 0,
+  `Some` = 1) vit en mémoire : tag `u32` à l'offset 0, puis la charge utile de
+  chaque variante disposée comme un tuple à partir du même offset. Une copie
+  d'enum copie les mots alignés qui le couvrent (la charge active dépend du
+  tag) ; aucune nouvelle instruction d'IR n'est nécessaire.
+- **Constructeurs** : variantes unitaires, tuple, à champs nommés (champs
+  évalués dans l'ordre du source, rangés dans l'ordre de déclaration),
+  `Some(x)`, `None`.
+- **`match`** : bras essayés dans l'ordre (O7) ; motifs `_`, liaison (par
+  copie), littéraux entiers/flottants/booléens, tuples, variantes imbriquées ;
+  les liaisons sont faites après le succès de tout le motif. Un `match` qui
+  sortirait de tous les bras (impossible : exhaustivité prouvée par le
+  checker) atteint `Unreachable` → `fault`, jamais une valeur.
+- **`checked_add/sub/mul/div/rem/neg`** : nouvelles `BinOp`
+  `Overflows{Add,Sub,Mul}` (booléen, sans trap) ; l'opération elle-même ne
+  s'exécute que sur le chemin `Some`.
+- Restent `Unsupported` : enums génériques ou non-`Copy`, `Result`, motifs
+  `char`/chaîne/constante, `match` sur une référence.
+
+| Oracle (`crates/ravum-lang-jit/tests/enums.rs`) | Résultat |
+|---|---|
+| `checked_*` : 10 types × valeurs limites × 5 opérations + `checked_neg` | **3 775 programmes, natif = interpréteur = machine**, 0 trap |
+| enums/`match` : 5 variantes (unitaire, tuple, champs), struct contenant un enum, `Option<Shape>`, tuple de `Option` en scrutin, tableaux d'enums, passage et retour par valeur, motifs littéraux et imbriqués, traps dans un bras et dans une charge utile | **614 programmes (variantes tuple) natif = interpréteur = machine** ; **614 (variantes à champs nommés) natif = interpréteur** (la machine n'a pas de variantes à champs nommés) |
+| **négatif** : une liaison de `match` est une copie (réaffecter le scrutin ensuite ne la change pas) | identique sur les 3 moteurs |
+| **négatif** : enum générique, `max`, `round`, `min`, `powf` | `Unsupported` |
+| corpus `ravum-core-machine` | **51/60 identiques**, 0 divergence ; restent 5 `Unsupported` (`math::*`, `u128`, motif de `for`…) et 3 refus attendus |
+| debug (vérificateur Cranelift actif) et release | identiques |
+
+Limite de la machine relevée (pas de l'IR) : dans un bras `None => -77`,
+la machine type le littéral en `i32` alors que le `match` est `i64` ; l'oracle
+passe par une variable typée.
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

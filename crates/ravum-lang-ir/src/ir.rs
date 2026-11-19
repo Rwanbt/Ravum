@@ -139,6 +139,11 @@ pub enum BinOp {
     SaturatingAdd,
     SaturatingSub,
     SaturatingMul,
+    /// Ints only (IR v1.2): `Bool`, true when the checked `+`/`-`/`*` would
+    /// overflow (used by `int::checked_*`; never traps).
+    OverflowsAdd,
+    OverflowsSub,
+    OverflowsMul,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
