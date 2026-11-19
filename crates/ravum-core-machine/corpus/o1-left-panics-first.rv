@@ -1,0 +1,12 @@
+// oracle: panic: x
+// O1, MACH-4.1: g(1) is reduced before g(2); the panic in g(2) ends the run.
+fn g(n: i32) -> i32 effects(panic) {
+    if n == 2 {
+        panic("x");
+    }
+    return n;
+}
+
+fn check() -> i32 effects(panic) {
+    return g(1) + g(2);
+}

@@ -1,0 +1,9 @@
+// oracle: value i32 0
+// O8, MACH-6.5: a >= b is zero iterations.
+fn check() -> i32 effects() {
+    let mut s: i32 = 0;
+    for i in 5..2 {
+        s += i;
+    }
+    return s;
+}

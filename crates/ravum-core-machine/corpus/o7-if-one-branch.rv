@@ -1,0 +1,10 @@
+// oracle: value i32 1
+// O7, MACH-4.4: only the selected branch is reduced.
+fn boom() -> i32 effects(panic) {
+    panic("other branch");
+}
+
+fn check() -> i32 effects(panic) {
+    let c = true;
+    return if c { 1 } else { boom() };
+}

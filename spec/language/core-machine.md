@@ -3,7 +3,7 @@
 > **Statut : DRAFT — CANDIDATE, non ratifiée.**
 > **Version : `core-1.0-draft.1`** · **Date : 2026-11-09** · **Portée : noyau pur de Ravum Core 1.0 (profil `pure`)** · **Base : `dev` @ `5408d9b`** · **Source de conception : `docs/architecture/RAVUM-CORE-DESIGN.md` §3.3, §3.4, §3.6 ; `docs/architecture/PROJECT_INVARIANTS.md` INV-12.**
 >
-> Ce document est une **candidate**. Il **ne ratifie aucun ADR**. **L'interpréteur de référence n'existe pas** : son état est `NOT_IMPLEMENTED` (§9). Ce document spécifie ce qu'il devra faire, pas ce qui a été fait. Aucune preuve, aucun résultat de test n'est revendiqué.
+> Ce document est une **candidate**. Il **ne ratifie aucun ADR**. L'interpréteur de référence existe depuis le 2026-11-19 (`crates/ravum-core-machine`) ; son état est `TESTED` (§9). Aucune preuve, aucun résultat de test n'est revendiqué.
 
 ## 1. Objet et statut
 
@@ -14,7 +14,7 @@ La machine abstraite fournit une **sémantique opérationnelle** indépendante d
 | MACH-1.1 | Le domaine de la machine est exactement le profil `pure` ([`effects.md`](effects.md) EFF-4.2) : valeurs `Copy` uniquement, aucune allocation, aucune E/S, aucun appel à `std` hors `math::*` et méthodes pures. | MUST |
 | MACH-1.2 | La machine est **déterministe** : aucune entrée externe, aucun temps, aucune adresse, aucune allocation ⇒ une configuration donnée a au plus une transition. | MUST |
 | MACH-1.3 | La machine est **indépendante de l'implémentation** : elle ne réutilise ni le parser, ni le checker, ni le codegen. Une divergence entre les deux est un défaut à instruire, jamais à contourner. | MUST |
-| MACH-1.4 | Son état est `NOT_IMPLEMENTED`. Aucun résultat de la machine ne peut être cité comme preuve. | MUST |
+| MACH-1.4 | Son état est `TESTED` : un interpréteur existe (`crates/ravum-core-machine`) et n'est mesuré que sur un corpus fini. Aucun résultat de la machine ne peut être cité comme preuve (MACH-8.5). | MUST |
 
 ## 2. Valeurs
 
@@ -107,7 +107,7 @@ fn g(n: i32) -> i32 { if n == 2 { panic("x"); } n }
 |---|---|---|
 | `+ - *` entiers | arithmétique mathématique du type ; résultat hors bornes ⇒ trap | `⟨panic: attempt to ... with overflow⟩` |
 | `/` entiers | troncature vers zéro ; `MIN / -1` ⇒ trap ; `x / 0` ⇒ trap | `⟨panic: division by zero⟩` |
-| `%` entiers | reste de la division tronquée, signe du dividende ; `x % 0` ⇒ trap ; `MIN % -1` = `0` | `⟨panic: remainder by zero⟩` |
+| `%` entiers | reste de la division tronquée, signe du dividende ; `x % 0` ⇒ trap ; `MIN % -1` ⇒ trap, comme `MIN / -1` (décision D-19-2) | `⟨panic: remainder by zero⟩`, `⟨panic: attempt to calculate the remainder with overflow⟩` |
 | `<< >>` | `0 ≤ n < largeur` ; sinon trap | `⟨panic: shift out of range⟩` |
 | `& \| ^` entiers | bit à bit, complément à deux | — |
 | `!` entier / `bool` | complément / négation | — |
@@ -188,10 +188,10 @@ fn h(x: f64) -> bool { x != x }    // vrai ssi x est NaN (0.0/0.0)
 | Élément | État |
 |---|---|
 | Spécification de la machine (§2–§6) | `SPECIFIED` (ce document, candidate) |
-| Interpréteur de référence | **`NOT_IMPLEMENTED`** |
-| Corpus de conformance pur | **`NOT_COVERED`** (`conformance/` absent) |
-| Comparaison différentielle backend ↔ oracle | `NOT_RUN` |
-| Résultats / chiffres | **aucun** |
+| Interpréteur de référence | `TESTED` — `crates/ravum-core-machine` (lexer, parser et évaluateur propres, aucune dépendance) |
+| Corpus de conformance pur | `TESTED` — `crates/ravum-core-machine/corpus/` (59 programmes, O1 à O10) |
+| Comparaison différentielle backend ↔ oracle | `TESTED` — `crates/ravum-lang-cli/tests/core_machine_differential.rs` (54 programmes, 54 accords ; une divergence trouvée et tranchée, D-19-2) |
+| Résultats / chiffres | ceux de la ligne précédente, liés au commit et à la machine qui les mesurent ; aucun `PROVED` |
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -232,4 +232,4 @@ fn boucle() -> i32 { let mut x = 0; loop { x += 1; } }
 - **Q-MACH-2 (résolue par le Lead)** — Les fonctions `libm` (`sin/cos/tan/exp/ln/log10/pow/powf`) sont exclues de l'oracle (MACH-5.5) : elles restent supportées par la toolchain, mais non vérifiables bit-à-bit.
 - **Q-MACH-3** — Le budget `N` n'est pas normatif (MACH-3.3) ; deux oracles avec des budgets différents peuvent différer sur un programme divergent. La conformance doit donc **exclure** les programmes non terminants plutôt que comparer `diverge`.
 - **Q-MACH-4** — Les littéraux `&str` entrent dans le domaine (MACH-2.2) mais leur comparaison exige une règle de texte ; faut-il les exclure pour un noyau strictement numérique ? Recommandation : les garder pour tester l'égalité texte (TYP-7.3).
-- **Q-MACH-5** — Aucun interpréteur n'existe : toute la section §8 est une **obligation future**. Elle ne doit pas être citée comme réalisée. Point de blocage pour T4 (« aucun programme safe du corpus de réfutation accepté ») tant que l'oracle n'existe pas.
+- **Q-MACH-5 (fermée, 2026-11-19)** — L'interpréteur existe (`crates/ravum-core-machine`) et la comparaison différentielle tourne en CI. Ses résultats restent `TESTED` sur un corpus fini (MACH-8.5).

@@ -33,3 +33,15 @@ corpus n'utilisait une quantité signée en variable ; trois tests de contrat du
 checker l'acceptaient et sont mis à jour.
 
 **Q-EXPR-2 :** fermée par cette décision.
+
+## D-19-2 — `MIN % -1` est un trap
+
+**Constat :** la comparaison différentielle entre l'interpréteur de référence
+(`crates/ravum-core-machine`) et le backend a trouvé une seule divergence sur
+54 programmes : `core-machine.md` §5 disait `MIN % -1 = 0`, alors que le
+binaire panique (`attempt to calculate the remainder with overflow`) et que
+`RFC-RT-TRAPS` range `%` par `-1` parmi les opérations qui débordent.
+
+**Décision :** `MIN % -1` est un **trap**, comme `MIN / -1` (EXPR-3.1).
+`core-machine.md` §5 est aligné ; l'oracle et son corpus suivent. Le
+compilateur ne change pas.

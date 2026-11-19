@@ -1,0 +1,5 @@
+// oracle: value bool true
+fn check() -> bool effects() {
+    let z: f64 = 0.0;
+    return -z == z;
+}

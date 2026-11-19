@@ -1,5 +1,11 @@
 # Dossier d'exemption F-META-006 — `NOT_COVERED`, justifié et révocable
 
+> **RÉVOQUÉE le 2026-11-19.** La condition de réexamen est atteinte : la
+> machine abstraite est exécutable (`crates/ravum-core-machine`, MACH-1.4 =
+> `TESTED`). La ligne F-META-006 cite des cas ; `tools/coverage_exemptions.json`
+> n'a plus d'exemption et `features_coverage.py --strict` mesure 236/236 sans
+> exemption. Le texte ci-dessous est conservé comme historique.
+
 > **Statut : `PENDING_HUMAN_APPROVAL`.** Ce dossier documente une exemption
 > **déjà machine-lisible** (`tools/coverage_exemptions.json`) et mesure ses
 > conséquences. Il ne remplace pas une approbation humaine : aucun agent ne

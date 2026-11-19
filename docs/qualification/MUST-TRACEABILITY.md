@@ -9,11 +9,12 @@
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
 > `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178,
-> `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md` #184, `types.md` et `expressions.md` #185, `compatibility.md` (2ᵉ lot), `abi.md` et `concurrency.md` (2ᵉ lot))** : `tools/must_audit.py`
-> compte **817 énoncés MUST** (STD-12.7 ajouté) et **235 FeatureIds** (F-LEX-009
+> `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md` #184, `types.md` et `expressions.md` #185, `compatibility.md` (2ᵉ lot) #186, `abi.md` et `concurrency.md` (2ᵉ lot) #187, `core-machine.md`)** : `tools/must_audit.py`
+> compte **817 énoncés MUST** (STD-12.7 ajouté) et **236 FeatureIds** (F-LEX-009
 > à 015, F-SYN-036 à 040, F-META-009 à 028, F-MOD-014 à 016, F-STD-033 à 035,
-> F-EFF-010, F-OWN-017 à 019, F-META-029, F-TYP-028, F-EXPR-019, F-META-030, F-META-031 ajoutés) ; **689 / 817** sont atteignables par un FeatureId, **128**
-> ne le sont pas ; couverture stricte **235/235** (1 exemption). `abi.md` : 16 / 35,
+> F-EFF-010, F-OWN-017 à 019, F-META-029, F-TYP-028, F-EXPR-019, F-META-030 à 032 ajoutés) ; **720 / 817** sont atteignables par un FeatureId, **97**
+> ne le sont pas ; couverture stricte **236/236**, **sans exemption** (F-META-006 révoquée : l'oracle existe). `core-machine.md` :
+> 31 / 40 (`T2-FINDINGS` §43). `abi.md` : 16 / 35,
 > `concurrency.md` : 9 / 20 (`T2-FINDINGS` §42). `compatibility.md` :
 > 19 / 39 (`T2-FINDINGS` §41). `types.md` : 94 / 94,
 > `expressions.md` : 86 / 86 (`T2-FINDINGS` §40). `features.md` : 6 / 11,

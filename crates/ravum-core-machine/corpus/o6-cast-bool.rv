@@ -1,0 +1,4 @@
+// oracle: value u8 1
+fn check() -> u8 effects() {
+    return true as u8;
+}

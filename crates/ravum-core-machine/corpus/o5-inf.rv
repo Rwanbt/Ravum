@@ -1,0 +1,5 @@
+// oracle: value f64 inf
+fn check() -> f64 effects() {
+    let z: f64 = 0.0;
+    return 1.0 / z;
+}

@@ -1,0 +1,9 @@
+// oracle: panic: attempt to calculate the remainder with overflow
+// O3, §5, D-19-2: MIN % -1 overflows, like MIN / -1.
+fn f(a: i32, b: i32) -> i32 effects() {
+    return a % b;
+}
+
+fn check() -> i32 effects() {
+    return f(-2147483648, -1);
+}

@@ -1,0 +1,9 @@
+// oracle: value i32 -3
+// O4, §5 example: -7 / 2 = -3.
+fn g(a: i32) -> i32 effects() {
+    return a / 2;
+}
+
+fn check() -> i32 effects() {
+    return g(-7);
+}

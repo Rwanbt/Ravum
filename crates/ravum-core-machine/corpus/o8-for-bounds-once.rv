@@ -1,0 +1,12 @@
+// oracle: value i32 3
+// O8, MACH-6.5: the bounds are evaluated once; changing n inside the loop
+// does not change the number of iterations.
+fn check() -> i32 effects() {
+    let mut n: i32 = 3;
+    let mut count: i32 = 0;
+    for _ in 0..n {
+        n += 10;
+        count += 1;
+    }
+    return count;
+}

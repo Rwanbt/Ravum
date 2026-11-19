@@ -1,0 +1,8 @@
+// oracle: panic: remainder by zero
+fn f(a: i32, b: i32) -> i32 effects() {
+    return a % b;
+}
+
+fn check() -> i32 effects() {
+    return f(1, 0);
+}

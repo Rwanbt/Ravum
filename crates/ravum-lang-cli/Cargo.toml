@@ -18,3 +18,8 @@ ravum-lang-codegen = { workspace = true }
 ravum-lang-lsp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+# Reference interpreter, compared to the backend (core-machine.md §8, O10).
+# A dev-dependency only: the machine itself depends on no compiler crate.
+ravum-core-machine = { path = "../ravum-core-machine" }

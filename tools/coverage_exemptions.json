@@ -1,16 +1,7 @@
 {
   "schema_version": 1,
   "description": "Rules the specification itself declares non-testable. Every entry must name a FeatureId whose `Conformance` cell is NOT_COVERED, explain why no executable case can exist, cite the normative text, and state the condition under which the exemption must be re-examined. `python tools/features_coverage.py --strict` fails if an entry is malformed, unknown, stale or hides an uncited rule.",
-  "exemptions": [
-    {
-      "rule": "F-META-006",
-      "reason": "La ligne declare elle-meme « pass : aucun (oracle absent) » et sa colonne Conformance vaut NOT_COVERED. La machine abstraite du noyau pur n'a aucune forme executable : MACH-1.4 fixe son etat a NOT_IMPLEMENTED et interdit de citer un resultat machine comme preuve. Inventer un cas reviendrait a inventer un oracle, ce qui est precisement le faux PASS que T2 doit interdire.",
-      "normative_reference": "spec/language/core-machine.md MACH-1.4 ; spec/language/features.md F-META-006 (Conformance = NOT_COVERED)",
-      "review_condition": "Revoquer cette exemption des qu'une machine abstraite executable existe (MACH-1.4 quitte NOT_IMPLEMENTED) ou si la ligne F-META-006 obtient une forme executable ; la couverture stricte doit alors repasser a 188/188 sans exemption. Reexamen obligatoire au plus tard le 2027-02-12 (90 jours apres l'approbation humaine du 2026-11-12).",
-      "approved_by": "Rwanbt (responsable du projet) — approbation explicite en session le 2026-11-12, reponse « 1 - ok » a la demande d'approbation de l'exemption F-META-006.",
-      "date": "2026-11-12"
-    }
-  ],
+  "exemptions": [],
   "line_coverage_exemptions": {
     "schema_version": 1,
     "owner_decision": "S5, APPROUVÉ par le responsable, 2026-11-14 : « Objectif de couverture : 100 % lignes et régions du CODE PRODUIT, hors modules #[cfg(test)] et hors chemins inatteignables documentés un par un. » Ce bloc est la liste « un par un ». ",
@@ -18,5 +9,12 @@
     "measured_on": "2026-11-14 (vague 3, agent F), branche goal/wave-3 + branche wave3/f-coverage-mutation",
     "command": "cargo llvm-cov -p ravum-lang-sema -p ravum-lang-codegen --json --output-path target/cov-all.json ; python tools/coverage_product_split.py --input target/cov-all.json ; python tools/coverage_report.py --input target/cov-all.json --gap",
     "entries": []
-  }
+  },
+  "revoked": [
+    {
+      "rule": "F-META-006",
+      "date": "2026-11-19",
+      "reason": "Condition de réexamen atteinte : la machine abstraite est exécutable (crates/ravum-core-machine, MACH-1.4 = TESTED). La ligne F-META-006 cite désormais des cas et la couverture stricte n'a plus aucune exemption."
+    }
+  ]
 }

@@ -1,0 +1,5 @@
+// oracle: value bool true
+fn check() -> bool effects() {
+    let a: u8 = 200;
+    return a.checked_add(100).is_none();
+}

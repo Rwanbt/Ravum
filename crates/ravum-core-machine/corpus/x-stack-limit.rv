@@ -1,0 +1,12 @@
+// oracle: fault: stack-limit
+// MACH-7.3: deep recursion is an explicit failure, never a partial result.
+fn down(n: u64) -> u64 effects() {
+    if n == 0 {
+        return 0;
+    }
+    return down(n - 1);
+}
+
+fn check() -> u64 effects() {
+    return down(100000);
+}

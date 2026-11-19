@@ -1,0 +1,5 @@
+// oracle: value i64 44
+fn check() -> i64 effects() {
+    let d: i64 = 300;
+    return d as u8 as i64;
+}

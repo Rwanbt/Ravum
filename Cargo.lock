@@ -238,6 +238,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ravum-core-machine"
+version = "0.1.0"
+
+[[package]]
 name = "ravum-daemon"
 version = "0.1.0"
 dependencies = [
@@ -272,6 +276,7 @@ dependencies = [
 name = "ravum-lang-cli"
 version = "0.1.0"
 dependencies = [
+ "ravum-core-machine",
  "ravum-lang-codegen",
  "ravum-lang-lsp",
  "ravum-lang-sema",

@@ -1,0 +1,8 @@
+// oracle: panic: attempt to negate with overflow
+fn f(a: i32) -> i32 effects() {
+    return a.abs();
+}
+
+fn check() -> i32 effects() {
+    return f(-2147483648);
+}

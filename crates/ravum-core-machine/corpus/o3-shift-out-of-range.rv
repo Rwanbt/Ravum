@@ -1,0 +1,8 @@
+// oracle: panic: shift out of range
+fn f(a: u8, n: u32) -> u8 effects() {
+    return a << n;
+}
+
+fn check() -> u8 effects() {
+    return f(1, 8);
+}

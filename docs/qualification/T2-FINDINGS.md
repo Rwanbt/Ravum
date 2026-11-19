@@ -2276,3 +2276,47 @@ demanderait d'observer l'absence de binaire, ce que le harnais ne sait pas
 affirmer. ABI-4.7 reste en arbitrage (`#![allow]` du fichier généré, §33.2).
 CONC-1.4 et 2.7 (un seul cœur, concurrence externe) ne sont pas mesurables par
 un cas.
+
+## 43. `core-machine.md` : l'interpréteur de référence existe (2026-11-19)
+
+Décision du responsable : construire l'oracle. `crates/ravum-core-machine` a son
+propre lexer, son parser et son évaluateur, sans aucune dépendance (test
+`independence.rs`). Il implémente §2 à §7 : valeurs typées, littéraux typés par
+leur contexte, traps de §5, court-circuit, ordre gauche→droite, `for` à bornes
+évaluées une fois, `return`/`break`/`continue`, budget d'étapes (`diverge`),
+limite de profondeur (`fault: stack-limit`), refus des fonctions libm
+(`fault: unsupported-libm`) et d'une version de spec inconnue.
+
+Mesures :
+
+- corpus de l'oracle : 59 programmes, chacun avec son résultat attendu en tête,
+  O1 à O10 couverts (`tests/corpus.rs`) ;
+- comparaison différentielle (`crates/ravum-lang-cli/tests/core_machine_differential.rs`) :
+  54 programmes compilés et exécutés par `ravum-lang`, **54 accords** ; les 5
+  autres (`diverge`, `fault`) sont exclus comme le demande Q-MACH-3.
+
+`must_audit.py` : `core-machine.md` passe de 40 non atteints à **9** (31 / 40) ;
+`features_coverage.py --strict` : 236/236 **sans exemption**.
+
+### 43.1 Ce que la comparaison a trouvé
+
+Huit désaccords au premier passage, tous instruits, aucun toléré :
+
+- six venaient de mon corpus (une fonction qui appelle `panic` doit déclarer
+  `effects(panic)`) ;
+- un venait de l'oracle : il acceptait les or-patterns et les range patterns,
+  que Core 1.0 refuse ; il les refuse désormais (`fault`) ;
+- **un était une contradiction de la spec** : `core-machine.md` §5 disait
+  `MIN % -1 = 0`, le binaire panique et `RFC-RT-TRAPS` range `% -1` parmi les
+  débordements. Décision D-19-2 : c'est un trap ; §5 est aligné.
+
+### 43.2 Non tracés, et pourquoi
+
+MACH-2.2 (`&str` réduit aux littéraux : le corpus ne compare pas de texte),
+MACH-5.3 (traps identiques dans tous les profils : propriété du backend, tenue
+par les cas `run/*` existants, pas par l'oracle), MACH-6.1, 6.4, 6.6 (formes
+que le checker refuse avant l'oracle), MACH-7.4 (non-garantie), MACH-8.4, 8.5
+et 9.1 (règles d'usage des résultats, sans forme exécutable).
+
+L'exemption F-META-006 est **révoquée** : sa condition de réexamen (« dès
+qu'une machine abstraite exécutable existe ») est atteinte.

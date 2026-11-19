@@ -1,0 +1,9 @@
+// oracle: value bool false
+// O2, MACH-4.2: the right operand of && is not reduced when the left is false.
+fn boom() -> bool effects(panic) {
+    panic("evaluated");
+}
+
+fn check() -> bool effects(panic) {
+    return false && boom();
+}

@@ -1,0 +1,9 @@
+// oracle: fault: outside the pure core: range patterns are not part of Core 1.0
+// The machine refuses what Core 1.0 refuses (E-UNSUPPORTED-RANGE-PAT).
+fn check() -> i32 effects() {
+    let n: i32 = 4;
+    return match n {
+        3..=9 => 1,
+        _ => 0,
+    };
+}
