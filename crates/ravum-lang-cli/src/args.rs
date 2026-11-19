@@ -58,6 +58,12 @@ pub enum Command {
         max_rebuilds: Option<u64>,
         /// `--reload`: hot reload with state preservation (RFC-E11-HOT-RELOAD).
         reload: bool,
+        /// `--backend jit`: native development backend with per-function hot
+        /// swap (T15/T16) instead of `rustc`.
+        jit: bool,
+        /// `--entry NAME` (jit backend only): the function run after each
+        /// accepted change.
+        entry: Option<String>,
     },
     Test {
         path: PathBuf,
@@ -358,12 +364,25 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
     let mut release = false;
     let mut max_rebuilds: Option<u64> = None;
     let mut reload = false;
+    let mut jit = false;
+    let mut entry: Option<String> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--run" => run = true,
             "--reload" => reload = true,
+            "--backend" => {
+                let value = option_value(rest, &mut i, "--backend")?;
+                jit = parse_backend(&value)?;
+            }
+            other if other.starts_with("--backend=") => {
+                jit = parse_backend(other.trim_start_matches("--backend="))?;
+            }
+            "--entry" => entry = Some(option_value(rest, &mut i, "--entry")?),
+            other if other.starts_with("--entry=") => {
+                entry = Some(other.trim_start_matches("--entry=").to_string());
+            }
             "--release" => release = true,
             "--max-rebuilds" => {
                 let value = option_value(rest, &mut i, "--max-rebuilds")?;
@@ -387,13 +406,34 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
                 .to_string(),
         );
     }
+    if jit && (run || reload || release) {
+        return Err(
+            "`--backend jit` runs the program in process; it takes neither `--run`, `--reload` nor `--release`"
+                .to_string(),
+        );
+    }
+    if entry.is_some() && !jit {
+        return Err("`--entry` requires `--backend jit`".to_string());
+    }
     Ok(Command::Watch {
         path: path.unwrap_or_else(default_path),
         run,
         release,
         max_rebuilds,
         reload,
+        jit,
+        entry,
     })
+}
+
+fn parse_backend(value: &str) -> Result<bool, String> {
+    match value {
+        "jit" => Ok(true),
+        "rustc" => Ok(false),
+        other => Err(format!(
+            "unknown backend `{other}` (expected `rustc` or `jit`)"
+        )),
+    }
 }
 
 fn parse_max_rebuilds(value: &str) -> Result<u64, String> {
@@ -558,6 +598,7 @@ COMMANDS:
     run [PATH] [--json] [--target TRIPLE] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
+    watch [PATH] --backend jit [--entry NAME]  Native in-process backend, per-function hot swap
     test [PATH] [--filter TEXT] [--json]
                                         Build the test runner, run it, parse `test ... ok/FAILED`
     fmt [PATH] [--check]                Format every `.rv` file, or verify with `--check`
@@ -820,16 +861,44 @@ mod tests {
                     release,
                     max_rebuilds,
                     reload,
+                    jit,
+                    entry,
                 }) => {
                     assert_eq!(path, PathBuf::from("pkg"));
                     assert!(run);
                     assert!(release);
                     assert_eq!(max_rebuilds, Some(2));
                     assert!(!reload);
+                    assert!(!jit, "the default backend stays rustc");
+                    assert_eq!(entry, None);
                 }
                 other => panic!("unexpected {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn watch_backend_jit_parses_and_excludes_rustc_only_flags() {
+        match parse(&args(&[
+            "watch",
+            "--backend",
+            "jit",
+            "--entry",
+            "check",
+            "pkg",
+        ]))
+        .unwrap()
+        {
+            Invocation::Command(Command::Watch { jit, entry, .. }) => {
+                assert!(jit);
+                assert_eq!(entry.as_deref(), Some("check"));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&args(&["watch", "--backend=jit", "--run"])).is_err());
+        assert!(parse(&args(&["watch", "--backend", "jit", "--reload"])).is_err());
+        assert!(parse(&args(&["watch", "--backend", "gcc"])).is_err());
+        assert!(parse(&args(&["watch", "--entry", "main"])).is_err());
     }
 
     #[test]

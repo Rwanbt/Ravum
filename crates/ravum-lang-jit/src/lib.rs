@@ -852,30 +852,40 @@ impl Compiled {
             fuel,
             table: self.table.as_ptr() as usize,
         };
-        let val = match f.ret {
-            Ty::I8 => Val::Int(Ty::I8, exec::call::<i8>(code, &mut ctx) as i128),
-            Ty::U8 => Val::Int(Ty::U8, exec::call::<u8>(code, &mut ctx) as i128),
-            Ty::I16 => Val::Int(Ty::I16, exec::call::<i16>(code, &mut ctx) as i128),
-            Ty::U16 => Val::Int(Ty::U16, exec::call::<u16>(code, &mut ctx) as i128),
-            Ty::I32 => Val::Int(Ty::I32, exec::call::<i32>(code, &mut ctx) as i128),
-            Ty::U32 => Val::Int(Ty::U32, exec::call::<u32>(code, &mut ctx) as i128),
-            t @ (Ty::I64 | Ty::Isize) => Val::Int(t, exec::call::<i64>(code, &mut ctx) as i128),
-            t @ (Ty::U64 | Ty::Usize) => Val::Int(t, exec::call::<u64>(code, &mut ctx) as i128),
-            Ty::F32 => Val::F32(exec::call::<f32>(code, &mut ctx)),
-            Ty::F64 => Val::F64(exec::call::<f64>(code, &mut ctx)),
-            Ty::Bool => Val::Bool(exec::call::<u8>(code, &mut ctx) != 0),
-            Ty::Unit => {
-                exec::call::<u8>(code, &mut ctx);
-                Val::Unit
-            }
-            Ty::Ptr => return RunOutcome::Fault("an entry cannot return an address".into()),
-        };
-        match ctx.code {
-            0 => RunOutcome::Value(val),
-            CODE_DEPTH => RunOutcome::Fault("call depth limit".into()),
-            CODE_FUEL => RunOutcome::Diverge,
-            c => RunOutcome::Panic(self.messages[(c - CODE_TRAP0) as usize].clone()),
+        call_nullary(code, &mut ctx, f.ret, &self.messages)
+    }
+}
+
+/// Call a no-argument entry returning `ret` and decode its outcome.
+pub(crate) fn call_nullary(
+    code: *const u8,
+    ctx: &mut Ctx,
+    ret: Ty,
+    messages: &[String],
+) -> RunOutcome {
+    let val = match ret {
+        Ty::I8 => Val::Int(Ty::I8, exec::call::<i8>(code, ctx) as i128),
+        Ty::U8 => Val::Int(Ty::U8, exec::call::<u8>(code, ctx) as i128),
+        Ty::I16 => Val::Int(Ty::I16, exec::call::<i16>(code, ctx) as i128),
+        Ty::U16 => Val::Int(Ty::U16, exec::call::<u16>(code, ctx) as i128),
+        Ty::I32 => Val::Int(Ty::I32, exec::call::<i32>(code, ctx) as i128),
+        Ty::U32 => Val::Int(Ty::U32, exec::call::<u32>(code, ctx) as i128),
+        t @ (Ty::I64 | Ty::Isize) => Val::Int(t, exec::call::<i64>(code, ctx) as i128),
+        t @ (Ty::U64 | Ty::Usize) => Val::Int(t, exec::call::<u64>(code, ctx) as i128),
+        Ty::F32 => Val::F32(exec::call::<f32>(code, ctx)),
+        Ty::F64 => Val::F64(exec::call::<f64>(code, ctx)),
+        Ty::Bool => Val::Bool(exec::call::<u8>(code, ctx) != 0),
+        Ty::Unit => {
+            exec::call::<u8>(code, ctx);
+            Val::Unit
         }
+        Ty::Ptr => return RunOutcome::Fault("an entry cannot return an address".into()),
+    };
+    match ctx.code {
+        0 => RunOutcome::Value(val),
+        CODE_DEPTH => RunOutcome::Fault("call depth limit".into()),
+        CODE_FUEL => RunOutcome::Diverge,
+        c => RunOutcome::Panic(messages[(c - CODE_TRAP0) as usize].clone()),
     }
 }
 

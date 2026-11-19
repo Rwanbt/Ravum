@@ -12,6 +12,7 @@ pub mod lsp;
 pub mod run;
 pub mod test;
 pub mod watch;
+pub mod watch_jit;
 
 use crate::args::Command;
 
@@ -68,8 +69,12 @@ pub fn dispatch(command: Command) -> i32 {
             release,
             max_rebuilds,
             reload,
+            jit,
+            entry,
         } => {
-            if reload {
+            if jit {
+                watch_jit::run(&path, entry.as_deref(), max_rebuilds)
+            } else if reload {
                 watch::run_reload(&path, release)
             } else {
                 watch::run(&path, run, release, max_rebuilds)

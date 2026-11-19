@@ -121,8 +121,56 @@ que `DSP_STATE_SCHEMA_V1_TEXT` de la voie `rustc` (asserté par le test).
 | **négatif** : nouvelle version qui écrit `z1` puis divise par zéro | état restauré, retour arrière, sortie = ancien filtre, `division by zero` remonté |
 | thread temps réel, 20 éditions | **0 alloc / 0 libération**, édition→activation p50 ≈ 1,4 ms, p95 ≈ 1,4 ms (release), 3 modules vivants |
 
+## 8. Ajout du 2026-11-19 — `ravum-lang watch --backend jit`
+
+```
+ravum-lang watch [PATH] --backend jit [--entry NAME]
+```
+
+Nouveau module `crates/ravum-lang-cli/src/commands/watch_jit.rs` ; retouches
+minimales des fichiers partagés (`args.rs` : options `--backend rustc|jit` et
+`--entry`, aide ; `commands/mod.rs` : une branche ; `Cargo.toml` : deux
+dépendances). Le backend par défaut reste `rustc` ; `--backend jit` refuse
+`--run`, `--reload` et `--release`, et `--entry` exige `--backend jit`.
+
+À chaque sauvegarde du fichier (`src/main.rv`, sinon `src/lib.rv`, ou le
+fichier donné ; scrutation toutes les 100 ms) : parse + check, abaissement en
+IR v1.1, `HotEngine::update` (seules les fonctions modifiées sont compilées),
+activation, puis exécution de l'entrée : `--entry NAME` (défaut `main`, sans
+paramètre) ou `process_sample` si le fichier déclare un bloc DSP (piloté par un
+signal de test déterministe de 4 096 échantillons, sans périphérique audio ;
+l'état du bloc continue d'une version à l'autre).
+
+Exemple réel (sortie du CLI) :
+
+```
+[ravum] jit: 3 functions compiled (front 0.8 ms, total 5.5 ms)
+[ravum] check() -> value i64 37
+[ravum] change detected
+[ravum] jit: 1 recompiled (offset), 2 reused (front 0.6 ms, jit 1.4 ms)
+[ravum] check() -> value i64 38
+[ravum] change detected
+[ravum] rejected by the checker; previous version kept
+  src/main.rv:6:12: E-TYP-MISMATCH: return: expected `i64`, found `bool`
+```
+
+| Test (`crates/ravum-lang-cli/tests/watch_jit.rs`) | Résultat |
+|---|---|
+| édition d'une fonction | `1 recompiled (offset), 2 reused`, nouveau résultat |
+| **négatif** : erreur de type | diagnostics `fichier:ligne:col`, version précédente gardée |
+| **négatif** : construction hors IR (`.abs()`) | `not supported by the jit backend`, version précédente gardée |
+| reprise après erreur | la sauvegarde suivante repart de la dernière bonne version |
+| bloc DSP : coefficient modifié | `1 recompiled (gain)`, état conservé |
+| **négatif** : `State` élargi (struct + `init`) | `refused: state schema changed`, version précédente gardée |
+| **négatif** : signature de l'entrée changée | `refused: entry \`check\` changed signature` |
+| analyse des options | `--backend jit` exclut `--run`/`--reload`/`--release` ; backend inconnu refusé ; `--entry` seul refusé ; défaut = `rustc` |
+
+Limites : un seul fichier (pas de `mod x;`) ; pas de sortie d'E/S (`io::println`
+n'est pas dans l'IR) : l'entrée rend une valeur ; pas de vrai périphérique
+audio ; fin par Ctrl+C (aucun processus enfant à arrêter).
+
 ## Suite proposée
 
 1. ~~IR v1.1 et bloc DSP avec état~~ (fait, §7) ; reste `migrate` (HR-1.7).
-2. `ravum-lang watch --backend jit` (touche le CLI, crate partagé).
+2. ~~`ravum-lang watch --backend jit`~~ (fait, §8).
 3. Brancher le `RtRunner` sur l'hôte audio existant (`ravum-patch-host`).

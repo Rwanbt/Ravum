@@ -45,6 +45,9 @@ pub enum EntryKind {
     /// `fn process_sample(state: &mut State, input: f32) -> f32` with a
     /// host-owned `struct State` (RFC-E11-DSP-BLOCK surface).
     DspF32,
+    /// A no-argument entry (`main`, `check`) run on demand from the editor
+    /// side (`ravum-lang watch --backend jit`); not a real-time entry.
+    Nullary(Ty),
 }
 
 impl EntryKind {
@@ -55,6 +58,7 @@ impl EntryKind {
             (2, Some(Ty::Ptr), Ty::F32) if f.locals.get(1) == Some(&Ty::F32) => {
                 Some(EntryKind::DspF32)
             }
+            (0, _, r) if r != Ty::Ptr => Some(EntryKind::Nullary(r)),
             _ => None,
         }
     }
@@ -185,7 +189,7 @@ impl HotEngine {
             .ok_or_else(|| Refusal::EntryMissing(entry.into()))?;
         let kind = EntryKind::of(&ir.functions[id as usize]).ok_or_else(|| {
             Refusal::EntrySignature(format!(
-                "{entry}: expected fn(f32) -> f32 or fn(f64) -> f64"
+                "{entry}: expected fn() -> T, fn(f32) -> f32, fn(f64) -> f64 or process_sample(&mut State, f32) -> f32"
             ))
         })?;
         let mut engine = HotEngine {
@@ -278,6 +282,11 @@ impl HotEngine {
 
     pub fn mailbox(&self) -> &Arc<Mailbox> {
         &self.mailbox
+    }
+
+    /// Interned trap messages (index = code - 3).
+    pub fn messages(&self) -> &[String] {
+        &self.messages
     }
 
     /// Message of a trap code reported by the runner.
@@ -550,6 +559,20 @@ impl RtRunner {
             self.state.copy_from_slice(&self.backup);
         }
         0.0
+    }
+
+    /// Run a no-argument entry once with the current version (not a
+    /// real-time call: the outcome is decoded with allocation).
+    pub fn run_nullary(&mut self, messages: &[String]) -> ravum_lang_ir::interp::RunOutcome {
+        let EntryKind::Nullary(ret) = self.kind else {
+            panic!("run_nullary on a {:?} entry", self.kind);
+        };
+        self.ctx.code = 0;
+        self.ctx.depth = 0;
+        self.ctx.fuel = self.fuel;
+        self.ctx.table = self.current.table.as_ptr() as usize;
+        let code = self.current.table[self.current.entry_slot as usize] as *const u8;
+        crate::call_nullary(code, &mut self.ctx, ret, messages)
     }
 
     /// Read-only view of the host-owned state (for tests and hosts).
