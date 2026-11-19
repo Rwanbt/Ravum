@@ -127,6 +127,7 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | F-TYP-025 | Indexation `Vec`/`&[T]` : lecture, panic hors bornes | TYP-9.3, TYP-5.5 | E-TYP-INDEX | panic | pass : `v[0]` (`i32`) ; fail : `v[i32]` → `E-TYP-INDEX` | B | candidate-stable | cases/run/dsp-gain-iir, cases/types/index-non-usize |
 | F-TYP-026 | `Type::Never` non nommable en champ/paramètre | G-5.11 | E-TYP-MISMATCH | — | pass : retour divergent ; fail : `struct S { x: ! }` → `E-TYP-MISMATCH` | B | candidate-stable | cases/types/never-divergent-return, cases/types/never-field |
 | F-TYP-027 | Méthode inconnue | G-6.30 | E-RES-UNKNOWN | — | pass : `v.push(1)` ; fail : `v.get(0)` → `E-RES-UNKNOWN` | B | candidate-stable | cases/run/string-vec, cases/types/unknown-method |
+| F-TYP-028 | Un seul type par `if`/`match` ; `as` limité, total, chaîné à gauche | TYP-13.3, TYP-13.5, TYP-13.6, TYP-13.7, TYP-13.8, TYP-13.9 | E-TYP-MISMATCH, E-TYP-CAST | `as` sans panic : `NaN → 0`, saturation hors bornes | pass : littéral adapté à l'autre branche, `NaN as i32 = 0`, `1e300 as i32 = MAX`, `300 as u8 as i64 = 44`, `x as i32` sans effet ; fail : branches `i32`/`bool`, `String as i64`, `&i64 as i64` → `E-TYP-CAST` | B | candidate-stable | cases/types/if-branches-must-agree, cases/types/if-literal-adapts-to-branch, cases/types/cast-string-refused, cases/types/cast-reference-refused, cases/types/cast-total-saturating-chained-identity |
 
 ## 5. Expressions et évaluation (`F-EXPR`)
 
@@ -150,6 +151,7 @@ Chemin cible conventionnel : `conformance/cases/<FeatureId>/pass.rv`, `.../fail.
 | F-EXPR-016 | `panic`/`exit` divergents (`!`) | EXPR-11 | `!` | code 1, arrêt | pass : `panic("x")` en position de valeur ; fail : `panic()` sans argument → `E-TYP-ARITY` | B | candidate-stable | cases/types/never-coerces, cases/types/panic-arity |
 | F-EXPR-017 | `for` range : bornes évaluées une fois | EXPR-6.3 | E-TYP-RANGE | zéro itération si `a>=b` | pass : `for i in 0..0 { }` ; fail : bornes réévaluées (trace) | B | candidate-stable | cases/run/loops |
 | F-EXPR-018 | `for` Vec : consommation | OWN-5.10 | `T` possédé | déplacement | pass : `for x in v` ; fail : usage de `v` après → `E-OWN-USE-AFTER-MOVE` | B | experimental | cases/run/stats, cases/ownership/for-vec-use-after-move |
+| F-EXPR-019 | Décalages, `i128` et panic contrôlé (`run` et `test`), sans `catch` | EXPR-3.4, EXPR-3.6, EXPR-3.7, EXPR-3.8 | E-TYP-SHIFT, E-RES-UNKNOWN | `panic: <msg>`, sortie 1 ; sous `test`, seul le test fautif échoue | pass : quantité `u8` sur un `i64`, un test qui panique n'arrête pas les autres ; fail : `a << -1` → `E-TYP-SHIFT`, débordement `i128` → panic, `catch_unwind` → `E-RES-UNKNOWN` | B | candidate-stable | cases/run/shift-amount-any-integer-type, cases/run/shift-negative-literal-refused, cases/run/i128-overflow-panics, cases/run/catch-unwind-unknown, cases/cli/test-panic-fails-one-test-only |
 
 ## 6. Propriété et destruction (`F-OWN`)
 

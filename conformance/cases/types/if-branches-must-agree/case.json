@@ -1,0 +1,8 @@
+{
+  "id": "types/if-branches-must-agree",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "TYP-13.3 (MUST): an `if` expression has one type; branches that disagree are E-TYP-MISMATCH, never converted."
+}

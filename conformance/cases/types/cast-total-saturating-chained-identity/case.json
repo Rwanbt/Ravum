@@ -1,0 +1,6 @@
+{
+  "id": "types/cast-total-saturating-chained-identity",
+  "mode": "run-pass",
+  "stdout_contains": "0\n2147483647\n-2147483648\n44\n7\n",
+  "notes": "TYP-13.6 (MUST): `as` is total, no panic: NaN -> 0, out of range saturates to MAX / MIN. TYP-13.7: `300 as u8 as i64` truncates then widens (44). TYP-13.9: `x as i32` with x: i32 is accepted and changes nothing."
+}

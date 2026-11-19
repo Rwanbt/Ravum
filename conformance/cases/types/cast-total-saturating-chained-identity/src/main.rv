@@ -1,0 +1,18 @@
+fn main() {
+    let z: f64 = 0.0;
+    let n = z / z;
+    let a = n as i32;
+    let b: f64 = 1.0e300;
+    let c = b as i32;
+    let m: f64 = -1.0e300;
+    let k = m as i32;
+    let d: i64 = 300;
+    let e = d as u8 as i64;
+    let x: i32 = 7;
+    let y = x as i32;
+    io::println(&a.to_string());
+    io::println(&c.to_string());
+    io::println(&k.to_string());
+    io::println(&e.to_string());
+    io::println(&y.to_string());
+}
