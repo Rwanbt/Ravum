@@ -431,6 +431,23 @@ fn bin(op: BinOp, ty: Ty, a: Val, b: Val) -> Result<Val, Stop> {
             Le => Ok(Val::Bool(x <= y)),
             Gt => Ok(Val::Bool(x > y)),
             Ge => Ok(Val::Bool(x >= y)),
+            // `x`, `y` are exact; the i128 product can only overflow for
+            // 64-bit operands, where wrapping in 2^128 keeps the low bits.
+            WrappingAdd => Ok(Val::Int(ty, wrap(ty, x.wrapping_add(y)))),
+            WrappingSub => Ok(Val::Int(ty, wrap(ty, x.wrapping_sub(y)))),
+            WrappingMul => Ok(Val::Int(ty, wrap(ty, x.wrapping_mul(y)))),
+            SaturatingAdd | SaturatingSub | SaturatingMul => {
+                let (lo, hi) = range(ty);
+                let exact = match op {
+                    SaturatingAdd => Some(x + y),
+                    SaturatingSub => Some(x - y),
+                    _ => x.checked_mul(y),
+                };
+                // An i128 product overflow means a magnitude beyond any
+                // 64-bit range: its sign is the sign of `x * y`.
+                let v = exact.unwrap_or(if (x < 0) != (y < 0) { lo } else { hi });
+                Ok(Val::Int(ty, v.clamp(lo, hi)))
+            }
         },
         (Val::F64(x), Val::F64(y)) => fbin(op, x, y, Val::F64),
         (Val::F32(x), Val::F32(y)) => fbin(op, x, y, Val::F32),
@@ -485,6 +502,16 @@ fn un(op: UnOp, ty: Ty, a: Val) -> Result<Val, Stop> {
         (UnOp::Neg, Val::F32(x)) => Ok(Val::F32(-x)),
         (UnOp::Not, Val::Bool(b)) => Ok(Val::Bool(!b)),
         (UnOp::Not, Val::Int(_, x)) => Ok(Val::Int(ty, wrap(ty, !x))),
+        (UnOp::Abs, Val::Int(_, x)) => checked(ty, x.abs(), "attempt to negate with overflow"),
+        (UnOp::WrappingNeg, Val::Int(_, x)) => Ok(Val::Int(ty, wrap(ty, -x))),
+        (UnOp::SaturatingNeg, Val::Int(_, x)) => {
+            let (lo, hi) = range(ty);
+            Ok(Val::Int(ty, (-x).clamp(lo, hi)))
+        }
+        (UnOp::Abs, Val::F64(x)) => Ok(Val::F64(x.abs())),
+        (UnOp::Sqrt, Val::F64(x)) => Ok(Val::F64(x.sqrt())),
+        (UnOp::Floor, Val::F64(x)) => Ok(Val::F64(x.floor())),
+        (UnOp::Ceil, Val::F64(x)) => Ok(Val::F64(x.ceil())),
         _ => Err(Stop::Fault("bad unary operand".into())),
     }
 }

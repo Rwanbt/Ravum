@@ -114,8 +114,10 @@ fn json_round_trip_is_lossless_and_versioned() {
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
         "enum E {\n    A,\n    B,\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
-        "fn check() -> i32 effects() {\n    let x: i32 = 5;\n    return x.wrapping_add(1);\n}\n",
-        "fn check() -> i32 effects() {\n    let a: i32 = -5;\n    return a.abs();\n}\n",
+        // IR v1.2 covers `wrapping_*`/`abs`; `round` (ties away from zero)
+        // and `min` (NaN rule) still are not.
+        "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",
+        "fn check() -> f64 effects() {\n    let a: f64 = -5.0;\n    return a.min(1.0);\n}\n",
         "fn f(r: &mut i32) -> i32 effects() {\n    return 0;\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
     ] {
         match compile_source(src) {

@@ -115,6 +115,39 @@ hors zone est une faute, jamais une valeur).
 Écart de spec relevé : EXPR-7.6 demande `index out of bounds: the len is N but
 the index is i` ; la machine de référence et l'IR donnent la forme courte.
 
+## IR v1.2 (ajout du 2026-11-19) — méthodes scalaires
+
+`ravum-ir-1.2` ajoute des opérations dont la sémantique est **exactement**
+celle d'une méthode de la stdlib (STD-12.7, RFC-RT-TRAPS) : `BinOp`
+`Wrapping{Add,Sub,Mul}`, `Saturating{Add,Sub,Mul}` ; `UnOp` `Abs` (entier
+signé vérifié : `attempt to negate with overflow` sur MIN ; `f64` : bit de
+signe), `WrappingNeg`, `SaturatingNeg`, `Sqrt`, `Floor`, `Ceil` (`f64`).
+`validate()` refuse une opération sur un type qu'elle n'accepte pas
+(fail-closed : un backend ne voit jamais `Sqrt` sur un entier). Restent
+`Unsupported` : `checked_*` (rend `Option`), `round` (arrondi « loin de zéro »
+≠ `nearest`), `min`/`max` (règle NaN), `powf`, `to_string`, méthodes
+utilisateur. Version d'IR incrémentée : un lecteur v1.1 refuse un JSON v1.2.
+
+| Oracle (`crates/ravum-lang-jit/tests/methods.rs`) | Résultat |
+|---|---|
+| 10 types entiers × 12–14 valeurs limites × 6 méthodes binaires + 3 unaires signées ; `f64` : 12 valeurs (±0, ±inf, NaN, ties) × 4 | **8 058 programmes : natif = interpréteur = machine, 8 058/8 058**, 5 traps (`abs(MIN)`) ; debug (vérificateur actif) et release |
+| **négatif** : `checked_add`+`match`, `round`, `min`, `powf` | `Unsupported` |
+| **négatif** : IR forgée (`Sqrt` sur `I64`) | refusée par `validate`/`from_json` |
+| corpus `ravum-core-machine` | **48/60 identiques** (44/59 avant), 0 divergence |
+
+**Bug trouvé dans la machine de référence** : `1u8.saturating_sub(7)` rendait
+`255` (MAX) au lieu de `0`. La spec dit « saturating » (STD-12.7) et la voie
+`rustc` délègue à `u8::saturating_sub` (→ 0) ; l'IR et le JIT donnaient déjà
+0. Correction d'une ligne dans `crates/ravum-core-machine/src/eval.rs` et
+programme de corpus `saturating-sub-unsigned.rv` (`// oracle: value u8 0`).
+140 programmes sur 8 058 étaient concernés (tous `uN`/`usize`
+`saturating_sub` en dépassement bas).
+
+Tests ajustés (aucun cas négatif retiré) : dans
+`ravum-lang-ir/tests/oracle.rs` et `ravum-lang-cli/tests/watch_jit.rs`,
+`wrapping_add`/`abs`, désormais couverts, sont remplacés par `round`/`min`,
+toujours hors IR.
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

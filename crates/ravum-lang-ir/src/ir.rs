@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.1";
+pub const IR_VERSION: &str = "ravum-ir-1.2";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -131,6 +131,14 @@ pub enum BinOp {
     Le,
     Gt,
     Ge,
+    /// Ints only (IR v1.2, `int::wrapping_*`): two's-complement wrap, no trap.
+    WrappingAdd,
+    WrappingSub,
+    WrappingMul,
+    /// Ints only (IR v1.2, `int::saturating_*`): clamp to the type range.
+    SaturatingAdd,
+    SaturatingSub,
+    SaturatingMul,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,6 +147,19 @@ pub enum UnOp {
     Neg,
     /// Bool: logical not. Ints: bitwise not.
     Not,
+    /// IR v1.2. Signed ints: checked (`int::abs`), traps
+    /// `attempt to negate with overflow` on MIN. `f64`: clears the sign bit.
+    Abs,
+    /// IR v1.2, signed ints: `0 - x` with wrap (`int::wrapping_neg`).
+    WrappingNeg,
+    /// IR v1.2, signed ints: MIN → MAX (`int::saturating_neg`).
+    SaturatingNeg,
+    /// IR v1.2, `f64` only: IEEE-754 correctly rounded square root.
+    Sqrt,
+    /// IR v1.2, `f64` only: round toward -inf.
+    Floor,
+    /// IR v1.2, `f64` only: round toward +inf.
+    Ceil,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -319,13 +340,27 @@ impl Module {
                 for i in &blk.insts {
                     match i {
                         Inst::Const { dst, .. } => l(*dst)?,
-                        Inst::Copy { dst, src }
-                        | Inst::Un { dst, src, .. }
-                        | Inst::Cast { dst, src, .. } => {
+                        Inst::Copy { dst, src } | Inst::Cast { dst, src, .. } => {
                             l(*dst)?;
                             l(*src)?
                         }
-                        Inst::Bin { dst, lhs, rhs, .. } => {
+                        Inst::Un { dst, src, op, ty } => {
+                            l(*dst)?;
+                            l(*src)?;
+                            if !un_op_accepts(*op, *ty) {
+                                return Err(format!("{}: {op:?} on {ty:?}", f.name));
+                            }
+                        }
+                        Inst::Bin {
+                            dst,
+                            lhs,
+                            rhs,
+                            op,
+                            ty,
+                        } => {
+                            if !bin_op_accepts(*op, *ty) {
+                                return Err(format!("{}: {op:?} on {ty:?}", f.name));
+                            }
                             l(*dst)?;
                             l(*lhs)?;
                             l(*rhs)?
@@ -388,5 +423,29 @@ impl Module {
             }
         }
         Ok(())
+    }
+}
+
+/// Operand types an IR v1.2 unary operation accepts (fail-closed: a backend
+/// never sees, say, `Sqrt` on an integer).
+pub fn un_op_accepts(op: UnOp, ty: Ty) -> bool {
+    match op {
+        UnOp::Neg => ty.is_int() || ty.is_float(),
+        UnOp::Not => ty.is_int() || ty == Ty::Bool,
+        UnOp::Abs => (ty.is_int() && ty.is_signed()) || ty == Ty::F64,
+        UnOp::WrappingNeg | UnOp::SaturatingNeg => ty.is_int() && ty.is_signed(),
+        UnOp::Sqrt | UnOp::Floor | UnOp::Ceil => ty == Ty::F64,
+    }
+}
+
+/// Operand types the IR v1.2 integer-only binary operations accept; the
+/// v1/v1.1 operations are unchanged (checked by the lowering).
+pub fn bin_op_accepts(op: BinOp, ty: Ty) -> bool {
+    use BinOp::*;
+    match op {
+        WrappingAdd | WrappingSub | WrappingMul | SaturatingAdd | SaturatingSub | SaturatingMul => {
+            ty.is_int()
+        }
+        _ => true,
     }
 }

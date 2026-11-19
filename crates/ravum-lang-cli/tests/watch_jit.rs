@@ -114,15 +114,19 @@ fn watch_jit_recompiles_only_the_edited_function_and_keeps_the_last_good_version
     edit(
         &file,
         "return true;",
-        "let v: i64 = -3;\n    return v.abs();",
+        "let v: f64 = -3.5;\n    return v.round() as i64;",
     );
     until(
         &rx,
-        "not supported by the jit backend: method call `.abs()`",
+        "not supported by the jit backend: method call `.round()`",
     );
 
     // Recovery: the next good edit compiles from the last good version.
-    edit(&file, "let v: i64 = -3;\n    return v.abs();", "return 3;");
+    edit(
+        &file,
+        "let v: f64 = -3.5;\n    return v.round() as i64;",
+        "return 3;",
+    );
     let lines = until(&rx, "check() -> ");
     assert!(lines.last().unwrap().ends_with("value i64 39"), "{lines:?}");
     assert!(child.wait().unwrap().success());

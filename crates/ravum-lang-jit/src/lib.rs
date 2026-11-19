@@ -495,6 +495,23 @@ impl Gen<'_, '_> {
                     }
                     (UnOp::Not, Ty::Bool) => self.b.ins().bxor_imm(x, 1),
                     (UnOp::Not, _) => self.b.ins().bnot(x),
+                    (UnOp::Abs, Ty::F64) => self.b.ins().fabs(x),
+                    (UnOp::Abs, t) => {
+                        let bad = self.b.ins().icmp_imm(IntCC::Equal, x, range(t).0 as i64);
+                        self.trap_msg_if(bad, "attempt to negate with overflow");
+                        self.b.ins().iabs(x)
+                    }
+                    (UnOp::WrappingNeg, _) => self.b.ins().ineg(x),
+                    (UnOp::SaturatingNeg, t) => {
+                        let (lo, hi) = range(t);
+                        let min = self.b.ins().icmp_imm(IntCC::Equal, x, lo as i64);
+                        let max = self.b.ins().iconst(cl_ty(t), hi as i64);
+                        let n = self.b.ins().ineg(x);
+                        self.b.ins().select(min, max, n)
+                    }
+                    (UnOp::Sqrt, _) => self.b.ins().sqrt(x),
+                    (UnOp::Floor, _) => self.b.ins().floor(x),
+                    (UnOp::Ceil, _) => self.b.ins().ceil(x),
                 };
                 self.set(*dst, v);
             }
@@ -587,40 +604,12 @@ impl Gen<'_, '_> {
         }
     }
 
-    fn bin(
-        &mut self,
-        op: BinOp,
-        ty: Ty,
-        x: Value,
-        y: Value,
-        fmod: cranelift_codegen::ir::FuncRef,
-        fmodf: cranelift_codegen::ir::FuncRef,
-    ) -> Value {
-        use BinOp::*;
-        if ty.is_float() {
-            return match op {
-                Add => self.b.ins().fadd(x, y),
-                Sub => self.b.ins().fsub(x, y),
-                Mul => self.b.ins().fmul(x, y),
-                Div => self.b.ins().fdiv(x, y),
-                Rem => {
-                    let f = if ty == Ty::F64 { fmod } else { fmodf };
-                    let c = self.b.ins().call(f, &[x, y]);
-                    self.b.inst_results(c)[0]
-                }
-                Eq => self.b.ins().fcmp(FloatCC::Equal, x, y),
-                Ne => self.b.ins().fcmp(FloatCC::NotEqual, x, y),
-                Lt => self.b.ins().fcmp(FloatCC::LessThan, x, y),
-                Le => self.b.ins().fcmp(FloatCC::LessThanOrEqual, x, y),
-                Gt => self.b.ins().fcmp(FloatCC::GreaterThan, x, y),
-                Ge => self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y),
-                BitAnd | BitOr | BitXor | Shl | Shr => unreachable!("rejected by the checker"),
-            };
-        }
+    /// Wrapped result and overflow flag of a checked `+`, `-`, `*`.
+    fn overflowing(&mut self, op: BinOp, ty: Ty, x: Value, y: Value) -> (Value, Value) {
         let signed = ty.is_signed();
         let bits = ty.int_bits().unwrap_or(8);
         match op {
-            Add => {
+            BinOp::Add => {
                 let r = self.b.ins().iadd(x, y);
                 let bad = if signed {
                     let a = self.b.ins().bxor(x, r);
@@ -630,10 +619,9 @@ impl Gen<'_, '_> {
                 } else {
                     self.b.ins().icmp(IntCC::UnsignedLessThan, r, x)
                 };
-                self.trap_msg_if(bad, "attempt to add with overflow");
-                r
+                (r, bad)
             }
-            Sub => {
+            BinOp::Sub => {
                 let r = self.b.ins().isub(x, y);
                 let bad = if signed {
                     let a = self.b.ins().bxor(x, y);
@@ -643,10 +631,9 @@ impl Gen<'_, '_> {
                 } else {
                     self.b.ins().icmp(IntCC::UnsignedLessThan, x, y)
                 };
-                self.trap_msg_if(bad, "attempt to subtract with overflow");
-                r
+                (r, bad)
             }
-            Mul => {
+            _ => {
                 let r = self.b.ins().imul(x, y);
                 let bad = if bits == 64 {
                     if signed {
@@ -679,8 +666,91 @@ impl Gen<'_, '_> {
                         .icmp_imm(IntCC::SignedGreaterThan, p, hi as i64);
                     self.b.ins().bor(a, c)
                 };
-                self.trap_msg_if(bad, "attempt to multiply with overflow");
+                (r, bad)
+            }
+        }
+    }
+
+    fn bin(
+        &mut self,
+        op: BinOp,
+        ty: Ty,
+        x: Value,
+        y: Value,
+        fmod: cranelift_codegen::ir::FuncRef,
+        fmodf: cranelift_codegen::ir::FuncRef,
+    ) -> Value {
+        use BinOp::*;
+        if ty.is_float() {
+            return match op {
+                Add => self.b.ins().fadd(x, y),
+                Sub => self.b.ins().fsub(x, y),
+                Mul => self.b.ins().fmul(x, y),
+                Div => self.b.ins().fdiv(x, y),
+                Rem => {
+                    let f = if ty == Ty::F64 { fmod } else { fmodf };
+                    let c = self.b.ins().call(f, &[x, y]);
+                    self.b.inst_results(c)[0]
+                }
+                Eq => self.b.ins().fcmp(FloatCC::Equal, x, y),
+                Ne => self.b.ins().fcmp(FloatCC::NotEqual, x, y),
+                Lt => self.b.ins().fcmp(FloatCC::LessThan, x, y),
+                Le => self.b.ins().fcmp(FloatCC::LessThanOrEqual, x, y),
+                Gt => self.b.ins().fcmp(FloatCC::GreaterThan, x, y),
+                Ge => self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y),
+                BitAnd | BitOr | BitXor | Shl | Shr | WrappingAdd | WrappingSub | WrappingMul
+                | SaturatingAdd | SaturatingSub | SaturatingMul => {
+                    unreachable!("rejected by the checker / `validate`")
+                }
+            };
+        }
+        let signed = ty.is_signed();
+        let bits = ty.int_bits().unwrap_or(8);
+        match op {
+            Add | Sub | Mul => {
+                let (r, bad) = self.overflowing(op, ty, x, y);
+                self.trap_msg_if(
+                    bad,
+                    match op {
+                        Add => "attempt to add with overflow",
+                        Sub => "attempt to subtract with overflow",
+                        _ => "attempt to multiply with overflow",
+                    },
+                );
                 r
+            }
+            WrappingAdd => self.b.ins().iadd(x, y),
+            WrappingSub => self.b.ins().isub(x, y),
+            WrappingMul => self.b.ins().imul(x, y),
+            SaturatingAdd | SaturatingSub | SaturatingMul => {
+                let base = match op {
+                    SaturatingAdd => Add,
+                    SaturatingSub => Sub,
+                    _ => Mul,
+                };
+                let (r, bad) = self.overflowing(base, ty, x, y);
+                let t = cl_ty(ty);
+                let (lo, hi) = range(ty);
+                let lo = self.b.ins().iconst(t, lo as i64);
+                let hi = self.b.ins().iconst(t, hi as i64);
+                // Direction of the overflow: signed add/sub follow the sign
+                // of `x` (for sub, `y` has the opposite sign); signed mul the
+                // sign of `x * y`; unsigned sub goes low, add/mul high.
+                let sat = if signed {
+                    let neg = match base {
+                        Mul => {
+                            let s = self.b.ins().bxor(x, y);
+                            self.b.ins().icmp_imm(IntCC::SignedLessThan, s, 0)
+                        }
+                        _ => self.b.ins().icmp_imm(IntCC::SignedLessThan, x, 0),
+                    };
+                    self.b.ins().select(neg, lo, hi)
+                } else if base == Sub {
+                    lo
+                } else {
+                    hi
+                };
+                self.b.ins().select(bad, sat, r)
             }
             Div | Rem => {
                 let zero = self.b.ins().icmp_imm(IntCC::Equal, y, 0);

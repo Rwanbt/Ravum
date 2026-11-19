@@ -25,7 +25,7 @@ use ravum_lang_sema::syntax::ast::{
     self, Block as AstBlock, Expr, ExprKind, FnItem, ItemKind, PatKind, StmtKind,
 };
 use ravum_lang_sema::syntax::{NodeId, Span};
-use ravum_lang_sema::{CallTarget, CheckedProgram, Resolution, Type};
+use ravum_lang_sema::{CallTarget, CheckedProgram, MethodTarget, Resolution, Type};
 
 use crate::ir::*;
 
@@ -993,9 +993,11 @@ impl<'a> FnLower<'a> {
                 Ok(self.unit())
             }
             ExprKind::Call { args, .. } => self.call(e, args),
-            ExprKind::MethodCall { method, .. } => {
-                unsupported(format!("method call `.{}()`", method.name))
-            }
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+            } => self.method_call(e, receiver, &method.name, args),
             ExprKind::Match { .. } => unsupported("match"),
             ExprKind::Str(_) => unsupported("string"),
             ExprKind::Char(_) => unsupported("char"),
@@ -1237,6 +1239,60 @@ impl<'a> FnLower<'a> {
         self.set_term(Term::Jump(head));
         self.switch_to(exit);
         Ok(self.unit())
+    }
+
+    /// IR v1.2: the scalar builtin methods whose semantics map exactly onto
+    /// one IR operation. Anything else (user methods, `checked_*` returning
+    /// `Option`, `round`/`min`/`max`/`powf` whose NaN or tie rules would need
+    /// more care, `to_string`) stays `Unsupported`.
+    fn method_call(&mut self, e: &Expr, recv: &Expr, name: &str, args: &[Expr]) -> R<Local> {
+        let path = match self.checked.facts.methods.get(&e.id) {
+            Some(MethodTarget::Builtin { path, .. }) => path.clone(),
+            _ => return unsupported(format!("method call `.{name}()`")),
+        };
+        let un = match path.as_str() {
+            "int::abs" | "f64::abs" => Some(UnOp::Abs),
+            "int::wrapping_neg" => Some(UnOp::WrappingNeg),
+            "int::saturating_neg" => Some(UnOp::SaturatingNeg),
+            "f64::sqrt" => Some(UnOp::Sqrt),
+            "f64::floor" => Some(UnOp::Floor),
+            "f64::ceil" => Some(UnOp::Ceil),
+            _ => None,
+        };
+        let bin = match path.as_str() {
+            "int::wrapping_add" => Some(BinOp::WrappingAdd),
+            "int::wrapping_sub" => Some(BinOp::WrappingSub),
+            "int::wrapping_mul" => Some(BinOp::WrappingMul),
+            "int::saturating_add" => Some(BinOp::SaturatingAdd),
+            "int::saturating_sub" => Some(BinOp::SaturatingSub),
+            "int::saturating_mul" => Some(BinOp::SaturatingMul),
+            _ => None,
+        };
+        let ty = self.ty_of(recv)?;
+        match (un, bin, args) {
+            (Some(op), None, []) if crate::ir::un_op_accepts(op, ty) => {
+                let src = self.expr(recv)?;
+                let dst = self.new_local(ty);
+                self.emit(Inst::Un { dst, op, ty, src });
+                Ok(dst)
+            }
+            (None, Some(op), [arg])
+                if crate::ir::bin_op_accepts(op, ty) && self.ty_of(arg)? == ty =>
+            {
+                let lhs = self.expr(recv)?;
+                let rhs = self.expr(arg)?;
+                let dst = self.new_local(ty);
+                self.emit(Inst::Bin {
+                    dst,
+                    op,
+                    ty,
+                    lhs,
+                    rhs,
+                });
+                Ok(dst)
+            }
+            _ => unsupported(format!("method call `.{name}()` (`{path}`)")),
+        }
     }
 
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {
