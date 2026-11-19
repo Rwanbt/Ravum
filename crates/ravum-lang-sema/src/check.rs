@@ -13,7 +13,7 @@ use crate::facts::{file_infos, CheckOptions, CheckResult, CheckedProgram, Facts}
 use crate::resolve::World;
 use crate::{effects, own, resolve, typeck};
 use ravum_lang_syntax::ast::Program;
-use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
+use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag, Severity};
 use ravum_lang_syntax::source::SourceMap;
 use ravum_lang_syntax::span::Span;
 use std::time::{Duration, Instant};
@@ -59,6 +59,88 @@ pub fn check_with_timings(
 }
 
 /// `check_with_timings`, with the explicit `rt` entry function of T6.
+/// Spans of the functions (free, in `impl`, in inline modules) that hold an
+/// error of `diags`; `None` when some error lies outside every function.
+fn faulty_functions(program: &Program, diags: &DiagnosticBag) -> Option<Vec<Span>> {
+    use ravum_lang_syntax::ast::{Item, ItemKind};
+    fn collect(items: &[Item], out: &mut Vec<Span>) {
+        for item in items {
+            match &item.kind {
+                ItemKind::Fn(_) => out.push(item.span),
+                ItemKind::Impl(imp) => collect(&imp.items, out),
+                ItemKind::Mod(m) => collect(&m.items, out),
+                _ => {}
+            }
+        }
+    }
+    let mut fns = Vec::new();
+    collect(&program.root.items, &mut fns);
+    let within = |outer: &Span, s: &Span| {
+        outer.file == s.file && outer.start <= s.start && s.end <= outer.end
+    };
+    let mut faulty = Vec::new();
+    for d in diags.iter().filter(|d| d.severity == Severity::Error) {
+        let f = fns.iter().find(|f| within(f, &d.span))?;
+        if !faulty.contains(f) {
+            faulty.push(*f);
+        }
+    }
+    Some(faulty)
+}
+
+/// Move into `diags` the diagnostics of `later` that are not inside one of
+/// the `faulty` functions (DIAG-1.4: an early phase masks the later ones).
+fn keep_outside(diags: &mut DiagnosticBag, later: DiagnosticBag, faulty: &[Span]) {
+    for d in later.into_vec() {
+        let masked = faulty
+            .iter()
+            .any(|f| f.file == d.span.file && f.start <= d.span.start && d.span.end <= f.end);
+        if !masked {
+            diags.push(d);
+        }
+    }
+}
+
+/// Effects, ownership and the `rt` gate on a program whose resolution and
+/// typing hold errors in some functions. Their facts there are partial, so
+/// the phases run under `catch_unwind`: should one fail on such facts, the
+/// later diagnostics are omitted (as before DIAG-1.4 conformance) rather
+/// than the check crashing.
+fn later_phases_on_valid_functions(
+    program: Program,
+    facts: Facts,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> Option<DiagnosticBag> {
+    let files = file_infos(sources);
+    let profile = options.profile;
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let mut bag = DiagnosticBag::new();
+        let mut checked = CheckedProgram {
+            program,
+            facts,
+            files,
+            profile,
+        };
+        let call_graph = effects::infer_and_check(
+            &checked.program,
+            &mut checked.facts,
+            profile,
+            rt_entry,
+            &mut bag,
+        );
+        let own_facts = own::check_ownership(&checked, &mut bag);
+        checked.facts.own = own_facts;
+        if profile == crate::facts::Profile::Rt {
+            let reachable = rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
+            crate::traps::check_rt_traps(&checked, &mut bag, reachable.as_ref());
+        }
+        bag
+    }))
+    .ok()
+}
+
 pub fn check_entry_with_timings(
     program: &Program,
     sources: &SourceMap,
@@ -86,18 +168,69 @@ pub fn check_entry_with_timings(
     let mut facts = Facts::default();
 
     let started = Instant::now();
-    let resolved = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
+    // `resolve_with_world`/`typecheck_with_world` return "no error"; where
+    // the errors are is what decides below (DIAG-1.4).
+    let _no_error = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
     timings.resolve = started.elapsed();
-    if !resolved || diags.has_errors() {
+    // DIAG-1.4 (decision V1-D1): an early-phase error stops the later phases
+    // on the faulty node only. The granularity used is the enclosing
+    // function: later phases still run on the whole program, and their
+    // diagnostics inside a function that already has an error are dropped.
+    let resolve_faulty = faulty_functions(&program, &diags);
+    if diags.has_errors() && resolve_faulty.is_none() {
+        // An error outside any function (a type, an import...): every
+        // function may depend on it; stop as before.
         diags.sort();
         return (CheckResult::failed(diags), timings);
     }
+    let resolve_had_errors = diags.has_errors();
 
     let started = Instant::now();
-    let typed =
-        typeck::typecheck_with_world(&program, &mut facts, &world, Some(sources), &mut diags);
+    let mut typeck_diags = DiagnosticBag::new();
+    let _no_error = if resolve_had_errors {
+        // Facts are partial where resolution failed: never let that crash
+        // the check (fail-closed: on a panic, report the resolution errors).
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            typeck::typecheck_with_world(
+                &program,
+                &mut facts,
+                &world,
+                Some(sources),
+                &mut typeck_diags,
+            )
+        })) {
+            Ok(t) => t,
+            Err(_) => {
+                diags.sort();
+                return (CheckResult::failed(diags), timings);
+            }
+        }
+    } else {
+        typeck::typecheck_with_world(
+            &program,
+            &mut facts,
+            &world,
+            Some(sources),
+            &mut typeck_diags,
+        )
+    };
     timings.typeck = started.elapsed();
-    if !typed || diags.has_errors() {
+    let resolve_faulty = resolve_faulty.unwrap_or_default();
+    keep_outside(&mut diags, typeck_diags, &resolve_faulty);
+    let faulty = faulty_functions(&program, &diags);
+    if diags.has_errors() && faulty.is_none() {
+        diags.sort();
+        return (CheckResult::failed(diags), timings);
+    }
+    if diags.has_errors() {
+        let faulty = faulty.unwrap_or_default();
+        drop(world);
+        let started = Instant::now();
+        let later = later_phases_on_valid_functions(program, facts, sources, options, rt_entry);
+        timings.effects = started.elapsed();
+        if let Some(later) = later {
+            keep_outside(&mut diags, later, &faulty);
+        }
         diags.sort();
         return (CheckResult::failed(diags), timings);
     }
@@ -564,6 +697,55 @@ fn main() { let s = m::make(); let x = s.secret; }
             Profile::Core,
         );
         error(&result, "E-RES-PRIVATE");
+    }
+
+    fn codes(result: &CheckResult) -> Vec<String> {
+        result.diags.iter().map(|d| d.code.clone()).collect()
+    }
+
+    /// DIAG-1.4 (V1-D1): a typing error in one function does not hide an
+    /// ownership error in another.
+    #[test]
+    fn a_type_error_does_not_hide_an_ownership_error_elsewhere() {
+        let src = "fn bad() -> i64 effects() {\n    return true;\n}\n\nfn moved() -> () effects(alloc) {\n    let s = String::new();\n    let t = s;\n    let u = s;\n    drop(t);\n    drop(u);\n}\n\nfn main() -> () effects(alloc) {\n    moved();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(result.checked.is_none());
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(c.contains(&"E-OWN-DOUBLE-MOVE".to_string()), "{c:?}");
+    }
+
+    /// Negative: in the *same* function the early phase still masks the
+    /// later one (DIAG-1.4, F-META-011).
+    #[test]
+    fn a_type_error_still_masks_an_ownership_error_in_the_same_function() {
+        let src = "fn both() -> i64 effects(alloc) {\n    let s = String::new();\n    let t = s;\n    let u = s;\n    drop(t);\n    drop(u);\n    return true;\n}\n\nfn main() -> () effects(alloc) {\n    let _x = both();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(!c.iter().any(|x| x.starts_with("E-OWN")), "{c:?}");
+    }
+
+    /// A resolution error in one function does not hide a typing error in
+    /// another.
+    #[test]
+    fn a_resolution_error_does_not_hide_a_type_error_elsewhere() {
+        let src = "fn a() -> () effects() {\n    inconnu();\n}\n\nfn b() -> i64 effects() {\n    return true;\n}\n\nfn main() -> () effects() {\n    a();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(c.contains(&"E-RES-UNKNOWN".to_string()), "{c:?}");
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+    }
+
+    /// Negative: an error outside every function (a field type) still stops
+    /// the later phases for the whole package.
+    #[test]
+    fn an_error_outside_functions_still_stops_everything() {
+        let src = "struct S {\n    x: Inconnu,\n}\n\nfn b() -> i64 effects() {\n    return true;\n}\n\nfn main() -> () effects() {\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(!c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(!c.is_empty());
     }
 
     #[test]

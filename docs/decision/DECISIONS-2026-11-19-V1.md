@@ -70,3 +70,18 @@ Décision du responsable (2026-11-19), choisie parmi trois options (côté
   un bloc, 64 échantillons ≈ 1,3 ms à 48 kHz). Le journal de session (T17)
   enregistre les deux instants, donc le replay reste exact.
 - Implémentation et preuves : [rapport T16 §9](../reports/T16-NATIVE-HOT-SWAP.md).
+
+## V1-D1, V1-S1, V1-C1 — crates partagés, DIAG-1.4, contrats (2026-11-19)
+
+Décisions du responsable, choisies parmi les options présentées :
+
+- **V1-S1** : l'autre ligne de travail est terminée ; les crates partagés
+  (`ravum-lang-sema`, `ravum-lang-syntax`) peuvent être modifiés sur cette
+  branche, `dev` étant fusionnée avant chaque étape.
+- **V1-D1 (DIAG-1.4)** : *conformer le checker* à la spec — une erreur d'une
+  phase précoce n'empêche les phases suivantes que sur le nœud fautif, pas
+  sur tout le paquet (constat F1 de T13). Les sorties de diagnostics
+  changent en conséquence.
+- **V1-C1 (T18)** : contrats `requires`/`ensures` **vérifiés à
+  l'exécution** (trap si violé), statut honnête `TESTED`, aucune preuve
+  statique ; une RFC d'abord, jamais auto-acceptée.
