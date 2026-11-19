@@ -47,3 +47,11 @@ JIT de T15). **Non couvert par cette décision** : les 3 doublons de versions
 (`hashbrown`, `bitflags`, `windows-sys`) refusés par `[bans]
 multiple-versions = "deny"` ; `cargo deny check` reste rouge sur ce seul point
 tant que le responsable ne l'a pas tranché.
+
+## V1-L2 — Doublons de versions tirés par Cranelift (2026-11-19)
+
+**Énoncé du responsable** : « oui autorise les doublons ». `deny.toml`
+`[bans].skip` liste les **versions exactes** `hashbrown@0.14.5`,
+`hashbrown@0.15.5`, `bitflags@1.3.2`, `windows-sys@0.52.0` (tirées par
+Cranelift 0.116 / regalloc2 / region). `multiple-versions = "deny"` reste en
+vigueur pour tout autre doublon.
