@@ -133,7 +133,8 @@ fn later_phases_on_valid_functions(
         let own_facts = own::check_ownership(&checked, &mut bag);
         checked.facts.own = own_facts;
         if profile == crate::facts::Profile::Rt {
-            let reachable = rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
+            let reachable =
+                rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
             crate::traps::check_rt_traps(&checked, &mut bag, reachable.as_ref());
         }
         bag
@@ -701,6 +702,43 @@ fn main() { let s = m::make(); let x = s.secret; }
 
     fn codes(result: &CheckResult) -> Vec<String> {
         result.diags.iter().map(|d| d.code.clone()).collect()
+    }
+
+    /// RFC-CONTRACTS-1: accepted clauses, and each refusal rule.
+    #[test]
+    fn contract_clauses_are_checked() {
+        let ok = "fn div(a: i64, b: i64) -> i64 effects()\n    requires b != 0\n    ensures result * b + a % b == a\n{\n    return a / b;\n}\n\nfn main() -> () effects() {\n    let requires: i64 = div(4, 2);\n    drop(requires);\n}\n";
+        let (result, _) = run("src/main.rv", ok, Profile::Core);
+        assert!(result.checked.is_some(), "{:?}", codes(&result));
+        let cases = [
+            // CON-1: not a bool.
+            ("fn f(a: i64) -> i64 effects()\n    requires a + 1\n{\n    return a;\n}\n", "E-TYP-MISMATCH"),
+            // CON-2: not pure.
+            ("fn noisy() -> bool effects(io) {\n    io::println(\"x\");\n    return true;\n}\n\nfn f(a: i64) -> i64 effects(io)\n    requires noisy()\n{\n    return a;\n}\n", "E-CON-EFFECT"),
+            // CON-3: a non-`Copy` parameter.
+            ("fn f(s: String) -> i64 effects(alloc)\n    requires s.len() > 0\n{\n    drop(s);\n    return 1;\n}\n", "E-CON-NONCOPY"),
+            // CON-3: a non-`Copy` result.
+            ("fn f() -> String effects(alloc)\n    ensures result.len() > 0\n{\n    return String::new();\n}\n", "E-CON-NONCOPY"),
+            // `result` exists only in `ensures` (CON-4).
+            ("fn f(a: i64) -> i64 effects()\n    requires result > 0\n{\n    return a;\n}\n", "E-RES-UNKNOWN"),
+        ];
+        for (src, code) in cases {
+            let src = format!("{src}\nfn main() -> () effects() {{\n}}\n");
+            let (result, _) = run("src/main.rv", &src, Profile::Core);
+            let c = codes(&result);
+            assert!(
+                c.contains(&code.to_string()),
+                "expected {code}, got {c:?} for\n{src}"
+            );
+        }
+        // CON-7: no clause in profile `rt`.
+        let rt = "fn f(a: i64) -> i64 effects()\n    requires a > 0\n{\n    return a;\n}\n\nfn main() -> () effects() {\n}\n";
+        let (result, _) = run("src/main.rv", rt, Profile::Rt);
+        assert!(
+            codes(&result).contains(&"E-EFF-PROFILE".to_string()),
+            "{:?}",
+            codes(&result)
+        );
     }
 
     /// DIAG-1.4 (V1-D1): a typing error in one function does not hide an

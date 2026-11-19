@@ -747,6 +747,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
             self.bind_local(&param.name, param.ty.clone(), mutable, false, decl_span);
         }
+        self.check_contracts(f, &body_ret, &sig.params);
         let body_ty = self.check_block(&f.body, Some(&body_ret));
         // DIAG-1.6: `W-OWN-UNUSED-VARIABLE` is one of the two warnings Core 1.0
         // documents. A binding is unused when no path resolved it inside the
@@ -796,6 +797,71 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.current_fn = None;
         self.self_ty = None;
         self.generics.clear();
+    }
+
+    /// RFC-CONTRACTS-1: each clause is a `bool` in the parameters' scope;
+    /// `ensures` also sees `result` (bound to the clause span). Only `Copy`
+    /// parameters and a `Copy` result may be mentioned (CON-3).
+    fn check_contracts(&mut self, f: &ast::FnItem, ret: &Type, params: &[crate::facts::ParamSig]) {
+        if f.is_async && !f.contracts.is_empty() {
+            self.error(
+                "E-CON-UNSUPPORTED",
+                f.contracts[0].span,
+                "contracts on an `async fn` are not supported (RFC-CONTRACTS-1)".to_string(),
+            );
+            return;
+        }
+        let mut used = std::mem::take(&mut self.used_locals);
+        for c in &f.contracts {
+            if c.kind == ast::ContractKind::Ensures && matches!(ret, Type::Never) {
+                self.error(
+                    "E-CON-UNSUPPORTED",
+                    c.span,
+                    "`ensures` on a function returning `!`: it never returns".to_string(),
+                );
+                continue;
+            }
+            self.push_scope();
+            if c.kind == ast::ContractKind::Ensures {
+                if !crate::own::is_copy_type(ret, self.facts) {
+                    self.error(
+                        "E-CON-NONCOPY",
+                        c.span,
+                        format!("`ensures` needs a `Copy` result; `{ret}` is not (CON-3)"),
+                    );
+                }
+                self.bind_local("result", ret.clone(), false, false, c.span);
+            }
+            let ty = self.check_expr(&c.expr, Some(&Type::Bool));
+            let ty = self.resolve_vars(&ty);
+            if !Self::compatible(&ty, &Type::Bool) && !matches!(ty, Type::Error) {
+                self.error(
+                    "E-TYP-MISMATCH",
+                    c.expr.span,
+                    format!("a contract clause is a `bool`, found `{ty}` (CON-1)"),
+                );
+            }
+            self.pop_scope();
+            // CON-3: the names the clause read (the checker records each
+            // resolved local in `used_locals`).
+            let read: Vec<String> = std::mem::take(&mut self.used_locals).into_iter().collect();
+            for name in &read {
+                if let Some(p) = params.iter().find(|p| &p.name == name) {
+                    if !crate::own::is_copy_type(&p.ty, self.facts) {
+                        self.error(
+                            "E-CON-NONCOPY",
+                            c.expr.span,
+                            format!(
+                                "a contract may only read `Copy` parameters; `{name}` is `{}` (CON-3)",
+                                p.ty
+                            ),
+                        );
+                    }
+                }
+            }
+            used.extend(read);
+        }
+        self.used_locals.extend(used);
     }
 
     // ------------------------------------------------------------------

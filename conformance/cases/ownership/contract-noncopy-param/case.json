@@ -1,0 +1,8 @@
+{
+  "id": "ownership/contract-noncopy-param",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CON-NONCOPY"
+  ],
+  "notes": "RFC-CONTRACTS-1 CON-3: a clause may read only `Copy` parameters."
+}

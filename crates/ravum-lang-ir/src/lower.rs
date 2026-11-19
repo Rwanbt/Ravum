@@ -405,6 +405,12 @@ struct FnLower<'a> {
     dead: bool,
     /// IR name: the plain name of a free function, `S::m` for a method.
     name: String,
+    /// RFC-CONTRACTS-1 clauses, and the parameters' entry copies that
+    /// `ensures` reads (CON-3: their value on entry).
+    contracts: Vec<ast::Contract>,
+    entry_params: Vec<((Span, String), (Local, Type))>,
+    /// Re-entrancy guard: an `ensures` is lowered once per return point.
+    in_ensures: bool,
 }
 
 impl<'a> FnLower<'a> {
@@ -451,6 +457,9 @@ impl<'a> FnLower<'a> {
             sret: None,
             dead: false,
             name,
+            contracts: f.contracts.clone(),
+            entry_params: Vec::new(),
+            in_ensures: false,
         };
         map_ty(&sig.ret)?;
         if matches!(sig.ret, Type::Ref { .. }) {
@@ -479,6 +488,44 @@ impl<'a> FnLower<'a> {
 
     fn run(mut self, f: &FnItem) -> R<Function> {
         let params = self.locals.len() as u32;
+        if f.is_async && !self.contracts.is_empty() {
+            return unsupported("contracts on an `async fn`");
+        }
+        // CON-3: `ensures` sees the parameters as they were on entry.
+        if self
+            .contracts
+            .iter()
+            .any(|c| c.kind == ast::ContractKind::Ensures)
+        {
+            let keys: Vec<_> = self
+                .vars
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            for (k, (l, t)) in keys {
+                if matches!(t, Type::Ref { .. }) {
+                    continue; // a reference is read as is
+                }
+                let c = if Layouts::is_agg(&t) {
+                    self.snapshot(l, &t)?
+                } else {
+                    let c = self.new_local(map_ty(&t)?);
+                    self.emit(Inst::Copy { dst: c, src: l });
+                    c
+                };
+                self.entry_params.push((k, (c, t)));
+            }
+        }
+        // CON-5: `requires`, in order, after the arguments.
+        let reqs: Vec<ast::Contract> = self
+            .contracts
+            .iter()
+            .filter(|c| c.kind == ast::ContractKind::Requires)
+            .cloned()
+            .collect();
+        for c in &reqs {
+            self.contract_check(c)?;
+        }
         let v = self.block(&f.body)?;
         let term = self.return_term(v)?;
         self.terminate(term);
@@ -497,7 +544,74 @@ impl<'a> FnLower<'a> {
         })
     }
 
+    /// Evaluate one clause; continue when true, trap with its message
+    /// otherwise (CON-5/CON-6).
+    fn contract_check(&mut self, c: &ast::Contract) -> R<()> {
+        let ok = self.expr(&c.expr)?;
+        let (good, bad) = (self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: ok,
+            then_to: good,
+            else_to: bad,
+        });
+        self.switch_to(bad);
+        let kind = match c.kind {
+            ast::ContractKind::Requires => "requires",
+            ast::ContractKind::Ensures => "ensures",
+        };
+        self.set_term(Term::Trap(format!("contract violated: {kind} {}", c.text)));
+        self.switch_to(good);
+        Ok(())
+    }
+
+    /// CON-6: every `ensures`, `result` bound to `v`, parameters read at
+    /// their entry value.
+    fn check_ensures(&mut self, v: Local) -> R<()> {
+        let ens: Vec<ast::Contract> = self
+            .contracts
+            .iter()
+            .filter(|c| c.kind == ast::ContractKind::Ensures)
+            .cloned()
+            .collect();
+        if ens.is_empty() || self.dead || self.in_ensures {
+            return Ok(());
+        }
+        self.in_ensures = true;
+        let saved: Vec<_> = self
+            .entry_params
+            .iter()
+            .map(|(k, _)| (k.clone(), self.vars.get(k).cloned()))
+            .collect();
+        for (k, e) in self.entry_params.clone() {
+            self.vars.insert(k, e);
+        }
+        let ret = self.ret.clone();
+        for c in &ens {
+            self.vars
+                .insert((c.span, "result".to_string()), (v, ret.clone()));
+            let r = self.contract_check(c);
+            self.vars.remove(&(c.span, "result".to_string()));
+            if let Err(e) = r {
+                self.in_ensures = false;
+                return Err(e);
+            }
+        }
+        for (k, old) in saved {
+            match old {
+                Some(o) => {
+                    self.vars.insert(k, o);
+                }
+                None => {
+                    self.vars.remove(&k);
+                }
+            }
+        }
+        self.in_ensures = false;
+        Ok(())
+    }
+
     fn return_term(&mut self, v: Local) -> R<Term> {
+        self.check_ensures(v)?;
         if let Some(out) = self.sret {
             if !self.dead {
                 let ty = self.ret.clone();

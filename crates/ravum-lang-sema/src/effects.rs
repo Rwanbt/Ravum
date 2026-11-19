@@ -91,6 +91,41 @@ pub fn infer_and_check(
             break;
         }
     }
+    // RFC-CONTRACTS-1 CON-2: a clause is pure (its own effects and those of
+    // the functions it calls); CON-7: no clause in profile `rt`, where a
+    // violation would be an implicit trap (RFC-RT-TRAPS-1).
+    for f in fns.values() {
+        for c in &f.contracts {
+            if profile == Profile::Rt {
+                diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                    "E-EFF-PROFILE",
+                    c.span,
+                    "contract clauses are not allowed in profile `rt`: a violation is a trap (CON-7)"
+                        .to_string(),
+                ));
+                continue;
+            }
+            let mut ce = FnEffects::default();
+            walk_expr(&c.expr, facts, &mut ce);
+            let mut set = ce.direct.clone();
+            for callee in &ce.edges {
+                if let Some(callee_set) = composed.get(callee) {
+                    set.extend(callee_set);
+                }
+            }
+            if !set.effects.is_empty() {
+                let names = set.names();
+                diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                    "E-CON-EFFECT",
+                    c.span,
+                    format!(
+                        "a contract clause must be pure; it has effects {} (CON-2)",
+                        names.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
     for (id, set) in &composed {
         facts.effects.insert(*id, set.clone());
         if let Some(sig) = facts.fn_sigs.get_mut(id) {

@@ -541,6 +541,7 @@ impl<'a> Parser<'a> {
             );
             self.skip_where_clause();
         }
+        let contracts = self.parse_contracts();
         let body = if self.at(Punct::LBrace) {
             self.parse_block()
         } else {
@@ -560,8 +561,44 @@ impl<'a> Parser<'a> {
             body,
             is_test,
             is_async: false,
+            contracts,
             span: self.span_from(start),
         }))
+    }
+
+    /// Source text of `span`, whitespace runs collapsed to one space.
+    fn source_text(&self, span: Span) -> String {
+        let (a, b) = (span.start as usize, span.end as usize);
+        self.src
+            .get(a..b.min(self.src.len()))
+            .unwrap_or("")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// `requires EXPR` / `ensures EXPR` clauses before a body
+    /// (RFC-CONTRACTS-1). Contextual words: recognized only here.
+    fn parse_contracts(&mut self) -> Vec<Contract> {
+        let mut out = Vec::new();
+        loop {
+            let kind = match self.kind() {
+                TokenKind::Ident(w) if w == "requires" => ContractKind::Requires,
+                TokenKind::Ident(w) if w == "ensures" => ContractKind::Ensures,
+                _ => break,
+            };
+            let start = self.cur_span();
+            self.bump();
+            let expr = self.parse_condition();
+            let text = self.source_text(expr.span);
+            out.push(Contract {
+                kind,
+                expr,
+                text,
+                span: self.span_from(start),
+            });
+        }
+        out
     }
 
     pub(super) fn skip_where_clause(&mut self) {

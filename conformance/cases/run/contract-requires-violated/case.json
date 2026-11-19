@@ -1,0 +1,7 @@
+{
+  "id": "run/contract-requires-violated",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "contract violated: requires b != 0",
+  "notes": "RFC-CONTRACTS-1 CON-5: a false `requires` stops the program and names the clause (the divisor comes from a parameter)."
+}

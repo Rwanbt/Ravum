@@ -129,3 +129,36 @@ fn jit_user_methods_match_the_rustc_build() {
     assert_eq!(jit.stdout, reference);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// RFC-CONTRACTS-1 on both paths: the same program, a violated `ensures`
+/// after two good calls; same output and same violation message.
+#[test]
+fn contracts_behave_the_same_on_rustc_and_jit() {
+    let src = "struct P {\n    x: i64,\n    y: i64,\n}\n\nfn div(a: i64, b: i64) -> i64 effects()\n    requires b != 0\n    ensures result * b + a % b == a\n{\n    return a / b;\n}\n\nfn grow(mut x: i64, p: P) -> i64 effects()\n    requires x >= 0\n    ensures result > x && p.y == 2\n{\n    x = x + 100;\n    if x > 110 {\n        return x - 120;\n    }\n    return x + p.x;\n}\n\nfn shift(mut x: i64) -> i64 effects()\n    ensures result == x + 1\n{\n    x = x + 5;\n    return x - 4;\n}\n\nfn main() -> () effects(io, alloc) {\n    let requires: i64 = 3;\n    io::println(&shift(10).to_string());\n    io::println(&div(7, 2).to_string());\n    io::println(&div(-7, requires).to_string());\n    io::println(&grow(1, P { x: 5, y: 2 }).to_string());\n    io::println(&grow(30, P { x: 5, y: 2 }).to_string());\n}\n";
+    let dir = std::env::temp_dir().join(format!("rv-jit-contracts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("ravum.toml"),
+        "[package]\nname = \"jitcontracts\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/main.rv"), src).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .arg("run")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(!out.status.success(), "the last call violates `ensures`");
+    let msg = "contract violated: ensures result > x && p.y == 2";
+    assert!(stderr.contains(msg), "{stderr}");
+    let ir = compile_source(src).unwrap();
+    let (r, jit) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
+    assert_eq!(r.render(), format!("panic: {msg}"));
+    assert_eq!(jit.stdout, stdout, "output before the violation");
+    // `shift`: `ensures` reads `x` as it was on entry (CON-3), not 15.
+    assert_eq!(stdout, "11\n3\n-2\n106\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}

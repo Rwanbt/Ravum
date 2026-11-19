@@ -88,13 +88,58 @@ impl<'a> Emitter<'a> {
         // Plan the array-element paths of this body (OWN-5.4) before emitting it:
         // `expr` consults the plan when it reaches a projection or an index.
         *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body);
-        let body = self.block_text(buf.indent, &fun.body)?;
+        let mut body = self.block_text(buf.indent, &fun.body)?;
+        if !fun.contracts.is_empty() {
+            body = self.contract_body(buf.indent, fun, &ret, body)?;
+        }
         if fun.is_async {
             buf.line(&format!("{signature}{{ Box::pin(async move {body}) }}"));
         } else {
             buf.line(&format!("{signature}{body}"));
         }
         Ok(())
+    }
+
+    /// RFC-CONTRACTS-1: `requires` checked on entry; with `ensures`, the body
+    /// runs in an immediately called `move` closure (a `return` leaves the
+    /// closure; `Copy` parameters keep their entry value outside it), then
+    /// every `ensures` is checked with `result` bound.
+    fn contract_body(
+        &self,
+        indent: usize,
+        fun: &FnItem,
+        ret: &str,
+        body: String,
+    ) -> Result<String, CodegenError> {
+        let mut out = String::from("{ ");
+        let mut ensures = Vec::new();
+        for c in &fun.contracts {
+            let cond = self.expr(&c.expr, indent + 1)?;
+            let kind = match c.kind {
+                ravum_lang_syntax::ast::ContractKind::Requires => "requires",
+                ravum_lang_syntax::ast::ContractKind::Ensures => "ensures",
+            };
+            let msg = format!("contract violated: {kind} {}", c.text);
+            let check = format!("if !({cond}) {{ panic!(\"{{}}\", {msg:?}); }} ");
+            match c.kind {
+                ravum_lang_syntax::ast::ContractKind::Requires => out.push_str(&check),
+                ravum_lang_syntax::ast::ContractKind::Ensures => ensures.push(check),
+            }
+        }
+        if ensures.is_empty() {
+            out.push_str(&body);
+        } else {
+            let result = self.local_ident("result");
+            out.push_str(&format!(
+                "let {result}: {ret} = (move || -> {ret} {body})(); "
+            ));
+            for e in ensures {
+                out.push_str(&e);
+            }
+            out.push_str(&result);
+        }
+        out.push_str(" }");
+        Ok(out)
     }
 
     pub(super) fn emit_struct(

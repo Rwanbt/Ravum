@@ -1,0 +1,19 @@
+fn shift(mut x: i64) -> i64 effects()
+    ensures result == x + 1
+{
+    x = x + 5;
+    return x - 4;
+}
+
+fn div(a: i64, b: i64) -> i64 effects()
+    requires b != 0
+    ensures result * b + a % b == a
+{
+    return a / b;
+}
+
+fn main() -> () effects(io, alloc) {
+    let requires: i64 = 2;
+    io::println(&shift(10).to_string());
+    io::println(&div(7, requires).to_string());
+}

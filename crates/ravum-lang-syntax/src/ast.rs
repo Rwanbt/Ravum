@@ -251,6 +251,28 @@ pub struct FnItem {
     pub is_test: bool,
     /// `async fn` (RFC-E11-CONCURRENCY phase 2): a call yields a `Future<T>`.
     pub is_async: bool,
+    /// `requires`/`ensures` clauses (RFC-CONTRACTS-1), in source order.
+    pub contracts: Vec<Contract>,
+    pub span: Span,
+}
+
+/// Which side of a call a contract clause constrains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContractKind {
+    /// Checked on entry: a violation is the caller's fault.
+    Requires,
+    /// Checked on every return, `result` bound: the function's fault.
+    Ensures,
+}
+
+/// One contract clause (RFC-CONTRACTS-1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contract {
+    pub kind: ContractKind,
+    pub expr: Expr,
+    /// The clause's source text, whitespace-normalized: the violation
+    /// message names it (CON-5/CON-6).
+    pub text: String,
     pub span: Span,
 }
 
