@@ -1,0 +1,6 @@
+{
+  "id": "run/primitive-size-bounds",
+  "mode": "run-pass",
+  "stdout_contains": "255\n-128\n65535\n2147483647\n18446744073709551615\n-170141183460469231731687303715884105728\n",
+  "notes": "ABI-2.8 (MUST), TYP-1.1: each primitive holds exactly the range of its size (u8, i8, u16, i32, u64, i128 bounds)."
+}

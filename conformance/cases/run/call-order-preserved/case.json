@@ -1,0 +1,6 @@
+{
+  "id": "run/call-order-preserved",
+  "mode": "run-pass",
+  "stdout_contains": "a\nb\nc\n7\n",
+  "notes": "ABI-4.4 (MUST), EXPR-1: calls with effects run left to right even where precedence groups the right operands first."
+}

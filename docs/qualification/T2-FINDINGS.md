@@ -2251,3 +2251,28 @@ n'existe, il n'y a rien à exécuter (le gel des codes publiés est déjà tenu 
 pas l'outil. COMPAT-6.1 à 6.5 et 7.2 à 7.5 décrivent la procédure humaine de
 migration et de rollback ; ils relèvent du dossier de release (T11, T12), pas
 d'un cas de conformance.
+
+## 42. `abi.md` et `concurrency.md`, 2ᵉ lot : 3 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `abi.md` 16 / 35, `concurrency.md` 9 / 20 ;
+`features_coverage.py --strict` : 235/235 (1 exemption). FeatureId F-META-031,
+chaque sortie mesurée avant d'être écrite :
+
+- ABI-2.8 : `u8` 255, `i8` -128, `u16` 65535, `i32` 2147483647, `u64`
+  18446744073709551615, `i128` minimum ; `let a: u8 = 256` → `E-TYP-LITERAL-RANGE`.
+- ABI-4.4 : `f("a", 1) + f("b", 2) * f("c", 3)` affiche `a`, `b`, `c` puis `7` ;
+  `0.1 * 10.0 - 1.0` affiche `0` (une FMA donnerait `5.55e-17`) et
+  `(1e16 + 1) - 1e16` affiche `0` (une réassociation donnerait `1`).
+- CONC-3.2 : `rt_profile_claims.rs` lance `check --profile rt`, texte et JSON,
+  sur un programme accepté et un programme refusé : aucun ne contient
+  `CERTIFIED`.
+
+Non tracés, et pourquoi : ABI-1.x, 2.9, 2.10, 4.8, 4.9, 5.x, 6.x et CONC-2.x,
+3.1, 3.3, 4.x sont des **non-garanties** ou des conditions sur une extension
+future (rien à exécuter : on ne teste pas l'absence d'une promesse). ABI-2.1 et
+2.6 sont tenus en pratique par le contrat `check → build` de T2, sans ligne
+propre. ABI-4.1 (un `CheckedProgram` invalide n'atteint jamais le backend)
+demanderait d'observer l'absence de binaire, ce que le harnais ne sait pas
+affirmer. ABI-4.7 reste en arbitrage (`#![allow]` du fichier généré, §33.2).
+CONC-1.4 et 2.7 (un seul cœur, concurrence externe) ne sont pas mesurables par
+un cas.
