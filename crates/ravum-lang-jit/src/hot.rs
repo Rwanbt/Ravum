@@ -502,6 +502,7 @@ fn serde_json_like(f: &Function) -> String {
     Module {
         version: ravum_lang_ir::IR_VERSION.to_string(),
         functions: vec![f.clone()],
+        state: None,
     }
     .to_json()
 }

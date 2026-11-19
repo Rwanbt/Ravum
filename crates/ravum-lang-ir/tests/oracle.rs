@@ -55,6 +55,9 @@ fn ir_interpreter_agrees_with_the_reference_machine() {
                         failures.push(format!("{name}: machine `{expected}`, IR produced `{got}`"));
                     }
                 } else if got != expected {
+                    // Note: EXPR-7.6 asks for `index out of bounds: the len is N
+                    // but the index is i`; the machine and IR v1.1 both give the
+                    // short form (see the T14 report).
                     failures.push(format!("{name}: expected `{expected}`, IR gave `{got}`"));
                 } else {
                     agreed += 1;
@@ -110,9 +113,10 @@ fn json_round_trip_is_lossless_and_versioned() {
 #[test]
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
-        "struct P {\n    x: i32,\n}\nfn check() -> i32 effects() {\n    let p = P { x: 1 };\n    return p.x;\n}\n",
+        "enum E {\n    A,\n    B,\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
+        "fn check() -> i32 effects() {\n    let x: i32 = 5;\n    return x.wrapping_add(1);\n}\n",
         "fn check() -> i32 effects() {\n    let a: i32 = -5;\n    return a.abs();\n}\n",
-        "fn check() -> i32 effects() {\n    let t = (1, 2);\n    return 0;\n}\n",
+        "fn f(r: &mut i32) -> i32 effects() {\n    return 0;\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
     ] {
         match compile_source(src) {
             Err(CompileError::Lower(LowerError::Unsupported(_))) => {}

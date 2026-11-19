@@ -34,6 +34,38 @@ pub enum CompileError {
     Lower(lower::LowerError),
 }
 
+/// Schema and layout of `struct State` in the root module, if declared. The
+/// schema text and digest are the ones of `ravum_lang_sema::reload::schema`
+/// (HR-1.1), shared with the `rustc` reload path.
+pub fn state_info(
+    checked: &ravum_lang_sema::CheckedProgram,
+) -> Result<Option<ir::StateInfo>, lower::LowerError> {
+    use ravum_lang_sema::syntax::ast::ItemKind;
+    for item in &checked.program.root.items {
+        if let ItemKind::Struct(st) = &item.kind {
+            if st.name.name == "State" {
+                let schema =
+                    ravum_lang_sema::reload::schema(checked, item.id, item.span).map_err(|_| {
+                        lower::LowerError::Unsupported("`State` has no canonical schema".into())
+                    })?;
+                let ty = ravum_lang_sema::Type::Nominal {
+                    def: item.id,
+                    name: st.name.name.clone(),
+                    args: Vec::new(),
+                };
+                let layout = lower::Layouts::new(checked).layout(&ty)?;
+                return Ok(Some(ir::StateInfo {
+                    text: schema.text,
+                    digest: schema.digest,
+                    size: layout.size,
+                    align: layout.align,
+                }));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Parse, check (profile `core`, as a library: no `main` required) and lower
 /// a single-file program.
 pub fn compile_source(src: &str) -> Result<Module, CompileError> {
@@ -57,7 +89,11 @@ pub fn compile_source(src: &str) -> Result<Module, CompileError> {
         .map(|d| d.code.clone())
         .collect();
     match result.checked {
-        Some(checked) if errors.is_empty() => lower::lower(&checked).map_err(CompileError::Lower),
+        Some(checked) if errors.is_empty() => {
+            let mut m = lower::lower(&checked).map_err(CompileError::Lower)?;
+            m.state = state_info(&checked).map_err(CompileError::Lower)?;
+            Ok(m)
+        }
         _ => Err(CompileError::Rejected(errors)),
     }
 }

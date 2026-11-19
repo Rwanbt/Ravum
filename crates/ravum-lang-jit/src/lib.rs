@@ -87,7 +87,7 @@ fn cl_ty(t: Ty) -> Type {
         Ty::I8 | Ty::U8 | Ty::Bool | Ty::Unit => types::I8,
         Ty::I16 | Ty::U16 => types::I16,
         Ty::I32 | Ty::U32 => types::I32,
-        Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize => types::I64,
+        Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::Ptr => types::I64,
         Ty::F32 => types::F32,
         Ty::F64 => types::F64,
     }
@@ -242,6 +242,18 @@ pub(crate) fn compile_funcs(
                     v
                 })
                 .collect();
+            let stack_slots: Vec<_> = f
+                .stack
+                .iter()
+                .map(|s| {
+                    let shift = s.align.max(1).trailing_zeros() as u8;
+                    b.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
+                        cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
+                        s.size,
+                        shift,
+                    ))
+                })
+                .collect();
             let entry = b.create_block();
             b.append_block_params_for_function_params(entry);
             b.switch_to_block(entry);
@@ -263,6 +275,7 @@ pub(crate) fn compile_funcs(
                 messages: &mut *messages,
                 msg_ids: &mut *msg_ids,
                 stop: None,
+                stack_slots,
             };
             // Depth check on entry.
             let depth = g.b.ins().load(types::I32, MemFlags::trusted(), ctxp, 4);
@@ -355,6 +368,7 @@ struct Gen<'a, 'f> {
     /// Shared exit block of the function, taking the stop code as parameter:
     /// one block per function instead of one per checked operation.
     stop: Option<cranelift_codegen::ir::Block>,
+    stack_slots: Vec<cranelift_codegen::ir::StackSlot>,
 }
 
 impl Gen<'_, '_> {
@@ -498,6 +512,47 @@ impl Gen<'_, '_> {
             Inst::Cast { dst, from, to, src } => {
                 let x = self.get(*src);
                 let v = self.cast(*from, *to, x);
+                self.set(*dst, v);
+            }
+            Inst::StackAddr { dst, slot } => {
+                let v = self
+                    .b
+                    .ins()
+                    .stack_addr(types::I64, self.stack_slots[*slot as usize], 0);
+                self.set(*dst, v);
+            }
+            Inst::Load {
+                dst,
+                ty,
+                addr,
+                offset,
+            } => {
+                let a = self.get(*addr);
+                let v = self
+                    .b
+                    .ins()
+                    .load(cl_ty(*ty), MemFlags::trusted(), a, *offset as i32);
+                self.set(*dst, v);
+            }
+            Inst::Store {
+                addr, offset, src, ..
+            } => {
+                let a = self.get(*addr);
+                let v = self.get(*src);
+                self.b
+                    .ins()
+                    .store(MemFlags::trusted(), v, a, *offset as i32);
+            }
+            Inst::PtrAdd {
+                dst,
+                base,
+                index,
+                scale,
+            } => {
+                let b0 = self.get(*base);
+                let i = self.get(*index);
+                let scaled = self.b.ins().imul_imm(i, *scale as i64);
+                let v = self.b.ins().iadd(b0, scaled);
                 self.set(*dst, v);
             }
             Inst::Call { dst, func, args } => {
@@ -803,6 +858,7 @@ impl Compiled {
                 exec::call::<u8>(code, &mut ctx);
                 Val::Unit
             }
+            Ty::Ptr => return RunOutcome::Fault("an entry cannot return an address".into()),
         };
         match ctx.code {
             0 => RunOutcome::Value(val),

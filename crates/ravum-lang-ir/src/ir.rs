@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1";
+pub const IR_VERSION: &str = "ravum-ir-1.1";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -26,9 +26,23 @@ pub enum Ty {
     F64,
     Bool,
     Unit,
+    /// A 64-bit address into memory the program may access (a stack slot of
+    /// the current or a calling frame, or host-owned state). IR v1.1.
+    Ptr,
 }
 
 impl Ty {
+    /// Size (= alignment) in memory, in bytes.
+    pub fn size(self) -> u32 {
+        match self {
+            Ty::I8 | Ty::U8 | Ty::Bool => 1,
+            Ty::I16 | Ty::U16 => 2,
+            Ty::I32 | Ty::U32 | Ty::F32 => 4,
+            Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::F64 | Ty::Ptr => 8,
+            Ty::Unit => 0,
+        }
+    }
+
     pub fn is_int(self) -> bool {
         self.int_bits().is_some()
     }
@@ -64,6 +78,7 @@ impl Ty {
             Ty::F64 => "f64",
             Ty::Bool => "bool",
             Ty::Unit => "()",
+            Ty::Ptr => "ptr",
         }
     }
 }
@@ -164,6 +179,51 @@ pub enum Inst {
         func: FuncId,
         args: Vec<Local>,
     },
+    /// Address of stack slot `slot` of the current frame (IR v1.1).
+    StackAddr {
+        dst: Local,
+        slot: u32,
+    },
+    /// Read a scalar of type `ty` at `addr + offset`. The lowering only emits
+    /// accesses that stay inside the object `addr` points into.
+    Load {
+        dst: Local,
+        ty: Ty,
+        addr: Local,
+        offset: u32,
+    },
+    /// Write a scalar of type `ty` at `addr + offset` (same discipline).
+    Store {
+        ty: Ty,
+        addr: Local,
+        offset: u32,
+        src: Local,
+    },
+    /// `dst = base + index * scale`; `index` is a `U64` slot already checked
+    /// against the bounds of the array by the lowering.
+    PtrAdd {
+        dst: Local,
+        base: Local,
+        index: Local,
+        scale: u32,
+    },
+}
+
+/// A stack slot of a function frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackSlot {
+    pub size: u32,
+    pub align: u32,
+}
+
+/// Host-owned state of a DSP block (RFC-E11-DSP-BLOCK): its canonical schema
+/// (HR-1.1, computed by `ravum_lang_sema::reload::schema`) and its layout.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateInfo {
+    pub text: String,
+    pub digest: String,
+    pub size: u32,
+    pub align: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -194,12 +254,17 @@ pub struct Function {
     pub ret: Ty,
     pub locals: Vec<Ty>,
     pub blocks: Vec<Block>,
+    #[serde(default)]
+    pub stack: Vec<StackSlot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Module {
     pub version: String,
     pub functions: Vec<Function>,
+    /// `struct State` of the root module, when there is one.
+    #[serde(default)]
+    pub state: Option<StateInfo>,
 }
 
 impl Module {
@@ -264,6 +329,27 @@ impl Module {
                             l(*dst)?;
                             l(*lhs)?;
                             l(*rhs)?
+                        }
+                        Inst::StackAddr { dst, slot } => {
+                            l(*dst)?;
+                            if *slot as usize >= f.stack.len() {
+                                return Err(format!("{}: stack slot {slot} out of range", f.name));
+                            }
+                        }
+                        Inst::Load { dst, addr, .. } => {
+                            l(*dst)?;
+                            l(*addr)?
+                        }
+                        Inst::Store { addr, src, .. } => {
+                            l(*addr)?;
+                            l(*src)?
+                        }
+                        Inst::PtrAdd {
+                            dst, base, index, ..
+                        } => {
+                            l(*dst)?;
+                            l(*base)?;
+                            l(*index)?
                         }
                         Inst::Call { dst, func, args } => {
                             if let Some(d) = dst {

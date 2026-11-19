@@ -106,7 +106,7 @@ pub fn run(module: &Module, entry: &str, steps: u64) -> RunOutcome {
     if module.functions[id as usize].params != 0 {
         return RunOutcome::Fault(format!("`{entry}` takes arguments"));
     }
-    let mut m = Machine { module, steps };
+    let mut m = Machine::new(module, steps, 0);
     match m.call(id, &[], 0) {
         Ok(v) => RunOutcome::Value(v),
         Err(Stop::Panic(s)) => RunOutcome::Panic(s),
@@ -115,12 +115,104 @@ pub fn run(module: &Module, entry: &str, steps: u64) -> RunOutcome {
     }
 }
 
+/// Bytes of memory the interpreter gives a run (stack + host state).
+pub const MEMORY: usize = 1 << 20;
+/// Addresses below this one are never valid (null guard). Host state, when
+/// present, starts here.
+pub const STATE_BASE: usize = 16;
+
+/// Run a DSP block: `init` (if any, `fn() -> State` lowered with its result
+/// address) writes the host state once, then `process(&mut State, x)` runs for
+/// each input. Returns the outputs, or the outcome that stopped the run.
+pub fn run_dsp(
+    module: &Module,
+    init: Option<&str>,
+    process: &str,
+    inputs: &[f32],
+    steps: u64,
+) -> Result<Vec<f32>, RunOutcome> {
+    let size = module.state.as_ref().map(|s| s.size as usize).unwrap_or(0);
+    let mut m = Machine::new(module, steps, size);
+    let state = Val::Int(Ty::Ptr, STATE_BASE as i128);
+    let stop = |e: Stop| match e {
+        Stop::Panic(s) => RunOutcome::Panic(s),
+        Stop::Diverge => RunOutcome::Diverge,
+        Stop::Fault(s) => RunOutcome::Fault(s),
+    };
+    if let Some(init) = init {
+        let id = module
+            .func_id(init)
+            .ok_or_else(|| RunOutcome::Fault(format!("no function `{init}`")))?;
+        m.call(id, &[state], 0).map_err(stop)?;
+    }
+    let id = module
+        .func_id(process)
+        .ok_or_else(|| RunOutcome::Fault(format!("no function `{process}`")))?;
+    let mut out = Vec::with_capacity(inputs.len());
+    for x in inputs {
+        match m.call(id, &[state, Val::F32(*x)], 0).map_err(stop)? {
+            Val::F32(y) => out.push(y),
+            other => return Err(RunOutcome::Fault(format!("`{process}` returned {other:?}"))),
+        }
+    }
+    Ok(out)
+}
+
 struct Machine<'m> {
     module: &'m Module,
     steps: u64,
+    mem: Vec<u8>,
+    sp: usize,
 }
 
-impl Machine<'_> {
+impl<'m> Machine<'m> {
+    fn new(module: &'m Module, steps: u64, state_size: usize) -> Self {
+        Machine {
+            module,
+            steps,
+            mem: vec![0; MEMORY],
+            sp: (STATE_BASE + state_size).div_ceil(16) * 16,
+        }
+    }
+
+    fn check(&self, addr: i128, size: u32) -> Result<usize, Stop> {
+        let end = addr + size as i128;
+        if addr < STATE_BASE as i128 || end > self.mem.len() as i128 {
+            return Err(Stop::Fault(format!("memory access out of range at {addr}")));
+        }
+        Ok(addr as usize)
+    }
+
+    fn load(&self, ty: Ty, addr: i128) -> Result<Val, Stop> {
+        let a = self.check(addr, ty.size())?;
+        let b = &self.mem[a..a + ty.size() as usize];
+        let mut raw = [0u8; 8];
+        raw[..b.len()].copy_from_slice(b);
+        let u = u64::from_le_bytes(raw);
+        Ok(match ty {
+            Ty::F32 => Val::F32(f32::from_bits(u as u32)),
+            Ty::F64 => Val::F64(f64::from_bits(u)),
+            Ty::Bool => Val::Bool(u & 1 == 1),
+            Ty::Ptr => Val::Int(Ty::Ptr, u as i128),
+            Ty::Unit => Val::Unit,
+            t => Val::Int(t, wrap(t, u as i128)),
+        })
+    }
+
+    fn store(&mut self, ty: Ty, addr: i128, v: Val) -> Result<(), Stop> {
+        let a = self.check(addr, ty.size())?;
+        let u: u64 = match v {
+            Val::F32(x) => x.to_bits() as u64,
+            Val::F64(x) => x.to_bits(),
+            Val::Bool(b) => b as u64,
+            Val::Int(_, x) => x as u64,
+            Val::Unit => 0,
+        };
+        let n = ty.size() as usize;
+        self.mem[a..a + n].copy_from_slice(&u.to_le_bytes()[..n]);
+        Ok(())
+    }
+
     fn tick(&mut self) -> Result<(), Stop> {
         if self.steps == 0 {
             return Err(Stop::Diverge);
@@ -136,6 +228,32 @@ impl Machine<'_> {
         let f = &self.module.functions[id as usize];
         let mut slots: Vec<Val> = f.locals.iter().map(|t| zero(*t)).collect();
         slots[..args.len()].copy_from_slice(args);
+        // Frame: stack slots at increasing aligned addresses; released on
+        // return (the caller's `sp` is restored).
+        let saved_sp = self.sp;
+        let mut frame = Vec::with_capacity(f.stack.len());
+        let mut sp = self.sp;
+        for s in &f.stack {
+            sp = sp.div_ceil(s.align.max(1) as usize) * s.align.max(1) as usize;
+            frame.push(sp);
+            sp += s.size as usize;
+        }
+        if sp > self.mem.len() {
+            return Err(Stop::Fault("stack overflow".into()));
+        }
+        self.sp = sp;
+        let r = self.exec(f, &mut slots, &frame, depth);
+        self.sp = saved_sp;
+        r
+    }
+
+    fn exec(
+        &mut self,
+        f: &'m Function,
+        slots: &mut [Val],
+        frame: &[usize],
+        depth: u32,
+    ) -> Result<Val, Stop> {
         let mut b: BlockId = 0;
         loop {
             let blk = &f.blocks[b as usize];
@@ -159,6 +277,39 @@ impl Machine<'_> {
                     }
                     Inst::Cast { dst, from, to, src } => {
                         slots[*dst as usize] = cast(*from, *to, slots[*src as usize])
+                    }
+                    Inst::StackAddr { dst, slot } => {
+                        slots[*dst as usize] = Val::Int(Ty::Ptr, frame[*slot as usize] as i128)
+                    }
+                    Inst::Load {
+                        dst,
+                        ty,
+                        addr,
+                        offset,
+                    } => {
+                        let a = ptr(slots[*addr as usize])? + *offset as i128;
+                        slots[*dst as usize] = self.load(*ty, a)?;
+                    }
+                    Inst::Store {
+                        ty,
+                        addr,
+                        offset,
+                        src,
+                    } => {
+                        let a = ptr(slots[*addr as usize])? + *offset as i128;
+                        self.store(*ty, a, slots[*src as usize])?;
+                    }
+                    Inst::PtrAdd {
+                        dst,
+                        base,
+                        index,
+                        scale,
+                    } => {
+                        let Val::Int(_, i) = slots[*index as usize] else {
+                            return Err(Stop::Fault("non-integer index".into()));
+                        };
+                        let a = ptr(slots[*base as usize])? + i * *scale as i128;
+                        slots[*dst as usize] = Val::Int(Ty::Ptr, a);
                     }
                     Inst::Call { dst, func, args } => {
                         let vals: Vec<Val> = args.iter().map(|a| slots[*a as usize]).collect();
@@ -189,6 +340,13 @@ impl Machine<'_> {
                 Term::Unreachable => return Err(Stop::Fault("reached unreachable block".into())),
             }
         }
+    }
+}
+
+fn ptr(v: Val) -> Result<i128, Stop> {
+    match v {
+        Val::Int(Ty::Ptr, a) => Ok(a),
+        _ => Err(Stop::Fault("not an address".into())),
     }
 }
 
