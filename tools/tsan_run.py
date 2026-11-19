@@ -2,22 +2,24 @@
 """ThreadSanitizer qualification of Ravum's concurrent path (RFC-E11-CONCURRENCY §5).
 
 Every `run-pass` conformance case whose source uses `thread::`, `sync::`,
-`task::`, `net::` or `http::` is built by `ravum-lang build` through a rustc wrapper that
-adds `-Zsanitizer=thread`, then executed several times with
-`TSAN_OPTIONS=halt_on_error=1`. Any ThreadSanitizer report, non-zero exit or
-missing stdout line fails the run.
+`task::`, `net::` or `http::` is built by `ravum-lang build`; its generated Rust
+(`.ravum/gen/main.rs`) is then compiled in a small Cargo project with
+`-Zsanitizer=thread` **and the standard library rebuilt with ThreadSanitizer**
+(`-Zbuild-std`), and executed several times with `TSAN_OPTIONS=halt_on_error=1`.
+Any ThreadSanitizer report, non-zero exit or missing stdout line fails the run.
+No report is suppressed.
 
 The run is never vacuous:
-* a positive control (a Rust program with a real data race, built by the same
-  wrapper) must be reported, otherwise the instrumentation is not working;
-* the generated binaries must contain `__tsan_` symbols;
+* a positive control (a Rust program with a real data race, built the same
+  way) must be reported, otherwise the instrumentation is not working;
+* the binaries must contain `__tsan_` symbols;
 * zero selected cases is a failure, not a pass.
 
-Limit, stated honestly: the standard library is not rebuilt with TSan
-(`-Cunsafe-allow-abi-mismatch=sanitizer`, no `-Zbuild-std`). Races inside
-`std` itself are not observed; races in the generated program and its
-runtime prelude are. A green run is an observation on this corpus, host and
-commit, not a proof of race freedom.
+Why `-Zbuild-std`: with an uninstrumented `std`, synchronisation inside
+`std::sync::mpmc` is invisible to TSan, which then reports false races on the
+channel's own buffers (observed in CI on `run/thread-channel-sum`). Rebuilding
+`std` removes that blind spot instead of suppressing it. A green run is an
+observation on this corpus, host and commit, not a proof of race freedom.
 
 Usage: python3 tools/tsan_run.py [--ravum-lang PATH] [--runs N]
 Exit codes: 0 = no report, 1 = report or failure, 2 = environment problem.
@@ -29,7 +31,6 @@ import argparse
 import json
 import os
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -49,16 +50,43 @@ fn main() {
 """
 
 
-def write_wrapper(directory: Path, toolchain: str) -> Path:
-    wrapper = directory / "rustc-tsan"
-    wrapper.write_text(
-        "#!/bin/sh\n"
-        f'exec rustc +{toolchain} "$@" -Zsanitizer=thread '
-        "-Cunsafe-allow-abi-mismatch=sanitizer\n",
-        encoding="utf-8",
-    )
-    wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return wrapper
+TARGET = "x86_64-unknown-linux-gnu"
+
+MANIFEST = """[package]
+name = "ravum_tsan_case"
+version = "0.0.0"
+edition = "2021"
+
+[workspace]
+
+[profile.dev]
+overflow-checks = true
+"""
+
+
+class Builder:
+    """One Cargo project, rebuilt per case: `std` is compiled once and reused."""
+
+    def __init__(self, directory: Path, toolchain: str) -> None:
+        self.directory = directory
+        self.toolchain = toolchain
+        (directory / "src").mkdir(parents=True)
+        (directory / "Cargo.toml").write_text(MANIFEST, encoding="utf-8")
+
+    def build(self, source: str) -> tuple[Path | None, str]:
+        (self.directory / "src" / "main.rs").write_text(source, encoding="utf-8")
+        env = dict(os.environ)
+        env["RUSTFLAGS"] = "-Zsanitizer=thread"
+        result = subprocess.run(
+            ["cargo", f"+{self.toolchain}", "build", "-q", "-Zbuild-std", "--target", TARGET],
+            cwd=self.directory,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            return None, result.stderr
+        return self.directory / "target" / TARGET / "debug" / "ravum_tsan_case", ""
 
 
 def tsan_env() -> dict[str, str]:
@@ -81,17 +109,10 @@ def selected_cases() -> list[Path]:
     return chosen
 
 
-def positive_control(work: Path, wrapper: Path) -> str | None:
-    source = work / "race.rs"
-    source.write_text(RACE, encoding="utf-8")
-    binary = work / "race"
-    build = subprocess.run(
-        [str(wrapper), "--edition", "2021", "-o", str(binary), str(source)],
-        capture_output=True,
-        text=True,
-    )
-    if build.returncode != 0:
-        return f"the control does not build:\n{build.stderr}"
+def positive_control(builder: Builder) -> str | None:
+    binary, error = builder.build(RACE)
+    if binary is None:
+        return f"the control does not build:\n{error}"
     run = subprocess.run([str(binary)], capture_output=True, text=True, env=tsan_env())
     if "ThreadSanitizer: data race" not in run.stderr:
         return "the control race was NOT reported: the instrumentation is not working"
@@ -103,25 +124,20 @@ def has_tsan_symbols(binary: Path) -> bool:
     return b"__tsan_" in data
 
 
-def run_case(case_dir: Path, work: Path, ravum: str, wrapper: Path, runs: int) -> str | None:
+def run_case(case_dir: Path, work: Path, ravum: str, builder: Builder, runs: int) -> str | None:
     case = json.loads((case_dir / "case.json").read_text(encoding="utf-8"))
     package = work / case["id"].replace("/", "__")
     shutil.copytree(case_dir, package)
     env = tsan_env()
-    env["RAVUM_RUSTC"] = str(wrapper)
-    env["RAVUM_NO_INCREMENTAL"] = "1"
-    build = subprocess.run(
-        [ravum, "build", str(package)], capture_output=True, text=True, env=env
-    )
+    build = subprocess.run([ravum, "build", str(package)], capture_output=True, text=True, env=env)
     if build.returncode != 0:
         return f"build failed:\n{build.stdout}{build.stderr}"
-    built = next(
-        (line[len("built: ") :].strip() for line in build.stdout.splitlines() if line.startswith("built: ")),
-        None,
-    )
-    if built is None:
-        return "no `built:` line"
-    binary = Path(built)
+    generated = package / ".ravum" / "gen" / "main.rs"
+    if not generated.is_file():
+        return "no generated `.ravum/gen/main.rs`"
+    binary, error = builder.build(generated.read_text(encoding="utf-8"))
+    if binary is None:
+        return f"the generated Rust does not build under TSan:\n{error}"
     if not has_tsan_symbols(binary):
         return "the binary is not instrumented (no `__tsan_` symbol)"
     wanted = case.get("stdout_contains") or []
@@ -160,8 +176,8 @@ def main() -> int:
         return 2
     with tempfile.TemporaryDirectory(prefix="ravum-tsan-") as tmp:
         work = Path(tmp)
-        wrapper = write_wrapper(work, args.toolchain)
-        problem = positive_control(work, wrapper)
+        builder = Builder(work / "cargo", args.toolchain)
+        problem = positive_control(builder)
         if problem:
             print(f"tsan_run: FAIL — positive control: {problem}")
             return 1
@@ -173,7 +189,7 @@ def main() -> int:
         failures = 0
         for case_dir in cases:
             rel = case_dir.relative_to(CASES)
-            problem = run_case(case_dir, work, args.ravum_lang, wrapper, args.runs)
+            problem = run_case(case_dir, work, args.ravum_lang, builder, args.runs)
             if problem:
                 failures += 1
                 print(f"FAIL  {rel}: {problem}")
@@ -181,7 +197,7 @@ def main() -> int:
                 print(f"PASS  {rel} ({args.runs} runs, no report)")
         print(
             f"tsan_run: {len(cases)} case(s), {failures} failure(s), {args.runs} run(s) each; "
-            "std is not instrumented (see the module docstring)"
+            "std rebuilt with ThreadSanitizer (-Zbuild-std)"
         )
         return 1 if failures else 0
 

@@ -1,6 +1,29 @@
 use super::*;
 
 impl<'a> Parser<'a> {
+    /// `expr.await` (CONC-6.1). Out of line on purpose: the postfix loop is on
+    /// the recursion path of deeply nested input, and every local added to its
+    /// frame lowers the nesting the parser survives (`hostile_deep_nesting_*`).
+    #[inline(never)]
+    /// Called after the `.`: `false` when the next token is not `await`.
+    fn finish_await(&mut self, expr: &mut Expr) -> bool {
+        if !self.at_kw(Kw::Await) {
+            return false;
+        }
+        self.bump(); // `await`
+        let start = expr.span;
+        let placeholder = self.unit_expr(start);
+        let base = std::mem::replace(expr, placeholder);
+        let span = self.span_from(start);
+        let id = self.id();
+        *expr = Expr {
+            id,
+            kind: ExprKind::Await(Box::new(base)),
+            span,
+        };
+        true
+    }
+
     pub(super) fn parse_postfix(&mut self, allow_struct: bool) -> Expr {
         let outer = self.open_operand();
         let head = std::mem::take(&mut self.stmt_head);
@@ -36,16 +59,6 @@ impl<'a> Parser<'a> {
                 let dot_span = self.cur_span();
                 self.bump();
                 match self.kind().clone() {
-                    TokenKind::Kw(Kw::Await) => {
-                        self.bump();
-                        let span = self.span_from(start);
-                        let id = self.id();
-                        expr = Expr {
-                            id,
-                            kind: ExprKind::Await(Box::new(expr)),
-                            span,
-                        };
-                    }
                     TokenKind::Ident(name) => {
                         let ident_span = self.cur_span();
                         self.bump();
@@ -125,7 +138,9 @@ impl<'a> Parser<'a> {
                         self.bump();
                     }
                     _ => {
-                        self.expected("a field name or tuple index after `.`");
+                        if !self.finish_await(&mut expr) {
+                            self.expected("a field name or tuple index after `.`");
+                        }
                     }
                 }
             } else if self.at(Punct::LBracket) {

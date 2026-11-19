@@ -55,7 +55,7 @@ C'est la règle `CONC-2.1` proposée ; elle remplace un système de traits
 > - **TSan bloquant** (§5) : `.github/workflows/tsan.yml` et
 >   `tools/tsan_run.py` (2026-11-19), sur tous les cas `run-pass` concurrents
 >   (threads, canaux, TCP, HTTP), 10 exécutions chacun, avec un témoin de course
->   qui doit être signalé ; la bibliothèque standard n'est pas instrumentée.
+>   qui doit être signalé ; la std est reconstruite avec TSan (`-Zbuild-std`).
 
 Module `std::thread` et `std::sync`, effet **`thread`** (nouveau groupe) :
 

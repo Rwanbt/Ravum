@@ -101,8 +101,9 @@ Depuis la phase 1 de RFC-E11-CONCURRENCY (threads, canaux) et `std::net` /
 séparé, [`tsan.yml`](../../.github/workflows/tsan.yml), exécuté aussi sur les
 pull requests : `tools/tsan_run.py` construit chaque cas `run-pass` concurrent
 avec `-Zsanitizer=thread` et l'exécute 10 fois ; un témoin contenant une vraie
-course doit être signalé, sinon le job échoue. Limite : la bibliothèque
-standard n'est pas reconstruite avec TSan. Le texte ci-dessous est
+course doit être signalé, sinon le job échoue. La bibliothèque standard est
+reconstruite avec TSan (`-Zbuild-std`) : sans cela, TSan signalait de fausses
+courses dans `std::sync::mpmc` (observé en CI) ; aucun rapport n'est supprimé. Le texte ci-dessous est
 l'historique de la décision antérieure.
 
 #### Historique — NOT_APPLICABLE (jusqu'au 2026-11-19)
