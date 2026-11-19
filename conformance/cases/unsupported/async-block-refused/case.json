@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/async-block-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-ASYNC"
+  ],
+  "notes": "CONC-1.2: no `async` block."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/arc-unknown",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-UNKNOWN"
+  ],
+  "notes": "CONC-1.2, CONC-1.5: there is no `Arc`, so no state can be shared between threads."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "unsupported/send-bound-refused",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-UNSUPPORTED-BOUNDS"
+  ],
+  "notes": "CONC-2.2: there is no `Send`/`Sync` and generics take no bounds."
+}
