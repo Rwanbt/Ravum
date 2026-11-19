@@ -2227,3 +2227,27 @@ Quatre cas `run/shift-*` de plus. Impact mesuré : aucun exemple, application ni
 cas du corpus n'utilisait une quantité signée en variable ; trois tests de
 contrat du checker qui l'acceptaient sont mis à jour (`typeck_contracts2.rs`,
 `typeck_contracts3.rs`).
+
+## 41. `compatibility.md`, 2ᵉ lot : 5 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `compatibility.md` passe de 25 non atteints à
+**20** (19 / 39) ; `features_coverage.py --strict` : 234/234 (1 exemption).
+FeatureId F-META-030 :
+
+- COMPAT-1.2 : `--version` affiche `core-1.0-draft.1` et chaque rapport JSON
+  porte `"spec_version":"core-1.0-draft.1"` (cas `cli/version-says-draft`,
+  `cli/json-spec-version-says-draft`).
+- COMPAT-2.8 : seule `core-1.0` est acceptée, `core-2.0` → `E-UNSUPPORTED-EDITION`.
+- COMPAT-3.6 : tests unitaires de `deprecation.rs` (registre vide, un
+  `W-DEPRECATED` par usage d'un chemin déprécié, programme accepté).
+- COMPAT-4.5 : `recompile_from_source.rs` lance `run`, change la source (même
+  longueur, même chemin de binaire), relance : la nouvelle sortie est affichée.
+- COMPAT-7.6 : une forme refusée par `core-1.0` reste refusée.
+
+Non tracés, et pourquoi : COMPAT-2.1 à 2.7, 3.1 à 3.5 décrivent ce qu'une
+**évolution future** du langage a le droit de faire ; aucune édition ratifiée
+n'existe, il n'y a rien à exécuter (le gel des codes publiés est déjà tenu par
+`diagnostic_codes.snapshot`, DIAG-9). COMPAT-5.2 oblige les **consommateurs**,
+pas l'outil. COMPAT-6.1 à 6.5 et 7.2 à 7.5 décrivent la procédure humaine de
+migration et de rollback ; ils relèvent du dossier de release (T11, T12), pas
+d'un cas de conformance.

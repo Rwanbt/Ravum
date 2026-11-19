@@ -1,0 +1,9 @@
+{
+  "id": "cli/version-says-draft",
+  "mode": "cli",
+  "args": [
+    "--version"
+  ],
+  "stdout_contains": "draft",
+  "notes": "COMPAT-1.2 (MUST): no report presents a draft as stable; `--version` names the edition `core-1.0-draft.N`."
+}
