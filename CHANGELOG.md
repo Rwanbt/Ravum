@@ -8,6 +8,9 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- `packages/sqlite` builds on Windows with MSVC (`tools/build_sqlite_native.py`,
+  `vswhere` + `vcvars64.bat`, `/Brepro`); the SQLite and HTTP + SQLite
+  end-to-end tests run on Windows CI.
 - Asynchronous TCP: `net::accept_async`, `net::connect_async`,
   `net::read_line_async`, `net::write_str_async` (CONC-6.7). They share the
   socket instead of borrowing it, never block the executor, and read the same
