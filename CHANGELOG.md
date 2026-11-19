@@ -8,6 +8,10 @@ released version yet: every entry below is part of the DRAFT Core 1.0 work.
 ## [Unreleased]
 
 ### Added
+- ThreadSanitizer as a blocking workflow (`.github/workflows/tsan.yml`,
+  `tools/tsan_run.py`): every concurrent `run-pass` case is built with
+  `-Zsanitizer=thread` and run 10 times, with a positive control that must be
+  reported; replaces the disabled `NOT_APPLICABLE` job (RFC-E11-CONCURRENCY §5).
 - `ravum-lang build --emit dsp-block`: a `.rv` DSP block built as a `cdylib`
   for the block host (DSP ABI 2, unchanged), checked under the `rt` profile
   from `process_sample`, exporting its state schema digest

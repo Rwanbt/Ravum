@@ -14,12 +14,8 @@ name: Linux qualification (real ubuntu-latest runner)
 # sémantique de programmes arbitraires. Un job vert est une observation liée à
 # ce run et à ce commit, jamais un `PROVED`.
 #
-# TSan : NOT_APPLICABLE (job désactivé ci-dessous). Ravum Core 1.0 n'expose ni
-# threads, ni async ; la FFI minimale (`extern "C"` + `unsafe { }`) est
-# mono-thread et n'ajoute aucun chemin concurrent. Aucun test ne partage d'état
-# mutable entre threads. L'ajouter produirait un faux signal de couverture. Il
-# faudra le réactiver le jour où un chemin concurrent réel (daemon multi-session)
-# sera qualifié.
+# TSan : workflow bloquant séparé, `tsan.yml` (aussi sur les pull requests),
+# depuis que Ravum a des threads, des canaux, TCP et HTTP (RFC-E11-CONCURRENCY).
 
 on:
   workflow_dispatch:
@@ -466,23 +462,6 @@ jobs:
         run: |
           echo "wasm32-wasip1 is a WASI preview 1 execution path through Node.js: not a browser, GPU or component-model qualification."
 
-  tsan:
-    # NOT_APPLICABLE — deliberately disabled, with the reason kept in-tree so it
-    # cannot be mistaken for a missing qualification.
-    #
-    # ThreadSanitizer qualifies concurrent code. Ravum Core 1.0 (syntax, sema,
-    # codegen, CLI) exposes no threads and no async runtime; the minimal FFI
-    # surface is synchronous, single-threaded `extern "C"` calls and does not
-    # create shared mutable concurrency. No test spawns a concurrent data path
-    # over shared mutable state. Running TSan here would produce a green signal
-    # that says nothing about the product. Re-enable when the daemon's
-    # multi-session/overlay path is qualified as a concurrent surface, with its
-    # own tests and a documented TCB.
-    name: ThreadSanitizer — NOT_APPLICABLE (no threads/async in Core 1.0)
-    if: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Explain why TSan is not run
-        run: |
-          echo "NOT_APPLICABLE: no concurrent surface is qualified in Core 1.0."
+  # ThreadSanitizer moved to its own blocking workflow, `tsan.yml`, which also
+  # runs on pull requests (RFC-E11-CONCURRENCY §5): Ravum now has threads,
+  # channels, TCP and HTTP (std::thread, std::sync, std::net, std::http).

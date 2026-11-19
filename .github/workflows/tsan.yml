@@ -1,0 +1,42 @@
+name: tsan
+
+# ThreadSanitizer on Ravum's concurrent path (RFC-E11-CONCURRENCY §5, T6).
+#
+# Blocking: every concurrent `run-pass` conformance case (threads, channels,
+# TCP, HTTP) is built with `-Zsanitizer=thread` and run 10 times; any report
+# fails the job. A positive control (a real data race) must be reported, so a
+# green job cannot come from missing instrumentation. Limit: the standard
+# library is not rebuilt with TSan (see `tools/tsan_run.py`). A green job is an
+# observation on this corpus and commit, never a proof of race freedom.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  tsan:
+    name: ThreadSanitizer (Linux, concurrent run-pass corpus)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (stable pinned to 1.95.0, as rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@1.95.0
+      - name: Install nightly Rust (for -Zsanitizer=thread)
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Show toolchains
+        run: |
+          rustc --version
+          rustc +nightly --version
+      - name: Build ravum-lang (pinned toolchain)
+        run: cargo +1.95.0 build -p ravum-lang-cli --locked
+      - name: Run the concurrent corpus under ThreadSanitizer
+        run: python3 tools/tsan_run.py --runs 10

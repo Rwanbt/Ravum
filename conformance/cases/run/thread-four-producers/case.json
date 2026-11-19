@@ -1,0 +1,5 @@
+{
+  "id": "run/thread-four-producers",
+  "mode": "run-pass",
+  "stdout_contains": "124500\n1000\n"
+}
