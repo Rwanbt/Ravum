@@ -2197,3 +2197,33 @@ prouvable par un test fini, seulement réfutable par un audit. UNS-0.1 (même
 nature que FEAT-12.2), UNS-0.3 (autorité du checker : tenue par le contrat
 `check → build` de T2, pas par une ligne), UNS-9.1 à 9.5 (procédure de
 proposition d'extension, sans forme exécutable).
+
+## 40. Lots `types.md` et `expressions.md` : 10 MUST de plus tracés (2026-11-19)
+
+`python3 tools/must_audit.py` : `types.md` passe de 6 non atteints à **0**
+(94 / 94), `expressions.md` de 4 à **0** (86 / 86) ; `features_coverage.py
+--strict` : 233/233 (1 exemption). FeatureIds F-TYP-028 et F-EXPR-019, dix cas,
+chaque sortie mesurée avant d'être écrite :
+
+- TYP-13.3 : branches `i32`/`bool` → `E-TYP-MISMATCH` ; `if c { a } else { 2 }`
+  avec `a: i64` affiche `5`.
+- TYP-13.5 à 13.9 : `String as i64` et `&i64 as i64` → `E-TYP-CAST` ;
+  `NaN as i32` = `0`, `1e300 as i32` = `2147483647`, `-1e300 as i32` =
+  `-2147483648`, `300 as u8 as i64` = `44`, `7 as i32` = `7`, sans panic.
+- EXPR-3.4 : `a << -1` → `E-TYP-SHIFT` ; une quantité `u8` décale un `i64`.
+- EXPR-3.6, 3.7 : débordement `i128` → `panic:`, sortie 1.
+- EXPR-3.7, 3.8 : sous `test`, un test qui panique est `FAILED` et l'autre
+  passe (`failed: 1`, `passed: 1`) ; `catch_unwind` → `E-RES-UNKNOWN`.
+
+### 40.1 Quantité de décalage négative : refusée à la compilation (D-19-1)
+
+Constat : EXPR-3.4 refusait une quantité négative, mais seulement pour un
+littéral ; `let s: i64 = -1; a << s` compilait puis paniquait. Décision du
+responsable (D-19-1) : la détection doit avoir lieu à la compilation, même en
+variable. Le checker (`typeck/helpers.rs`, `shift_amount_refused`) accepte une
+quantité non signée ou une constante de littéraux de valeur `>= 0`, et refuse
+toute autre quantité signée (`E-TYP-SHIFT`), pour `<<`, `>>`, `<<=`, `>>=`.
+Quatre cas `run/shift-*` de plus. Impact mesuré : aucun exemple, application ni
+cas du corpus n'utilisait une quantité signée en variable ; trois tests de
+contrat du checker qui l'acceptaient sont mis à jour (`typeck_contracts2.rs`,
+`typeck_contracts3.rs`).

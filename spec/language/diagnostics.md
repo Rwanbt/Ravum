@@ -110,7 +110,7 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-TYP-CALL` | types | appel d'une valeur non-fonction |
 | `E-TYP-INDEX` | types | index non `usize`, type non indexable (`String`), index de tuple invalide |
 | `E-TYP-CAST` | types | `as` hors paires admises (entier→`char`, entier→`bool`, référence, agrégat) |
-| `E-TYP-SHIFT` | types | décalage négatif ou quantité invalide |
+| `E-TYP-SHIFT` | types | quantité de décalage négative ou non prouvée positive à la compilation (EXPR-3.4) |
 | `E-TYP-EQ` | types | `==`/`!=` sur un type non comparable (agrégat, `Option`, `Result`, `T`), `assert_eq` invalide |
 | `E-TYP-CMP` | types | `< <= > >=` sur un type non ordonné (texte, agrégat) |
 | `E-TYP-AMBIGUOUS` | types | inférence non résolue (`Vec::new()` sans contexte, littéral non contraint) |

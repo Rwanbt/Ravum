@@ -1,0 +1,4 @@
+fn main() {
+    let c = true;
+    let _x = if c { 1 } else { true };
+}

@@ -1,0 +1,7 @@
+{
+  "id": "run/i128-overflow-panics",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "panic:",
+  "notes": "EXPR-3.6 (MUST): i128 follows the same rules; overflow is a controlled panic, no wrapping mode. EXPR-3.7: `panic:` on stderr, exit code 1."
+}

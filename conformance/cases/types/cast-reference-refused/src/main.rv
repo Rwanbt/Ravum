@@ -1,0 +1,5 @@
+fn main() {
+    let a: i64 = 1;
+    let r = &a;
+    let _n = r as i64;
+}

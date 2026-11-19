@@ -9,11 +9,12 @@
 
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
 > `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178,
-> `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md`)** : `tools/must_audit.py`
-> compte **817 énoncés MUST** (STD-12.7 ajouté) et **231 FeatureIds** (F-LEX-009
+> `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md` #184, `types.md` et `expressions.md`)** : `tools/must_audit.py`
+> compte **817 énoncés MUST** (STD-12.7 ajouté) et **233 FeatureIds** (F-LEX-009
 > à 015, F-SYN-036 à 040, F-META-009 à 028, F-MOD-014 à 016, F-STD-033 à 035,
-> F-EFF-010, F-OWN-017 à 019, F-META-029 ajoutés) ; **671 / 817** sont atteignables par un FeatureId, **146**
-> ne le sont pas ; couverture stricte **231/231** (1 exemption). `features.md` : 6 / 11,
+> F-EFF-010, F-OWN-017 à 019, F-META-029, F-TYP-028, F-EXPR-019 ajoutés) ; **681 / 817** sont atteignables par un FeatureId, **136**
+> ne le sont pas ; couverture stricte **233/233** (1 exemption). `types.md` : 94 / 94,
+> `expressions.md` : 86 / 86 (`T2-FINDINGS` §40). `features.md` : 6 / 11,
 > `unsupported.md` : 1 / 8 (`T2-FINDINGS` §39). `ownership.md` :
 > 73 / 73 (`T2-FINDINGS` §38). `effects.md` :
 > 35 / 44 (`T2-FINDINGS` §37). `modules.md` : 64 / 67 ;

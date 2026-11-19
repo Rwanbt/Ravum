@@ -1,0 +1,6 @@
+{
+  "id": "run/shift-amount-any-integer-type",
+  "mode": "run-pass",
+  "stdout_contains": "8\n",
+  "notes": "EXPR-3.4 (MUST): the shift amount may have any integer type (u8 shifting an i64)."
+}

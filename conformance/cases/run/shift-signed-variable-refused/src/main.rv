@@ -1,0 +1,5 @@
+fn main() {
+    let a: i64 = 1;
+    let s: i64 = 3;
+    io::println(&(a << s).to_string());
+}

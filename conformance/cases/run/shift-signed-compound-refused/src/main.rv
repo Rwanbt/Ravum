@@ -1,0 +1,6 @@
+fn main() {
+    let mut a: i64 = 1;
+    let s: i32 = 2;
+    a <<= s;
+    io::println(&a.to_string());
+}

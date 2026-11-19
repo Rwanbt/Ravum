@@ -1,0 +1,4 @@
+fn main() {
+    let s = String::new();
+    let _n = s as i64;
+}
