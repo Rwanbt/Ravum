@@ -172,6 +172,7 @@ pub fn run(
     target: BuildTarget,
     json_output: bool,
     det_seed: Option<u64>,
+    journal: Option<&crate::args::Journal>,
 ) -> i32 {
     let report = Report {
         path,
@@ -193,10 +194,10 @@ pub fn run(
 
     // `det` (DET-1): the program must not reach an input it cannot replay;
     // the run itself is scheduled by the seed (DET-3).
-    let profile = if det_seed.is_some() {
-        Profile::Det
-    } else {
-        Profile::Core
+    let profile = match (det_seed, journal) {
+        (Some(_), Some(_)) => Profile::DetIo,
+        (Some(_), None) => Profile::Det,
+        _ => Profile::Core,
     };
     let frontend = pipeline::analyze(path, profile, false);
     if !frontend.success() {
@@ -228,7 +229,9 @@ pub fn run(
     if artifacts.target.is_wasm() {
         run_wasm(&report, &frontend, &artifacts, child_args)
     } else {
-        run_native(&report, &frontend, &artifacts, child_args, det_seed)
+        run_native(
+            &report, &frontend, &artifacts, child_args, det_seed, journal,
+        )
     }
 }
 
@@ -238,18 +241,97 @@ fn run_native(
     artifacts: &Artifacts,
     child_args: &[String],
     det_seed: Option<u64>,
+    journal: Option<&crate::args::Journal>,
 ) -> i32 {
     eprintln!("running: {}", util::pretty_path(&artifacts.binary));
     let mut command = Command::new(&artifacts.binary);
     command.args(child_args);
-    match det_seed {
-        Some(seed) => {
-            eprintln!("profile det: seed={seed}");
-            command.env("RAVUM_DET_SEED", seed.to_string());
+    for var in [
+        "RAVUM_DET_SEED",
+        "RAVUM_DET_RECORD",
+        "RAVUM_DET_REPLAY",
+        "RAVUM_DET_HEADER",
+    ] {
+        command.env_remove(var);
+    }
+    let mut det_seed = det_seed;
+    if let Some(journal) = journal {
+        // DET-13: the header binds a journal to this binary and platform.
+        let binary = match std::fs::read(&artifacts.binary) {
+            Ok(bytes) => ravum_lang_sema::loader::sha256_hex(&bytes),
+            Err(error) => {
+                util::err(format!("run: cannot read the built program: {error}"));
+                return util::EXIT_TOOL;
+            }
+        };
+        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+        let absolute = |p: &Path| {
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                std::env::current_dir().unwrap_or_default().join(p)
+            }
+        };
+        match journal {
+            crate::args::Journal::Record(path) => {
+                let seed = det_seed.unwrap_or(0);
+                let header = format!(
+                    "ravum-rvlog-1\tseed={seed}\tbinary=sha256:{binary}\tplatform={platform}"
+                );
+                // DET-14: the journal holds what the program read.
+                eprintln!(
+                    "profile det: recording I/O to {} (it contains the data the program reads)",
+                    util::pretty_path(path)
+                );
+                command.env("RAVUM_DET_RECORD", absolute(path));
+                command.env("RAVUM_DET_HEADER", header);
+            }
+            crate::args::Journal::Replay(path) => {
+                let text = match std::fs::read_to_string(path) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        util::err(format!(
+                            "run: cannot read the journal `{}`: {error}",
+                            util::pretty_path(path)
+                        ));
+                        return util::EXIT_USAGE;
+                    }
+                };
+                let header = text.lines().next().unwrap_or("");
+                let fields: Vec<&str> = header.split('\t').collect();
+                let seed = fields
+                    .iter()
+                    .find_map(|f| f.strip_prefix("seed="))
+                    .and_then(|s| s.parse::<u64>().ok());
+                let expected_binary = format!("binary=sha256:{binary}");
+                let expected_platform = format!("platform={platform}");
+                let matches = fields.first() == Some(&"ravum-rvlog-1")
+                    && fields.contains(&expected_binary.as_str())
+                    && fields.contains(&expected_platform.as_str());
+                match (seed, matches) {
+                    (Some(seed), true) => {
+                        det_seed = Some(seed);
+                        eprintln!(
+                            "profile det: replaying I/O from {}",
+                            util::pretty_path(path)
+                        );
+                        command.env("RAVUM_DET_REPLAY", absolute(path));
+                    }
+                    _ => {
+                        util::err(format!(
+                            "run: the journal `{}` was not recorded by this program on this \
+                             platform (header `{header}`); refusing to replay (DET-13)",
+                            util::pretty_path(path)
+                        ));
+                        return util::EXIT_USAGE;
+                    }
+                }
+            }
         }
-        None => {
-            command.env_remove("RAVUM_DET_SEED");
-        }
+    }
+    if let Some(seed) = det_seed {
+        eprintln!("profile det: seed={seed}");
+        command.env("RAVUM_DET_SEED", seed.to_string());
     }
     command.current_dir(frontend.root());
     command.stdout(report.program_stdout());

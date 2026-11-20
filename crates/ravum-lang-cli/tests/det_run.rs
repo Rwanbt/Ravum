@@ -96,6 +96,24 @@ test fn first_message_comes_from_worker_one() {
 }
 "#;
 
+/// Reads a file and an environment variable, writes a file, prints (DET-9..13).
+const IO_PROGRAM: &str = r#"use std::env;
+use std::fs;
+use std::io;
+
+fn main() -> Result<(), Error> effects(io, fs, alloc) {
+    let text: String = fs::read_to_string("input.txt")?;
+    let who: String = env::var("RR_WHO")?;
+    let mut out: String = String::from("hello ");
+    out.push_str(who.as_str());
+    out.push_str(": ");
+    out.push_str(text.as_str());
+    fs::write_string("out.txt", out.as_str())?;
+    io::println(out.as_str());
+    Ok(())
+}
+"#;
+
 fn package(name: &str, source: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("ravum-det-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
@@ -228,4 +246,101 @@ fn test_seeds_finds_an_order_dependent_failure_and_names_its_seed() {
     }
     let (code, _) = test(&["--seeds", "3"]);
     assert_eq!(code, 2, "--seeds without --profile det is a usage error");
+}
+
+fn run_env(dir: &Path, extra: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ravum-lang"));
+    command.arg("run").arg(dir).args(extra).current_dir(dir);
+    for (k, v) in env {
+        command.env(k, v);
+    }
+    let out = command.output().expect("ravum-lang runs");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn record_then_replay_serves_the_recorded_inputs_and_performs_no_io() {
+    let dir = package("det-record", IO_PROGRAM);
+    fs::write(dir.join("input.txt"), "first").unwrap();
+    let journal = dir.join("s.rvlog");
+    let journal_arg = journal.to_string_lossy().into_owned();
+    // Without a journal, det refuses fs (DET-1).
+    let (code, _, err) = run_env(&dir, &["--profile", "det"], &[("RR_WHO", "ana")]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("E-EFF-PROFILE"), "{err}");
+
+    let (code, recorded, err) = run_env(
+        &dir,
+        &["--profile", "det", "--record", &journal_arg],
+        &[("RR_WHO", "ana")],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(recorded, "hello ana: first\n");
+    assert!(
+        err.contains("it contains the data the program reads"),
+        "{err}"
+    );
+    let text = fs::read_to_string(&journal).unwrap();
+    assert!(
+        text.starts_with("ravum-rvlog-1\tseed=0\tbinary=sha256:"),
+        "{text}"
+    );
+    assert_eq!(text.lines().count(), 4, "header + 3 events: {text}");
+
+    // Replay: inputs changed, output file removed, variable unset.
+    fs::write(dir.join("input.txt"), "CHANGED").unwrap();
+    fs::remove_file(dir.join("out.txt")).unwrap();
+    let (code, replayed, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(replayed, recorded, "DET-3/DET-10: same output");
+    assert!(
+        !dir.join("out.txt").exists(),
+        "DET-12: a replayed write is not performed"
+    );
+
+    // DET-11: a tampered argument digest stops the replay at its rank.
+    let tampered: String = text
+        .lines()
+        .map(|l| {
+            if l.starts_with("1\t") {
+                let f: Vec<&str> = l.splitn(4, '\t').collect();
+                format!("{}\t{}\t0000000000000000\t{}", f[0], f[1], f[3])
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&journal, tampered + "\n").unwrap();
+    let (code, _, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("panic: replay diverged at #1"), "{err}");
+
+    // DET-11: a truncated journal (header + first event) ends the replay.
+    let truncated: String = text.lines().take(2).collect::<Vec<_>>().join("\n") + "\n";
+    fs::write(&journal, truncated).unwrap();
+    let (code, _, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("the journal has ended"), "{err}");
+
+    // DET-13: a journal of another program is refused before running.
+    let other = text.replacen("binary=sha256:", "binary=sha256:00", 1);
+    fs::write(&journal, other).unwrap();
+    let (code, _, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("refusing to replay (DET-13)"), "{err}");
+
+    // Usage: --replay with --seed, --record without det.
+    let (code, _, _) = run_env(
+        &dir,
+        &["--profile", "det", "--seed", "1", "--replay", &journal_arg],
+        &[],
+    );
+    assert_eq!(code, 2);
+    let (code, _, _) = run_env(&dir, &["--record", &journal_arg], &[]);
+    assert_eq!(code, 2);
 }

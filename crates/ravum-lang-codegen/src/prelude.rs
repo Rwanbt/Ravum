@@ -144,6 +144,10 @@ pub fn rv_eprint(text: &str) {
 }
 
 pub fn rv_read_line() -> Result<String, Error> {
+    rv_rec::call("io::read_line", &[], rv_read_line_real, rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_read_line_real() -> Result<String, Error> {
     let mut line = String::new();
     match std::io::stdin().read_line(&mut line) {
         Ok(_) => {
@@ -164,6 +168,10 @@ pub fn rv_args() -> Vec<String> {
 }
 
 pub fn rv_env_var(name: &str) -> Result<String, Error> {
+    rv_rec::call("env::var", &[name], || rv_env_var_real(name), rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_env_var_real(name: &str) -> Result<String, Error> {
     match std::env::var(name) {
         Ok(value) => Ok(value),
         Err(error) => Err(Error::new(&format!(
@@ -174,6 +182,16 @@ pub fn rv_env_var(name: &str) -> Result<String, Error> {
 }
 
 pub fn rv_fs_read_to_string(path: &str) -> Result<String, Error> {
+    rv_rec::call(
+        "fs::read_to_string",
+        &[path],
+        || rv_fs_read_to_string_real(path),
+        rv_rec::enc_text,
+        rv_rec::dec_text,
+    )
+}
+
+fn rv_fs_read_to_string_real(path: &str) -> Result<String, Error> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(text),
         Err(error) => Err(Error::new(&format!(
@@ -184,6 +202,17 @@ pub fn rv_fs_read_to_string(path: &str) -> Result<String, Error> {
 }
 
 pub fn rv_fs_write_string(path: &str, contents: &str) -> Result<(), Error> {
+    // DET-12: replayed, the write is not performed; its arguments are checked.
+    rv_rec::call(
+        "fs::write_string",
+        &[path, contents],
+        || rv_fs_write_string_real(path, contents),
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
+}
+
+fn rv_fs_write_string_real(path: &str, contents: &str) -> Result<(), Error> {
     match std::fs::write(path, contents) {
         Ok(()) => Ok(()),
         Err(error) => Err(Error::new(&format!(
@@ -194,7 +223,221 @@ pub fn rv_fs_write_string(path: &str, contents: &str) -> Result<(), Error> {
 }
 
 pub fn rv_fs_exists(path: &str) -> bool {
-    std::path::Path::new(path).exists()
+    rv_rec::call(
+        "fs::exists",
+        &[path],
+        || std::path::Path::new(path).exists(),
+        rv_rec::enc_bool,
+        rv_rec::dec_bool,
+    )
+}
+
+// --- I/O record and replay (RFC-DETERMINISTIC-PROFILE-1 DET-9..DET-15) ---
+//
+// Active only when `RAVUM_DET_RECORD=<file>` or `RAVUM_DET_REPLAY=<file>` is
+// set (`ravum-lang run --profile det --record|--replay FILE`). Recording, each
+// external call runs and appends `rank \t name \t digest(args) \t result` to
+// the journal (`ravum-rvlog-1`). Replaying, no external call runs: the next
+// event must have the same rank, name and argument digest, and its result is
+// returned; anything else stops the program (`replay diverged at #n`), never
+// a guessed value nor a real call (fail-closed). Covered: `fs::*`,
+// `io::read_line`, `env::var`; `net` stays refused under `det`.
+mod rv_rec {
+    use super::Error;
+    use std::io::Write;
+    use std::sync::{Mutex, OnceLock};
+
+    pub const VERSION: &str = "ravum-rvlog-1";
+
+    struct Event {
+        name: String,
+        digest: String,
+        result: String,
+    }
+
+    enum Mode {
+        Off,
+        Record(Mutex<(std::fs::File, u64)>),
+        Replay(Vec<Event>, Mutex<usize>),
+    }
+
+    static MODE: OnceLock<Mode> = OnceLock::new();
+
+    /// FNV-1a 64 of the arguments, each followed by a 0 byte. Not a
+    /// cryptographic digest: it detects a divergence, it does not authenticate.
+    fn digest(args: &[&str]) -> String {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for arg in args {
+            for b in arg.bytes().chain(std::iter::once(0u8)) {
+                h ^= b as u64;
+                h = ((h as u128 * 0x0100_0000_01b3u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+            }
+        }
+        format!("{h:016x}")
+    }
+
+    fn escape(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        for c in text.chars() {
+            match c {
+                '\\' => out.push_str("\\\\"),
+                '\t' => out.push_str("\\t"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+
+    fn unescape(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut chars = text.chars();
+        while let Some(c) = chars.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+            match chars.next() {
+                Some('t') => out.push('\t'),
+                Some('n') => out.push('\n'),
+                Some('r') => out.push('\r'),
+                Some(other) => out.push(other),
+                None => {}
+            }
+        }
+        out
+    }
+
+    pub fn enc_text(value: &Result<String, Error>) -> String {
+        match value {
+            Ok(text) => format!("ok:{}", escape(text)),
+            Err(error) => format!("err:{}", escape(&error.message)),
+        }
+    }
+
+    pub fn dec_text(text: &str) -> Option<Result<String, Error>> {
+        if let Some(rest) = text.strip_prefix("ok:") {
+            Some(Ok(unescape(rest)))
+        } else {
+            text.strip_prefix("err:")
+                .map(|rest| Err(Error::new(&unescape(rest))))
+        }
+    }
+
+    pub fn enc_unit(value: &Result<(), Error>) -> String {
+        match value {
+            Ok(()) => "ok:".to_string(),
+            Err(error) => format!("err:{}", escape(&error.message)),
+        }
+    }
+
+    pub fn dec_unit(text: &str) -> Option<Result<(), Error>> {
+        if text == "ok:" {
+            Some(Ok(()))
+        } else {
+            text.strip_prefix("err:")
+                .map(|rest| Err(Error::new(&unescape(rest))))
+        }
+    }
+
+    pub fn enc_bool(value: &bool) -> String {
+        value.to_string()
+    }
+
+    pub fn dec_bool(text: &str) -> Option<bool> {
+        text.parse().ok()
+    }
+
+    fn fail(message: String) -> ! {
+        panic!("{}", message)
+    }
+
+    fn mode() -> &'static Mode {
+        MODE.get_or_init(|| {
+            if let Ok(path) = std::env::var("RAVUM_DET_RECORD") {
+                let mut file = match std::fs::File::create(&path) {
+                    Ok(file) => file,
+                    Err(error) => fail(format!("cannot create the journal `{path}`: {error}")),
+                };
+                let header = std::env::var("RAVUM_DET_HEADER").unwrap_or_default();
+                if writeln!(file, "{header}").is_err() {
+                    fail(format!("cannot write the journal `{path}`"));
+                }
+                return Mode::Record(Mutex::new((file, 0)));
+            }
+            if let Ok(path) = std::env::var("RAVUM_DET_REPLAY") {
+                let text = match std::fs::read_to_string(&path) {
+                    Ok(text) => text,
+                    Err(error) => fail(format!("cannot read the journal `{path}`: {error}")),
+                };
+                let mut events = Vec::new();
+                for (index, line) in text.lines().enumerate().skip(1) {
+                    let fields: Vec<&str> = line.splitn(4, '\t').collect();
+                    let ok = fields.len() == 4 && fields[0] == (index - 1).to_string();
+                    if !ok {
+                        fail(format!("malformed journal `{path}` at line {}", index + 1));
+                    }
+                    events.push(Event {
+                        name: fields[1].to_string(),
+                        digest: fields[2].to_string(),
+                        result: fields[3].to_string(),
+                    });
+                }
+                return Mode::Replay(events, Mutex::new(0));
+            }
+            Mode::Off
+        })
+    }
+
+    pub fn call<T>(
+        name: &str,
+        args: &[&str],
+        real: impl FnOnce() -> T,
+        enc: fn(&T) -> String,
+        dec: fn(&str) -> Option<T>,
+    ) -> T {
+        match mode() {
+            Mode::Off => real(),
+            Mode::Record(state) => {
+                let value = real();
+                let mut guard = match state.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let rank = guard.1;
+                guard.1 += 1;
+                let line = format!("{rank}\t{name}\t{}\t{}", digest(args), enc(&value));
+                if writeln!(guard.0, "{line}").and_then(|_| guard.0.flush()).is_err() {
+                    fail("cannot append to the journal".to_string());
+                }
+                value
+            }
+            Mode::Replay(events, position) => {
+                let mut guard = match position.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let rank = *guard;
+                *guard += 1;
+                drop(guard);
+                let got = digest(args);
+                match events.get(rank) {
+                    None => fail(format!(
+                        "replay diverged at #{rank}: the journal has ended, got {name}({got})"
+                    )),
+                    Some(event) if event.name != name || event.digest != got => fail(format!(
+                        "replay diverged at #{rank}: expected {}({}), got {name}({got})",
+                        event.name, event.digest
+                    )),
+                    Some(event) => match dec(&event.result) {
+                        Some(value) => value,
+                        None => fail(format!("replay diverged at #{rank}: unreadable result")),
+                    },
+                }
+            }
+        }
+    }
 }
 
 // The socket is shared (`Arc`) so that an `async` operation can own a handle to

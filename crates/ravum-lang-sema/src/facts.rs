@@ -117,6 +117,10 @@ pub enum Profile {
     Rt,
     /// RFC-DETERMINISTIC-PROFILE-1: replayable execution (DET-1).
     Det,
+    /// `det` with `--record`/`--replay` (DET-9): the journaled inputs (`fs`,
+    /// `io::read_line`, `env::var`) are allowed. Never parsed from the
+    /// command line; reported as `det`.
+    DetIo,
 }
 
 impl Profile {
@@ -135,7 +139,7 @@ impl Profile {
             Profile::Core => "core",
             Profile::Pure => "pure",
             Profile::Rt => "rt",
-            Profile::Det => "det",
+            Profile::Det | Profile::DetIo => "det",
         }
     }
 
@@ -174,6 +178,12 @@ impl Profile {
             // the virtual clock of DET-2 exists: fail-closed.
             Profile::Det => Some(EffectSet::new([
                 Effect::Fs,
+                Effect::Net,
+                Effect::Unsafe,
+                Effect::Ffi,
+                Effect::Nondet,
+            ])),
+            Profile::DetIo => Some(EffectSet::new([
                 Effect::Net,
                 Effect::Unsafe,
                 Effect::Ffi,

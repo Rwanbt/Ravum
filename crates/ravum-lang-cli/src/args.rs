@@ -11,6 +11,13 @@ pub enum CacheAction {
     Clean,
 }
 
+/// I/O journal of a `det` run (RFC-DETERMINISTIC-PROFILE-1 §2.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Journal {
+    Record(PathBuf),
+    Replay(PathBuf),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Init {
@@ -53,6 +60,8 @@ pub enum Command {
         json: bool,
         /// `--profile det [--seed N]` (RFC-DETERMINISTIC-PROFILE-1 DET-3).
         det_seed: Option<u64>,
+        /// `--record FILE` / `--replay FILE` (DET-9, DET-10), with `--profile det`.
+        journal: Option<Journal>,
     },
     Watch {
         path: PathBuf,
@@ -339,6 +348,7 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
     let mut json = false;
     let mut det = false;
     let mut seed: Option<u64> = None;
+    let mut journal: Option<Journal> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
@@ -346,6 +356,17 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
             "--" => {
                 child.extend(rest[i + 1..].iter().cloned());
                 break;
+            }
+            "--record" | "--replay" => {
+                let value = option_value(rest, &mut i, arg)?;
+                if journal.is_some() {
+                    return Err("`--record` and `--replay` are exclusive".to_string());
+                }
+                journal = Some(if arg == "--record" {
+                    Journal::Record(PathBuf::from(value))
+                } else {
+                    Journal::Replay(PathBuf::from(value))
+                });
             }
             "--json" => json = true,
             "--profile" => {
@@ -388,12 +409,19 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
     if det && target.is_wasm() {
         return Err("`--profile det` runs native programs only".to_string());
     }
+    if journal.is_some() && !det {
+        return Err("`--record`/`--replay` require `--profile det`".to_string());
+    }
+    if matches!(journal, Some(Journal::Replay(_))) && seed.is_some() {
+        return Err("`--replay` reads the seed from the journal; do not pass `--seed`".to_string());
+    }
     Ok(Command::Run {
         path: path.unwrap_or_else(default_path),
         args: child,
         target,
         json,
         det_seed: det.then(|| seed.unwrap_or(0)),
+        journal,
     })
 }
 
@@ -660,7 +688,7 @@ COMMANDS:
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
-    run [PATH] [--json] [--target TRIPLE] [--profile det [--seed N]] [-- ARGS...]
+    run [PATH] [--json] [--target TRIPLE] [--profile det [--seed N] [--record|--replay FILE]] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
     watch [PATH] --backend jit [--entry NAME]  Native in-process backend, per-function hot swap

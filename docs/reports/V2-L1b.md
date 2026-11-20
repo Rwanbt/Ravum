@@ -1,4 +1,4 @@
-# V2-L1b — T17 : profil `det`, étapes 1 et 2
+# V2-L1b — T17 : profil `det`, étapes 1, 2 et 3
 
 | Champ | Valeur |
 |---|---|
@@ -71,7 +71,26 @@
 - **Horloge virtuelle** de l'exécuteur `std::task` : non faite ; sans effet
   observable aujourd'hui (le sommeil de 1 ms n'a lieu qu'en attente de
   socket, et `net` est refusé sous `det`). À faire avec `task::timeout` (L7b).
-- **DET-9 à DET-15** (`--record`/`--replay`) : étape 3, non faite.
+- **Étape 3, faite pour `fs`, `io::read_line`, `env::var`** :
+  `run --profile det [--seed N] --record F` / `--replay F`. Runtime
+  (`rv_rec`, prélude) : en enregistrement, chaque appel s'exécute puis ajoute
+  `rang \t nom \t empreinte(args) \t résultat` au journal ; en rejeu, aucun
+  appel externe : rang, nom et empreinte (FNV-1a 64, détection et non
+  authentification) doivent correspondre, sinon `panic: replay diverged at
+  #n` (aussi journal épuisé) ; une écriture rejouée n'est pas faite (DET-12).
+  CLI : en-tête `ravum-rvlog-1 seed= binary=sha256: platform=` (DET-13) :
+  journal d'un autre binaire ou d'une autre plateforme refusé avant
+  exécution (code 2) ; graine lue dans le journal (`--seed` avec `--replay` :
+  code 2) ; avertissement « contient les données lues » (DET-14).
+  Vérification : profil interne `DetIo` (affiché `det`) qui permet ces
+  entrées journalisées et refuse toujours `net unsafe ffi nondet`.
+  Test `record_then_replay_serves_the_recorded_inputs_and_performs_no_io` :
+  entrée modifiée et variable absente au rejeu → même sortie, fichier non
+  écrit ; empreinte altérée → divergence #1 ; journal tronqué → fin de
+  journal ; en-tête étranger → code 2 ; usages invalides → code 2.
+- **Pas fait de l'étape 3** : `net` (sockets, HTTP) et l'horloge
+  (`task::timeout`) ne sont pas journalisés ; ils restent refusés sous `det`
+  (DET-T8 avec un serveur HTTP : non fait).
 - Déterminisme **entre plateformes** non mesuré (une seule : Linux x86_64).
 
 ## État des preuves
