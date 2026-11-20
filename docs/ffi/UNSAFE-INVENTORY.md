@@ -33,7 +33,7 @@ Deux verrous sont désormais en place, et ils sont de nature différente :
 | 1 | `crates/ravum-lang-cli/src/commands/watch.rs`, `mod signal` (Windows) | `unsafe extern "system" { fn SetConsoleCtrlHandler(...) }` | API Win32 sans crate externe | signature reproduite à l'identique (`HandlerRoutine = unsafe extern "system" fn(u32) -> i32`) ; installation best-effort |
 | 2 | idem | `unsafe extern "system" fn handler(_control_type: u32) -> i32` | callback exigé par Win32 | ne fait que `STOP.store(true, SeqCst)` puis retourne `1` ; aucune allocation, aucun verrou, aucune panique |
 | 3 | idem | `unsafe { SetConsoleCtrlHandler(Some(handler), 1) }` | appel de l'API | pointeur vers une fonction `extern "system"` de durée de vie statique ; valeur de retour ignorée (best-effort) |
-| 4 | `crates/ravum-lang-cli/src/commands/watch.rs`, `mod signal` (Unix) | `unsafe extern "C" { fn signal(sig: i32, handler: usize) -> usize; }` | `signal(2)` sans crate externe | seule `SIGINT` (2) est installée ; pointeur passé en `usize` selon l'ABI de la plateforme |
+| 4 | `crates/ravum-lang-cli/src/commands/watch.rs`, `mod signal` (Unix) | `unsafe extern "C" { fn signal(sig: i32, handler: usize) -> usize; }` | `signal(2)` sans crate externe | `SIGINT` (2) et `SIGTERM` (15) sont installées (SIGTERM : décision V2-K1, utilisé aussi par `run`) ; pointeur passé en `usize` selon l'ABI de la plateforme |
 | 5 | idem | `unsafe extern "C" fn handler(_sig: i32)` | callback exigé par `signal(2)` | ne fait que `STOP.store(true, SeqCst)` ; travail async-signal-safe uniquement |
 | 6 | idem | `unsafe { signal(2, handler as usize) }` | appel de l'API | pointeur de fonction valide ; résultat ignoré (best-effort) |
 

@@ -253,7 +253,29 @@ fn run_native(
     }
     command.current_dir(frontend.root());
     command.stdout(report.program_stdout());
-    match command.status() {
+    // V2-K1: an interrupted `run` (SIGINT/SIGTERM, console Ctrl+C) stops the
+    // program it launched instead of leaving it running. SIGKILL cannot be
+    // caught by any process: the child then survives (documented limit).
+    super::watch::install_interrupt_handler();
+    let status = command.spawn().and_then(|mut child| loop {
+        if let Some(status) = child.try_wait()? {
+            break Ok(status);
+        }
+        if super::watch::interrupt_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            break Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "interrupted; the program was stopped",
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    });
+    match status {
+        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+            util::err("run: interrupted; the program was stopped");
+            130
+        }
         Ok(status) => report.ran(frontend, child_exit_code(status.code()), "run: the program"),
         Err(error) => {
             let exit = if error.kind() == std::io::ErrorKind::NotFound {

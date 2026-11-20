@@ -204,6 +204,17 @@ fn stop_requested() -> bool {
     STOP.load(Ordering::SeqCst)
 }
 
+/// For `run` (decision V2-K1): install the same interrupt handler and report
+/// whether an interrupt arrived, so the launched program can be stopped too.
+pub(crate) fn install_interrupt_handler() {
+    STOP.store(false, Ordering::SeqCst);
+    signal::install();
+}
+
+pub(crate) fn interrupt_requested() -> bool {
+    stop_requested()
+}
+
 enum BuildOutcome {
     Ok(PathBuf),
     /// The pipeline refused to publish because the sources changed while rustc
@@ -665,7 +676,7 @@ mod signal {
 
     // SAFETY (declaration): `signal(2)` takes an `int` and a function pointer;
     // passing the pointer as `usize` matches the platform ABI used by this
-    // binding. Only SIGINT (2) is installed.
+    // binding. SIGINT (2) and SIGTERM (15) are installed.
     unsafe extern "C" {
         fn signal(sig: i32, handler: usize) -> usize;
     }
@@ -681,6 +692,7 @@ mod signal {
         // is best-effort and the previous handler's result is ignored.
         unsafe {
             signal(2, handler as *const () as usize); // SIGINT
+            signal(15, handler as *const () as usize); // SIGTERM (V2-K1)
         }
     }
 }
