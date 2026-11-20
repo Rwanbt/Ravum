@@ -261,3 +261,63 @@ fn a_crossfaded_swap_mixes_both_versions_and_allocates_nothing_in_process() {
         steady_d2
     );
 }
+
+/// A pure gain with a state (a sample counter), no filter: a gain edit makes a
+/// real step, so the crossfade effect is measurable.
+fn pure_gain(gain: &str) -> String {
+    format!(
+        "struct State {{\n    n: u32,\n}}\n\n\
+fn init() -> State effects() {{\n    return State {{ n: 0 }};\n}}\n\n\
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {{\n    state.n = state.n.wrapping_add(1);\n    return input * {gain};\n}}\n\n\
+fn main() -> () effects() {{\n}}\n"
+    )
+}
+
+#[test]
+fn the_crossfade_removes_the_step_of_a_pure_gain_edit() {
+    let dir = scratch("click");
+    let loud = prepare_block3(&build(&dir, "loud", &pure_gain("1.0"))).unwrap();
+    let soft = prepare_block3(&build(&dir, "soft", &pure_gain("0.2"))).unwrap();
+    // A constant 0.5 input: any step in the output is the edit itself.
+    let input = vec![0.5f32; 2048];
+    let switch = 1024usize;
+    let run = |fade_frames: u32| {
+        let mut host = Block3Host::new(loud.clone()).unwrap();
+        let mut out = vec![0.0f32; input.len()];
+        for (k, (i, o)) in input.chunks(64).zip(out.chunks_mut(64)).enumerate() {
+            if k * 64 == switch {
+                host.replace_with_fade(soft.clone(), fade_frames).unwrap();
+            }
+            host.process(i, o);
+            if host.fade_remaining() == 0 {
+                host.collect();
+            }
+        }
+        out
+    };
+    let max_step = |v: &[f32]| {
+        v.windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0f32, f32::max)
+    };
+    let immediate = run(0);
+    let faded = run(256);
+    println!(
+        "pure gain 1.0 -> 0.2 on a constant 0.5: max |Δy| immediate = {:.6}, with a 256-frame fade = {:.6}",
+        max_step(&immediate),
+        max_step(&faded)
+    );
+    assert!(
+        (max_step(&immediate) - 0.4).abs() < 1e-6,
+        "the edit is a 0.4 step"
+    );
+    assert!(
+        max_step(&faded) < 0.4 / 200.0,
+        "the fade spreads it over 256 frames"
+    );
+    assert_eq!(
+        faded[switch + 256..],
+        immediate[switch + 256..],
+        "same signal after the fade"
+    );
+}

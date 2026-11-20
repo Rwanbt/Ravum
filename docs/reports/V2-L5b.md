@@ -78,6 +78,8 @@
 - Publication sans verrou (comme `BlockHost` pour l'ABI 2) : `Block3Host`
   est possédé par un thread et remplacé par `&mut self`.
 - **Migration** de schéma côté éditeur (DSP3-5) : un autre digest est refusé.
-- Fondu mesuré sur un seul signal et une seule édition ; pas de scénario
-  où un clic existe sans fondu (un changement de gain sans filtre, par
-  exemple) : à ajouter pour montrer l'effet du fondu.
+- ~~Scénario avec un vrai saut~~ : **fait**,
+  `the_crossfade_removes_the_step_of_a_pure_gain_edit` — gain pur 1,0 → 0,2
+  sur une entrée constante 0,5 : saut de **0,400000** sans fondu, pas
+  maximal de **0,001563** avec un fondu de 256 trames (≈ 0,4 / 256) ; signal
+  identique après le fondu. Mesure liée à ce signal et à cette édition.
