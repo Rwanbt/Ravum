@@ -31,8 +31,23 @@ fn native_code_agrees_with_interpreter_and_reference_machine() {
     let mut compared = 0;
     let mut failures = Vec::new();
     for (name, src) in machine_corpus() {
-        let Ok(ir) = compile_source(&src) else {
-            continue;
+        let ir = match compile_source(&src) {
+            Ok(ir) => ir,
+            Err(_)
+                if matches!(
+                    name.as_str(),
+                    "o3-u128-max"
+                        | "x-libm-refused"
+                        | "x-or-pattern-refused"
+                        | "x-range-pattern-refused"
+                ) =>
+            {
+                continue
+            }
+            Err(err) => {
+                failures.push(format!("{name}: unexpected frontend refusal: {err:?}"));
+                continue;
+            }
         };
         let expected = src
             .lines()
@@ -55,7 +70,13 @@ fn native_code_agrees_with_interpreter_and_reference_machine() {
                 "{name}: native `{native}` != interpreter `{interp}`"
             ));
         }
-        if !(expected.starts_with("diverge") || expected.starts_with("fault")) && native != expected
+        if expected.starts_with("diverge") && native != "diverge" {
+            failures.push(format!(
+                "{name}: expected divergence, native gave `{native}`"
+            ));
+        } else if !expected.starts_with("diverge")
+            && !expected.starts_with("fault")
+            && native != expected
         {
             failures.push(format!("{name}: native `{native}` != machine `{expected}`"));
         }

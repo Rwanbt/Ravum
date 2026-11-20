@@ -48,9 +48,11 @@ fn ir_interpreter_agrees_with_the_reference_machine() {
         match compile_source(src) {
             Ok(m) => {
                 let got = run(&m, "check", DEFAULT_STEPS).render();
-                // A machine `diverge`/`fault` is inconclusive: the IR must not
-                // turn it into a value.
-                if expected.starts_with("diverge") || expected.starts_with("fault") {
+                if expected.starts_with("diverge") {
+                    if got != "diverge" {
+                        failures.push(format!("{name}: expected divergence, IR gave `{got}`"));
+                    }
+                } else if expected.starts_with("fault") {
                     if got.starts_with("value") {
                         failures.push(format!("{name}: machine `{expected}`, IR produced `{got}`"));
                     }
@@ -64,10 +66,21 @@ fn ir_interpreter_agrees_with_the_reference_machine() {
                 }
             }
             Err(CompileError::Lower(LowerError::Unsupported(what))) => {
+                if !matches!(name.as_str(), "o3-u128-max" | "x-libm-refused") {
+                    failures.push(format!("{name}: unexpected lowering refusal: {what}"));
+                }
                 unsupported.push(format!("{name} ({what})"))
             }
             Err(CompileError::Lower(e)) => failures.push(format!("{name}: lowering bug: {e}")),
-            Err(CompileError::Rejected(codes)) => rejected.push(format!("{name} {codes:?}")),
+            Err(CompileError::Rejected(codes)) => {
+                if !matches!(
+                    name.as_str(),
+                    "x-or-pattern-refused" | "x-range-pattern-refused"
+                ) {
+                    failures.push(format!("{name}: unexpected checker refusal: {codes:?}"));
+                }
+                rejected.push(format!("{name} {codes:?}"));
+            }
         }
     }
     eprintln!(
