@@ -62,7 +62,12 @@
 - **DET-2** (`nondet` produit) : aucune fonction de la stdlib ne lit
   aujourd'hui une horloge ni un aléa ; il n'y a donc rien à marquer.
   `task::timeout` (RFC-ASYNC-NET-1) sera la première source.
-- **DET-5** (`test --profile det --seeds N`) : non fait.
+- ~~DET-5~~ : **fait** — `test --profile det [--seeds N]` (N de 1 à 10 000,
+  défaut 1) vérifie sous `det` puis exécute le lanceur de tests pour les
+  graines `0..N` ; la première graine en échec est nommée avec la commande
+  qui la reproduit (`--seeds k+1`). Test DET-T3 (`det_run.rs`) : un test
+  dépendant de l'ordre échoue pour une graine donnée, la commande indiquée
+  le reproduit 3 fois sur 3, les graines précédentes passent.
 - **Horloge virtuelle** de l'exécuteur `std::task` : non faite ; sans effet
   observable aujourd'hui (le sommeil de 1 ms n'a lieu qu'en attente de
   socket, et `net` est refusé sous `det`). À faire avec `task::timeout` (L7b).

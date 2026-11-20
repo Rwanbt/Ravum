@@ -84,8 +84,16 @@ fn declared_tests(frontend: &pipeline::Frontend) -> DeclaredTests {
     DeclaredTests { total, names }
 }
 
-pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
-    let frontend = pipeline::analyze(path, Profile::Core, false);
+pub fn run(path: &Path, filter: Option<&str>, json_output: bool, det_seeds: Option<u64>) -> i32 {
+    // DET-5: under `det`, the tests are checked under the profile (DET-1) and
+    // the runner is executed once per seed `0..N`; the first failing seed is
+    // reported and its run is the one shown.
+    let profile = if det_seeds.is_some() {
+        Profile::Det
+    } else {
+        Profile::Core
+    };
+    let frontend = pipeline::analyze(path, profile, false);
     if !frontend.success() {
         let declared = declared_tests(&frontend);
         let report = RunReport::not_run(declared.total, util::EXIT_FAIL, "analysis failed");
@@ -126,12 +134,41 @@ pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
         }
     };
 
-    let mut command = Command::new(&artifacts.binary);
-    if let Some(filter) = filter {
-        command.arg("--filter").arg(filter);
-    }
-    command.current_dir(frontend.root());
-    let output = match command.output() {
+    let run_once = |seed: Option<u64>| {
+        let mut command = Command::new(&artifacts.binary);
+        if let Some(filter) = filter {
+            command.arg("--filter").arg(filter);
+        }
+        command.current_dir(frontend.root());
+        match seed {
+            Some(seed) => command.env("RAVUM_DET_SEED", seed.to_string()),
+            None => command.env_remove("RAVUM_DET_SEED"),
+        };
+        command.output()
+    };
+    let outcome = match det_seeds {
+        None => run_once(None),
+        Some(seeds) => {
+            let mut last = None;
+            for seed in 0..seeds {
+                let attempt = run_once(Some(seed));
+                let failed = match &attempt {
+                    Ok(output) => !output.status.success(),
+                    Err(_) => true,
+                };
+                last = Some(attempt);
+                if failed {
+                    eprintln!("profile det: seed={seed} failed (reproduce: `ravum-lang test --profile det --seeds {}`)", seed + 1);
+                    break;
+                }
+                if seed + 1 == seeds {
+                    eprintln!("profile det: {seeds} seed(s) passed (0..{seeds})");
+                }
+            }
+            last.unwrap_or_else(|| run_once(Some(0)))
+        }
+    };
+    let output = match outcome {
         Ok(output) => output,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let message = format!(

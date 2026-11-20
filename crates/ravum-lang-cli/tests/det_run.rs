@@ -67,6 +67,35 @@ fn main() -> () effects(io, thread, alloc, panic) {
 }
 "#;
 
+/// A test whose assertion depends on the interleaving (DET-T3).
+const ORDER_TEST: &str = r#"use std::sync;
+use std::thread;
+
+fn worker(job: (Sender<i64>, i64)) -> () effects(thread, alloc) {
+    match job {
+        (tx, id) => {
+            let sent: bool = sync::send(&tx, id);
+            drop(sent);
+        }
+    }
+}
+
+fn main() {
+}
+
+
+test fn first_message_comes_from_worker_one() {
+    let ch: Channel<i64> = sync::channel();
+    let a: JoinHandle<()> = thread::spawn(worker, (sync::sender(&ch), 1));
+    let b: JoinHandle<()> = thread::spawn(worker, (sync::sender(&ch), 2));
+    let rx: Receiver<i64> = sync::receiver(ch);
+    let first: Option<i64> = sync::recv(&rx);
+    thread::join(a);
+    thread::join(b);
+    assert_eq(first.unwrap_or(0), 1);
+}
+"#;
+
 fn package(name: &str, source: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("ravum-det-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
@@ -156,4 +185,47 @@ fn det_still_refuses_inputs_and_bad_arguments() {
         let (code, _, err) = run(&race, args);
         assert_eq!(code, 2, "{why}: {err}");
     }
+}
+
+#[test]
+fn test_seeds_finds_an_order_dependent_failure_and_names_its_seed() {
+    let dir = package("det-seeds", ORDER_TEST);
+    let test = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+            .arg("test")
+            .arg(&dir)
+            .args(args)
+            .output()
+            .expect("ravum-lang runs");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+    let (code, err) = test(&["--profile", "det", "--seeds", "20"]);
+    assert_eq!(code, 1, "{err}");
+    let seed: u64 = err
+        .split("profile det: seed=")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("no failing seed reported: {err}"));
+    // The reported command reproduces the failure, every time.
+    let again = format!("{}", seed + 1);
+    for _ in 0..3 {
+        let (code, err2) = test(&["--profile", "det", "--seeds", &again]);
+        assert_eq!(code, 1, "{err2}");
+        assert!(
+            err2.contains(&format!("profile det: seed={seed} failed")),
+            "{err2}"
+        );
+    }
+    // The seeds before it pass.
+    if seed > 0 {
+        let (code, err3) = test(&["--profile", "det", "--seeds", &seed.to_string()]);
+        assert_eq!(code, 0, "{err3}");
+        assert!(err3.contains("seed(s) passed"), "{err3}");
+    }
+    let (code, _) = test(&["--seeds", "3"]);
+    assert_eq!(code, 2, "--seeds without --profile det is a usage error");
 }

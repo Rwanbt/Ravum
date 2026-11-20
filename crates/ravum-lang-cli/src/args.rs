@@ -73,6 +73,8 @@ pub enum Command {
         path: PathBuf,
         filter: Option<String>,
         json: bool,
+        /// `--profile det [--seeds N]`: run every test for seeds `0..N` (DET-5).
+        det_seeds: Option<u64>,
     },
     Fmt {
         path: PathBuf,
@@ -483,11 +485,33 @@ fn parse_test(rest: &[String]) -> Result<Command, String> {
     let mut path: Option<PathBuf> = None;
     let mut filter: Option<String> = None;
     let mut json = false;
+    let mut det = false;
+    let mut seeds: Option<u64> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
+            "--profile" => {
+                let value = option_value(rest, &mut i, "--profile")?;
+                if parse_profile(&value)? != Profile::Det {
+                    return Err(format!(
+                        "`test --profile {value}`: only `det` changes how tests run; \
+                         check other profiles with `ravum-lang check --profile {value}`"
+                    ));
+                }
+                det = true;
+            }
+            "--seeds" => {
+                let value = option_value(rest, &mut i, "--seeds")?;
+                seeds = Some(
+                    value
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|n| (1..=10_000).contains(n))
+                        .ok_or_else(|| format!("invalid `--seeds {value}`; expected 1..=10000"))?,
+                );
+            }
             "--filter" => filter = Some(option_value(rest, &mut i, "--filter")?),
             other if other.starts_with("--filter=") => {
                 filter = Some(other.trim_start_matches("--filter=").to_string());
@@ -499,10 +523,14 @@ fn parse_test(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if seeds.is_some() && !det {
+        return Err("`--seeds` requires `--profile det`".to_string());
+    }
     Ok(Command::Test {
         path: path.unwrap_or_else(default_path),
         filter,
         json,
+        det_seeds: det.then(|| seeds.unwrap_or(1)),
     })
 }
 
@@ -636,7 +664,7 @@ COMMANDS:
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
     watch [PATH] --backend jit [--entry NAME]  Native in-process backend, per-function hot swap
-    test [PATH] [--filter TEXT] [--json]
+    test [PATH] [--filter TEXT] [--json] [--profile det [--seeds N]]
                                         Build the test runner, run it, parse `test ... ok/FAILED`
     fmt [PATH] [--check]                Format every `.rv` file, or verify with `--check`
     lint [PATH] [--deny CODE]...        Report checker warnings; `--deny` turns one into an error

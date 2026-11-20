@@ -83,7 +83,12 @@ pub fn dispatch(command: Command) -> i32 {
                 watch::run(&path, run, release, max_rebuilds)
             }
         }
-        Command::Test { path, filter, json } => test::run(&path, filter.as_deref(), json),
+        Command::Test {
+            path,
+            filter,
+            json,
+            det_seeds,
+        } => test::run(&path, filter.as_deref(), json, det_seeds),
         Command::Fmt { path, check } => fmt::run(&path, check),
         Command::Lint { path, deny } => lint::run(&path, &deny),
         Command::Doc { path, out } => doc::run(&path, out.as_deref()),
