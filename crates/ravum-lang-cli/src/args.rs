@@ -30,6 +30,8 @@ pub enum Command {
         reload: bool,
         /// `--dsp-block`: check the DSP block contract and the `rt` profile.
         dsp_block: bool,
+        /// `--sarif`: SARIF 2.1.0 on stdout instead of the human report (T19).
+        sarif: bool,
     },
     Build {
         path: PathBuf,
@@ -189,11 +191,13 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut rt_entry: Option<String> = None;
     let mut reload = false;
     let mut dsp_block = false;
+    let mut sarif = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
+            "--sarif" => sarif = true,
             "--reload" => reload = true,
             "--dsp-block" => dsp_block = true,
             "--locked" => locked = true,
@@ -222,6 +226,9 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     if rt_entry.is_some() && profile != Profile::Rt {
         return Err("`--rt-entry` requires `--profile rt`".to_string());
     }
+    if sarif && json {
+        return Err("`--sarif` and `--json` are exclusive".to_string());
+    }
     Ok(Command::Check {
         path: path.unwrap_or_else(default_path),
         json,
@@ -231,6 +238,7 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         rt_entry,
         reload,
         dsp_block,
+        sarif,
     })
 }
 
@@ -591,7 +599,7 @@ USAGE:
 
 COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
-    check [PATH] [--json] [--profile core|pure|rt] [--rt-entry FN] [--locked] [--timings]
+    check [PATH] [--json|--sarif] [--profile core|pure|rt] [--rt-entry FN] [--locked] [--timings]
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
@@ -649,7 +657,7 @@ pub fn help_for(topic: &str) -> String {
                    Creates `ravum.toml`, `src/main.rv` (or `src/lib.rv` with --lib) and a\n\
                    `.gitignore` that ignores `.ravum/`. Refuses a non-empty directory\n\
                    unless --force is given; --force overwrites only the generated files.\n",
-        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] \
+        "check" => "USAGE: ravum-lang check [PATH] [--json|--sarif] [--profile core|pure|rt] \
                     [--rt-entry FN] [--locked] [--timings]\n\n\
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\

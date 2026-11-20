@@ -102,3 +102,70 @@ fn test_json_names_the_violated_contract_of_a_failed_test() {
     assert_eq!(plain["status"], "FAILED");
     assert!(plain.get("violated_contracts").is_none(), "{plain}");
 }
+
+#[test]
+fn check_sarif_is_a_valid_sarif_log_with_results_and_contracts() {
+    let src = "fn div(a: i64, b: i64) -> i64 effects()\n    requires b != 0\n{\n    return a / b;\n}\n\nfn bad() -> i64 effects() {\n    return true;\n}\n\nfn main() -> () effects() {\n}\n";
+    let dir = std::env::temp_dir().join(format!("rv-sarif-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("ravum.toml"),
+        "[package]\nname = \"sarif\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/main.rv"), src).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .args(["check", "--sarif"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "the program has an error");
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["version"], "2.1.0");
+    let run = &v["runs"][0];
+    assert_eq!(run["tool"]["driver"]["name"], "ravum-lang");
+    let results = run["results"].as_array().unwrap();
+    let r = results
+        .iter()
+        .find(|r| r["ruleId"] == "E-TYP-MISMATCH")
+        .expect("the type error is a result");
+    assert_eq!(r["level"], "error");
+    let region = &r["locations"][0]["physicalLocation"]["region"];
+    assert_eq!(region["startLine"], 8);
+    // Every result's rule is declared in the driver.
+    let rules: Vec<&str> = run["tool"]["driver"]["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    for r in results {
+        assert!(rules.contains(&r["ruleId"].as_str().unwrap()));
+    }
+    // A program with an error has no checked facts: no contract facts.
+    assert!(run.get("properties").is_none(), "{run}");
+    // Negative: `--sarif` and `--json` together are a usage error.
+    let both = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .args(["check", "--sarif", "--json"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(!both.status.success());
+    // Without errors, the contracts are in the property bag.
+    std::fs::write(
+        dir.join("src/main.rv"),
+        src.replace("    return true;", "    return 1;"),
+    )
+    .unwrap();
+    let ok = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .args(["check", "--sarif"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let v: serde_json::Value = serde_json::from_slice(&ok.stdout).unwrap();
+    let c = &v["runs"][0]["properties"]["ravum.contracts"][0];
+    assert_eq!(c["id"], "div#requires.0");
+    assert_eq!(c["verification"], "runtime-checked");
+}

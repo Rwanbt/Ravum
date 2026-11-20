@@ -11,6 +11,7 @@ use crate::util;
 pub fn run(
     path: &Path,
     json_output: bool,
+    sarif: bool,
     profile: Profile,
     locked: bool,
     request_timings: bool,
@@ -36,7 +37,14 @@ pub fn run(
     }
     let success = frontend.success();
 
-    if json_output {
+    if sarif {
+        let diagnostics = json::diagnostics(frontend.diags.as_slice(), &frontend.pkg.sources);
+        let contracts = frontend
+            .checked
+            .as_ref()
+            .and_then(|c| json::contracts(c, &frontend.pkg.sources));
+        println!("{}", json::sarif(&diagnostics, contracts.as_deref()));
+    } else if json_output {
         let diagnostics = json::diagnostics(frontend.diags.as_slice(), &frontend.pkg.sources);
         let summary = pipeline::base_summary(&frontend, profile);
         let meta = json::ReportMeta {

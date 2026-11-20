@@ -119,6 +119,62 @@ pub struct JsonContract {
     pub verification: &'static str,
 }
 
+/// SARIF 2.1.0 log of a check (T19, ADR-027/040): one result per
+/// diagnostic (rule = stable code); the contract clauses with their stable
+/// ids, the tests reaching them and `runtime-checked` go in the run's
+/// property bag (they are facts, not findings).
+pub fn sarif(diagnostics: &[JsonDiagnostic], contracts: Option<&[JsonContract]>) -> String {
+    let mut rules: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    rules.sort();
+    rules.dedup();
+    let results: Vec<Value> = diagnostics
+        .iter()
+        .map(|d| {
+            let level = match d.severity.as_str() {
+                "error" => "error",
+                "warning" => "warning",
+                _ => "note",
+            };
+            let mut r = serde_json::json!({
+                "ruleId": d.code,
+                "level": level,
+                "message": { "text": d.message },
+            });
+            if let Some(file) = &d.file {
+                r["locations"] = serde_json::json!([{
+                    "physicalLocation": {
+                        "artifactLocation": { "uri": file },
+                        "region": {
+                            "startLine": d.line,
+                            "startColumn": d.column,
+                            "endLine": d.end_line,
+                            "endColumn": d.end_column,
+                        }
+                    }
+                }]);
+            }
+            r
+        })
+        .collect();
+    let mut run = serde_json::json!({
+        "tool": { "driver": {
+            "name": TOOL,
+            "version": env!("CARGO_PKG_VERSION"),
+            "rules": rules.iter().map(|r| serde_json::json!({ "id": r })).collect::<Vec<_>>(),
+        }},
+        "results": results,
+    });
+    if let Some(c) = contracts {
+        run["properties"] = serde_json::json!({ "ravum.contracts": c });
+    }
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [run],
+    })
+    .to_string()
+}
+
 /// The contracts of a checked program, for the JSON envelope.
 pub fn contracts(
     checked: &ravum_lang_sema::CheckedProgram,

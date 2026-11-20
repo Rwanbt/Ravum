@@ -28,9 +28,11 @@ pub fn dispatch(command: Command) -> i32 {
             rt_entry,
             reload,
             dsp_block,
+            sarif,
         } => check::run(
             &path,
             json,
+            sarif,
             profile,
             locked,
             timings,
