@@ -49,7 +49,7 @@ fn program() -> String {
         }
     }
     body.push_str("    io::println(v0_0.to_string().as_str());\n    io::println(\"done\");\n");
-    format!("fn main() -> () effects(io, alloc) {{\n{body}}}\n")
+    format!("use std::io;\nfn main() -> () effects(io, alloc) {{\n{body}}}\n")
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn jit_output_is_byte_identical_to_the_rustc_build() {
 #[test]
 fn jit_user_methods_match_the_rustc_build() {
     let acc = "struct Acc {\n    total: i64,\n    n: i32,\n}\n\nimpl Acc {\n    fn new(start: i64) -> Acc effects() {\n        return Acc { total: start, n: 0 };\n    }\n    fn add(&mut self, x: i64) -> () effects() {\n        self.total = self.total + x;\n        self.n = self.n + 1;\n    }\n    fn mean(&self) -> i64 effects() {\n        return self.total / (self.n as i64);\n    }\n    fn doubled(self) -> Acc effects() {\n        let mut c = self;\n        c.total = c.total * 2;\n        return c;\n    }\n    fn bump_all(&mut self, k: i64) -> () effects() {\n        self.add(k);\n        self.add(k);\n    }\n}\n\nstruct Pair {\n    a: Acc,\n    b: Acc,\n}\n\nimpl Pair {\n    fn new() -> Pair effects() {\n        return Pair { a: Acc::new(0), b: Acc::new(100) };\n    }\n    fn mean(&self) -> i64 effects() {\n        return self.a.mean() + self.b.mean();\n    }\n}\n\nfn case(x: i64, y: i64) -> i64 effects() {\n    let mut a = Acc::new(x);\n    a.add(y);\n    a.add(9);\n    let b = a.doubled();\n    a.bump_all(y);\n    let mut p = Pair::new();\n    p.a.add(y);\n    p.b.add(4);\n    let k: i64 = 1000;\n    return a.mean() * k + b.total + p.mean();\n}\n\n";
-    let mut main = String::from("fn main() -> () effects(io, alloc) {\n");
+    let mut main = String::from("use std::io;\nfn main() -> () effects(io, alloc) {\n");
     for x in [0i64, 1, 5, -7, 123_456_789] {
         for y in [1i64, 3, -2] {
             main.push_str(&format!("    io::println(&case({x}, {y}).to_string());\n"));

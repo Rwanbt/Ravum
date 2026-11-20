@@ -143,7 +143,10 @@ fn an_unknown_builtin_method_is_refused() {
 
 #[test]
 fn a_builtin_call_missing_its_argument_is_refused() {
-    let mut program = checked("use std::io;\nfn main() { io::println(\"a\"); }\n", Profile::Core);
+    let mut program = checked(
+        "use std::io;\nfn main() { io::println(\"a\"); }\n",
+        Profile::Core,
+    );
     if let ExprKind::Call { args, .. } = &mut first_main_expr(&mut program).kind {
         args.clear();
     }

@@ -590,7 +590,10 @@ fn integer_math_builtins_are_refused_by_the_checker() {
     // The Core 1.0 `std::math` surface is `f64` only. The emitter's non-float
     // branch for `math::{min,max}` is therefore unreachable from an accepted
     // program; this contract pins the refusal instead of pretending to cover it.
-    let message = match compile_source("emit", "use std::math;\nfn main() {\n    let hi = math::max(1, 2);\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::math;\nfn main() {\n    let hi = math::max(1, 2);\n}\n",
+    ) {
         Ok(_) => panic!("integer `math::max` must be refused by the checker"),
         Err(message) => message,
     };
@@ -651,7 +654,10 @@ fn main() {
 #[test]
 fn a_builtin_function_used_as_a_value_is_refused_by_the_checker() {
     // The checker diagnoses a bare builtin before lowering to Rust.
-    let message = match compile_source("emit", "use std::io;\nfn main() {\n    let write = io::println;\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::io;\nfn main() {\n    let write = io::println;\n}\n",
+    ) {
         Ok(_) => panic!("a builtin used as a value must be refused by the checker"),
         Err(message) => message,
     };
@@ -892,7 +898,10 @@ fn prelude_constants_that_the_checker_does_not_expose_are_refused() {
     // `resolve` only produces `ValuePath::BuiltinConst("Option::None")`; the
     // emitter's `math::PI` / `math::E` / primitive `MIN`/`MAX` arms therefore
     // have no accepted program behind them.
-    let message = match compile_source("emit", "use std::math;\nfn main() {\n    let pi = math::PI;\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::math;\nfn main() {\n    let pi = math::PI;\n}\n",
+    ) {
         Ok(_) => panic!("`math::PI` must be refused by the resolver"),
         Err(message) => message,
     };

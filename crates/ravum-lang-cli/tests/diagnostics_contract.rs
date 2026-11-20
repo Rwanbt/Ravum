@@ -50,7 +50,8 @@ impl Drop for Package {
 }
 
 /// Several errors of two phases, out of source order inside each line.
-const ERRORS: &str = "use std::io;\nfn main() {\n    let a = u;\n    let b: i32 = true;\n    let c = v;\n    \
+const ERRORS: &str =
+    "use std::io;\nfn main() {\n    let a = u;\n    let b: i32 = true;\n    let c = v;\n    \
                       let d: bool = 1;\n    io::println(&(a + c).to_string());\n    \
                       let _e = (b, d);\n}\n";
 

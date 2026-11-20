@@ -8,7 +8,8 @@ use std::process::Command;
 const PASSES: &str =
     "fn sum(a: i64, b: i64) -> i64 effects() {\n    return a.wrapping_add(b);\n}\n\n\
                       fn main() effects() {\n    let _s = sum(1, 2);\n}\n";
-const FAILS: &str = "use std::io;\nfn sum(a: i64, b: i64) -> i64 effects() {\n    return a + b;\n}\n\n\
+const FAILS: &str =
+    "use std::io;\nfn sum(a: i64, b: i64) -> i64 effects() {\n    return a + b;\n}\n\n\
                      fn main() {\n    io::println(&sum(1, 2).to_string());\n}\n";
 
 #[test]

@@ -503,8 +503,8 @@ fn definition_and_references_find_the_declaration() {
     assert_eq!(locations.len(), 1, "expected one definition: {locations:?}");
     assert_eq!(
         locations[0]["range"]["start"]["line"].as_u64(),
-        Some(0),
-        "the declaration of `add` is on line 0"
+        Some(1),
+        "the declaration of `add` is on line 1 (after `use std::io;`)"
     );
     assert_eq!(
         locations[0]["range"]["start"]["character"].as_u64(),
