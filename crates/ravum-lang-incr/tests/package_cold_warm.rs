@@ -324,3 +324,44 @@ fn field_diff(a: &Facts, b: &Facts) -> String {
     f!(item_paths);
     out.join("; ")
 }
+
+/// The single-file case of `watch --backend jit`: FileId 0 (its first item's
+/// node range starts at id 0), edits at the start, middle and end; the
+/// incremental check equals a full check (diagnostics and facts), and the
+/// bodies before the change are reused.
+#[test]
+fn single_file_with_file_id_zero_equals_a_full_check() {
+    use ravum_lang_sema::syntax::parser::parse_file;
+    use ravum_lang_sema::syntax::source::SourceMap;
+    let base = "fn a(x: i64) -> i64 effects() {\n    return x + 1;\n}\n\nfn b(x: i64) -> i64 effects() {\n    return a(x) * 2;\n}\n\nfn c(x: i64) -> i64 effects() {\n    return b(x) - a(x);\n}\n\nfn check() -> i64 effects() {\n    return c(3);\n}\n";
+    let run = |src: &str, prev| {
+        let mut sources = SourceMap::new();
+        let id = sources.add("src/lib.rv", src);
+        assert_eq!(id, 0);
+        let parsed = parse_file(id, src);
+        let warm = check_package(prev, &parsed.program, &sources, &options());
+        let cold = check(&parsed.program, &sources, &options());
+        (warm, cold)
+    };
+    let ((r0, s0, _), _) = run(base, None);
+    assert!(r0.checked.is_some());
+    let mut reused = 0;
+    for (what, from, to) in [
+        ("start", "return x + 1;", "return x + 5;"),
+        ("middle", "return a(x) * 2;", "return a(x) * 3;"),
+        ("end", "return c(3);", "return c(4);"),
+        ("error", "return c(3);", "return true;"),
+    ] {
+        let src = base.replace(from, to);
+        let ((warm, _, st), cold) = run(&src, Some(&s0));
+        reused += st.reused_bodies;
+        assert_eq!(norm_diags(&warm), norm_diags(&cold), "{what}");
+        assert_eq!(
+            warm.checked.as_ref().map(|c| norm_facts(&c.facts)),
+            cold.checked.as_ref().map(|c| norm_facts(&c.facts)),
+            "{what}: facts"
+        );
+    }
+    // `end`: a, b, c are before the change; `middle`: a.
+    assert!(reused >= 4, "reused {reused}");
+}

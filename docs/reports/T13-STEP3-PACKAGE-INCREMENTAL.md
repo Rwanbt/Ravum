@@ -96,7 +96,17 @@ Ligne affichée : `[ravum] check: N bodies reused, M checked[ (full: raison)]`.
 | `package_cold_warm.rs`, 117 éditions (ajout des éditions « item ajouté en fin », « item ajouté en tête » — tous les ids du fichier glissent —, « item ajouté invalide ») | diagnostics **et** faits identiques au contrôle complet sur toutes ; 693 corps réutilisés dont **84 dans des fichiers édités** (assertion > 0), 279 revérifiés |
 | `watch_continuity.rs::a_rebuild_reuses_the_unchanged_function_bodies` | 1ʳᵉ vérification complète (`first check`) ; après l'édition de `main.rv` : ≥ 3 corps réutilisés (`twice`, `thrice` du module intact, `helper` avant le changement), **1** revérifié (`main`) ; le programme relancé affiche `v2` |
 
-Limites restantes : un corps **après** le premier changement de son fichier
-est revérifié (pas de remise en correspondance des ids glissés) ;
-`watch --backend jit` (fichier unique) garde l'étape 2 ; après une
-vérification en erreur, la suivante est complète.
+**`watch --backend jit`** (fichier unique) passe aussi par `check_package`
+puis `ravum_lang_ir::lower_checked` (faits complets → même IR) ; ligne
+`[ravum] check: …` ; `watch_jit.rs` vérifie `1 bodies reused, 2 checked`
+après l'édition de `offset`. **Bug trouvé** en le branchant : pour le
+FileId 0, `range_of` calculait `(0 << 32) - 1` (débordement ; en release, une
+plage vide : les faits du premier item n'auraient pas été copiés). Plages
+désormais inclusives `[lo, hi]` ; oracle
+`single_file_with_file_id_zero_equals_a_full_check` (début, milieu, fin,
+erreur : diagnostics et faits identiques).
+
+Hors périmètre V1 (définition V1-T2) : un corps **après** le premier
+changement de son fichier est revérifié (il faudrait renuméroter ids et
+spans des faits) ; après une vérification en erreur, la suivante est
+complète.

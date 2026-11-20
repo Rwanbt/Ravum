@@ -102,6 +102,14 @@ fn watch_jit_recompiles_only_the_edited_function_and_keeps_the_last_good_version
         "{lines:?}"
     );
     assert!(lines.last().unwrap().ends_with("value i64 38"), "{lines:?}");
+    // T13: the check reused `square` (before the change); `offset` and
+    // `check` (from the change on) were checked again.
+    assert!(
+        lines
+            .iter()
+            .any(|l| l == "[ravum] check: 1 bodies reused, 2 checked"),
+        "{lines:?}"
+    );
 
     // Negative: an ill-typed edit is reported, nothing is activated.
     edit(&file, "return 2;", "return true;");

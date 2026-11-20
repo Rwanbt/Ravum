@@ -60,7 +60,7 @@ struct Range {
 
 ### Limites (déclarées, non cachées)
 
-- **Points d'observation** : INV-2 et INV-3 ; INV-9 ferme les écritures directes. Restent hors de la règle : une méthode `self` par valeur qui modifie sa propre copie (elle ne modifie pas l'objet observé) et la déstructuration d'un `&mut S` par motif (non couverte par INV-9 ; rare en Core 1.0).
+- **Points d'observation** : INV-2 et INV-3 ; INV-9 ferme les écritures directes. Restent hors de la règle : une méthode `self` par valeur qui modifie sa propre copie (elle ne modifie pas l'objet observé) ; la déstructuration d'un `&mut S` est impossible : Core 1.0 n'a pas de motif de struct (`let`/`match` le refusent, vérifié le 2026-11-20).
 - Pas de vérification à l'entrée des méthodes (l'invariant est supposé tenu,
   il l'était à la dernière observation).
 - Le JIT ne gère que les structs `Copy` (limite existante de l'IR) ; la voie

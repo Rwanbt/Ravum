@@ -136,12 +136,17 @@ pub fn compile_source(src: &str) -> Result<Module, CompileError> {
         .map(|d| d.code.clone())
         .collect();
     match result.checked {
-        Some(checked) if errors.is_empty() => {
-            let mut m = lower::lower(&checked).map_err(CompileError::Lower)?;
-            m.state = state_info(&checked).map_err(CompileError::Lower)?;
-            m.migrate_from = migrate_info(&checked).map_err(CompileError::Lower)?;
-            Ok(m)
-        }
+        Some(checked) if errors.is_empty() => lower_checked(&checked),
         _ => Err(CompileError::Rejected(errors)),
     }
+}
+
+/// The IR module of an already checked program (as [`compile_source`]
+/// builds it): for a driver that checks incrementally (T13, `watch --backend
+/// jit`) and holds complete facts.
+pub fn lower_checked(checked: &ravum_lang_sema::CheckedProgram) -> Result<Module, CompileError> {
+    let mut m = lower::lower(checked).map_err(CompileError::Lower)?;
+    m.state = state_info(checked).map_err(CompileError::Lower)?;
+    m.migrate_from = migrate_info(checked).map_err(CompileError::Lower)?;
+    Ok(m)
 }

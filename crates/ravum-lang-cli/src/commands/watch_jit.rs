@@ -22,7 +22,6 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use ravum_lang_ir::compile_source;
 use ravum_lang_ir::lower::LowerError;
 use ravum_lang_ir::CompileError;
 use ravum_lang_jit::hot::{HotEngine, RtRunner};
@@ -157,9 +156,63 @@ impl Session {
     }
 }
 
+/// T13: [`ravum_lang_ir::compile_source`], with the check done by
+/// [`ravum_lang_incr::package::check_package`] (same virtual `src/lib.rv`,
+/// same options), reusing the unchanged bodies of the previous text; the
+/// facts are complete, so the IR is the same as a full check's.
+fn compile_incremental(
+    src: &str,
+    state: &mut Option<ravum_lang_incr::package::PackageState>,
+) -> Result<ravum_lang_ir::Module, CompileError> {
+    let mut sources = SourceMap::new();
+    let id = sources.add("src/lib.rv", src);
+    let parsed = parser::parse_file(id, src);
+    if !parsed.diags.is_empty() {
+        *state = None;
+        return Err(CompileError::Rejected(
+            parsed.diags.iter().map(|d| d.code.clone()).collect(),
+        ));
+    }
+    let options = CheckOptions {
+        profile: Profile::Core,
+        edition: LANGUAGE_EDITION.to_string(),
+    };
+    let (result, next, stats) = ravum_lang_incr::package::check_package(
+        state.as_ref(),
+        &parsed.program,
+        &sources,
+        &options,
+    );
+    *state = Some(next);
+    say(&format!(
+        "[ravum] check: {} bodies reused, {} checked{}",
+        stats.reused_bodies,
+        stats.checked_bodies,
+        stats
+            .full
+            .map(|r| format!(" (full: {r})"))
+            .unwrap_or_default()
+    ));
+    let errors: Vec<String> = result
+        .diags
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .map(|d| d.code.clone())
+        .collect();
+    match result.checked {
+        Some(checked) if errors.is_empty() => ravum_lang_ir::lower_checked(&checked),
+        _ => Err(CompileError::Rejected(errors)),
+    }
+}
+
 /// One attempt: compile the current text; start or update the session.
 /// Returns `true` when a new version became active.
-fn attempt(file: &Path, entry_opt: Option<&str>, session: &mut Option<Session>) -> bool {
+fn attempt(
+    file: &Path,
+    entry_opt: Option<&str>,
+    session: &mut Option<Session>,
+    incr: &mut Option<ravum_lang_incr::package::PackageState>,
+) -> bool {
     let started = Instant::now();
     let Ok(src) = std::fs::read_to_string(file) else {
         say(&format!(
@@ -168,7 +221,7 @@ fn attempt(file: &Path, entry_opt: Option<&str>, session: &mut Option<Session>) 
         ));
         return false;
     };
-    let ir = match compile_source(&src) {
+    let ir = match compile_incremental(&src, incr) {
         Ok(ir) => ir,
         Err(CompileError::Rejected(_)) => {
             say("[ravum] rejected by the checker; previous version kept");
@@ -274,8 +327,10 @@ pub fn run(path: &Path, entry: Option<&str>, max_rebuilds: Option<u64>) -> i32 {
         file.display()
     ));
     let mut session: Option<Session> = None;
+    // T13: the incremental check state, kept across edits.
+    let mut incr: Option<ravum_lang_incr::package::PackageState> = None;
     let mut last = stamp(&file);
-    attempt(&file, entry, &mut session);
+    attempt(&file, entry, &mut session, &mut incr);
     if max_rebuilds == Some(0) {
         return util::EXIT_OK;
     }
@@ -288,7 +343,7 @@ pub fn run(path: &Path, entry: Option<&str>, max_rebuilds: Option<u64>) -> i32 {
         }
         last = now;
         say("[ravum] change detected");
-        attempt(&file, entry, &mut session);
+        attempt(&file, entry, &mut session, &mut incr);
         changes += 1;
         if max_rebuilds.is_some_and(|m| changes >= m) {
             return util::EXIT_OK;

@@ -87,23 +87,25 @@ fn collect(
     }
 }
 
-/// Node range `(lo, hi]` of item `id`: the parser numbers nodes in reading
-/// order and gives an item its id after its children.
+/// Node range `[lo, hi]` (inclusive) of item `id`: the parser numbers nodes
+/// in reading order and gives an item its id after its children, so its
+/// nodes follow the previous item of its file (or start the file).
 fn range_of(id: NodeId, ids: &BTreeMap<u32, Vec<NodeId>>) -> (NodeId, NodeId) {
     let file = file_of(id);
     let lo = ids
         .get(&file)
         .and_then(|v| v.iter().copied().filter(|x| *x < id).max())
-        .unwrap_or(((file as u64) << 32).wrapping_sub(1));
+        .map(|prev| prev + 1)
+        .unwrap_or((file as u64) << 32);
     (lo, id)
 }
 
 /// Per referred file, the largest node id that the facts of the nodes in
-/// `(lo, hi]` refer to (a local counts as the function itself).
+/// `[lo, hi]` refer to (a local counts as the function itself).
 fn refs_of(f: &Facts, (lo, hi): (NodeId, NodeId)) -> BTreeMap<u32, NodeId> {
     let mut ids: BTreeSet<NodeId> = BTreeSet::new();
     let mut files = BTreeSet::new();
-    let r = (lo + 1)..=hi;
+    let r = lo..=hi;
     for (_, t) in f
         .expr_types
         .range(r.clone())
@@ -397,7 +399,7 @@ pub fn check_package(
             let ranges: Vec<(NodeId, NodeId)> =
                 reuse.keys().map(|id| range_of(*id, &ids)).collect();
             c.facts
-                .merge_reused(old, |n| ranges.iter().any(|(lo, hi)| n > *lo && n <= *hi));
+                .merge_reused(old, |n| ranges.iter().any(|(lo, hi)| n >= *lo && n <= *hi));
         }
         c.facts.reuse_bodies.clear();
     }
