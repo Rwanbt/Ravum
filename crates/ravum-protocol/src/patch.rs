@@ -115,6 +115,10 @@ pub enum RejectReason {
     /// The module's state schema digest differs from the host's state
     /// (RFC-E11-DSP-BLOCK DSP-1.4, `reload.md` HR-1.3).
     StateSchemaChanged { expected: String, found: String },
+    /// The module's opaque DSP state layout is outside the ABI bounds.
+    StateLayout { size: u32, align: u32 },
+    /// The migration did not produce an initialized state.
+    StateMigrationFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -27,6 +27,7 @@ pub const DSP_STATE_LAYOUT_EXPORT: &str = "ravum_state_layout";
 pub const DSP_STATE_INIT_EXPORT: &str = "ravum_state_init";
 pub const DSP_STATE_MIGRATE_EXPORT: &str = "ravum_state_migrate";
 pub const DSP_STATE_MIGRATE_FROM_EXPORT: &str = "ravum_state_migrate_from";
+pub const DSP_STATE_MIGRATE_STATUS_EXPORT: &str = "ravum_state_migrate_status";
 pub const DSP_STATE_MAX_SIZE: u32 = 64 * 1024;
 pub const DSP_STATE_MAX_ALIGN: u32 = 64;
 

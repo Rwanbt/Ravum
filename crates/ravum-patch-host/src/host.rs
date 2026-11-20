@@ -51,6 +51,14 @@ impl ExpectedAbi {
         }
     }
 
+    pub fn dsp_opaque() -> Self {
+        Self {
+            abi_version: ravum_protocol::dsp::DSP_OPAQUE_ABI_VERSION,
+            signature: ravum_protocol::dsp::DSP_OPAQUE_SIGNATURE.to_owned(),
+            ..Self::dsp()
+        }
+    }
+
     /// The DSP contract plus the state schema check: a module must export
     /// `ravum_state_schema` and it must name the host's [`DspState`] schema.
     ///

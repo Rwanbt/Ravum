@@ -4,7 +4,7 @@
 //! three observable properties. It says nothing about audio quality, real-time
 //! behaviour, or inputs outside that block.
 
-use ravum_patch_host::{prepare_block, ExpectedAbi};
+use ravum_patch_host::{prepare_block, prepare_opaque_block, ExpectedAbi, OpaqueBlock};
 use ravum_protocol::{
     sha256_hex, BuildOutput, DspState, EvidenceRecord, RejectReason, VerificationKey,
     VerificationStatus, EVIDENCE_SCHEMA_VERSION,
@@ -30,29 +30,63 @@ pub fn block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReaso
         });
     }
 
-    let frames = 64usize;
-    let input: Vec<f32> = (0..frames)
-        .map(|i| ((i as f32) / (frames as f32)) - 0.5)
-        .collect();
+    let (mut first, mut second) = (DspState::default(), DspState::default());
+    let module = &prepared.module;
+    Ok(smoke(
+        build,
+        "state is host-owned and starts at zero",
+        |input, output| {
+            module.process_block(input, output, &mut first);
+        },
+        |input, output| {
+            module.process_block(input, output, &mut second);
+        },
+    ))
+}
 
-    let mut first = vec![0f32; frames];
-    let mut first_state = DspState::default();
-    prepared
-        .module
-        .process_block(&input, &mut first, &mut first_state);
+/// Exercise a trusted native ABI 3 artifact from two initialized states.
+///
+/// # Safety
+/// The artifact must come from a trusted build that implements DSP ABI 3.
+pub unsafe fn opaque_block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReason> {
+    let path = Path::new(&build.artifact_path);
+    let load = || {
+        // SAFETY: the caller vouches for this native artifact.
+        let prepared = unsafe { prepare_opaque_block(path) }?;
+        if prepared.artifact_id != build.artifact_id {
+            return Err(RejectReason::ArtifactMismatch {
+                expected: build.artifact_id.clone(),
+                found: prepared.artifact_id,
+            });
+        }
+        OpaqueBlock::start(prepared)
+    };
+    let (mut first, mut second) = (load()?, load()?);
+    Ok(smoke(
+        build,
+        "state is host-owned and initialized by the module",
+        |input, output| {
+            first.process(input, output);
+        },
+        |input, output| {
+            second.process(input, output);
+        },
+    ))
+}
 
-    let mut second = vec![0f32; frames];
-    let mut second_state = DspState::default();
-    prepared
-        .module
-        .process_block(&input, &mut second, &mut second_state);
-
-    // A second block from the *same advanced state* must be requested from the same
-    // module, otherwise a stateful filter would be compared from a fresh state.
-    let mut third = vec![0f32; frames];
-    prepared
-        .module
-        .process_block(&input, &mut third, &mut first_state);
+fn smoke(
+    build: &BuildOutput,
+    initialization: &str,
+    mut primary: impl FnMut(&[f32], &mut [f32]),
+    mut independent: impl FnMut(&[f32], &mut [f32]),
+) -> EvidenceRecord {
+    const FRAMES: usize = 64;
+    let input = std::array::from_fn::<_, FRAMES, _>(|i| i as f32 / FRAMES as f32 - 0.5);
+    let (mut first, mut second, mut third) = ([0.0; FRAMES], [0.0; FRAMES], [0.0; FRAMES]);
+    primary(&input, &mut first);
+    independent(&input, &mut second);
+    // Exercise the next block with the advanced state, not a fresh one.
+    primary(&input, &mut third);
 
     let finite = first.iter().all(|s| s.is_finite()) && third.iter().all(|s| s.is_finite());
     let deterministic = first == second;
@@ -73,14 +107,14 @@ pub fn block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReaso
     let tool_version = env!("CARGO_PKG_VERSION");
     let mut assumptions = vec![
         "single fixed 64-frame block of a deterministic ramp".to_owned(),
-        "state is host-owned and starts at zero".to_owned(),
+        initialization.to_owned(),
         "does not measure audio quality, latency, real-time behaviour or state migration"
             .to_owned(),
         format!("trust base: rustc-built artifact, the native loader, and {tool} {tool_version}"),
     ];
     assumptions.extend(failures);
 
-    Ok(EvidenceRecord {
+    EvidenceRecord {
         schema_version: EVIDENCE_SCHEMA_VERSION,
         verification_key: dsp_evidence_key(tool, tool_version),
         status: VerificationStatus::Tested,
@@ -94,5 +128,5 @@ pub fn block_evidence(build: &BuildOutput) -> Result<EvidenceRecord, RejectReaso
         passed: finite && deterministic && non_silent,
         counterexample: None,
         recorded_at_unix: ravum_protocol::now_unix(),
-    })
+    }
 }

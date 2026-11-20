@@ -19,6 +19,7 @@
 | P3 | #1–#6 | `crates/ravum-lang-cli/src/commands/watch.rs` `mod signal` | `SetConsoleCtrlHandler` / `signal(2)` (gestion de Ctrl-C) |
 | hors code | code **généré** par Cranelift | — | repose sur la validation de l'IR, le vérificateur Cranelift et l'oracle différentiel (voir §4) |
 | hors code | code Rust **généré** pour un `extern "C"` / bloc DSP | `ravum-lang-codegen` | un seul `#[allow(unsafe_code)]` par programme (`SAFETY.md` §2, §8) |
+| **P1** | ABI DSP 3 | `ravum-patch-host/src/opaque_block.rs`, module `rv_dsp_abi` généré, `ravum-dsp-harness/src/evidence.rs` | contrats des pointeurs et des digests, layout C imbriqué, publication conditionnée par l’initialisation, interception des traps de migration dans la bibliothèque d’origine |
 
 Tous les autres crates du langage portent `#![forbid(unsafe_code)]`
 (`syntax`, `sema`, `codegen`, `lsp`, `ir`, `incr`, `audio`) ou
