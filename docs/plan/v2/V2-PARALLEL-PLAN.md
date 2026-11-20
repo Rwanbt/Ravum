@@ -47,6 +47,12 @@ fin vérifiables. Le prompt de lancement est en §6.
 
 ## 2. Vue d'ensemble
 
+> **2026-11-20** : L1, L5 et L7 sont **rédigées** (statut `PROPOSED`) sur la
+> branche d'intégration `claude/trusting-cerf-4hhv5a` :
+> `docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md`, `docs/rfc/RFC-DSP-ABI-2.md`,
+> `docs/rfc/RFC-ASYNC-NET-1.md`. Ne pas les relancer ; leurs implémentations
+> (L1b, L5b, L7b) attendent la ratification du responsable.
+
 | Id | Gate | Chantier | Dépend de | Parallélisable avec | Taille |
 |---|---|---|---|---|---|
 | L1 | T17 | RFC du profil déterministe (horloge, aléa, ordonnancement virtualisés, replay par seed) | — | tous | S (doc) |
