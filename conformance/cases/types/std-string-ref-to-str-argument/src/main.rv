@@ -1,3 +1,5 @@
+use std::io;
+
 fn takes(s: &str) -> usize { s.len() }
 fn main() {
     let s = String::from("ab");

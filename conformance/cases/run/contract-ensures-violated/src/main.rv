@@ -1,3 +1,5 @@
+use std::io;
+
 fn grow(x: i64) -> i64 effects()
     ensures result > x
 {

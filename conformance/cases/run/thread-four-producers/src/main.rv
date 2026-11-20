@@ -1,3 +1,7 @@
+use std::io;
+use std::sync;
+use std::thread;
+
 fn produce(out: Sender<i64>) -> () effects(thread) {
     for i in 0..250 {
         let sent: bool = sync::send(&out, i as i64);

@@ -1,3 +1,5 @@
+use std::net;
+
 fn main() -> () effects(net, alloc) {
     let r: Result<TcpListener, Error> = net::listen("127.0.0.1:0");
     drop(r);

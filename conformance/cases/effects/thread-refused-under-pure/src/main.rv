@@ -1,3 +1,5 @@
+use std::thread;
+
 fn one(n: i64) -> i64 effects() {
     n
 }

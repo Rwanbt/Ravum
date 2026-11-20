@@ -1,3 +1,5 @@
+use std::thread;
+
 fn take(v: Vec<i64>) -> usize effects() {
     v.len()
 }

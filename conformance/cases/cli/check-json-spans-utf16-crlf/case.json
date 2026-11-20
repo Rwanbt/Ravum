@@ -7,7 +7,7 @@
     "."
   ],
   "exit_code": 1,
-  "stdout_contains": "\"start_byte\":50,\"end_byte\":51,\"start_line\":2,\"start_col\":35,\"end_line\":2,\"end_col\":36,\"start_utf16\":47,\"end_utf16\":48",
+  "stdout_contains": "\"start_byte\":64,\"end_byte\":65,\"start_line\":3,\"start_col\":35,\"end_line\":3,\"end_col\":36,\"start_utf16\":61,\"end_utf16\":62",
   "expect_json_schema_version": 1,
   "notes": "LEX-3.2, LEX-3.5, LEX-9.1 to LEX-9.4, DIAG-5.2/5.3/5.6: a CRLF counts as one line and two bytes; offsets are absolute bytes of the unmodified file; the column counts UTF-16 code units (`é` = 1, `😀` = 2), never bytes (the column used to be 38, in bytes)."
 }

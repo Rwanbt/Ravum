@@ -13,6 +13,8 @@
 use std::env;
 use std::io;
 use std::string;
+use std::http;
+use std::net;
 
 const PAGE: &str = "<!doctype html>\n<html><head><meta charset='utf-8'><title>Ravum notes</title></head>\n<body>\n<h1>Ravum notes</h1>\n<form id='add'><input id='text' name='text' autocomplete='off'><button id='save' type='submit'>Add</button></form>\n<p id='error' role='alert'></p>\n<ul id='notes'></ul>\n<script>\nconst list = document.getElementById('notes');\nconst error = document.getElementById('error');\nasync function refresh() {\n  const text = await (await fetch('/notes')).text();\n  list.replaceChildren();\n  for (const line of text.split('\\n')) {\n    if (line === '') continue;\n    const space = line.indexOf(' ');\n    const id = line.slice(0, space);\n    const li = document.createElement('li');\n    li.dataset.id = id;\n    const label = document.createElement('span');\n    label.textContent = line.slice(space + 1);\n    const del = document.createElement('button');\n    del.textContent = 'Delete';\n    del.className = 'delete';\n    del.onclick = async () => {\n      const r = await fetch('/notes/delete', { method: 'POST', body: id });\n      error.textContent = r.ok ? '' : await r.text();\n      await refresh();\n    };\n    li.append(label, del);\n    list.append(li);\n  }\n  document.body.dataset.ready = 'yes';\n}\ndocument.getElementById('add').onsubmit = async (event) => {\n  event.preventDefault();\n  const input = document.getElementById('text');\n  const r = await fetch('/notes', { method: 'POST', body: input.value });\n  error.textContent = r.ok ? '' : await r.text();\n  if (r.ok) input.value = '';\n  await refresh();\n};\nrefresh();\n</script>\n</body></html>\n";
 

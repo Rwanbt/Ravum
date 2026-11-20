@@ -24,6 +24,15 @@
 - **V2-S1** : STD-1.1 est appliqué : le checker refuse `io::…` (et tout
   module `std`) sans `use std::…;`. Les cas et exemples qui s'en passaient
   sont corrigés (rupture admise en phase draft, COMPAT-2.1).
+  **État (2026-11-20)** : appliqué **à moitié**. Fait : `use std::…;`
+  ajouté à 84 fichiers `.rv` du corpus, des exemples et des paquets (correct
+  dans les deux régimes) ; `std::task` ajouté aux modules importables (il
+  ne l'était pas : défaut masqué par l'accès sans `use`). **Pas fait** : le
+  refus dans le checker. Essayé : conformance 748/0 après correction du
+  corpus, mais **109 tests Rust** de 9 crates embarquent des sources sans
+  `use`, dont `ravum-lang-jit`/`ravum-lang-ir` (chantier L2, en cours dans
+  une autre session) : refus retiré pour ne pas créer de conflit ; à faire
+  après la fusion de L2.
 - **V2-M1** : les MUST **déclaratifs** (non testables) sont comptés à part
   par `must_audit.py`, sur une liste relue par le responsable.
 - **V2-K1** : `ravum-lang run` arrête le programme lancé quand il est

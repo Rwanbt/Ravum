@@ -1,3 +1,5 @@
+use std::io;
+
 const C: bool = true;
 fn main() {
     if C {

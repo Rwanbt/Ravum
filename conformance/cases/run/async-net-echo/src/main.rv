@@ -1,5 +1,9 @@
 // Server and clients are tasks of ONE thread: with blocking sockets the
 // first `accept` or `read_line` would freeze every other task.
+use std::io;
+use std::net;
+use std::task;
+
 async fn serve(listener: TcpListener, connections: i64) -> () effects(net, async, alloc, io) {
     for i in 0..connections {
         match net::accept_async(&listener).await {

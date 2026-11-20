@@ -1,3 +1,5 @@
+use std::thread;
+
 fn main() {
     thread::sleep();
 }

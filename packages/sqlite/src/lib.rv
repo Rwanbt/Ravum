@@ -5,6 +5,8 @@
 // package splices a value into SQL text (DB-1.2). Every SQLite error is an
 // `Err`, never a panic (DB-1.3). Build the native library first:
 // `python3 tools/build_sqlite_native.py`.
+use std::ffi;
+
 
 extern "C" from "ravum_sqlite" {
     fn rvs_open(path: &str) -> CHandle;

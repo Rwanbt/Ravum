@@ -1,3 +1,5 @@
+use std::io;
+
 struct Range {
     lo: i64,
     hi: i64,

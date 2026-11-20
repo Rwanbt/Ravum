@@ -7,6 +7,11 @@
 //   anything else                      -> 404 / 405
 // `main` is the client: it drives a fixed scenario on 127.0.0.1, port 0, and
 // prints what it receives, so the whole run is reproducible.
+use std::http;
+use std::io;
+use std::net;
+use std::thread;
+
 
 fn note_lines(db: &sqlite::Db) -> Result<String, Error> effects(alloc, panic, unsafe, ffi) {
     let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT id, body FROM notes ORDER BY id DESC", Vec::new())?;

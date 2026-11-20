@@ -1,3 +1,5 @@
+use std::io;
+
 fn pick(a: [&str; 2]) -> &str {
     let s = a[1];
     return s;

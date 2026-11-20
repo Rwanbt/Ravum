@@ -213,6 +213,7 @@ pub const BUILTIN_MODULES: &[&str] = &[
     "std::sync",
     "std::ffi",
     "std::http",
+    "std::task",
     "std::string",
     "std::math",
     "std::env",
