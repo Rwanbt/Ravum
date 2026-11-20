@@ -26,7 +26,10 @@ pub use host::{
     inspect_artifact, prepare, ArtifactFacts, ComputeFn, ExpectedAbi, LoadedModule, PatchHost,
     PreparedPatch,
 };
-pub use opaque_block::{prepare_opaque_block, OpaqueBlock, PreparedOpaqueBlock};
+pub use opaque_block::{
+    prepare_opaque_block, OpaqueBlock, OpaqueEditor, OpaqueRunner, OpaqueUpdate,
+    PreparedOpaqueBlock,
+};
 pub use reclaimer::{
     init_reclaimer, live_modules, pending_reclamations, unloaded_modules, wait_until_idle,
     DeferredLibrary,

@@ -119,6 +119,8 @@ pub enum RejectReason {
     StateLayout { size: u32, align: u32 },
     /// The migration did not produce an initialized state.
     StateMigrationFailed,
+    /// The audio runner has yet to capture or adopt an opaque DSP state.
+    StateUpdateInFlight,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

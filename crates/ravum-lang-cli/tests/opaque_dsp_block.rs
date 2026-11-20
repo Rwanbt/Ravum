@@ -8,7 +8,9 @@ use ravum_dsp_harness::{
 use ravum_lang_ir::compile_source;
 use ravum_lang_ir::interp::{run_dsp, DEFAULT_STEPS};
 use ravum_lang_jit::hot::HotEngine;
-use ravum_patch_host::{prepare_opaque_block, OpaqueBlock, PreparedOpaqueBlock};
+use ravum_patch_host::{
+    prepare_opaque_block, OpaqueBlock, OpaqueEditor, OpaqueUpdate, PreparedOpaqueBlock,
+};
 use ravum_protocol::{BuildContextId, BuildOutput, DiagnosticSet, RejectReason, SnapshotId};
 
 const FRAMES: usize = 64;
@@ -93,10 +95,10 @@ fn load_path(path: &Path) -> PreparedOpaqueBlock {
     unsafe { prepare_opaque_block(path) }.unwrap()
 }
 
-fn replace(block: &mut OpaqueBlock, build: &BuildOutput) -> Result<(), RejectReason> {
+fn update(editor: &mut OpaqueEditor, build: &BuildOutput) -> Result<OpaqueUpdate, RejectReason> {
     // SAFETY: build is produced by the trusted compiler from a test fixture.
     let evidence = unsafe { ravum_dsp_harness::evidence::opaque_block_evidence(build) }?;
-    block.replace(
+    editor.update(
         load(build),
         build,
         Some(&evidence),
@@ -145,7 +147,7 @@ fn same_digest_swaps_keep_state_without_callback_allocation() {
     let active = load(&first);
     let digest = active.schema().to_owned();
     let layout = active.layout();
-    let mut block = OpaqueBlock::start(active).unwrap();
+    let (mut editor, mut runner) = OpaqueBlock::start(active).unwrap().split();
     let input = [0.125; FRAMES];
     let mut output = [0.0; FRAMES];
     let mut expected = 1.0f32;
@@ -156,11 +158,11 @@ fn same_digest_swaps_keep_state_without_callback_allocation() {
             let next = load(build);
             assert_eq!(next.schema(), digest);
             assert_eq!(next.layout(), layout);
-            replace(&mut block, build).unwrap();
+            assert_eq!(update(&mut editor, build).unwrap(), OpaqueUpdate::Published);
             gain = if gain == 1.0 { 2.0 } else { 1.0 };
         }
         reset_thread_counter();
-        let frames = block.process(&input, &mut output);
+        let frames = runner.process(&input, &mut output);
         let allocations = allocations_on_this_thread();
         let frees = deallocations_on_this_thread();
         assert_eq!((frames, allocations, frees), (FRAMES, 0, 0));
@@ -216,22 +218,78 @@ fn migrate(old: OldState) -> State effects() {{
 "#
     );
 
-    let mut block = OpaqueBlock::start(load(&build("opaque-migrate-original", &original))).unwrap();
-    let mut output = [0.0];
-    block.process(&[1.0], &mut output);
-    assert_eq!(output, [1.0]);
-
+    let initial = build("opaque-migrate-original", &original);
+    let block = OpaqueBlock::start(load(&initial)).unwrap();
+    let (mut editor, mut runner) = block.split();
     let trap = build("opaque-migrate-trap", &trapping);
-    assert!(matches!(
-        replace(&mut block, &trap),
-        Err(ravum_protocol::RejectReason::StateMigrationFailed)
-    ));
-    block.process(&[0.0], &mut output);
-    assert_eq!(output, [0.5]);
+    let good = build("opaque-migrate-success", &migrated);
 
-    replace(&mut block, &build("opaque-migrate-success", &migrated)).unwrap();
-    block.process(&[0.0], &mut output);
-    assert_eq!(output, [1.25]);
+    std::thread::scope(|scope| {
+        let (input, next) = std::sync::mpsc::channel::<f32>();
+        let (send, output) = std::sync::mpsc::channel();
+        let worker = scope.spawn(move || {
+            while let Ok(sample) = next.recv() {
+                let mut out = [0.0];
+                reset_thread_counter();
+                let frames = runner.process(&[sample], &mut out);
+                let counts = (
+                    frames,
+                    allocations_on_this_thread(),
+                    deallocations_on_this_thread(),
+                );
+                send.send((out[0], counts)).unwrap();
+            }
+        });
+        let render = |sample| {
+            input.send(sample).unwrap();
+            let (sample, counts) = output.recv().unwrap();
+            assert_eq!(counts, (1, 0, 0));
+            sample
+        };
+
+        assert_eq!(render(1.0), 1.0);
+        assert_eq!(
+            update(&mut editor, &trap).unwrap(),
+            OpaqueUpdate::WaitingForBlock
+        );
+        assert_eq!(
+            editor.finish_migration(&trap.source_snapshot_id).unwrap(),
+            Some(OpaqueUpdate::WaitingForBlock)
+        );
+        assert_eq!(render(0.0), 0.5);
+        assert!(matches!(
+            editor.finish_migration(&trap.source_snapshot_id),
+            Err(RejectReason::StateMigrationFailed)
+        ));
+
+        assert_eq!(
+            update(&mut editor, &good).unwrap(),
+            OpaqueUpdate::WaitingForBlock
+        );
+        assert_eq!(render(0.0), 0.25);
+        assert_eq!(render(0.0), 0.125);
+        assert_eq!(
+            editor.finish_migration(&good.source_snapshot_id).unwrap(),
+            Some(OpaqueUpdate::Published)
+        );
+        assert!(matches!(
+            update(&mut editor, &good),
+            Err(RejectReason::StateUpdateInFlight)
+        ));
+        assert_eq!(render(0.0), 1.25);
+
+        assert_eq!(
+            update(&mut editor, &initial).unwrap(),
+            OpaqueUpdate::WaitingForBlock
+        );
+        assert!(matches!(
+            editor.finish_migration(&SnapshotId::new("stale")),
+            Err(RejectReason::StaleBuild { .. })
+        ));
+        assert_eq!(render(0.0), 1.125);
+        drop(input);
+        worker.join().unwrap();
+    });
 }
 
 #[test]

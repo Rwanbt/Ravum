@@ -20,6 +20,9 @@ use crate::DeferredLibrary;
 type Process = unsafe extern "C" fn(*mut u8, *const f32, *mut f32, u32);
 type Init = unsafe extern "C" fn(*mut u8);
 
+mod live;
+pub use live::{OpaqueEditor, OpaqueRunner, OpaqueUpdate};
+
 pub struct PreparedOpaqueBlock {
     pub manifest: PatchManifest,
     pub artifact_id: ArtifactId,
@@ -37,6 +40,85 @@ impl PreparedOpaqueBlock {
 
     pub fn schema(&self) -> &str {
         &self.schema
+    }
+
+    fn authorize(
+        &self,
+        build: &BuildOutput,
+        evidence: Option<&EvidenceRecord>,
+        current_snapshot: &SnapshotId,
+    ) -> Result<(), RejectReason> {
+        if self.artifact_id != build.artifact_id {
+            return Err(RejectReason::ArtifactMismatch {
+                expected: build.artifact_id.clone(),
+                found: self.artifact_id.clone(),
+            });
+        }
+        evaluate_gates(build, &self.artifact_id, evidence, current_snapshot)?;
+        Ok(())
+    }
+
+    fn migrate_state(
+        &self,
+        current: &PreparedOpaqueBlock,
+        previous: &StateBuffer,
+    ) -> Result<StateBuffer, RejectReason> {
+        let library = &self._library;
+        type Migrate = unsafe extern "C" fn(*const u8, *mut u8);
+        // SAFETY: ABI version and manifest were validated before preparing the module.
+        let migrate: Migrate =
+            unsafe { library.symbol(b"ravum_state_migrate\0") }.map_err(|_| {
+                RejectReason::StateSchemaChanged {
+                    expected: current.schema.clone(),
+                    found: self.schema.clone(),
+                }
+            })?;
+        // SAFETY: the ABI specifies a digest export for migrations.
+        let origin = unsafe {
+            read_digest(
+                library,
+                b"ravum_state_migrate_from\0",
+                DSP_STATE_MIGRATE_FROM_EXPORT,
+            )
+        }?;
+        if origin != current.schema {
+            return Err(RejectReason::StateSchemaChanged {
+                expected: current.schema.clone(),
+                found: origin,
+            });
+        }
+        // SAFETY: this optional extension has a fixed signature. Absence
+        // prevents calling a migration whose outcome cannot be observed.
+        let status: unsafe extern "C" fn() -> u32 =
+            unsafe { library.symbol(b"ravum_state_migrate_status\0") }
+                .map_err(|_| missing(DSP_STATE_MIGRATE_STATUS_EXPORT))?;
+        let next = StateBuffer::allocate(self.layout)?;
+        // SAFETY: the digest attests the snapshot layout. The status getter
+        // is called on this editor thread after the module catches its panic.
+        unsafe {
+            migrate(previous.ptr.as_ptr(), next.ptr.as_ptr());
+            if status() != 1 {
+                return Err(RejectReason::StateMigrationFailed);
+            }
+        }
+        Ok(next)
+    }
+
+    fn render(&self, state: &mut StateBuffer, input: &[f32], output: &mut [f32]) -> usize {
+        let frames = input.len().min(output.len()).min(u32::MAX as usize);
+        if frames > 0 {
+            // SAFETY: both slices cover `frames`, and the module and its
+            // initialized, layout-compatible state remain live for the call.
+            unsafe {
+                (self.process)(
+                    state.ptr.as_ptr(),
+                    input.as_ptr(),
+                    output.as_mut_ptr(),
+                    frames as u32,
+                )
+            };
+        }
+        frames
     }
 }
 
@@ -142,6 +224,19 @@ impl StateBuffer {
             })?;
         Ok(Self { ptr, allocation })
     }
+
+    fn copy_from(&mut self, source: &Self) {
+        assert_eq!(self.allocation, source.allocation);
+        // SAFETY: both distinct buffers were allocated for the caller's validated
+        // layout. Copying bytes preserves padding without reading it as a value.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                source.ptr.as_ptr(),
+                self.ptr.as_ptr(),
+                self.allocation.size(),
+            );
+        }
+    }
 }
 
 impl Drop for StateBuffer {
@@ -174,88 +269,22 @@ impl OpaqueBlock {
         evidence: Option<&EvidenceRecord>,
         current_snapshot: &SnapshotId,
     ) -> Result<(), RejectReason> {
-        if module.artifact_id != build.artifact_id {
-            return Err(RejectReason::ArtifactMismatch {
-                expected: build.artifact_id.clone(),
-                found: module.artifact_id,
-            });
-        }
-        evaluate_gates(build, &module.artifact_id, evidence, current_snapshot)?;
+        module.authorize(build, evidence, current_snapshot)?;
         if module.schema == self.module.schema {
             if module.layout != self.module.layout {
                 return Err(layout_refusal(module.layout));
             }
         } else {
-            self.state = self.migrate_state(&module)?;
+            let mut snapshot = StateBuffer::allocate(self.module.layout)?;
+            snapshot.copy_from(&self.state);
+            self.state = module.migrate_state(&self.module, &snapshot)?;
         }
         self.module = module;
         Ok(())
     }
 
-    fn migrate_state(&self, candidate: &PreparedOpaqueBlock) -> Result<StateBuffer, RejectReason> {
-        let library = &candidate._library;
-        type Migrate = unsafe extern "C" fn(*const u8, *mut u8);
-        // SAFETY: ABI version and manifest were validated before preparing the module.
-        let migrate: Migrate =
-            unsafe { library.symbol(b"ravum_state_migrate\0") }.map_err(|_| {
-                RejectReason::StateSchemaChanged {
-                    expected: self.module.schema.clone(),
-                    found: candidate.schema.clone(),
-                }
-            })?;
-        // SAFETY: the ABI specifies a digest export for migrations.
-        let origin = unsafe {
-            read_digest(
-                library,
-                b"ravum_state_migrate_from\0",
-                DSP_STATE_MIGRATE_FROM_EXPORT,
-            )
-        }?;
-        if origin != self.module.schema {
-            return Err(RejectReason::StateSchemaChanged {
-                expected: self.module.schema.clone(),
-                found: origin,
-            });
-        }
-        // SAFETY: this optional extension has a fixed signature. Absence
-        // prevents calling a migration whose outcome cannot be observed.
-        let status: unsafe extern "C" fn() -> u32 =
-            unsafe { library.symbol(b"ravum_state_migrate_status\0") }
-                .map_err(|_| missing(DSP_STATE_MIGRATE_STATUS_EXPORT))?;
-        let previous = StateBuffer::allocate(self.module.layout)?;
-        let next = StateBuffer::allocate(candidate.layout)?;
-        // SAFETY: both old buffers have identical validated layouts and do not
-        // overlap. Copy preserves padding without interpreting it as a value.
-        // The candidate receives only the snapshot and fresh new storage.
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                self.state.ptr.as_ptr(),
-                previous.ptr.as_ptr(),
-                self.module.layout.size as usize,
-            );
-            migrate(previous.ptr.as_ptr(), next.ptr.as_ptr());
-            if status() != 1 {
-                return Err(RejectReason::StateMigrationFailed);
-            }
-        }
-        Ok(next)
-    }
-
     /// Audio path: exclusive access to the state and no allocation or locks.
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) -> usize {
-        let frames = input.len().min(output.len()).min(u32::MAX as usize);
-        if frames > 0 {
-            // SAFETY: both slices cover `frames`, and the module and its
-            // initialized, layout-compatible state remain live for the call.
-            unsafe {
-                (self.module.process)(
-                    self.state.ptr.as_ptr(),
-                    input.as_ptr(),
-                    output.as_mut_ptr(),
-                    frames as u32,
-                )
-            };
-        }
-        frames
+        self.module.render(&mut self.state, input, output)
     }
 }
