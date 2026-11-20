@@ -23,6 +23,12 @@
 Tous les autres crates du langage portent `#![forbid(unsafe_code)]`
 (`syntax`, `sema`, `codegen`, `lsp`, `ir`, `incr`, `audio`) ou
 `#![deny(unsafe_code)]` avec les seules exceptions listées (`cli`, `jit`).
+Ajout du 2026-11-20 (V2-L5b) : l'hôte de blocs ABI 3
+(`crates/ravum-patch-host/src/block3.rs` : chargement de symboles,
+allocation et libération du tampon d'état, appels `init`/`process`) et le
+module généré correspondant ; justifications : `docs/ffi/SAFETY.md` §9.
+Priorité proposée : P1 (mémoire possédée par l'hôte, écrite par du code natif).
+
 Dépendances tierces avec du code `unsafe` interne, hors périmètre de cet
 audit : `cpal` et `audio_thread_priority` (features `cpal`/`rt-priority`,
 désactivées par défaut) ; `ravum-lang-audio` lui-même reste

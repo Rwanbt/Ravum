@@ -21,6 +21,17 @@ pub const DSP_EXPORT: &str = "ravum_process_block";
 /// Changing the state layout requires a new signature, not a silent reinterpretation.
 pub const DSP_SIGNATURE: &str = "block:f32->f32+state:v1";
 
+/// ABI 3 (RFC-DSP-ABI-2): the state is declared by the module and held by
+/// the host in an opaque buffer of `ravum_state_layout()` bytes.
+pub const DSP3_ABI_VERSION: u32 = 3;
+
+/// Logical signature of an ABI 3 block.
+pub const DSP3_SIGNATURE: &str = "block:f32->f32+state:opaque:v3";
+
+/// DSP3-3: largest state an ABI 3 host accepts, and largest alignment.
+pub const DSP3_MAX_STATE_BYTES: u32 = 64 * 1024;
+pub const DSP3_MAX_STATE_ALIGN: u32 = 64;
+
 /// Exported symbol giving the module's state schema digest (RFC-E11-DSP-BLOCK
 /// DSP-1.4): a NUL-terminated lowercase hexadecimal SHA-256.
 pub const DSP_STATE_SCHEMA_EXPORT: &str = "ravum_state_schema";

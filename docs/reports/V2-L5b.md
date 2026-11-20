@@ -1,4 +1,4 @@
-# V2-L5b — T8 : ABI DSP 3 (RFC-DSP-ABI-2), tranche 1 : vérificateur et générateur
+# V2-L5b — T8 : ABI DSP 3 (RFC-DSP-ABI-2), tranches 1 et 2
 
 | Champ | Valeur |
 |---|---|
@@ -32,12 +32,35 @@
 - Mesures : conformance 757 → 755 PASS, 0 FAIL, 2 SKIP ; `dsp_block` (ABI 2)
   4/4 ; `ravum-lang-sema` + `-codegen` : 1 344 tests, 0 échec.
 
-## Pas fait (tranches suivantes)
+## Tranche 2 : hôte (fait)
 
-- **Hôte** (`ravum-patch-host`, `ravum-protocol`) : charger un module ABI 3
-  (tampon d'état alloué hors du thread audio avec `size`/`align`, limites
-  64 KiB / 64 : DSP3-3), conserver le tampon au même digest (DSP3-4),
-  refuser ABI 2 ↔ 3 (DSP3-7), fondu enchaîné (aujourd'hui une copie
-  `DspState` sur la pile : à revoir pour un état opaque).
-- Migration côté éditeur (DSP3-5), tests DSP3-T1 à T6, inventaire `unsafe`
-  des nouveaux sites de l'hôte.
+- `ravum-protocol` : `DSP3_ABI_VERSION`, `DSP3_SIGNATURE`, limites
+  `DSP3_MAX_STATE_BYTES` (64 KiB) / `DSP3_MAX_STATE_ALIGN` (64),
+  `RejectReason::StateLayout` (ajout).
+- `ravum-patch-host::block3` : `prepare_block3` (ABI 3 vérifiée, schéma et
+  layout lus, layout hors bornes refusé), `Block3Host::new` (tampon alloué et
+  initialisé par le module, hors thread audio), `process` (sans allocation ni
+  verrou), `replace` (même digest et même layout : état conservé ; sinon
+  `StateSchemaChanged`, l'ancien bloc continue ; même artefact :
+  `AlreadyActive` ; l'ancien module est rendu à l'appelant, détruit hors
+  thread audio).
+- Tests `crates/ravum-lang-cli/tests/dsp3_block.rs` (3) : bloc `{ y }` =
+  référence Rust bit à bit sur 4 096 échantillons avec remplacement à chaud
+  au même schéma et état conservé (DSP3-T1/T2/T4) ; état à struct imbriquée,
+  tableau et `u32` : layout 20/4 et sortie de la ligne à retard ; nouveau
+  schéma refusé et bloc courant gardé ; ABI 2 refusé par `prepare_block3`
+  et ABI 3 refusé par `prepare_block` (DSP3-7, DSP3-T5). ABI 2 inchangée :
+  `dsp_block` 4/4 (DSP3-T6). `ravum-patch-host` + `ravum-protocol` : 38/0.
+- `unsafe` : sites inscrits dans `docs/ffi/SAFETY.md` §9 et au dossier
+  d'audit ; `tools/unsafe_audit.py` : PASS.
+
+## Pas fait
+
+- Publication sans verrou (comme `BlockHost` pour l'ABI 2) et **fondu
+  enchaîné** pour l'ABI 3 : `Block3Host` est possédé par un thread et
+  remplacé par `&mut self`.
+- **Migration** de schéma côté éditeur (DSP3-5) : un autre digest est refusé.
+- Compteur d'allocations dans `process` (DSP3-T2 « 0 allocation ») : non
+  mesuré pour l'ABI 3 ; `process` n'appelle que le module.
+- Mesure du fondu de la voie `cdylib` sur `dsp-gain-iir` (T8) : dépend du
+  fondu ci-dessus.

@@ -115,6 +115,9 @@ pub enum RejectReason {
     /// The module's state schema digest differs from the host's state
     /// (RFC-E11-DSP-BLOCK DSP-1.4, `reload.md` HR-1.3).
     StateSchemaChanged { expected: String, found: String },
+    /// RFC-DSP-ABI-2 DSP3-3: the module's state layout is out of the host's
+    /// bounds (size > 64 KiB, or alignment not a power of two <= 64).
+    StateLayout { size: u32, align: u32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

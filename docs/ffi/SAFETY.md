@@ -201,3 +201,26 @@ Une panique dans `process_sample` traverse une frontière `extern "C"` : le
 processus s'arrête (comportement de Rust), elle n'est pas rattrapée. Le profil
 `rt` ne garantit pas l'absence de panique (RFC-RT-TRAPS).
 
+
+## 9. Bloc DSP ABI 3 (RFC-DSP-ABI-2, DSP3-9)
+
+**Côté module généré** (même module `rv_dsp_abi`, même confinement qu'au §8) :
+
+| Opération | Justification |
+|---|---|
+| `std::ptr::write(state as *mut State, init())` (`ravum_state_init`) | l'hôte a alloué le tampon avec la taille et l'alignement que rend `ravum_state_layout` (`size_of`/`align_of` du `State` `#[repr(C)]` de ce module) |
+| `&mut *(state as *mut State)` (`ravum_process_block`) | tampon initialisé par `ravum_state_init` d'un module **au même digest de schéma** (même `repr(C)`, donc même layout), vérifié par l'hôte avant tout remplacement |
+
+**Côté hôte** (`crates/ravum-patch-host/src/block3.rs`) :
+
+| Opération | Justification |
+|---|---|
+| `DeferredLibrary::symbol` (4 symboles ABI 3) | types de la RFC, après contrôle de `ravum_abi_version` = 3 et de la signature du manifeste (`validate_loaded`) |
+| `CStr::from_ptr` sur `ravum_state_schema` | pointeur non nul, terminé par NUL par contrat, copié aussitôt |
+| `alloc_zeroed` / `dealloc` du tampon d'état | `Layout` valide (taille ≤ 64 KiB, alignement puissance de deux ≤ 64, sinon `RejectReason::StateLayout`) ; taille 0 : pointeur pendant aligné, sans allocation ; libération avec le même `Layout` |
+| appels `ravum_state_init` / `ravum_process_block` | tampon de ce layout ; tranches valides de `frames` échantillons ; module gardé chargé par `Arc` pendant l'appel |
+
+Limites : `Block3Host` est possédé par un seul thread (`&mut self`), sans
+publication sans verrou ni fondu ; la migration de schéma (DSP3-5) n'existe
+pas : un autre digest est refusé. Tests : `crates/ravum-lang-cli/tests/dsp3_block.rs`.
+Non audité par un tiers (D4/R13).
