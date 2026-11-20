@@ -292,3 +292,15 @@ maximale sur un appelant à 1 MiB de pile.
 
 Restent hors de Ravum : l'ordonnancement RT de l'OS, les allocations
 natives du pilote audio, et un audit externe des sites `unsafe`.
+
+**Pile du thread de rappel audio (complément).** Vérifié dans les sources de
+`cpal` 0.15.3 : sous ALSA le rappel tourne sur un thread Rust créé par
+`thread::Builder` sans taille explicite (2 MiB par défaut) ; sous CoreAudio
+ou WASAPI c'est un thread du système, dont la pile peut être plus petite
+(~512 KiB). Le budget de pile est donc **réglable par runner**
+(`RtRunner::set_stack_budget`) et `CpalHost` utilise 256 KiB
+(`CALLBACK_STACK_BUDGET`, aussi dans l'exemple `play`). Test :
+`a_small_stack_budget_protects_a_small_callback_thread` — sur un thread de
+512 KiB, du code qui demanderait 3,2 MiB trappe et revient à la version
+précédente, sans débordement. `cpal` 0.15 ne demande aucune priorité temps
+réel pour son thread.

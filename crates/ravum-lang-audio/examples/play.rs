@@ -90,8 +90,10 @@ fn main() -> Result<(), String> {
     // raises the pitch by one octave at any device sample rate.
     let initial = compile_source(&oscillator("0.01")).map_err(|err| format!("{err:?}"))?;
     let updated = oscillator("0.02");
-    let (mut engine, runner) =
+    let (mut engine, mut runner) =
         HotEngine::start(&initial, "process_sample").map_err(|err| format!("{err:?}"))?;
+    // The callback thread belongs to the audio backend: conservative budget.
+    runner.set_stack_budget(CpalHost::CALLBACK_STACK_BUDGET);
     let initial_generation = runner.generation();
     let playback = Arc::new(Playback::default());
     let host = CpalHost::start(Box::new(MeasuredRunner {

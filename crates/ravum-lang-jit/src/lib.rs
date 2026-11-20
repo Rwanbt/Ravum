@@ -62,6 +62,9 @@ pub struct Ctx {
     /// to the caller's stack pointer minus [`STACK_BUDGET`]): a deeper call
     /// traps like the depth limit instead of overflowing the native stack.
     pub stack_floor: usize,
+    /// Stack bytes compiled code may use below the caller (0 = the default
+    /// [`STACK_BUDGET`]); read by `exec::call*` only, never by compiled code.
+    pub stack_budget: usize,
 }
 
 pub const MAX_DEPTH: u32 = 512;
@@ -1154,7 +1157,12 @@ pub(crate) mod exec {
     fn arm(ctx: &mut Ctx) {
         let probe = 0u8;
         let sp = std::hint::black_box(&probe) as *const u8 as usize;
-        ctx.stack_floor = sp.saturating_sub(super::STACK_BUDGET);
+        let budget = if ctx.stack_budget == 0 {
+            super::STACK_BUDGET
+        } else {
+            ctx.stack_budget
+        };
+        ctx.stack_floor = sp.saturating_sub(budget);
     }
 
     pub fn call<R>(code: *const u8, ctx: &mut Ctx) -> R {
@@ -1351,6 +1359,7 @@ impl Compiled {
             scratch: 0,
             scratch2: 0,
             stack_floor: 0,
+            stack_budget: 0,
         };
         let r = call_nullary(code, &mut ctx, f.ret, &self.messages);
         (with_note(r, &sink.out), sink.out)

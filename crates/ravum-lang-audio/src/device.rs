@@ -19,6 +19,18 @@ pub struct CpalHost {
 impl CpalHost {
     /// Open the default output device and start `processor` (mono, copied
     /// to every channel, silence as input).
+    /// Stack budget given to compiled code on the device callback thread:
+    /// that thread belongs to the backend (ALSA: a Rust thread, 2 MiB;
+    /// CoreAudio/WASAPI: an OS thread, possibly ~512 KiB).
+    pub const CALLBACK_STACK_BUDGET: usize = 256 << 10;
+
+    /// Open the default output device and start a JIT runner, with the
+    /// conservative [`Self::CALLBACK_STACK_BUDGET`].
+    pub fn start_runner(mut runner: ravum_lang_jit::hot::RtRunner) -> Result<CpalHost, String> {
+        runner.set_stack_budget(Self::CALLBACK_STACK_BUDGET);
+        Self::start(Box::new(runner))
+    }
+
     pub fn start(mut processor: Box<dyn Processor>) -> Result<CpalHost, String> {
         let host = cpal::default_host();
         let device = host

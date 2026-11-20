@@ -299,6 +299,7 @@ impl HotEngine {
                 scratch: 0,
                 scratch2: 0,
                 stack_floor: 0,
+                stack_budget: 0,
             },
             kind,
             // A real-time entry gets a bounded budget per call; an editor-side
@@ -337,6 +338,7 @@ impl HotEngine {
             scratch: 0,
             scratch2: 0,
             stack_floor: 0,
+            stack_budget: 0,
         };
         exec::call1::<usize, u8>(
             v.table[slot] as *const u8,
@@ -617,6 +619,7 @@ impl HotEngine {
             scratch: 0,
             scratch2: 0,
             stack_floor: 0,
+            stack_budget: 0,
         };
         exec::call2::<usize, usize, u8>(
             version.table[slot] as *const u8,
@@ -800,6 +803,15 @@ impl RtRunner {
 
     pub fn fuel_budget(&self) -> u64 {
         self.fuel
+    }
+
+    /// Native stack bytes compiled code may use below the host's call
+    /// (default [`crate::STACK_BUDGET`], 1 MiB). A host whose audio thread
+    /// has a small stack (an OS audio callback) sets less: deeper code then
+    /// traps (rollback) instead of overflowing.
+    pub fn set_stack_budget(&mut self, bytes: usize) {
+        assert!(bytes >= 16 << 10, "stack budget below 16 KiB");
+        self.ctx.stack_budget = bytes;
     }
 
     /// The entry's shape (an audio host picks the per-sample call).

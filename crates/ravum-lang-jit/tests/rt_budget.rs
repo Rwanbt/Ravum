@@ -183,3 +183,26 @@ fn deep_recursion_fits_the_stack_or_traps() {
         "the stack guard trapped: {native}"
     );
 }
+
+/// A host with a small callback stack sets a smaller budget: compiled code
+/// that would need more traps (and rolls back) on a 512 KiB thread instead
+/// of overflowing it.
+#[test]
+fn a_small_stack_budget_protects_a_small_callback_thread() {
+    let ok = "fn gain(x: f32) -> f32 effects() {\n    return x * 0.5;\n}\n";
+    let deep = "fn b(n: i64) -> i64 effects() {\n    if n <= 0 {\n        return 0;\n    }\n    let a: [i64; 1024] = [n; 1024];\n    return b(n - 1) + a[10] - n;\n}\n\nfn gain(x: f32) -> f32 effects() {\n    return x + (b(400) as f32);\n}\n";
+    let (mut e, mut rt) = HotEngine::start(&compile_source(ok).unwrap(), "gain").unwrap();
+    rt.set_stack_budget(256 << 10);
+    e.update(&compile_source(deep).unwrap()).unwrap();
+    // 400 frames of 8 KiB = 3.2 MiB: far beyond a 512 KiB thread.
+    let y = std::thread::Builder::new()
+        .stack_size(512 << 10)
+        .spawn(move || {
+            rt.poll();
+            rt.process_f32(1.0)
+        })
+        .unwrap()
+        .join()
+        .expect("overflowed a 512 KiB callback thread");
+    assert_eq!(y, 0.5, "trapped and rolled back");
+}
