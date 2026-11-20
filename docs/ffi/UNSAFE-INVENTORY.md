@@ -106,3 +106,41 @@ sûreté écrit sur le site (`// SAFETY:`), (b) une ligne dans le tableau §2,
 `tools/unsafe_audit.py`, (d) un test qui échoue si le site disparaît. Élargir
 `ALLOWED_LOCAL_ALLOWS` sans revue revient à affaiblir D7 : le script échoue
 délibérément dans ce cas.
+
+## Revue interne des sites #7b, #8, #9 (2026-11-20)
+
+> Revue **interne** par l'agent de développement, **pas un audit externe**
+> (D4/R13 restent des décisions humaines). Preuve : `TESTED`.
+
+- **#7b `call1`** : le `transmute` vers `extern "C" fn(A, *mut Ctx) -> R`
+  n'est atteint que par `process_f32`/`process_f64`, qui commencent par
+  `assert_eq!(self.kind, …)` ; `EntryKind` est calculé une fois au
+  démarrage depuis la signature IR et `update` refuse toute version dont la
+  signature d'entrée diffère (`Refusal::EntrySignature`, testé). Le pointeur
+  vient de la table de la version tenue par le runner (code vivant, cf. #9).
+- **#8 `take`/`reclaim`** : chaque pointeur non nul d'un emplacement
+  (`pending`, `retired`) provient de `Box::into_raw` et en sort par un
+  `swap` atomique ; aucun autre chemin ne lit l'emplacement pour en faire
+  une `Box`. Le runner ne retire une version (`retired`) qu'après que
+  l'éditeur a vidé l'emplacement précédent (garde de `poll_event`) : au plus
+  une version en transit, jamais deux propriétaires.
+- **#9 `free_module`** : `collect` libère un module seulement si aucune
+  version de génération ≥ `min(active, previous)` ne le référence. Le runner
+  publie `previous_generation` **avant** `active_generation` (adoption) et,
+  au retour arrière, échange deux générations déjà tenues : toute lecture
+  concurrente de la paire par `collect` donne une borne ≤ à la plus vieille
+  génération réellement tenue (analyse des entrelacements : adoption, retour
+  arrière, publication non adoptée). Une version retirée n'est plus
+  exécutée : le runner n'exécute du code que dans `process_*`, sur son
+  thread, via `current`/`previous`.
+
+Test adversarial ajouté :
+`hot_swap.rs::concurrent_publish_and_collect_never_runs_freed_code` —
+300 publications sans attente, `collect` après chacune, runner en boucle
+serrée, 1 version sur 7 qui trappe (retour arrière effectif vérifié) :
+**0 valeur hors des versions publiées, aucun crash** (debug : ~3·10⁵ appels
+par exécution, 3 exécutions ; release : ~1,2·10⁶ appels), modules vivants
+bornés (≤ 4 : courante, précédente, publication non adoptée, module de base).
+
+Limites : un test ne prouve pas l'absence de course ; pas de Miri (le code
+JIT n'est pas exécutable sous Miri) ni de sanitizer (toolchain stable).

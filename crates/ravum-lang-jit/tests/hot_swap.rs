@@ -237,3 +237,76 @@ fn real_time_thread_swaps_20_edits_without_allocating() {
     );
     drop(rt);
 }
+
+/// Unsafe sites #8/#9 under adversarial interleaving: the editor publishes
+/// back to back and frees old machine code (`collect`) after every update,
+/// never waiting for the runner, while the runner polls and calls the entry
+/// in a tight loop; every 7th version traps (rollback to the previous one).
+/// Freed code that were still reachable would crash or produce a value of
+/// no published version; neither happens, and old code is reclaimed.
+#[test]
+fn concurrent_publish_and_collect_never_runs_freed_code() {
+    const EDITS: usize = 300;
+    let v1 = compile_source(&program("1.0", 2, "")).unwrap();
+    let (mut engine, mut rt) = HotEngine::start(&v1, "process").unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_rt = stop.clone();
+    let bad = Arc::new(AtomicU64::new(0));
+    let bad_rt = bad.clone();
+    let audio = std::thread::spawn(move || {
+        let mut calls = 0u64;
+        while !stop_rt.load(SeqCst) {
+            rt.poll();
+            for _ in 0..16 {
+                let y = rt.process_f64(0.3);
+                // Valid outputs: any published, non-trapping gain 1..=EDITS+1.
+                let ok = (1..=EDITS + 1).any(|g| y == expected(0.3, g as f64, 2));
+                if !ok {
+                    bad_rt.fetch_add(1, SeqCst);
+                }
+                calls += 1;
+            }
+        }
+        (rt, calls)
+    });
+    let mut traps = 0;
+    for edit in 1..=EDITS {
+        let g = format!("{}.0", edit + 1);
+        let extra = if edit % 7 == 0 {
+            traps += 1;
+            "let z: i64 = 0;\n    let q: i64 = 1 / z;\n    "
+        } else {
+            ""
+        };
+        let ir = compile_source(&program(&g, 2, extra)).unwrap();
+        // A refusal (e.g. the previous publication not yet adopted) is fine;
+        // what matters is that nothing unsafe happens meanwhile.
+        let _ = engine.update(&ir);
+        engine.collect();
+        assert!(
+            engine.live_modules() <= 8,
+            "unbounded: {}",
+            engine.live_modules()
+        );
+    }
+    stop.store(true, SeqCst);
+    let (rt, calls) = audio.join().unwrap();
+    engine.collect();
+    eprintln!(
+        "T16 stress: edits={EDITS} (trapping {traps}) runner calls={calls} live_modules={} final generation={}",
+        engine.live_modules(),
+        rt.generation()
+    );
+    assert_eq!(bad.load(SeqCst), 0, "a value of no published version");
+    assert!(calls > 1000, "the runner barely ran: {calls}");
+    // The rollback path (#9's other user) was really exercised.
+    assert!(
+        engine.mailbox().rolled_back_generation.load(SeqCst) > 0,
+        "no trapping version was ever adopted"
+    );
+    // Bounded by what can still run: the runner's current and previous
+    // versions, a publication it has not adopted yet, and the base module
+    // (generation 1) holding the never-edited functions they share.
+    assert!(engine.live_modules() <= 4, "{}", engine.live_modules());
+    drop(rt);
+}
