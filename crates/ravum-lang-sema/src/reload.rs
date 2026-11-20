@@ -17,7 +17,7 @@ use crate::facts::{CheckedProgram, VariantKind};
 use crate::loader::sha256_hex;
 use crate::types::Type;
 use ravum_lang_syntax::ast::{ItemKind, NodeId};
-use ravum_lang_syntax::diag::Diagnostic;
+use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
 use ravum_lang_syntax::span::Span;
 use std::collections::BTreeMap;
 
@@ -418,33 +418,51 @@ pub const DSP_STATE_SCHEMA_V1_TEXT: &str = "#0=struct{z1:f32;z2:f32;}\n";
 pub struct DspContract {
     pub state: StateSchema,
     pub process: NodeId,
-    /// 2 = host state `{ z1, z2 }`; 3 = state declared by the module
-    /// (RFC-DSP-ABI-2, DSP3-1), with its `init`.
+    /// An initializer selects ABI 3. Legacy ABI 2 takes host-zeroed state.
     pub abi: u32,
     pub init: Option<NodeId>,
-    /// ABI 3, DSP3-5: `fn migrate(old: OldState) -> State` and the schema of
-    /// `OldState` (the state it accepts).
     pub migrate: Option<(NodeId, StateSchema)>,
 }
 
-/// DSP3-1: a field type of an ABI 3 state.
-fn dsp3_field_ok(checked: &CheckedProgram, ty: &Type, depth: u32) -> bool {
-    if depth > 8 {
-        return false;
-    }
+fn opaque_dsp_field(ty: &Type) -> bool {
     match ty {
         Type::F32 | Type::F64 | Type::I32 | Type::U32 | Type::Bool => true,
-        Type::Array { elem, .. } => dsp3_field_ok(checked, elem, depth + 1),
-        Type::Nominal { def, args, .. } if args.is_empty() => {
-            checked.facts.structs.get(def).is_some_and(|s| {
-                s.generics.is_empty()
-                    && s.fields
-                        .iter()
-                        .all(|f| dsp3_field_ok(checked, &f.ty, depth + 1))
-            })
-        }
+        Type::Array { elem, .. } => opaque_dsp_field(elem),
+        Type::Nominal { args, .. } => args.is_empty(),
         _ => false,
     }
+}
+
+fn opaque_dsp_schema(checked: &CheckedProgram, state: &StateSchema) -> bool {
+    state.types.iter().all(|def| {
+        checked.facts.structs.get(def).is_some_and(|item| {
+            item.generics.is_empty() && item.fields.iter().all(|field| opaque_dsp_field(&field.ty))
+        })
+    })
+}
+
+fn opaque_dsp_migration(
+    checked: &CheckedProgram,
+    item: NodeId,
+    state_def: NodeId,
+    span: Span,
+) -> Option<StateSchema> {
+    let sig = checked.facts.fn_sigs.get(&item)?;
+    if !sig.generics.is_empty()
+        || sig.params.len() != 1
+        || !matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty())
+    {
+        return None;
+    }
+    let Type::Nominal { def, args, .. } = &sig.params[0].ty else {
+        return None;
+    };
+    if !args.is_empty() || *def == state_def {
+        return None;
+    }
+    schema(checked, *def, span)
+        .ok()
+        .filter(|old| opaque_dsp_schema(checked, old))
 }
 
 /// Check the DSP block contract: `struct State` with the host state schema and
@@ -454,6 +472,8 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
     let whole = root.span;
     let mut state_item = None;
     let mut process_item = None;
+    let mut init_item = None;
+    let mut migrate_item = None;
     for item in &root.items {
         match &item.kind {
             ItemKind::Struct(s) if s.name.name == "State" => {
@@ -462,6 +482,10 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
             ItemKind::Enum(e) if e.name.name == "State" => state_item = Some((item.id, item.span)),
             ItemKind::Fn(f) if f.name.name == DSP_ENTRY => {
                 process_item = Some((item.id, item.span))
+            }
+            ItemKind::Fn(f) if f.name.name == "init" => init_item = Some(item.id),
+            ItemKind::Fn(f) if f.name.name == "migrate" => {
+                migrate_item = Some((item.id, item.span))
             }
             _ => {}
         }
@@ -474,24 +498,14 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
         )]);
     };
     let mut diags = Vec::new();
-    let mut abi = 2;
-    let state_ok_for_abi3 = checked.facts.structs.get(&state_def).is_some_and(|s| {
-        s.generics.is_empty()
-            && !s.fields.is_empty()
-            && s.fields.iter().all(|f| dsp3_field_ok(checked, &f.ty, 0))
-    });
     let state = match schema(checked, state_def, state_span) {
-        Ok(s) if s.text == DSP_STATE_SCHEMA_V1_TEXT => Some(s),
-        Ok(s) if state_ok_for_abi3 => {
-            abi = 3;
-            Some(s)
-        }
+        Ok(s) if s.text == DSP_STATE_SCHEMA_V1_TEXT && init_item.is_none() => Some(s),
+        Ok(s) if opaque_dsp_schema(checked, &s) => Some(s),
         Ok(_) => {
             diags.push(Diagnostic::error(
                 E_DSP_STATE_TYPE,
                 state_span,
-                "the state of a DSP block holds only `f32`, `f64`, `i32`, `u32`, `bool`, \
-                 fixed-size arrays and structs of those (DSP3-1); `{ z1: f32, z2: f32 }` is the ABI 2 host state",
+                "DSP requires the fixed ABI 2 state or an initialized ABI 3 struct with supported scalar fields, arrays and nested structs",
             ));
             None
         }
@@ -499,11 +513,47 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
             diags.push(Diagnostic::error(
                 E_DSP_STATE_TYPE,
                 state_span,
-                "the state of a DSP block is the host state `struct State { z1: f32, z2: f32 }`",
+                "DSP state must have a finite, non-generic struct layout",
             ));
             None
         }
     };
+    let mut init = None;
+    let mut migrate = None;
+    if state
+        .as_ref()
+        .is_some_and(|state| state.text != DSP_STATE_SCHEMA_V1_TEXT || init_item.is_some())
+    {
+        init = init_item.filter(|id| {
+            checked.facts.fn_sigs.get(id).is_some_and(|sig| {
+                sig.generics.is_empty()
+                    && sig.params.is_empty()
+                    && sig.effects.effects.is_empty()
+                    && matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty())
+            })
+        });
+        if init.is_none() {
+            diags.push(Diagnostic::error(
+                E_DSP_ENTRY,
+                whole,
+                "opaque DSP state requires `fn init() -> State effects()`",
+            ));
+        } else if let Some(entry) = init {
+            // This ABI entry cannot convey a trap. Apply the intrinsic trap
+            // checks to its own callees even though it runs off the audio thread.
+            let reachable = crate::effects::reachable_from(&checked.facts.call_graph, entry);
+            let mut traps = DiagnosticBag::new();
+            crate::traps::check_rt_traps(checked, &mut traps, Some(&reachable));
+            diags.extend(traps.into_vec());
+        }
+        if let Some((item, span)) = migrate_item {
+            match opaque_dsp_migration(checked, item, state_def, span) {
+                Some(old) => migrate = Some((item, old)),
+                None => diags.push(Diagnostic::error(E_DSP_ENTRY, span,
+                    "opaque DSP migration requires `fn migrate(old: OldState) -> State` with a supported old layout")),
+            }
+        }
+    }
     let process = match process_item {
         None => {
             diags.push(Diagnostic::error(
@@ -536,71 +586,11 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
             }
         }
     };
-    // ABI 3: the module writes its own initial state (`ravum_state_init`).
-    let mut init = None;
-    if abi == 3 {
-        for item in &root.items {
-            if let ItemKind::Fn(f) = &item.kind {
-                if f.name.name == "init" {
-                    let ok = checked.facts.fn_sigs.get(&item.id).is_some_and(|sig| {
-                        sig.generics.is_empty()
-                            && sig.params.is_empty()
-                            && matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty())
-                    });
-                    if ok {
-                        init = Some(item.id);
-                    }
-                }
-            }
-        }
-        if init.is_none() {
-            diags.push(Diagnostic::error(
-                E_DSP_ENTRY,
-                whole,
-                "a DSP block with its own state (ABI 3) declares `fn init() -> State` (DSP3-1)",
-            ));
-        }
-    }
-    // DSP3-5: optional `fn migrate(old: OldState) -> State`, `OldState` an
-    // ABI 3 state type other than `State`.
-    let mut migrate = None;
-    for item in &root.items {
-        if let ItemKind::Fn(f) = &item.kind {
-            if f.name.name != "migrate" {
-                continue;
-            }
-            let old = checked.facts.fn_sigs.get(&item.id).and_then(|sig| {
-                let ret_ok = matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty());
-                if abi != 3 || !sig.generics.is_empty() || sig.params.len() != 1 || !ret_ok {
-                    return None;
-                }
-                match &sig.params[0].ty {
-                    Type::Nominal { def, args, .. }
-                        if args.is_empty()
-                            && *def != state_def
-                            && dsp3_field_ok(checked, &sig.params[0].ty, 0) =>
-                    {
-                        Some(*def)
-                    }
-                    _ => None,
-                }
-            });
-            match old.map(|def| schema(checked, def, item.span)) {
-                Some(Ok(s)) => migrate = Some((item.id, s)),
-                _ => diags.push(Diagnostic::error(
-                    E_DSP_ENTRY,
-                    item.span,
-                    "a DSP `migrate` is `fn migrate(old: OldState) -> State` in an ABI 3 block, \
-                     `OldState` an ABI 3 state type (DSP3-5)",
-                )),
-            }
-        }
-    }
     match (state, process) {
         (Some(state), Some(process)) if diags.is_empty() => Ok(DspContract {
             state,
             process,
-            abi,
+            abi: if init.is_some() { 3 } else { 2 },
             init,
             migrate,
         }),

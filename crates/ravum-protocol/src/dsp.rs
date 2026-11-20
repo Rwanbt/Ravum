@@ -21,6 +21,35 @@ pub const DSP_EXPORT: &str = "ravum_process_block";
 /// Changing the state layout requires a new signature, not a silent reinterpretation.
 pub const DSP_SIGNATURE: &str = "block:f32->f32+state:v1";
 
+pub const DSP_OPAQUE_ABI_VERSION: u32 = DSP3_ABI_VERSION;
+pub const DSP_OPAQUE_SIGNATURE: &str = DSP3_SIGNATURE;
+pub const DSP_STATE_LAYOUT_EXPORT: &str = "ravum_state_layout";
+pub const DSP_STATE_INIT_EXPORT: &str = "ravum_state_init";
+pub const DSP_STATE_MIGRATE_EXPORT: &str = "ravum_state_migrate";
+pub const DSP_STATE_MIGRATE_FROM_EXPORT: &str = "ravum_state_migrate_from";
+pub const DSP_STATE_MIGRATE_STATUS_EXPORT: &str = "ravum_state_migrate_status";
+pub const DSP_STATE_MAX_SIZE: u32 = DSP3_MAX_STATE_BYTES;
+pub const DSP_STATE_MAX_ALIGN: u32 = DSP3_MAX_STATE_ALIGN;
+
+/// C return type of `ravum_state_layout` in DSP ABI 3.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DspStateLayout {
+    pub size: u32,
+    pub align: u32,
+}
+
+impl DspStateLayout {
+    /// A C struct's size includes its tail padding. An empty state still
+    /// requires a nonzero power-of-two alignment.
+    pub fn is_valid(self) -> bool {
+        self.size <= DSP_STATE_MAX_SIZE
+            && self.align <= DSP_STATE_MAX_ALIGN
+            && self.align.is_power_of_two()
+            && self.size.is_multiple_of(self.align)
+    }
+}
+
 /// ABI 3 (RFC-DSP-ABI-2): the state is declared by the module and held by
 /// the host in an opaque buffer of `ravum_state_layout()` bytes.
 pub const DSP3_ABI_VERSION: u32 = 3;
@@ -120,6 +149,37 @@ mod tests {
     #[test]
     fn dsp_abi_is_distinct_from_the_scalar_one() {
         assert_ne!(DSP_ABI_VERSION, crate::PATCH_ABI_VERSION);
+        assert_ne!(DSP_OPAQUE_ABI_VERSION, crate::PATCH_ABI_VERSION);
+        assert_ne!(DSP_OPAQUE_ABI_VERSION, DSP_ABI_VERSION);
+    }
+
+    #[test]
+    fn opaque_state_layout_enforces_bounds_and_c_tail_padding() {
+        for layout in [
+            DspStateLayout { size: 0, align: 1 },
+            DspStateLayout { size: 0, align: 64 },
+            DspStateLayout {
+                size: DSP_STATE_MAX_SIZE,
+                align: DSP_STATE_MAX_ALIGN,
+            },
+        ] {
+            assert!(layout.is_valid(), "{layout:?}");
+        }
+        for layout in [
+            DspStateLayout { size: 0, align: 0 },
+            DspStateLayout { size: 12, align: 3 },
+            DspStateLayout { size: 12, align: 8 },
+            DspStateLayout {
+                size: 128,
+                align: 128,
+            },
+            DspStateLayout {
+                size: DSP_STATE_MAX_SIZE + 1,
+                align: 1,
+            },
+        ] {
+            assert!(!layout.is_valid(), "{layout:?}");
+        }
     }
 
     #[test]

@@ -216,8 +216,8 @@ impl Emitter<'_> {
         buf: &mut Buf,
         contract: &ravum_lang_sema::reload::DspContract,
     ) -> Result<(), CodegenError> {
-        if contract.abi == 3 {
-            return self.emit_dsp3_wrapper(buf, contract);
+        if let Some(init) = contract.init {
+            return self.emit_opaque_dsp_wrapper(buf, contract, init);
         }
         let state = self.type_path(contract.state.def)?;
         let process = self.item_path(contract.process)?;
@@ -287,123 +287,96 @@ impl Emitter<'_> {
         Ok(())
     }
 
-    /// RFC-DSP-ABI-2 (ABI 3): the state is the module's own `repr(C)` `State`,
-    /// held by the host in an opaque buffer of `ravum_state_layout()` bytes
-    /// and initialised by `ravum_state_init`. Same confinement as ABI 2: one
-    /// generated module, never written by the user (DSP-1.3).
-    fn emit_dsp3_wrapper(
+    fn emit_opaque_dsp_wrapper(
         &self,
         buf: &mut Buf,
         contract: &ravum_lang_sema::reload::DspContract,
+        init: ravum_lang_syntax::ast::NodeId,
     ) -> Result<(), CodegenError> {
         let state = self.type_path(contract.state.def)?;
         let process = self.item_path(contract.process)?;
-        let init = match contract.init {
-            Some(init) => self.item_path(init)?,
-            None => {
-                return Err(super::err(
-                    "an ABI 3 DSP block has no `init` (checked by dsp_contract)",
-                ))
-            }
+        let init = self.item_path(init)?;
+        let digest = &contract.state.digest;
+        let patch = &self.options.crate_name;
+        let migration = match &contract.migrate {
+            Some((item, old)) => self.opaque_dsp_migration(*item, old, &state)?,
+            None => String::new(),
         };
-        let manifest = format!(
-            "{{\\\"schema_version\\\":1,\\\"patch_id\\\":\\\"{}\\\",\\\"export\\\":\\\"ravum_process_block\\\",\\\"signature\\\":\\\"block:f32->f32+state:opaque:v3\\\",\\\"author\\\":\\\"ravum-lang\\\"}}",
-            self.options.crate_name
+        buf.line("#[allow(unsafe_code)]");
+        let wrapper = format!(
+            r#"
+pub mod rv_dsp_abi {{
+    #[repr(C)]
+    pub struct RvStateLayout {{ pub size: u32, pub align: u32 }}
+    const _: () = assert!(core::mem::size_of::<{state}>() <= u32::MAX as usize);
+    const MANIFEST: &[u8] = b"{{\"schema_version\":1,\"patch_id\":\"{patch}\",\"export\":\"ravum_process_block\",\"signature\":\"block:f32->f32+state:opaque:v3\",\"author\":\"ravum-lang\"}}\0";
+    const STATE_SCHEMA: &[u8] = b"{digest}\0";
+
+    #[no_mangle]
+    pub extern "C" fn ravum_abi_version() -> u32 {{ 3 }}
+    #[no_mangle]
+    pub extern "C" fn ravum_manifest_v1() -> *const std::os::raw::c_char {{ MANIFEST.as_ptr().cast() }}
+    #[no_mangle]
+    pub extern "C" fn ravum_state_schema() -> *const std::os::raw::c_char {{ STATE_SCHEMA.as_ptr().cast() }}
+    #[no_mangle]
+    pub extern "C" fn ravum_state_layout() -> RvStateLayout {{
+        RvStateLayout {{ size: core::mem::size_of::<{state}>() as u32, align: core::mem::align_of::<{state}>() as u32 }}
+    }}
+    #[no_mangle]
+    pub unsafe extern "C" fn ravum_state_init(state: *mut u8) {{
+        // SAFETY: the host allocates a fresh, validated layout for State.
+        unsafe {{ state.cast::<{state}>().write({init}()); }}
+    }}
+    #[no_mangle]
+    pub unsafe extern "C" fn ravum_process_block(state: *mut u8, input: *const f32, output: *mut f32, frames: u32) {{
+        if frames == 0 {{ return; }}
+        // SAFETY: validated ABI 3 host provides initialized State and separate buffers.
+        let (state, input, output) = unsafe {{ (
+            &mut *state.cast::<{state}>(),
+            core::slice::from_raw_parts(input, frames as usize),
+            core::slice::from_raw_parts_mut(output, frames as usize),
+        ) }};
+        for (input, output) in input.iter().zip(output) {{ *output = {process}(state, *input); }}
+    }}
+{migration}
+}}
+"#
         );
-        let lines = [
-            String::new(),
-            "#[allow(unsafe_code)]".to_string(),
-            "pub mod rv_dsp_abi {".to_string(),
-            "    #[repr(C)]".to_string(),
-            "    pub struct RvStateLayout {".to_string(),
-            "        pub size: u32,".to_string(),
-            "        pub align: u32,".to_string(),
-            "    }".to_string(),
-            format!("    const MANIFEST: &[u8] = b\"{manifest}\\0\";"),
-            format!("    const STATE_SCHEMA: &[u8] = b\"{}\\0\";", contract.state.digest),
-            "    #[no_mangle]".to_string(),
-            "    pub extern \"C\" fn ravum_abi_version() -> u32 {".to_string(),
-            "        3".to_string(),
-            "    }".to_string(),
-            "    #[no_mangle]".to_string(),
-            "    pub extern \"C\" fn ravum_manifest_v1() -> *const std::os::raw::c_char {".to_string(),
-            "        MANIFEST.as_ptr() as *const std::os::raw::c_char".to_string(),
-            "    }".to_string(),
-            "    #[no_mangle]".to_string(),
-            "    pub extern \"C\" fn ravum_state_schema() -> *const std::os::raw::c_char {".to_string(),
-            "        STATE_SCHEMA.as_ptr() as *const std::os::raw::c_char".to_string(),
-            "    }".to_string(),
-            "    #[no_mangle]".to_string(),
-            "    pub extern \"C\" fn ravum_state_layout() -> RvStateLayout {".to_string(),
-            "        RvStateLayout {".to_string(),
-            format!("            size: std::mem::size_of::<{state}>() as u32,"),
-            format!("            align: std::mem::align_of::<{state}>() as u32,"),
-            "        }".to_string(),
-            "    }".to_string(),
-            "    /// # Safety".to_string(),
-            "    /// `state` points to `size` writable bytes aligned to `align`.".to_string(),
-            "    #[no_mangle]".to_string(),
-            "    pub unsafe extern \"C\" fn ravum_state_init(state: *mut u8) {".to_string(),
-            "        if state.is_null() {".to_string(),
-            "            return;".to_string(),
-            "        }".to_string(),
-            "        // SAFETY: the host allocated the buffer with this module's layout.".to_string(),
-            format!("        unsafe {{ std::ptr::write(state as *mut {state}, {init}()) }};"),
-            "    }".to_string(),
-            "    /// # Safety".to_string(),
-            "    /// `input` and `output` hold `frames` samples; `state` was initialised".to_string(),
-            "    /// by `ravum_state_init` of a module with the same schema digest.".to_string(),
-            "    #[no_mangle]".to_string(),
-            "    pub unsafe extern \"C\" fn ravum_process_block(input: *const f32, output: *mut f32, frames: u32, state: *mut u8) {".to_string(),
-            "        if input.is_null() || output.is_null() || state.is_null() || frames == 0 {".to_string(),
-            "            return;".to_string(),
-            "        }".to_string(),
-            "        let n = frames as usize;".to_string(),
-            "        // SAFETY: the host passes valid, non-overlapping buffers of `n` samples.".to_string(),
-            "        let input = unsafe { std::slice::from_raw_parts(input, n) };".to_string(),
-            "        let output = unsafe { std::slice::from_raw_parts_mut(output, n) };".to_string(),
-            "        // SAFETY: an initialised `State` of this schema, owned by the host.".to_string(),
-            format!("        let rv_state = unsafe {{ &mut *(state as *mut {state}) }};"),
-            "        for (x, y) in input.iter().zip(output.iter_mut()) {".to_string(),
-            format!("            *y = {process}(rv_state, *x);"),
-            "        }".to_string(),
-            "    }".to_string(),
-            "}".to_string(),
-        ];
-        for line in lines {
-            buf.line(&line);
-        }
-        // DSP3-5: the migration the host may run, on its thread, from a state
-        // of schema `ravum_state_migrate_from` to this module's state.
-        if let Some((migrate, old)) = &contract.migrate {
-            let migrate_path = self.item_path(*migrate)?;
-            let old_ty = self.type_path(old.def)?;
-            let extra = [
-                "#[allow(unsafe_code)]".to_string(),
-                "pub mod rv_dsp_migrate {".to_string(),
-                format!("    const FROM: &[u8] = b\"{}\\0\";", old.digest),
-                "    #[no_mangle]".to_string(),
-                "    pub extern \"C\" fn ravum_state_migrate_from() -> *const std::os::raw::c_char {".to_string(),
-                "        FROM.as_ptr() as *const std::os::raw::c_char".to_string(),
-                "    }".to_string(),
-                "    /// # Safety".to_string(),
-                "    /// `old` is an initialised state of schema `FROM`; `new` has this".to_string(),
-                "    /// module's state layout; the two do not overlap.".to_string(),
-                "    #[no_mangle]".to_string(),
-                "    pub unsafe extern \"C\" fn ravum_state_migrate(old: *const u8, new: *mut u8) {".to_string(),
-                "        if old.is_null() || new.is_null() {".to_string(),
-                "            return;".to_string(),
-                "        }".to_string(),
-                "        // SAFETY: `repr(C)` types of this module, buffers given by the host.".to_string(),
-                format!("        let value = unsafe {{ std::ptr::read(old as *const {old_ty}) }};"),
-                format!("        unsafe {{ std::ptr::write(new as *mut {}, {migrate_path}(value)) }};", self.type_path(contract.state.def)?),
-                "    }".to_string(),
-                "}".to_string(),
-            ];
-            for line in extra {
-                buf.line(&line);
-            }
+        for line in wrapper.lines() {
+            buf.line(line);
         }
         Ok(())
+    }
+
+    fn opaque_dsp_migration(
+        &self,
+        item: ravum_lang_syntax::ast::NodeId,
+        old: &ravum_lang_sema::reload::StateSchema,
+        state: &str,
+    ) -> Result<String, CodegenError> {
+        let old_type = self.type_path(old.def)?;
+        let migrate = self.item_path(item)?;
+        let digest = &old.digest;
+        Ok(format!(
+            r#"
+    // The C migration entry returns void, so status is read on the same editor thread.
+    thread_local! {{ static MIGRATED: core::cell::Cell<bool> = const {{ core::cell::Cell::new(false) }}; }}
+    #[no_mangle]
+    pub extern "C" fn ravum_state_migrate_from() -> *const std::os::raw::c_char {{ b"{digest}\0".as_ptr().cast() }}
+    #[no_mangle]
+    pub extern "C" fn ravum_state_migrate_status() -> u32 {{ MIGRATED.with(|status| u32::from(status.get())) }}
+    #[no_mangle]
+    pub unsafe extern "C" fn ravum_state_migrate(old: *const u8, new: *mut u8) {{
+        MIGRATED.with(|status| status.set(false));
+        // SAFETY: the host checked the origin digest and supplies two separate aligned allocations.
+        let old = unsafe {{ old.cast::<{old_type}>().read() }};
+        if let Ok(state) = std::panic::catch_unwind(|| {migrate}(old)) {{
+            // SAFETY: the new allocation has the validated layout for State.
+            unsafe {{ new.cast::<{state}>().write(state); }}
+            MIGRATED.with(|status| status.set(true));
+        }}
+    }}
+"#
+        ))
     }
 }

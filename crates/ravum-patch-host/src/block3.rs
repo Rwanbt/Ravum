@@ -17,21 +17,14 @@
 use crate::host::{validate_loaded, ExpectedAbi};
 use crate::reclaimer::DeferredLibrary;
 use ravum_protocol::{
-    ArtifactId, PatchManifest, RejectReason, DSP3_ABI_VERSION, DSP3_MAX_STATE_ALIGN,
-    DSP3_MAX_STATE_BYTES, DSP3_SIGNATURE, DSP_EXPORT,
+    ArtifactId, PatchManifest, RejectReason, DSP3_ABI_VERSION, DSP3_SIGNATURE, DSP_EXPORT,
 };
 use std::alloc::Layout;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-/// `{ size, align }` returned by `ravum_state_layout`.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StateLayout {
-    pub size: u32,
-    pub align: u32,
-}
+pub use ravum_protocol::dsp::DspStateLayout as StateLayout;
 
 /// Entry points of an ABI 3 module.
 ///
@@ -40,7 +33,7 @@ pub struct StateLayout {
 /// `ravum_state_init`; `input`/`output` hold `frames` samples; nothing is
 /// retained after the call.
 pub type Block3Fn =
-    unsafe extern "C" fn(input: *const f32, output: *mut f32, frames: u32, state: *mut u8);
+    unsafe extern "C" fn(state: *mut u8, input: *const f32, output: *mut f32, frames: u32);
 type InitFn = unsafe extern "C" fn(state: *mut u8);
 type LayoutFn = unsafe extern "C" fn() -> StateLayout;
 type SchemaFn = unsafe extern "C" fn() -> *const std::os::raw::c_char;
@@ -67,6 +60,7 @@ pub struct Block3Module {
     /// DSP3-5: the schema digest this module migrates from.
     pub migrate_from: Option<String>,
     migrate: Option<MigrateFn>,
+    migration_status: Option<unsafe extern "C" fn() -> u32>,
     pub manifest: PatchManifest,
     pub artifact_id: ArtifactId,
     _lib: DeferredLibrary,
@@ -122,16 +116,22 @@ pub fn prepare_block3(path: &Path) -> Result<Arc<Block3Module>, RejectReason> {
         (None, Some(_)) => return Err(missing("ravum_state_migrate_from")),
         (Some(_), None) => return Err(missing("ravum_state_migrate")),
     };
-    if layout.size > DSP3_MAX_STATE_BYTES
-        || layout.align == 0
-        || !layout.align.is_power_of_two()
-        || layout.align > DSP3_MAX_STATE_ALIGN
-    {
-        return Err(RejectReason::StateLayout {
-            size: layout.size,
-            align: layout.align,
-        });
+    if !layout.is_valid() {
+        return Err(layout_refusal(layout));
     }
+    for digest in std::iter::once(schema.as_str()).chain(migrate_from.as_deref()) {
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(RejectReason::ManifestInvalid {
+                detail: "invalid DSP state schema digest".into(),
+            });
+        }
+    }
+    // SAFETY: ABI 3 uses this optional result export to report migration traps.
+    let migration_status = unsafe { validated.lib.symbol(b"ravum_state_migrate_status\0") }.ok();
     Ok(Arc::new(Block3Module {
         process,
         init,
@@ -139,6 +139,7 @@ pub fn prepare_block3(path: &Path) -> Result<Arc<Block3Module>, RejectReason> {
         schema,
         migrate_from,
         migrate,
+        migration_status,
         manifest: validated.manifest,
         artifact_id: validated.artifact_id,
         _lib: validated.lib,
@@ -146,13 +147,13 @@ pub fn prepare_block3(path: &Path) -> Result<Arc<Block3Module>, RejectReason> {
 }
 
 /// The host-owned state buffer: allocated once, with the module's layout.
-struct StateBuffer {
+pub(crate) struct StateBuffer {
     ptr: NonNull<u8>,
     layout: Layout,
 }
 
 impl StateBuffer {
-    fn new(state: StateLayout) -> Result<Self, RejectReason> {
+    pub(crate) fn allocate(state: StateLayout) -> Result<Self, RejectReason> {
         let bad = || RejectReason::StateLayout {
             size: state.size,
             align: state.align,
@@ -168,6 +169,98 @@ impl StateBuffer {
         let raw = unsafe { std::alloc::alloc_zeroed(layout) };
         let ptr = NonNull::new(raw).ok_or_else(bad)?;
         Ok(Self { ptr, layout })
+    }
+}
+
+// SAFETY: this buffer uniquely owns plain DSP state, with no Rust borrows.
+unsafe impl Send for StateBuffer {}
+
+impl StateBuffer {
+    pub(crate) fn copy_from(&mut self, source: &Self) {
+        assert_eq!(self.layout, source.layout);
+        // SAFETY: equal layouts, distinct owned buffers, raw copy preserves padding.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                source.ptr.as_ptr(),
+                self.ptr.as_ptr(),
+                self.layout.size(),
+            )
+        };
+    }
+}
+
+pub(crate) fn layout_refusal(layout: StateLayout) -> RejectReason {
+    RejectReason::StateLayout {
+        size: layout.size,
+        align: layout.align,
+    }
+}
+
+impl Block3Module {
+    pub fn layout(&self) -> StateLayout {
+        self.layout
+    }
+    pub fn schema(&self) -> &str {
+        &self.schema
+    }
+
+    pub(crate) fn initialize(&self) -> Result<StateBuffer, RejectReason> {
+        let state = StateBuffer::allocate(self.layout)?;
+        // SAFETY: the fresh buffer matches the validated module layout.
+        unsafe { (self.init)(state.ptr.as_ptr()) };
+        Ok(state)
+    }
+
+    pub(crate) fn migrate_state(
+        &self,
+        current: &Self,
+        previous: &StateBuffer,
+    ) -> Result<StateBuffer, RejectReason> {
+        let Some(migrate) = self
+            .migrate
+            .filter(|_| self.migrate_from.as_deref() == Some(&current.schema))
+        else {
+            return Err(RejectReason::StateSchemaChanged {
+                expected: current.schema.clone(),
+                found: self.schema.clone(),
+            });
+        };
+        let status = self
+            .migration_status
+            .ok_or_else(|| RejectReason::MissingExport {
+                symbol: ravum_protocol::dsp::DSP_STATE_MIGRATE_STATUS_EXPORT.into(),
+            })?;
+        let next = StateBuffer::allocate(self.layout)?;
+        // SAFETY: source schema was matched, buffers do not overlap, and
+        // the status is read on the same editor thread as the migration.
+        unsafe {
+            migrate(previous.ptr.as_ptr(), next.ptr.as_ptr());
+            if status() != 1 {
+                return Err(RejectReason::StateMigrationFailed);
+            }
+        }
+        Ok(next)
+    }
+
+    pub(crate) fn render(
+        &self,
+        state: &mut StateBuffer,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> usize {
+        let frames = input.len().min(output.len()).min(u32::MAX as usize);
+        if frames != 0 {
+            // SAFETY: initialized state from this schema and valid, distinct slices.
+            unsafe {
+                (self.process)(
+                    state.ptr.as_ptr(),
+                    input.as_ptr(),
+                    output.as_mut_ptr(),
+                    frames as u32,
+                )
+            };
+        }
+        frames
     }
 }
 
@@ -201,9 +294,7 @@ impl Block3Host {
     /// Allocate the state with the module's layout and let the module write
     /// its initial value. Off the audio thread.
     pub fn new(module: Arc<Block3Module>) -> Result<Self, RejectReason> {
-        let state = StateBuffer::new(module.layout)?;
-        // SAFETY: the buffer has the module's size and alignment.
-        unsafe { (module.init)(state.ptr.as_ptr()) };
+        let state = module.initialize()?;
         Ok(Self {
             current: module,
             state,
@@ -225,22 +316,8 @@ impl Block3Host {
                 let n = (frames - start).min(crate::MAX_FADE_FRAMES);
                 let mut old_out = [0.0f32; crate::MAX_FADE_FRAMES];
                 let (i, o) = (&input[start..start + n], &mut output[start..start + n]);
-                // SAFETY: as below; the fade state is a copy of the current
-                // state made with the same layout (same schema digest).
-                unsafe {
-                    (fade.old.process)(
-                        i.as_ptr(),
-                        old_out.as_mut_ptr(),
-                        n as u32,
-                        fade.state.ptr.as_ptr(),
-                    );
-                    (self.current.process)(
-                        i.as_ptr(),
-                        o.as_mut_ptr(),
-                        n as u32,
-                        self.state.ptr.as_ptr(),
-                    );
-                }
+                fade.old.render(&mut fade.state, i, &mut old_out[..n]);
+                self.current.render(&mut self.state, i, o);
                 for (k, y) in o.iter_mut().enumerate() {
                     if fade.done < fade.total {
                         fade.done += 1;
@@ -252,17 +329,7 @@ impl Block3Host {
             }
             return frames;
         }
-        // SAFETY: valid slices of `frames` samples; the state was initialised
-        // by a module of the same schema digest (checked by `replace`).
-        unsafe {
-            (self.current.process)(
-                input.as_ptr(),
-                output.as_mut_ptr(),
-                frames as u32,
-                self.state.ptr.as_ptr(),
-            )
-        };
-        frames
+        self.current.render(&mut self.state, input, output)
     }
 
     /// Replace the module, keeping the state (same schema digest), or refuse
@@ -271,10 +338,7 @@ impl Block3Host {
     ///
     /// A different schema is accepted only when the new module migrates from
     /// the current one (`ravum_state_migrate_from` = current digest, DSP3-5):
-    /// a new buffer is allocated and filled by `ravum_state_migrate` here, on
-    /// the caller's thread, where the old buffer is also freed. A panic in the
-    /// module's `migrate` crosses an `extern "C"` boundary and aborts the
-    /// process (Rust behaviour): it is not caught.
+    /// the editor migrates a copy and activates the new state only on success.
     pub fn replace(
         &mut self,
         module: Arc<Block3Module>,
@@ -284,20 +348,14 @@ impl Block3Host {
                 artifact_id: module.artifact_id.clone(),
             });
         }
-        let same = module.schema == self.current.schema && module.layout == self.current.layout;
-        if !same {
-            let migrates = module.migrate_from.as_deref() == Some(self.current.schema.as_str());
-            let Some(migrate) = module.migrate.filter(|_| migrates) else {
-                return Err(RejectReason::StateSchemaChanged {
-                    expected: self.current.schema.clone(),
-                    found: module.schema.clone(),
-                });
-            };
-            let fresh = StateBuffer::new(module.layout)?;
-            // SAFETY: `self.state` is an initialised state of the schema the
-            // module migrates from; `fresh` has the module's layout.
-            unsafe { migrate(self.state.ptr.as_ptr(), fresh.ptr.as_ptr()) };
-            self.state = fresh;
+        if module.schema == self.current.schema {
+            if module.layout != self.current.layout {
+                return Err(layout_refusal(module.layout));
+            }
+        } else {
+            let mut captured = StateBuffer::allocate(self.current.layout)?;
+            captured.copy_from(&self.state);
+            self.state = module.migrate_state(&self.current, &captured)?;
         }
         Ok(std::mem::replace(&mut self.current, module))
     }
@@ -320,7 +378,7 @@ impl Block3Host {
         }
         // The copy for the old module is taken before `replace`, which may
         // migrate the host state to another schema.
-        let copy = StateBuffer::new(self.current.layout)?;
+        let copy = StateBuffer::allocate(self.current.layout)?;
         // SAFETY: both buffers have the current module's layout; distinct.
         unsafe {
             std::ptr::copy_nonoverlapping(

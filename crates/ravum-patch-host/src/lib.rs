@@ -15,6 +15,7 @@
 mod block;
 mod block3;
 mod host;
+mod opaque_block;
 mod reclaimer;
 mod slot;
 
@@ -26,6 +27,10 @@ pub use block3::{prepare_block3, Block3Fn, Block3Host, Block3Module, StateLayout
 pub use host::{
     inspect_artifact, prepare, ArtifactFacts, ComputeFn, ExpectedAbi, LoadedModule, PatchHost,
     PreparedPatch,
+};
+pub use opaque_block::{
+    prepare_opaque_block, OpaqueBlock, OpaqueEditor, OpaqueRunner, OpaqueUpdate,
+    PreparedOpaqueBlock,
 };
 pub use reclaimer::{
     init_reclaimer, live_modules, pending_reclamations, unloaded_modules, wait_until_idle,

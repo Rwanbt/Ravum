@@ -177,6 +177,12 @@ impl std::fmt::Debug for PreparedBlock {
 
 /// Load and validate a block module. Never activates.
 pub fn prepare_block(path: &Path, expected: &ExpectedAbi) -> Result<PreparedBlock, RejectReason> {
+    if expected.abi_version != ravum_protocol::DSP_ABI_VERSION {
+        return Err(RejectReason::AbiMismatch {
+            expected: ravum_protocol::DSP_ABI_VERSION,
+            found: expected.abi_version,
+        });
+    }
     let started = Instant::now();
     let lib = DeferredLibrary::open(path).map_err(|detail| RejectReason::LoadFailed { detail })?;
     let validated = validate_loaded(lib, path, expected)?;

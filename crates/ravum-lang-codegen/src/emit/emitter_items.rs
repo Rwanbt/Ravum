@@ -250,13 +250,17 @@ impl<'a> Emitter<'a> {
     ) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
         let entry = self.entry(item.id)?;
-        buf.line(&self.derive_attribute(item.id));
-        // RFC-DSP-ABI-2 DSP3-2: an ABI 3 block's state is a `repr(C)` layout,
-        // so the layout is a function of the schema digest. Every non-generic
-        // struct gets it (nested state structs included; harmless elsewhere).
-        if structure.generics.is_empty() && self.options.dsp.as_ref().is_some_and(|c| c.abi == 3) {
+        if self.options.dsp.as_ref().is_some_and(|contract| {
+            contract.init.is_some()
+                && (contract.state.types.contains(&item.id)
+                    || contract
+                        .migrate
+                        .as_ref()
+                        .is_some_and(|(_, old)| old.types.contains(&item.id)))
+        }) {
             buf.line("#[repr(C)]");
         }
+        buf.line(&self.derive_attribute(item.id));
         let visibility = if item.vis.is_public() { "pub " } else { "" };
         let generics = self.generics(&structure.generics);
         let head = format!("{visibility}struct {}{generics}", entry.rust_name);

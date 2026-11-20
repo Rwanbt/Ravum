@@ -66,6 +66,17 @@ Statut : `TESTED`, non audité (D4).
 
 ## 3. Ce que l'inventaire ne couvre pas
 
+### ABI DSP 3 (L5b)
+
+| Site | Opérations et garanties exigées |
+|---|---|
+| `crates/ravum-patch-host/src/opaque_block.rs` | Chargement de symboles et appels C d’un artefact natif de confiance. Les portes ABI et manifeste précèdent la résolution du bloc. Les digests sont copiés tant que la bibliothèque vit. Les métadonnées seules ne rendent pas sûr un artefact hostile. |
+| `crates/ravum-patch-host/src/opaque_block.rs`, `StateBuffer` | Allocation et libération selon le layout contrôlé. Chaque tampon a un propriétaire, et `Send` ne déplace que cet état scalaire sans emprunt. Les tampons restent vivants pendant les appels et sont libérés hors du traitement. |
+| `crates/ravum-patch-host/src/opaque_block.rs`, `migrate_state` | Copie brute vers un tampon séparé de même disposition. Le digest source est comparé avant la migration. La nouvelle zone ne devient active qu’après confirmation de l’initialisation par le module. |
+| `crates/ravum-patch-host/src/opaque_block/live.rs` | L’unique lecteur audio remplit la copie avant le signal `Release`. L’éditeur lit après `Acquire` et ne modifie jamais la copie. L’adoption échange le tampon avec celui du slot. L’éditeur récupère et libère l’ancien tampon après la fin des emprunts `ArcSlot`. |
+| `crates/ravum-lang-codegen/src/emit/emitter_reload.rs`, module généré `rv_dsp_abi` | Références temporaires sur l’état `repr(C)` et sur des tranches non superposées de `frames` éléments. La migration consomme une copie alignée et écrit dans une nouvelle zone. La panique est interceptée dans le module qui l’a produite. |
+| `crates/ravum-dsp-harness/src/evidence.rs`, `opaque_block_evidence` | Le caller garantit la provenance de l’artefact exécutable. Le chargement vérifie l’identité du binaire avant d’exercer le traitement. |
+
 - **Le code généré.** `ravum-lang-codegen` produit un fichier Rust qui porte
   `#![forbid(unsafe_code)]` ; pour un programme avec `extern "C"`, l'en-tête
   passe à `#![deny(unsafe_code)]` et **un seul** `#[allow(unsafe_code)]`
