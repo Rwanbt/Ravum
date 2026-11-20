@@ -25,6 +25,10 @@ INV-05 et INV-12. Les ADR-010 et ADR-018 restent `PROPOSED`.
   pour `u128` et `sin`.
 - `crates/ravum-lang-jit/tests/owned_structs.rs` ajoute les cas différentiels
   et négatifs des structs propriétaires.
+- `crates/ravum-core-machine/corpus/x-diverge.rv` préserve la boucle et
+  rend le programme bien typé dans Core 1.0. `tests/oracle.rs` et
+  `tests/differential.rs` exigent la divergence et rejettent les nouveaux
+  cas non exécutés.
 
 ## Tests positifs / négatifs (noms, résultats)
 
@@ -61,11 +65,11 @@ attente que le test IR/JIT.
 ## Résultats mesurés
 
 Le corpus de 61 programmes donne 55 accords exacts IR sur des valeurs,
-et 56 programmes comparés entre l’IR et le JIT, avec 0 divergence selon les
-assertions des oracles. Le 56e programme est `x-stack-limit`. Il est
-exécuté avec le résultat non-valeur attendu par l’oracle, qui ne compte
-que les accords sur les valeurs dans le numérateur 55. Le comptage est
-identique à celui du SHA de départ.
+et 57 programmes comparés entre l’IR et le JIT, avec 0 divergence selon les
+assertions des oracles. Les deux cas exécutés hors du compteur des valeurs sont `x-stack-limit`
+(faute attendue) et `x-diverge` (épuisement du budget). Le SHA de départ
+n’exécutait que 56 cas. Les oracles refusent tout nouvel échec de compilation
+hors des quatre cas documentés.
 
 | Programme restant | Construction ou résultat |
 |---|---|
@@ -73,7 +77,7 @@ identique à celui du SHA de départ.
 | `x-libm-refused` | `std::math::sin` hors du cœur vérifiable selon MACH-5.5. Refus conservé. |
 | `x-or-pattern-refused` | Motif alternatif. Refus attendu `E-UNSUPPORTED-TOKEN`. |
 | `x-range-pattern-refused` | Motif d’intervalle. Refus attendu `E-UNSUPPORTED-RANGE-PAT`. |
-| `x-diverge` | Boucle infinie avec `wrapping_add`. La machine attend l’épuisement du budget. Le checker émet deux `E-TYP-MISMATCH` avant l’abaissement. |
+| `x-diverge` | Boucle infinie avec `wrapping_add`. Un retour inatteignable respecte le type statique de la boucle. Les deux moteurs signalent l’épuisement du budget attendu. |
 | `x-stack-limit` | Récursion profonde. Cas exécuté, faute attendue, non comptée parmi les accords sur les valeurs. |
 
 Les 12 sorties du nouveau différentiel concordent aussi avec la voie `rustc`.
@@ -83,20 +87,16 @@ La conformance finale avec loopback donne 742 cas, dont 740 réussis,
 
 ## Limites, écarts, demandes hors périmètre
 
-- `x-diverge` est consigné comme écart en amont. Examiner le rejet du
-  checker dans un chantier séparé si le responsable souhaite exécuter ce
-  cas dans les deux moteurs.
 - Le déréférencement explicite d’un emprunt de tas, dont le remplacement
   de l’objet entier via `*emprunt = ...`, reste hors du sous-ensemble IR.
   Les méthodes sur l’objet emprunté sont utilisables. Le tas est libéré en
   fin d’exécution. Le test ne porte pas sur les structs génériques ou les
   vecteurs d’agrégats.
-- `cargo test --workspace` échoue dans
+- Le premier `cargo test --workspace` échouait dans
   `ravum-conformance::stand_in_toolchain_reports_pass_fail_and_skip_honestly`.
   Le champ JSON `toolchain` expose le chemin absolu du binaire. Ce test
   utilise le harnais lui-même comme outil factice et le crate n’a aucune
-  dépendance IR/JIT. Demande hors périmètre à l’intégrateur. Revoir le
-  masquage du chemin quand le harnais est lancé depuis un répertoire temporaire.
+  dépendance IR/JIT. Le correctif est détaillé ci-dessous.
 - Le plan omet le sous-programme `run` du harnais. L’invocation littérale
   sort avec le code 2. La conformance a été exécutée avec `-- run`. Les
   cinq erreurs réseau dans le bac à sable ont disparu avec l’accès loopback.
@@ -106,36 +106,36 @@ La conformance finale avec loopback donne 742 cas, dont 740 réussis,
 `TESTED` pour les tests ciblés, les comparaisons d’exécution et la conformance
 locale. L’égalité observée porte sur les entrées listées et les sorties des
 moteurs, avec le checker, le tas d’exécution et Cranelift dans la chaîne
-testée. Le workspace reste en échec. Deux cas de conformance sont `SKIP`.
+testée. Deux cas de conformance sont `SKIP`.
 La dimension `--verify-build` est `NOT_RUN`. Aucun benchmark de performance.
 
 ## Proposition à l’intégrateur
 
-Maintenir T14 à `PARTIAL`. Ajouter la couverture mesurée des champs
-propriétaires et conserver le rejet de `x-diverge` et l’échec du workspace
-dans les limites.
+Proposer la validation de T14 sur la base des critères L2. Les quatre
+refus restent explicites et justifiés. La décision de gate relève de
+l’intégrateur.
 
 ## Vérification du correctif de conformance sur un checkout Linux natif
 
 Le correctif du harnais est publié sur `codex/conformance-toolchain-path`
 au SHA `64efd691b2b18fd2e5cb5e86fed98a63ab0e8891`. Il affiche le nom du
 binaire dans le rapport et garde son chemin pour l’exécution. Les 57 tests
-du harnais réussissent, dont le test d’origine sur le masquage. Le correctif
-est testé avec L2 dans un checkout temporaire, hors de la branche L2.
+du harnais réussissent, dont le test d’origine sur le masquage. Le commit
+`b3173fcd3bb437a0c8c364c6f43fe12a34bdb7a7` applique aussi ce correctif
+sur L2.
 
 Les anciens binaires de `ravum-unit-graph` contenaient un chemin de checkout
 obsolète. Une reconstruction avec un répertoire de build neuf a rétabli les
 tests. Les 15 tests de publication Git réussissent sur un système de fichiers
-Linux natif. La campagne DSP termine avec 9 réussites en 18,58 s lorsque
+Linux natif. La campagne DSP termine avec 9 réussites en 18,30 s lorsque
 seule la dépendance existante `sha2` est optimisée. Elle traite des artefacts
 d’environ 4 Mio à chaque préparation. Le seuil et les assertions restent
 identiques. La conformance combinée donne 740 réussites, 0 échec et 2 `SKIP`.
-Le workspace combiné termine avec le code 0, 2 324 tests réussis,
-0 échec et 14 ignorés. Ce résultat s’applique au SHA L2
-`3de3e20e1c1b6e8cd9dd9e724084aed38a8eb6be` avec le correctif du harnais
-appliqué et la configuration ci-dessous. Pour reproduire la validation
-après intégration, reprendre ces deux révisions sur un système de fichiers
-Linux natif et utiliser un répertoire de build neuf.
+Le workspace termine avec le code 0, 2 324 tests réussis,
+0 échec et 14 ignorés. Ce résultat s’applique aux sources du SHA L2
+`b3173fcd3bb437a0c8c364c6f43fe12a34bdb7a7` avec la configuration ci-dessous.
+Pour reproduire la validation, utiliser un système de fichiers Linux natif et
+un répertoire de build neuf.
 
 ```sh
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
