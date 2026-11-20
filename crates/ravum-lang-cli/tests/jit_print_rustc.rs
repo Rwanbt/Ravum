@@ -152,7 +152,9 @@ fn contracts_behave_the_same_on_rustc_and_jit() {
     let stdout = String::from_utf8(out.stdout).unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(!out.status.success(), "the last call violates `ensures`");
-    let msg = "contract violated: ensures result > x && p.y == 2";
+    // Amendment 1: the scalar values (entry `x`, `result`); the struct `p`
+    // is left out, never guessed.
+    let msg = "contract violated: ensures result > x && p.y == 2 (x = 30, result = 10)";
     assert!(stderr.contains(msg), "{stderr}");
     let ir = compile_source(src).unwrap();
     let (r, jit) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
@@ -198,4 +200,105 @@ fn strings_and_vectors_match_the_rustc_build() {
     assert_eq!(oi.stdout, stdout);
     assert_eq!(stdout.lines().count(), 17, "{stdout}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// RFC-CONTRACTS-1 amendment 1: the counterexample in a `requires` message
+/// (integers, floats, bools, owned and borrowed strings) is the same text
+/// on both paths; a generic parameter is left out on both.
+#[test]
+fn violation_values_are_the_same_on_rustc_and_jit() {
+    let cases = [
+        (
+            "fn f(n: i64, r: f64, ok: bool, s: String, t: &String, u: &str) -> i64 effects()\n    requires n < 0 || !ok\n{\n    return n;\n}\n\nfn main() -> () effects(io, alloc) {\n    let t = String::from(\"bo\");\n    io::println(\"go\");\n    let _x = f(-1, 0.5, true, String::from(\"a\"), &t, \"lit\");\n    let _y = f(4, 0.1, true, String::from(\"a b\"), &t, \"z\");\n}\n",
+            "contract violated: requires n < 0 || !ok (n = 4, r = 0.1, ok = true, s = \"a b\", t = \"bo\", u = \"z\")",
+        ),
+        (
+            "fn g<T>(x: T, k: u8) -> u8 effects()\n    ensures result < k\n{\n    return k;\n}\n\nfn main() -> () effects(io) {\n    io::println(\"go\");\n    let _a = g(1, 7);\n}\n",
+            "contract violated: ensures result < k (k = 7, result = 7)",
+        ),
+        (
+            "fn h(s: String) -> i64 effects()\n    ensures result > 1\n{\n    return 1;\n}\n\nfn main() -> () effects(io, alloc) {\n    io::println(\"go\");\n    let _a = h(String::from(\"q\"));\n}\n",
+            "contract violated: ensures result > 1 (result = 1)",
+        ),
+    ];
+    for (i, (src, msg)) in cases.iter().enumerate() {
+        let dir = std::env::temp_dir().join(format!("rv-jit-cvals-{i}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("ravum.toml"),
+            "[package]\nname = \"cvals\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/main.rv"), src).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+            .arg("run")
+            .arg(&dir)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        assert!(!out.status.success(), "case {i}");
+        assert!(stderr.contains(msg), "case {i} rustc: {stderr}");
+        let ir = compile_source(src).unwrap_or_else(|e| panic!("case {i}: {e:?}"));
+        let (r, jit) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
+        assert_eq!(r.render(), format!("panic: {msg}"), "case {i} jit");
+        assert_eq!(jit.stdout, "go\n");
+        // The note is not printed output.
+        assert!(jit.stderr.is_empty());
+        let (ri, _) = ravum_lang_ir::interp::run_with_output(
+            &ir,
+            "main",
+            ravum_lang_ir::interp::DEFAULT_STEPS,
+        );
+        assert_eq!(ri.render(), r.render(), "case {i} interpreter");
+    }
+}
+
+/// RFC-INVARIANTS-1 on both paths: checked at each struct literal and at the
+/// exit of each `&mut self` method (early `return` included), not inside a
+/// method nor on a direct field write; same output and same message.
+#[test]
+fn struct_invariants_behave_the_same_on_rustc_and_jit() {
+    let head = "struct Span {\n    lo: i64,\n    hi: i64,\n    on: bool,\n}\n    invariant self.lo <= self.hi\n    invariant self.hi - self.lo < 100\n\nimpl Span {\n    fn new(lo: i64, hi: i64) -> Span effects() {\n        return Span { lo: lo, hi: hi, on: true };\n    }\n\n    fn shift(&mut self, d: i64) -> i64 effects() {\n        self.hi = self.hi + d;\n        if d > 50 {\n            return d;\n        }\n        self.lo = self.lo + d;\n        return self.hi - self.lo;\n    }\n\n    fn width(&self) -> i64 effects() {\n        return self.hi - self.lo;\n    }\n}\n\n";
+    let cases = [
+        (
+            "fn main() -> () effects(io, alloc) {\n    let mut s = Span::new(1, 4);\n    io::println(&s.shift(3).to_string());\n    s.lo = 90;\n    io::println(&s.width().to_string());\n    s.lo = 0;\n    io::println(&s.shift(127).to_string());\n}\n",
+            "3\n-83\n",
+            "contract violated: invariant self.hi - self.lo < 100 (self.lo = 0, self.hi = 134, on = true)",
+        ),
+        (
+            "fn main() -> () effects(io, alloc) {\n    io::println(\"go\");\n    let s = Span::new(5, 2);\n    io::println(&s.width().to_string());\n}\n",
+            "go\n",
+            "contract violated: invariant self.lo <= self.hi (self.lo = 5, self.hi = 2, on = true)",
+        ),
+    ];
+    for (i, (main, stdout_expected, msg)) in cases.iter().enumerate() {
+        let src = format!("{head}{main}");
+        let msg = msg.replace("on =", "self.on =");
+        let dir = std::env::temp_dir().join(format!("rv-jit-inv-{i}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("ravum.toml"),
+            "[package]\nname = \"inv\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/main.rv"), &src).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+            .arg("run")
+            .arg(&dir)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        assert!(!out.status.success(), "case {i}");
+        assert!(stderr.contains(&msg), "case {i} rustc: {stderr}");
+        let ir = compile_source(&src).unwrap_or_else(|e| panic!("case {i}: {e:?}"));
+        let (r, jit) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
+        assert_eq!(r.render(), format!("panic: {msg}"), "case {i} jit");
+        assert_eq!(jit.stdout, stdout, "case {i}");
+        assert!(stdout.ends_with(stdout_expected), "case {i}: {stdout}");
+    }
 }

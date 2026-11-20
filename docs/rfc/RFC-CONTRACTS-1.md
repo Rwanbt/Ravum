@@ -88,3 +88,33 @@ identifiants).
   change le comportement entre deux builds (déterminisme, T17).
 - **Invariants de type** : reportés (RFC séparée) ; ils demandent de définir
   les points d'observation d'un objet.
+
+## 7. Amendement 1 — contre-exemple dans le message (2026-11-20, décision V1-C3)
+
+Le responsable a approuvé (V1-C3) l'ajout des valeurs observées au message de
+violation. Le **préfixe** de CON-5/CON-6 est inchangé ; il est suivi, quand
+au moins une valeur est montrée, de ` (nom = valeur, …)` :
+
+```text
+panic: contract violated: requires b != 0 (a = 1, b = 0)
+panic: contract violated: ensures result > x (x = 30, result = 10)
+```
+
+| Règle | Énoncé |
+|---|---|
+| CON-5a | Sont montrés, dans l'ordre de déclaration, les paramètres (hors `self`) dont le **type déclaré** est un entier (hors `i128`/`u128`), un flottant, un `bool` (texte de `to_string`), un `String`, `&String` ou `&str` (texte entre `"`, **sans** échappement). Un paramètre générique, `char`, une référence à un scalaire, un agrégat ou une collection n'est **jamais** montré : aucun rendu n'est deviné. |
+| CON-6a | Pour `ensures` : les paramètres à leur valeur d'entrée (CON-3), sauf un `String` possédé (consommé par le corps), puis `result` s'il suit CON-5a. |
+| CON-6b | Sans valeur montrée, le message est exactement celui de CON-5/CON-6. La voie `rustc`, le JIT et l'interpréteur de l'IR produisent le même texte, octet pour octet. |
+
+Implémentation : `ravum_lang_sema::contracts::shown` (règle unique),
+`contract_body` (rustc, `panic!` formaté), IR v1.4 `Stream::Note` (le JIT et
+l'interpréteur ajoutent la note au message du trap). `test --json`
+(`violated_contracts`) reconnaît le préfixe suivi de ` (`. Preuve :
+`violation_values_are_the_same_on_rustc_and_jit` (`TESTED`).
+
+Précision (même amendement) : le « texte source normalisé » de CON-5/CON-6
+est reconstruit depuis les **jetons** de la clause avec un espacement
+canonique (un espace autour des opérateurs binaires, aucun autour de `.`/`::`
+ni à l'intérieur des parenthèses), de sorte que `ravum-lang fmt` ne change
+jamais un message. Les valeurs montrées sont celles **observées** à la
+violation ; ce n'est pas un contre-exemple minimisé.

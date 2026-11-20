@@ -95,3 +95,17 @@ Décisions du responsable, choisies parmi les options présentées :
   branchement sur le LSP et `watch`.
 - **V1-P1** : prochain chantier prioritaire, la couverture du JIT (`String`,
   `Vec`, `Result`, génériques).
+
+## V1-C3, V1-C4, V1-A1 (2026-11-20)
+
+- **V1-C3 (T19)** : amender RFC-CONTRACTS-1 (CON-5/CON-6) : le message de
+  violation montre les valeurs des arguments scalaires et chaînes, ex.
+  `contract violated: requires b != 0 (a = 1, b = 0)` ; préfixe inchangé ;
+  identique sur rustc et le JIT.
+- **V1-C4 (T18)** : invariants de type sous la forme
+  `struct S { .. } invariant <expr>`, vérifiés à chaque construction
+  (littéral) et à la sortie de chaque méthode `&mut self` ; RFC d'abord,
+  puis rustc et JIT.
+- **V1-A1** : hôte audio = une abstraction, une implémentation fichier WAV
+  testable dans le conteneur, et une implémentation `cpal` derrière une
+  feature désactivée par défaut (à tester sur la machine du responsable).

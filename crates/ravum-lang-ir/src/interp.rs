@@ -217,6 +217,9 @@ fn heap_stop(e: crate::heap::HeapStop) -> Stop {
 pub struct Output {
     pub stdout: String,
     pub stderr: String,
+    /// IR v1.4: text written to [`Stream::Note`], appended to the message of
+    /// the trap that follows it.
+    pub note: String,
 }
 
 impl<'m> Machine<'m> {
@@ -427,6 +430,7 @@ impl<'m> Machine<'m> {
                         match stream {
                             Stream::Stdout => self.out.stdout.push_str(&text),
                             Stream::Stderr => self.out.stderr.push_str(&text),
+                            Stream::Note => self.out.note.push_str(&text),
                         }
                     }
                     i @ (Inst::Heap { .. }
@@ -459,7 +463,7 @@ impl<'m> Machine<'m> {
                 }
                 Term::Return(Some(x)) => return Ok(slots[*x as usize]),
                 Term::Return(None) => return Ok(Val::Unit),
-                Term::Trap(m) => return Err(Stop::Panic(m.clone())),
+                Term::Trap(m) => return Err(Stop::Panic(format!("{m}{}", self.out.note))),
                 Term::Unreachable => return Err(Stop::Fault("reached unreachable block".into())),
             }
         }

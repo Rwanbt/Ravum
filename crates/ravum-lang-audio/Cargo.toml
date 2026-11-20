@@ -1,0 +1,21 @@
+[package]
+name = "ravum-lang-audio"
+description = "Ravum language: audio host interface driving a hot-swapped JIT entry (WAV file host; optional cpal device host)"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Real output device through cpal. Off by default: the CI container has no
+# audio device; to be tested on a workstation (`--features cpal`).
+cpal = ["dep:cpal"]
+
+[dependencies]
+ravum-lang-jit = { path = "../ravum-lang-jit" }
+cpal = { version = "0.15", optional = true }
+
+[dev-dependencies]
+ravum-lang-ir = { path = "../ravum-lang-ir" }

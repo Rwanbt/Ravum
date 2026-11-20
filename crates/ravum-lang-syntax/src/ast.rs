@@ -311,8 +311,25 @@ pub struct StructItem {
     pub name: Ident,
     pub generics: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
+    /// `invariant <expr>` clauses (RFC-INVARIANTS-1), in source order. Each
+    /// expression lives in a synthetic method of the item that follows the
+    /// struct (`impl S { pub fn __rv_invariant_<n>(&self) -> bool effects() }`).
+    pub invariants: Vec<Invariant>,
     pub span: Span,
 }
+
+/// One `invariant` clause of a struct (RFC-INVARIANTS-1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Invariant {
+    /// Normalized source text, as in the violation message.
+    pub text: String,
+    /// The synthetic method holding the expression.
+    pub method: String,
+    pub span: Span,
+}
+
+/// Prefix of the synthetic invariant methods: reserved (RFC-INVARIANTS-1).
+pub const INVARIANT_METHOD_PREFIX: &str = "__rv_invariant_";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldDef {

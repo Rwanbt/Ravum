@@ -722,7 +722,14 @@ fn violated_contracts(
     };
     contracts
         .iter()
-        .filter(|c| rest == format!("{} {}", c.kind, c.text))
+        .filter(|c| {
+            // Amendment 1: the clause may be followed by ` (values)`.
+            let head = format!("{} {}", c.kind, c.text);
+            rest == head
+                || rest
+                    .strip_prefix(&head)
+                    .is_some_and(|t| t.starts_with(" ("))
+        })
         .map(|c| c.id.clone())
         .collect()
 }

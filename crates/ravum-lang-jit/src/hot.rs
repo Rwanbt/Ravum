@@ -773,6 +773,11 @@ impl RtRunner {
         }
     }
 
+    /// The entry's shape (an audio host picks the per-sample call).
+    pub fn kind(&self) -> EntryKind {
+        self.kind
+    }
+
     /// Process one sample (entry `fn(f32) -> f32`). Never traps: a trap rolls
     /// back and re-runs the sample; with nothing to roll back to, outputs 0.
     pub fn process_f32(&mut self, x: f32) -> f32 {
@@ -825,7 +830,7 @@ impl RtRunner {
         self.ctx.out = &mut sink as *mut crate::exec::OutputSink as usize;
         let r = self.run_nullary_inner(messages);
         self.ctx.out = 0;
-        (r, sink.out)
+        (crate::with_note(r, &sink.out), sink.out)
     }
 
     pub fn run_nullary(&mut self, messages: &[String]) -> ravum_lang_ir::interp::RunOutcome {

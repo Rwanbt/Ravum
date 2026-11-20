@@ -169,3 +169,51 @@ fn check_sarif_is_a_valid_sarif_log_with_results_and_contracts() {
     assert_eq!(c["id"], "div#requires.0");
     assert_eq!(c["verification"], "runtime-checked");
 }
+
+/// RFC-INVARIANTS-1: an `invariant` is a contract fact (`S#invariant.n`)
+/// reached by the tests that construct `S` or call a `&mut self` method; a
+/// failed test names it.
+#[test]
+fn invariants_are_contract_facts_and_named_by_failed_tests() {
+    let src = "struct Acc {\n    n: i64,\n}\n    invariant self.n >= 0\n\nimpl Acc {\n    fn take(&mut self, k: i64) -> () effects() {\n        self.n = self.n - k;\n    }\n\n    fn get(&self) -> i64 effects() {\n        return self.n;\n    }\n}\n\nfn make() -> Acc effects() {\n    return Acc { n: 3 };\n}\n\nfn main() -> () effects() {\n}\n\ntest fn builds() {\n    assert(make().get() == 3);\n}\n\ntest fn overdraws() {\n    let mut a = make();\n    a.take(5);\n}\n";
+    let v = check_json(src, "inv");
+    let c = v["contracts"].as_array().expect("contracts");
+    assert_eq!(c.len(), 1, "{v}");
+    assert_eq!(c[0]["id"], "Acc#invariant.0");
+    assert_eq!(c[0]["kind"], "invariant");
+    assert_eq!(c[0]["text"], "self.n >= 0");
+    assert_eq!(
+        c[0]["exercised_by"],
+        serde_json::json!(["builds", "overdraws"])
+    );
+    assert_eq!(c[0]["verification"], "runtime-checked");
+    let dir = std::env::temp_dir().join(format!("rv-inv-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("ravum.toml"),
+        "[package]\nname = \"invt\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/main.rv"), src).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .args(["test", "--json"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let tests = v["summary"]["tests"].as_array().unwrap();
+    let by = |n: &str| tests.iter().find(|t| t["name"] == n).unwrap().clone();
+    assert_eq!(by("builds")["status"], "ok");
+    let o = by("overdraws");
+    assert_eq!(o["status"], "FAILED");
+    assert_eq!(
+        o["violated_contracts"],
+        serde_json::json!(["Acc#invariant.0"])
+    );
+    assert!(
+        o["message"].as_str().unwrap().contains("(self.n = -2)"),
+        "{o}"
+    );
+}

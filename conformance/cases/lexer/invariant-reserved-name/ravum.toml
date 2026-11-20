@@ -1,0 +1,4 @@
+[package]
+name = "invariant-reserved-name"
+version = "0.1.0"
+edition = "core-1.0"

@@ -657,6 +657,7 @@ impl Gen<'_, '_> {
                     match stream {
                         Stream::Stdout => 0,
                         Stream::Stderr => 1,
+                        Stream::Note => 2,
                     },
                 );
                 let ctxp = self.ctxp;
@@ -1277,10 +1278,10 @@ pub(crate) mod exec {
             },
             k => scalar_text(k as u64, bits),
         };
-        if stream == 0 {
-            sink.out.stdout.push_str(&text);
-        } else {
-            sink.out.stderr.push_str(&text);
+        match stream {
+            0 => sink.out.stdout.push_str(&text),
+            1 => sink.out.stderr.push_str(&text),
+            _ => sink.out.note.push_str(&text),
         }
     }
 }
@@ -1324,11 +1325,22 @@ impl Compiled {
             scratch2: 0,
         };
         let r = call_nullary(code, &mut ctx, f.ret, &self.messages);
-        (r, sink.out)
+        (with_note(r, &sink.out), sink.out)
     }
 }
 
 /// Call a no-argument entry returning `ret` and decode its outcome.
+/// IR v1.4: a trap's message carries the note written just before it
+/// (the values of a violated contract), as in the interpreter.
+pub(crate) fn with_note(r: RunOutcome, out: &ravum_lang_ir::interp::Output) -> RunOutcome {
+    match r {
+        RunOutcome::Panic(m) if !out.note.is_empty() => {
+            RunOutcome::Panic(format!("{m}{}", out.note))
+        }
+        r => r,
+    }
+}
+
 pub(crate) fn call_nullary(
     code: *const u8,
     ctx: &mut Ctx,

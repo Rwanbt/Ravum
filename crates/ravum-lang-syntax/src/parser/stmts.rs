@@ -44,6 +44,7 @@ impl<'a> Parser<'a> {
                 );
                 let before_item = self.pos;
                 let _ = self.parse_item();
+                self.pending_items.clear(); // an item refused here has no synthetic impl
                 if self.pos == before_item {
                     self.bump();
                 }

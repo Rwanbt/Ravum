@@ -1,0 +1,8 @@
+{
+  "id": "types/invariant-not-bool",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "RFC-INVARIANTS-1 INV-1: a clause is a `bool`."
+}

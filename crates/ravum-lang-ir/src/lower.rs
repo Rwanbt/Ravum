@@ -32,6 +32,7 @@ use ravum_lang_sema::{
 
 use crate::ir::*;
 use crate::mono::{substitute, Subst};
+use ravum_lang_sema::contracts::{self, Shown};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LowerError {
@@ -328,6 +329,8 @@ impl<'a> Layouts<'a> {
 /// Lower every function of `checked` into an IR module.
 pub fn lower(checked: &CheckedProgram) -> R<Module> {
     let mut fns: Vec<(&ast::Item, &FnItem)> = Vec::new();
+    let mut invariants: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
+    let mut method_owner: BTreeMap<NodeId, NodeId> = BTreeMap::new();
     for item in &checked.program.root.items {
         match &item.kind {
             ItemKind::Fn(f) => fns.push((item, f)),
@@ -355,9 +358,21 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                 if !imp.generics.is_empty() {
                     return unsupported("generic impl");
                 }
+                let owner = match checked.facts.type_nodes.get(&imp.self_ty.id) {
+                    Some(Type::Nominal { def, .. }) => Some(*def),
+                    _ => None,
+                };
                 for sub in &imp.items {
                     match &sub.kind {
-                        ItemKind::Fn(f) => fns.push((sub, f)),
+                        ItemKind::Fn(f) => {
+                            if let Some(def) = owner {
+                                method_owner.insert(sub.id, def);
+                                if f.name.name.starts_with(ast::INVARIANT_METHOD_PREFIX) {
+                                    invariants.entry(def).or_default().push(sub.id);
+                                }
+                            }
+                            fns.push((sub, f))
+                        }
                         _ => return unsupported("non-method item in an impl"),
                     }
                 }
@@ -385,6 +400,8 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
             .map(|(id, _)| *id)
             .collect(),
         next: plain.len() as FuncId,
+        invariants,
+        method_owner,
         ..FnTable::default()
     });
     let layouts = Layouts::new(checked);
@@ -425,6 +442,10 @@ struct FnTable {
     instances: BTreeMap<(NodeId, String), FuncId>,
     queue: Vec<(NodeId, Subst)>,
     next: FuncId,
+    /// RFC-INVARIANTS-1: struct → its synthetic invariant methods (in
+    /// clause order), and method item → the struct of its `impl`.
+    invariants: BTreeMap<NodeId, Vec<NodeId>>,
+    method_owner: BTreeMap<NodeId, NodeId>,
 }
 
 impl FnTable {
@@ -483,6 +504,13 @@ struct FnLower<'a> {
     entry_params: Vec<((Span, String), (Local, Type))>,
     /// Re-entrancy guard: an `ensures` is lowered once per return point.
     in_ensures: bool,
+    /// Amendment 1: the parameters a violation message shows (by their
+    /// declared, unsubstituted type), and how `result` is shown.
+    shown_params: Vec<((Span, String), Shown)>,
+    shown_result: Option<Shown>,
+    /// RFC-INVARIANTS-1 INV-3: a `&mut self` method of a struct with
+    /// invariants: (struct, receiver address), checked at every return.
+    inv_receiver: Option<(NodeId, Local)>,
 }
 
 impl<'a> FnLower<'a> {
@@ -544,6 +572,16 @@ impl<'a> FnLower<'a> {
             contracts: f.contracts.clone(),
             entry_params: Vec::new(),
             in_ensures: false,
+            shown_params: sig0
+                .params
+                .iter()
+                .filter(|p| !p.is_receiver)
+                .filter_map(|p| {
+                    contracts::shown(&p.ty, true).map(|s| ((item.span, p.name.clone()), s))
+                })
+                .collect(),
+            shown_result: contracts::shown(&sig0.ret, true),
+            inv_receiver: None,
         };
         map_ty(&sig.ret)?;
         if matches!(sig.ret, Type::Ref { .. }) {
@@ -569,6 +607,14 @@ impl<'a> FnLower<'a> {
             let l = me.new_local(ty);
             me.vars
                 .insert((item.span, p.name.clone()), (l, p.ty.clone()));
+        }
+        if matches!(sig.receiver, Some(ast::Receiver::Exclusive)) {
+            let t = ids.borrow();
+            if let Some(def) = t.method_owner.get(&item.id) {
+                if t.invariants.contains_key(def) {
+                    me.inv_receiver = Some((*def, 0));
+                }
+            }
         }
         Ok(me)
     }
@@ -642,12 +688,176 @@ impl<'a> FnLower<'a> {
             else_to: bad,
         });
         self.switch_to(bad);
+        self.contract_note(c.kind)?;
         let kind = match c.kind {
             ast::ContractKind::Requires => "requires",
             ast::ContractKind::Ensures => "ensures",
         };
         self.set_term(Term::Trap(format!("contract violated: {kind} {}", c.text)));
         self.switch_to(good);
+        Ok(())
+    }
+
+    /// RFC-INVARIANTS-1: call each invariant method of struct `def` on the
+    /// value at `addr`, in order; trap on the first false one, the note
+    /// showing the fields (same text as the `rustc` build).
+    fn check_invariants(&mut self, def: NodeId, addr: Local) -> R<()> {
+        let methods = self
+            .ids
+            .borrow()
+            .invariants
+            .get(&def)
+            .cloned()
+            .unwrap_or_default();
+        if methods.is_empty() {
+            return Ok(());
+        }
+        let info = self
+            .checked
+            .facts
+            .structs
+            .get(&def)
+            .ok_or_else(|| LowerError::MissingFact("invariant struct".into()))?;
+        let texts: Vec<String> = info.invariants.iter().map(|(_, t)| t.clone()).collect();
+        let fields: Vec<(String, Type)> = info
+            .fields
+            .iter()
+            .map(|f| (f.name.clone(), f.ty.clone()))
+            .collect();
+        let st = Type::Nominal {
+            def,
+            name: info.name.clone(),
+            args: Vec::new(),
+        };
+        for (m, text) in methods.iter().zip(texts) {
+            let func = *self
+                .ids
+                .borrow()
+                .plain
+                .get(m)
+                .ok_or_else(|| LowerError::MissingFact("invariant method".into()))?;
+            let ok = self.new_local(Ty::Bool);
+            self.emit(Inst::Call {
+                dst: Some(ok),
+                func,
+                args: vec![addr],
+            });
+            let (good, bad) = (self.new_block(), self.new_block());
+            self.set_term(Term::Branch {
+                cond: ok,
+                then_to: good,
+                else_to: bad,
+            });
+            self.switch_to(bad);
+            let mut first = true;
+            for (name, fty) in &fields {
+                let Some(s) = contracts::shown(fty, true) else {
+                    continue;
+                };
+                let (off, _) = self.layouts.named_field(&st, name)?;
+                let ty = map_ty(fty)?;
+                let v = self.new_local(ty);
+                self.emit(Inst::Load {
+                    dst: v,
+                    ty,
+                    addr,
+                    offset: off,
+                });
+                let sep = if first { " (" } else { ", " };
+                first = false;
+                self.emit(Inst::Print {
+                    stream: Stream::Note,
+                    arg: PrintArg::Text(format!("{sep}self.{name} = ")),
+                });
+                let quoted = s == Shown::Text;
+                if quoted {
+                    self.emit(Inst::Print {
+                        stream: Stream::Note,
+                        arg: PrintArg::Text("\"".into()),
+                    });
+                }
+                self.emit(Inst::Print {
+                    stream: Stream::Note,
+                    arg: if quoted {
+                        PrintArg::Obj(v)
+                    } else {
+                        PrintArg::Value { ty, src: v }
+                    },
+                });
+                if quoted {
+                    self.emit(Inst::Print {
+                        stream: Stream::Note,
+                        arg: PrintArg::Text("\"".into()),
+                    });
+                }
+            }
+            if !first {
+                self.emit(Inst::Print {
+                    stream: Stream::Note,
+                    arg: PrintArg::Text(")".into()),
+                });
+            }
+            self.set_term(Term::Trap(format!("contract violated: invariant {text}")));
+            self.switch_to(good);
+        }
+        Ok(())
+    }
+
+    /// Amendment 1: ` (a = 1, s = "x", result = 2)` written to the trap note,
+    /// the same text as the `rustc` build's message.
+    fn contract_note(&mut self, kind: ast::ContractKind) -> R<()> {
+        let ensures = kind == ast::ContractKind::Ensures;
+        let mut shown: Vec<(String, Local, Type, Shown)> = Vec::new();
+        for (key, s) in self.shown_params.clone() {
+            if ensures
+                && s == Shown::Text
+                && !matches!(self.vars.get(&key), Some((_, Type::Ref { .. })))
+            {
+                continue; // owned `String`: consumed by the body
+            }
+            let Some((l, t)) = self.vars.get(&key).cloned() else {
+                return Err(LowerError::MissingFact(format!("parameter `{}`", key.1)));
+            };
+            shown.push((key.1, l, t, s));
+        }
+        if ensures {
+            if let Some(s) = self.shown_result {
+                let key = self
+                    .vars
+                    .keys()
+                    .find(|(_, n)| n == "result")
+                    .cloned()
+                    .ok_or_else(|| LowerError::MissingFact("`result`".into()))?;
+                let (l, t) = self.vars[&key].clone();
+                shown.push(("result".into(), l, t, s));
+            }
+        }
+        if shown.is_empty() {
+            return Ok(());
+        }
+        let note = |me: &mut Self, arg| {
+            me.emit(Inst::Print {
+                stream: Stream::Note,
+                arg,
+            })
+        };
+        note(self, PrintArg::Text(" (".into()));
+        for (i, (name, l, t, s)) in shown.into_iter().enumerate() {
+            let sep = if i == 0 { "" } else { ", " };
+            note(self, PrintArg::Text(format!("{sep}{name} = ")));
+            match s {
+                Shown::Scalar => {
+                    let ty = map_ty(&t)?;
+                    note(self, PrintArg::Value { ty, src: l });
+                }
+                Shown::Text => {
+                    note(self, PrintArg::Text("\"".into()));
+                    note(self, PrintArg::Obj(l));
+                    note(self, PrintArg::Text("\"".into()));
+                }
+            }
+        }
+        note(self, PrintArg::Text(")".into()));
         Ok(())
     }
 
@@ -699,6 +909,11 @@ impl<'a> FnLower<'a> {
 
     fn return_term(&mut self, v: Local) -> R<Term> {
         self.check_ensures(v)?;
+        if let Some((def, recv)) = self.inv_receiver {
+            if !self.dead {
+                self.check_invariants(def, recv)?;
+            }
+        }
         if let Some(out) = self.sret {
             if !self.dead {
                 let ty = self.ret.clone();
@@ -1391,6 +1606,10 @@ impl<'a> FnLower<'a> {
                     let v = self.expr(&fi.value)?;
                     let (off, fty) = self.layouts.named_field(&t, &fi.name.name)?;
                     self.store_value(dst, off, v, &fty)?;
+                }
+                // RFC-INVARIANTS-1 INV-2: a constructed value is checked.
+                if let Type::Nominal { def, .. } = &t {
+                    self.check_invariants(*def, dst)?;
                 }
                 Ok(dst)
             }

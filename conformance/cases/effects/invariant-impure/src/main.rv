@@ -1,0 +1,12 @@
+struct R {
+    lo: i64,
+}
+    invariant self.lo < noisy()
+
+fn noisy() -> i64 effects(io) {
+    io::println("x");
+    return 1;
+}
+
+fn main() -> () effects() {
+}

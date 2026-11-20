@@ -1,0 +1,8 @@
+{
+  "id": "lexer/invariant-reserved-name",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-LEX-RESERVED-IDENT"
+  ],
+  "notes": "RFC-INVARIANTS-1 INV-7: the synthetic method names cannot be written: `_rv_` is reserved by the lexer."
+}

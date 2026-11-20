@@ -838,6 +838,7 @@ fn sample_program() -> Sample {
         kind: ItemKind::Struct(StructItem {
             name: point_name,
             generics: Vec::new(),
+            invariants: Vec::new(),
             fields: vec![FieldDef {
                 id: field_id,
                 vis: Vis::Public(span()),
@@ -864,6 +865,7 @@ fn sample_program() -> Sample {
                 public: true,
             }],
             is_copy: false,
+            invariants: Vec::new(),
         },
     );
 

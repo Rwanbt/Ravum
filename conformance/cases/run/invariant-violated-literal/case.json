@@ -1,0 +1,7 @@
+{
+  "id": "run/invariant-violated-literal",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "contract violated: invariant self.lo <= self.hi (self.lo = 4, self.hi = 2)",
+  "notes": "RFC-INVARIANTS-1 INV-2: a struct literal that breaks the invariant stops the program, naming the clause and the field values."
+}

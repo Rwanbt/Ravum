@@ -2,6 +2,6 @@
   "id": "run/contract-ensures-violated",
   "mode": "run-fail",
   "exit_code": 1,
-  "stderr_contains": "contract violated: ensures result > x",
+  "stderr_contains": "contract violated: ensures result > x (x = 20, result = 20)",
   "notes": "RFC-CONTRACTS-1 CON-6: a false `ensures` at a `return` stops the program and names the clause."
 }

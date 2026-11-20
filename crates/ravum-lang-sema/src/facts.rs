@@ -213,6 +213,8 @@ pub struct StructInfo {
     pub generics: Vec<String>,
     pub fields: Vec<FieldInfo>,
     pub is_copy: bool,
+    /// RFC-INVARIANTS-1: `(synthetic method, clause text)` per `invariant`.
+    pub invariants: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -830,4 +832,3 @@ mod tests {
         assert_eq!(infos[0].path, "<unknown>", "a hole has no source file");
     }
 }
-

@@ -203,6 +203,44 @@ fn check_core(
     reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
     driver: &mut DriverFacts,
 ) -> (CheckResult, PhaseTimings) {
+    let (mut r, t) = check_core_raw(program, sources, options, rt_entry, reuse, driver);
+    // RFC-INVARIANTS-1: a diagnostic of a synthetic invariant method names
+    // the clause, never the generated method.
+    r.diags.rewrite_text(name_invariants);
+    (r, t)
+}
+
+fn name_invariants(m: &str) -> String {
+    let prefix = ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX;
+    let mut out = m.to_string();
+    while let Some(at) = out.find(prefix) {
+        let end = at
+            + prefix.len()
+            + out[at + prefix.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .count();
+        let (mut a, mut b) = (at, end);
+        if out[..a].ends_with('`') && out[b..].starts_with('`') {
+            a -= 1;
+            b += 1;
+        }
+        if out[..a].ends_with("function ") {
+            a -= "function ".len();
+        }
+        out.replace_range(a..b, "the `invariant` clause");
+    }
+    out
+}
+
+fn check_core_raw(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+    driver: &mut DriverFacts,
+) -> (CheckResult, PhaseTimings) {
     let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
     if !edition_supported(&options.edition) {

@@ -567,14 +567,74 @@ impl<'a> Parser<'a> {
     }
 
     /// Source text of `span`, whitespace runs collapsed to one space.
+    /// The clause's normalized text (RFC-CONTRACTS-1 CON-5): its tokens
+    /// with canonical spacing (one space around binary operators, none
+    /// around `.`/`::`, inside brackets, before `,`/`?`, after a prefix
+    /// operator), so that `ravum-lang fmt` never changes a message.
     fn source_text(&self, span: Span) -> String {
-        let (a, b) = (span.start as usize, span.end as usize);
-        self.src
-            .get(a..b.min(self.src.len()))
-            .unwrap_or("")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        let mut out = String::new();
+        let mut prev: Option<&TokenKind> = None;
+        // The previous token ends an operand: a following `-`/`&`/`*` is binary.
+        let mut operand = false;
+        let mut prefix = false;
+        let mut prev_end = 0;
+        for t in &self.tokens {
+            if t.span.start < span.start || t.span.end > span.end || t.is_eof() {
+                continue;
+            }
+            let text = self
+                .src
+                .get(t.span.start as usize..t.span.end as usize)
+                .unwrap_or("");
+            let k = &t.kind;
+            let tight_before =
+                matches!(
+                    k,
+                    TokenKind::Punct(
+                        Punct::RParen
+                            | Punct::RBracket
+                            | Punct::Comma
+                            | Punct::Dot
+                            | Punct::ColonColon
+                            | Punct::Question
+                    )
+                ) || (matches!(k, TokenKind::Punct(Punct::LParen | Punct::LBracket)) && operand);
+            let tight_after_prev = matches!(
+                prev,
+                Some(TokenKind::Punct(
+                    Punct::LParen | Punct::LBracket | Punct::Dot | Punct::ColonColon
+                ))
+            ) || prefix;
+            // `>=`/`>>` reach the parser split (`>` `=`) for generics: glue
+            // the pieces that touch in the source.
+            let glued = matches!(prev, Some(TokenKind::Punct(Punct::Gt)))
+                && prev_end == t.span.start
+                && matches!(
+                    k,
+                    TokenKind::Punct(Punct::Eq | Punct::Gt | Punct::Ge | Punct::Shr | Punct::ShrEq)
+                );
+            if prev.is_some() && !tight_before && !tight_after_prev && !glued {
+                out.push(' ');
+            }
+            out.push_str(text);
+            prefix = matches!(k, TokenKind::Punct(Punct::Bang))
+                || (matches!(k, TokenKind::Punct(Punct::Minus | Punct::Amp | Punct::Star))
+                    && !operand);
+            operand = matches!(
+                k,
+                TokenKind::Ident(_)
+                    | TokenKind::Punct(Punct::RParen | Punct::RBracket | Punct::Question)
+            ) || matches!(
+                k,
+                TokenKind::Kw(Kw::SelfValue | Kw::SelfType | Kw::True | Kw::False)
+            ) || !matches!(
+                k,
+                TokenKind::Punct(_) | TokenKind::Kw(_) | TokenKind::Ident(_)
+            );
+            prev = Some(k);
+            prev_end = t.span.end;
+        }
+        out
     }
 
     /// `requires EXPR` / `ensures EXPR` clauses before a body
@@ -769,6 +829,7 @@ impl<'a> Parser<'a> {
                 name,
                 generics,
                 fields: Vec::new(),
+                invariants: Vec::new(),
                 span: self.span_from(start),
             }));
         }
@@ -792,12 +853,116 @@ impl<'a> Parser<'a> {
             return None;
         }
         let fields = self.parse_fields("struct");
+        let invariants = self.parse_invariants(&name, &generics);
         Some(ItemKind::Struct(StructItem {
             name,
             generics,
             fields,
+            invariants,
             span: self.span_from(start),
         }))
+    }
+
+    /// RFC-INVARIANTS-1: `invariant <expr>` clauses after the fields. `invariant`
+    /// is contextual: it cannot start an item, so no program changes meaning.
+    /// Each expression becomes the body of a synthetic pure method
+    /// `pub fn __rv_invariant_<n>(&self) -> bool effects()` of a synthetic
+    /// `impl` placed right after the struct (the checker, the ownership
+    /// rules and both back ends then treat it as ordinary code).
+    fn parse_invariants(&mut self, name: &Ident, generics: &[GenericParam]) -> Vec<Invariant> {
+        let mut out = Vec::new();
+        let mut methods = Vec::new();
+        while matches!(self.kind(), TokenKind::Ident(w) if w == "invariant") {
+            let start = self.cur_span();
+            self.bump();
+            let expr = self.parse_condition();
+            let text = self.source_text(expr.span);
+            let span = self.span_from(start);
+            if !generics.is_empty() {
+                self.diags.error(
+                    "E-CON-UNSUPPORTED",
+                    span,
+                    "an `invariant` on a generic struct is not supported (RFC-INVARIANTS-1)",
+                );
+                continue;
+            }
+            let method = format!("{INVARIANT_METHOD_PREFIX}{}", out.len());
+            methods.push(self.invariant_method(&method, expr, span));
+            out.push(Invariant { text, method, span });
+        }
+        if !methods.is_empty() {
+            let path = self.synthetic_path(&name.name, name.span);
+            let self_ty = Type {
+                id: self.id(),
+                kind: TypeKind::Path(path),
+                span: name.span,
+            };
+            let span = out[0].span;
+            let imp = ItemKind::Impl(ImplItem {
+                generics: Vec::new(),
+                self_ty,
+                items: methods,
+                span,
+            });
+            let item = Item {
+                id: self.id(),
+                vis: Vis::Private,
+                kind: imp,
+                span,
+            };
+            self.pending_items.push(item);
+        }
+        out
+    }
+
+    fn synthetic_path(&mut self, name: &str, span: Span) -> Path {
+        Path {
+            id: self.id(),
+            root: PathRoot::Plain,
+            segments: vec![PathSegment {
+                name: Ident::new(name, span),
+                args: Vec::new(),
+            }],
+            span,
+        }
+    }
+
+    fn invariant_method(&mut self, method: &str, expr: Expr, span: Span) -> Item {
+        let param = Param {
+            id: self.id(),
+            kind: ParamKind::Receiver(Receiver::Shared),
+            span,
+        };
+        let bool_path = self.synthetic_path("bool", span);
+        let ret = Type {
+            id: self.id(),
+            kind: TypeKind::Path(bool_path),
+            span,
+        };
+        let body = Block {
+            id: self.id(),
+            stmts: Vec::new(),
+            tail: Some(Box::new(expr)),
+            span,
+        };
+        let f = FnItem {
+            name: Ident::new(method, span),
+            generics: Vec::new(),
+            params: vec![param],
+            ret,
+            effects: Some(Vec::new()),
+            body,
+            is_test: false,
+            is_async: false,
+            contracts: Vec::new(),
+            span,
+        };
+        Item {
+            id: self.id(),
+            vis: Vis::Public(span),
+            kind: ItemKind::Fn(f),
+            span,
+        }
     }
 
     pub(super) fn parse_fields(&mut self, what: &str) -> Vec<FieldDef> {

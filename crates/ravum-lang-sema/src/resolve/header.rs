@@ -438,6 +438,11 @@ pub(crate) fn resolve_struct(
             generics: generics.iter().map(|(n, _)| n.clone()).collect(),
             fields,
             is_copy: false,
+            invariants: s
+                .invariants
+                .iter()
+                .map(|i| (i.method.clone(), i.text.clone()))
+                .collect(),
         },
     );
 }

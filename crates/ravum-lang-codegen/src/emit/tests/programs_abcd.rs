@@ -32,6 +32,7 @@ pub(super) fn build_program_a() -> ProgramA {
         kind: ItemKind::Struct(StructItem {
             name: point_name,
             generics: Vec::new(),
+            invariants: Vec::new(),
             fields: vec![
                 FieldDef {
                     id: field_x,
@@ -75,6 +76,7 @@ pub(super) fn build_program_a() -> ProgramA {
                 },
             ],
             is_copy: true,
+            invariants: Vec::new(),
         },
     );
 

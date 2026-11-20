@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.3";
+pub const IR_VERSION: &str = "ravum-ir-1.4";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -202,6 +202,10 @@ pub enum HeapOp {
 pub enum Stream {
     Stdout,
     Stderr,
+    /// IR v1.4: the note of the next [`Term::Trap`] (RFC-CONTRACTS-1
+    /// amendment 1, the values of a violated contract): appended to the
+    /// trap's message, never printed.
+    Note,
 }
 
 /// What a [`Inst::Print`] writes: a literal text, or a scalar formatted like

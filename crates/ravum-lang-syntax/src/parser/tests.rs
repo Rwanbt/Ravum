@@ -1552,3 +1552,47 @@ fn a_block_like_head_continues_with_a_method_call_or_inside_an_expression() {
         );
     }
 }
+
+#[test]
+fn clause_text_is_normalized_whatever_the_spacing() {
+    // RFC-CONTRACTS-1 CON-5: the message text does not depend on spacing,
+    // so `fmt` never changes it.
+    let p = parse_ok("fn f(a: i64, ok: bool) -> i64 effects()\n    requires g( a,a )>-1&&!ok||a.abs()==x::y[0]\n{\n    return a;\n}\n");
+    let ItemKind::Fn(f) = &p.root.items[0].kind else {
+        panic!()
+    };
+    assert_eq!(
+        f.contracts[0].text,
+        "g(a, a) > -1 && !ok || a.abs() == x::y[0]"
+    );
+}
+
+#[test]
+fn struct_invariants_become_a_synthetic_pure_method() {
+    let p = parse_ok("struct R {\n    lo: i64,\n}\n    invariant self.lo>=0\n    invariant self.lo < 9\n\nfn main() -> () effects() {\n}\n");
+    let ItemKind::Struct(s) = &p.root.items[0].kind else {
+        panic!()
+    };
+    let texts: Vec<&str> = s.invariants.iter().map(|i| i.text.as_str()).collect();
+    assert_eq!(texts, ["self.lo >= 0", "self.lo < 9"]);
+    let ItemKind::Impl(imp) = &p.root.items[1].kind else {
+        panic!("the synthetic impl follows the struct")
+    };
+    let names: Vec<&str> = imp.methods().map(|(_, f)| f.name.name.as_str()).collect();
+    assert_eq!(names, ["__rv_invariant_0", "__rv_invariant_1"]);
+    let (_, m) = imp.methods().next().unwrap();
+    assert_eq!(m.effects, Some(Vec::new()), "pure");
+    assert!(matches!(p.root.items[2].kind, ItemKind::Fn(_)));
+}
+
+#[test]
+fn invariant_negative_cases() {
+    // A generic struct: refused. The synthetic name is unwritable (`_rv_`
+    // is reserved by the lexer). `invariant` as an
+    // ordinary identifier: unchanged.
+    let r = parse("struct G<T> {\n    v: T,\n}\n    invariant true\n");
+    assert!(r.diags.iter().any(|d| d.code == "E-CON-UNSUPPORTED"));
+    let r = parse("fn __rv_invariant_0() -> () effects() {\n}\n");
+    assert!(r.diags.iter().any(|d| d.code == "E-LEX-RESERVED-IDENT"));
+    parse_ok("fn f() -> () effects() {\n    let invariant = 1;\n}\n");
+}

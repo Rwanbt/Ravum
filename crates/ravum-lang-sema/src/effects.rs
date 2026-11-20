@@ -35,6 +35,9 @@ struct FnEffects {
     direct: EffectSet,
     sources: Vec<(Effect, String)>,
     edges: Vec<NodeId>,
+    /// RFC-INVARIANTS-1: struct → its synthetic invariant methods. A struct
+    /// literal is a call of each (INV-2), an edge of the call graph.
+    invariants: std::rc::Rc<BTreeMap<NodeId, Vec<NodeId>>>,
 }
 
 /// Compose les effets de toutes les fonctions, vérifie les bornes déclarées et
@@ -53,6 +56,8 @@ pub fn infer_and_check(
     diags: &mut DiagnosticBag,
 ) -> BTreeMap<NodeId, Vec<NodeId>> {
     let fns = collect_fns(program);
+    let (invariants, inv_methods) = invariant_methods(program, facts);
+    let invariants = std::rc::Rc::new(invariants);
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
         if let Some(r) = facts.reuse_bodies.get(id) {
@@ -64,11 +69,15 @@ pub fn infer_and_check(
                     direct: r.direct.clone(),
                     sources: Vec::new(),
                     edges: r.edges.clone(),
+                    invariants: invariants.clone(),
                 },
             );
             continue;
         }
-        let mut effects = FnEffects::default();
+        let mut effects = FnEffects {
+            invariants: invariants.clone(),
+            ..FnEffects::default()
+        };
         if f.is_async {
             // CONC-6.4: an `async fn` carries the `async` effect.
             effects.direct.insert(Effect::Async);
@@ -78,6 +87,17 @@ pub fn infer_and_check(
         }
         walk_block(&f.body, facts, &mut effects);
         direct.insert(*id, effects);
+    }
+    // INV-3: a `&mut self` method of a struct with invariants calls them on
+    // exit. Recomputed from the program each time (never cached), deduped.
+    for (method, def) in &inv_methods {
+        if let (Some(e), Some(ms)) = (direct.get_mut(method), invariants.get(def)) {
+            e.edges.extend(ms.iter().copied());
+        }
+    }
+    for e in direct.values_mut() {
+        e.edges.sort_unstable();
+        e.edges.dedup();
     }
     for (id, e) in &direct {
         facts.direct_effects.insert(*id, e.direct.clone());
@@ -111,6 +131,19 @@ pub fn infer_and_check(
     // the functions it calls); CON-7: no clause in profile `rt`, where a
     // violation would be an implicit trap (RFC-RT-TRAPS-1).
     for f in fns.values() {
+        // RFC-INVARIANTS-1 INV-5: no `invariant` in profile `rt` either.
+        if profile == Profile::Rt
+            && f.name
+                .name
+                .starts_with(ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX)
+        {
+            diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                "E-EFF-PROFILE",
+                f.span,
+                "`invariant` clauses are not allowed in profile `rt`: a violation is a trap (INV-5)"
+                    .to_string(),
+            ));
+        }
         for c in &f.contracts {
             if profile == Profile::Rt {
                 diags.push(ravum_lang_syntax::diag::Diagnostic::error(
@@ -292,6 +325,45 @@ pub fn reachable_from(graph: &BTreeMap<NodeId, Vec<NodeId>>, entry: NodeId) -> B
     reached
 }
 
+/// (struct → invariant methods, `&mut self` method → struct).
+type InvariantMethods = (BTreeMap<NodeId, Vec<NodeId>>, Vec<(NodeId, NodeId)>);
+
+/// RFC-INVARIANTS-1: struct → its synthetic invariant methods (clause
+/// order), and each `&mut self` method of such a struct → the struct.
+fn invariant_methods(program: &Program, facts: &Facts) -> InvariantMethods {
+    let mut inv: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
+    let mut exclusive = Vec::new();
+    let mut items = Vec::new();
+    ravum_lang_syntax::ast::walk_items(&program.root, &mut items);
+    for item in items {
+        let ItemKind::Impl(imp) = &item.kind else {
+            continue;
+        };
+        let Some(crate::types::Type::Nominal { def, .. }) = facts.type_nodes.get(&imp.self_ty.id)
+        else {
+            continue;
+        };
+        for (member, f) in imp.methods() {
+            if f.name
+                .name
+                .starts_with(ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX)
+            {
+                inv.entry(*def).or_default().push(member.id);
+            } else if f.params.iter().any(|p| {
+                matches!(
+                    p.kind,
+                    ravum_lang_syntax::ast::ParamKind::Receiver(
+                        ravum_lang_syntax::ast::Receiver::Exclusive
+                    )
+                )
+            }) {
+                exclusive.push((member.id, *def));
+            }
+        }
+    }
+    (inv, exclusive)
+}
+
 fn collect_fns(program: &Program) -> BTreeMap<NodeId, &FnItem> {
     let mut out = BTreeMap::new();
     collect_module_fns(&program.root, &mut out);
@@ -440,9 +512,15 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             walk_expr(value, facts, out);
             walk_expr(len, facts, out);
         }
-        ExprKind::StructLit { fields, .. } => {
+        ExprKind::StructLit { path, fields } => {
             for field in fields {
                 walk_expr(&field.value, facts, out);
+            }
+            if let Some(crate::facts::Resolution::Item { item }) = facts.resolutions.get(&path.id) {
+                if let Some(ms) = out.invariants.get(item) {
+                    let ms = ms.clone();
+                    out.edges.extend(ms);
+                }
             }
         }
         ExprKind::Range { start, end, .. } => {
