@@ -153,10 +153,21 @@ impl Drop for StateBuffer {
     }
 }
 
+/// A crossfade in progress: the replaced module keeps running on its own copy
+/// of the state (taken at `replace_with_fade`, off the audio thread) while the
+/// output ramps from it to the new module.
+struct Fade3 {
+    old: Arc<Block3Module>,
+    state: StateBuffer,
+    total: u32,
+    done: u32,
+}
+
 /// One ABI 3 block and its state.
 pub struct Block3Host {
     current: Arc<Block3Module>,
     state: StateBuffer,
+    fade: Option<Fade3>,
 }
 
 impl Block3Host {
@@ -169,14 +180,50 @@ impl Block3Host {
         Ok(Self {
             current: module,
             state,
+            fade: None,
         })
     }
 
-    /// Process one block. No allocation, no lock (audio thread).
+    /// Process one block. No allocation, no free, no lock (audio thread):
+    /// a finished crossfade is only marked done; its module and state copy
+    /// are released by [`Self::collect`] on the caller's thread.
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) -> usize {
         let frames = input.len().min(output.len());
         if frames == 0 {
             return 0;
+        }
+        if let Some(fade) = self.fade.as_mut().filter(|f| f.done < f.total) {
+            let mut start = 0;
+            while start < frames {
+                let n = (frames - start).min(crate::MAX_FADE_FRAMES);
+                let mut old_out = [0.0f32; crate::MAX_FADE_FRAMES];
+                let (i, o) = (&input[start..start + n], &mut output[start..start + n]);
+                // SAFETY: as below; the fade state is a copy of the current
+                // state made with the same layout (same schema digest).
+                unsafe {
+                    (fade.old.process)(
+                        i.as_ptr(),
+                        old_out.as_mut_ptr(),
+                        n as u32,
+                        fade.state.ptr.as_ptr(),
+                    );
+                    (self.current.process)(
+                        i.as_ptr(),
+                        o.as_mut_ptr(),
+                        n as u32,
+                        self.state.ptr.as_ptr(),
+                    );
+                }
+                for (k, y) in o.iter_mut().enumerate() {
+                    if fade.done < fade.total {
+                        fade.done += 1;
+                        let w = fade.done as f32 / fade.total as f32;
+                        *y = old_out[k] * (1.0 - w) + *y * w;
+                    }
+                }
+                start += n;
+            }
+            return frames;
         }
         // SAFETY: valid slices of `frames` samples; the state was initialised
         // by a module of the same schema digest (checked by `replace`).
@@ -210,6 +257,60 @@ impl Block3Host {
             });
         }
         Ok(std::mem::replace(&mut self.current, module))
+    }
+
+    /// Like [`Self::replace`], with a crossfade of `frames` frames: the state
+    /// is copied for the old module here, on the caller's thread. A fade
+    /// still in progress is refused (`AlreadyActive` of the fading module):
+    /// call [`Self::collect`] once it has finished.
+    pub fn replace_with_fade(
+        &mut self,
+        module: Arc<Block3Module>,
+        frames: u32,
+    ) -> Result<(), RejectReason> {
+        if let Some(fade) = &self.fade {
+            if fade.done < fade.total {
+                return Err(RejectReason::AlreadyActive {
+                    artifact_id: self.current.artifact_id.clone(),
+                });
+            }
+        }
+        let copy = StateBuffer::new(self.current.layout)?;
+        let old = self.replace(module)?;
+        if frames == 0 {
+            drop(old);
+            return Ok(());
+        }
+        // SAFETY: both buffers have the same layout; they do not overlap.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.state.ptr.as_ptr(),
+                copy.ptr.as_ptr(),
+                self.state.layout.size(),
+            )
+        };
+        self.fade = Some(Fade3 {
+            old,
+            state: copy,
+            total: frames,
+            done: 0,
+        });
+        Ok(())
+    }
+
+    /// Frames of crossfade still to render (0 when none).
+    pub fn fade_remaining(&self) -> u32 {
+        self.fade.as_ref().map(|f| f.total - f.done).unwrap_or(0)
+    }
+
+    /// Release a finished crossfade (module and state copy) on the caller's
+    /// thread. Returns `true` if something was released.
+    pub fn collect(&mut self) -> bool {
+        if self.fade.as_ref().is_some_and(|f| f.done >= f.total) {
+            self.fade = None;
+            return true;
+        }
+        false
     }
 
     pub fn active(&self) -> &Arc<Block3Module> {

@@ -1,4 +1,4 @@
-# V2-L5b — T8 : ABI DSP 3 (RFC-DSP-ABI-2), tranches 1 et 2
+# V2-L5b — T8 : ABI DSP 3 (RFC-DSP-ABI-2), tranches 1 à 3
 
 | Champ | Valeur |
 |---|---|
@@ -54,13 +54,30 @@
 - `unsafe` : sites inscrits dans `docs/ffi/SAFETY.md` §9 et au dossier
   d'audit ; `tools/unsafe_audit.py` : PASS.
 
+## Tranche 3 : fondu enchaîné, allocation, mesure (fait)
+
+- `Block3Host::replace_with_fade(module, frames)` : la copie de l'état pour
+  l'ancien module est allouée et remplie sur le thread appelant ; pendant le
+  fondu, l'ancien module tourne sur sa copie, le nouveau sur l'état de
+  l'hôte, sortie `ancien·(1−w) + nouveau·w`, `w = k/frames` ; un fondu fini
+  est seulement marqué, libéré par `collect()` sur le thread appelant.
+- Test `a_crossfaded_swap_mixes_both_versions_and_allocates_nothing_in_process` :
+  sortie = formule de référence **bit à bit** (4 096 échantillons, fondu de
+  256 trames) ; **0 allocation et 0 libération** dans `process`
+  (allocateur compteur par thread), fondu compris.
+- **Mesure du fondu sur la voie `cdylib`** (`dsp-gain-iir`, gain 2 → 1,
+  sinus, ce commit, Linux, debug) : au changement |Δy| = 0,036418 avec fondu
+  (0,017714 sans), |Δ²y| = 0,000203 (0,000077 sans) ; |Δ²y| maximal du
+  signal stable : 0,001351. **Aucun clic dans les deux cas** : le filtre IIR
+  lisse déjà le changement de gain, le fondu n'apporte rien de mesurable
+  ici. La première différence mesure surtout la pente du signal (gain 2
+  encore dominant au début du fondu). Aucune amélioration n'est revendiquée.
+
 ## Pas fait
 
-- Publication sans verrou (comme `BlockHost` pour l'ABI 2) et **fondu
-  enchaîné** pour l'ABI 3 : `Block3Host` est possédé par un thread et
-  remplacé par `&mut self`.
+- Publication sans verrou (comme `BlockHost` pour l'ABI 2) : `Block3Host`
+  est possédé par un thread et remplacé par `&mut self`.
 - **Migration** de schéma côté éditeur (DSP3-5) : un autre digest est refusé.
-- Compteur d'allocations dans `process` (DSP3-T2 « 0 allocation ») : non
-  mesuré pour l'ABI 3 ; `process` n'appelle que le module.
-- Mesure du fondu de la voie `cdylib` sur `dsp-gain-iir` (T8) : dépend du
-  fondu ci-dessus.
+- Fondu mesuré sur un seul signal et une seule édition ; pas de scénario
+  où un clic existe sans fondu (un changement de gain sans filtre, par
+  exemple) : à ajouter pour montrer l'effet du fondu.

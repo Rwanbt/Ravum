@@ -10,8 +10,41 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
+
 use ravum_patch_host::{prepare_block, prepare_block3, Block3Host, ExpectedAbi, StateLayout};
 use ravum_protocol::RejectReason;
+
+/// Counts allocations and frees made while `COUNTING` is set, per thread.
+struct Counting;
+thread_local! {
+    static COUNTING: Cell<bool> = const { Cell::new(false) };
+    static EVENTS: Cell<usize> = const { Cell::new(0) };
+}
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+        if COUNTING.with(|c| c.get()) {
+            EVENTS.with(|e| e.set(e.get() + 1));
+        }
+        unsafe { System.alloc(l) }
+    }
+    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+        if COUNTING.with(|c| c.get()) {
+            EVENTS.with(|e| e.set(e.get() + 1));
+        }
+        unsafe { System.dealloc(p, l) }
+    }
+}
+#[global_allocator]
+static A: Counting = Counting;
+
+/// `host.process`, counting allocations and frees inside it only.
+fn counted(host: &mut Block3Host, i: &[f32], o: &mut [f32]) {
+    COUNTING.with(|c| c.set(true));
+    host.process(i, o);
+    COUNTING.with(|c| c.set(false));
+}
 
 /// Gain then first-order IIR, state `{ y }` (the `examples/dsp-gain-iir` block).
 fn gain_iir(gain: &str) -> String {
@@ -162,4 +195,69 @@ fn schema_changes_and_abi_mixes_are_refused() {
         }) => {}
         other => panic!("ABI 3 loaded as ABI 2: {:?}", other.map(|m| m.abi_version)),
     }
+}
+
+#[test]
+fn a_crossfaded_swap_mixes_both_versions_and_allocates_nothing_in_process() {
+    let dir = scratch("fade");
+    let g2 = prepare_block3(&build(&dir, "f2", &gain_iir("2.0"))).unwrap();
+    let g1 = prepare_block3(&build(&dir, "f1", &gain_iir("1.0"))).unwrap();
+    let input = signal(4096);
+    let switch = 1024usize;
+    let fade = 256u32;
+    let run = |fade_frames: u32| {
+        let mut host = Block3Host::new(g2.clone()).unwrap();
+        let mut out = vec![0.0f32; input.len()];
+        let before = EVENTS.with(|e| e.get());
+        for (k, (i, o)) in input.chunks(64).zip(out.chunks_mut(64)).enumerate() {
+            if k * 64 == switch {
+                host.replace_with_fade(g1.clone(), fade_frames).unwrap();
+            }
+            counted(&mut host, i, o);
+            if host.fade_remaining() == 0 {
+                host.collect(); // caller's thread
+            }
+        }
+        (out, EVENTS.with(|e| e.get()) - before)
+    };
+    let (faded, events) = run(fade);
+    assert_eq!(events, 0, "allocations or frees inside process()");
+
+    // Reference: the old version continues on its own copy of the state,
+    // the new one on the host state; out = old * (1 - w) + new * w.
+    let old = reference(&input, |_| 2.0);
+    let new = reference(&input, |n| if n < switch { 2.0 } else { 1.0 });
+    for n in 0..input.len() {
+        let expected = if n < switch {
+            old[n]
+        } else if n < switch + fade as usize {
+            let w = (n - switch + 1) as f32 / fade as f32;
+            old[n] * (1.0 - w) + new[n] * w
+        } else {
+            new[n]
+        };
+        assert_eq!(faded[n].to_bits(), expected.to_bits(), "sample {n}");
+    }
+
+    // Fade measurement on the native (cdylib) path, for this signal and edit.
+    let (immediate, _) = run(0);
+    // Fade measurement (reported, not asserted): with this IIR the gain edit
+    // makes no click, so a crossfade cannot be shown to remove one here. The
+    // first difference at the swap mostly measures the signal's slope; the
+    // second difference is the better click indicator.
+    let d1 = |v: &[f32]| (v[switch] - v[switch - 1]).abs();
+    let d2 = |v: &[f32]| (v[switch + 1] - 2.0 * v[switch] + v[switch - 1]).abs();
+    let steady_d2 = immediate[64..switch]
+        .windows(3)
+        .map(|w| (w[2] - 2.0 * w[1] + w[0]).abs())
+        .fold(0.0f32, f32::max);
+    println!(
+        "fade: {fade} frames; at the swap |Δy| = {:.6} (immediate {:.6}), \
+         |Δ²y| = {:.6} (immediate {:.6}); max steady |Δ²y| = {:.6}",
+        d1(&faded),
+        d1(&immediate),
+        d2(&faded),
+        d2(&immediate),
+        steady_d2
+    );
 }

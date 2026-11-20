@@ -219,8 +219,10 @@ processus s'arrête (comportement de Rust), elle n'est pas rattrapée. Le profil
 | `CStr::from_ptr` sur `ravum_state_schema` | pointeur non nul, terminé par NUL par contrat, copié aussitôt |
 | `alloc_zeroed` / `dealloc` du tampon d'état | `Layout` valide (taille ≤ 64 KiB, alignement puissance de deux ≤ 64, sinon `RejectReason::StateLayout`) ; taille 0 : pointeur pendant aligné, sans allocation ; libération avec le même `Layout` |
 | appels `ravum_state_init` / `ravum_process_block` | tampon de ce layout ; tranches valides de `frames` échantillons ; module gardé chargé par `Arc` pendant l'appel |
+| `copy_nonoverlapping` de l'état vers la copie du fondu (`replace_with_fade`) | deux tampons distincts du même layout (même digest), copie faite sur le thread appelant, avant toute utilisation de la copie |
+| appel de l'ancien module sur la copie pendant le fondu | ancien module gardé par `Arc` dans le fondu ; tampon de sortie intermédiaire sur la pile, borné par `MAX_FADE_FRAMES` |
 
 Limites : `Block3Host` est possédé par un seul thread (`&mut self`), sans
-publication sans verrou ni fondu ; la migration de schéma (DSP3-5) n'existe
+publication sans verrou (le fondu existe : `replace_with_fade`) ; la migration de schéma (DSP3-5) n'existe
 pas : un autre digest est refusé. Tests : `crates/ravum-lang-cli/tests/dsp3_block.rs`.
 Non audité par un tiers (D4/R13).
