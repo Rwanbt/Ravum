@@ -344,3 +344,135 @@ fn record_then_replay_serves_the_recorded_inputs_and_performs_no_io() {
     let (code, _, _) = run_env(&dir, &["--record", &journal_arg], &[]);
     assert_eq!(code, 2);
 }
+
+/// DET-T8 / DET-9..DET-12 for `net`: an HTTP server records the request it
+/// receives from a real client; the replay serves the same request from the
+/// journal with no client at all (a real `accept` would wait forever).
+const NET_SERVER: &str = r#"use std::io;
+use std::net;
+use std::http;
+
+fn main() -> Result<(), Error> effects(io, net, alloc) {
+    let listener: TcpListener = net::listen("127.0.0.1:0")?;
+    let mut line: String = String::from("listening ");
+    line.push_str(&net::local_port(&listener).to_string());
+    io::println(&line);
+    let mut stream: TcpStream = net::accept(&listener)?;
+    let request: HttpRequest = http::read_request(&mut stream)?;
+    let mut seen: String = http::method(&request);
+    seen.push_str(" ");
+    seen.push_str(&http::path(&request));
+    seen.push_str(" ");
+    seen.push_str(&http::body(&request));
+    io::println(&seen);
+    http::respond(&mut stream, 200, "text/plain", "pong")?;
+    Ok(())
+}
+"#;
+
+#[test]
+fn a_recorded_http_server_replays_without_any_socket() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::process::Stdio;
+    let dir = package("det-net", NET_SERVER);
+    let journal = dir.join("net.rvlog");
+    let journal_arg = journal.to_string_lossy().into_owned();
+    // Without a journal, det still refuses net (DET-1).
+    let (code, _, err) = run_env(&dir, &["--profile", "det"], &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("E-EFF-PROFILE"), "{err}");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .arg("run")
+        .arg(&dir)
+        .args(["--profile", "det", "--record", &journal_arg])
+        .current_dir(&dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("ravum-lang runs");
+    let mut out = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    out.read_line(&mut first).unwrap();
+    let port: u16 = first
+        .trim()
+        .strip_prefix("listening ")
+        .and_then(|p| p.parse().ok())
+        .unwrap_or_else(|| panic!("no port: {first:?}"));
+    let mut client = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    client
+        .write_all(b"POST /ping HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello")
+        .unwrap();
+    let mut response = String::new();
+    client.read_to_string(&mut response).unwrap();
+    assert!(response.ends_with("\r\n\r\npong"), "{response}");
+    let mut rest = String::new();
+    out.read_to_string(&mut rest).unwrap();
+    let status = child.wait().unwrap();
+    let mut err = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    assert!(status.success(), "{err}");
+    let recorded = format!("{first}{rest}");
+    assert_eq!(rest, "POST /ping hello\n");
+    let text = fs::read_to_string(&journal).unwrap();
+    for name in [
+        "net::listen",
+        "net::local_port",
+        "net::accept",
+        "http::read_request",
+        "http::respond",
+    ] {
+        assert!(
+            text.contains(&format!("\t{name}\t")),
+            "{name} not journaled: {text}"
+        );
+    }
+
+    // Replay: no client exists; a real accept would block forever.
+    let started = Instant::now();
+    let (code, replayed, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(replayed, recorded, "DET-10: same output, port included");
+    assert!(started.elapsed() < Duration::from_secs(120));
+
+    // DET-11: a different response body diverges at http::respond.
+    let tampered = NET_SERVER.replace("\"pong\"", "\"PONG\"");
+    let other = package("det-net-tampered", &tampered);
+    let header_free = fs::read_to_string(&journal).unwrap();
+    let journal2 = other.join("net.rvlog");
+    fs::write(&journal2, &header_free).unwrap();
+    let (code, _, err) = run_env(
+        &other,
+        &["--profile", "det", "--replay", &journal2.to_string_lossy()],
+        &[],
+    );
+    assert_ne!(
+        code, 0,
+        "a journal of another program must not replay: {err}"
+    );
+}
+
+/// Fail-closed: the asynchronous network functions are not journaled, so
+/// `--record` refuses them by name instead of running them unrecorded.
+#[test]
+fn record_refuses_the_unjournaled_async_network_functions() {
+    let dir = package(
+        "det-net-async",
+        "use std::net;\nuse std::task;\n\nasync fn go() -> () effects(net, async, alloc) {\n    drop(net::connect_async(\"127.0.0.1:9\").await);\n}\n\nfn main() -> () effects(net, async, alloc) {\n    task::block_on(go());\n}\n",
+    );
+    let journal = dir.join("a.rvlog");
+    let (code, _, err) = run_env(
+        &dir,
+        &["--profile", "det", "--record", &journal.to_string_lossy()],
+        &[],
+    );
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("E-EFF-PROFILE"), "{err}");
+    assert!(err.contains("connect_async"), "{err}");
+    assert!(!journal.exists(), "nothing ran, no journal");
+}

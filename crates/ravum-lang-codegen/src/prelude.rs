@@ -341,6 +341,124 @@ mod rv_rec {
         }
     }
 
+    fn enc_err(error: &Error) -> String {
+        format!("err:{}", escape(&error.message))
+    }
+
+    fn dec_err<T>(text: &str) -> Option<Result<T, Error>> {
+        text.strip_prefix("err:")
+            .map(|rest| Err(Error::new(&unescape(rest))))
+    }
+
+    /// A replayed connection or listener: no socket (DET-10).
+    pub fn enc_stream(value: &Result<super::TcpStream, Error>) -> String {
+        match value {
+            Ok(_) => "ok:".to_string(),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_stream(text: &str) -> Option<Result<super::TcpStream, Error>> {
+        if text == "ok:" {
+            Some(Ok(super::TcpStream { shared: None }))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    pub fn enc_listener(value: &Result<super::TcpListener, Error>) -> String {
+        match value {
+            Ok(_) => "ok:".to_string(),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_listener(text: &str) -> Option<Result<super::TcpListener, Error>> {
+        if text == "ok:" {
+            Some(Ok(super::TcpListener { inner: None }))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    pub fn enc_u16(value: &u16) -> String {
+        value.to_string()
+    }
+
+    pub fn dec_u16(text: &str) -> Option<u16> {
+        text.parse().ok()
+    }
+
+    pub fn enc_opt_text(value: &Result<Option<String>, Error>) -> String {
+        match value {
+            Ok(None) => "ok:none".to_string(),
+            Ok(Some(text)) => format!("ok:some:{}", escape(text)),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_opt_text(text: &str) -> Option<Result<Option<String>, Error>> {
+        if text == "ok:none" {
+            Some(Ok(None))
+        } else if let Some(rest) = text.strip_prefix("ok:some:") {
+            Some(Ok(Some(unescape(rest))))
+        } else {
+            dec_err(text)
+        }
+    }
+
+    /// Escaped fields never hold a raw tab (`escape`), so a tab separates them.
+    pub fn enc_request(value: &Result<super::HttpRequest, Error>) -> String {
+        match value {
+            Ok(r) => {
+                let mut out = format!("ok:{}\t{}\t{}", escape(&r.method), escape(&r.path), escape(&r.body));
+                for (name, value) in &r.headers {
+                    out.push('\t');
+                    out.push_str(&escape(name));
+                    out.push('\t');
+                    out.push_str(&escape(value));
+                }
+                out
+            }
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_request(text: &str) -> Option<Result<super::HttpRequest, Error>> {
+        let Some(rest) = text.strip_prefix("ok:") else {
+            return dec_err(text);
+        };
+        let fields: Vec<String> = rest.split('\t').map(unescape).collect();
+        if fields.len() < 3 || (fields.len() - 3) % 2 != 0 {
+            return None;
+        }
+        let headers = fields[3..].chunks(2).map(|kv| (kv[0].clone(), kv[1].clone())).collect();
+        Some(Ok(super::HttpRequest {
+            method: fields[0].clone(),
+            path: fields[1].clone(),
+            body: fields[2].clone(),
+            headers,
+        }))
+    }
+
+    pub fn enc_response(value: &Result<super::HttpResponse, Error>) -> String {
+        match value {
+            Ok(r) => format!("ok:{}\t{}", r.status, escape(&r.body)),
+            Err(error) => enc_err(error),
+        }
+    }
+
+    pub fn dec_response(text: &str) -> Option<Result<super::HttpResponse, Error>> {
+        let Some(rest) = text.strip_prefix("ok:") else {
+            return dec_err(text);
+        };
+        let (status, body) = rest.split_once('\t')?;
+        Some(Ok(super::HttpResponse {
+            status: status.parse().ok()?,
+            body: unescape(body),
+        }))
+    }
+
     pub fn enc_bool(value: &bool) -> String {
         value.to_string()
     }
@@ -444,26 +562,50 @@ mod rv_rec {
 // it without borrowing the Ravum value: the future is `'static`, the Ravum
 // value stays usable, and buffered bytes are never lost between the blocking
 // and the asynchronous functions (they read the same `BufReader`).
+//
+// Under `--replay` (DET-10) no socket is opened: a handle is `None` and every
+// operation on it is served by the journal, so the socket is never touched.
 pub struct TcpListener {
-    inner: std::sync::Arc<std::net::TcpListener>,
+    inner: Option<std::sync::Arc<std::net::TcpListener>>,
 }
 
 type RvSharedStream = std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>;
 
 pub struct TcpStream {
-    shared: RvSharedStream,
+    shared: Option<RvSharedStream>,
 }
 
 fn rv_stream(socket: std::net::TcpStream) -> TcpStream {
     TcpStream {
-        shared: std::sync::Arc::new(std::sync::Mutex::new(std::io::BufReader::new(socket))),
+        shared: Some(std::sync::Arc::new(std::sync::Mutex::new(std::io::BufReader::new(socket)))),
+    }
+}
+
+/// The real socket of a handle. A replayed handle has none; reaching this with
+/// one is a defect of the journaling (every public operation is journaled),
+/// never a silent real I/O (fail-closed).
+fn rv_shared(stream: &TcpStream) -> RvSharedStream {
+    match &stream.shared {
+        Some(shared) => shared.clone(),
+        None => panic!("replay: a replayed connection has no socket"),
+    }
+}
+
+fn rv_listener(listener: &TcpListener) -> &std::sync::Arc<std::net::TcpListener> {
+    match &listener.inner {
+        Some(inner) => inner,
+        None => panic!("replay: a replayed listener has no socket"),
     }
 }
 
 fn rv_reader(
     stream: &TcpStream,
 ) -> std::sync::MutexGuard<'_, std::io::BufReader<std::net::TcpStream>> {
-    stream.shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    let shared = match &stream.shared {
+        Some(shared) => shared,
+        None => panic!("replay: a replayed connection has no socket"),
+    };
+    shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn rv_net_error(what: &str, error: std::io::Error) -> Error {
@@ -471,29 +613,45 @@ fn rv_net_error(what: &str, error: std::io::Error) -> Error {
 }
 
 pub fn rv_net_listen(addr: &str) -> Result<TcpListener, Error> {
+    rv_rec::call("net::listen", &[addr], || rv_net_listen_real(addr), rv_rec::enc_listener, rv_rec::dec_listener)
+}
+
+fn rv_net_listen_real(addr: &str) -> Result<TcpListener, Error> {
     match std::net::TcpListener::bind(addr) {
         Ok(inner) => Ok(TcpListener {
-            inner: std::sync::Arc::new(inner),
+            inner: Some(std::sync::Arc::new(inner)),
         }),
         Err(error) => Err(rv_net_error(&format!("cannot listen on `{}`", addr), error)),
     }
 }
 
 pub fn rv_net_local_port(listener: &TcpListener) -> u16 {
-    match listener.inner.local_addr() {
+    rv_rec::call("net::local_port", &[], || rv_net_local_port_real(listener), rv_rec::enc_u16, rv_rec::dec_u16)
+}
+
+fn rv_net_local_port_real(listener: &TcpListener) -> u16 {
+    match rv_listener(listener).local_addr() {
         Ok(addr) => addr.port(),
         Err(_) => 0,
     }
 }
 
 pub fn rv_net_accept(listener: &TcpListener) -> Result<TcpStream, Error> {
-    match listener.inner.accept() {
+    rv_rec::call("net::accept", &[], || rv_net_accept_real(listener), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_accept_real(listener: &TcpListener) -> Result<TcpStream, Error> {
+    match rv_listener(listener).accept() {
         Ok((stream, _)) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error("cannot accept a connection", error)),
     }
 }
 
 pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
+    rv_rec::call("net::connect", &[addr], || rv_net_connect_real(addr), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_connect_real(addr: &str) -> Result<TcpStream, Error> {
     match std::net::TcpStream::connect(addr) {
         Ok(stream) => Ok(rv_stream(stream)),
         Err(error) => Err(rv_net_error(&format!("cannot connect to `{}`", addr), error)),
@@ -501,6 +659,10 @@ pub fn rv_net_connect(addr: &str) -> Result<TcpStream, Error> {
 }
 
 pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> {
+    rv_rec::call("net::read_line", &[], || rv_net_read_line_real(stream), rv_rec::enc_opt_text, rv_rec::dec_opt_text)
+}
+
+fn rv_net_read_line_real(stream: &mut TcpStream) -> Result<Option<String>, Error> {
     use std::io::BufRead;
     let mut bytes = Vec::new();
     match rv_reader(stream).read_until(b'\n', &mut bytes) {
@@ -522,6 +684,17 @@ pub fn rv_net_read_line(stream: &mut TcpStream) -> Result<Option<String>, Error>
 }
 
 pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
+    let count_text = count.to_string();
+    rv_rec::call(
+        "net::read_exact",
+        &[&count_text],
+        || rv_net_read_exact_real(stream, count),
+        rv_rec::enc_text,
+        rv_rec::dec_text,
+    )
+}
+
+fn rv_net_read_exact_real(stream: &mut TcpStream, count: usize) -> Result<String, Error> {
     use std::io::Read;
     let mut bytes = vec![0u8; count];
     match rv_reader(stream).read_exact(&mut bytes) {
@@ -534,6 +707,10 @@ pub fn rv_net_read_exact(stream: &mut TcpStream, count: usize) -> Result<String,
 }
 
 pub fn rv_net_write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
+    rv_rec::call("net::write_str", &[text], || rv_net_write_str_real(stream, text), rv_rec::enc_unit, rv_rec::dec_unit)
+}
+
+fn rv_net_write_str_real(stream: &mut TcpStream, text: &str) -> Result<(), Error> {
     use std::io::Write;
     let mut reader = rv_reader(stream);
     let socket = reader.get_mut();
@@ -673,6 +850,10 @@ fn rv_http_body_text(bytes: Vec<u8>) -> Result<String, Error> {
 }
 
 pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
+    rv_rec::call("http::read_request", &[], || rv_http_read_request_real(stream), rv_rec::enc_request, rv_rec::dec_request)
+}
+
+fn rv_http_read_request_real(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
     let mut reader = rv_reader(stream);
     rv_http_parse_request(&mut *reader)
 }
@@ -738,8 +919,17 @@ pub fn rv_http_respond(
     content_type: &str,
     body: &str,
 ) -> Result<(), Error> {
-    let text = rv_http_response_text(status, content_type, body)?;
-    rv_net_write_str(stream, &text)
+    let status_text = status.to_string();
+    rv_rec::call(
+        "http::respond",
+        &[&status_text, content_type, body],
+        || {
+            let text = rv_http_response_text(status, content_type, body)?;
+            rv_net_write_str_real(stream, &text)
+        },
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
 }
 
 /// STD-19.5: the whole response, or `Err` for a bad status/content type.
@@ -777,7 +967,7 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
     } else {
         format!("{}:80", authority)
     };
-    let mut stream = rv_net_connect(&address)?;
+    let mut stream = rv_net_connect_real(&address)?;
     let request = format!(
         "{} {} HTTP/1.1\r\nHost: {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         method,
@@ -787,7 +977,7 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
         body.len(),
         body
     );
-    rv_net_write_str(&mut stream, &request)?;
+    rv_net_write_str_real(&mut stream, &request)?;
     let mut reader = rv_reader(&stream);
     let line = match rv_http_line(&mut *reader)? {
         Some(line) => line,
@@ -803,11 +993,23 @@ fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Resu
 }
 
 pub fn rv_http_get(url: &str) -> Result<HttpResponse, Error> {
-    rv_http_send(url, "GET", "text/plain", "")
+    rv_rec::call(
+        "http::get",
+        &[url],
+        || rv_http_send(url, "GET", "text/plain", ""),
+        rv_rec::enc_response,
+        rv_rec::dec_response,
+    )
 }
 
 pub fn rv_http_post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
-    rv_http_send(url, "POST", content_type, body)
+    rv_rec::call(
+        "http::post",
+        &[url, content_type, body],
+        || rv_http_send(url, "POST", content_type, body),
+        rv_rec::enc_response,
+        rv_rec::dec_response,
+    )
 }
 
 pub fn rv_http_status(response: &HttpResponse) -> u16 {
@@ -1261,7 +1463,7 @@ impl std::future::Future for RvAccept {
 /// `net::accept_async`: a connection, without blocking the other tasks.
 pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
     Box::pin(RvAccept {
-        listener: listener.inner.clone(),
+        listener: rv_listener(listener).clone(),
     })
 }
 
@@ -1347,7 +1549,7 @@ impl std::future::Future for RvReadLine {
 
 /// The next line or `None` at end of stream.
 pub fn rv_net_read_line_async(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
-    Box::pin(RvReadLine { shared: stream.shared.clone(), partial: Vec::new(), http: false })
+    Box::pin(RvReadLine { shared: rv_shared(stream), partial: Vec::new(), http: false })
 }
 
 struct RvReadExact {
@@ -1400,7 +1602,7 @@ impl std::future::Future for RvReadExact {
 
 pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
     let read = RvReadExact {
-        shared: stream.shared.clone(), count, partial: Vec::new(),
+        shared: rv_shared(stream), count, partial: Vec::new(),
         operation: "cannot read from the connection",
     };
     Box::pin(async move {
@@ -1409,7 +1611,7 @@ pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<R
 }
 
 pub fn rv_http_read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
-    let shared = stream.shared.clone();
+    let shared = rv_shared(stream);
     Box::pin(async move {
         let next_line = || RvReadLine { shared: shared.clone(), partial: Vec::new(), http: true };
         let line = next_line().await?.ok_or_else(|| Error::new("http: connection closed before a request"))?;
@@ -1493,7 +1695,7 @@ pub fn rv_http_respond_async(
 ) -> Future<Result<(), Error>> {
     match rv_http_response_text(status, content_type, body) {
         Ok(text) => Box::pin(RvWrite {
-            shared: stream.shared.clone(),
+            shared: rv_shared(stream),
             data: text.into_bytes(),
             written: 0,
         }),
@@ -1504,7 +1706,7 @@ pub fn rv_http_respond_async(
 /// `net::write_str_async`: the whole text, without blocking the other tasks.
 pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
     Box::pin(RvWrite {
-        shared: stream.shared.clone(),
+        shared: rv_shared(stream),
         data: text.as_bytes().to_vec(),
         written: 0,
     })

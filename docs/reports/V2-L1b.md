@@ -96,3 +96,19 @@
 ## État des preuves
 
 `TESTED` (refus statique ; même graine ⇒ même sortie sur le corpus des tests, Linux). Pas de record/replay. T17 reste `PARTIAL`.
+
+## Suite : journalisation de `net`/`http` (DET-9 à DET-12, DET-T8)
+
+- Sous `--record`/`--replay` (profil interne `DetIo`), `net` est permis ;
+  `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`,
+  `write_str`, `http::read_request`, `respond`, `get`, `post` passent par
+  `rv_rec::call`. Au rejeu, `TcpStream`/`TcpListener` n'ont **aucun socket**
+  (`None`) ; toute opération réelle sur une telle poignée panique (fail-closed).
+- Formes `*_async` de `net`/`http` : refusées par nom sous `DetIo`
+  (`E-EFF-PROFILE`), non journalisées.
+- Tests : `a_recorded_http_server_replays_without_any_socket` (vrai client
+  à l'enregistrement ; rejeu sans client, même sortie, port compris ;
+  journal d'un autre programme refusé) ;
+  `record_refuses_the_unjournaled_async_network_functions`.
+- Mesures (SHA parent `7a892b1`) : sema, codegen, cli, ir, jit, core-machine
+  0 échec ; conformance 759, 757 PASS, 0 FAIL, 2 SKIP. `TESTED`.
