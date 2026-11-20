@@ -412,11 +412,25 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         effects: NET_ASYNC,
     },
     BuiltinFnSig {
+        path: "std::net::read_exact_async",
+        generics: &[],
+        params: &["&mut TcpStream", "usize"],
+        ret: "Future<Result<String, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
         path: "std::task::block_on",
         generics: &["T"],
         params: &["Future<T>"],
         ret: "T",
         effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::timeout",
+        generics: &["T"],
+        params: &["u64", "Future<T>"],
+        ret: "Future<Option<T>>",
+        effects: &[Effect::Async, Effect::Alloc, Effect::Nondet],
     },
     BuiltinFnSig {
         path: "std::task::spawn",
@@ -482,6 +496,20 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         effects: THREAD,
     },
     // --- std::http (RFC-E11-NET-HTTP §4) ---
+    BuiltinFnSig {
+        path: "std::http::read_request_async",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Future<Result<HttpRequest, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::http::respond_async",
+        generics: &[],
+        params: &["&mut TcpStream", "u16", "&str", "&str"],
+        ret: "Future<Result<(), Error>>",
+        effects: NET_ASYNC,
+    },
     BuiltinFnSig {
         path: "std::http::read_request",
         generics: &[],

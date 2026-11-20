@@ -205,8 +205,10 @@ pub struct TcpListener {
     inner: std::sync::Arc<std::net::TcpListener>,
 }
 
+type RvSharedStream = std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>;
+
 pub struct TcpStream {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: RvSharedStream,
 }
 
 fn rv_stream(socket: std::net::TcpStream) -> TcpStream {
@@ -325,6 +327,13 @@ fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<
         Ok(_) => {}
         Err(error) => return Err(rv_net_error("cannot read from the connection", error)),
     }
+    rv_http_line_text(bytes)
+}
+
+fn rv_http_line_text(mut bytes: Vec<u8>) -> Result<Option<String>, Error> {
+    if bytes.is_empty() {
+        return Ok(None);
+    }
     if bytes.last() != Some(&b'\n') {
         return Err(Error::new("http: line too long or truncated"));
     }
@@ -351,14 +360,17 @@ fn rv_http_headers(
         if line.is_empty() {
             return Ok(headers);
         }
-        if headers.len() == RV_HTTP_MAX_HEADERS {
-            return Err(Error::new("http: too many headers"));
-        }
-        match line.split_once(':') {
-            Some((name, value)) => headers.push((name.trim().to_string(), value.trim().to_string())),
-            None => return Err(Error::new("http: malformed header line")),
-        }
+        rv_http_push_header(&mut headers, &line)?;
     }
+}
+
+fn rv_http_push_header(headers: &mut Vec<(String, String)>, line: &str) -> Result<(), Error> {
+    if headers.len() == RV_HTTP_MAX_HEADERS {
+        return Err(Error::new("http: too many headers"));
+    }
+    let (name, value) = line.split_once(':').ok_or_else(|| Error::new("http: malformed header line"))?;
+    headers.push((name.trim().to_string(), value.trim().to_string()));
+    Ok(())
 }
 
 fn rv_http_find(headers: &[(String, String)], name: &str) -> Option<String> {
@@ -375,19 +387,9 @@ fn rv_http_read_body(
     until_eof: bool,
 ) -> Result<String, Error> {
     use std::io::Read;
-    if rv_http_find(headers, "transfer-encoding").is_some() {
-        return Err(Error::new("http: Transfer-Encoding is not supported"));
-    }
     let mut bytes = Vec::new();
-    match rv_http_find(headers, "content-length") {
-        Some(text) => {
-            let length: usize = match text.parse() {
-                Ok(length) => length,
-                Err(_) => return Err(Error::new("http: invalid Content-Length")),
-            };
-            if length > RV_HTTP_MAX_BODY {
-                return Err(Error::new("http: body too large"));
-            }
+    match rv_http_body_length(headers)? {
+        Some(length) => {
             bytes.resize(length, 0);
             if let Err(error) = reader.read_exact(&mut bytes) {
                 return Err(rv_net_error("cannot read the body", error));
@@ -407,6 +409,22 @@ fn rv_http_read_body(
         }
         None => {}
     }
+    rv_http_body_text(bytes)
+}
+
+fn rv_http_body_length(headers: &[(String, String)]) -> Result<Option<usize>, Error> {
+    if rv_http_find(headers, "transfer-encoding").is_some() {
+        return Err(Error::new("http: Transfer-Encoding is not supported"));
+    }
+    let Some(text) = rv_http_find(headers, "content-length") else { return Ok(None); };
+    let length = text.parse::<usize>().map_err(|_| Error::new("http: invalid Content-Length"))?;
+    if length > RV_HTTP_MAX_BODY {
+        return Err(Error::new("http: body too large"));
+    }
+    Ok(Some(length))
+}
+
+fn rv_http_body_text(bytes: Vec<u8>) -> Result<String, Error> {
     match String::from_utf8(bytes) {
         Ok(body) => Ok(body),
         Err(_) => Err(Error::new("http: body is not valid UTF-8")),
@@ -419,6 +437,13 @@ pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         Some(line) => line,
         None => return Err(Error::new("http: connection closed before a request")),
     };
+    let (method, path) = rv_http_request_line(&line)?;
+    let headers = rv_http_headers(&mut *reader)?;
+    let body = rv_http_read_body(&mut *reader, &headers, false)?;
+    Ok(HttpRequest { method, path, headers, body })
+}
+
+fn rv_http_request_line(line: &str) -> Result<(String, String), Error> {
     let mut parts = line.split(' ');
     let (method, path, version) = match (parts.next(), parts.next(), parts.next(), parts.next()) {
         (Some(m), Some(p), Some(v), None) if !m.is_empty() && p.starts_with('/') => (m, p, v),
@@ -427,10 +452,7 @@ pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
     if version != "HTTP/1.1" && version != "HTTP/1.0" {
         return Err(Error::new("http: unsupported HTTP version"));
     }
-    let (method, path) = (method.to_string(), path.to_string());
-    let headers = rv_http_headers(&mut *reader)?;
-    let body = rv_http_read_body(&mut *reader, &headers, false)?;
-    Ok(HttpRequest { method, path, headers, body })
+    Ok((method.to_string(), path.to_string()))
 }
 
 pub fn rv_http_method(request: &HttpRequest) -> String {
@@ -469,18 +491,22 @@ pub fn rv_http_respond(
     content_type: &str,
     body: &str,
 ) -> Result<(), Error> {
+    let response = rv_http_response_text(status, content_type, body)?;
+    rv_net_write_str(stream, &response)
+}
+
+fn rv_http_response_text(status: u16, content_type: &str, body: &str) -> Result<String, Error> {
     if !(100..=999).contains(&status) || content_type.contains(['\r', '\n']) {
         return Err(Error::new("http: invalid status or content type"));
     }
-    let text = format!(
+    Ok(format!(
         "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         status,
         rv_http_reason(status),
         content_type,
         body.len(),
         body
-    );
-    rv_net_write_str(stream, &text)
+    ))
 }
 
 fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
@@ -584,6 +610,7 @@ mod rv_det {
         next: u64,
         rng: u64,
         seed: u64,
+        clock_ms: u128,
     }
 
     pub struct DetSched {
@@ -614,6 +641,7 @@ mod rv_det {
                         next: 1,
                         rng: seed,
                         seed,
+                        clock_ms: 0,
                     }),
                     turn: Condvar::new(),
                 })
@@ -650,6 +678,15 @@ mod rv_det {
                 Ok(guard) => guard,
                 Err(poisoned) => poisoned.into_inner(),
             }
+        }
+
+        pub fn clock_ms(&self) -> u128 {
+            self.lock().clock_ms
+        }
+
+        pub fn advance_clock(&self) {
+            let mut state = self.lock();
+            state.clock_ms = state.clock_ms.saturating_add(1);
         }
 
         /// Choose the next thread; DET-6 when none can run but some wait.
@@ -813,10 +850,14 @@ pub fn rv_task_block_on<T>(main: Future<T>) -> T {
                 }
             }
         }
-        // Every task waits on a socket: sleep instead of spinning. A round with
-        // a completion, or with a task that only yielded, does not sleep.
+        // Yield to the clock when a socket or a timer is still pending.
+        // Deterministic runs advance scheduler time without a wall-clock wait.
         if !progressed && RV_IO_WAITING.with(|flag| flag.get()) {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            if let Some(scheduler) = rv_det::sched() {
+                scheduler.advance_clock();
+            } else {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
         }
         let idle = RV_TASKS.with(|tasks| tasks.borrow().last().map_or(true, |q| q.is_empty()));
         if idle {
@@ -872,6 +913,55 @@ fn rv_io_wait<T>(context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
     RV_IO_WAITING.with(|flag| flag.set(true));
     context.waker().wake_by_ref();
     std::task::Poll::Pending
+}
+
+enum RvDeadlineStart {
+    Real(std::time::Instant),
+    Virtual(&'static rv_det::DetSched, u128),
+}
+
+impl RvDeadlineStart {
+    fn now() -> Self {
+        match rv_det::sched() {
+            Some(scheduler) => Self::Virtual(scheduler, scheduler.clock_ms()),
+            None => Self::Real(std::time::Instant::now()),
+        }
+    }
+
+    fn expired(&self, ms: u64) -> bool {
+        match self {
+            Self::Real(start) => start.elapsed() >= std::time::Duration::from_millis(ms),
+            Self::Virtual(scheduler, start) => scheduler.clock_ms() - *start >= u128::from(ms),
+        }
+    }
+}
+
+pub fn rv_task_timeout<T: 'static>(ms: u64, task: Future<T>) -> Future<Option<T>> {
+    use std::task::Poll;
+    let mut start = None;
+    let mut task = Some(task);
+    Box::pin(std::future::poll_fn(move |context| {
+        let start = start.get_or_insert_with(RvDeadlineStart::now);
+        if ms != 0 && start.expired(ms) {
+            task = None;
+            return Poll::Ready(None);
+        }
+        let value = match task.as_mut() {
+            Some(future) => future.as_mut().poll(context),
+            None => return Poll::Ready(None),
+        };
+        match value {
+            Poll::Ready(value) => {
+                task = None;
+                Poll::Ready((ms == 0 || !start.expired(ms)).then_some(value))
+            }
+            Poll::Pending if ms == 0 || start.expired(ms) => {
+                task = None;
+                Poll::Ready(None)
+            }
+            Poll::Pending => rv_io_wait(context),
+        }
+    }))
 }
 
 fn rv_would_block(error: &std::io::Error) -> bool {
@@ -935,9 +1025,32 @@ pub fn rv_net_connect_async(addr: &str) -> Future<Result<TcpStream, Error>> {
     Box::pin(async move { rv_net_connect(&addr) })
 }
 
+fn rv_poll_stream<T>(
+    shared: &RvSharedStream,
+    context: &mut std::task::Context<'_>,
+    operation: &str,
+    poll: impl FnOnce(&mut std::io::BufReader<std::net::TcpStream>, &mut std::task::Context<'_>)
+        -> std::task::Poll<Result<T, Error>>,
+) -> std::task::Poll<Result<T, Error>> {
+    let mut reader = match shared.try_lock() {
+        Ok(reader) => reader,
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return rv_io_wait(context),
+    };
+    if let Err(error) = reader.get_ref().set_nonblocking(true) {
+        return std::task::Poll::Ready(Err(rv_net_error(operation, error)));
+    }
+    let result = poll(&mut reader, context);
+    if let Err(error) = reader.get_ref().set_nonblocking(false) {
+        return std::task::Poll::Ready(Err(rv_net_error("cannot restore blocking mode", error)));
+    }
+    result
+}
+
 struct RvReadLine {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: RvSharedStream,
     partial: Vec<u8>,
+    http: bool,
 }
 
 impl std::future::Future for RvReadLine {
@@ -947,60 +1060,129 @@ impl std::future::Future for RvReadLine {
         context: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         use std::io::BufRead;
+        use std::task::Poll;
         let this = self.get_mut();
-        let shared = this.shared.clone();
-        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Err(error) = reader.get_ref().set_nonblocking(true) {
-            return std::task::Poll::Ready(Err(rv_net_error("cannot read from the connection", error)));
-        }
-        let outcome = loop {
-            let (found, used) = match reader.fill_buf() {
-                Ok(buffer) if buffer.is_empty() => {
-                    let bytes = std::mem::take(&mut this.partial);
-                    break if bytes.is_empty() {
-                        std::task::Poll::Ready(Ok(None))
+        let shared = &this.shared;
+        let partial = &mut this.partial;
+        let http = this.http;
+        rv_poll_stream(shared, context, "cannot read from the connection", |reader, context| {
+            loop {
+                let (used, finished) = match reader.fill_buf() {
+                    Ok(buffer) if buffer.is_empty() => (0, true),
+                    Ok(buffer) => {
+                        let limit = if http { RV_HTTP_MAX_LINE as usize + 1 - partial.len() } else { buffer.len() };
+                        let buffer = &buffer[..buffer.len().min(limit)];
+                        let newline = buffer.iter().position(|b| *b == b'\n');
+                        let used = newline.map_or(buffer.len(), |index| index + 1);
+                        partial.extend_from_slice(&buffer[..used]);
+                        (used, newline.is_some() || (http && partial.len() > RV_HTTP_MAX_LINE as usize))
+                    }
+                    Err(error) if rv_would_block(&error) => return rv_io_wait(context),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(error) => return Poll::Ready(Err(rv_net_error("cannot read from the connection", error))),
+                };
+                reader.consume(used);
+                if finished {
+                    let bytes = std::mem::take(partial);
+                    return Poll::Ready(if http {
+                        rv_http_line_text(bytes)
+                    } else if bytes.is_empty() {
+                        Ok(None)
                     } else {
-                        std::task::Poll::Ready(rv_line_text(bytes))
-                    };
+                        rv_line_text(bytes)
+                    });
                 }
-                Ok(buffer) => match buffer.iter().position(|b| *b == b'\n') {
-                    Some(at) => {
-                        this.partial.extend_from_slice(&buffer[..=at]);
-                        (true, at + 1)
-                    }
-                    None => {
-                        this.partial.extend_from_slice(buffer);
-                        (false, buffer.len())
-                    }
-                },
-                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
-                Err(error) => {
-                    break std::task::Poll::Ready(Err(rv_net_error(
-                        "cannot read from the connection",
-                        error,
-                    )))
-                }
-            };
-            reader.consume(used);
-            if found {
-                break std::task::Poll::Ready(rv_line_text(std::mem::take(&mut this.partial)));
             }
-        };
-        let _ = reader.get_ref().set_nonblocking(false);
-        outcome
+        })
     }
 }
 
-/// `net::read_line_async`: the next line, `None` at end of stream.
+/// The next line or `None` at end of stream.
 pub fn rv_net_read_line_async(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
-    Box::pin(RvReadLine {
-        shared: stream.shared.clone(),
-        partial: Vec::new(),
+    Box::pin(RvReadLine { shared: stream.shared.clone(), partial: Vec::new(), http: false })
+}
+
+struct RvReadExact {
+    shared: RvSharedStream,
+    partial: Vec<u8>,
+    count: usize,
+    operation: &'static str,
+}
+
+impl std::future::Future for RvReadExact {
+    type Output = Result<Vec<u8>, Error>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::io::Read;
+        use std::task::Poll;
+        let this = self.get_mut();
+        let operation = this.operation;
+        if this.partial.len() == this.count {
+            return Poll::Ready(Ok(std::mem::take(&mut this.partial)));
+        }
+        rv_poll_stream(&this.shared, context, operation, |reader, context| {
+            let mut buffer = [0u8; 8192];
+            let count = buffer.len().min(this.count - this.partial.len());
+            match reader.read(&mut buffer[..count]) {
+                Ok(0) => Poll::Ready(Err(rv_net_error(operation, std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof, "failed to fill whole buffer",
+                )))),
+                Ok(read) => {
+                    this.partial.extend_from_slice(&buffer[..read]);
+                    if this.partial.len() == this.count {
+                        Poll::Ready(Ok(std::mem::take(&mut this.partial)))
+                    } else {
+                        context.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                }
+                Err(error) if rv_would_block(&error) => rv_io_wait(context),
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                    context.waker().wake_by_ref();
+                    Poll::Pending
+                }
+                Err(error) => Poll::Ready(Err(rv_net_error(operation, error))),
+            }
+        })
+    }
+}
+
+pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
+    let read = RvReadExact {
+        shared: stream.shared.clone(), count, partial: Vec::new(),
+        operation: "cannot read from the connection",
+    };
+    Box::pin(async move {
+        String::from_utf8(read.await?).map_err(|_| Error::new("received bytes are not valid UTF-8"))
+    })
+}
+
+pub fn rv_http_read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
+    let shared = stream.shared.clone();
+    Box::pin(async move {
+        let next_line = || RvReadLine { shared: shared.clone(), partial: Vec::new(), http: true };
+        let line = next_line().await?.ok_or_else(|| Error::new("http: connection closed before a request"))?;
+        let (method, path) = rv_http_request_line(&line)?;
+        let mut headers = Vec::new();
+        loop {
+            let line = next_line().await?.ok_or_else(|| Error::new("http: connection closed inside the headers"))?;
+            if line.is_empty() {
+                break;
+            }
+            rv_http_push_header(&mut headers, &line)?;
+        }
+        let count = rv_http_body_length(&headers)?.unwrap_or(0);
+        let bytes = RvReadExact { shared, count, partial: Vec::new(), operation: "cannot read the body" }.await?;
+        let body = rv_http_body_text(bytes)?;
+        Ok(HttpRequest { method, path, headers, body })
     })
 }
 
 struct RvWrite {
-    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    shared: RvSharedStream,
     data: Vec<u8>,
     written: usize,
 }
@@ -1013,15 +1195,10 @@ impl std::future::Future for RvWrite {
     ) -> std::task::Poll<Self::Output> {
         use std::io::Write;
         let this = self.get_mut();
-        let shared = this.shared.clone();
-        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let socket = reader.get_mut();
-        if let Err(error) = socket.set_nonblocking(true) {
-            return std::task::Poll::Ready(Err(rv_net_error("cannot write to the connection", error)));
-        }
-        let outcome = loop {
+        rv_poll_stream(&this.shared, context, "cannot write to the connection", |reader, context| {
+            let socket = reader.get_mut();
             if this.written == this.data.len() {
-                break match socket.flush() {
+                return match socket.flush() {
                     Ok(()) => std::task::Poll::Ready(Ok(())),
                     Err(error) if rv_would_block(&error) => rv_io_wait(context),
                     Err(error) => std::task::Poll::Ready(Err(rv_net_error(
@@ -1030,24 +1207,31 @@ impl std::future::Future for RvWrite {
                     ))),
                 };
             }
-            match socket.write(&this.data[this.written..]) {
+            let end = this.data.len().min(this.written.saturating_add(8192));
+            match socket.write(&this.data[this.written..end]) {
                 Ok(0) => {
-                    break std::task::Poll::Ready(Err(Error::new(
+                    std::task::Poll::Ready(Err(Error::new(
                         "cannot write to the connection: closed",
                     )))
                 }
-                Ok(count) => this.written += count,
-                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
+                Ok(count) => {
+                    this.written += count;
+                    context.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                }
+                Err(error) if rv_would_block(&error) => rv_io_wait(context),
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                    context.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                }
                 Err(error) => {
-                    break std::task::Poll::Ready(Err(rv_net_error(
+                    std::task::Poll::Ready(Err(rv_net_error(
                         "cannot write to the connection",
                         error,
                     )))
                 }
             }
-        };
-        let _ = socket.set_nonblocking(false);
-        outcome
+        })
     }
 }
 
@@ -1057,6 +1241,19 @@ pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Resu
         shared: stream.shared.clone(),
         data: text.as_bytes().to_vec(),
         written: 0,
+    })
+}
+
+pub fn rv_http_respond_async(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Future<Result<(), Error>> {
+    let shared = stream.shared.clone();
+    let response = rv_http_response_text(status, content_type, body);
+    Box::pin(async move {
+        RvWrite { shared, data: response?.into_bytes(), written: 0 }.await
     })
 }
 
