@@ -162,3 +162,40 @@ fn contracts_behave_the_same_on_rustc_and_jit() {
     assert_eq!(stdout, "11\n3\n-2\n106\n");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// IR v1.3 run heap (`String`, `Vec<T>`): same output, byte for byte, and
+/// the same out-of-bounds panic text as the rustc build.
+#[test]
+fn strings_and_vectors_match_the_rustc_build() {
+    let src = "fn greet(name: &String) -> String effects(alloc) {\n    let mut s = String::new();\n    s.push_str(\"hello \");\n    s.push_str(name.as_str());\n    return s;\n}\n\nfn fill(v: &mut Vec<i64>, n: i64) -> () effects(alloc) {\n    let mut i: i64 = 0;\n    while i < n {\n        v.push(i * i);\n        i = i + 1;\n    }\n}\n\nfn total(v: &Vec<i64>) -> i64 effects() {\n    let mut s: i64 = 0;\n    let mut i: usize = 0;\n    while i < v.len() {\n        s = s + v[i];\n        i = i + 1;\n    }\n    return s;\n}\n\nfn main() -> () effects(io, alloc) {\n    let who = String::from(\"ravum\");\n    let g = greet(&who);\n    io::println(&g);\n    let mut c = g.clone();\n    c.push_str(\"!\");\n    io::println(&c);\n    io::println(&g);\n    io::println(&g.len().to_string());\n    io::println(&(g.as_str() == c.as_str()).to_string());\n    io::println(&(g.as_str() != c.as_str()).to_string());\n    io::println(&(who.as_str() == \"ravum\").to_string());\n    let e = String::new();\n    io::println(&e.is_empty().to_string());\n    let mut v: Vec<i64> = Vec::new();\n    fill(&mut v, 6);\n    io::println(&v.len().to_string());\n    io::println(&total(&v).to_string());\n    v[2] = 100;\n    let w = v.clone();\n    v[0] = -5;\n    io::println(&v[0].to_string());\n    io::println(&w[0].to_string());\n    io::println(&w[2].to_string());\n    let mut f: Vec<f64> = Vec::with_capacity(4);\n    f.push(0.1);\n    f.push(2.5);\n    io::println(&f[0].to_string());\n    let mut words: Vec<String> = Vec::new();\n    words.push(String::from(\"a\"));\n    words.push(g.clone());\n    io::println(&words[1]);\n    let mut k: i64 = 0;\n    while !v.is_empty() {\n        let top = match v.pop() {\n            Some(x) => x,\n            None => 0,\n        };\n        k = k + top;\n    }\n    io::println(&k.to_string());\n    let none = match v.pop() {\n        Some(x) => x,\n        None => -1,\n    };\n    io::println(&none.to_string());\n    let seven: usize = 7;\n    io::println(&w[seven].to_string());\n}\n";
+    let dir = std::env::temp_dir().join(format!("rv-jit-heap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("ravum.toml"),
+        "[package]\nname = \"jitheap\"\nversion = \"0.1.0\"\nedition = \"core-1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/main.rv"), src).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .arg("run")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(!out.status.success(), "the last access is out of bounds");
+    let msg = "index out of bounds: the len is 6 but the index is 7";
+    assert!(stderr.contains(msg), "{stderr}");
+    let ir = compile_source(src).unwrap();
+    let (r, jit) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
+    assert_eq!(r.render(), format!("panic: {msg}"));
+    assert_eq!(jit.stdout, stdout);
+    // Same on the interpreter.
+    let (ri, oi) =
+        ravum_lang_ir::interp::run_with_output(&ir, "main", ravum_lang_ir::interp::DEFAULT_STEPS);
+    assert_eq!(ri.render(), r.render());
+    assert_eq!(oi.stdout, stdout);
+    assert_eq!(stdout.lines().count(), 17, "{stdout}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

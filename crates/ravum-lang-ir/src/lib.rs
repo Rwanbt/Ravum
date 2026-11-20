@@ -17,6 +17,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod heap;
 pub mod interp;
 pub mod ir;
 pub mod lower;

@@ -258,6 +258,46 @@ du CLI reste vert.
 | génériques : `pick<T>` à 2 instances, `swap<A, B>` sur tuple, `wrap<T> -> Option<T>`, récursion générique | natif = interpréteur = valeurs calculées à la main ; noms d'instances vérifiés |
 | corpus machine | 55/61, inchangé |
 
+## IR v1.3 — `String` et `Vec<T>` sur un tas d'exécution (2026-11-20, V1-P1)
+
+**Conception** (`ravum-lang-ir/src/heap.rs`, partagé par l'interpréteur et le
+JIT) :
+- un objet (`String`, `Vec<T>`) est désigné par un descripteur de 8 octets,
+  le type IR `Obj` ;
+- un emprunt (`&String`, `&mut Vec<T>`, `&str`) est le descripteur lui-même ;
+- copier un descripteur est un déplacement : le checker garantit qu'une
+  valeur déplacée n'est plus utilisée ;
+- **aucune libération pendant l'exécution** : le tas entier est libéré à la
+  fin (`drop(x)` évalue seulement `x`) ;
+- au-delà de 256 Mio alloués, l'exécution s'arrête sur `fault: heap limit`,
+  jamais sur un plantage ;
+- un module qui touche au tas est **refusé** pour une entrée temps réel
+  (INV-05), comme un module qui imprime.
+
+**Couvert** :
+- `String::new`/`String::from`, `push_str`, `len`, `is_empty`, `clone`,
+  `as_str`, `==`/`!=` de chaînes, littéraux, `x.to_string()` (scalaires),
+  impression de toute chaîne ;
+- `Vec::new`/`with_capacity`, `push`, `len`, `is_empty`, `clone`, `pop`
+  (→ `Option`), `v[i]` en lecture et en écriture ;
+- éléments scalaires ou descripteurs (`Vec<String>`) ;
+- hors bornes : `index out of bounds: the len is N but the index is i`, le
+  texte exact de `rustc` (EXPR-7.6).
+
+**Toujours `Unsupported`** :
+- `Vec` d'agrégats ;
+- structs ou enums contenant une `String` (non `Copy`) ;
+- les autres méthodes (`to_uppercase`, `trim`, `contains`, `lines`…) ;
+- `for x in v`.
+
+| Test | Résultat |
+|---|---|
+| `ravum-lang-cli/tests/jit_print_rustc.rs` : `String` et `Vec` passés par `&`/`&mut`, rendus par une fonction, `clone` indépendant, `Vec<f64>`, `Vec<String>`, `pop` jusqu'à `None`, accès hors bornes | **JIT = interpréteur = `rustc`**, sortie octet par octet (17 lignes) et même message de panique |
+| **négatif** : entrée temps réel qui alloue | `Refusal::Invalid` (INV-05) |
+| **négatif** : chaîne doublée 30 fois | `fault: heap limit` sur les deux moteurs |
+| hot swap d'un `main` qui construit des chaînes | 1 fonction recompilée, nouvelle sortie |
+| interpréteur | les instructions de tas sont dans une fonction non inlinée : sans cela, la frame de `call` grossissait et la récursion profonde du corpus débordait la pile native (trouvé par l'oracle) |
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Version of the IR contract. Any change to the data model or to the
 /// semantics of an operation bumps it; a consumer refuses an unknown version.
-pub const IR_VERSION: &str = "ravum-ir-1.2";
+pub const IR_VERSION: &str = "ravum-ir-1.3";
 
 /// Scalar types of IR v1. `isize`/`usize` are 64-bit (the only supported
 /// targets are 64-bit).
@@ -29,6 +29,9 @@ pub enum Ty {
     /// A 64-bit address into memory the program may access (a stack slot of
     /// the current or a calling frame, or host-owned state). IR v1.1.
     Ptr,
+    /// IR v1.3: handle of a run-heap object (`String`, `Vec<T>`, and the
+    /// borrows of them), see `heap.rs`. 0 is never an object.
+    Obj,
 }
 
 impl Ty {
@@ -38,7 +41,7 @@ impl Ty {
             Ty::I8 | Ty::U8 | Ty::Bool => 1,
             Ty::I16 | Ty::U16 => 2,
             Ty::I32 | Ty::U32 | Ty::F32 => 4,
-            Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::F64 | Ty::Ptr => 8,
+            Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::F64 | Ty::Ptr | Ty::Obj => 8,
             Ty::Unit => 0,
         }
     }
@@ -79,6 +82,7 @@ impl Ty {
             Ty::Bool => "bool",
             Ty::Unit => "()",
             Ty::Ptr => "ptr",
+            Ty::Obj => "obj",
         }
     }
 }
@@ -174,6 +178,25 @@ pub enum UnOp {
     Round,
 }
 
+/// IR v1.3 run-heap operations (`heap::Heap::op`): two raw 64-bit operands
+/// `a`, `b` (unused ones are 0), one raw result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HeapOp {
+    StrNew,
+    StrClone,
+    /// `a.push_str(b)` (both strings).
+    StrPush,
+    StrLen,
+    StrEq,
+    VecNew,
+    /// `a.push(b)`, `b` the element's raw word.
+    VecPush,
+    VecLen,
+    /// `a[b]`: traps `index out of bounds`.
+    VecGet,
+    VecClone,
+}
+
 /// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Stream {
@@ -186,7 +209,12 @@ pub enum Stream {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PrintArg {
     Text(String),
-    Value { ty: Ty, src: Local },
+    Value {
+        ty: Ty,
+        src: Local,
+    },
+    /// IR v1.3: the contents of a heap string.
+    Obj(Local),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -196,6 +224,37 @@ pub enum Inst {
     Print {
         stream: Stream,
         arg: PrintArg,
+    },
+    /// IR v1.3: `dst = heap.op(a, b)` (`a`/`b` absent = 0). `dst`'s type is
+    /// the result's (a handle, a length, a bool or an element word).
+    Heap {
+        dst: Option<Local>,
+        op: HeapOp,
+        a: Option<Local>,
+        b: Option<Local>,
+    },
+    /// IR v1.3: a new heap string holding `text` (a literal).
+    HeapText {
+        dst: Local,
+        text: String,
+    },
+    /// IR v1.3: a new heap string holding the `Display` text of `src`.
+    HeapOfValue {
+        dst: Local,
+        ty: Ty,
+        src: Local,
+    },
+    /// IR v1.3: `h[i] = x` (traps `index out of bounds`).
+    VecSet {
+        h: Local,
+        i: Local,
+        x: Local,
+    },
+    /// IR v1.3: `h.pop()`: `present` and the raw word (0 when absent).
+    VecPop {
+        present: Local,
+        value: Local,
+        h: Local,
     },
     Const {
         dst: Local,
@@ -377,7 +436,33 @@ impl Module {
                 for i in &blk.insts {
                     match i {
                         Inst::Const { dst, .. } => l(*dst)?,
+                        Inst::Heap { dst, a, b, .. } => {
+                            for x in [dst, a, b].into_iter().flatten() {
+                                l(*x)?;
+                            }
+                        }
+                        Inst::HeapText { dst, .. } => l(*dst)?,
+                        Inst::HeapOfValue { dst, src, ty } => {
+                            l(*dst)?;
+                            l(*src)?;
+                            if !(ty.is_int() || ty.is_float() || *ty == Ty::Bool) {
+                                return Err(format!("{}: to_string of {ty:?}", f.name));
+                            }
+                        }
+                        Inst::VecSet { h, i, x } => {
+                            l(*h)?;
+                            l(*i)?;
+                            l(*x)?
+                        }
+                        Inst::VecPop { present, value, h } => {
+                            l(*present)?;
+                            l(*value)?;
+                            l(*h)?
+                        }
                         Inst::Print { arg, .. } => {
+                            if let PrintArg::Obj(src) = arg {
+                                l(*src)?;
+                            }
                             if let PrintArg::Value { ty, src } = arg {
                                 l(*src)?;
                                 if !(ty.is_int() || ty.is_float() || *ty == Ty::Bool) {

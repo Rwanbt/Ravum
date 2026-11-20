@@ -177,6 +177,38 @@ struct Machine<'m> {
     sp: usize,
     /// `io::print*` output, in program order.
     out: Output,
+    /// IR v1.3 run heap (freed with the machine).
+    heap: crate::heap::Heap,
+}
+
+/// Raw 64-bit word of a scalar (the encoding heap vectors store).
+pub fn to_word(v: Val) -> u64 {
+    match v {
+        Val::Int(_, x) => x as u64,
+        Val::F32(x) => x.to_bits() as u64,
+        Val::F64(x) => x.to_bits(),
+        Val::Bool(b) => b as u64,
+        Val::Unit => 0,
+    }
+}
+
+/// The scalar of type `ty` a raw word holds.
+pub fn from_word(ty: Ty, w: u64) -> Val {
+    match ty {
+        Ty::F32 => Val::F32(f32::from_bits(w as u32)),
+        Ty::F64 => Val::F64(f64::from_bits(w)),
+        Ty::Bool => Val::Bool(w & 1 == 1),
+        Ty::Unit => Val::Unit,
+        Ty::Ptr | Ty::Obj => Val::Int(ty, w as i128),
+        t => Val::Int(t, wrap(t, w as i128)),
+    }
+}
+
+fn heap_stop(e: crate::heap::HeapStop) -> Stop {
+    match e {
+        e @ crate::heap::HeapStop::IndexOutOfBounds { .. } => Stop::Panic(e.message()),
+        crate::heap::HeapStop::Fault(m) => Stop::Fault(m.to_string()),
+    }
 }
 
 /// Text written by a run (`io::print`/`println` → `stdout`, `eprintln` →
@@ -195,6 +227,7 @@ impl<'m> Machine<'m> {
             mem: vec![0; MEMORY],
             sp: (STATE_BASE + state_size).div_ceil(16) * 16,
             out: Output::default(),
+            heap: Default::default(),
         }
     }
 
@@ -217,6 +250,7 @@ impl<'m> Machine<'m> {
             Ty::F64 => Val::F64(f64::from_bits(u)),
             Ty::Bool => Val::Bool(u & 1 == 1),
             Ty::Ptr => Val::Int(Ty::Ptr, u as i128),
+            Ty::Obj => Val::Int(Ty::Obj, u as i128),
             Ty::Unit => Val::Unit,
             t => Val::Int(t, wrap(t, u as i128)),
         })
@@ -241,6 +275,52 @@ impl<'m> Machine<'m> {
             return Err(Stop::Diverge);
         }
         self.steps -= 1;
+        Ok(())
+    }
+
+    /// IR v1.3 heap instructions, out of `call` so that its stack frame
+    /// stays small (deep recursion must reach the depth limit, not the
+    /// native stack).
+    #[inline(never)]
+    fn heap_inst(&mut self, i: &Inst, locals: &[Ty], slots: &mut [Val]) -> Result<(), Stop> {
+        match i {
+            Inst::Heap { dst, op, a, b } => {
+                let w = |x: &Option<Local>| x.map(|l| to_word(slots[l as usize])).unwrap_or(0);
+                let r = self.heap.op(*op, w(a), w(b)).map_err(heap_stop)?;
+                if let Some(d) = dst {
+                    let t = locals[*d as usize];
+                    slots[*d as usize] = from_word(t, r);
+                }
+            }
+            Inst::HeapText { dst, text } => {
+                let h = self.heap.text(text).map_err(heap_stop)?;
+                slots[*dst as usize] = Val::Int(Ty::Obj, h as i128);
+            }
+            Inst::HeapOfValue { dst, src, .. } => {
+                let t = slots[*src as usize].text();
+                let h = self.heap.text(&t).map_err(heap_stop)?;
+                slots[*dst as usize] = Val::Int(Ty::Obj, h as i128);
+            }
+            Inst::VecSet { h, i, x } => {
+                self.heap
+                    .vec_set(
+                        to_word(slots[*h as usize]),
+                        to_word(slots[*i as usize]),
+                        to_word(slots[*x as usize]),
+                    )
+                    .map_err(heap_stop)?;
+            }
+            Inst::VecPop { present, value, h } => {
+                let (p, w) = self
+                    .heap
+                    .vec_pop(to_word(slots[*h as usize]))
+                    .map_err(heap_stop)?;
+                slots[*present as usize] = Val::Bool(p);
+                let t = locals[*value as usize];
+                slots[*value as usize] = from_word(t, w);
+            }
+            _ => {}
+        }
         Ok(())
     }
 
@@ -337,6 +417,11 @@ impl<'m> Machine<'m> {
                     Inst::Print { stream, arg } => {
                         let text = match arg {
                             PrintArg::Text(t) => t.clone(),
+                            PrintArg::Obj(h) => self
+                                .heap
+                                .str(to_word(slots[*h as usize]))
+                                .map_err(heap_stop)?
+                                .to_string(),
                             PrintArg::Value { src, .. } => slots[*src as usize].text(),
                         };
                         match stream {
@@ -344,6 +429,11 @@ impl<'m> Machine<'m> {
                             Stream::Stderr => self.out.stderr.push_str(&text),
                         }
                     }
+                    i @ (Inst::Heap { .. }
+                    | Inst::HeapText { .. }
+                    | Inst::HeapOfValue { .. }
+                    | Inst::VecSet { .. }
+                    | Inst::VecPop { .. }) => self.heap_inst(i, &f.locals, slots)?,
                     Inst::Call { dst, func, args } => {
                         let vals: Vec<Val> = args.iter().map(|a| slots[*a as usize]).collect();
                         let r = self.call(*func, &vals, depth + 1)?;

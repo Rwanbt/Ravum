@@ -53,6 +53,11 @@ pub struct Ctx {
     /// 0 when the entry may not print (real-time entries: refused statically
     /// by the hot-swap engine; a print reaching a 0 sink writes nothing).
     pub out: usize,
+    /// Second result of a host call (`VecPop`'s presence flag), and the
+    /// length of an out-of-bounds vector access.
+    pub scratch: u64,
+    /// The index of an out-of-bounds vector access.
+    pub scratch2: u64,
 }
 
 pub const MAX_DEPTH: u32 = 512;
@@ -61,6 +66,12 @@ pub const DEFAULT_FUEL: u64 = 1_000_000_000;
 const CODE_DEPTH: u32 = 1;
 const CODE_FUEL: u32 = 2;
 pub(crate) const CODE_TRAP0: u32 = 3;
+/// Heap faults (IR v1.3), decoded by `call_nullary`; never trap messages.
+pub(crate) const CODE_HEAP_LIMIT: u32 = u32::MAX;
+pub(crate) const CODE_BAD_HANDLE: u32 = u32::MAX - 1;
+pub(crate) const CODE_NO_HEAP: u32 = u32::MAX - 2;
+/// `index out of bounds: the len is {scratch} but the index is {scratch2}`.
+pub(crate) const CODE_VEC_OOB: u32 = u32::MAX - 3;
 
 /// A compiled IR module, ready to run.
 pub struct Compiled {
@@ -92,7 +103,7 @@ fn cl_ty(t: Ty) -> Type {
         Ty::I8 | Ty::U8 | Ty::Bool | Ty::Unit => types::I8,
         Ty::I16 | Ty::U16 => types::I16,
         Ty::I32 | Ty::U32 => types::I32,
-        Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::Ptr => types::I64,
+        Ty::I64 | Ty::U64 | Ty::Isize | Ty::Usize | Ty::Ptr | Ty::Obj => types::I64,
         Ty::F32 => types::F32,
         Ty::F64 => types::F64,
     }
@@ -135,6 +146,7 @@ pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
     jb.symbol("rv_fmod", rv_fmod as *const u8);
     jb.symbol("rv_fmodf", rv_fmodf as *const u8);
     jb.symbol("rv_print", exec::rv_print as *const u8);
+    jb.symbol("rv_heap", exec::rv_heap as *const u8);
     Ok(JITModule::new(jb))
 }
 
@@ -217,6 +229,21 @@ pub(crate) fn compile_funcs(
     let print = module
         .declare_function("rv_print", Linkage::Import, &print_sig)
         .map_err(|e| JitError::Codegen(e.to_string()))?;
+    let mut heap_sig = module.make_signature();
+    for t in [
+        ptr_ty,
+        types::I32,
+        types::I64,
+        types::I64,
+        types::I64,
+        types::I32,
+    ] {
+        heap_sig.params.push(AbiParam::new(t));
+    }
+    heap_sig.returns.push(AbiParam::new(types::I64));
+    let heap = module
+        .declare_function("rv_heap", Linkage::Import, &heap_sig)
+        .map_err(|e| JitError::Codegen(e.to_string()))?;
 
     let mut fctx = FunctionBuilderContext::new();
     let mut ctx: Context = module.make_context();
@@ -247,6 +274,7 @@ pub(crate) fn compile_funcs(
             let fmod_ref = module.declare_func_in_func(fmod, b.func);
             let fmodf_ref = module.declare_func_in_func(fmodf, b.func);
             let print_ref = module.declare_func_in_func(print, b.func);
+            let heap_ref = module.declare_func_in_func(heap, b.func);
             let blocks: Vec<_> = f.blocks.iter().map(|_| b.create_block()).collect();
             let vars: Vec<Variable> = f
                 .locals
@@ -292,6 +320,7 @@ pub(crate) fn compile_funcs(
                 msg_ids: &mut *msg_ids,
                 stop: None,
                 stack_slots,
+                local_tys: f.locals.clone(),
             };
             // Depth check on entry.
             let depth = g.b.ins().load(types::I32, MemFlags::trusted(), ctxp, 4);
@@ -309,7 +338,7 @@ pub(crate) fn compile_funcs(
                     g.inst(
                         inst,
                         &callee_refs,
-                        [fmod_ref, fmodf_ref, print_ref],
+                        [fmod_ref, fmodf_ref, print_ref, heap_ref],
                         &ir.functions,
                     );
                 }
@@ -390,9 +419,78 @@ struct Gen<'a, 'f> {
     /// one block per function instead of one per checked operation.
     stop: Option<cranelift_codegen::ir::Block>,
     stack_slots: Vec<cranelift_codegen::ir::StackSlot>,
+    /// IR type of each local (heap words are converted by type).
+    local_tys: Vec<Ty>,
 }
 
 impl Gen<'_, '_> {
+    fn local_ty(&self, l: u32) -> Ty {
+        self.local_tys[l as usize]
+    }
+
+    /// `(kind, 64-bit bits)` of a scalar, as `rv_print`/`rv_heap` decode it.
+    fn print_bits(&mut self, ty: Ty, x: Value) -> (i64, Value) {
+        match ty {
+            Ty::F64 => (3, self.b.ins().bitcast(types::I64, MemFlags::new(), x)),
+            Ty::F32 => {
+                let w = self.b.ins().bitcast(types::I32, MemFlags::new(), x);
+                (4, self.b.ins().uextend(types::I64, w))
+            }
+            Ty::Bool => (5, self.b.ins().uextend(types::I64, x)),
+            t if cl_ty(t) == types::I64 => (if t.is_signed() { 1 } else { 2 }, x),
+            t if t.is_signed() => (1, self.b.ins().sextend(types::I64, x)),
+            _ => (2, self.b.ins().uextend(types::I64, x)),
+        }
+    }
+
+    /// Raw word of a scalar (`interp::to_word`).
+    fn emit_word(&mut self, ty: Ty, x: Value) -> Value {
+        self.print_bits(ty, x).1
+    }
+
+    /// The scalar of type `ty` a raw word holds (`interp::from_word`).
+    fn emit_unword(&mut self, ty: Ty, w: Value) -> Value {
+        match ty {
+            Ty::F64 => self.b.ins().bitcast(types::F64, MemFlags::new(), w),
+            Ty::F32 => {
+                let n = self.b.ins().ireduce(types::I32, w);
+                self.b.ins().bitcast(types::F32, MemFlags::new(), n)
+            }
+            Ty::Bool => {
+                let one = self.b.ins().band_imm(w, 1);
+                self.b.ins().ireduce(types::I8, one)
+            }
+            t if cl_ty(t) == types::I64 => w,
+            t => self.b.ins().ireduce(cl_ty(t), w),
+        }
+    }
+
+    /// Call `rv_heap`, then stop if it set a code (trap or heap fault).
+    fn host_heap(
+        &mut self,
+        heap: cranelift_codegen::ir::FuncRef,
+        op: i64,
+        a: Value,
+        b: Value,
+        c: Option<Value>,
+    ) -> Value {
+        let trap = self.msg("index out of bounds");
+        let opv = self.b.ins().iconst(types::I32, op);
+        let c = c.unwrap_or_else(|| self.b.ins().iconst(types::I64, 0));
+        let t = self.b.ins().iconst(types::I32, trap as i64);
+        let ctxp = self.ctxp;
+        let call = self.b.ins().call(heap, &[ctxp, opv, a, b, c, t]);
+        let r = self.b.inst_results(call)[0];
+        let code = self
+            .b
+            .ins()
+            .load(types::I32, MemFlags::trusted(), self.ctxp, 0);
+        let stop = self.stop_block();
+        let cont = self.b.create_block();
+        self.b.ins().brif(code, stop, &[code], cont, &[]);
+        self.b.switch_to_block(cont);
+        r
+    }
     fn msg(&mut self, m: &str) -> u32 {
         if let Some(id) = self.msg_ids.get(m) {
             return *id;
@@ -482,11 +580,65 @@ impl Gen<'_, '_> {
         &mut self,
         inst: &Inst,
         callees: &BTreeMap<u32, (cranelift_codegen::ir::SigRef, u32)>,
-        hosts: [cranelift_codegen::ir::FuncRef; 3],
+        hosts: [cranelift_codegen::ir::FuncRef; 4],
         fns: &[ravum_lang_ir::ir::Function],
     ) {
-        let [fmod, fmodf, print] = hosts;
+        let [fmod, fmodf, print, heap] = hosts;
         match inst {
+            Inst::Heap { dst, op, a, b } => {
+                let w = |me: &mut Self, x: &Option<u32>| match x {
+                    Some(l) => {
+                        let t = me.local_ty(*l);
+                        let v = me.get(*l);
+                        me.emit_word(t, v)
+                    }
+                    None => me.b.ins().iconst(types::I64, 0),
+                };
+                let (a, b) = (w(self, a), w(self, b));
+                let code = *op as u32 as i64;
+                let r = self.host_heap(heap, code, a, b, None);
+                if let Some(d) = dst {
+                    let t = self.local_ty(*d);
+                    let v = self.emit_unword(t, r);
+                    self.set(*d, v);
+                }
+            }
+            Inst::HeapText { dst, text } => {
+                let id = (self.msg(text) - CODE_TRAP0) as i64;
+                let a = self.b.ins().iconst(types::I64, id);
+                let z = self.b.ins().iconst(types::I64, 0);
+                let r = self.host_heap(heap, exec::OP_TEXT as i64, a, z, None);
+                self.set(*dst, r);
+            }
+            Inst::HeapOfValue { dst, ty, src } => {
+                let x = self.get(*src);
+                let (kind, bits) = self.print_bits(*ty, x);
+                let k = self.b.ins().iconst(types::I64, kind);
+                let r = self.host_heap(heap, exec::OP_OF_VALUE as i64, k, bits, None);
+                self.set(*dst, r);
+            }
+            Inst::VecSet { h, i, x } => {
+                let hv = self.get(*h);
+                let iv = self.get(*i);
+                let t = self.local_ty(*x);
+                let xv = self.get(*x);
+                let xw = self.emit_word(t, xv);
+                self.host_heap(heap, exec::OP_VEC_SET as i64, hv, iv, Some(xw));
+            }
+            Inst::VecPop { present, value, h } => {
+                let hv = self.get(*h);
+                let z = self.b.ins().iconst(types::I64, 0);
+                let w = self.host_heap(heap, exec::OP_VEC_POP as i64, hv, z, None);
+                let p = self
+                    .b
+                    .ins()
+                    .load(types::I64, MemFlags::trusted(), self.ctxp, 32);
+                let p = self.b.ins().ireduce(types::I8, p);
+                self.set(*present, p);
+                let t = self.local_ty(*value);
+                let v = self.emit_unword(t, w);
+                self.set(*value, v);
+            }
             Inst::Print { stream, arg } => {
                 let (kind, bits) = match arg {
                     PrintArg::Text(t) => {
@@ -495,18 +647,9 @@ impl Gen<'_, '_> {
                     }
                     PrintArg::Value { ty, src } => {
                         let x = self.get(*src);
-                        match *ty {
-                            Ty::F64 => (3, self.b.ins().bitcast(types::I64, MemFlags::new(), x)),
-                            Ty::F32 => {
-                                let w = self.b.ins().bitcast(types::I32, MemFlags::new(), x);
-                                (4, self.b.ins().uextend(types::I64, w))
-                            }
-                            Ty::Bool => (5, self.b.ins().uextend(types::I64, x)),
-                            t if cl_ty(t) == types::I64 => (if t.is_signed() { 1 } else { 2 }, x),
-                            t if t.is_signed() => (1, self.b.ins().sextend(types::I64, x)),
-                            _ => (2, self.b.ins().uextend(types::I64, x)),
-                        }
+                        self.print_bits(*ty, x)
                     }
+                    PrintArg::Obj(h) => (6, self.get(*h)),
                 };
                 let k = self.b.ins().iconst(types::I32, kind);
                 let st = self.b.ins().iconst(
@@ -1011,9 +1154,11 @@ pub(crate) mod exec {
         f(a, b, ctx as *mut Ctx)
     }
 
-    /// Output buffer of one run (`Ctx::out`), with the interned texts.
+    /// Environment of one run (`Ctx::out`): its output buffer, its heap
+    /// (IR v1.3) and the interned texts.
     pub struct OutputSink {
         pub out: ravum_lang_ir::interp::Output,
+        pub heap: ravum_lang_ir::heap::Heap,
         texts: *const String,
         n: usize,
     }
@@ -1022,8 +1167,86 @@ pub(crate) mod exec {
         pub fn new(texts: &[String]) -> Self {
             OutputSink {
                 out: Default::default(),
+                heap: Default::default(),
                 texts: texts.as_ptr(),
                 n: texts.len(),
+            }
+        }
+
+        fn text(&self, i: u64) -> Option<String> {
+            if i as usize >= self.n {
+                return None;
+            }
+            Some(unsafe { (*self.texts.add(i as usize)).clone() })
+        }
+    }
+
+    /// `rv_heap` operation codes beyond `HeapOp` (whose `as u32` values are
+    /// below 20).
+    pub const OP_TEXT: u32 = 20;
+    pub const OP_OF_VALUE: u32 = 21;
+    pub const OP_VEC_SET: u32 = 22;
+    pub const OP_VEC_POP: u32 = 23;
+
+    fn scalar_text(kind: u64, bits: u64) -> String {
+        match kind {
+            1 => (bits as i64).to_string(),
+            2 => bits.to_string(),
+            3 => f64::from_bits(bits).to_string(),
+            4 => f32::from_bits(bits as u32).to_string(),
+            _ => (bits != 0).to_string(),
+        }
+    }
+
+    /// Host function of every IR v1.3 heap instruction (site #7d). Same
+    /// SAFETY argument as `rv_print`: `ctx` is the running call's exclusive
+    /// `Ctx`, `ctx.out` is 0 or the caller's live `OutputSink`. Errors set
+    /// `ctx.code` (the compiled code then stops): `trap` is the interned
+    /// `index out of bounds` code; heap faults use the reserved codes.
+    pub extern "C" fn rv_heap(ctx: *mut Ctx, op: u32, a: u64, b: u64, c: u64, trap: u32) -> u64 {
+        use ravum_lang_ir::heap::HeapStop;
+        use ravum_lang_ir::ir::HeapOp::*;
+        let ctx = unsafe { &mut *ctx };
+        if ctx.out == 0 {
+            ctx.code = super::CODE_NO_HEAP;
+            return 0;
+        }
+        let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
+        let ops = [
+            StrNew, StrClone, StrPush, StrLen, StrEq, VecNew, VecPush, VecLen, VecGet, VecClone,
+        ];
+        let r = match op {
+            OP_TEXT => match sink.text(a) {
+                Some(t) => sink.heap.text(&t),
+                None => Err(HeapStop::Fault("invalid object handle")),
+            },
+            OP_OF_VALUE => sink.heap.text(&scalar_text(a, b)),
+            OP_VEC_SET => sink.heap.vec_set(a, b, c).map(|_| 0),
+            OP_VEC_POP => sink.heap.vec_pop(a).map(|(p, w)| {
+                ctx.scratch = p as u64;
+                w
+            }),
+            k => match ops.iter().find(|o| **o as u32 == k) {
+                Some(o) => sink.heap.op(*o, a, b),
+                None => Err(HeapStop::Fault("invalid object handle")),
+            },
+        };
+        match r {
+            Ok(v) => v,
+            Err(HeapStop::IndexOutOfBounds { len, index }) => {
+                let _ = trap;
+                ctx.code = super::CODE_VEC_OOB;
+                ctx.scratch = len;
+                ctx.scratch2 = index;
+                0
+            }
+            Err(HeapStop::Fault(m)) => {
+                ctx.code = if m == "heap limit" {
+                    super::CODE_HEAP_LIMIT
+                } else {
+                    super::CODE_BAD_HANDLE
+                };
+                0
             }
         }
     }
@@ -1044,17 +1267,15 @@ pub(crate) mod exec {
         }
         let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
         let text = match kind {
-            0 => {
-                if bits as usize >= sink.n {
-                    return;
-                }
-                unsafe { (*sink.texts.add(bits as usize)).clone() }
-            }
-            1 => (bits as i64).to_string(),
-            2 => bits.to_string(),
-            3 => f64::from_bits(bits).to_string(),
-            4 => f32::from_bits(bits as u32).to_string(),
-            _ => (bits != 0).to_string(),
+            0 => match sink.text(bits) {
+                Some(t) => t,
+                None => return,
+            },
+            6 => match sink.heap.str(bits) {
+                Ok(s) => s.to_string(),
+                Err(_) => return,
+            },
+            k => scalar_text(k as u64, bits),
         };
         if stream == 0 {
             sink.out.stdout.push_str(&text);
@@ -1067,22 +1288,9 @@ pub(crate) mod exec {
 impl Compiled {
     /// Run `entry` (no parameters) natively.
     pub fn run(&self, entry: &str, fuel: u64) -> RunOutcome {
-        let Some(id) = self.ir.func_id(entry) else {
-            return RunOutcome::Fault(format!("no function `{entry}`"));
-        };
-        let f = &self.ir.functions[id as usize];
-        if f.params != 0 {
-            return RunOutcome::Fault(format!("`{entry}` takes arguments"));
-        }
-        let code = self.table[id as usize] as *const u8;
-        let mut ctx = Ctx {
-            code: 0,
-            depth: 0,
-            fuel,
-            table: self.table.as_ptr() as usize,
-            out: 0,
-        };
-        call_nullary(code, &mut ctx, f.ret, &self.messages)
+        // A run always has its environment (output, heap); the output is
+        // dropped here.
+        self.run_with_output(entry, fuel).0
     }
 
     /// [`Compiled::run`], also returning what the program printed.
@@ -1112,6 +1320,8 @@ impl Compiled {
             fuel,
             table: self.table.as_ptr() as usize,
             out: &mut sink as *mut exec::OutputSink as usize,
+            scratch: 0,
+            scratch2: 0,
         };
         let r = call_nullary(code, &mut ctx, f.ret, &self.messages);
         (r, sink.out)
@@ -1142,11 +1352,22 @@ pub(crate) fn call_nullary(
             Val::Unit
         }
         Ty::Ptr => return RunOutcome::Fault("an entry cannot return an address".into()),
+        Ty::Obj => return RunOutcome::Fault("an entry cannot return a heap object".into()),
     };
     match ctx.code {
         0 => RunOutcome::Value(val),
         CODE_DEPTH => RunOutcome::Fault("call depth limit".into()),
         CODE_FUEL => RunOutcome::Diverge,
+        CODE_HEAP_LIMIT => RunOutcome::Fault("heap limit".into()),
+        CODE_VEC_OOB => RunOutcome::Panic(
+            ravum_lang_ir::heap::HeapStop::IndexOutOfBounds {
+                len: ctx.scratch,
+                index: ctx.scratch2,
+            }
+            .message(),
+        ),
+        CODE_BAD_HANDLE => RunOutcome::Fault("invalid object handle".into()),
+        CODE_NO_HEAP => RunOutcome::Fault("heap use in a real-time entry".into()),
         c => RunOutcome::Panic(messages[(c - CODE_TRAP0) as usize].clone()),
     }
 }

@@ -103,12 +103,51 @@ fn a_real_time_entry_that_prints_is_refused() {
 }
 
 #[test]
-fn strings_other_than_literals_and_scalar_text_are_unsupported() {
-    let src = "fn check() -> i64 effects(io, alloc) {\n    let n: i64 = 3;\n    let s = n.to_string();\n    io::println(&s);\n    return 0;\n}\n";
+fn string_methods_outside_the_ir_are_unsupported() {
+    // IR v1.3 prints any heap string; `to_uppercase` is still not lowered.
+    let src = "fn check() -> i64 effects(io, alloc) {\n    let n: i64 = 3;\n    let s = n.to_string();\n    io::println(&s.to_uppercase());\n    return 0;\n}\n";
     match compile_source(src) {
         Err(ravum_lang_ir::CompileError::Lower(ravum_lang_ir::lower::LowerError::Unsupported(
             _,
         ))) => {}
         other => panic!("expected Unsupported, got {other:?}"),
     }
+}
+
+#[test]
+fn a_real_time_entry_that_allocates_is_refused() {
+    // Negative (INV-05): no heap allocation on the audio thread.
+    let src = "fn gain(x: f32) -> f32 effects(alloc) {\n    let v: Vec<f32> = Vec::new();\n    drop(v);\n    return x;\n}\n";
+    let ir = compile_source(src).unwrap();
+    match HotEngine::start(&ir, "gain") {
+        Err(Refusal::Invalid(m)) => assert!(m.contains("heap allocation"), "{m}"),
+        Err(other) => panic!("expected Invalid, got {other:?}"),
+        Ok(_) => panic!("expected a refusal"),
+    }
+}
+
+#[test]
+fn the_heap_limit_is_a_fault_not_a_crash() {
+    // The string doubles 30 times: past the 256 MiB limit long before.
+    let src = "fn check() -> i64 effects(alloc) {\n    let mut s = String::from(\"xxxxxxxxxxxxxxxxxxxx\");\n    let mut k: i64 = 0;\n    while k < 30 {\n        let c = s.clone();\n        s.push_str(c.as_str());\n        k = k + 1;\n    }\n    return 1;\n}\n";
+    let ir = compile_source(src).unwrap();
+    let native = compile(&ir).unwrap().run("check", DEFAULT_FUEL).render();
+    assert_eq!(native, "fault: heap limit");
+    let (interp, _) = run_with_output(&ir, "check", DEFAULT_STEPS * 10);
+    assert_eq!(interp.render(), "fault: heap limit");
+}
+
+#[test]
+fn a_string_building_entry_is_hot_swapped() {
+    let v1 = "fn label() -> String effects(alloc) {\n    return String::from(\"v1\");\n}\n\nfn main() -> () effects(io, alloc) {\n    let mut s = label();\n    s.push_str(\"-ok\");\n    io::println(&s);\n}\n";
+    let (mut engine, mut rt) = HotEngine::start(&compile_source(v1).unwrap(), "main").unwrap();
+    let (r, out) = rt.run_nullary_with_output(engine.messages());
+    assert_eq!(r.render(), "value () ()");
+    assert_eq!(out.stdout, "v1-ok\n");
+    let v2 = v1.replace("\"v1\"", "\"v2\"");
+    let rep = engine.update(&compile_source(&v2).unwrap()).unwrap();
+    assert_eq!(rep.recompiled, vec!["label".to_string()]);
+    assert!(rt.poll());
+    let (_, out) = rt.run_nullary_with_output(engine.messages());
+    assert_eq!(out.stdout, "v2-ok\n");
 }

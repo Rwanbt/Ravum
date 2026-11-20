@@ -77,6 +77,11 @@ pub fn map_ty(t: &Type) -> R<Ty> {
         Type::F64 => Ty::F64,
         Type::Bool => Ty::Bool,
         Type::Unit | Type::Never => Ty::Unit,
+        // IR v1.3: heap objects, and borrows of them, are handles.
+        Type::String | Type::Vec(_) => Ty::Obj,
+        Type::Ref { inner, .. } if matches!(**inner, Type::String | Type::Str | Type::Vec(_)) => {
+            Ty::Obj
+        }
         Type::Ref { .. }
         | Type::Nominal { .. }
         | Type::Tuple(_)
@@ -445,6 +450,8 @@ struct LoopCtx {
 enum Place {
     /// A scalar local (register).
     Reg(Local),
+    /// IR v1.3: element `i` of the heap vector `h` (scalar elements).
+    VecElem { h: Local, i: Local, ty: Ty },
     /// Memory at `addr + off`, holding a value of type `ty`.
     Mem { addr: Local, off: u32, ty: Type },
 }
@@ -548,10 +555,13 @@ impl<'a> FnLower<'a> {
         }
         for p in &sig.params {
             if let Type::Ref { inner, .. } = &p.ty {
-                if !Layouts::is_agg(inner) {
+                if map_ty(&p.ty)? == Ty::Obj {
+                    // `&String`/`&mut Vec<T>`: the handle itself.
+                } else if !Layouts::is_agg(inner) {
                     return unsupported("reference to a scalar parameter");
+                } else {
+                    layouts.layout(inner)?;
                 }
-                layouts.layout(inner)?;
             } else if Layouts::is_agg(&p.ty) {
                 layouts.layout(&p.ty)?;
             }
@@ -917,7 +927,9 @@ impl<'a> FnLower<'a> {
         }
         match self.place(base)? {
             Place::Mem { addr, off, ty } => Ok((addr, off, ty)),
-            Place::Reg(_) => Err(LowerError::MissingFact("aggregate in a register".into())),
+            Place::Reg(_) | Place::VecElem { .. } => {
+                Err(LowerError::MissingFact("aggregate in a register".into()))
+            }
         }
     }
 
@@ -975,6 +987,20 @@ impl<'a> FnLower<'a> {
                     off: off + foff,
                     ty: fty,
                 })
+            }
+            ExprKind::Index { base, index } if self.is_vec(base)? => {
+                let elem = self.vec_elem(base)?;
+                let h = self.expr(base)?;
+                let it = self.ty_of(index)?;
+                let iv = self.expr(index)?;
+                let i = self.new_local(Ty::U64);
+                self.emit(Inst::Cast {
+                    dst: i,
+                    from: it,
+                    to: Ty::U64,
+                    src: iv,
+                });
+                Ok(Place::VecElem { h, i, ty: elem })
             }
             ExprKind::Index { base, index } => {
                 let (addr, off, bt) = self.base_mem(base)?;
@@ -1062,6 +1088,16 @@ impl<'a> FnLower<'a> {
     fn read(&mut self, p: Place) -> R<Local> {
         match p {
             Place::Reg(l) => Ok(l),
+            Place::VecElem { h, i, ty } => {
+                let dst = self.new_local(ty);
+                self.emit(Inst::Heap {
+                    dst: Some(dst),
+                    op: HeapOp::VecGet,
+                    a: Some(h),
+                    b: Some(i),
+                });
+                Ok(dst)
+            }
             Place::Mem { addr, off, ty } => {
                 if Layouts::is_agg(&ty) {
                     return Ok(self.offset(addr, off));
@@ -1087,7 +1123,36 @@ impl<'a> FnLower<'a> {
                 Ok(())
             }
             Place::Mem { addr, off, ty } => self.store_value(addr, off, v, &ty),
+            Place::VecElem { h, i, .. } => {
+                self.emit(Inst::VecSet { h, i, x: v });
+                Ok(())
+            }
         }
+    }
+
+    /// Whether `e` is a `Vec<T>` or a borrow of one.
+    fn is_vec(&self, e: &Expr) -> R<bool> {
+        Ok(match self.type_of(e)? {
+            Type::Vec(_) => true,
+            Type::Ref { inner, .. } => matches!(*inner, Type::Vec(_)),
+            _ => false,
+        })
+    }
+
+    /// IR type of the elements of the vector `e` (scalars or handles only).
+    fn vec_elem(&self, e: &Expr) -> R<Ty> {
+        let t = match self.type_of(e)? {
+            Type::Vec(t) => *t,
+            Type::Ref { inner, .. } => match *inner {
+                Type::Vec(t) => *t,
+                _ => return Err(LowerError::MissingFact("element of a non-vector".into())),
+            },
+            _ => return Err(LowerError::MissingFact("element of a non-vector".into())),
+        };
+        if Layouts::is_agg(&t) || matches!(t, Type::Ref { .. }) {
+            return unsupported("`Vec` of aggregates or references");
+        }
+        map_ty(&t)
     }
 
     // ---- statements and blocks ------------------------------------------
@@ -1180,7 +1245,13 @@ impl<'a> FnLower<'a> {
             ExprKind::Unary { op, expr } => match op {
                 ast::UnOp::Ref | ast::UnOp::RefMut => match self.place(expr)? {
                     Place::Mem { addr, off, .. } => Ok(self.offset(addr, off)),
-                    Place::Reg(_) => unsupported("reference to a scalar local"),
+                    // `&s` / `&mut v` of a heap object: the handle itself.
+                    Place::Reg(l) if self.locals[l as usize] == Ty::Obj => Ok(l),
+                    // `&v[i]` of a `Vec<String>`: the element is the handle.
+                    p @ Place::VecElem { ty: Ty::Obj, .. } => self.read(p),
+                    Place::Reg(_) | Place::VecElem { .. } => {
+                        unsupported("reference to a scalar local")
+                    }
                 },
                 ast::UnOp::Deref => {
                     let p = self.place(e)?;
@@ -1238,6 +1309,10 @@ impl<'a> FnLower<'a> {
                             ty: t.clone(),
                         })?;
                         (v, Place::Mem { addr, off, ty: t })
+                    }
+                    Place::VecElem { h, i, ty: t } => {
+                        let v = self.read(Place::VecElem { h, i, ty: t })?;
+                        (v, Place::VecElem { h, i, ty: t })
                     }
                 };
                 let rhs = self.expr(value)?;
@@ -1424,7 +1499,15 @@ impl<'a> FnLower<'a> {
                 args,
             } => self.method_call(e, receiver, &method.name, args),
             ExprKind::Match { scrutinee, arms } => self.match_expr(e, scrutinee, arms),
-            ExprKind::Str(_) => unsupported("string"),
+            ExprKind::Str(t) => {
+                // A literal `&str`: a fresh heap string (IR v1.3).
+                let dst = self.new_local(Ty::Obj);
+                self.emit(Inst::HeapText {
+                    dst,
+                    text: t.clone(),
+                });
+                Ok(dst)
+            }
             ExprKind::Char(_) => unsupported("char"),
             ExprKind::Range { .. } => unsupported("range outside `for`"),
             ExprKind::Try(inner) => self.try_expr(inner),
@@ -1546,6 +1629,10 @@ impl<'a> FnLower<'a> {
         let place = match self.place(scrutinee)? {
             Place::Reg(l) => Place::Reg(l),
             Place::Mem { addr, off, ty } => Place::Mem { addr, off, ty },
+            p @ Place::VecElem { .. } => {
+                let v = self.read(p)?;
+                Place::Reg(v)
+            }
         };
         let join = self.new_block();
         for arm in arms {
@@ -1572,7 +1659,9 @@ impl<'a> FnLower<'a> {
                 off: o + off,
                 ty,
             }),
-            Place::Reg(_) => Err(LowerError::MissingFact("field of a register".into())),
+            Place::Reg(_) | Place::VecElem { .. } => {
+                Err(LowerError::MissingFact("field of a register".into()))
+            }
         }
     }
 
@@ -1696,6 +1785,11 @@ impl<'a> FnLower<'a> {
     fn read_place(&mut self, p: &Place) -> R<Local> {
         match p {
             Place::Reg(l) => Ok(*l),
+            Place::VecElem { h, i, ty } => self.read(Place::VecElem {
+                h: *h,
+                i: *i,
+                ty: *ty,
+            }),
             Place::Mem { addr, off, ty } => self.read(Place::Mem {
                 addr: *addr,
                 off: *off,
@@ -1883,6 +1977,33 @@ impl<'a> FnLower<'a> {
         }
         let lt = self.ty_of(lhs)?;
         let rt = self.ty_of(rhs)?;
+        if lt == Ty::Obj && rt == Ty::Obj && matches!(op, ast::BinOp::Eq | ast::BinOp::Ne) {
+            let (a, b) = (self.expr(lhs)?, self.expr(rhs)?);
+            if self.is_vec(lhs)? {
+                return unsupported("`==` on vectors");
+            }
+            let eq = self.new_local(Ty::Bool);
+            self.emit(Inst::Heap {
+                dst: Some(eq),
+                op: HeapOp::StrEq,
+                a: Some(a),
+                b: Some(b),
+            });
+            if op == ast::BinOp::Eq {
+                return Ok(eq);
+            }
+            let ne = self.new_local(Ty::Bool);
+            self.emit(Inst::Un {
+                dst: ne,
+                op: UnOp::Not,
+                ty: Ty::Bool,
+                src: eq,
+            });
+            return Ok(ne);
+        }
+        if lt == Ty::Obj || rt == Ty::Obj {
+            return unsupported("operator on a string or a vector");
+        }
         if lt == Ty::Ptr || rt == Ty::Ptr {
             return unsupported("operator on an aggregate or a reference");
         }
@@ -2057,6 +2178,9 @@ impl<'a> FnLower<'a> {
             _ => None,
         };
         let ty = self.ty_of(recv)?;
+        if let Some(r) = self.heap_method(e, recv, &path, args)? {
+            return Ok(r);
+        }
         if let Some(m) = path.strip_prefix("Option::") {
             return self.option_method(e, recv, m, args);
         }
@@ -2237,7 +2361,132 @@ impl<'a> FnLower<'a> {
                 return Ok(PrintArg::Value { ty, src });
             }
         }
-        unsupported("`io::print*` of a string other than a literal or `x.to_string()`")
+        // IR v1.3: any other `&str` is a heap string handle.
+        if self.ty_of(a)? == Ty::Obj {
+            let h = self.expr(a)?;
+            return Ok(PrintArg::Obj(h));
+        }
+        unsupported("`io::print*` of this argument")
+    }
+
+    fn heap(&mut self, dst: Option<Local>, op: HeapOp, a: Option<Local>, b: Option<Local>) {
+        self.emit(Inst::Heap { dst, op, a, b });
+    }
+
+    /// IR v1.3 `String`/`str`/`Vec` methods and scalar `to_string`;
+    /// `Ok(None)` when `path` is not one of them.
+    fn heap_method(
+        &mut self,
+        e: &Expr,
+        recv: &Expr,
+        path: &str,
+        args: &[Expr],
+    ) -> R<Option<Local>> {
+        let scalar_text = matches!(
+            path,
+            "int::to_string" | "float::to_string" | "bool::to_string"
+        );
+        let known = scalar_text
+            || matches!(
+                path,
+                "String::push_str"
+                    | "String::len"
+                    | "str::len"
+                    | "String::clone"
+                    | "String::as_str"
+                    | "str::as_str"
+                    | "String::is_empty"
+                    | "str::is_empty"
+                    | "Vec::push"
+                    | "Vec::len"
+                    | "Vec::is_empty"
+                    | "Vec::clone"
+                    | "Vec::pop"
+            );
+        if !known {
+            return Ok(None);
+        }
+        let h = self.expr(recv)?;
+        if scalar_text {
+            let ty = self.ty_of(recv)?;
+            let dst = self.new_local(Ty::Obj);
+            self.emit(Inst::HeapOfValue { dst, ty, src: h });
+            return Ok(Some(dst));
+        }
+        let len = |me: &mut Self, op: HeapOp| {
+            let n = me.new_local(Ty::Usize);
+            me.heap(Some(n), op, Some(h), None);
+            n
+        };
+        let r = match (path, args) {
+            ("String::push_str", [a]) => {
+                let b = self.expr(a)?;
+                self.heap(None, HeapOp::StrPush, Some(h), Some(b));
+                self.unit()
+            }
+            ("String::len" | "str::len", []) => len(self, HeapOp::StrLen),
+            ("Vec::len", []) => len(self, HeapOp::VecLen),
+            ("String::is_empty" | "str::is_empty" | "Vec::is_empty", []) => {
+                let op = if path == "Vec::is_empty" {
+                    HeapOp::VecLen
+                } else {
+                    HeapOp::StrLen
+                };
+                let n = len(self, op);
+                let z = self.int_const(Ty::Usize, 0)?;
+                let d = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: d,
+                    op: BinOp::Eq,
+                    ty: Ty::Usize,
+                    lhs: n,
+                    rhs: z,
+                });
+                d
+            }
+            ("String::clone" | "Vec::clone", []) => {
+                let op = if path == "Vec::clone" {
+                    HeapOp::VecClone
+                } else {
+                    HeapOp::StrClone
+                };
+                let d = self.new_local(Ty::Obj);
+                self.heap(Some(d), op, Some(h), None);
+                d
+            }
+            ("String::as_str" | "str::as_str", []) => h,
+            ("Vec::push", [a]) => {
+                self.vec_elem(recv)?;
+                let x = self.expr(a)?;
+                self.heap(None, HeapOp::VecPush, Some(h), Some(x));
+                self.unit()
+            }
+            ("Vec::pop", []) => {
+                let elem = self.vec_elem(recv)?;
+                let t = self.type_of(e)?;
+                let (present, value) = (self.new_local(Ty::Bool), self.new_local(elem));
+                self.emit(Inst::VecPop { present, value, h });
+                let result = self.alloc(&t)?;
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: present,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                let some = self.construct(&t, 1, vec![value])?;
+                self.copy(result, 0, some, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                let none = self.construct(&t, 0, Vec::new())?;
+                self.copy(result, 0, none, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                result
+            }
+            _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
+        };
+        Ok(Some(r))
     }
 
     /// `x?` (EXPR, `check_try`): on `None`/`Err(e)` return `None`/`Err(e)`
@@ -2419,7 +2668,9 @@ impl<'a> FnLower<'a> {
             } else {
                 match self.place(recv)? {
                     Place::Mem { addr, off, .. } => self.offset(addr, off),
-                    Place::Reg(_) => return unsupported("method on a scalar receiver"),
+                    Place::Reg(_) | Place::VecElem { .. } => {
+                        return unsupported("method on a scalar receiver")
+                    }
                 }
             }
         } else {
@@ -2595,6 +2846,39 @@ impl<'a> FnLower<'a> {
                     }
                     _ => unsupported(format!("builtin `{path}`")),
                 }
+            }
+            Some(CallTarget::BuiltinFn { path })
+                if matches!(
+                    path.as_str(),
+                    "String::new"
+                        | "String::from"
+                        | "std::string::from"
+                        | "Vec::new"
+                        | "Vec::with_capacity"
+                ) =>
+            {
+                let dst = self.new_local(Ty::Obj);
+                match (path.as_str(), args) {
+                    ("String::new", []) => self.heap(Some(dst), HeapOp::StrNew, None, None),
+                    ("String::from" | "std::string::from", [a]) => {
+                        let s = self.expr(a)?;
+                        self.heap(Some(dst), HeapOp::StrClone, Some(s), None)
+                    }
+                    ("Vec::new", []) => self.heap(Some(dst), HeapOp::VecNew, None, None),
+                    ("Vec::with_capacity", [n]) => {
+                        // Capacity is a hint: evaluated (O1), not used.
+                        self.expr(n)?;
+                        self.heap(Some(dst), HeapOp::VecNew, None, None)
+                    }
+                    _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
+                }
+                Ok(dst)
+            }
+            // `drop(x)`: the run heap is freed when the run ends (IR v1.3),
+            // so dropping is evaluating the argument (O1).
+            Some(CallTarget::BuiltinFn { path }) if path.ends_with("drop") && args.len() == 1 => {
+                self.expr(&args[0])?;
+                Ok(self.unit())
             }
             Some(CallTarget::BuiltinFn { path })
                 if path == "Result::Ok" || path == "Result::Err" =>
