@@ -5,7 +5,7 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ravum_lang_audio::{device::CpalHost, Processor};
 use ravum_lang_ir::compile_source;
@@ -64,6 +64,10 @@ struct Playback {
     generation: AtomicU64,
     blocks: AtomicU64,
     allocations: AtomicU64,
+    sample_rate: AtomicU64,
+    max_process_ns: AtomicU64,
+    over_budget_blocks: AtomicU64,
+    unclassified_blocks: AtomicU64,
 }
 
 struct MeasuredRunner {
@@ -74,8 +78,21 @@ struct MeasuredRunner {
 impl Processor for MeasuredRunner {
     fn process(&mut self, input: &[f32], output: &mut [f32]) {
         ALLOCATIONS.with(|count| count.set(Some(0)));
+        let start = Instant::now();
         self.runner.process(input, output);
+        let elapsed_ns = start.elapsed().as_nanos();
+
         let allocations = ALLOCATIONS.with(|count| count.take().unwrap_or_default());
+
+        self.playback
+            .max_process_ns
+            .fetch_max(elapsed_ns as u64, Relaxed);
+        let sample_rate = self.playback.sample_rate.load(Relaxed);
+        if sample_rate == 0 || output.is_empty() {
+            self.playback.unclassified_blocks.fetch_add(1, Relaxed);
+        } else if elapsed_ns * u128::from(sample_rate) > output.len() as u128 * 1_000_000_000 {
+            self.playback.over_budget_blocks.fetch_add(1, Relaxed);
+        }
 
         self.playback.allocations.fetch_add(allocations, Relaxed);
         self.playback.blocks.fetch_add(1, Relaxed);
@@ -101,6 +118,9 @@ fn main() -> Result<(), String> {
         playback: Arc::clone(&playback),
     }))?;
 
+    playback
+        .sample_rate
+        .store(u64::from(host.sample_rate), Relaxed);
     println!(
         "sample_rate={} Hz, channels={}, format=f32",
         host.sample_rate, host.channels
@@ -120,6 +140,12 @@ fn main() -> Result<(), String> {
     let generation = playback.generation.load(Relaxed);
     let allocations = playback.allocations.load(Relaxed);
     println!("Published generation={}, observed={generation}, blocks={blocks}, Rust allocations in Processor::process={allocations}", update.generation);
+    println!(
+        "max_process_ns={}, over_budget_blocks={}, unclassified_blocks={}",
+        playback.max_process_ns.load(Relaxed),
+        playback.over_budget_blocks.load(Relaxed),
+        playback.unclassified_blocks.load(Relaxed),
+    );
     if first_blocks == 0
         || first_generation != initial_generation
         || generation != update.generation

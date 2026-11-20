@@ -84,9 +84,62 @@ cargo run -p ravum-lang-audio --features cpal --example play
   rien.
 - `CpalHost::rt_status()` dit ce qui s'est passé ; l'exemple `play`
   l'affiche. Un refus (`Refused`) laisse le son à priorité normale.
-- État : compilé, clippy et tests du crate verts dans le conteneur cloud ;
-  **`NOT_RUN`** sur périphérique. Même promu, aucune garantie hard-RT : un
-  noyau non temps réel peut encore préempter.
+### Essai sur périphérique réel (2026-11-20)
+
+MSI Pulse 15 B13VGK (Intel Core i7-13620H, 16 CPU logiques), Ubuntu
+26.04.1 LTS x86_64, haut-parleurs intégrés Intel Raptor Lake-P/U/H cAVS
+(ALSA `sof-hda-dsp`, PipeWire 1.6.2). Sortie CPAL 0.15.3 en f32,
+44 100 Hz, 2 canaux. rustc 1.95.0 (`59807616e`), module
+`audio_thread_priority` 0.38.0. Source de départ
+`0a43ef42d79e2adc3f03022bd017f94361ceb2ed` avec l’instrumentation de
+`play` de ce changement.
+
+`uname -a` indique `7.0.0-43-generic #43-Ubuntu SMP PREEMPT_DYNAMIC`.
+La configuration du noyau indique `# CONFIG_PREEMPT_RT is not set`.
+RTKit 0.14 actif, `ulimit -r` à 0. `libasound2-dev` 1.2.15.3 installé.
+Les fichiers de développement D-Bus 1.16.2 et systemd ont été extraits
+dans un répertoire temporaire et exposés via `PKG_CONFIG_PATH`. Le lien
+dynamique D-Bus utilise la bibliothèque système. Lecture et charge
+exécutées hors du bac à sable pour accéder à la sortie locale.
+
+```bash
+cargo test -p ravum-lang-audio --features rt-priority
+cargo clippy -p ravum-lang-audio --all-targets --features rt-priority -- -D warnings
+cargo run --release -p ravum-lang-audio --features rt-priority --example play
+cargo run --release -p ravum-lang-audio --features cpal --example play
+ps -T -p "$pid" -o pid,tid,cls,rtprio,comm
+stress-ng --cpu 0 --timeout 20s --metrics-brief
+```
+
+Quatre tests WAV et Clippy réussis. Pour la charge, les deux binaires
+release ont été précompilés avec les mêmes features que ci-dessus, puis
+exécutés successivement dans la même fenêtre de 20 s de stress-ng 0.20.01.
+Les 16 workers CPU ont tourné avec un temps CPU utilisateur cumulé de
+310,14 s. La politique a été relevée environ toutes les 500 ms pendant
+la lecture.
+
+| Essai | `rt_status()` | Thread `cpal_alsa_out` | Max `process` (µs) | Blocs au-delà du budget / traités |
+|---|---|---|---:|---:|
+| Au repos, `rt-priority` | `Promoted` | RR, priorité 10 (TID 1836834) | 24,484 | 0 / 746 |
+| Au repos, `cpal` seul | `Disabled` | TS (TID 1836936) | 29,833 | 0 / 762 |
+| Sous charge, `rt-priority` | `Promoted` | TS puis RR, priorité 10 (TID 1836535) | 6,726 | 0 / 730 |
+| Sous charge, `cpal` seul | `Disabled` | TS (TID 1836598) | 12,009 | 0 / 762 |
+
+La politique observée est `SCHED_RR`. Le thread PipeWire `data-loop.0`
+est distinct et était en RR priorité 20 dans les deux configurations.
+L’écoute sur place n’a relevé ni craquement ni coupure au changement de
+note dans les deux essais sous charge. Les quatre lectures ont observé
+les générations 1 puis 2 et compté 0 allocation Rust dans
+`RtRunner::process`.
+
+**`TESTED`** pour la promotion du thread CPAL sur cette machine.
+L’instrumentation, limitée à l’exemple, compare le temps mural de
+`RtRunner::process` à la durée des échantillons du bloc
+(`trames / sample_rate`). Aucun bloc n’a été exclu sur les quatre essais.
+Elle ne couvre ni l’arrivée tardive du rappel, ni son exécution complète,
+ni l’appel initial à RTKit. Le nombre de rappels hors échéance reste
+non mesuré. Ces maxima sur une lecture courte ne suffisent pas à comparer
+les performances des deux politiques ni à établir une garantie hard-RT.
 
 ## Limites
 
