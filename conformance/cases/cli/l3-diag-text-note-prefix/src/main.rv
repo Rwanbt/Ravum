@@ -1,0 +1,4 @@
+fn main() {
+    let mut x: i64 = 1;
+    let r: &mut i64 = &mut x;
+}

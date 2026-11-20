@@ -265,6 +265,10 @@ pub fn phase_for_code(code: &str) -> &'static str {
         "E-UNSUPPORTED-EFFECT" | "E-FFI-TYPE" => "resolve",
         "E-FFI-UNKNOWN-LIB" => "modules",
         "E-UNSAFE-CONTEXT" => "types",
+        // RFC-CONTRACTS-1 / RFC-INVARIANTS-1: where each is emitted.
+        "E-CON-EFFECT" => "effects",
+        "E-CON-NONCOPY" | "E-CON-FIELD-WRITE" => "types",
+        "E-CON-UNSUPPORTED" => "parse",
         // DIAG-1.10: reported where a builtin path is resolved.
         "W-DEPRECATED" => "resolve",
         // Resource limits are enforced by the loader before any analysis: the

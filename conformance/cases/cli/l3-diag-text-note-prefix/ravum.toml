@@ -1,0 +1,4 @@
+[package]
+name = "cli-l3-diag-text-note-prefix"
+version = "0.1.0"
+edition = "core-1.0"

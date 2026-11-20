@@ -1,0 +1,6 @@
+{
+  "id": "ownership/l3-deref-mut-assign",
+  "mode": "run-pass",
+  "stdout_contains": "7\n",
+  "notes": "G-6.9 (MUST): `*r = e` is a valid assignment target when `r: &mut T`; the write is visible through the original binding."
+}

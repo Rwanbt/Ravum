@@ -178,6 +178,18 @@ Un `warning` ne peut **jamais** être promu en `error` en Core 1.0 (pas de `--de
 | `E-DSP-ENTRY` | reload | `State` ou `process_sample` absents du module racine, ou signature différente de `fn(state: &mut State, input: f32) -> f32` (DSP-1.2) ; émis par `--dsp-block` / `--emit dsp-block` |
 | `E-DSP-STATE-TYPE` | reload | état d'un bloc DSP différent de l'état hôte `struct State { z1: f32, z2: f32 }` (DSP-1.2) |
 
+### 3.6.3 Contrats et invariants
+
+Introduits par [`RFC-CONTRACTS-1`](../../docs/rfc/RFC-CONTRACTS-1.md) et
+[`RFC-INVARIANTS-1`](../../docs/rfc/RFC-INVARIANTS-1.md) (`ACCEPTED`).
+
+| Code | Phase | Sens |
+|---|---|---|
+| `E-CON-EFFECT` | effects | une clause `requires`/`ensures`/`invariant` a un effet (CON-2) |
+| `E-CON-NONCOPY` | types | une clause lit un paramètre ou un `result` non `Copy` (CON-3) |
+| `E-CON-UNSUPPORTED` | parse | forme de contrat hors V1 : `invariant` sur une struct générique (INV-6, parseur) ; clause sur une forme de fonction non prise en charge (vérifiée au typage) |
+| `E-CON-FIELD-WRITE` | types | écriture ou emprunt `&mut` d'un champ d'une struct à invariant hors de ses méthodes (INV-9) |
+
 ### 3.7 Avertissements
 
 | Code | Phase | Sens |
