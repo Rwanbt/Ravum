@@ -120,3 +120,15 @@ Décisions du responsable, choisies parmi les options présentées :
 - **V1-C7** : T19 est atteint avec un contre-exemple **observé** (valeurs
   au moment de la violation), non minimisé : les `test fn` n'ont pas
   d'entrées à réduire. Pas de tests par propriété en V1.
+
+## V1-G1, V1-W1, V1-A2 (2026-11-20)
+
+- **V1-G1** : T18 et T19 passent à **`PASS (V1)`** : périmètre V1
+  implémenté et testé ; vérification à l'exécution, preuves `TESTED`,
+  aucune preuve statique (`PROVED` non revendiqué), aucun audit externe.
+- **V1-W1** : l'échec isolé de `watch_jit` est **clos** comme « cause
+  probable reproduite (binaire réécrit pendant l'exécution), non prouvée » ;
+  le message du test distingue désormais délai et fin de l'enfant.
+- **V1-A2** : l'exécution de l'hôte `cpal` sur un vrai périphérique est
+  confiée à une session **locale** du responsable (consigne :
+  `docs/handoff/CPAL-LOCAL-SESSION.md`) ; reste `NOT_RUN` d'ici là.
