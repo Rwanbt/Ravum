@@ -28,11 +28,13 @@ encore `PARTIAL`/`BLOCKED` et propose un ordre. Elle ne change aucun état.
 | 1 | T17 | seule l'étape 1 (replay d'une session hot swap) existe | étape 2 : replay de session `watch` complète (éditions source → diagnostics → activations), digests comparés ; refus identiques |
 | 2 | T14 | corpus IR **55/61** ; JIT limité aux structs `Copy` | couvrir les 6 programmes restants (lister chacun et sa construction manquante), structs non-`Copy` dans l'IR/JIT |
 | 3 | T2 | **95 MUST sans FeatureId** (`must_audit.py`) | rattacher chaque MUST à un FeatureId et un cas, sans exemption nouvelle |
-| 4 | T6, T8, T9 | les critères écrits semblent atteints ; la raison du `PARTIAL` n'est pas écrite dans la matrice : **NOT_REVIEWED** | relire les rapports, écrire le critère de sortie manquant, puis proposer `PASS` ou le travail restant |
+| 4 | T8 + T9 | colonne « écart » : vertical `examples/dsp-gain-iir` non branché sur l'hôte ; état DSP limité à `{ z1, z2 }` (ABI 2 non ratifiée) ; fondu non mesuré sur un bloc `.rv` ; E2E navigateur absent | brancher `dsp-gain-iir` sur l'hôte audio (`ravum-lang-audio`, WAV en CI), mesurer le fondu ; l'ABI 2 et l'E2E navigateur demandent une décision |
+| 5 | T6 | `connect` TCP bloquant, pas d'HTTP asynchrone | `connect` asynchrone puis HTTP asynchrone (RFC d'abord) |
 
 ## Questions au responsable
 
 1. Valider (ou réordonner) la liste B.
-2. Pour T6/T8/T9 : quel était le critère de sortie attendu ?
+2. T8 : ratifier l'ABI 2 de l'état DSP (au-delà de `{ z1, z2 }`) ou la laisser hors V2 ?
+3. T9 : l'E2E navigateur est-il dans le périmètre V2 ?
 
 Rien ne sera marqué `PASS` sans preuve exécutée et décision du responsable.
