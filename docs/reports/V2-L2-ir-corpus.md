@@ -114,3 +114,32 @@ La dimension `--verify-build` est `NOT_RUN`. Aucun benchmark de performance.
 Maintenir T14 à `PARTIAL`. Ajouter la couverture mesurée des champs
 propriétaires et conserver le rejet de `x-diverge` et l’échec du workspace
 dans les limites.
+
+## Vérification du correctif de conformance sur un checkout Linux natif
+
+Le correctif du harnais est publié sur `codex/conformance-toolchain-path`
+au SHA `64efd691b2b18fd2e5cb5e86fed98a63ab0e8891`. Il affiche le nom du
+binaire dans le rapport et garde son chemin pour l’exécution. Les 57 tests
+du harnais réussissent, dont le test d’origine sur le masquage. Le correctif
+est testé avec L2 dans un checkout temporaire, hors de la branche L2.
+
+Les anciens binaires de `ravum-unit-graph` contenaient un chemin de checkout
+obsolète. Une reconstruction avec un répertoire de build neuf a rétabli les
+tests. Les 15 tests de publication Git réussissent sur un système de fichiers
+Linux natif. La campagne DSP termine avec 9 réussites en 18,58 s lorsque
+seule la dépendance existante `sha2` est optimisée. Elle traite des artefacts
+d’environ 4 Mio à chaque préparation. Le seuil et les assertions restent
+identiques. La conformance combinée donne 740 réussites, 0 échec et 2 `SKIP`.
+Le workspace combiné termine avec le code 0, 2 324 tests réussis,
+0 échec et 14 ignorés. Ce résultat s’applique au SHA L2
+`3de3e20e1c1b6e8cd9dd9e724084aed38a8eb6be` avec le correctif du harnais
+appliqué et la configuration ci-dessous. Pour reproduire la validation
+après intégration, reprendre ces deux révisions sur un système de fichiers
+Linux natif et utiliser un répertoire de build neuf.
+
+```sh
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  cargo --config 'profile.test.package.sha2.opt-level=3' \
+  test --workspace --no-fail-fast -- --test-threads=1
+cargo run -p ravum-conformance --release -- run
+```
