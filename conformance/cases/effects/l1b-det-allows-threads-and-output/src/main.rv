@@ -1,0 +1,13 @@
+use std::io;
+use std::sync;
+use std::thread;
+
+fn work(n: i64) -> i64 effects() {
+    n * 2
+}
+
+fn main() -> () effects(io, thread, alloc, panic) {
+    let h = thread::spawn(work, 21);
+    let v = thread::join(h);
+    io::println(&v.to_string());
+}

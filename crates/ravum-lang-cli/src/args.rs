@@ -244,7 +244,7 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
 
 fn parse_profile(value: &str) -> Result<Profile, String> {
     Profile::parse(value)
-        .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure` or `rt`"))
+        .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure`, `rt` or `det`"))
 }
 
 fn parse_target(value: &str, command: &str) -> Result<BuildTarget, String> {
@@ -599,7 +599,7 @@ USAGE:
 
 COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
-    check [PATH] [--json|--sarif] [--profile core|pure|rt] [--rt-entry FN] [--locked] [--timings]
+    check [PATH] [--json|--sarif] [--profile core|pure|rt|det] [--rt-entry FN] [--locked] [--timings]
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
@@ -657,7 +657,7 @@ pub fn help_for(topic: &str) -> String {
                    Creates `ravum.toml`, `src/main.rv` (or `src/lib.rv` with --lib) and a\n\
                    `.gitignore` that ignores `.ravum/`. Refuses a non-empty directory\n\
                    unless --force is given; --force overwrites only the generated files.\n",
-        "check" => "USAGE: ravum-lang check [PATH] [--json|--sarif] [--profile core|pure|rt] \
+        "check" => "USAGE: ravum-lang check [PATH] [--json|--sarif] [--profile core|pure|rt|det] \
                     [--rt-entry FN] [--locked] [--timings]\n\n\
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\

@@ -1,0 +1,12 @@
+{
+  "id": "effects/l1b-det-refuses-fs",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "DET-1 (MUST): fs is not replayable; refused at the det entry point."
+}

@@ -275,7 +275,9 @@ pub fn infer_and_check(
         .into_iter()
         .filter(|(id, _)| direct.contains_key(id))
     {
-        if let Some((chain, effect, source)) = find_violation(entry, &forbidden, &direct, facts) {
+        if let Some((chain, effect, source)) =
+            find_violation(entry, &forbidden, profile.forbidden_calls(), &direct, facts)
+        {
             let span = fns.get(&entry).map(|f| f.span).unwrap_or(Span::dummy());
             let chain_text: Vec<String> = chain
                 .iter()
@@ -291,11 +293,19 @@ pub fn infer_and_check(
                 ravum_lang_syntax::diag::Diagnostic::error(
                     "E-EFF-PROFILE",
                     span,
-                    format!(
-                        "profile `{}` forbids effect `{}` reachable from `{entry_name}`",
-                        profile.name(),
-                        effect.name()
-                    ),
+                    if forbidden.contains(effect) {
+                        format!(
+                            "profile `{}` forbids effect `{}` reachable from `{entry_name}`",
+                            profile.name(),
+                            effect.name()
+                        )
+                    } else {
+                        format!(
+                            "profile `{}` forbids reading an input it cannot replay \
+                             ({source}) reachable from `{entry_name}` (DET-1)",
+                            profile.name()
+                        )
+                    },
                 )
                 .with_note(format!("call chain: {}", chain_text.join(" -> ")), None)
                 .with_note(format!("offending call: {source}"), None),
@@ -578,6 +588,7 @@ fn add_method_path(path: &str, out: &mut FnEffects) {
 fn find_violation(
     entry: NodeId,
     forbidden: &EffectSet,
+    forbidden_calls: &[&str],
     direct: &BTreeMap<NodeId, FnEffects>,
     facts: &Facts,
 ) -> Option<(Vec<NodeId>, Effect, String)> {
@@ -592,11 +603,12 @@ fn find_violation(
         // test or the `--rt-entry` function), and an edge is followed only
         // when its callee is one.
         let effects = &direct[&node];
-        if let Some((effect, source)) = effects
-            .sources
-            .iter()
-            .find(|(effect, _)| forbidden.contains(*effect))
-        {
+        if let Some((effect, source)) = effects.sources.iter().find(|(effect, source)| {
+            forbidden.contains(*effect)
+                || forbidden_calls
+                    .iter()
+                    .any(|path| *source == format!("call to `{path}`"))
+        }) {
             return Some((chain, *effect, source.clone()));
         }
         for callee in &effects.edges {

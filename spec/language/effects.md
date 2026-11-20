@@ -133,6 +133,7 @@ Un profil est un **mode de vérification** choisi par `--profile` (`check`, `bui
 | `core` (défaut) | candidate-stable | aucun contrôle supplémentaire ; le programme doit être accepté par le checker standard | — |
 | `pure` | candidate-stable | le **point d'entrée** (`main`, ou la fonction ciblée par `test`) ne peut atteindre **aucun** effet interdit, transitivement | `io fs net thread alloc panic unsafe ffi async rt nondet` |
 | `rt` | **expérimental** | le corps et la fermeture transitive des fonctions atteignables depuis l'entrée ne contiennent aucun effet interdit ; ne certifie **pas** le hard-RT | `io fs net thread alloc panic unsafe ffi async rt` |
+| `det` | **expérimental** ([`RFC-DETERMINISTIC-PROFILE-1`](../../docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md), `ACCEPTED`) | le point d'entrée n'atteint aucune entrée non rejouable ; **étape 1 seulement** : refus statique (DET-1), sans ordonnancement ni horloge virtuels (DET-3 à DET-6 non implémentés) | `fs net unsafe ffi`, et les lectures `io::read_line`, `env::var` |
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -146,6 +147,7 @@ Un profil est un **mode de vérification** choisi par `--profile` (`check`, `bui
 | EFF-4.8 | Aucun profil n'est une **garantie de sécurité d'exécution** : voir §6. | MUST |
 | EFF-4.9 | Le profil ne change **jamais** la sémantique du programme accepté : il ne fait qu'ajouter des refus. Deux programmes identiques acceptés sous `core` et `pure` ont le même comportement. | MUST |
 | EFF-4.10 | Un profil inconnu (`--profile hard_rt`) est un usage invalide : code de sortie `2` (et non `1`). | MUST |
+| EFF-4.11 | `det` (`check --profile det`) refuse au point d'entrée, transitivement, les effets `fs net unsafe ffi` et les appels `io::read_line` et `env::var` (`E-EFF-PROFILE`) ; `thread`, `async`, `alloc`, `panic`, l'écriture `io` et `env::args` sont permis (RFC-DETERMINISTIC-PROFILE-1 DET-1). Il ne garantit **pas** encore une exécution rejouable : `run`/`test` n'ont pas de profil (DET-3 à DET-15 non implémentés). | MUST |
 
 ```rv
 // POSITIF — profil `pure` : aucune API à effet ; `assert` est interdit (`panic`)

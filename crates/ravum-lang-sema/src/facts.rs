@@ -115,6 +115,8 @@ pub enum Profile {
     Core,
     Pure,
     Rt,
+    /// RFC-DETERMINISTIC-PROFILE-1: replayable execution (DET-1).
+    Det,
 }
 
 impl Profile {
@@ -123,6 +125,7 @@ impl Profile {
             "core" => Some(Profile::Core),
             "pure" => Some(Profile::Pure),
             "rt" => Some(Profile::Rt),
+            "det" => Some(Profile::Det),
             _ => None,
         }
     }
@@ -132,6 +135,7 @@ impl Profile {
             Profile::Core => "core",
             Profile::Pure => "pure",
             Profile::Rt => "rt",
+            Profile::Det => "det",
         }
     }
 
@@ -164,6 +168,25 @@ impl Profile {
                 Effect::Async,
                 Effect::Rt,
             ])),
+            // DET-1: external inputs and native code are not replayable;
+            // `thread`, `async`, `alloc`, `panic` and `io` output are allowed.
+            Profile::Det => Some(EffectSet::new([
+                Effect::Fs,
+                Effect::Net,
+                Effect::Unsafe,
+                Effect::Ffi,
+            ])),
+        }
+    }
+
+    /// Library functions refused at the entry point although their effect is
+    /// allowed: under `det` (DET-1), the `io` functions that *read* an input
+    /// the profile cannot replay. `env::args` stays allowed: the arguments
+    /// are given by the command that runs the program.
+    pub fn forbidden_calls(&self) -> &'static [&'static str] {
+        match self {
+            Profile::Det => &["std::io::read_line", "std::env::var"],
+            _ => &[],
         }
     }
 }
@@ -749,6 +772,33 @@ mod tests {
         assert_eq!(EffectSet::default().difference(&base), Vec::new());
     }
 
+    /// DET-1: `det` forbids exactly the non-replayable effects, keeps
+    /// `thread`/`async`/`alloc`/`panic`/`io` output, and refuses the `io`
+    /// reads by name; the other profiles refuse no call by name.
+    #[test]
+    fn det_forbids_inputs_it_cannot_replay() {
+        let det = Profile::Det.forbidden().expect("det forbids effects");
+        for e in [Effect::Fs, Effect::Net, Effect::Unsafe, Effect::Ffi] {
+            assert!(det.contains(e), "{e:?}");
+        }
+        for e in [
+            Effect::Io,
+            Effect::Thread,
+            Effect::Async,
+            Effect::Alloc,
+            Effect::Panic,
+        ] {
+            assert!(!det.contains(e), "{e:?}");
+        }
+        assert_eq!(
+            Profile::Det.forbidden_calls(),
+            &["std::io::read_line", "std::env::var"]
+        );
+        for p in [Profile::Core, Profile::Pure, Profile::Rt] {
+            assert!(p.forbidden_calls().is_empty());
+        }
+    }
+
     /// Profile names appear in diagnostics (`profile \`pure\` forbids ...`) and
     /// on the command line; the parser is the only accepted spelling.
     #[test]
@@ -757,6 +807,7 @@ mod tests {
             ("core", Profile::Core),
             ("pure", Profile::Pure),
             ("rt", Profile::Rt),
+            ("det", Profile::Det),
         ] {
             assert_eq!(Profile::parse(text), Some(profile));
             assert_eq!(profile.name(), text);
