@@ -303,4 +303,6 @@ ou WASAPI c'est un thread du système, dont la pile peut être plus petite
 `a_small_stack_budget_protects_a_small_callback_thread` — sur un thread de
 512 KiB, du code qui demanderait 3,2 MiB trappe et revient à la version
 précédente, sans débordement. `cpal` 0.15 ne demande aucune priorité temps
-réel pour son thread.
+réel pour son thread ; la feature `rt-priority` de `ravum-lang-audio`
+(V1-A3) l'obtient de l'OS une fois, au premier rappel (`NOT_RUN` sur
+périphérique, voir `docs/reports/V1-AUDIO-HOST.md`).

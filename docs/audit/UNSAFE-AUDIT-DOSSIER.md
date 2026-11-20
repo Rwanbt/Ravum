@@ -23,6 +23,10 @@
 Tous les autres crates du langage portent `#![forbid(unsafe_code)]`
 (`syntax`, `sema`, `codegen`, `lsp`, `ir`, `incr`, `audio`) ou
 `#![deny(unsafe_code)]` avec les seules exceptions listées (`cli`, `jit`).
+Dépendances tierces avec du code `unsafe` interne, hors périmètre de cet
+audit : `cpal` et `audio_thread_priority` (features `cpal`/`rt-priority`,
+désactivées par défaut) ; `ravum-lang-audio` lui-même reste
+`forbid(unsafe_code)`.
 Les tests (`tests/*.rs`) contiennent quelques `unsafe` de banc d'essai
 (allocateurs compteurs, `clock_gettime`) : hors périmètre produit.
 

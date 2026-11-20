@@ -72,6 +72,22 @@ cargo run -p ravum-lang-audio --features cpal --example play
   celui du flux CPAL. Le format matériel sous-jacent et le chemin de
   refus d’un flux non-f32 n’ont pas été mesurés lors de cet essai.
 
+## Priorité temps réel (feature `rt-priority`, V1-A3)
+
+- `cargo build -p ravum-lang-audio --features rt-priority` (Linux : il faut
+  `libdbus-1-dev` pour RTKit). La feature implique `cpal`.
+- Au **premier** rappel, avant tout bloc, le thread du backend est promu par
+  `audio_thread_priority::promote_current_thread_to_real_time(frames,
+  sample_rate)` ; la poignée vit aussi longtemps que le flux. Cet appel peut
+  allouer et bloquer (D-Bus) : exception **unique et documentée** à
+  l'INV-05, avant toute production de son. Les rappels suivants n'en font
+  rien.
+- `CpalHost::rt_status()` dit ce qui s'est passé ; l'exemple `play`
+  l'affiche. Un refus (`Refused`) laisse le son à priorité normale.
+- État : compilé, clippy et tests du crate verts dans le conteneur cloud ;
+  **`NOT_RUN`** sur périphérique. Même promu, aucune garantie hard-RT : un
+  noyau non temps réel peut encore préempter.
+
 ## Limites
 
 - Mono, `f32` ; pas d'entrée micro (silence) ; pas de choix du périphérique.

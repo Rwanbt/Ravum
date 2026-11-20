@@ -113,6 +113,7 @@ fn main() -> Result<(), String> {
     let edited = compile_source(&updated).map_err(|err| format!("{err:?}"))?;
     let update = engine.update(&edited).map_err(|err| format!("{err:?}"))?;
     sleep(TONE_DURATION);
+    println!("rt_status={:?}", host.rt_status());
     drop(host);
 
     let blocks = playback.blocks.load(Relaxed);

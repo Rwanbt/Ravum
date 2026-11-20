@@ -150,3 +150,17 @@ Décisions du responsable, choisies parmi les options présentées :
   la seule profondeur ; pas de garde de pile), corrigé et mesuré. La part
   restante — l'ordonnancement temps réel de l'OS — ne relève pas du code et
   n'est pas revendiquée.
+
+## V1-L2 / V1-A3 (2026-11-20)
+
+- **V1-L2** : la licence **MPL-2.0** est autorisée dans `deny.toml`, pour
+  `audio_thread_priority` 0.38 (Mozilla) seulement, par la feature
+  `rt-priority` de `ravum-lang-audio`, désactivée par défaut.
+- **V1-A3** : la priorité temps réel du thread de rappel est implémentée
+  derrière cette feature : promotion **une seule fois**, au premier rappel,
+  avant le premier bloc (RTKit/SCHED_FIFO sous Linux, MMCSS sous Windows,
+  politique « time constraint » sous macOS), état lisible par
+  `CpalHost::rt_status()` (`Disabled`/`Pending`/`Promoted`/`Refused`). Un
+  refus de l'OS n'arrête pas le son et n'est jamais présenté comme une
+  promotion. Exécution sur périphérique confiée à une session locale
+  (`docs/handoff/RT-PRIORITY-LOCAL-SESSION.md`) : `NOT_RUN` d'ici là.

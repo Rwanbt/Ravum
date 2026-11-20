@@ -18,6 +18,10 @@ allow = [
     # (V1-L1, docs/decision/DECISIONS-2026-11-19-V1.md). L'exception LLVM
     # n'ajoute que des droits par rapport à Apache-2.0.
     "Apache-2.0 WITH LLVM-exception",
+    # audio_thread_priority (feature `rt-priority` de ravum-lang-audio,
+    # désactivée par défaut). Autorisée par le responsable le 2026-11-20
+    # (V1-L2, docs/decision/DECISIONS-2026-11-19-V1.md).
+    "MPL-2.0",
 ]
 confidence-threshold = 0.8
 

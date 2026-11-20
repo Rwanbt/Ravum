@@ -12,10 +12,15 @@ default = []
 # Real output device through cpal. Off by default: the CI container has no
 # audio device; to be tested on a workstation (`--features cpal`).
 cpal = ["dep:cpal"]
+# Real-time promotion of the device callback thread (RTKit/SCHED_FIFO on
+# Linux, MMCSS on Windows, time-constraint policy on macOS). Off by default;
+# implies `cpal`. MPL-2.0 dependency, allowed by decision V1-L2.
+rt-priority = ["cpal", "dep:audio_thread_priority"]
 
 [dependencies]
 ravum-lang-jit = { path = "../ravum-lang-jit" }
 cpal = { version = "0.15", optional = true }
+audio_thread_priority = { version = "0.38", optional = true }
 
 [dev-dependencies]
 ravum-lang-ir = { path = "../ravum-lang-ir" }
