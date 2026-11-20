@@ -317,7 +317,7 @@ const RV_HTTP_MAX_HEADERS: usize = 100;
 const RV_HTTP_MAX_BODY: usize = 16 * 1024 * 1024;
 
 /// One CRLF- or LF-terminated line of at most `RV_HTTP_MAX_LINE` bytes.
-fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<Option<String>, Error> {
+fn rv_http_line<R: std::io::BufRead>(reader: &mut R) -> Result<Option<String>, Error> {
     use std::io::{BufRead, Read};
     let mut bytes = Vec::new();
     match reader.by_ref().take(RV_HTTP_MAX_LINE + 1).read_until(b'\n', &mut bytes) {
@@ -339,9 +339,7 @@ fn rv_http_line(reader: &mut std::io::BufReader<std::net::TcpStream>) -> Result<
 }
 
 /// Header lines up to the blank line; names are kept as received.
-fn rv_http_headers(
-    reader: &mut std::io::BufReader<std::net::TcpStream>,
-) -> Result<Vec<(String, String)>, Error> {
+fn rv_http_headers<R: std::io::BufRead>(reader: &mut R) -> Result<Vec<(String, String)>, Error> {
     let mut headers = Vec::new();
     loop {
         let line = match rv_http_line(reader)? {
@@ -369,8 +367,8 @@ fn rv_http_find(headers: &[(String, String)], name: &str) -> Option<String> {
 }
 
 /// The body announced by `Content-Length` (0 when absent), or `until_eof`.
-fn rv_http_read_body(
-    reader: &mut std::io::BufReader<std::net::TcpStream>,
+fn rv_http_read_body<R: std::io::BufRead>(
+    reader: &mut R,
     headers: &[(String, String)],
     until_eof: bool,
 ) -> Result<String, Error> {
@@ -415,7 +413,13 @@ fn rv_http_read_body(
 
 pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
     let mut reader = rv_reader(stream);
-    let line = match rv_http_line(&mut *reader)? {
+    rv_http_parse_request(&mut *reader)
+}
+
+/// STD-19.2/19.3: one request from any buffered reader (the socket, or the
+/// bytes gathered by `read_request_async`): same parser, same limits.
+fn rv_http_parse_request<R: std::io::BufRead>(reader: &mut R) -> Result<HttpRequest, Error> {
+    let line = match rv_http_line(reader)? {
         Some(line) => line,
         None => return Err(Error::new("http: connection closed before a request")),
     };
@@ -428,8 +432,8 @@ pub fn rv_http_read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         return Err(Error::new("http: unsupported HTTP version"));
     }
     let (method, path) = (method.to_string(), path.to_string());
-    let headers = rv_http_headers(&mut *reader)?;
-    let body = rv_http_read_body(&mut *reader, &headers, false)?;
+    let headers = rv_http_headers(reader)?;
+    let body = rv_http_read_body(reader, &headers, false)?;
     Ok(HttpRequest { method, path, headers, body })
 }
 
@@ -469,18 +473,23 @@ pub fn rv_http_respond(
     content_type: &str,
     body: &str,
 ) -> Result<(), Error> {
+    let text = rv_http_response_text(status, content_type, body)?;
+    rv_net_write_str(stream, &text)
+}
+
+/// STD-19.5: the whole response, or `Err` for a bad status/content type.
+fn rv_http_response_text(status: u16, content_type: &str, body: &str) -> Result<String, Error> {
     if !(100..=999).contains(&status) || content_type.contains(['\r', '\n']) {
         return Err(Error::new("http: invalid status or content type"));
     }
-    let text = format!(
+    Ok(format!(
         "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         status,
         rv_http_reason(status),
         content_type,
         body.len(),
         body
-    );
-    rv_net_write_str(stream, &text)
+    ))
 }
 
 fn rv_http_send(url: &str, method: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> {
@@ -1048,6 +1057,128 @@ impl std::future::Future for RvWrite {
         };
         let _ = socket.set_nonblocking(false);
         outcome
+    }
+}
+
+/// `http::read_request_async` (RFC-ASYNC-NET-1 ANET-2): gathers bytes without
+/// blocking the executor until a whole request is there (head + announced
+/// body), then parses it with the parser of `read_request` — same rules, same
+/// limits, same errors. Bytes after the request are not read (one request per
+/// connection, STD-19.8).
+struct RvReadRequest {
+    shared: std::sync::Arc<std::sync::Mutex<std::io::BufReader<std::net::TcpStream>>>,
+    bytes: Vec<u8>,
+}
+
+/// Bound on the head: request line + 100 headers + blank line, 8 KiB each.
+const RV_HTTP_MAX_HEAD: usize = (RV_HTTP_MAX_HEADERS + 2) * RV_HTTP_MAX_LINE as usize;
+
+/// Length of a complete request in `bytes`, `None` while more is needed, or
+/// `Some(len)` early when the head is malformed or too large (the parser then
+/// reports the error).
+fn rv_http_complete(bytes: &[u8]) -> Option<usize> {
+    let head_end = bytes
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|at| at + 4)
+        .into_iter()
+        .chain(bytes.windows(2).position(|w| w == b"\n\n").map(|at| at + 2))
+        .min();
+    let head_end = match head_end {
+        Some(end) => end,
+        None if bytes.len() > RV_HTTP_MAX_HEAD => return Some(bytes.len()),
+        None => return None,
+    };
+    let head = String::from_utf8_lossy(&bytes[..head_end]);
+    let mut length = 0usize;
+    for line in head.lines() {
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                match value.trim().parse::<usize>() {
+                    Ok(n) if n <= RV_HTTP_MAX_BODY => length = n,
+                    _ => return Some(head_end),
+                }
+            }
+        }
+    }
+    let need = head_end + length;
+    (bytes.len() >= need).then_some(need)
+}
+
+impl std::future::Future for RvReadRequest {
+    type Output = Result<HttpRequest, Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::io::BufRead;
+        let this = self.get_mut();
+        let shared = this.shared.clone();
+        let mut reader = shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Err(error) = reader.get_ref().set_nonblocking(true) {
+            return std::task::Poll::Ready(Err(rv_net_error("cannot read from the connection", error)));
+        }
+        let outcome = loop {
+            if let Some(len) = rv_http_complete(&this.bytes) {
+                let mut cursor = std::io::Cursor::new(&this.bytes[..len]);
+                break std::task::Poll::Ready(rv_http_parse_request(&mut cursor));
+            }
+            let used = match reader.fill_buf() {
+                Ok(buffer) if buffer.is_empty() => {
+                    // End of stream: the parser reports what is missing.
+                    let mut cursor = std::io::Cursor::new(&this.bytes[..]);
+                    break std::task::Poll::Ready(rv_http_parse_request(&mut cursor));
+                }
+                Ok(buffer) => {
+                    // Take only up to the end of the request once it is known.
+                    let before = this.bytes.len();
+                    this.bytes.extend_from_slice(buffer);
+                    let taken = match rv_http_complete(&this.bytes) {
+                        Some(len) if len >= before => {
+                            this.bytes.truncate(len);
+                            len - before
+                        }
+                        _ => buffer.len(),
+                    };
+                    taken
+                }
+                Err(error) if rv_would_block(&error) => break rv_io_wait(context),
+                Err(error) => {
+                    break std::task::Poll::Ready(Err(rv_net_error(
+                        "cannot read from the connection",
+                        error,
+                    )))
+                }
+            };
+            reader.consume(used);
+        };
+        let _ = reader.get_ref().set_nonblocking(false);
+        outcome
+    }
+}
+
+pub fn rv_http_read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
+    Box::pin(RvReadRequest {
+        shared: stream.shared.clone(),
+        bytes: Vec::new(),
+    })
+}
+
+/// `http::respond_async` (ANET-2): the response of `respond`, written without
+/// blocking the other tasks.
+pub fn rv_http_respond_async(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Future<Result<(), Error>> {
+    match rv_http_response_text(status, content_type, body) {
+        Ok(text) => Box::pin(RvWrite {
+            shared: stream.shared.clone(),
+            data: text.into_bytes(),
+            written: 0,
+        }),
+        Err(error) => Box::pin(async move { Err(error) }),
     }
 }
 

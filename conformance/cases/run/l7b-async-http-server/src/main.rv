@@ -1,0 +1,103 @@
+// RFC-ASYNC-NET-1 ANET-2: an HTTP server on the single-threaded executor.
+// Client `a` sends half a request and waits; client `b` sends a whole one.
+// With a blocking `read_request` the server would freeze on `a` and `b`
+// would never be answered: `b` is answered first, then `a`.
+use std::http;
+use std::io;
+use std::net;
+use std::task;
+
+async fn handle(stream: TcpStream) -> () effects(net, async, alloc) {
+    let mut s: TcpStream = stream;
+    match http::read_request_async(&mut s).await {
+        Ok(request) => {
+            let mut text: String = http::method(&request);
+            text.push_str(" ");
+            text.push_str(&http::path(&request));
+            text.push_str(" ");
+            text.push_str(&http::body(&request));
+            drop(http::respond_async(&mut s, 200, "text/plain", &text).await);
+        }
+        Err(e) => drop(http::respond_async(&mut s, 400, "text/plain", "bad request").await),
+    }
+}
+
+async fn serve(listener: TcpListener) -> () effects(net, async, alloc, io) {
+    for i in 0..2 {
+        match net::accept_async(&listener).await {
+            Ok(stream) => task::spawn(handle(stream)),
+            Err(e) => io::println("accept failed"),
+        }
+    };
+}
+
+async fn reply(name: String, stream: TcpStream) -> () effects(net, async, alloc, io) {
+    let mut s: TcpStream = stream;
+    let mut out: String = name;
+    out.push_str(":");
+    let mut done: bool = false;
+    while !done {
+        match net::read_line_async(&mut s).await {
+            Ok(Some(line)) => {
+                out.push_str(" ");
+                out.push_str(&line);
+            }
+            Ok(None) => {
+                done = true;
+            }
+            Err(e) => {
+                done = true;
+            }
+        }
+    }
+    io::println(&out);
+}
+
+async fn pause(rounds: i64) -> () effects(async, alloc) {
+    for i in 0..rounds {
+        task::yield_now().await;
+    }
+}
+
+async fn client_a(addr: String) -> () effects(net, async, alloc, io) {
+    match net::connect_async(&addr).await {
+        Ok(stream) => {
+            let mut s: TcpStream = stream;
+            drop(net::write_str_async(&mut s, "GET /a HTTP/1.1\r\nHost: x\r\n").await);
+            pause(50).await;
+            drop(net::write_str_async(&mut s, "\r\n").await);
+            reply(String::from("a"), s).await;
+        }
+        Err(e) => io::println("connect failed"),
+    }
+}
+
+async fn client_b(addr: String) -> () effects(net, async, alloc, io) {
+    match net::connect_async(&addr).await {
+        Ok(stream) => {
+            let mut s: TcpStream = stream;
+            drop(net::write_str_async(&mut s, "POST /b HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello").await);
+            reply(String::from("b"), s).await;
+        }
+        Err(e) => io::println("connect failed"),
+    }
+}
+
+async fn run() -> () effects(net, async, alloc, io) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let mut addr: String = String::from("127.0.0.1:");
+            addr.push_str(&net::local_port(&listener).to_string());
+            task::spawn(serve(listener));
+            task::spawn(client_a(addr.clone()));
+            client_b(addr).await;
+            pause(200).await;
+        }
+        Err(e) => io::println("listen failed"),
+    }
+}
+
+fn main() -> () effects(net, async, alloc, io) {
+    task::block_on(run());
+    io::println("done");
+}

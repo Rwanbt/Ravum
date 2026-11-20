@@ -524,6 +524,21 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         ret: "Result<(), Error>",
         effects: NET_ALLOC,
     },
+    // RFC-ASYNC-NET-1 ANET-2: same semantics as the blocking forms.
+    BuiltinFnSig {
+        path: "std::http::read_request_async",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Future<Result<HttpRequest, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::http::respond_async",
+        generics: &[],
+        params: &["&mut TcpStream", "u16", "&str", "&str"],
+        ret: "Future<Result<(), Error>>",
+        effects: NET_ASYNC,
+    },
     BuiltinFnSig {
         path: "std::http::get",
         generics: &[],

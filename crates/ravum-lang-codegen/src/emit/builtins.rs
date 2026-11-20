@@ -72,6 +72,8 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "http::header" => FreeBuiltin::Conc("http_header"),
         "http::body" => FreeBuiltin::Conc("http_body"),
         "http::respond" => FreeBuiltin::Conc("http_respond"),
+        "http::read_request_async" => FreeBuiltin::Conc("http_read_request_async"),
+        "http::respond_async" => FreeBuiltin::Conc("http_respond_async"),
         "http::get" => FreeBuiltin::Conc("http_get"),
         "http::post" => FreeBuiltin::Conc("http_post"),
         "http::status" => FreeBuiltin::Conc("http_status"),

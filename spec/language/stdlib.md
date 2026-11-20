@@ -771,6 +771,8 @@ pub fn path(request: &HttpRequest) -> String effects(alloc)
 pub fn header(request: &HttpRequest, name: &str) -> Option<String> effects(alloc)
 pub fn body(request: &HttpRequest) -> String effects(alloc)
 pub fn respond(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Result<(), Error> effects(net, alloc)
+pub fn read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> effects(net, async, alloc)   // CONC-6.8
+pub fn respond_async(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Future<Result<(), Error>> effects(net, async, alloc)   // CONC-6.8
 pub fn get(url: &str) -> Result<HttpResponse, Error> effects(net, alloc)
 pub fn post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> effects(net, alloc)
 pub fn status(response: &HttpResponse) -> u16
