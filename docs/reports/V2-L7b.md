@@ -1,44 +1,91 @@
-# V2-L7b — T6 : RFC-ASYNC-NET-1, blocage avant implémentation
+# V2-L7b — TCP et HTTP asynchrones côté serveur
 
 | Champ | Valeur |
 |---|---|
 | Gate | T6 |
-| RFC | `RFC-ASYNC-NET-1` (`ACCEPTED`, V2-R3, sans dépendance nouvelle) |
-| SHA | `5628e64` |
-| État | **bloqué sur une décision du responsable** ; aucun code modifié |
+| RFC | RFC-ASYNC-NET-1, V2-R3 et note V2-N1 |
+| Branche / SHA de départ / SHA final | `v2/L7b-async-net` / `24d85d61fbb58e9f6a5d944c29fc94767edc03ed` / commit qui ajoute ce rapport |
+| SHA des sources testées | `61e368992bddfb4719bafb489d62b2da543dbd09` |
+| Outils / OS | rustc `1.95.0 (59807616e 2026-04-14)`, Cargo 1.95.0, Linux x86_64, Intel Core i7-13620H |
 
-## Constat
+## Objectif et périmètre
 
-ANET-1 exige un `connect_async` qui ne bloque pas l'exécuteur mono-thread.
-Aujourd'hui (`crates/ravum-lang-codegen/src/prelude.rs`,
-`rv_net_connect_async`) la connexion est faite par `std::net::TcpStream::connect`,
-bloquant, au premier sondage (CONC-6.7).
+Avancer sur les opérations ANET qui peuvent utiliser des sockets déjà
+connectées. P0-C et P0-D s’appliquent. Aucun nouveau site `unsafe`, aucune
+dépendance, aucun changement au chemin de liaison de rustc.
 
-La bibliothèque standard Rust **n'a pas** de connexion TCP non bloquante :
-`TcpStream::connect` et `connect_timeout` bloquent ; `set_nonblocking` ne
-s'applique qu'à un socket déjà connecté. Les trois voies restantes violent
-chacune une contrainte déjà décidée :
+## Modification
 
-| Voie | Contrainte violée |
+- Déclarations, effets et abaissement de `net::read_exact_async`,
+  `http::read_request_async`, `http::respond_async` et `task::timeout`.
+- Les fonctions HTTP synchrones et asynchrones partagent l’analyse de la
+  ligne, des en-têtes et de la longueur, le décodage UTF-8 du corps et le
+  format de réponse. Elles lisent le même tampon TCP. La lecture et
+  l’écriture asynchrones d’un corps cèdent la main entre les tranches.
+- Le sondage du flux utilise `try_lock`. Une opération qui n’a pas accès au
+  socket rend la main. Le mode bloquant est rétabli avant de rendre le
+  tampon à son propriétaire.
+- `timeout` abandonne le futur à l’échéance monotone. À délai nul, il
+  sonde une fois. Sous `det`, le scheduler avance son horloge virtuelle
+  lorsqu’une attente est signalée. `nondet` rend visible la lecture de
+  l’horloge réelle conformément à DET-2.
+
+## Tests positifs / négatifs
+
+| Test | Résultat |
 |---|---|
-| `socket2` (MIT/Apache-2.0) : socket non bloquant puis `connect` qui rend `EINPROGRESS` | **V2-R3** : aucune dépendance nouvelle |
-| appel direct `libc::connect` | **`#![forbid(unsafe_code)]`** du Rust généré (ABI-2.4, F-META-024) |
-| un thread système par `connect_async`, le futur sonde un canal | alternative **écartée** par la RFC (§4 : contraire à l'exécuteur mono-thread, CONC-1.2) |
+| `blocking_and_async_http_match_and_preserve_buffered_bytes` | Une deuxième tâche avance alors que le corps HTTP est incomplet. Les deux chemins répondent octet pour octet de la même façon. Les lectures exactes suivantes retrouvent tous les octets tamponnés. |
+| Même test, refus HTTP | Ligne hors limite, 101 en-têtes, corps déclaré à 16 Mio + 1 octet et UTF-8 invalide. Même code de sortie et même diagnostic sur les deux chemins. |
+| Même test, délai réel | La lecture sans données expire à 80,02 ms pour 80 ms demandées. Le même propriétaire relit ensuite le socket et répond avec le contenu reçu après le délai. |
+| `deterministic_timeout_polls_once_at_zero_and_virtualizes_ten_minutes` | À délai nul, le futur prêt rend `Some` et le futur en attente rend `None`. Le cas rapide à délai positif rend `Some`. Les dix minutes virtuelles se terminent sans sommeil réel. |
 
-`http::get_async`/`post_async` (ANET-2) dépendent de la même connexion.
-`read_request_async`, `respond_async` (côté serveur) et `task::timeout`
-(ANET-5) ne sont **pas** bloqués et peuvent être faits sans décision.
+## Commandes exécutées
 
-## Correction (après V2-N1)
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test -p ravum-lang-sema -p ravum-lang-codegen --lib
+cargo test -p ravum-lang-cli --test async_net_server --test async_net_timeout -- --nocapture
+python3 tools/unsafe_audit.py
+python3 tools/must_audit.py
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  cargo --config 'profile.test.package.sha2.opt-level=3' \
+  test --workspace --no-fail-fast -- --test-threads=1
+cargo run -p ravum-conformance --release -- run
+```
 
-`socket2` ne peut pas servir : le Rust généré est compilé par `rustc` comme
-un fichier unique, sans aucune crate (`pipeline.rs`, pas de `--extern`).
-Le recommander était une erreur de l'agent.
+## Limites, écarts et demandes hors périmètre
 
-## Décision demandée
+- Le Rust généré est un fichier autonome compilé sans `--extern`.
+  L’autorisation V2-N1 sur la licence de `socket2` ne suffit donc pas à le
+  rendre utilisable depuis les programmes générés. Le plan de liaison et la
+  distribution de l’artefact runtime relèvent d’une décision distincte.
+  Une autre possibilité est un adaptateur natif audité et lié avec le
+  mécanisme FFI existant. Elle demande une décision de sûreté et une
+  qualification multiplateforme.
+- `connect_async` conserve son comportement actuel. `http::get_async` et
+  `http::post_async` dépendent de la connexion non bloquante. ANET-T1, le
+  scénario intégral ANET-T2, ANET-T3 et les cas client ANET-T6 restent
+  ouverts. Le test différentiel d’ici porte sur le serveur et le tampon.
+- Les opérations réussies partagent leurs octets tamponnés. Le test
+  d’annulation expire avant qu’un octet soit reçu. Le sort d’un préfixe
+  déjà consommé par un futur annulé nécessite un scénario dédié.
+- TSan ANET-T7 `NOT_RUN`. La machine a les toolchains stables seulement.
+- La suite workspace est lancée sur un système de fichiers Linux natif,
+  dans une copie temporaire avec le correctif du harnais
+  `64efd691b2b18fd2e5cb5e86fed98a63ab0e8891`.
 
-1. Autoriser `socket2` (recommandé : licence déjà permise par `deny.toml`,
-   surface minimale, pas d'`unsafe` dans le code généré), **ou**
-2. accepter un thread auxiliaire borné par `connect_async` (amender §4), **ou**
-3. garder `connect_async` bloquant (CONC-6.7 inchangé) et ne faire que le
-   côté serveur et `timeout`.
+## État des preuves
+
+`TESTED` côté serveur, pour la virtualisation du délai et pour les
+entrées et mesures décrites. Aucune nouvelle règle testable non liée
+n’est ajoutée au comptage de `must_audit.py`.
+Workspace avec 2 329 réussites, 0 échec et 14 ignorés. Conformance avec
+748 réussites, 0 échec et 2 `SKIP`. La dimension `--verify-build` est
+`NOT_RUN`. Formatage, Clippy et contrôle d’inventaire ont réussi.
+
+## Proposition à l’intégrateur
+
+Retenir les preuves serveur et de délai pour T6. La validation complète de
+T6 exige encore le chemin de connexion non bloquante, les clients HTTP et
+la campagne TSan.
