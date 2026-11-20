@@ -64,7 +64,8 @@ pub fn dispatch(command: Command) -> i32 {
             args,
             target,
             json,
-        } => run::run(&path, &args, target, json),
+            det_seed,
+        } => run::run(&path, &args, target, json, det_seed),
         Command::Watch {
             path,
             run,

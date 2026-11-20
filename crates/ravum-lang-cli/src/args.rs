@@ -51,6 +51,8 @@ pub enum Command {
         args: Vec<String>,
         target: BuildTarget,
         json: bool,
+        /// `--profile det [--seed N]` (RFC-DETERMINISTIC-PROFILE-1 DET-3).
+        det_seed: Option<u64>,
     },
     Watch {
         path: PathBuf,
@@ -333,6 +335,8 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
     let mut child: Vec<String> = Vec::new();
     let mut target = BuildTarget::Native;
     let mut json = false;
+    let mut det = false;
+    let mut seed: Option<u64> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
@@ -342,6 +346,24 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
                 break;
             }
             "--json" => json = true,
+            "--profile" => {
+                let value = option_value(rest, &mut i, "--profile")?;
+                if parse_profile(&value)? != Profile::Det {
+                    return Err(format!(
+                        "`run --profile {value}`: only `det` changes how a program runs; \
+                         check other profiles with `ravum-lang check --profile {value}`"
+                    ));
+                }
+                det = true;
+            }
+            "--seed" => {
+                let value = option_value(rest, &mut i, "--seed")?;
+                seed = Some(
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| format!("invalid seed `{value}`; expected a u64"))?,
+                );
+            }
             "--target" => {
                 let value = option_value(rest, &mut i, "--target")?;
                 target = parse_target(&value, "run")?;
@@ -358,11 +380,18 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if seed.is_some() && !det {
+        return Err("`--seed` requires `--profile det`".to_string());
+    }
+    if det && target.is_wasm() {
+        return Err("`--profile det` runs native programs only".to_string());
+    }
     Ok(Command::Run {
         path: path.unwrap_or_else(default_path),
         args: child,
         target,
         json,
+        det_seed: det.then(|| seed.unwrap_or(0)),
     })
 }
 
@@ -603,7 +632,7 @@ COMMANDS:
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
-    run [PATH] [--json] [--target TRIPLE] [-- ARGS...]
+    run [PATH] [--json] [--target TRIPLE] [--profile det [--seed N]] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
     watch [PATH] --backend jit [--entry NAME]  Native in-process backend, per-function hot swap

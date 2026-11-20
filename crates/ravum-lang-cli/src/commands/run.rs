@@ -166,7 +166,13 @@ impl Report<'_> {
     }
 }
 
-pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output: bool) -> i32 {
+pub fn run(
+    path: &Path,
+    child_args: &[String],
+    target: BuildTarget,
+    json_output: bool,
+    det_seed: Option<u64>,
+) -> i32 {
     let report = Report {
         path,
         json: json_output,
@@ -185,7 +191,14 @@ pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output:
         );
     }
 
-    let frontend = pipeline::analyze(path, Profile::Core, false);
+    // `det` (DET-1): the program must not reach an input it cannot replay;
+    // the run itself is scheduled by the seed (DET-3).
+    let profile = if det_seed.is_some() {
+        Profile::Det
+    } else {
+        Profile::Core
+    };
+    let frontend = pipeline::analyze(path, profile, false);
     if !frontend.success() {
         if json_output {
             let diagnostics = json::diagnostics(frontend.diags.as_slice(), &frontend.pkg.sources);
@@ -215,7 +228,7 @@ pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output:
     if artifacts.target.is_wasm() {
         run_wasm(&report, &frontend, &artifacts, child_args)
     } else {
-        run_native(&report, &frontend, &artifacts, child_args)
+        run_native(&report, &frontend, &artifacts, child_args, det_seed)
     }
 }
 
@@ -224,10 +237,20 @@ fn run_native(
     frontend: &pipeline::Frontend,
     artifacts: &Artifacts,
     child_args: &[String],
+    det_seed: Option<u64>,
 ) -> i32 {
     eprintln!("running: {}", util::pretty_path(&artifacts.binary));
     let mut command = Command::new(&artifacts.binary);
     command.args(child_args);
+    match det_seed {
+        Some(seed) => {
+            eprintln!("profile det: seed={seed}");
+            command.env("RAVUM_DET_SEED", seed.to_string());
+        }
+        None => {
+            command.env_remove("RAVUM_DET_SEED");
+        }
+    }
     command.current_dir(frontend.root());
     command.stdout(report.program_stdout());
     match command.status() {

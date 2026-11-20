@@ -548,12 +548,217 @@ pub fn rv_http_response_body(response: &HttpResponse) -> String {
 /// that was not joined joins it: no thread outlives its handle (CONC-3.5).
 pub struct JoinHandle<T> {
     inner: Option<std::thread::JoinHandle<T>>,
+    /// Thread id under the deterministic scheduler (`rv_det`), if active.
+    det_id: Option<u64>,
 }
 
 impl<T> Drop for JoinHandle<T> {
     fn drop(&mut self) {
         if let Some(handle) = self.inner.take() {
+            rv_det::wait_finished(self.det_id);
             let _ = handle.join();
+        }
+    }
+}
+
+// --- Deterministic scheduler (RFC-DETERMINISTIC-PROFILE-1 DET-3..DET-6) ---
+//
+// Active only when the process is started with `RAVUM_DET_SEED=<u64>`
+// (`ravum-lang run --profile det --seed N`). Then exactly one Ravum thread
+// runs at a time; at each synchronisation point (`spawn`, `send`, `recv`,
+// `join`, thread end) the next thread is drawn among the runnable ones by a
+// SplitMix64 generator seeded with N. Same seed, same binary, same input:
+// same interleaving, hence the same output. When no thread can run while
+// some wait, the program stops: `panic: deadlock (det, seed=N)`. Without the
+// variable nothing changes (the functions below return at once).
+mod rv_det {
+    use std::cell::Cell;
+    use std::collections::BTreeSet;
+    use std::sync::{Condvar, Mutex, MutexGuard, OnceLock};
+
+    struct State {
+        current: u64,
+        runnable: BTreeSet<u64>,
+        blocked: BTreeSet<u64>,
+        finished: BTreeSet<u64>,
+        next: u64,
+        rng: u64,
+        seed: u64,
+    }
+
+    pub struct DetSched {
+        state: Mutex<State>,
+        turn: Condvar,
+    }
+
+    static SCHED: OnceLock<Option<DetSched>> = OnceLock::new();
+
+    thread_local! {
+        static ME: Cell<u64> = const { Cell::new(0) };
+    }
+
+    pub fn sched() -> Option<&'static DetSched> {
+        SCHED
+            .get_or_init(|| {
+                let text = std::env::var("RAVUM_DET_SEED").ok()?;
+                let seed: u64 = match text.parse() {
+                    Ok(seed) => seed,
+                    Err(_) => panic!("RAVUM_DET_SEED is not a u64: {text:?}"),
+                };
+                Some(DetSched {
+                    state: Mutex::new(State {
+                        current: 0,
+                        runnable: BTreeSet::from([0]),
+                        blocked: BTreeSet::new(),
+                        finished: BTreeSet::new(),
+                        next: 1,
+                        rng: seed,
+                        seed,
+                    }),
+                    turn: Condvar::new(),
+                })
+            })
+            .as_ref()
+    }
+
+    /// SplitMix64. Its arithmetic is modulo 2^64 by definition: it is done in
+    /// `u128`, where it cannot overflow, then truncated explicitly — the
+    /// overflow checks of the program are untouched.
+    fn mod64_add(a: u64, b: u64) -> u64 {
+        ((a as u128 + b as u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64
+    }
+
+    fn mod64_mul(a: u64, b: u64) -> u64 {
+        ((a as u128 * b as u128) & 0xFFFF_FFFF_FFFF_FFFF) as u64
+    }
+
+    fn splitmix64(x: &mut u64) -> u64 {
+        *x = mod64_add(*x, 0x9E37_79B9_7F4A_7C15);
+        let mut z = *x;
+        z = mod64_mul(z ^ (z >> 30), 0xBF58_476D_1CE4_E5B9);
+        z = mod64_mul(z ^ (z >> 27), 0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn me() -> u64 {
+        ME.with(|m| m.get())
+    }
+
+    impl DetSched {
+        fn lock(&self) -> MutexGuard<'_, State> {
+            match self.state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            }
+        }
+
+        /// Choose the next thread; DET-6 when none can run but some wait.
+        fn pick<'a>(&'a self, mut st: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+            if st.runnable.is_empty() {
+                if st.blocked.is_empty() {
+                    return st;
+                }
+                let seed = st.seed;
+                drop(st);
+                panic!("deadlock (det, seed={seed})");
+            }
+            let n = st.runnable.len() as u64;
+            let k = (splitmix64(&mut st.rng) % n) as usize;
+            st.current = st.runnable.iter().copied().nth(k).unwrap_or(0);
+            self.turn.notify_all();
+            st
+        }
+
+        fn wait_turn<'a>(&'a self, mut st: MutexGuard<'a, State>, id: u64) {
+            while st.current != id {
+                st = match self.turn.wait(st) {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+            }
+        }
+
+        /// A synchronisation point: let the scheduler choose who runs next.
+        pub fn switch(&self) {
+            let id = me();
+            let st = self.pick(self.lock());
+            self.wait_turn(st, id);
+        }
+
+        /// Wait for an event (a `send`, a sender dropped, a thread ended).
+        pub fn block(&self) {
+            let id = me();
+            let mut st = self.lock();
+            st.runnable.remove(&id);
+            st.blocked.insert(id);
+            let st = self.pick(st);
+            self.wait_turn(st, id);
+        }
+
+        /// Something a waiting thread may need happened: all of them retry.
+        pub fn event(&self) {
+            let mut st = self.lock();
+            let woken: Vec<u64> = std::mem::take(&mut st.blocked).into_iter().collect();
+            st.runnable.extend(woken);
+        }
+
+        pub fn spawn_id(&self) -> u64 {
+            let mut st = self.lock();
+            let id = st.next;
+            st.next += 1;
+            st.runnable.insert(id);
+            id
+        }
+
+        /// First instruction of a spawned thread: wait to be chosen.
+        pub fn enter(&self, id: u64) {
+            ME.with(|m| m.set(id));
+            let st = self.lock();
+            self.wait_turn(st, id);
+        }
+
+        /// Last instruction of a spawned thread: leave and hand over.
+        pub fn exit(&self) {
+            let id = me();
+            let mut st = self.lock();
+            st.runnable.remove(&id);
+            st.finished.insert(id);
+            let woken: Vec<u64> = std::mem::take(&mut st.blocked).into_iter().collect();
+            st.runnable.extend(woken);
+            drop(self.pick(st));
+        }
+
+        fn is_finished(&self, id: u64) -> bool {
+            self.lock().finished.contains(&id)
+        }
+    }
+
+    /// `join` and `JoinHandle` drop: wait, under the scheduler, until the
+    /// thread has left it (its OS thread then only returns its value).
+    pub fn wait_finished(id: Option<u64>) {
+        if let (Some(s), Some(id)) = (sched(), id) {
+            s.switch();
+            while !s.is_finished(id) {
+                s.block();
+            }
+        }
+    }
+
+    pub fn switch() {
+        if let Some(s) = sched() {
+            s.switch();
+        }
+    }
+
+    pub fn event() {
+        if let Some(s) = sched() {
+            s.event();
+        }
+    }
+
+    pub fn block() {
+        if let Some(s) = sched() {
+            s.block();
         }
     }
 }
@@ -864,8 +1069,25 @@ pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
     worker: fn(A) -> R,
     arg: A,
 ) -> JoinHandle<R> {
-    JoinHandle {
-        inner: Some(std::thread::spawn(move || worker(arg))),
+    match rv_det::sched() {
+        None => JoinHandle {
+            inner: Some(std::thread::spawn(move || worker(arg))),
+            det_id: None,
+        },
+        Some(s) => {
+            let id = s.spawn_id();
+            let inner = std::thread::spawn(move || {
+                s.enter(id);
+                let value = worker(arg);
+                s.exit();
+                value
+            });
+            s.switch();
+            JoinHandle {
+                inner: Some(inner),
+                det_id: Some(id),
+            }
+        }
     }
 }
 
@@ -873,7 +1095,10 @@ pub fn rv_thread_spawn<A: Send + 'static, R: Send + 'static>(
 /// (`panic: <message>`, exit code 1), so `join` only sees finished threads.
 pub fn rv_thread_join<T>(mut handle: JoinHandle<T>) -> T {
     match handle.inner.take() {
-        Some(inner) => match inner.join() {
+        Some(inner) => match {
+            rv_det::wait_finished(handle.det_id);
+            inner.join()
+        } {
             Ok(value) => value,
             Err(payload) => std::panic::resume_unwind(payload),
         },
@@ -888,6 +1113,14 @@ pub struct Channel<T> {
 
 pub struct Sender<T> {
     inner: std::sync::mpsc::Sender<T>,
+}
+
+impl<T> Drop for Sender<T> {
+    /// A receiver waiting under the deterministic scheduler may now see the
+    /// end of the channel.
+    fn drop(&mut self) {
+        rv_det::event();
+    }
 }
 
 pub struct Receiver<T> {
@@ -920,11 +1153,24 @@ pub fn rv_sync_receiver<T>(channel: Channel<T>) -> Receiver<T> {
 }
 
 pub fn rv_sync_send<T>(sender: &Sender<T>, value: T) -> bool {
-    sender.inner.send(value).is_ok()
+    let sent = sender.inner.send(value).is_ok();
+    rv_det::event();
+    rv_det::switch();
+    sent
 }
 
 pub fn rv_sync_recv<T>(receiver: &Receiver<T>) -> Option<T> {
-    receiver.inner.recv().ok()
+    if rv_det::sched().is_none() {
+        return receiver.inner.recv().ok();
+    }
+    rv_det::switch();
+    loop {
+        match receiver.inner.try_recv() {
+            Ok(value) => return Some(value),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => return None,
+            Err(std::sync::mpsc::TryRecvError::Empty) => rv_det::block(),
+        }
+    }
 }
 
 /// An opaque C pointer (`std::ffi`, RFC-E11-SQLITE NAT-3.3). Ravum code can
