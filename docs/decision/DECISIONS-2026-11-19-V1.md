@@ -132,3 +132,10 @@ Décisions du responsable, choisies parmi les options présentées :
 - **V1-A2** : l'exécution de l'hôte `cpal` sur un vrai périphérique est
   confiée à une session **locale** du responsable (consigne :
   `docs/handoff/CPAL-LOCAL-SESSION.md`) ; reste `NOT_RUN` d'ici là.
+
+## V1-A2 — clôture (2026-11-20)
+
+- L'hôte `cpal` a été **exécuté** dans la session locale du responsable
+  (commit `be04b3c`) : flux f32 44,1 kHz stéréo, édition à chaud entendue
+  sans coupure, 0 allocation Rust dans `process` — `TESTED` pour cette
+  configuration (détails et limites : `docs/reports/V1-AUDIO-HOST.md`).
