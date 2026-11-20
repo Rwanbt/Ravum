@@ -51,8 +51,16 @@ fn until(rx: &Receiver<String>, needle: &str) -> Vec<String> {
                     return seen;
                 }
             }
-            Err(_) => panic!(
-                "timed out waiting for `{needle}`; got:\n{}",
+            // Distinguish a slow child from one whose stdout closed (it
+            // exited, or could not start: e.g. its binary was being
+            // rewritten by a concurrent build).
+            Err(e) => panic!(
+                "{} waiting for `{needle}`; got:\n{}",
+                match e {
+                    std::sync::mpsc::RecvTimeoutError::Timeout => "timed out",
+                    std::sync::mpsc::RecvTimeoutError::Disconnected =>
+                        "the child's stdout closed (child exited)",
+                },
                 seen.join("\n")
             ),
         }

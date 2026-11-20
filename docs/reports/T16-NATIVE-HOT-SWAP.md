@@ -229,3 +229,18 @@ sont pas dans l'état migré (écart à HR-1.2, documenté).
 1. ~~IR v1.1 et bloc DSP avec état~~ (fait, §7) ; ~~`migrate` (HR-1.7)~~ (fait, §9).
 2. ~~`ravum-lang watch --backend jit`~~ (fait, §8).
 3. Brancher le `RtRunner` sur l'hôte audio existant (`ravum-patch-host`).
+
+## Note (2026-11-20) — échec isolé de deux tests `watch_jit`
+
+Lors d'une exécution de la suite pendant que d'autres commandes `cargo`
+tournaient en parallèle, `watch_jit_drives_a_dsp_block…` et
+`watch_jit_recompiles_only_the_edited_function…` ont échoué en 0,49 s (pas un
+dépassement du délai de 30 s : la sortie de l'enfant s'est fermée). Enquête :
+30 exécutions du binaire de test, 6 en parallèle sous charge : **0 échec** ;
+la suite relancée seule : verte. **Signature reproduite** en réécrivant
+`target/debug/ravum-lang` pendant que les tests le lancent (mêmes lignes
+d'échec, < 1 s). Cause la plus probable : un binaire réécrit par une
+compilation concurrente — **non prouvée** pour l'exécution d'origine (sa
+sortie d'erreur n'a pas été conservée). Le test distingue maintenant « délai
+dépassé » de « sortie de l'enfant fermée » pour qu'un prochain cas soit
+diagnostiqué. Aucun test désactivé ni affaibli.

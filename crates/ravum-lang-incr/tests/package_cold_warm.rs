@@ -86,6 +86,24 @@ fn edits(files: &BTreeMap<&'static str, String>) -> Vec<(String, &'static str, S
                 text.replace("pub fn norm(", "pub fn norm2("),
             ));
         }
+        // Prefix edits: an item appended (everything before is reusable),
+        // one prepended (every id of the file shifts: nothing reusable), and
+        // an appended item shadowing nothing but calling earlier ones.
+        out.push((
+            format!("{name} append"),
+            *name,
+            format!("{text}\nfn appended(q: i64) -> i64 effects() {{\n    return q;\n}}\n"),
+        ));
+        out.push((
+            format!("{name} prepend"),
+            *name,
+            format!("fn prepended(q: i64) -> i64 effects() {{\n    return q;\n}}\n\n{text}"),
+        ));
+        out.push((
+            format!("{name} append-bad"),
+            *name,
+            format!("{text}\nfn appended(q: i64) -> bool effects() {{\n    return q;\n}}\n"),
+        ));
         if text.contains("pub y: i64") {
             out.push((
                 format!("{name} field"),
@@ -165,6 +183,7 @@ fn norm_diags(r: &ravum_lang_sema::CheckResult) -> Vec<String> {
 fn package_check_equals_full_check_with_complete_facts() {
     let base_dir = std::env::temp_dir().join(format!("rv-incr-pkg-{}", std::process::id()));
     let (mut edits_n, mut reused, mut checked, mut facts_compared) = (0, 0, 0, 0);
+    let mut reused_edited = 0;
     let mut failures = Vec::new();
     for seed in 0..3u32 {
         let root = base_dir.join(format!("p{seed}"));
@@ -203,6 +222,7 @@ fn package_check_equals_full_check_with_complete_facts() {
             };
             let (warm, s1, stats) = check_package(Some(&s0), wp, &w.sources, &options());
             reused += stats.reused_bodies;
+            reused_edited += stats.reused_in_edited_files;
             checked += stats.checked_bodies;
             // Cold: same file ids, fresh parse cache, full check.
             let mut cold_cache = ParseCache::default();
@@ -249,7 +269,7 @@ fn package_check_equals_full_check_with_complete_facts() {
         let _ = std::fs::remove_dir_all(&root);
     }
     eprintln!(
-        "T13 step 3 package cold=warm: edits={edits_n} facts compared={facts_compared} bodies reused={reused} checked={checked}"
+        "T13 step 3 package cold=warm: edits={edits_n} facts compared={facts_compared} bodies reused={reused} (in edited files: {reused_edited}) checked={checked}"
     );
     assert!(
         failures.is_empty(),
@@ -265,6 +285,8 @@ fn package_check_equals_full_check_with_complete_facts() {
     assert!(edits_n >= 50, "edits: {edits_n}");
     assert!(facts_compared >= 20, "facts compared: {facts_compared}");
     assert!(reused > 0, "nothing reused");
+    // T13: functions before the first change of an edited file are reused.
+    assert!(reused_edited > 0, "nothing reused inside an edited file");
 }
 
 /// Names (and a sample) of the `Facts` fields that differ.

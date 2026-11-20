@@ -44,8 +44,9 @@ struct FnCache {
     callees: Vec<NodeId>,
     used_imports: Vec<String>,
     static_str: bool,
-    /// Files the function's facts refer to.
-    ref_files: BTreeSet<u32>,
+    /// Per file the function's facts refer to, the largest node id referred
+    /// to there (T13: reuse inside an edited file needs it in the prefix).
+    refs: BTreeMap<u32, NodeId>,
 }
 
 /// What the next check of the same package reuses.
@@ -61,18 +62,26 @@ pub struct PackageState {
 pub struct PackageStats {
     pub checked_bodies: usize,
     pub reused_bodies: usize,
+    /// Of `reused_bodies`, those of an edited file (before its first change).
+    pub reused_in_edited_files: usize,
     pub full: Option<String>,
 }
 
 /// Function items (any nesting) with their file and span, and every item id
 /// per file (for the node ranges).
-fn collect(items: &[Item], fns: &mut Vec<(NodeId, Span)>, ids: &mut BTreeMap<u32, Vec<NodeId>>) {
+fn collect(
+    items: &[Item],
+    fns: &mut Vec<(NodeId, Span)>,
+    ids: &mut BTreeMap<u32, Vec<NodeId>>,
+    all: &mut Vec<(NodeId, Span)>,
+) {
     for item in items {
         ids.entry(file_of(item.id)).or_default().push(item.id);
+        all.push((item.id, item.span));
         match &item.kind {
             ItemKind::Fn(_) => fns.push((item.id, item.span)),
-            ItemKind::Impl(imp) => collect(&imp.items, fns, ids),
-            ItemKind::Mod(m) => collect(&m.items, fns, ids),
+            ItemKind::Impl(imp) => collect(&imp.items, fns, ids, all),
+            ItemKind::Mod(m) => collect(&m.items, fns, ids, all),
             _ => {}
         }
     }
@@ -89,31 +98,11 @@ fn range_of(id: NodeId, ids: &BTreeMap<u32, Vec<NodeId>>) -> (NodeId, NodeId) {
     (lo, id)
 }
 
-fn type_files(t: &Type, out: &mut BTreeSet<u32>) {
-    match t {
-        Type::Nominal { def, args, .. } => {
-            out.insert(file_of(*def));
-            for a in args {
-                type_files(a, out);
-            }
-        }
-        Type::Ref { inner, .. }
-        | Type::Slice(inner)
-        | Type::Vec(inner)
-        | Type::Option(inner)
-        | Type::Array { elem: inner, .. } => type_files(inner, out),
-        Type::Tuple(items) => items.iter().for_each(|i| type_files(i, out)),
-        Type::Result(a, b) => {
-            type_files(a, out);
-            type_files(b, out);
-        }
-        _ => {}
-    }
-}
-
-/// Files referred to by the facts of the nodes in `(lo, hi]`.
-fn ref_files(f: &Facts, (lo, hi): (NodeId, NodeId)) -> BTreeSet<u32> {
-    let mut out = BTreeSet::new();
+/// Per referred file, the largest node id that the facts of the nodes in
+/// `(lo, hi]` refer to (a local counts as the function itself).
+fn refs_of(f: &Facts, (lo, hi): (NodeId, NodeId)) -> BTreeMap<u32, NodeId> {
+    let mut ids: BTreeSet<NodeId> = BTreeSet::new();
+    let mut files = BTreeSet::new();
     let r = (lo + 1)..=hi;
     for (_, t) in f
         .expr_types
@@ -121,18 +110,18 @@ fn ref_files(f: &Facts, (lo, hi): (NodeId, NodeId)) -> BTreeSet<u32> {
         .chain(f.pat_types.range(r.clone()))
         .chain(f.type_nodes.range(r.clone()))
     {
-        type_files(t, &mut out);
+        type_ids(t, &mut ids);
     }
     for (_, res) in f.resolutions.range(r.clone()) {
         match res {
             Resolution::Item { item } => {
-                out.insert(file_of(*item));
+                ids.insert(*item);
             }
             Resolution::Variant { enum_item, .. } => {
-                out.insert(file_of(*enum_item));
+                ids.insert(*enum_item);
             }
             Resolution::Local { decl, .. } => {
-                out.insert(decl.file);
+                files.insert(decl.file);
             }
             _ => {}
         }
@@ -140,20 +129,53 @@ fn ref_files(f: &Facts, (lo, hi): (NodeId, NodeId)) -> BTreeSet<u32> {
     for (_, c) in f.calls.range(r.clone()) {
         match c {
             CallTarget::UserFn { item } => {
-                out.insert(file_of(*item));
+                ids.insert(*item);
             }
             CallTarget::VariantCtor { enum_item, .. } => {
-                out.insert(file_of(*enum_item));
+                ids.insert(*enum_item);
             }
             _ => {}
         }
     }
     for (_, m) in f.methods.range(r) {
         if let MethodTarget::User { item } = m {
-            out.insert(file_of(*item));
+            ids.insert(*item);
         }
     }
+    let mut out: BTreeMap<u32, NodeId> = BTreeMap::new();
+    for file in files {
+        // A local is declared in the function itself, or (defensively) at
+        // the largest id of its file.
+        let m = if file == file_of(hi) { hi } else { NodeId::MAX };
+        out.insert(file, m);
+    }
+    for id in ids {
+        let e = out.entry(file_of(id)).or_insert(id);
+        *e = (*e).max(id);
+    }
     out
+}
+
+fn type_ids(t: &Type, out: &mut BTreeSet<NodeId>) {
+    match t {
+        Type::Nominal { def, args, .. } => {
+            out.insert(*def);
+            for a in args {
+                type_ids(a, out);
+            }
+        }
+        Type::Ref { inner, .. }
+        | Type::Slice(inner)
+        | Type::Vec(inner)
+        | Type::Option(inner)
+        | Type::Array { elem: inner, .. } => type_ids(inner, out),
+        Type::Tuple(items) => items.iter().for_each(|i| type_ids(i, out)),
+        Type::Result(a, b) => {
+            type_ids(a, out);
+            type_ids(b, out);
+        }
+        _ => {}
+    }
 }
 
 /// Names of items whose interface differs between two fingerprints of a
@@ -206,7 +228,8 @@ pub fn check_package(
 ) -> (CheckResult, PackageState, PackageStats) {
     let mut fns = Vec::new();
     let mut ids = BTreeMap::new();
-    collect(&program.root.items, &mut fns, &mut ids);
+    let mut all_items = Vec::new();
+    collect(&program.root.items, &mut fns, &mut ids, &mut all_items);
     let files: BTreeSet<u32> = fns
         .iter()
         .map(|(id, _)| file_of(*id))
@@ -248,17 +271,50 @@ pub fn check_package(
                     names.extend(fp.items.values().map(|i| i.name.clone()));
                 }
             }
+            // T13: in an edited file, the nodes of the items that end before
+            // the first changed byte keep their ids and spans (the parser
+            // numbers in reading order): `bound[f]` is the largest such
+            // item id. A file with nothing before the change has no bound.
+            let mut bound: BTreeMap<u32, NodeId> = BTreeMap::new();
+            for (f, t) in &texts {
+                if unchanged.contains(f) {
+                    continue;
+                }
+                let Some(old) = p.texts.get(f) else { continue };
+                let prefix = old
+                    .bytes()
+                    .zip(t.bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count() as u32;
+                // Margin of one byte: a token touching the change could lex
+                // differently.
+                if let Some(b) = all_items
+                    .iter()
+                    .filter(|(id, s)| file_of(*id) == *f && s.end < prefix)
+                    .map(|(id, _)| *id)
+                    .max()
+                {
+                    bound.insert(*f, b);
+                }
+            }
+            let stable = |id: NodeId| {
+                let f = file_of(id);
+                unchanged.contains(&f) || bound.get(&f).is_some_and(|b| id <= *b)
+            };
             if !plannable {
                 full = Some("an edited file cannot be planned".into());
             } else {
                 for (id, span) in &fns {
                     let file = file_of(*id);
-                    if !unchanged.contains(&file) {
+                    if !stable(*id) {
                         continue;
                     }
                     let Some(c) = p.fns.get(id) else { continue };
-                    if !c.ref_files.is_subset(&unchanged)
-                        || !c.callees.iter().all(|x| unchanged.contains(&file_of(*x)))
+                    if !c
+                        .refs
+                        .iter()
+                        .all(|(f, m)| unchanged.contains(f) || bound.get(f).is_some_and(|b| m <= b))
+                        || !c.callees.iter().all(|x| stable(*x))
                     {
                         continue;
                     }
@@ -346,6 +402,11 @@ pub fn check_package(
         c.facts.reuse_bodies.clear();
     }
 
+    let reused_in_edited_files = reuse
+        .keys()
+        .filter(|id| prev.is_some_and(|p| p.texts.get(&file_of(**id)) != texts.get(&file_of(**id))))
+        .count();
+
     // The next state.
     let mut state = PackageState {
         texts,
@@ -375,7 +436,7 @@ pub fn check_package(
                     callees: df.call_graph.get(id).cloned().unwrap_or_default(),
                     used_imports: df.fn_used_imports.get(id).cloned().unwrap_or_default(),
                     static_str: df.static_str_fns.contains(id),
-                    ref_files: ref_files(&c.facts, range_of(*id, &ids)),
+                    refs: refs_of(&c.facts, range_of(*id, &ids)),
                 },
             );
         }
@@ -384,6 +445,7 @@ pub fn check_package(
     let stats = PackageStats {
         checked_bodies: fns.len() - reuse.len(),
         reused_bodies: reuse.len(),
+        reused_in_edited_files,
         full,
     };
     (

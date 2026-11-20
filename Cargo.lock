@@ -923,6 +923,7 @@ dependencies = [
  "ravum-core-machine",
  "ravum-dsp-harness",
  "ravum-lang-codegen",
+ "ravum-lang-incr",
  "ravum-lang-ir",
  "ravum-lang-jit",
  "ravum-lang-lsp",

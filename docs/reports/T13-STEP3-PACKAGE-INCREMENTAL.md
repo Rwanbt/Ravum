@@ -73,3 +73,30 @@ l'intervalle `]item précédent du fichier, X]`.
   (diagnostics seulement).
 - **Oracle** : corpus généré (3 formes de paquet) ; le corpus réel
   multi-fichiers ne compte que 9 paquets, surtout des cas d'erreur.
+
+## Étape 4 (2026-11-20) — réutilisation dans le fichier édité, `watch` branché
+
+**Réutilisation dans le fichier édité.** Le parseur numérote les nœuds dans
+l'ordre de lecture et donne son id à un item après ses enfants : les items qui
+se terminent **avant le premier octet modifié** du fichier (marge d'un octet
+pour le lexer) gardent leurs `NodeId` et leurs spans. `bound[f]` est le plus
+grand id d'item de ce préfixe. Un corps du fichier édité est réutilisé si son
+id est ≤ `bound[f]`, si chaque nœud auquel ses faits renvoient est dans un
+fichier inchangé ou ≤ `bound` de son fichier (le cache garde désormais, par
+fichier, l'id **maximal** référencé au lieu du seul fichier), si ses appelés le
+sont aussi, et si la règle de noms (interfaces changées) le permet.
+
+**`watch` (backend `rustc`)** garde une `IncrementalSession` (cache de parse,
+table `FileId` stable, état de paquet) et vérifie chaque reconstruction avec
+`check_package` ; les faits étant complets, le build qui suit est inchangé.
+Ligne affichée : `[ravum] check: N bodies reused, M checked[ (full: raison)]`.
+
+| Test | Résultat |
+|---|---|
+| `package_cold_warm.rs`, 117 éditions (ajout des éditions « item ajouté en fin », « item ajouté en tête » — tous les ids du fichier glissent —, « item ajouté invalide ») | diagnostics **et** faits identiques au contrôle complet sur toutes ; 693 corps réutilisés dont **84 dans des fichiers édités** (assertion > 0), 279 revérifiés |
+| `watch_continuity.rs::a_rebuild_reuses_the_unchanged_function_bodies` | 1ʳᵉ vérification complète (`first check`) ; après l'édition de `main.rv` : ≥ 3 corps réutilisés (`twice`, `thrice` du module intact, `helper` avant le changement), **1** revérifié (`main`) ; le programme relancé affiche `v2` |
+
+Limites restantes : un corps **après** le premier changement de son fichier
+est revérifié (pas de remise en correspondance des ids glissés) ;
+`watch --backend jit` (fichier unique) garde l'étape 2 ; après une
+vérification en erreur, la suivante est complète.
