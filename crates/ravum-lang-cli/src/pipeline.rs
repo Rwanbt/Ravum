@@ -1477,7 +1477,7 @@ mod tests {
         let scratch = Scratch::new("identity");
         let dir = scratch.package(
             "identity-demo",
-            "fn main() {\n    io::println(\"hi\");\n}\n",
+            "use std::io;\nfn main() {\n    io::println(\"hi\");\n}\n",
         );
         let frontend = analyze(&dir, Profile::Core, false);
         assert!(frontend.success(), "the test package must check");
@@ -1519,7 +1519,7 @@ mod tests {
         let changed_frontend = {
             std::fs::write(
                 dir.join("src/main.rv"),
-                "fn main() {\n    io::println(\"bye\");\n}\n",
+                "use std::io;\nfn main() {\n    io::println(\"bye\");\n}\n",
             )
             .expect("rewrite source");
             analyze(&dir, Profile::Core, false)

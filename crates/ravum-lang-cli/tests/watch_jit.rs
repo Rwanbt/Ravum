@@ -224,7 +224,7 @@ fn watch_jit_refuses_an_incompatible_entry_change() {
 
 #[test]
 fn watch_jit_shows_what_main_prints_and_follows_an_edit() {
-    let src = "fn label() -> i64 effects() {\n    return 41;\n}\n\nfn main() -> () effects(io, alloc) {\n    io::print(\"total=\");\n    io::println(&(label() + 1).to_string());\n}\n";
+    let src = "use std::io;\nfn label() -> i64 effects() {\n    return 41;\n}\n\nfn main() -> () effects(io, alloc) {\n    io::print(\"total=\");\n    io::println(&(label() + 1).to_string());\n}\n";
     let dir = package("prints", src);
     let file = dir.join("src/main.rv");
     let (mut child, rx) = spawn(&[

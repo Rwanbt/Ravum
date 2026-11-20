@@ -132,9 +132,15 @@ pub(crate) fn resolve_value_path(
                     Sym::BuiltinModule(p) => Cursor::Builtin(p),
                     _ => return Err(PathError::unknown(first)),
                 }
-            } else if let Some(p) = builtins::builtin_root_module(first) {
+            } else if first == "std" {
                 index = 1;
-                Cursor::Builtin(p)
+                Cursor::Builtin("std")
+            } else if builtins::builtin_root_module(first).is_some() {
+                // STD-1.1: no module is in the prelude; `io::f` needs `use std::io;`.
+                return Err(PathError {
+                    code: "E-RES-UNKNOWN",
+                    message: format!("module `{first}` is not in scope (add `use std::{first};`)"),
+                });
             } else if let Some(sym) = world.lookup(module, Ns::Type, first) {
                 world.mark_used(module, sym);
                 index = 1;

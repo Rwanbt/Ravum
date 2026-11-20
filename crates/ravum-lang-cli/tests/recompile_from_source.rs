@@ -31,14 +31,14 @@ fn a_changed_source_is_never_served_from_an_earlier_build() {
     .unwrap();
     fs::write(
         root.join("src/main.rv"),
-        "fn main() {\n    io::println(\"first\");\n}\n",
+        "use std::io;\nfn main() {\n    io::println(\"first\");\n}\n",
     )
     .unwrap();
     assert!(run(&root).contains("first\n"));
     // Same length, same directory, same binary path: only the bytes differ.
     fs::write(
         root.join("src/main.rv"),
-        "fn main() {\n    io::println(\"other\");\n}\n",
+        "use std::io;\nfn main() {\n    io::println(\"other\");\n}\n",
     )
     .unwrap();
     let second = run(&root);

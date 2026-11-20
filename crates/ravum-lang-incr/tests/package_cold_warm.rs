@@ -26,7 +26,7 @@ fn package(seed: u32) -> BTreeMap<&'static str, String> {
     files.insert(
         "main.rv",
         format!(
-            "mod geo;\nmod calc;\nmod text;\n\nfn main() -> () effects(io, alloc) {{\n    let p = geo::Point {{ x: {k}, y: 2 }};\n    let n = calc::total(p.x, p.y);\n    let s = text::label(n);\n    io::println(&s);\n    io::println(&geo::norm(p).to_string());\n}}\n\nfn local(a: i64) -> i64 effects() {{\n    return a + {k};\n}}\n"
+            "use std::io;\nmod geo;\nmod calc;\nmod text;\n\nfn main() -> () effects(io, alloc) {{\n    let p = geo::Point {{ x: {k}, y: 2 }};\n    let n = calc::total(p.x, p.y);\n    let s = text::label(n);\n    io::println(&s);\n    io::println(&geo::norm(p).to_string());\n}}\n\nfn local(a: i64) -> i64 effects() {{\n    return a + {k};\n}}\n"
         ),
     );
     files.insert(

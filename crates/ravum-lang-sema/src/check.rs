@@ -456,7 +456,8 @@ mod tests {
     fn hello_program_is_valid() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn main() {
     io::println("hello");
     return;
@@ -479,7 +480,8 @@ fn main() {
     fn comprehensive_positive_program() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 struct Point { pub x: f64, pub y: f64 }
 enum Shape { Circle(f64), Rect { w: f64, h: f64 }, Empty }
 
@@ -595,7 +597,8 @@ fn main() { }
     fn invalid_try_is_reported() {
         let (result, _) = run(
             "src/main.rv",
-            r#"fn f() { let x = io::read_line()?; }"#,
+            r#"use std::io;
+fn f() { let x = io::read_line()?; }"#,
             Profile::Core,
         );
         error(&result, "E-TYP-TRY");
@@ -605,7 +608,8 @@ fn main() { }
     fn valid_try_is_accepted() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn f() -> Result<(), Error> {
     let x = io::read_line()?;
     return Result::Ok(());
@@ -651,7 +655,8 @@ fn main() -> Result<(), Error> { return f(); }
     /// is refused outside one, and refuses a value that is not a future.
     #[test]
     fn await_is_typed_and_confined_to_async_fns() {
-        let ok = r#"async fn two() -> i64 effects(async) { 2 }
+        let ok = r#"use std::task;
+async fn two() -> i64 effects(async) { 2 }
 async fn four() -> i64 effects(async) { let x: i64 = two().await; x * 2 }
 fn main() -> () effects(async) { let v: i64 = task::block_on(four()); drop(v); }"#;
         let (result, _) = run("src/main.rv", ok, Profile::Core);
@@ -675,7 +680,8 @@ fn main() { }"#;
     /// entry point of `pure` (no effect group is unsupported any more).
     #[test]
     fn async_effect_is_accepted_under_core_and_refused_under_pure() {
-        let source = r#"fn main() -> () effects(async) { drop(task::yield_now()); }"#;
+        let source = r#"use std::task;
+fn main() -> () effects(async) { drop(task::yield_now()); }"#;
         let (core, _) = run("src/main.rv", source, Profile::Core);
         assert!(core.checked.is_some(), "async refused under core");
         let (pure, _) = run("src/main.rv", source, Profile::Pure);
@@ -692,7 +698,9 @@ fn main() { }"#;
             Profile::Core,
         );
         assert!(result.checked.is_some(), "{:?}", result.diags);
-        let src = r#"fn main() -> () effects(io, net, alloc) {
+        let src = r#"use std::io;
+use std::net;
+fn main() -> () effects(io, net, alloc) {
     let r: Result<TcpListener, Error> = net::listen("127.0.0.1:0");
     io::println(if r.is_ok() { "ok" } else { "err" });
 }"#;
@@ -746,7 +754,8 @@ fn main() { }
     fn pure_profile_rejects_io() {
         let (result, _) = run(
             "src/main.rv",
-            r#"fn main() { io::println("x"); }"#,
+            r#"use std::io;
+fn main() { io::println("x"); }"#,
             Profile::Pure,
         );
         error(&result, "E-EFF-PROFILE");
@@ -766,7 +775,8 @@ fn main() { }
     fn recursive_effects_reach_fixpoint_and_are_declared() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn a() -> () effects(io) { b(); }
 fn b() { a(); io::println("x"); }
 fn main() { a(); }
@@ -780,7 +790,8 @@ fn main() { a(); }
         // E-EFF-UNDECLARED.
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn a() -> () effects() { io::println("x"); }
 fn main() { a(); }
 "#,
@@ -816,7 +827,7 @@ fn main() { let s = m::make(); let x = s.secret; }
             // CON-1: not a bool.
             ("fn f(a: i64) -> i64 effects()\n    requires a + 1\n{\n    return a;\n}\n", "E-TYP-MISMATCH"),
             // CON-2: not pure.
-            ("fn noisy() -> bool effects(io) {\n    io::println(\"x\");\n    return true;\n}\n\nfn f(a: i64) -> i64 effects(io)\n    requires noisy()\n{\n    return a;\n}\n", "E-CON-EFFECT"),
+            ("use std::io;\nfn noisy() -> bool effects(io) {\n    io::println(\"x\");\n    return true;\n}\n\nfn f(a: i64) -> i64 effects(io)\n    requires noisy()\n{\n    return a;\n}\n", "E-CON-EFFECT"),
             // CON-3: a non-`Copy` parameter.
             ("fn f(s: String) -> i64 effects(alloc)\n    requires s.len() > 0\n{\n    drop(s);\n    return 1;\n}\n", "E-CON-NONCOPY"),
             // CON-3: a non-`Copy` result.
@@ -1292,7 +1303,8 @@ mod inference_and_rules_tests {
     fn vec_inference_from_push_is_accepted() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn main() -> Result<(), Error> {
     let mut out = Vec::new();
     let mut i: usize = 0;

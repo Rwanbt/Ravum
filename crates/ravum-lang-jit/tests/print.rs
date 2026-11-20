@@ -10,7 +10,7 @@ use ravum_lang_jit::{compile, DEFAULT_FUEL};
 /// One program printing `value` (an expression of type `ty`) both ways.
 fn program(ty: &str, value: &str) -> String {
     format!(
-        "fn check() -> i64 effects(io, alloc) {{\n    let z: f64 = 0.0;\n    let v: {ty} = {value};\n    io::print(\"v=\");\n    io::println(&v.to_string());\n    io::eprintln(v.to_string().as_str());\n    return 1;\n}}\n"
+        "use std::io;\nfn check() -> i64 effects(io, alloc) {{\n    let z: f64 = 0.0;\n    let v: {ty} = {value};\n    io::print(\"v=\");\n    io::println(&v.to_string());\n    io::eprintln(v.to_string().as_str());\n    return 1;\n}}\n"
     )
 }
 
@@ -79,7 +79,7 @@ fn native_output_is_identical_to_the_interpreter() {
 
 #[test]
 fn output_before_a_trap_is_kept_and_order_is_program_order() {
-    let src = "fn check() -> i64 effects(io, alloc) {\n    let mut i: i64 = 0;\n    while i < 3 {\n        io::println(&i.to_string());\n        i = i + 1;\n    }\n    let d: i64 = 0;\n    io::println(\"before\");\n    return 1 / d;\n}\n";
+    let src = "use std::io;\nfn check() -> i64 effects(io, alloc) {\n    let mut i: i64 = 0;\n    while i < 3 {\n        io::println(&i.to_string());\n        i = i + 1;\n    }\n    let d: i64 = 0;\n    io::println(\"before\");\n    return 1 / d;\n}\n";
     let ir = compile_source(src).unwrap();
     let (ri, oi) = run_with_output(&ir, "check", DEFAULT_STEPS);
     let (rn, on) = compile(&ir).unwrap().run_with_output("check", DEFAULT_FUEL);
@@ -93,7 +93,7 @@ fn output_before_a_trap_is_kept_and_order_is_program_order() {
 fn a_real_time_entry_that_prints_is_refused() {
     // Negative (INV-05): no I/O may run on the audio thread.
     let src =
-        "fn gain(x: f32) -> f32 effects(io, alloc) {\n    io::println(\"x\");\n    return x;\n}\n";
+        "use std::io;\nfn gain(x: f32) -> f32 effects(io, alloc) {\n    io::println(\"x\");\n    return x;\n}\n";
     let ir = compile_source(src).unwrap();
     match HotEngine::start(&ir, "gain") {
         Err(Refusal::Invalid(m)) => assert!(m.contains("INV-05"), "{m}"),
@@ -105,7 +105,7 @@ fn a_real_time_entry_that_prints_is_refused() {
 #[test]
 fn string_methods_outside_the_ir_are_unsupported() {
     // IR v1.3 prints any heap string; `to_uppercase` is still not lowered.
-    let src = "fn check() -> i64 effects(io, alloc) {\n    let n: i64 = 3;\n    let s = n.to_string();\n    io::println(&s.to_uppercase());\n    return 0;\n}\n";
+    let src = "use std::io;\nfn check() -> i64 effects(io, alloc) {\n    let n: i64 = 3;\n    let s = n.to_string();\n    io::println(&s.to_uppercase());\n    return 0;\n}\n";
     match compile_source(src) {
         Err(ravum_lang_ir::CompileError::Lower(ravum_lang_ir::lower::LowerError::Unsupported(
             _,
@@ -139,7 +139,7 @@ fn the_heap_limit_is_a_fault_not_a_crash() {
 
 #[test]
 fn a_string_building_entry_is_hot_swapped() {
-    let v1 = "fn label() -> String effects(alloc) {\n    return String::from(\"v1\");\n}\n\nfn main() -> () effects(io, alloc) {\n    let mut s = label();\n    s.push_str(\"-ok\");\n    io::println(&s);\n}\n";
+    let v1 = "use std::io;\nfn label() -> String effects(alloc) {\n    return String::from(\"v1\");\n}\n\nfn main() -> () effects(io, alloc) {\n    let mut s = label();\n    s.push_str(\"-ok\");\n    io::println(&s);\n}\n";
     let (mut engine, mut rt) = HotEngine::start(&compile_source(v1).unwrap(), "main").unwrap();
     let (r, out) = rt.run_nullary_with_output(engine.messages());
     assert_eq!(r.render(), "value () ()");

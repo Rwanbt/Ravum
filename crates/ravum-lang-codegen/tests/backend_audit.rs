@@ -3239,7 +3239,8 @@ fn audit_static_str_positions_are_emitted_per_position() {
     }
     let code = generate_source(
         "p0a-static-str",
-        r#"struct S {
+        r#"use std::io;
+struct S {
     text: &str,
 }
 
@@ -3304,7 +3305,8 @@ fn audit_mut_parameter_binding_is_emitted() {
     }
     let code = generate_source(
         "p0a-mut-param",
-        r#"fn bump(mut x: i32) -> i32 {
+        r#"use std::io;
+fn bump(mut x: i32) -> i32 {
     x = x + 1;
     return x;
 }
@@ -3335,7 +3337,8 @@ fn audit_array_element_move_builds_and_runs() {
     }
     let code = generate_source(
         "p0a-array-move",
-        r#"fn second(a: [String; 2]) -> String {
+        r#"use std::io;
+fn second(a: [String; 2]) -> String {
     return a[1];
 }
 
@@ -3373,7 +3376,8 @@ fn audit_multiple_array_element_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-array-multiple",
-        r#"fn pair(a: [String; 2]) -> (String, String) {
+        r#"use std::io;
+fn pair(a: [String; 2]) -> (String, String) {
     let x = a[0];
     let y = a[1];
     return (x, y);
@@ -3456,7 +3460,8 @@ fn audit_array_element_paths_under_aggregates_build_and_run() {
     }
     let code = generate_source(
         "p0a-array-aggregate-paths",
-        r#"struct Basket { items: [String; 2] }
+        r#"use std::io;
+struct Basket { items: [String; 2] }
 fn basket(x: &str, y: &str) -> Basket {
     return Basket { items: [String::from(x), String::from(y)] };
 }
@@ -3572,7 +3577,8 @@ fn audit_array_element_projection_moves_only_mobile_fields() {
     }
     let code = generate_source(
         "p0a-array-projection",
-        r#"fn moved(a: [(String, i32); 2]) -> String {
+        r#"use std::io;
+fn moved(a: [(String, i32); 2]) -> String {
     return a[1].0;
 }
 
@@ -3610,7 +3616,8 @@ fn audit_dynamic_array_element_move_keeps_bounds_panic() {
     }
     let code = generate_source(
         "p0a-array-dynamic",
-        r#"fn pick(a: [String; 2], i: usize) -> String {
+        r#"use std::io;
+fn pick(a: [String; 2], i: usize) -> String {
     return a[i];
 }
 
@@ -3634,7 +3641,8 @@ fn main() {
 
     let out_of_bounds = generate_source(
         "p0a-array-dynamic-oob",
-        r#"fn pick(a: [String; 2], i: usize) -> String {
+        r#"use std::io;
+fn pick(a: [String; 2], i: usize) -> String {
     return a[i];
 }
 
@@ -3725,7 +3733,8 @@ fn audit_nested_array_element_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-nested-array",
-        r#"fn leaf(a: [[String; 2]; 2]) -> String {
+        r#"use std::io;
+fn leaf(a: [[String; 2]; 2]) -> String {
     return a[0][1];
 }
 
@@ -3781,7 +3790,8 @@ fn audit_projected_array_element_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-projected-array",
-        r#"struct Holder {
+        r#"use std::io;
+struct Holder {
     items: [String; 2],
     label: String,
 }
@@ -3862,7 +3872,8 @@ fn audit_shadowed_array_bindings_move_build_and_run() {
     }
     let code = generate_source(
         "p0a-shadowed-array",
-        r#"fn shadowed(a: [String; 2]) -> String {
+        r#"use std::io;
+fn shadowed(a: [String; 2]) -> String {
     if true {
         let a = String::from("inner");
         io::println(a.as_str());
@@ -3925,7 +3936,8 @@ fn audit_match_payload_array_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-match-payload",
-        r#"enum E {
+        r#"use std::io;
+enum E {
     Items([String; 2]),
     Empty,
 }
@@ -3986,7 +3998,8 @@ fn audit_by_value_self_receiver_on_array_element_build_and_run() {
     }
     let code = generate_source(
         "p0a-self-receiver",
-        r#"struct H {
+        r#"use std::io;
+struct H {
     s: String,
 }
 
@@ -4056,7 +4069,8 @@ fn audit_nested_dynamic_index_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-nested-dynamic",
-        r#"fn at(a: [[String; 2]; 2], i: usize) -> String {
+        r#"use std::io;
+fn at(a: [[String; 2]; 2], i: usize) -> String {
     return a[0][i];
 }
 
@@ -4104,7 +4118,8 @@ fn audit_nested_dynamic_index_panics_like_rustc() {
     }
     let code = generate_source(
         "p0a-nested-dynamic-oob",
-        r#"fn at(a: [[String; 2]; 2], i: usize) -> String {
+        r#"use std::io;
+fn at(a: [[String; 2]; 2], i: usize) -> String {
     return a[0][i];
 }
 
@@ -4134,7 +4149,8 @@ fn audit_non_place_array_roots_build_and_run() {
     }
     let code = generate_source(
         "p0a-non-place-root",
-        r#"fn make() -> [String; 2] {
+        r#"use std::io;
+fn make() -> [String; 2] {
     return [String::from("x"), String::from("y")];
 }
 
@@ -4194,7 +4210,8 @@ fn audit_expression_arm_multiple_moves_build_and_run() {
     }
     let code = generate_source(
         "p0a-arm-multi",
-        r#"enum E {
+        r#"use std::io;
+enum E {
     Items([String; 2]),
     Empty,
 }
@@ -4247,7 +4264,8 @@ fn audit_builtin_by_value_receiver_on_array_element_build_and_run() {
     }
     let code = generate_source(
         "p0a-builtin-receiver",
-        r#"fn unwrap_at(a: [Option<String>; 2]) -> String {
+        r#"use std::io;
+fn unwrap_at(a: [Option<String>; 2]) -> String {
     return a[0].unwrap();
 }
 
@@ -4321,7 +4339,8 @@ fn audit_shared_descent_slot_hoist_builds_and_runs() {
     }
     let code = generate_source(
         "p0a-shared-descent",
-        r#"fn two_descents(a: [([String; 2], i32); 2]) -> (String, String) {
+        r#"use std::io;
+fn two_descents(a: [([String; 2], i32); 2]) -> (String, String) {
     let x = a[0].0[1];
     let y = a[1].0[0];
     return (x, y);
@@ -4395,7 +4414,8 @@ fn audit_branch_and_nested_descents_build_and_run() {
     }
     let code = generate_source(
         "p0a-branch-nested-descent",
-        r#"fn pick(c: bool, a: [([String; 2], i32); 2]) -> String {
+        r#"use std::io;
+fn pick(c: bool, a: [([String; 2], i32); 2]) -> String {
     if c {
         let x = a[0].0[1];
         return x;
@@ -4485,7 +4505,8 @@ fn audit_d13_array_projection_emits_static_parameter_and_runs() {
     }
     let code = generate_source(
         "d13-array-projection",
-        r#"fn pick(a: [&str; 2]) -> &str {
+        r#"use std::io;
+fn pick(a: [&str; 2]) -> &str {
     return a[1];
 }
 
@@ -4515,7 +4536,8 @@ fn audit_d13_top_level_str_parameter_stays_elided() {
     }
     let code = generate_source(
         "d13-param-elision",
-        r#"fn g(s: &str) {
+        r#"use std::io;
+fn g(s: &str) {
     io::println(s);
 }
 
@@ -4545,7 +4567,8 @@ fn audit_d13_str_as_str_identity_compiles_and_runs() {
     // acceptance with no backend support). It is the identity on a `&str`.
     let code = generate_source(
         "d13-str-as-str",
-        r#"fn main() {
+        r#"use std::io;
+fn main() {
     let t = "x";
     io::println(t.as_str());
 }
@@ -4564,7 +4587,9 @@ fn audit_float_min_max_evaluate_each_operand_once_in_order() {
     }
     let code = generate_source(
         "math-min-max-operand-order",
-        r#"fn left(value: f64) -> f64 {
+        r#"use std::io;
+use std::math;
+fn left(value: f64) -> f64 {
     io::println("left");
     return value;
 }
@@ -4593,7 +4618,7 @@ fn audit_float_min_max_temporary_avoids_user_constant_names() {
     if skip("audit_float_min_max_temporary_avoids_user_constant_names") {
         return;
     }
-    let source = "fn main() { assert_eq(math::max(-2.0, 0.0), 0.0); }";
+    let source = "use std::math;\nfn main() { assert_eq(math::max(-2.0, 0.0), 0.0); }";
     let code = generate_source("math-temporary-name", source);
     let temporary = code
         .split_once("let __rv_math_args_")
@@ -4735,7 +4760,8 @@ fn audit_element_paths_with_trailing_projections_run_correctly() {
     }
     let code = generate_source(
         "element-path-projections",
-        r#"struct P { name: String, n: i32 }
+        r#"use std::io;
+struct P { name: String, n: i32 }
 
 fn take(s: String) -> usize {
     return s.len();
@@ -4791,7 +4817,8 @@ fn audit_projections_after_a_computed_index_and_a_partial_move_run_correctly() {
     }
     let code = generate_source(
         "element-path-computed-projections",
-        r#"struct S { n: String, t: (String, i32) }
+        r#"use std::io;
+struct S { n: String, t: (String, i32) }
 
 fn main() {
     let i: usize = 1;
@@ -4836,7 +4863,7 @@ fn audit_a_type_nested_at_the_depth_bound_builds_and_runs() {
         pattern = format!("Some({pattern})");
     }
     let source = format!(
-        "fn main() {{\n    let x: {ty} = None;\n    let y = x;\n    \
+        "use std::io;\nfn main() {{\n    let x: {ty} = None;\n    let y = x;\n    \
          match y {{\n        {pattern} => {{ }}\n        _ => {{ io::println(\"ok\"); }}\n    }}\n}}\n"
     );
     let code = generate_source("deep-type", &source);
@@ -4883,7 +4910,8 @@ fn audit_rare_expression_shapes_build_and_run() {
     }
     let code = generate_source(
         "rare-expression-shapes",
-        r#"enum E { A, B(i32) }
+        r#"use std::io;
+enum E { A, B(i32) }
 
 fn g(c: bool) {
     let y = if c { 1 } else { return };
@@ -4925,7 +4953,8 @@ fn audit_block_arms_without_commas_before_tuple_and_negative_arms_run() {
     }
     let code = generate_source(
         "block-arms-without-commas",
-        r#"fn classify(p: (bool, bool)) -> i32 {
+        r#"use std::io;
+fn classify(p: (bool, bool)) -> i32 {
     match p {
         (true, true) => { return 3; }
         (true, false) => { return 2; }
@@ -4969,7 +4998,9 @@ fn audit_constant_patterns_and_borrowed_string_arguments_run() {
     }
     let code = generate_source(
         "constant-patterns",
-        r#"const C: i32 = 1;
+        r#"use std::io;
+use std::string;
+const C: i32 = 1;
 
 fn k(n: i32) -> i32 {
     match n {
@@ -5004,7 +5035,8 @@ fn audit_borrow_of_a_partially_moved_element_followed_by_a_vec_index_runs() {
     }
     let code = generate_source(
         "partially-moved-element-vec-index",
-        r#"struct S { n: String, v: Vec<String> }
+        r#"use std::io;
+struct S { n: String, v: Vec<String> }
 fn len_of(s: &String) -> usize { s.len() }
 fn main() {
     let mut v0: Vec<String> = Vec::new();
@@ -5039,7 +5071,8 @@ fn audit_empty_struct_unit_extern_and_module_tests_run() {
     if skip("audit_empty_struct_unit_extern_and_module_tests_run") {
         return;
     }
-    let source = r#"struct Empty {}
+    let source = r#"use std::io;
+struct Empty {}
 
 struct P { n: i32 }
 
@@ -5115,7 +5148,8 @@ fn audit_borrow_after_a_runtime_index_of_a_partially_moved_array_runs() {
     }
     let code = generate_source(
         "borrow-after-runtime-index",
-        r#"struct S { n: String, t: (String, i32) }
+        r#"use std::io;
+struct S { n: String, t: (String, i32) }
 fn mk(s: &str) -> S { S { n: String::from(s), t: (String::from(s), 1) } }
 fn show(s: &String) { io::println(s); }
 fn main() {
@@ -5147,7 +5181,8 @@ fn audit_element_paths_through_references_and_vec_indexes_run() {
     }
     let code = generate_source(
         "element-paths-through-refs",
-        r#"struct S { a: [String; 2] }
+        r#"use std::io;
+struct S { a: [String; 2] }
 impl S { fn first(&self) -> usize { self.a[0].len() } }
 fn tup(t: &([String; 2], i32)) -> usize { t.0[1].len() }
 fn main() {
@@ -5178,13 +5213,13 @@ fn audit_moving_an_element_at_a_literal_index_out_of_range_panics_at_run_time() 
     for (label, source, len, index) in [
         (
             "move-out-of-range-root",
-            "fn main() { let a = [String::from(\"a\")]; let x = a[3]; io::println(&x); }",
+            "use std::io;\nfn main() { let a = [String::from(\"a\")]; let x = a[3]; io::println(&x); }",
             1,
             3,
         ),
         (
             "move-out-of-range-nested",
-            "struct S { n: String }\n\
+            "use std::io;\nstruct S { n: String }\n\
              fn main() { let i: usize = 0; \
              let a = [[S { n: String::from(\"a\") }, S { n: String::from(\"b\") }]]; \
              let x = a[i][5].n; io::println(&x); }",
@@ -5216,7 +5251,8 @@ fn audit_reinitialising_an_element_at_a_literal_index_out_of_range_panics_at_run
     }
     let code = generate_source(
         "reinit-out-of-range",
-        r#"fn value() -> String { io::println("value"); String::from("b") }
+        r#"use std::io;
+fn value() -> String { io::println("value"); String::from("b") }
 fn pick(c: bool) {
     let mut a = [String::from("a")];
     if c { let x = a[3]; io::println(&x); }
@@ -5245,7 +5281,8 @@ fn audit_reinit_of_an_array_field_next_to_a_moved_field_runs() {
     }
     let code = generate_source(
         "reinit-array-field-next-to-moved-field",
-        r#"struct P { arr: [String; 2], n: String }
+        r#"use std::io;
+struct P { arr: [String; 2], n: String }
 fn main() {
     let mut p = P { arr: [String::from("a"), String::from("b")], n: String::from("n") };
     let x = p.n;
@@ -5285,7 +5322,7 @@ fn audit_an_exhaustive_match_at_the_depth_bound_deep_builds_and_runs() {
     ];
     arms.extend((0..depth).map(|level| format!("{} => {}", wrap("None", level), level + 3)));
     let source = format!(
-        "fn f(t: {ty}) -> usize {{ match t {{ {} }} }}\n\
+        "use std::io;\nfn f(t: {ty}) -> usize {{ match t {{ {} }} }}\n\
          fn main() {{ io::println(&f(Some(None)).to_string()); }}\n",
         arms.join(", ")
     );
@@ -5310,7 +5347,8 @@ fn audit_locals_named_like_a_module_constant_bind_as_written() {
     }
     let code = generate_source(
         "locals-named-like-constants",
-        r#"const T: bool = true;
+        r#"use std::io;
+const T: bool = true;
 const N: i32 = 3;
 struct U;
 fn pick(b: bool) -> i32 { match b { T => 1, false => 2 } }
@@ -5347,7 +5385,8 @@ fn audit_a_generic_argument_before_its_parameter_is_bound_builds_and_runs() {
     }
     let code = generate_source(
         "generic-argument-before-binding",
-        r#"fn g<T>(a: Option<T>, b: T) -> T { match a { Some(x) => x, None => b } }
+        r#"use std::io;
+fn g<T>(a: Option<T>, b: T) -> T { match a { Some(x) => x, None => b } }
 fn h<T>(a: Vec<T>, b: T) -> usize { let mut v = a; v.push(b); return v.len(); }
 fn main() {
     let x = g(Some(7), 1);
@@ -5373,7 +5412,8 @@ fn audit_constant_comparisons_of_every_kind_build_and_run() {
     }
     let code = generate_source(
         "constant-comparisons",
-        r#"const A: bool = true == true;
+        r#"use std::io;
+const A: bool = true == true;
 const B: bool = 'a' < 'b';
 const C: bool = "a" == "a";
 const D: bool = 1 != 1;
@@ -5399,7 +5439,8 @@ fn audit_one_element_tuple_patterns_and_exponent_floats_run() {
     }
     let code = generate_source(
         "one-tuple-pattern",
-        r#"fn main() {
+        r#"use std::io;
+fn main() {
     let x = 1e3;
     let t = (5,);
     match t { (a,) => { if a == 5 && x > 999.5 { io::println("ok"); } } }
@@ -5422,7 +5463,8 @@ fn audit_boolean_bitwise_constants_build_and_run() {
     }
     let code = generate_source(
         "boolean-bitwise-constants",
-        r#"const A: bool = true & false;
+        r#"use std::io;
+const A: bool = true & false;
 const B: bool = true | false;
 const C: bool = true ^ true;
 const D: bool = (6 & 3) == 2;
@@ -5448,7 +5490,8 @@ fn audit_branch_inference_works_in_either_order() {
     }
     let code = generate_source(
         "branch-inference-order",
-        r#"fn pick(t: bool) -> usize {
+        r#"use std::io;
+fn pick(t: bool) -> usize {
     let a: Vec<i32> = Vec::new();
     let c = if t { Vec::new() } else { a };
     return c.len();
@@ -5489,7 +5532,8 @@ fn audit_text_parsing_and_float_tuple_patterns_run() {
     }
     let code = generate_source(
         "parse-and-float-tuple",
-        r#"use std::string;
+        r#"use std::io;
+use std::string;
 fn main() {
     let s = String::from("42");
     let n = string::parse_i64(&s);

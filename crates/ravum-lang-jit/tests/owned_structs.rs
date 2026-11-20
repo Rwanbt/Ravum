@@ -8,7 +8,8 @@ fn owned_fields_survive_moves_returns_and_mutable_borrows() {
     for value in [-17, 0, 1, 61] {
         for label in ["", "ravum", "été"] {
             let source = format!(
-                r#"
+                r#"use std::io;
+
 struct Payload {{ label: String, values: Vec<i64> }}
 struct Envelope {{ payload: Payload, tag: i64 }}
 
@@ -47,7 +48,8 @@ fn main() -> () effects(io, alloc) {{
 
 #[test]
 fn reusing_a_moved_struct_is_rejected_before_lowering() {
-    let source = r#"
+    let source = r#"use std::io;
+
 struct Payload { label: String }
 
 fn main() -> () effects(io, alloc) {

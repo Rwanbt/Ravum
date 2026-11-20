@@ -256,13 +256,13 @@ fn math_functions_agree_with_interpreter_and_reference_machine() {
     for x in MATH_VALUES {
         for f in ["abs", "sqrt", "floor", "ceil", "round"] {
             check(format!(
-                "fn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let x: f64 = {x};\n    let r = math::{f}(x);\n    return r;\n}}\n"
+                "use std::math;\nfn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let x: f64 = {x};\n    let r = math::{f}(x);\n    return r;\n}}\n"
             ));
         }
         for y in MATH_VALUES {
             for f in ["min", "max"] {
                 check(format!(
-                    "fn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let r = math::{f}({x}, {y});\n    let one: f64 = 1.0;\n    return one / r;\n}}\n"
+                    "use std::math;\nfn check() -> f64 effects() {{\n    let z: f64 = 0.0;\n    let r = math::{f}({x}, {y});\n    let one: f64 = 1.0;\n    return one / r;\n}}\n"
                 ));
             }
         }
