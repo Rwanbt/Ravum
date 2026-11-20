@@ -418,6 +418,30 @@ pub const DSP_STATE_SCHEMA_V1_TEXT: &str = "#0=struct{z1:f32;z2:f32;}\n";
 pub struct DspContract {
     pub state: StateSchema,
     pub process: NodeId,
+    /// 2 = host state `{ z1, z2 }`; 3 = state declared by the module
+    /// (RFC-DSP-ABI-2, DSP3-1), with its `init`.
+    pub abi: u32,
+    pub init: Option<NodeId>,
+}
+
+/// DSP3-1: a field type of an ABI 3 state.
+fn dsp3_field_ok(checked: &CheckedProgram, ty: &Type, depth: u32) -> bool {
+    if depth > 8 {
+        return false;
+    }
+    match ty {
+        Type::F32 | Type::F64 | Type::I32 | Type::U32 | Type::Bool => true,
+        Type::Array { elem, .. } => dsp3_field_ok(checked, elem, depth + 1),
+        Type::Nominal { def, args, .. } if args.is_empty() => {
+            checked.facts.structs.get(def).is_some_and(|s| {
+                s.generics.is_empty()
+                    && s.fields
+                        .iter()
+                        .all(|f| dsp3_field_ok(checked, &f.ty, depth + 1))
+            })
+        }
+        _ => false,
+    }
 }
 
 /// Check the DSP block contract: `struct State` with the host state schema and
@@ -447,13 +471,24 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
         )]);
     };
     let mut diags = Vec::new();
+    let mut abi = 2;
+    let state_ok_for_abi3 = checked.facts.structs.get(&state_def).is_some_and(|s| {
+        s.generics.is_empty()
+            && !s.fields.is_empty()
+            && s.fields.iter().all(|f| dsp3_field_ok(checked, &f.ty, 0))
+    });
     let state = match schema(checked, state_def, state_span) {
         Ok(s) if s.text == DSP_STATE_SCHEMA_V1_TEXT => Some(s),
+        Ok(s) if state_ok_for_abi3 => {
+            abi = 3;
+            Some(s)
+        }
         Ok(_) => {
             diags.push(Diagnostic::error(
                 E_DSP_STATE_TYPE,
                 state_span,
-                "the state of a DSP block is the host state `struct State { z1: f32, z2: f32 }`",
+                "the state of a DSP block holds only `f32`, `f64`, `i32`, `u32`, `bool`, \
+                 fixed-size arrays and structs of those (DSP3-1); `{ z1: f32, z2: f32 }` is the ABI 2 host state",
             ));
             None
         }
@@ -498,8 +533,38 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
             }
         }
     };
+    // ABI 3: the module writes its own initial state (`ravum_state_init`).
+    let mut init = None;
+    if abi == 3 {
+        for item in &root.items {
+            if let ItemKind::Fn(f) = &item.kind {
+                if f.name.name == "init" {
+                    let ok = checked.facts.fn_sigs.get(&item.id).is_some_and(|sig| {
+                        sig.generics.is_empty()
+                            && sig.params.is_empty()
+                            && matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty())
+                    });
+                    if ok {
+                        init = Some(item.id);
+                    }
+                }
+            }
+        }
+        if init.is_none() {
+            diags.push(Diagnostic::error(
+                E_DSP_ENTRY,
+                whole,
+                "a DSP block with its own state (ABI 3) declares `fn init() -> State` (DSP3-1)",
+            ));
+        }
+    }
     match (state, process) {
-        (Some(state), Some(process)) if diags.is_empty() => Ok(DspContract { state, process }),
+        (Some(state), Some(process)) if diags.is_empty() => Ok(DspContract {
+            state,
+            process,
+            abi,
+            init,
+        }),
         _ => Err(diags),
     }
 }

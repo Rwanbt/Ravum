@@ -251,6 +251,12 @@ impl<'a> Emitter<'a> {
         self.marker(buf, item.span);
         let entry = self.entry(item.id)?;
         buf.line(&self.derive_attribute(item.id));
+        // RFC-DSP-ABI-2 DSP3-2: an ABI 3 block's state is a `repr(C)` layout,
+        // so the layout is a function of the schema digest. Every non-generic
+        // struct gets it (nested state structs included; harmless elsewhere).
+        if structure.generics.is_empty() && self.options.dsp.as_ref().is_some_and(|c| c.abi == 3) {
+            buf.line("#[repr(C)]");
+        }
         let visibility = if item.vis.is_public() { "pub " } else { "" };
         let generics = self.generics(&structure.generics);
         let head = format!("{visibility}struct {}{generics}", entry.rust_name);

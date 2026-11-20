@@ -1,0 +1,19 @@
+struct Delay { z: [f32; 4] }
+
+struct State { gain: f32, delay: Delay, count: u32 }
+
+fn init() -> State effects() {
+    State { gain: 0.5, delay: Delay { z: [0.0; 4] }, count: 0 }
+}
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    let y: f32 = input * state.gain + state.delay.z[3];
+    state.delay.z[3] = state.delay.z[2];
+    state.delay.z[2] = state.delay.z[1];
+    state.delay.z[1] = state.delay.z[0];
+    state.delay.z[0] = input;
+    y
+}
+
+fn main() -> () effects() {
+}

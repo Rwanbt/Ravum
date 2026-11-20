@@ -1,0 +1,8 @@
+{
+  "id": "types/l5b-dsp3-state-accepted",
+  "mode": "compile-pass",
+  "args": [
+    "--dsp-block"
+  ],
+  "notes": "RFC-DSP-ABI-2 DSP3-1 (MUST): a state declared by the module (scalars, a fixed array, a nested struct) with `fn init() -> State` is an ABI 3 DSP block."
+}
