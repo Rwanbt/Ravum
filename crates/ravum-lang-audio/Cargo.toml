@@ -19,3 +19,7 @@ cpal = { version = "0.15", optional = true }
 
 [dev-dependencies]
 ravum-lang-ir = { path = "../ravum-lang-ir" }
+
+[[example]]
+name = "play"
+required-features = ["cpal"]

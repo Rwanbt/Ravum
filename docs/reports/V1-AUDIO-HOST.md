@@ -6,7 +6,7 @@
 | Crate | `crates/ravum-lang-audio` (`#![forbid(unsafe_code)]`) |
 | Source | branche `claude/trusting-cerf-4hhv5a`, parent `6bde4c0` |
 | Toolchain | rustc 1.95.0, Linux x86_64 (conteneur, sans périphérique audio) |
-| État des preuves | hôte WAV : `TESTED` ; hôte `cpal` : **compilé seulement, `NOT_RUN`** |
+| État des preuves | hôte WAV : `TESTED` ; hôte `cpal` : **`TESTED` sur une sortie réelle** (V1-A2, essai ci-dessous) |
 
 ## Interface
 
@@ -23,7 +23,7 @@
 - `device::CpalHost` (feature `cpal`) : sortie par défaut, format `f32`
   seulement (sinon refus explicite), entrée silencieuse, sortie copiée sur
   tous les canaux ; tampon de travail fixe de 256 trames capturé par le rappel (alloué une fois à la création), bloc
-  du périphérique traité par morceaux, aucune allocation dans le rappel.
+  du périphérique traité par morceaux, aucune allocation explicite pour ces tampons pendant le rappel.
 
 ## Preuves (`cargo test -p ravum-lang-audio`)
 
@@ -36,17 +36,41 @@
 
 `cargo check -p ravum-lang-audio --features cpal` et `cargo clippy` avec la
 feature passent (avec `libasound2-dev` installé dans le conteneur) ;
-`cargo deny check` : ok. **Aucune exécution sur un périphérique réel.**
+`cargo deny check` : ok. L’essai sur périphérique réel est consigné ci-dessous.
 
-## Pour tester sur une machine
+## Exécution sur périphérique
+
+- 2026-11-20, MSI Pulse 15 B13VGK, Ubuntu 26.04.1 LTS x86_64,
+  noyau `7.0.0-43-generic`. Sortie par défaut de la session PipeWire 1.6.2 :
+  haut-parleurs intégrés Raptor Lake-P/U/H cAVS (`sof-hda-dsp`).
+  Exécution hors du bac à sable, qui masque `/dev/snd`.
+- Source de départ `96272bc4f84e9862e4adf50b901e7dedfd087e38` (branche
+  `claude/trusting-cerf-4hhv5a`) avec l’exemple `play` de ce changement.
+  rustc 1.95.0 (`59807616e`), CPAL 0.15.3, ALSA 1.2.15.3
+  (`pkg-config --modversion alsa`), profil Cargo de développement.
 
 ```bash
+cargo build -p ravum-lang-audio --features cpal
 cargo test -p ravum-lang-audio --features cpal
+cargo clippy -p ravum-lang-audio --features cpal --all-targets -- -D warnings
+cargo run -p ravum-lang-audio --features cpal --example play
 ```
 
-puis, dans un programme : `HotEngine::start(&ir, "gain")` et
-`CpalHost::start(Box::new(runner))` ; garder `CpalHost` vivant ; publier
-les éditions avec `engine.update(..)` depuis un autre thread.
+- Build et Clippy réussis. Quatre tests WAV réussis, dont le retour à la
+  version précédente sur trap et le contrôle négatif du compteur.
+- CPAL a ouvert le flux par défaut en **f32, 44 100 Hz, 2 canaux**.
+  Génération 1 observée à 370 blocs traités, puis génération 2 publiée et
+  observée à 746 blocs cumulés. L’édition double le pas de phase du
+  triangle (441 → 882 Hz à ce taux) en conservant son état.
+- Écoute sur place confirmée par le responsable : deux notes audibles,
+  passage à l’octave sans craquement ni coupure perceptibles pendant cet
+  essai. Statut CPAL **`TESTED`** pour cette configuration.
+- **0 allocation Rust** comptée sur les 746 blocs. Le compteur est armé
+  dans le rappel uniquement autour de `RtRunner::process`, adoption
+  comprise. Il ne mesure ni le reste du rappel CPAL, ni les allocations
+  natives de CPAL/ALSA/PipeWire, ni les libérations. Le format annoncé est
+  celui du flux CPAL. Le format matériel sous-jacent et le chemin de
+  refus d’un flux non-f32 n’ont pas été mesurés lors de cet essai.
 
 ## Limites
 
