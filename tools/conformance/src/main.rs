@@ -284,7 +284,8 @@ fn execute_run(options: Options) -> Result<u8, String> {
         match runner::locate_toolchain(options.toolchain.as_deref(), &repo) {
             Ok(path) => {
                 let version = runner::probe_version(&path, &repo, &temp_base);
-                let display = sanitizer.apply(&path.display().to_string());
+                let display =
+                    sanitizer.apply(&path.file_name().unwrap_or_default().to_string_lossy());
                 (
                     Some(runner::Toolchain {
                         path,
