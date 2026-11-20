@@ -336,9 +336,8 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
             ItemKind::Fn(f) => fns.push((item, f)),
             ItemKind::Use(_) => {}
             ItemKind::Struct(s) => {
-                let info = checked.facts.structs.get(&item.id);
-                if !info.is_some_and(|i| i.is_copy) {
-                    return unsupported(format!("non-`Copy` struct `{}`", s.name.name));
+                if !checked.facts.structs.contains_key(&item.id) {
+                    return Err(LowerError::MissingFact(format!("struct `{}`", s.name.name)));
                 }
             }
             ItemKind::Enum(e) => {
@@ -1064,7 +1063,8 @@ impl<'a> FnLower<'a> {
         dst
     }
 
-    /// Copy a value of type `t` from `src + so` to `dst + doff`, leaf by leaf.
+    /// Transfer a value leaf by leaf. For an owned heap field this transfers
+    /// its handle; the checker prevents reuse of the moved value.
     fn copy(&mut self, dst: Local, doff: u32, src: Local, so: u32, t: &Type) -> R<()> {
         if Layouts::is_agg(t) {
             for (off, fty) in self.layouts.fields(t)? {
@@ -1459,6 +1459,9 @@ impl<'a> FnLower<'a> {
             ExprKind::Block(b) => self.block(b),
             ExprKind::Unary { op, expr } => match op {
                 ast::UnOp::Ref | ast::UnOp::RefMut => match self.place(expr)? {
+                    Place::Mem { addr, off, ty } if map_ty(&ty)? == Ty::Obj => {
+                        self.read(Place::Mem { addr, off, ty })
+                    }
                     Place::Mem { addr, off, .. } => Ok(self.offset(addr, off)),
                     // `&s` / `&mut v` of a heap object: the handle itself.
                     Place::Reg(l) if self.locals[l as usize] == Ty::Obj => Ok(l),

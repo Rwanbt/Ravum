@@ -127,3 +127,17 @@ fn unsupported_constructs_are_refused_not_approximated() {
         }
     }
 }
+
+#[test]
+fn corpus_limits_are_explicit_lowering_refusals() {
+    for (fixture, reason) in [("o3-u128-max", "u128"), ("x-libm-refused", "sin")] {
+        let corpus = machine_corpus();
+        let (_, source) = corpus.iter().find(|(name, _)| name == fixture).unwrap();
+        match compile_source(source) {
+            Err(CompileError::Lower(LowerError::Unsupported(detail))) => {
+                assert!(detail.contains(reason), "{fixture}: {detail}");
+            }
+            other => panic!("{fixture}: expected an explicit refusal, got {other:?}"),
+        }
+    }
+}
