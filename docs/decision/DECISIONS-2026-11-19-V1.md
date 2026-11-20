@@ -85,3 +85,13 @@ Décisions du responsable, choisies parmi les options présentées :
 - **V1-C1 (T18)** : contrats `requires`/`ensures` **vérifiés à
   l'exécution** (trap si violé), statut honnête `TESTED`, aucune preuve
   statique ; une RFC d'abord, jamais auto-acceptée.
+
+## V1-C2, V1-T2, V1-P1 (2026-11-20)
+
+- **V1-C2** : [RFC-CONTRACTS-1](../rfc/RFC-CONTRACTS-1.md) est **ratifiée**
+  (`ACCEPTED`). Les preuves restent `TESTED`.
+- **V1-T2** : T13 doit être complet malgré un gain mesuré modeste :
+  identifiants de nœuds stables, fusion des faits, plusieurs fichiers, et
+  branchement sur le LSP et `watch`.
+- **V1-P1** : prochain chantier prioritaire, la couverture du JIT (`String`,
+  `Vec`, `Result`, génériques).

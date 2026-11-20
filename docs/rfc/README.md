@@ -54,3 +54,4 @@ Ce répertoire contient les **propositions d'ingénierie** qui ne sont ni des AD
 - Revue multi-IA non ratifiée : [`../reviews/2026-11-08-consolidation.md`](../reviews/2026-11-08-consolidation.md)
 
 Une RFC ne modifie ni les ADR, ni les invariants, ni la roadmap. Elle propose ; elle n'engage rien.
+| [RFC-CONTRACTS-1](RFC-CONTRACTS-1.md) | Contrats `requires`/`ensures` vérifiés à l'exécution | `ACCEPTED` (2026-11-20) | 2026-11-19 | voie `rustc` + JIT, 6 cas de conformance | — |

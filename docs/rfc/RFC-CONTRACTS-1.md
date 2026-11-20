@@ -3,11 +3,15 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-CONTRACTS-1` |
-| Statut | **PROPOSED** — à ratifier par le responsable (jamais auto-acceptée) |
+| Statut | **ACCEPTED** — ratifiée par le responsable le 2026-11-20 (décision V1-C2) |
 | Date | 2026-11-19 |
 | Auteur | agent de développement (session GOAL) |
 | Gate | T18 (ADR-004/028), décision V1-C1 : vérification à l'exécution |
 | Portée | `ravum-lang-syntax`, `ravum-lang-sema`, `ravum-lang-codegen`, `ravum-lang-ir`/`ravum-lang-jit`, `spec/language/` |
+
+> **Ratification du 2026-11-20.** Le responsable a accepté cette RFC telle
+> qu'implémentée (voie `rustc` et JIT, 6 cas de conformance). Les preuves
+> restent `TESTED` ; rien ne devient `PROVED`.
 
 > **Statut de preuve.** Un contrat de cette RFC est **vérifié à l'exécution**,
 > au moment de l'appel. Un programme qui passe ses tests n'a donc **pas**
