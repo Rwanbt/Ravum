@@ -8,11 +8,9 @@
 //! new module migrates from the current one (DSP3-5, on the caller's thread). ABI 2 and ABI 3 modules never load as each
 //! other (`AbiMismatch`, DSP3-7).
 //!
-//! Honest limits of this first host: [`Block3Host`] is owned by one thread and
-//! replaced through `&mut self` (no lock-free publication slot, no crossfade
-//! yet, unlike [`crate::BlockHost`] for ABI 2). A real audio host must call
-//! [`Block3Host::replace`] at a safe point it controls; the old module is then
-//! dropped by the caller, not by the audio callback.
+//! [`Block3Host`] supports crossfade at a caller-controlled safe point.
+//! [`crate::OpaqueEditor`] and [`crate::OpaqueRunner`] use the same module
+//! loader and state layout for lock-free publication across threads.
 
 use crate::host::{validate_loaded, ExpectedAbi};
 use crate::reclaimer::DeferredLibrary;
