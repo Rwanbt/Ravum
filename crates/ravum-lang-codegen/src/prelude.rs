@@ -1191,6 +1191,45 @@ pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Resu
     })
 }
 
+/// `task::timeout(ms, f)` (ANET-5): `Some(v)` if `f` completes within `ms`
+/// milliseconds of the monotonic clock, else `None`, and `f` is dropped.
+/// `ms == 0` polls `f` once. While waiting it lets the executor sleep like an
+/// I/O wait instead of spinning.
+struct RvTimeout<T> {
+    inner: Option<Future<T>>,
+    deadline: std::time::Instant,
+}
+
+impl<T> std::future::Future for RvTimeout<T> {
+    type Output = Option<T>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<T>> {
+        let this = self.get_mut();
+        let Some(inner) = this.inner.as_mut() else {
+            return std::task::Poll::Ready(None);
+        };
+        if let std::task::Poll::Ready(value) = inner.as_mut().poll(context) {
+            this.inner = None;
+            return std::task::Poll::Ready(Some(value));
+        }
+        if std::time::Instant::now() >= this.deadline {
+            this.inner = None;
+            return std::task::Poll::Ready(None);
+        }
+        rv_io_wait(context)
+    }
+}
+
+pub fn rv_task_timeout<T: 'static>(ms: u64, f: Future<T>) -> Future<Option<T>> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    Box::pin(RvTimeout {
+        inner: Some(f),
+        deadline,
+    })
+}
+
 /// A future that is pending once: the other ready tasks run before it resumes.
 pub fn rv_task_yield_now() -> Future<()> {
     Box::pin(RvYield(false))

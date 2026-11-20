@@ -15,7 +15,7 @@ Dix groupes, exactement ceux du design §3.6 :
 | `fs` | système de fichiers (`read_to_string`, `write_string`, `exists`) | oui | oui |
 | `alloc` | allocation dynamique (`String`, `Vec`, `Error::new`, `clone`, conversions texte) | oui (granularité fonction) | oui |
 | `panic` | arrêt contrôlé (`panic`, `assert`, `assert_eq`, `unwrap`) | oui | oui |
-| `nondet` | non-déterminisme (réservé) | **non** (aucune source en Core 1.0) | oui, sans effet |
+| `nondet` | non-déterminisme : lecture de l'horloge réelle | **oui** depuis `task::timeout` ([`RFC-DETERMINISTIC-PROFILE-1`](../../docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md) DET-2) | oui |
 | `rt` | appartenance à un contexte temps réel (réservé) | **non** | oui, sans effet |
 | `net` | réseau TCP (`std::net`, [`stdlib.md`](stdlib.md) §17) | oui | oui |
 | `thread` | threads et canaux (`std::thread`, `std::sync`, [`stdlib.md`](stdlib.md) §18) | oui | oui |
@@ -133,7 +133,7 @@ Un profil est un **mode de vérification** choisi par `--profile` (`check`, `bui
 | `core` (défaut) | candidate-stable | aucun contrôle supplémentaire ; le programme doit être accepté par le checker standard | — |
 | `pure` | candidate-stable | le **point d'entrée** (`main`, ou la fonction ciblée par `test`) ne peut atteindre **aucun** effet interdit, transitivement | `io fs net thread alloc panic unsafe ffi async rt nondet` |
 | `rt` | **expérimental** | le corps et la fermeture transitive des fonctions atteignables depuis l'entrée ne contiennent aucun effet interdit ; ne certifie **pas** le hard-RT | `io fs net thread alloc panic unsafe ffi async rt` |
-| `det` | **expérimental** ([`RFC-DETERMINISTIC-PROFILE-1`](../../docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md), `ACCEPTED`) | le point d'entrée n'atteint aucune entrée non rejouable ; refus statique (DET-1) et, pour `run --profile det --seed N`, ordonnancement déterministe des threads (DET-3, DET-4, DET-6) ; ni `test --seeds`, ni record/replay | `fs net unsafe ffi`, et les lectures `io::read_line`, `env::var` |
+| `det` | **expérimental** ([`RFC-DETERMINISTIC-PROFILE-1`](../../docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md), `ACCEPTED`) | le point d'entrée n'atteint aucune entrée non rejouable ; refus statique (DET-1) et, pour `run --profile det --seed N`, ordonnancement déterministe des threads (DET-3, DET-4, DET-6) ; ni `test --seeds`, ni record/replay | `fs net unsafe ffi nondet`, et les lectures `io::read_line`, `env::var` |
 
 | ID | Règle | Niveau |
 |---|---|---|
@@ -147,7 +147,7 @@ Un profil est un **mode de vérification** choisi par `--profile` (`check`, `bui
 | EFF-4.8 | Aucun profil n'est une **garantie de sécurité d'exécution** : voir §6. | MUST |
 | EFF-4.9 | Le profil ne change **jamais** la sémantique du programme accepté : il ne fait qu'ajouter des refus. Deux programmes identiques acceptés sous `core` et `pure` ont le même comportement. | MUST |
 | EFF-4.10 | Un profil inconnu (`--profile hard_rt`) est un usage invalide : code de sortie `2` (et non `1`). | MUST |
-| EFF-4.11 | `det` (`check --profile det`) refuse au point d'entrée, transitivement, les effets `fs net unsafe ffi` et les appels `io::read_line` et `env::var` (`E-EFF-PROFILE`) ; `thread`, `async`, `alloc`, `panic`, l'écriture `io` et `env::args` sont permis (RFC-DETERMINISTIC-PROFILE-1 DET-1). `run --profile det [--seed N]` (graine par défaut 0) exécute le programme avec l'ordonnanceur déterministe : un seul thread à la fois, choix du suivant à chaque `spawn`/`send`/`recv`/`join`/fin de thread par SplitMix64 initialisé par la graine ; même graine, même binaire, même plateforme ⇒ même sortie (DET-3, DET-4) ; un interblocage arrête le programme : `panic: deadlock (det, seed=N)`, code 1 (DET-6). `test --profile det --seeds N` exécute les tests pour les graines `0..N` et nomme la première en échec (DET-5). Non implémentés : horloge virtuelle de `std::task` (sans effet observable tant que `net` est refusé), `--record`/`--replay` (DET-9 à DET-15). | MUST |
+| EFF-4.11 | `det` (`check --profile det`) refuse au point d'entrée, transitivement, les effets `fs net unsafe ffi nondet` (pas encore d'horloge virtuelle : `task::timeout` est refusé) et les appels `io::read_line` et `env::var` (`E-EFF-PROFILE`) ; `thread`, `async`, `alloc`, `panic`, l'écriture `io` et `env::args` sont permis (RFC-DETERMINISTIC-PROFILE-1 DET-1). `run --profile det [--seed N]` (graine par défaut 0) exécute le programme avec l'ordonnanceur déterministe : un seul thread à la fois, choix du suivant à chaque `spawn`/`send`/`recv`/`join`/fin de thread par SplitMix64 initialisé par la graine ; même graine, même binaire, même plateforme ⇒ même sortie (DET-3, DET-4) ; un interblocage arrête le programme : `panic: deadlock (det, seed=N)`, code 1 (DET-6). `test --profile det --seeds N` exécute les tests pour les graines `0..N` et nomme la première en échec (DET-5). Non implémentés : horloge virtuelle de `std::task` (sans effet observable tant que `net` est refusé), `--record`/`--replay` (DET-9 à DET-15). | MUST |
 
 ```rv
 // POSITIF — profil `pure` : aucune API à effet ; `assert` est interdit (`panic`)

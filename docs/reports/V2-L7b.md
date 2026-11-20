@@ -69,5 +69,16 @@ Le recommander était une erreur de l'agent.
   (`E-TYP-STATEMENT-VALUE`) alors que la même boucle au niveau du corps est
   acceptée. Contourné dans le cas (fonction `pause`) ; défaut probable du
   checker, non corrigé ici.
-- Pas fait : `get_async`/`post_async` (attendent `connect_async`),
-  `task::timeout` (ANET-5).
+- **`task::timeout` (ANET-5) : fait.** `RvTimeout` (prélude) : `Some(v)`
+  si le futur se termine avant l'échéance (horloge monotone), sinon `None`
+  et le futur est détruit ; l'attente laisse dormir l'exécuteur comme une
+  attente d'E/S. Effets `async, alloc, nondet` : **premier producteur de
+  `nondet`** (DET-2). Sous `det`, `nondet` est refusé (pas encore d'horloge
+  virtuelle : fail-closed). Spécification : CONC-6.9, table `nondet` de
+  `effects.md`, F-STD-041. Cas : `run/l7b-task-timeout` (lecture muette →
+  `None`, futur rapide → `Some(42)`), `effects/l7b-timeout-is-nondet`
+  (`E-EFF-UNDECLARED`), `effects/l1b-det-refuses-timeout` (`E-EFF-PROFILE`,
+  accepté sous `core`).
+- Mesures (SHA de ce commit) : conformance 755 → 753 PASS, 0 FAIL, 2 SKIP ;
+  `ravum-lang-sema` + `-codegen` + `-cli` : 1 531 tests, 0 échec.
+- Pas fait : `get_async`/`post_async` (attendent `connect_async`).

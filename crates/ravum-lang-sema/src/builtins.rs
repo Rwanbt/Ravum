@@ -425,6 +425,15 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         ret: "()",
         effects: ASYNC,
     },
+    // RFC-ASYNC-NET-1 ANET-5: reads the monotonic clock, hence `nondet`
+    // (RFC-DETERMINISTIC-PROFILE-1 DET-2: the first producer of the effect).
+    BuiltinFnSig {
+        path: "std::task::timeout",
+        generics: &["T"],
+        params: &["u64", "Future<T>"],
+        ret: "Future<Option<T>>",
+        effects: &[Effect::Async, Effect::Alloc, Effect::Nondet],
+    },
     BuiltinFnSig {
         path: "std::task::yield_now",
         generics: &[],

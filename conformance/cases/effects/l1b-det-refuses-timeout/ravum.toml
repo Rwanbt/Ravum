@@ -1,0 +1,4 @@
+[package]
+name = "effects-l1b-det-refuses-timeout"
+version = "0.1.0"
+edition = "core-1.0"

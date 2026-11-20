@@ -170,11 +170,14 @@ impl Profile {
             ])),
             // DET-1: external inputs and native code are not replayable;
             // `thread`, `async`, `alloc`, `panic` and `io` output are allowed.
+            // `nondet` (the real clock of `task::timeout`) stays refused until
+            // the virtual clock of DET-2 exists: fail-closed.
             Profile::Det => Some(EffectSet::new([
                 Effect::Fs,
                 Effect::Net,
                 Effect::Unsafe,
                 Effect::Ffi,
+                Effect::Nondet,
             ])),
         }
     }
@@ -778,7 +781,13 @@ mod tests {
     #[test]
     fn det_forbids_inputs_it_cannot_replay() {
         let det = Profile::Det.forbidden().expect("det forbids effects");
-        for e in [Effect::Fs, Effect::Net, Effect::Unsafe, Effect::Ffi] {
+        for e in [
+            Effect::Fs,
+            Effect::Net,
+            Effect::Unsafe,
+            Effect::Ffi,
+            Effect::Nondet,
+        ] {
             assert!(det.contains(e), "{e:?}");
         }
         for e in [

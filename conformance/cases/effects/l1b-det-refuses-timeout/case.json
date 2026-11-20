@@ -1,0 +1,12 @@
+{
+  "id": "effects/l1b-det-refuses-timeout",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "DET-2 (MUST): the det profile has no virtual clock yet, so nondet (task::timeout) is refused at its entry point (fail-closed)."
+}

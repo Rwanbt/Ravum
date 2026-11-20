@@ -66,6 +66,7 @@ pub(super) fn builtin_free(path: &str) -> Option<FreeBuiltin> {
         "task::block_on" => FreeBuiltin::Conc("task_block_on"),
         "task::spawn" => FreeBuiltin::Conc("task_spawn"),
         "task::yield_now" => FreeBuiltin::Conc("task_yield_now"),
+        "task::timeout" => FreeBuiltin::Conc("task_timeout"),
         "http::read_request" => FreeBuiltin::Conc("http_read_request"),
         "http::method" => FreeBuiltin::Conc("http_method"),
         "http::path" => FreeBuiltin::Conc("http_path"),

@@ -1,0 +1,13 @@
+use std::task;
+
+async fn quick() -> i64 effects(async) {
+    1
+}
+
+async fn bounded() -> () effects(async, alloc, nondet) {
+    drop(task::timeout(10, quick()).await);
+}
+
+fn main() -> () effects(async, alloc, nondet) {
+    task::block_on(bounded());
+}

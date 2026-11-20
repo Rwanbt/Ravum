@@ -1,0 +1,53 @@
+// RFC-ASYNC-NET-1 ANET-5: `task::timeout` ends a future that never completes
+// (a read on a connection nobody writes to) and keeps the value of one that
+// does.
+use std::io;
+use std::net;
+use std::task;
+
+async fn silent_read(stream: TcpStream) -> i64 effects(net, async, alloc) {
+    let mut s: TcpStream = stream;
+    match net::read_line_async(&mut s).await {
+        Ok(Some(line)) => 1,
+        Ok(None) => 2,
+        Err(e) => 3,
+    }
+}
+
+async fn quick() -> i64 effects(async) {
+    task::yield_now().await;
+    42
+}
+
+async fn run() -> () effects(net, async, alloc, io, nondet) {
+    match net::listen("127.0.0.1:0") {
+        Ok(listener) => {
+            let mut addr: String = String::from("127.0.0.1:");
+            addr.push_str(&net::local_port(&listener).to_string());
+            match net::connect_async(&addr).await {
+                Ok(client) => {
+                    match net::accept_async(&listener).await {
+                        Ok(server_side) => {
+                            match task::timeout(100, silent_read(server_side)).await {
+                                Some(v) => io::println("silent: completed"),
+                                None => io::println("silent: timed out"),
+                            }
+                            drop(client);
+                        }
+                        Err(e) => io::println("accept failed"),
+                    }
+                }
+                Err(e) => io::println("connect failed"),
+            }
+        }
+        Err(e) => io::println("listen failed"),
+    }
+    match task::timeout(5000, quick()).await {
+        Some(v) => io::println(&v.to_string()),
+        None => io::println("quick: timed out"),
+    }
+}
+
+fn main() -> () effects(net, async, alloc, io, nondet) {
+    task::block_on(run());
+}
