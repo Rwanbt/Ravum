@@ -103,8 +103,32 @@ pub fn run(module: &Module, entry: &str, steps: u64) -> RunOutcome {
     run_with_output(module, entry, steps).0
 }
 
+/// Stack of the interpreter's own thread: the reference semantics allow
+/// [`MAX_DEPTH`] nested calls, and the interpreter recurses once per call,
+/// so its depth must not depend on the caller's stack (2 MiB for a Rust
+/// thread, less on some hosts). Reserved, not committed: only the pages a
+/// run touches are used.
+pub const INTERP_STACK: usize = 64 << 20;
+
+/// Run `f` on a thread with [`INTERP_STACK`] bytes of stack.
+fn on_interp_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
+    std::thread::scope(|s| {
+        std::thread::Builder::new()
+            .name("ravum-ir-interp".into())
+            .stack_size(INTERP_STACK)
+            .spawn_scoped(s, f)
+            .expect("spawn the interpreter thread")
+            .join()
+            .unwrap_or_else(|p| std::panic::resume_unwind(p))
+    })
+}
+
 /// [`run`], also returning what the program printed (up to the stop).
 pub fn run_with_output(module: &Module, entry: &str, steps: u64) -> (RunOutcome, Output) {
+    on_interp_stack(|| run_with_output_here(module, entry, steps))
+}
+
+fn run_with_output_here(module: &Module, entry: &str, steps: u64) -> (RunOutcome, Output) {
     let Some(id) = module.func_id(entry) else {
         return (
             RunOutcome::Fault(format!("no function `{entry}`")),
@@ -137,6 +161,16 @@ pub const STATE_BASE: usize = 16;
 /// address) writes the host state once, then `process(&mut State, x)` runs for
 /// each input. Returns the outputs, or the outcome that stopped the run.
 pub fn run_dsp(
+    module: &Module,
+    init: Option<&str>,
+    process: &str,
+    inputs: &[f32],
+    steps: u64,
+) -> Result<Vec<f32>, RunOutcome> {
+    on_interp_stack(|| run_dsp_here(module, init, process, inputs, steps))
+}
+
+fn run_dsp_here(
     module: &Module,
     init: Option<&str>,
     process: &str,
@@ -284,6 +318,33 @@ impl<'m> Machine<'m> {
     /// IR v1.3 heap instructions, out of `call` so that its stack frame
     /// stays small (deep recursion must reach the depth limit, not the
     /// native stack).
+    /// Out of `exec` (like `heap_inst`): keeps the recursive frame small,
+    /// the interpreter recursing once per IR call.
+    #[inline(never)]
+    fn print(&mut self, stream: Stream, arg: &PrintArg, slots: &[Val]) -> Result<(), Stop> {
+        let text = match arg {
+            PrintArg::Text(t) => t.clone(),
+            PrintArg::Obj(h) => self
+                .heap
+                .str(to_word(slots[*h as usize]))
+                .map_err(heap_stop)?
+                .to_string(),
+            PrintArg::Value { src, .. } => slots[*src as usize].text(),
+        };
+        match stream {
+            Stream::Stdout => self.out.stdout.push_str(&text),
+            Stream::Stderr => self.out.stderr.push_str(&text),
+            Stream::Note => self.out.note.push_str(&text),
+        }
+        Ok(())
+    }
+
+    /// A trap's panic, with the note written before it (IR v1.4).
+    #[inline(never)]
+    fn trap(&self, m: &str) -> Stop {
+        Stop::Panic(format!("{m}{}", self.out.note))
+    }
+
     #[inline(never)]
     fn heap_inst(&mut self, i: &Inst, locals: &[Ty], slots: &mut [Val]) -> Result<(), Stop> {
         match i {
@@ -417,22 +478,7 @@ impl<'m> Machine<'m> {
                         let a = ptr(slots[*base as usize])? + i * *scale as i128;
                         slots[*dst as usize] = Val::Int(Ty::Ptr, a);
                     }
-                    Inst::Print { stream, arg } => {
-                        let text = match arg {
-                            PrintArg::Text(t) => t.clone(),
-                            PrintArg::Obj(h) => self
-                                .heap
-                                .str(to_word(slots[*h as usize]))
-                                .map_err(heap_stop)?
-                                .to_string(),
-                            PrintArg::Value { src, .. } => slots[*src as usize].text(),
-                        };
-                        match stream {
-                            Stream::Stdout => self.out.stdout.push_str(&text),
-                            Stream::Stderr => self.out.stderr.push_str(&text),
-                            Stream::Note => self.out.note.push_str(&text),
-                        }
-                    }
+                    Inst::Print { stream, arg } => self.print(*stream, arg, slots)?,
                     i @ (Inst::Heap { .. }
                     | Inst::HeapText { .. }
                     | Inst::HeapOfValue { .. }
@@ -463,7 +509,7 @@ impl<'m> Machine<'m> {
                 }
                 Term::Return(Some(x)) => return Ok(slots[*x as usize]),
                 Term::Return(None) => return Ok(Val::Unit),
-                Term::Trap(m) => return Err(Stop::Panic(format!("{m}{}", self.out.note))),
+                Term::Trap(m) => return Err(self.trap(m)),
                 Term::Unreachable => return Err(Stop::Fault("reached unreachable block".into())),
             }
         }

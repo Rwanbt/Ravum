@@ -139,3 +139,14 @@ Décisions du responsable, choisies parmi les options présentées :
   (commit `be04b3c`) : flux f32 44,1 kHz stéréo, édition à chaud entendue
   sans coupure, 0 allocation Rust dans `process` — `TESTED` pour cette
   configuration (détails et limites : `docs/reports/V1-AUDIO-HOST.md`).
+
+## V1-G2 (2026-11-20)
+
+- **V1-G2** : T13 et T16 passent à **`PASS (V1)`** (preuves `TESTED`,
+  aucun audit externe). À la question du responsable « pourquoi aucune
+  garantie hard-RT ? il faut faire le test s'il est nécessaire » : le test a
+  été fait (T16 §10) ; il a révélé un vrai défaut (carburant RT non borné,
+  2,34 s par échantillon pour une édition qui boucle ; récursion bornée par
+  la seule profondeur ; pas de garde de pile), corrigé et mesuré. La part
+  restante — l'ordonnancement temps réel de l'OS — ne relève pas du code et
+  n'est pas revendiquée.

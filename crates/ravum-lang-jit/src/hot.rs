@@ -203,6 +203,16 @@ pub struct HotEngine {
     migrating: Option<(Box<Version>, Module, u64)>,
 }
 
+/// Fuel of one real-time call (one sample): each loop back-edge and each
+/// function entry costs 1. An edit that loops or recurses without end traps
+/// after this budget and the runner rolls back to the previous version, so
+/// one call costs at most `RT_FUEL` units (≈ 0.25 ms for a minimal loop on
+/// the reference machine, below a 64-frame block at 48 kHz; a loop with a
+/// larger body costs proportionally more per unit). Legitimate DSP code
+/// uses far less (a 64-tap filter: 64). Hosts can tune it:
+/// [`RtRunner::set_fuel_budget`].
+pub const RT_FUEL: u64 = 100_000;
+
 /// Real-time side: calls the entry and switches versions at safepoints.
 pub struct RtRunner {
     mailbox: Arc<Mailbox>,
@@ -288,9 +298,16 @@ impl HotEngine {
                 out: 0,
                 scratch: 0,
                 scratch2: 0,
+                stack_floor: 0,
             },
             kind,
-            fuel: DEFAULT_FUEL,
+            // A real-time entry gets a bounded budget per call; an editor-side
+            // run (`Nullary`) keeps the large default.
+            fuel: if matches!(kind, EntryKind::Nullary(_)) {
+                DEFAULT_FUEL
+            } else {
+                RT_FUEL
+            },
             state,
             backup,
         };
@@ -319,6 +336,7 @@ impl HotEngine {
             out: 0,
             scratch: 0,
             scratch2: 0,
+            stack_floor: 0,
         };
         exec::call1::<usize, u8>(
             v.table[slot] as *const u8,
@@ -598,6 +616,7 @@ impl HotEngine {
             out: 0,
             scratch: 0,
             scratch2: 0,
+            stack_floor: 0,
         };
         exec::call2::<usize, usize, u8>(
             version.table[slot] as *const u8,
@@ -771,6 +790,16 @@ impl RtRunner {
             }
             None => false,
         }
+    }
+
+    /// Per-call fuel budget (see [`RT_FUEL`]); 0 is refused (no call could run).
+    pub fn set_fuel_budget(&mut self, fuel: u64) {
+        assert!(fuel > 0, "fuel budget");
+        self.fuel = fuel;
+    }
+
+    pub fn fuel_budget(&self) -> u64 {
+        self.fuel
     }
 
     /// The entry's shape (an audio host picks the per-sample call).

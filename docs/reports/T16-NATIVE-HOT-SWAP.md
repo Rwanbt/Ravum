@@ -244,3 +244,51 @@ compilation concurrente — **non prouvée** pour l'exécution d'origine (sa
 sortie d'erreur n'a pas été conservée). Le test distingue maintenant « délai
 dépassé » de « sortie de l'enfant fermée » pour qu'un prochain cas soit
 diagnostiqué. Aucun test désactivé ni affaibli.
+
+## 10. Budget temps réel (2026-11-20)
+
+**Pourquoi pas de « garantie hard-RT ».** Une garantie temps réel strict
+exige deux choses : un coût **borné** de chaque appel (propriété du code,
+démontrable ici) et un ordonnanceur qui exécute le thread audio à temps
+(propriété de l'OS et du matériel : `SCHED_FIFO`/PREEMPT_RT, CPU isolé). La
+seconde ne se prouve pas par un test et n'est pas sous le contrôle de Ravum.
+Ce qui a été fait :
+
+**Défaut trouvé et corrigé.** Le carburant d'un appel temps réel valait
+10⁹ : une édition qui boucle bloquait le thread audio **2,34 s pour un
+seul échantillon** (mesuré) avant le retour arrière. Une récursion sans
+boucle n'était bornée que par la profondeur (arbre d'appels exponentiel).
+- Chaque **entrée de fonction** brûle aussi 1 unité de carburant.
+- `RT_FUEL = 100 000` unités par appel temps réel (les exécutions
+  côté éditeur gardent 10⁹), réglable par l'hôte (`set_fuel_budget`).
+- **Garde de pile** : `Ctx::stack_floor` (pointeur de pile de l'appelant −
+  `STACK_BUDGET` = 1 MiB) comparé à l'entrée de chaque fonction : une
+  récursion à grosses trames **trappe** au lieu de déborder la pile native
+  (la limite de profondeur 512 ne bornait pas les octets). Le thread hôte
+  doit avoir ≥ 1 MiB de pile libre plus son propre usage (2 MiB par défaut
+  pour un thread Rust).
+
+**Mesures (`tests/rt_budget.rs`, conteneur Linux non-RT, 4 vCPU, temps CPU
+du thread via `CLOCK_THREAD_CPUTIME_ID`).**
+
+| Cas | Résultat |
+|---|---|
+| édition qui boucle à l'infini | 1 appel = **≈ 0,26–0,45 ms CPU**, puis retour arrière (avant : 2,34 s) |
+| récursion explosive sans boucle | **≈ 20 µs**, retour arrière |
+| boucle DSP légitime (256 itérations/échantillon) | aucun trap |
+| 20 000 blocs DSP de 64 échantillons, 50 hot swaps, ×8 exécutions | CPU par bloc : p50 ≈ 12 µs, p99,9 ≈ 41–58 µs, **max 174 µs** pour une échéance de **1,333 ms** ; **0** bloc dont le travail dépasse l'échéance. Murale : 2 dépassements sur 160 000 blocs, **tous préemptés** (CPU 93 et 127 µs pour 3,4 et 1,55 ms muraux) |
+| récursion à trames de 32 KiB, 500 niveaux, thread de 2 MiB | trap (garde de pile), pas de crash |
+
+Le test échoue si le **travail** d'un bloc dépasse son échéance, ou si un
+dépassement mural survient **sans** préemption ; un dépassement dû à
+l'ordonnanceur est compté et affiché, jamais masqué.
+
+**Bug annexe trouvé.** L'interpréteur de référence recurse une fois par
+appel IR : à la profondeur 512 il ne tenait plus dans la pile de 2 MiB d'un
+thread de test (débordement de pile dans `differential.rs` selon les
+features unifiées du build). Il s'exécute désormais sur son propre thread
+(`INTERP_STACK` = 64 MiB réservés), et un test vérifie la profondeur
+maximale sur un appelant à 1 MiB de pile.
+
+Restent hors de Ravum : l'ordonnancement RT de l'OS, les allocations
+natives du pilote audio, et un audit externe des sites `unsafe`.

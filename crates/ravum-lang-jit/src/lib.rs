@@ -58,9 +58,17 @@ pub struct Ctx {
     pub scratch: u64,
     /// The index of an out-of-bounds vector access.
     pub scratch2: u64,
+    /// Lowest stack address compiled code may grow to (set by `exec::call*`
+    /// to the caller's stack pointer minus [`STACK_BUDGET`]): a deeper call
+    /// traps like the depth limit instead of overflowing the native stack.
+    pub stack_floor: usize,
 }
 
 pub const MAX_DEPTH: u32 = 512;
+/// Native stack compiled code may use below its caller (bytes). The calling
+/// thread needs this much free stack plus its own usage: Rust threads get
+/// 2 MiB by default.
+pub const STACK_BUDGET: usize = 1 << 20;
 pub const DEFAULT_FUEL: u64 = 1_000_000_000;
 
 const CODE_DEPTH: u32 = 1;
@@ -328,8 +336,16 @@ pub(crate) fn compile_funcs(
                 g.b.ins()
                     .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, depth, MAX_DEPTH as i64);
             g.trap_if(over, CODE_DEPTH);
+            // Stack guard: below `stack_floor`, trap like the depth limit.
+            let sp = g.b.ins().get_stack_pointer(types::I64);
+            let floor = g.b.ins().load(types::I64, MemFlags::trusted(), ctxp, 48);
+            let low = g.b.ins().icmp(IntCC::UnsignedLessThan, sp, floor);
+            g.trap_if(low, CODE_DEPTH);
             let d1 = g.b.ins().iadd_imm(depth, 1);
             g.b.ins().store(MemFlags::trusted(), d1, ctxp, 4);
+            // Fuel on entry too: a call tree without loops (recursion) is
+            // bounded by the fuel, not only by the depth (T16 RT budget).
+            g.burn_fuel();
             g.b.ins().jump(blocks[0], &[]);
 
             for (bi, blk) in f.blocks.iter().enumerate() {
@@ -1127,14 +1143,23 @@ pub(crate) mod exec {
     //! module has been finalized and is kept alive by `&Compiled` for the
     //! duration of the call. `R` is chosen from the declared return type, so
     //! the transmuted type matches the ABI signature exactly. `ctx` is a valid,
-    //! exclusive `&mut Ctx`; compiled code only reads/writes its three fields
-    //! at the offsets of the `#[repr(C)]` layout (0, 4, 8).
+    //! exclusive `&mut Ctx`; compiled code only reads/writes its fields at
+    //! the offsets of the `#[repr(C)]` layout (0..48); `arm` sets
+    //! `stack_floor` from the current stack position before every call.
     #![allow(unsafe_code)]
 
     use super::Ctx;
 
+    /// Arm the stack guard of `ctx` from the current stack position.
+    fn arm(ctx: &mut Ctx) {
+        let probe = 0u8;
+        let sp = std::hint::black_box(&probe) as *const u8 as usize;
+        ctx.stack_floor = sp.saturating_sub(super::STACK_BUDGET);
+    }
+
     pub fn call<R>(code: *const u8, ctx: &mut Ctx) -> R {
         let f: extern "C" fn(*mut Ctx) -> R = unsafe { std::mem::transmute(code) };
+        arm(ctx);
         f(ctx as *mut Ctx)
     }
 
@@ -1142,6 +1167,7 @@ pub(crate) mod exec {
     /// hot-swap entry kinds check the IR signature before calling).
     pub fn call1<A, R>(code: *const u8, a: A, ctx: &mut Ctx) -> R {
         let f: extern "C" fn(A, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
+        arm(ctx);
         f(a, ctx as *mut Ctx)
     }
 
@@ -1152,6 +1178,7 @@ pub(crate) mod exec {
     /// indexing, fixed field offsets).
     pub fn call2<A, B, R>(code: *const u8, a: A, b: B, ctx: &mut Ctx) -> R {
         let f: extern "C" fn(A, B, *mut Ctx) -> R = unsafe { std::mem::transmute(code) };
+        arm(ctx);
         f(a, b, ctx as *mut Ctx)
     }
 
@@ -1323,6 +1350,7 @@ impl Compiled {
             out: &mut sink as *mut exec::OutputSink as usize,
             scratch: 0,
             scratch2: 0,
+            stack_floor: 0,
         };
         let r = call_nullary(code, &mut ctx, f.ret, &self.messages);
         (with_note(r, &sink.out), sink.out)

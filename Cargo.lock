@@ -971,6 +971,7 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
+ "libc",
  "ravum-core-machine",
  "ravum-lang-ir",
  "ravum-lang-sema",
