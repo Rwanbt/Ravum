@@ -373,6 +373,37 @@ impl Emitter<'_> {
         for line in lines {
             buf.line(&line);
         }
+        // DSP3-5: the migration the host may run, on its thread, from a state
+        // of schema `ravum_state_migrate_from` to this module's state.
+        if let Some((migrate, old)) = &contract.migrate {
+            let migrate_path = self.item_path(*migrate)?;
+            let old_ty = self.type_path(old.def)?;
+            let extra = [
+                "#[allow(unsafe_code)]".to_string(),
+                "pub mod rv_dsp_migrate {".to_string(),
+                format!("    const FROM: &[u8] = b\"{}\\0\";", old.digest),
+                "    #[no_mangle]".to_string(),
+                "    pub extern \"C\" fn ravum_state_migrate_from() -> *const std::os::raw::c_char {".to_string(),
+                "        FROM.as_ptr() as *const std::os::raw::c_char".to_string(),
+                "    }".to_string(),
+                "    /// # Safety".to_string(),
+                "    /// `old` is an initialised state of schema `FROM`; `new` has this".to_string(),
+                "    /// module's state layout; the two do not overlap.".to_string(),
+                "    #[no_mangle]".to_string(),
+                "    pub unsafe extern \"C\" fn ravum_state_migrate(old: *const u8, new: *mut u8) {".to_string(),
+                "        if old.is_null() || new.is_null() {".to_string(),
+                "            return;".to_string(),
+                "        }".to_string(),
+                "        // SAFETY: `repr(C)` types of this module, buffers given by the host.".to_string(),
+                format!("        let value = unsafe {{ std::ptr::read(old as *const {old_ty}) }};"),
+                format!("        unsafe {{ std::ptr::write(new as *mut {}, {migrate_path}(value)) }};", self.type_path(contract.state.def)?),
+                "    }".to_string(),
+                "}".to_string(),
+            ];
+            for line in extra {
+                buf.line(&line);
+            }
+        }
         Ok(())
     }
 }

@@ -4,8 +4,8 @@
 //! the module reports (`ravum_state_layout`), allocated and initialised
 //! (`ravum_state_init`) when the module is loaded — off the audio thread
 //! (DSP3-3, DSP3-6). A replacement with the same schema digest keeps the buffer
-//! (DSP3-4); a different digest is refused (`StateSchemaChanged`; migration,
-//! DSP3-5, is not implemented). ABI 2 and ABI 3 modules never load as each
+//! (DSP3-4); a different digest is refused (`StateSchemaChanged`) unless the
+//! new module migrates from the current one (DSP3-5, on the caller's thread). ABI 2 and ABI 3 modules never load as each
 //! other (`AbiMismatch`, DSP3-7).
 //!
 //! Honest limits of this first host: [`Block3Host`] is owned by one thread and
@@ -44,6 +44,7 @@ pub type Block3Fn =
 type InitFn = unsafe extern "C" fn(state: *mut u8);
 type LayoutFn = unsafe extern "C" fn() -> StateLayout;
 type SchemaFn = unsafe extern "C" fn() -> *const std::os::raw::c_char;
+type MigrateFn = unsafe extern "C" fn(old: *const u8, new: *mut u8);
 
 impl ExpectedAbi {
     /// Contract of an ABI 3 block module.
@@ -63,6 +64,9 @@ pub struct Block3Module {
     init: InitFn,
     pub layout: StateLayout,
     pub schema: String,
+    /// DSP3-5: the schema digest this module migrates from.
+    pub migrate_from: Option<String>,
+    migrate: Option<MigrateFn>,
     pub manifest: PatchManifest,
     pub artifact_id: ArtifactId,
     _lib: DeferredLibrary,
@@ -97,6 +101,27 @@ pub fn prepare_block3(path: &Path) -> Result<Arc<Block3Module>, RejectReason> {
             .into_owned()
     };
     let layout = unsafe { layout_fn() };
+    // Optional migration (DSP3-5): both symbols or neither.
+    // SAFETY: same contract as above; the digest is copied at once.
+    let from_fn: Option<SchemaFn> =
+        unsafe { validated.lib.symbol(b"ravum_state_migrate_from\0") }.ok();
+    let migrate: Option<MigrateFn> = unsafe { validated.lib.symbol(b"ravum_state_migrate\0") }.ok();
+    let migrate_from = match (from_fn, migrate) {
+        (Some(from_fn), Some(_)) => {
+            let raw = unsafe { from_fn() };
+            if raw.is_null() {
+                return Err(missing("ravum_state_migrate_from"));
+            }
+            Some(
+                unsafe { std::ffi::CStr::from_ptr(raw) }
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        }
+        (None, None) => None,
+        (None, Some(_)) => return Err(missing("ravum_state_migrate_from")),
+        (Some(_), None) => return Err(missing("ravum_state_migrate")),
+    };
     if layout.size > DSP3_MAX_STATE_BYTES
         || layout.align == 0
         || !layout.align.is_power_of_two()
@@ -112,6 +137,8 @@ pub fn prepare_block3(path: &Path) -> Result<Arc<Block3Module>, RejectReason> {
         init,
         layout,
         schema,
+        migrate_from,
+        migrate,
         manifest: validated.manifest,
         artifact_id: validated.artifact_id,
         _lib: validated.lib,
@@ -241,20 +268,36 @@ impl Block3Host {
     /// Replace the module, keeping the state (same schema digest), or refuse
     /// and keep the running one. Returns the previous module, to be dropped
     /// off the audio thread by the caller.
+    ///
+    /// A different schema is accepted only when the new module migrates from
+    /// the current one (`ravum_state_migrate_from` = current digest, DSP3-5):
+    /// a new buffer is allocated and filled by `ravum_state_migrate` here, on
+    /// the caller's thread, where the old buffer is also freed. A panic in the
+    /// module's `migrate` crosses an `extern "C"` boundary and aborts the
+    /// process (Rust behaviour): it is not caught.
     pub fn replace(
         &mut self,
         module: Arc<Block3Module>,
     ) -> Result<Arc<Block3Module>, RejectReason> {
-        if module.schema != self.current.schema || module.layout != self.current.layout {
-            return Err(RejectReason::StateSchemaChanged {
-                expected: self.current.schema.clone(),
-                found: module.schema.clone(),
-            });
-        }
         if module.artifact_id == self.current.artifact_id {
             return Err(RejectReason::AlreadyActive {
                 artifact_id: module.artifact_id.clone(),
             });
+        }
+        let same = module.schema == self.current.schema && module.layout == self.current.layout;
+        if !same {
+            let migrates = module.migrate_from.as_deref() == Some(self.current.schema.as_str());
+            let Some(migrate) = module.migrate.filter(|_| migrates) else {
+                return Err(RejectReason::StateSchemaChanged {
+                    expected: self.current.schema.clone(),
+                    found: module.schema.clone(),
+                });
+            };
+            let fresh = StateBuffer::new(module.layout)?;
+            // SAFETY: `self.state` is an initialised state of the schema the
+            // module migrates from; `fresh` has the module's layout.
+            unsafe { migrate(self.state.ptr.as_ptr(), fresh.ptr.as_ptr()) };
+            self.state = fresh;
         }
         Ok(std::mem::replace(&mut self.current, module))
     }
@@ -275,13 +318,10 @@ impl Block3Host {
                 });
             }
         }
+        // The copy for the old module is taken before `replace`, which may
+        // migrate the host state to another schema.
         let copy = StateBuffer::new(self.current.layout)?;
-        let old = self.replace(module)?;
-        if frames == 0 {
-            drop(old);
-            return Ok(());
-        }
-        // SAFETY: both buffers have the same layout; they do not overlap.
+        // SAFETY: both buffers have the current module's layout; distinct.
         unsafe {
             std::ptr::copy_nonoverlapping(
                 self.state.ptr.as_ptr(),
@@ -289,6 +329,11 @@ impl Block3Host {
                 self.state.layout.size(),
             )
         };
+        let old = self.replace(module)?;
+        if frames == 0 {
+            drop(old);
+            return Ok(());
+        }
         self.fade = Some(Fade3 {
             old,
             state: copy,

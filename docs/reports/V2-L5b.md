@@ -77,7 +77,18 @@
 
 - Publication sans verrou (comme `BlockHost` pour l'ABI 2) : `Block3Host`
   est possédé par un thread et remplacé par `&mut self`.
-- **Migration** de schéma côté éditeur (DSP3-5) : un autre digest est refusé.
+- ~~Migration (DSP3-5)~~ : **faite**. Source : `fn migrate(old: OldState)
+  -> State` (vérifiée : `OldState` type d'état ABI 3 ≠ `State`, sinon
+  `E-DSP-ENTRY`, cas `types/l5b-dsp3-migrate-invalid`). Générateur :
+  `ravum_state_migrate_from` (digest de `OldState`), `ravum_state_migrate`.
+  Hôte : `replace` accepte un autre schéma seulement si le module migre
+  depuis le schéma courant ; nouveau tampon alloué et rempli sur le thread
+  appelant, ancien libéré là ; le fondu copie l'état **avant** la migration.
+  Test `a_new_schema_is_accepted_through_migrate_and_refused_without_it` :
+  `{ y }` → `{ y, n }`, sortie = référence bit à bit (y conservé) ; module
+  migrant depuis un autre schéma refusé, bloc courant gardé. **Limite** : une
+  panique dans `migrate` traverse `extern "C"` et arrête le processus (la RFC
+  prévoyait un refus) ; non rattrapée.
 - ~~Scénario avec un vrai saut~~ : **fait**,
   `the_crossfade_removes_the_step_of_a_pure_gain_edit` — gain pur 1,0 → 0,2
   sur une entrée constante 0,5 : saut de **0,400000** sans fondu, pas

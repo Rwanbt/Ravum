@@ -321,3 +321,57 @@ fn the_crossfade_removes_the_step_of_a_pure_gain_edit() {
         "same signal after the fade"
     );
 }
+
+/// Version 2 of the gain-IIR block: its state gains a counter, and it
+/// migrates from version 1's `{ y }` (DSP3-5).
+fn gain_iir_v2(gain: &str, migrate_from_field: &str) -> String {
+    format!(
+        "struct OldState {{\n    {migrate_from_field}: f32,\n}}\n\n\
+struct State {{\n    y: f32,\n    n: u32,\n}}\n\n\
+fn init() -> State effects() {{\n    return State {{ y: 0.0, n: 0 }};\n}}\n\n\
+fn migrate(old: OldState) -> State effects() {{\n    return State {{ y: old.{migrate_from_field}, n: 0 }};\n}}\n\n\
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {{\n    state.n = state.n.wrapping_add(1);\n    let a: f32 = 0.8;\n    let b: f32 = 0.2;\n    state.y = a * state.y + b * (input * {gain});\n    return state.y;\n}}\n\n\
+fn main() -> () effects() {{\n}}\n"
+    )
+}
+
+#[test]
+fn a_new_schema_is_accepted_through_migrate_and_refused_without_it() {
+    let dir = scratch("migrate");
+    let v1 = prepare_block3(&build(&dir, "v1", &gain_iir("2.0"))).unwrap();
+    assert_eq!(v1.migrate_from, None);
+    let v2 = prepare_block3(&build(&dir, "v2", &gain_iir_v2("1.0", "y"))).unwrap();
+    assert_eq!(
+        v2.migrate_from.as_deref(),
+        Some(v1.schema.as_str()),
+        "OldState {{ y }} = v1 schema"
+    );
+    assert_eq!(v2.layout, StateLayout { size: 8, align: 4 });
+
+    let input = signal(4096);
+    let switch = 2048;
+    let mut host = Block3Host::new(v1.clone()).unwrap();
+    let mut out = vec![0.0f32; input.len()];
+    for (k, (i, o)) in input.chunks(64).zip(out.chunks_mut(64)).enumerate() {
+        if k * 64 == switch {
+            host.replace(v2.clone())
+                .expect("migrates from the current schema");
+        }
+        host.process(i, o);
+    }
+    // `y` carried over by `migrate`: same as an in-place gain change.
+    let expected = reference(&input, |n| if n < switch { 2.0 } else { 1.0 });
+    for (n, (o, e)) in out.iter().zip(&expected).enumerate() {
+        assert_eq!(o.to_bits(), e.to_bits(), "sample {n}");
+    }
+
+    // A module migrating from another schema is refused; the running one stays.
+    let mut host = Block3Host::new(v1.clone()).unwrap();
+    let other = prepare_block3(&build(&dir, "v2x", &gain_iir_v2("1.0", "w"))).unwrap();
+    assert_ne!(other.migrate_from.as_deref(), Some(v1.schema.as_str()));
+    match host.replace(other) {
+        Err(RejectReason::StateSchemaChanged { .. }) => {}
+        r => panic!("{:?}", r.map(|_| ())),
+    }
+    assert!(std::sync::Arc::ptr_eq(host.active(), &v1));
+}

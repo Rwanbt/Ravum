@@ -210,6 +210,7 @@ processus s'arrête (comportement de Rust), elle n'est pas rattrapée. Le profil
 |---|---|
 | `std::ptr::write(state as *mut State, init())` (`ravum_state_init`) | l'hôte a alloué le tampon avec la taille et l'alignement que rend `ravum_state_layout` (`size_of`/`align_of` du `State` `#[repr(C)]` de ce module) |
 | `&mut *(state as *mut State)` (`ravum_process_block`) | tampon initialisé par `ravum_state_init` d'un module **au même digest de schéma** (même `repr(C)`, donc même layout), vérifié par l'hôte avant tout remplacement |
+| `ptr::read(old as *const OldState)` puis `ptr::write(new as *mut State, migrate(..))` (`ravum_state_migrate`) | l'hôte n'appelle la migration que si `ravum_state_migrate_from` égale le digest de l'état courant (même `repr(C)`, donc même layout que `OldState`) ; `new` est un tampon neuf au layout du module, distinct de `old` |
 
 **Côté hôte** (`crates/ravum-patch-host/src/block3.rs`) :
 
@@ -223,6 +224,5 @@ processus s'arrête (comportement de Rust), elle n'est pas rattrapée. Le profil
 | appel de l'ancien module sur la copie pendant le fondu | ancien module gardé par `Arc` dans le fondu ; tampon de sortie intermédiaire sur la pile, borné par `MAX_FADE_FRAMES` |
 
 Limites : `Block3Host` est possédé par un seul thread (`&mut self`), sans
-publication sans verrou (le fondu existe : `replace_with_fade`) ; la migration de schéma (DSP3-5) n'existe
-pas : un autre digest est refusé. Tests : `crates/ravum-lang-cli/tests/dsp3_block.rs`.
+publication sans verrou (le fondu existe : `replace_with_fade`) ; un autre digest n'est accepté que par migration (DSP3-5), faite sur le thread appelant ; une panique dans `migrate` traverse `extern "C"` et arrête le processus. Tests : `crates/ravum-lang-cli/tests/dsp3_block.rs`.
 Non audité par un tiers (D4/R13).

@@ -422,6 +422,9 @@ pub struct DspContract {
     /// (RFC-DSP-ABI-2, DSP3-1), with its `init`.
     pub abi: u32,
     pub init: Option<NodeId>,
+    /// ABI 3, DSP3-5: `fn migrate(old: OldState) -> State` and the schema of
+    /// `OldState` (the state it accepts).
+    pub migrate: Option<(NodeId, StateSchema)>,
 }
 
 /// DSP3-1: a field type of an ABI 3 state.
@@ -558,12 +561,48 @@ pub fn dsp_contract(checked: &CheckedProgram) -> Result<DspContract, Vec<Diagnos
             ));
         }
     }
+    // DSP3-5: optional `fn migrate(old: OldState) -> State`, `OldState` an
+    // ABI 3 state type other than `State`.
+    let mut migrate = None;
+    for item in &root.items {
+        if let ItemKind::Fn(f) = &item.kind {
+            if f.name.name != "migrate" {
+                continue;
+            }
+            let old = checked.facts.fn_sigs.get(&item.id).and_then(|sig| {
+                let ret_ok = matches!(&sig.ret, Type::Nominal { def, args, .. } if *def == state_def && args.is_empty());
+                if abi != 3 || !sig.generics.is_empty() || sig.params.len() != 1 || !ret_ok {
+                    return None;
+                }
+                match &sig.params[0].ty {
+                    Type::Nominal { def, args, .. }
+                        if args.is_empty()
+                            && *def != state_def
+                            && dsp3_field_ok(checked, &sig.params[0].ty, 0) =>
+                    {
+                        Some(*def)
+                    }
+                    _ => None,
+                }
+            });
+            match old.map(|def| schema(checked, def, item.span)) {
+                Some(Ok(s)) => migrate = Some((item.id, s)),
+                _ => diags.push(Diagnostic::error(
+                    E_DSP_ENTRY,
+                    item.span,
+                    "a DSP `migrate` is `fn migrate(old: OldState) -> State` in an ABI 3 block, \
+                     `OldState` an ABI 3 state type (DSP3-5)",
+                )),
+            }
+        }
+    }
     match (state, process) {
         (Some(state), Some(process)) if diags.is_empty() => Ok(DspContract {
             state,
             process,
             abi,
             init,
+            migrate,
         }),
         _ => Err(diags),
     }
