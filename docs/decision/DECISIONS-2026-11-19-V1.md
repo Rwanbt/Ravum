@@ -164,3 +164,13 @@ Décisions du responsable, choisies parmi les options présentées :
   refus de l'OS n'arrête pas le son et n'est jamais présenté comme une
   promotion. Exécution sur périphérique confiée à une session locale
   (`docs/handoff/RT-PRIORITY-LOCAL-SESSION.md`) : `NOT_RUN` d'ici là.
+
+## V1-A3 — clôture (2026-11-20)
+
+- La promotion temps réel a été **exécutée** dans la session locale du
+  responsable (commit `ffe891c`, Linux, noyau non `PREEMPT_RT`, RTKit) :
+  `rt_status() = Promoted`, thread `cpal_alsa_out` observé en `SCHED_RR`
+  priorité 10 (au repos et sous `stress-ng` 16 cœurs), `TS` avec `cpal`
+  seul ; aucun craquement entendu sous charge ; 0 allocation Rust dans
+  `process`. `TESTED` pour cette machine ; rappels hors échéance non
+  mesurés ; aucune garantie hard-RT, Windows/macOS `NOT_RUN`.
