@@ -238,6 +238,26 @@ du CLI reste vert.
 | `const` en expression (bornes `i64::MAX`, `i8::MIN`, `u8::MAX`), débordement via une constante, `K =>` (liaison) | 4 programmes identiques sur les 3 moteurs, 1 trap |
 | motif de constante `crate::K` (la machine n'en a pas) | natif = interpréteur = valeurs calculées à la main |
 
+## IR v1.2, suite — `Result`, `?` et fonctions génériques (2026-11-20, V1-P1)
+
+- `Result<T, E>` : même disposition que les enums (`Ok` = 0, `Err` = 1) ;
+  `Ok(..)`/`Err(..)`, motifs, `is_ok`/`is_err`/`unwrap_or`.
+- `x?` sur `Option` et `Result` : retour anticipé de `None`/`Err(e)` (même
+  type d'erreur exigé par le checker, donc aucune conversion), contrats
+  `ensures` compris ; sinon la charge utile.
+- **Fonctions génériques par monomorphisation** : une instance par jeu
+  d'arguments de type (`pick<i64>`, `pick<f64>`), retrouvé en confrontant les
+  types déclarés des paramètres et du retour aux types du checker à l'appel
+  (`ravum-lang-ir::mono`). Instances créées à la demande, 1 024 au plus ;
+  aucune fonction générique non instanciée n'est émise. Structs et enums
+  génériques, `impl` générique : toujours `Unsupported`.
+
+| Test (`ravum-lang-jit/tests/enums.rs`) | Résultat |
+|---|---|
+| `Result` + `?` en chaîne + `Option` + `?` (la machine n'a pas `?`) | 7 programmes : natif = interpréteur = valeurs calculées à la main |
+| génériques : `pick<T>` à 2 instances, `swap<A, B>` sur tuple, `wrap<T> -> Option<T>`, récursion générique | natif = interpréteur = valeurs calculées à la main ; noms d'instances vérifiés |
+| corpus machine | 55/61, inchangé |
+
 ## Suite proposée
 
 1. Élargir IR v1 : struct/tuple/tableau Copy, `match`, méthodes scalaires

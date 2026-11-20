@@ -31,6 +31,7 @@ use ravum_lang_sema::{
 };
 
 use crate::ir::*;
+use crate::mono::{substitute, Subst};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LowerError {
@@ -80,7 +81,8 @@ pub fn map_ty(t: &Type) -> R<Ty> {
         | Type::Nominal { .. }
         | Type::Tuple(_)
         | Type::Array { .. }
-        | Type::Option(_) => Ty::Ptr,
+        | Type::Option(_)
+        | Type::Result(..) => Ty::Ptr,
         other => return unsupported(format!("type `{other}`")),
     })
 }
@@ -116,7 +118,11 @@ impl<'a> Layouts<'a> {
     fn is_agg(t: &Type) -> bool {
         matches!(
             t,
-            Type::Nominal { .. } | Type::Tuple(_) | Type::Array { .. } | Type::Option(_)
+            Type::Nominal { .. }
+                | Type::Tuple(_)
+                | Type::Array { .. }
+                | Type::Option(_)
+                | Type::Result(..)
         )
     }
 
@@ -125,6 +131,8 @@ impl<'a> Layouts<'a> {
     fn variants(&self, t: &Type) -> R<Option<Vec<Vec<Type>>>> {
         match t {
             Type::Option(inner) => Ok(Some(vec![vec![], vec![(**inner).clone()]])),
+            // `Ok` is variant 0, `Err` variant 1.
+            Type::Result(ok, err) => Ok(Some(vec![vec![(**ok).clone()], vec![(**err).clone()]])),
             Type::Nominal { def, args, .. } => {
                 let Some(info) = self.checked.facts.enums.get(def) else {
                     return Ok(None);
@@ -353,15 +361,42 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
             ItemKind::Extern(_) => return unsupported("extern"),
         }
     }
-    let ids: BTreeMap<NodeId, FuncId> = fns
-        .iter()
-        .enumerate()
-        .map(|(i, (item, _))| (item.id, i as FuncId))
+    // Generic functions are lowered per instance, on demand (`FnTable`).
+    let by_id: BTreeMap<NodeId, (&ast::Item, &FnItem)> =
+        fns.iter().map(|(i, f)| (i.id, (*i, *f))).collect();
+    let plain: Vec<(&ast::Item, &FnItem)> = fns
+        .into_iter()
+        .filter(|(_, f)| f.generics.is_empty())
         .collect();
+    let table = std::cell::RefCell::new(FnTable {
+        plain: plain
+            .iter()
+            .enumerate()
+            .map(|(i, (item, _))| (item.id, i as FuncId))
+            .collect(),
+        generic: by_id
+            .iter()
+            .filter(|(_, (_, f))| !f.generics.is_empty())
+            .map(|(id, _)| *id)
+            .collect(),
+        next: plain.len() as FuncId,
+        ..FnTable::default()
+    });
     let layouts = Layouts::new(checked);
     let mut functions = Vec::new();
-    for (item, f) in &fns {
-        functions.push(FnLower::new(checked, &layouts, &ids, item, f)?.run(f)?);
+    for (item, f) in &plain {
+        functions.push(FnLower::new(checked, &layouts, &table, item, f, Subst::new())?.run(f)?);
+    }
+    let mut done = 0;
+    loop {
+        let next = table.borrow().queue.get(done).cloned();
+        let Some((item_id, subst)) = next else { break };
+        done += 1;
+        if done > MAX_INSTANCES {
+            return unsupported(format!("more than {MAX_INSTANCES} generic instances"));
+        }
+        let (item, f) = by_id[&item_id];
+        functions.push(FnLower::new(checked, &layouts, &table, item, f, subst)?.run(f)?);
     }
     let m = Module {
         version: IR_VERSION.to_string(),
@@ -371,6 +406,34 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
     };
     m.validate().map_err(LowerError::MissingFact)?;
     Ok(m)
+}
+
+/// Largest number of generic instances one program may need.
+const MAX_INSTANCES: usize = 1024;
+
+/// Function ids: plain functions first, then generic instances in creation
+/// order (the order they are lowered and pushed in).
+#[derive(Default)]
+struct FnTable {
+    plain: BTreeMap<NodeId, FuncId>,
+    generic: std::collections::BTreeSet<NodeId>,
+    instances: BTreeMap<(NodeId, String), FuncId>,
+    queue: Vec<(NodeId, Subst)>,
+    next: FuncId,
+}
+
+impl FnTable {
+    fn instance(&mut self, item: NodeId, subst: &Subst) -> FuncId {
+        let key = (item, format!("{subst:?}"));
+        if let Some(id) = self.instances.get(&key) {
+            return *id;
+        }
+        let id = self.next;
+        self.next += 1;
+        self.instances.insert(key, id);
+        self.queue.push((item, subst.clone()));
+        id
+    }
 }
 
 struct LoopCtx {
@@ -389,7 +452,9 @@ enum Place {
 struct FnLower<'a> {
     checked: &'a CheckedProgram,
     layouts: &'a Layouts<'a>,
-    ids: &'a BTreeMap<NodeId, FuncId>,
+    ids: &'a std::cell::RefCell<FnTable>,
+    /// Type arguments of this instance (empty for a plain function).
+    subst: Subst,
     locals: Vec<Ty>,
     stack: Vec<StackSlot>,
     blocks: Vec<Block>,
@@ -417,17 +482,24 @@ impl<'a> FnLower<'a> {
     fn new(
         checked: &'a CheckedProgram,
         layouts: &'a Layouts<'a>,
-        ids: &'a BTreeMap<NodeId, FuncId>,
+        ids: &'a std::cell::RefCell<FnTable>,
         item: &'a ast::Item,
         f: &FnItem,
+        subst: Subst,
     ) -> R<Self> {
-        if !f.generics.is_empty() {
-            return unsupported("generic function");
+        if (0..f.generics.len()).any(|i| !subst.contains_key(&i)) {
+            return unsupported("generic function without its type arguments");
         }
-        let sig =
+        let sig0 =
             checked.facts.fn_sigs.get(&item.id).ok_or_else(|| {
                 LowerError::MissingFact(format!("signature of `{}`", f.name.name))
             })?;
+        let mut sig = sig0.clone();
+        sig.ret = substitute(&sig.ret, &subst);
+        for p in &mut sig.params {
+            p.ty = substitute(&p.ty, &subst);
+        }
+        let sig = &sig;
         // A method: the receiver is the first parameter (`self` by value, or
         // `&self`/`&mut self` as an address); its IR name is its path
         // (`S::m`) so that two types' methods never share a name.
@@ -435,15 +507,20 @@ impl<'a> FnLower<'a> {
             .rust_path
             .strip_prefix("crate::")
             .unwrap_or(&sig.rust_path);
-        let name = if path.contains("::") {
+        let mut name = if path.contains("::") {
             path.to_string()
         } else {
             f.name.name.clone()
         };
+        if !subst.is_empty() {
+            let args: Vec<String> = subst.values().map(|t| t.to_string()).collect();
+            name = format!("{name}<{}>", args.join(", "));
+        }
         let mut me = FnLower {
             checked,
             layouts,
             ids,
+            subst,
             locals: Vec::new(),
             stack: Vec::new(),
             blocks: vec![Block {
@@ -669,8 +746,42 @@ impl<'a> FnLower<'a> {
             .facts
             .expr_types
             .get(&e.id)
-            .cloned()
+            .map(|t| substitute(t, &self.subst))
             .ok_or_else(|| LowerError::MissingFact(format!("type of expression at {:?}", e.span)))
+    }
+
+    /// Id of the function `item` called by `e` with arguments `args` (and a
+    /// receiver type first for a method): a plain function, or the instance
+    /// whose type arguments match the call's types.
+    fn func_for_call(&self, e: &Expr, item: NodeId, arg_types: &[Type]) -> R<FuncId> {
+        let t = self.ids.borrow();
+        if let Some(id) = t.plain.get(&item) {
+            return Ok(*id);
+        }
+        if !t.generic.contains(&item) {
+            return Err(LowerError::Unsupported(
+                "call to a function outside the root module".into(),
+            ));
+        }
+        drop(t);
+        let sig = self
+            .checked
+            .facts
+            .fn_sigs
+            .get(&item)
+            .ok_or_else(|| LowerError::MissingFact("generic signature".into()))?;
+        let mut s = Subst::new();
+        let mut ok = sig.params.len() == arg_types.len();
+        for (p, a) in sig.params.iter().zip(arg_types) {
+            ok &= crate::mono::bind(&p.ty, a, &mut s);
+        }
+        ok &= crate::mono::bind(&sig.ret, &self.type_of(e)?, &mut s);
+        let complete =
+            (0..sig.generics.len()).all(|i| s.get(&i).is_some_and(|t| !crate::mono::has_param(t)));
+        if !ok || !complete {
+            return unsupported("generic call whose type arguments cannot be inferred");
+        }
+        Ok(self.ids.borrow_mut().instance(item, &s))
     }
 
     fn ty_of(&self, e: &Expr) -> R<Ty> {
@@ -993,7 +1104,7 @@ impl<'a> FnLower<'a> {
                         .facts
                         .pat_types
                         .get(&l.pat.id)
-                        .cloned()
+                        .map(|t| substitute(t, &self.subst))
                         .ok_or_else(|| {
                             LowerError::MissingFact(format!("type of `{}`", name.name))
                         })?;
@@ -1316,7 +1427,7 @@ impl<'a> FnLower<'a> {
             ExprKind::Str(_) => unsupported("string"),
             ExprKind::Char(_) => unsupported("char"),
             ExprKind::Range { .. } => unsupported("range outside `for`"),
-            ExprKind::Try(_) => unsupported("`?`"),
+            ExprKind::Try(inner) => self.try_expr(inner),
             ExprKind::Unsafe(_) => unsupported("unsafe"),
             ExprKind::Await(_) => unsupported("await"),
             ExprKind::SelfValue => {
@@ -1598,6 +1709,8 @@ impl<'a> FnLower<'a> {
             Some(Resolution::Variant { variant, .. }) => Ok(*variant),
             Some(Resolution::BuiltinConst { path }) if path == "Option::None" => Ok(0),
             Some(Resolution::BuiltinFn { path }) if path == "Option::Some" => Ok(1),
+            Some(Resolution::BuiltinFn { path }) if path == "Result::Ok" => Ok(0),
+            Some(Resolution::BuiltinFn { path }) if path == "Result::Err" => Ok(1),
             Some(Resolution::BuiltinFn { path }) => unsupported(format!("`{path}` pattern")),
             Some(Resolution::Item { .. }) => unsupported("constant pattern"),
             _ => Err(LowerError::MissingFact("pattern resolution".into())),
@@ -1947,6 +2060,14 @@ impl<'a> FnLower<'a> {
         if let Some(m) = path.strip_prefix("Option::") {
             return self.option_method(e, recv, m, args);
         }
+        if let Some(m) = path.strip_prefix("Result::") {
+            let m = match m {
+                "is_ok" => "is_some",
+                "is_err" => "is_none",
+                other => other,
+            };
+            return self.option_method(e, recv, m, args);
+        }
         if let Some(m) = path.strip_prefix("int::checked_") {
             return self.checked_method(e, recv, m, args, ty);
         }
@@ -2119,13 +2240,83 @@ impl<'a> FnLower<'a> {
         unsupported("`io::print*` of a string other than a literal or `x.to_string()`")
     }
 
+    /// `x?` (EXPR, `check_try`): on `None`/`Err(e)` return `None`/`Err(e)`
+    /// from the function (same error type: no conversion), else the payload.
+    fn try_expr(&mut self, inner: &Expr) -> R<Local> {
+        let it = self.type_of(inner)?;
+        let (good, bad) = match it {
+            Type::Option(_) => (1, 0),
+            Type::Result(..) => (0, 1),
+            _ => return Err(LowerError::MissingFact("`?` on a non-Option/Result".into())),
+        };
+        let Place::Mem { addr, off, .. } = self.place(inner)? else {
+            return Err(LowerError::MissingFact("`?` operand in a register".into()));
+        };
+        let tag = self.new_local(Ty::U32);
+        self.emit(Inst::Load {
+            dst: tag,
+            ty: Ty::U32,
+            addr,
+            offset: off,
+        });
+        let k = self.tag_const(good);
+        let ok = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: ok,
+            op: BinOp::Eq,
+            ty: Ty::U32,
+            lhs: tag,
+            rhs: k,
+        });
+        let (gb, bb) = (self.new_block(), self.new_block());
+        self.set_term(Term::Branch {
+            cond: ok,
+            then_to: gb,
+            else_to: bb,
+        });
+        // Early return.
+        self.switch_to(bb);
+        let ret = self.ret.clone();
+        let vals = match &it {
+            Type::Result(..) => {
+                let (foff, ft) = self.layouts.variant_fields(&it, bad)?[0].clone();
+                let v = self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft.clone(),
+                })?;
+                vec![if Layouts::is_agg(&ft) {
+                    self.snapshot(v, &ft)?
+                } else {
+                    v
+                }]
+            }
+            _ => Vec::new(),
+        };
+        let r = self.construct(&ret, bad, vals)?;
+        let t = self.return_term(r)?;
+        self.terminate(t);
+        // The payload.
+        self.switch_to(gb);
+        let (foff, ft) = self.layouts.variant_fields(&it, good)?[0].clone();
+        self.read(Place::Mem {
+            addr,
+            off: off + foff,
+            ty: ft,
+        })
+    }
+
     /// `Option::{is_some, is_none, unwrap_or}`. `unwrap` stays `Unsupported`:
     /// its panic text differs between the spec machine and the rustc path.
     fn option_method(&mut self, e: &Expr, recv: &Expr, m: &str, args: &[Expr]) -> R<Local> {
         let ot = self.type_of(recv)?;
-        if !matches!(ot, Type::Option(_)) {
-            return unsupported(format!("`Option::{m}` on `{ot}`"));
-        }
+        // The "present" variant: `Some` (1) for `Option`, `Ok` (0) for
+        // `Result` — `is_ok`/`is_err` map onto `is_some`/`is_none`.
+        let good = match ot {
+            Type::Option(_) => 1,
+            Type::Result(..) => 0,
+            _ => return unsupported(format!("`{m}` on `{ot}`")),
+        };
         let p = self.place(recv)?;
         let Place::Mem { addr, off, .. } = p else {
             return Err(LowerError::MissingFact("option in a register".into()));
@@ -2137,7 +2328,7 @@ impl<'a> FnLower<'a> {
             addr,
             offset: off,
         });
-        let one = self.tag_const(1);
+        let one = self.tag_const(good);
         let some = self.new_local(Ty::Bool);
         self.emit(Inst::Bin {
             dst: some,
@@ -2176,7 +2367,7 @@ impl<'a> FnLower<'a> {
                     else_to: nb,
                 });
                 self.switch_to(sb);
-                let (foff, ft) = self.layouts.variant_fields(&ot, 1)?[0].clone();
+                let (foff, ft) = self.layouts.variant_fields(&ot, good)?[0].clone();
                 let v = self.read(Place::Mem {
                     addr,
                     off: off + foff,
@@ -2198,10 +2389,22 @@ impl<'a> FnLower<'a> {
     /// copy for `self`, the place's address for `&self`/`&mut self`
     /// (auto-reference), or the reference itself when it already is one.
     fn user_method_call(&mut self, e: &Expr, recv: &Expr, item: NodeId, args: &[Expr]) -> R<Local> {
-        let func = *self
-            .ids
-            .get(&item)
-            .ok_or_else(|| LowerError::Unsupported("method outside the root module".into()))?;
+        let mut arg_types = vec![self.type_of(recv)?];
+        for a in args {
+            arg_types.push(self.type_of(a)?);
+        }
+        let func = match self.func_for_call(e, item, &arg_types) {
+            Ok(f) => f,
+            // A method takes `&self` where the receiver is a place: retry
+            // with the receiver auto-referenced.
+            Err(_) => {
+                arg_types[0] = Type::Ref {
+                    mutable: false,
+                    inner: Box::new(arg_types[0].clone()),
+                };
+                self.func_for_call(e, item, &arg_types)?
+            }
+        };
         let sig = self
             .checked
             .facts
@@ -2264,9 +2467,11 @@ impl<'a> FnLower<'a> {
     fn call(&mut self, e: &Expr, args: &[Expr]) -> R<Local> {
         match self.checked.facts.calls.get(&e.id) {
             Some(CallTarget::UserFn { item }) => {
-                let func = *self.ids.get(item).ok_or_else(|| {
-                    LowerError::Unsupported("call to a function outside the root module".into())
-                })?;
+                let arg_types = args
+                    .iter()
+                    .map(|a| self.type_of(a))
+                    .collect::<R<Vec<_>>>()?;
+                let func = self.func_for_call(e, *item, &arg_types)?;
                 let rt = self.type_of(e)?;
                 let mut vals = Vec::new();
                 let sret = if Layouts::is_agg(&rt) {
@@ -2390,6 +2595,14 @@ impl<'a> FnLower<'a> {
                     }
                     _ => unsupported(format!("builtin `{path}`")),
                 }
+            }
+            Some(CallTarget::BuiltinFn { path })
+                if path == "Result::Ok" || path == "Result::Err" =>
+            {
+                let v = usize::from(path == "Result::Err");
+                let vals = self.eval_args(args)?;
+                let t = self.type_of(e)?;
+                self.construct(&t, v, vals)
             }
             Some(CallTarget::BuiltinFn { path }) if path == "Option::Some" => {
                 let vals = self.eval_args(args)?;

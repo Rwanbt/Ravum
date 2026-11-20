@@ -254,3 +254,65 @@ fn consts_agree_with_the_reference_machine() {
         );
     }
 }
+
+const PARSE: &str = "fn digit(c: i64) -> Result<i64, i32> effects() {\n    if c >= 0 && c <= 9 {\n        return Ok(c);\n    }\n    let code: i32 = 7;\n    return Err(code);\n}\n\nfn two(a: i64, b: i64) -> Result<i64, i32> effects() {\n    let x = digit(a)?;\n    let y = digit(b)?;\n    let ten: i64 = 10;\n    return Ok(x * ten + y);\n}\n\nfn first(o: Option<i64>) -> Option<i64> effects() {\n    let v = o?;\n    let one: i64 = 1;\n    return Some(v + one);\n}\n\n";
+
+#[test]
+fn result_and_try_agree_with_the_reference_machine() {
+    let mut programs = Vec::new();
+    for (a, b) in [(1, 2), (9, 0), (12, 3), (4, -1), (0, 0)] {
+        programs.push(format!(
+            "{PARSE}fn check() -> i64 effects() {{\n    let miss: i64 = -1;\n    let r = two({a}, {b});\n    let mut out: i64 = match r {{\n        Ok(v) => v,\n        Err(e) => (e as i64) * miss,\n    }};\n    if r.is_ok() {{\n        out = out + 1000;\n    }}\n    if r.is_err() {{\n        out = out - 1000;\n    }}\n    let d: i64 = 5;\n    return out + r.unwrap_or(d);\n}}\n"
+        ));
+    }
+    for v in ["Some(41)", "None"] {
+        programs.push(format!(
+            "{PARSE}fn check() -> i64 effects() {{\n    let z: i64 = 0;\n    let o: Option<i64> = {v};\n    return first(o).unwrap_or(z);\n}}\n"
+        ));
+    }
+    // The reference machine has no `?`: native = interpreter, and each
+    // result equals the value computed by hand.
+    let (n, traps) = judge_with(&programs, false);
+    assert_eq!((n, traps), (7, 0));
+    let want = [1024, 1180, -1002, -1002, 1000, 42, 0];
+    for (p, w) in programs.iter().zip(want) {
+        let ir = compile_source(p).unwrap();
+        assert_eq!(
+            run(&ir, "check", DEFAULT_STEPS).render(),
+            format!("value i64 {w}")
+        );
+    }
+}
+
+#[test]
+fn generic_functions_agree_with_the_reference_machine() {
+    let generic = "fn pick<T>(c: bool, a: T, b: T) -> T effects() {\n    if c {\n        return a;\n    }\n    return b;\n}\n\nfn swap<A, B>(p: (A, B)) -> (B, A) effects() {\n    return (p.1, p.0);\n}\n\nfn wrap<T>(x: T) -> Option<T> effects() {\n    return Some(x);\n}\n\nfn depth<T>(x: T, n: i64) -> T effects() {\n    if n <= 0 {\n        return x;\n    }\n    let one: i64 = 1;\n    return depth(x, n - one);\n}\n\n";
+    let mut programs = Vec::new();
+    for c in ["true", "false"] {
+        programs.push(format!(
+            "{generic}fn check() -> i64 effects() {{\n    let a: i64 = 3;\n    let b: i64 = 4;\n    let x = pick({c}, a, b);\n    let f: f64 = pick({c}, 1.5, 2.5);\n    let s = swap((x, f > 2.0));\n    let w = wrap(s);\n    let n: i64 = 5;\n    let seven: u8 = 7;\n    let d: u8 = depth(seven, n);\n    let z: i64 = 0;\n    let k: i64 = 100;\n    let r = match w {{\n        Some(t) => if t.0 {{ k }} else {{ z }},\n        None => z,\n    }};\n    return x + r + (d as i64) + (f as i64);\n}}\n"
+        ));
+    }
+    // The reference machine has no generics: native = interpreter, and the
+    // values computed by hand.
+    let (n, _) = judge_with(&programs, false);
+    assert_eq!(n, 2);
+    for (p, w) in programs.iter().zip([11, 113]) {
+        let ir = compile_source(p).unwrap();
+        assert_eq!(
+            run(&ir, "check", DEFAULT_STEPS).render(),
+            format!("value i64 {w}")
+        );
+    }
+    // Each distinct set of type arguments is one instance.
+    let ir = compile_source(&programs[0]).unwrap();
+    let names: Vec<&str> = ir.functions.iter().map(|f| f.name.as_str()).collect();
+    assert!(
+        names.contains(&"pick<i64>") && names.contains(&"pick<f64>"),
+        "{names:?}"
+    );
+    assert!(
+        names.iter().all(|n| *n != "pick"),
+        "no uninstantiated generic: {names:?}"
+    );
+}

@@ -20,6 +20,7 @@
 pub mod interp;
 pub mod ir;
 pub mod lower;
+pub mod mono;
 
 pub use ir::{Module, IR_VERSION};
 
