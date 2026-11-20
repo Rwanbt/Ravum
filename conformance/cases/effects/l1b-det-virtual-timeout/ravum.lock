@@ -3,6 +3,6 @@
 lockfile_version = 1
 
 [[package]]
-name = "effects-l1b-det-refuses-timeout"
+name = "effects-l1b-det-virtual-timeout"
 version = "0.1.0"
 digest = "sha256:abd2fb309096a8c2b9ac98de13bead3e8ee09583a722c75208083fce18e441f5"

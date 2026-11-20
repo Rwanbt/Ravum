@@ -26,9 +26,9 @@
 |---|---|---|
 | `std::io` | `use std::io;` | `print`, `println`, `eprintln`, `read_line` |
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
-| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) ; `accept_async`, `connect_async`, `read_line_async`, `write_str_async` ([`concurrency.md`](concurrency.md) CONC-6.7) |
-| `std::task` | `task::…` | `block_on`, `spawn`, `yield_now` ([`concurrency.md`](concurrency.md) §6) |
-| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body` (§19) |
+| `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) ; `accept_async`, `connect_async`, `read_line_async`, `read_exact_async`, `write_str_async` ([`concurrency.md`](concurrency.md) CONC-6.7) |
+| `std::task` | `task::…` | `block_on`, `spawn`, `yield_now`, `timeout` ([`concurrency.md`](concurrency.md) §6) |
+| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body`, `read_request_async`, `respond_async` (§19) |
 | `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
 | `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |
 | `std::env` | `use std::env;` | `args`, `var` |
@@ -659,6 +659,7 @@ pub fn connect(addr: &str) -> Result<TcpStream, Error> effects(net, alloc)
 pub fn read_line(stream: &mut TcpStream) -> Result<Option<String>, Error> effects(net, alloc)
 pub fn read_exact(stream: &mut TcpStream, count: usize) -> Result<String, Error> effects(net, alloc)
 pub fn write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> effects(net, alloc)
+pub fn read_exact_async(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> effects(net, async, alloc)
 ```
 
 | ID | Sémantique | Niveau |
@@ -668,9 +669,9 @@ pub fn write_str(stream: &mut TcpStream, text: &str) -> Result<(), Error> effect
 | STD-17.3 | Toute erreur système (adresse invalide, port occupé, connexion refusée ou réinitialisée) rend `Err(Error)`, jamais une panique. | MUST |
 | STD-17.4 | Les octets reçus sont du **texte UTF-8 strict** : un octet invalide rend `Err`, jamais une substitution. | MUST |
 | STD-17.5 | `read_line` rend `Ok(None)` à la fin du flux, sinon la ligne **sans** son `\n` final ni un `\r` qui le précède. | MUST |
-| STD-17.6 | `read_exact(s, n)` lit exactement `n` octets ; une fin de flux avant `n` octets rend `Err`. | MUST |
+| STD-17.6 | `read_exact(s, n)` et `read_exact_async(s, n).await` lisent exactement `n` octets ; une fin de flux avant `n` octets rend `Err`. | MUST |
 | STD-17.7 | `write_str` écrit tous les octets UTF-8 puis vide le tampon, ou rend `Err`. | MUST |
-| STD-17.8 | Tous les appels sont **bloquants** ; il n'y a ni timeout, ni TLS, ni UDP, ni octets bruts en 1.0. | MUST |
+| STD-17.8 | Les formes synchrones sont **bloquantes**. `task::timeout` peut borner une opération asynchrone. Il n’y a ni TLS, ni UDP, ni octets bruts en 1.0. | MUST |
 
 ```rv
 // POSITIF — échange sur la boucle locale, un seul processus
@@ -766,12 +767,12 @@ n'est pas possible en 1.0. `HttpRequest` et `HttpResponse` sont des types
 
 ```rv
 pub fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> effects(net, alloc)
+pub fn read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> effects(net, async, alloc)
 pub fn method(request: &HttpRequest) -> String effects(alloc)
 pub fn path(request: &HttpRequest) -> String effects(alloc)
 pub fn header(request: &HttpRequest, name: &str) -> Option<String> effects(alloc)
 pub fn body(request: &HttpRequest) -> String effects(alloc)
 pub fn respond(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Result<(), Error> effects(net, alloc)
-pub fn read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> effects(net, async, alloc)   // CONC-6.8
 pub fn respond_async(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Future<Result<(), Error>> effects(net, async, alloc)   // CONC-6.8
 pub fn get(url: &str) -> Result<HttpResponse, Error> effects(net, alloc)
 pub fn post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> effects(net, alloc)
@@ -782,10 +783,10 @@ pub fn response_body(response: &HttpResponse) -> String effects(alloc)
 | ID | Sémantique | Niveau |
 |---|---|---|
 | STD-19.1 | `read_request`, `respond`, `get` et `post` portent l'effet `net` ; il est interdit au point d'entrée de `pure` et de `rt`. | MUST |
-| STD-19.2 | `read_request` lit une ligne `MÉTHODE /chemin HTTP/1.1` (ou `HTTP/1.0`), les en-têtes jusqu'à la ligne vide, puis un corps de `Content-Length` octets (0 sans en-tête). Une ligne ou un chemin malformé, une autre version, ou `Transfer-Encoding` (dont `chunked`) rendent `Err`. | MUST |
+| STD-19.2 | `read_request` et `read_request_async` lisent une ligne `MÉTHODE /chemin HTTP/1.1` (ou `HTTP/1.0`), les en-têtes jusqu'à la ligne vide, puis un corps de `Content-Length` octets (0 sans en-tête). Une ligne ou un chemin malformé, une autre version, ou `Transfer-Encoding` (dont `chunked`) rendent `Err`. | MUST |
 | STD-19.3 | Limites fixes : une ligne ≤ 8 KiB, au plus 100 en-têtes, un corps ≤ 16 MiB ; au-delà, `Err`. Les octets de la ligne, des en-têtes et du corps doivent être de l'UTF-8 strict, sinon `Err`. | MUST |
 | STD-19.4 | `header(request, nom)` compare les noms sans tenir compte de la casse ASCII et rend la valeur sans blancs en tête ni en queue, ou `None`. | MUST |
-| STD-19.5 | `respond` écrit une seule réponse complète : ligne de statut, `Content-Type`, `Content-Length`, `Connection: close`, puis le corps. Un statut hors de `100..=999` ou un `content_type` contenant `\r` ou `\n` rend `Err` (pas d'injection d'en-tête). | MUST |
+| STD-19.5 | `respond` et `respond_async` écrivent une seule réponse complète : ligne de statut, `Content-Type`, `Content-Length`, `Connection: close`, puis le corps. Un statut hors de `100..=999` ou un `content_type` contenant `\r` ou `\n` rend `Err` (pas d'injection d'en-tête). | MUST |
 | STD-19.6 | `get` et `post` n'acceptent que `http://hôte[:port]/chemin` (port 80 par défaut), envoient `Connection: close` et lisent le corps par `Content-Length`, ou jusqu'à la fermeture. `https://` rend `Err` : il n'y a pas de TLS en 1.0. | MUST |
 | STD-19.7 | Toute erreur de connexion, de lecture ou de format est `Err`, jamais une panique. | MUST |
 | STD-19.8 | Une connexion par requête : ni keep-alive, ni pipelining, ni HTTP/2, ni TLS, ni compression. Un serveur Ravum 1.0 est destiné à la boucle locale et au réseau local. | MUST |

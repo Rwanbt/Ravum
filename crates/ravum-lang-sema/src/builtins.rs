@@ -412,11 +412,25 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         effects: NET_ASYNC,
     },
     BuiltinFnSig {
+        path: "std::net::read_exact_async",
+        generics: &[],
+        params: &["&mut TcpStream", "usize"],
+        ret: "Future<Result<String, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
         path: "std::task::block_on",
         generics: &["T"],
         params: &["Future<T>"],
         ret: "T",
         effects: ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::task::timeout",
+        generics: &["T"],
+        params: &["u64", "Future<T>"],
+        ret: "Future<Option<T>>",
+        effects: &[Effect::Async, Effect::Alloc, Effect::Nondet],
     },
     BuiltinFnSig {
         path: "std::task::spawn",
@@ -427,13 +441,6 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
     },
     // RFC-ASYNC-NET-1 ANET-5: reads the monotonic clock, hence `nondet`
     // (RFC-DETERMINISTIC-PROFILE-1 DET-2: the first producer of the effect).
-    BuiltinFnSig {
-        path: "std::task::timeout",
-        generics: &["T"],
-        params: &["u64", "Future<T>"],
-        ret: "Future<Option<T>>",
-        effects: &[Effect::Async, Effect::Alloc, Effect::Nondet],
-    },
     BuiltinFnSig {
         path: "std::task::yield_now",
         generics: &[],
@@ -492,6 +499,20 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
     },
     // --- std::http (RFC-E11-NET-HTTP §4) ---
     BuiltinFnSig {
+        path: "std::http::read_request_async",
+        generics: &[],
+        params: &["&mut TcpStream"],
+        ret: "Future<Result<HttpRequest, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::http::respond_async",
+        generics: &[],
+        params: &["&mut TcpStream", "u16", "&str", "&str"],
+        ret: "Future<Result<(), Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
         path: "std::http::read_request",
         generics: &[],
         params: &["&mut TcpStream"],
@@ -534,20 +555,6 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         effects: NET_ALLOC,
     },
     // RFC-ASYNC-NET-1 ANET-2: same semantics as the blocking forms.
-    BuiltinFnSig {
-        path: "std::http::read_request_async",
-        generics: &[],
-        params: &["&mut TcpStream"],
-        ret: "Future<Result<HttpRequest, Error>>",
-        effects: NET_ASYNC,
-    },
-    BuiltinFnSig {
-        path: "std::http::respond_async",
-        generics: &[],
-        params: &["&mut TcpStream", "u16", "&str", "&str"],
-        ret: "Future<Result<(), Error>>",
-        effects: NET_ASYNC,
-    },
     BuiltinFnSig {
         path: "std::http::get",
         generics: &[],

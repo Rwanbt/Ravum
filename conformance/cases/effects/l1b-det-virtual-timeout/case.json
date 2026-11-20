@@ -1,0 +1,9 @@
+{
+  "id": "effects/l1b-det-virtual-timeout",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "notes": "DET-2: the virtual clock makes timeout admissible under det; nondet remains a declared effect."
+}
