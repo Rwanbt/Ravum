@@ -217,3 +217,41 @@ fn invariants_are_contract_facts_and_named_by_failed_tests() {
         "{o}"
     );
 }
+
+/// RFC-INVARIANTS-1 INV-9: every write path to a field of a struct with an
+/// invariant is refused outside its methods (assignment, compound
+/// assignment, `&mut` borrow, mutating method on the field), allowed inside
+/// them, and reading stays allowed; a struct without invariant is unchanged.
+#[test]
+fn field_writes_outside_the_methods_of_an_invariant_struct_are_refused() {
+    let base = |inv: &str, tail: &str| {
+        format!("struct R {{\n    lo: i64,\n    v: Vec<i64>,\n}}\n{inv}\nimpl R {{\n    fn bump(&mut self) -> () effects(alloc) {{\n        self.lo = self.lo + 1;\n        self.lo += 1;\n        self.v.push(1);\n        set(&mut self.lo);\n    }}\n}}\n\nfn set(x: &mut i64) -> () effects() {{\n    *x = 3;\n}}\n\nfn main() -> () effects(alloc) {{\n    let mut r = R {{ lo: 0, v: Vec::new() }};\n    r.bump();\n    let _k = r.lo + (r.v.len() as i64);\n{tail}}}\n")
+    };
+    let inv = "    invariant self.lo >= 0\n";
+    let codes = |v: &serde_json::Value| -> Vec<String> {
+        v["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["severity"] == "error")
+            .map(|d| d["code"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let ok = check_json(&base(inv, ""), "fw0");
+    assert_eq!(ok["success"], true, "{ok}");
+    for (i, tail) in [
+        "    r.lo = -1;\n",
+        "    r.lo -= 5;\n",
+        "    set(&mut r.lo);\n",
+        "    r.v.push(2);\n",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let v = check_json(&base(inv, tail), &format!("fw{}", i + 1));
+        assert_eq!(codes(&v), ["E-CON-FIELD-WRITE"], "{tail}: {v}");
+        // Without the invariant the same program is accepted.
+        let w = check_json(&base("", tail), &format!("fwn{}", i + 1));
+        assert_eq!(w["success"], true, "{tail}: {w}");
+    }
+}

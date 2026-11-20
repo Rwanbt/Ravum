@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-INVARIANTS-1` |
-| Statut | **PROPOSED** — implémentée pour revue ; jamais auto-acceptée |
+| Statut | **ACCEPTED** — ratifiée par le responsable le 2026-11-20 (décision V1-C5), avec INV-9 (décision V1-C6) |
 | Date | 2026-11-20 |
 | Auteur | agent de développement (session GOAL) |
 | Gate | T18 (ADR-004/028), décision V1-C4 (forme `invariant` sur struct) |
@@ -55,15 +55,12 @@ struct Range {
 | INV-5 | Profil `rt` : une clause est refusée (`E-EFF-PROFILE`). |
 | INV-6 | V1 : pas d'invariant sur une struct générique (`E-CON-UNSUPPORTED`). |
 | INV-7 | Les noms synthétiques ne peuvent pas être écrits : `_rv_` est réservé par le lexer (`E-LEX-RESERVED-IDENT`). |
+| INV-9 | Hors des méthodes de `S` (son `impl`), un champ de `S` n'est **jamais écrit ni emprunté `&mut`** : affectation, affectation composée, `&mut s.f`, méthode `&mut self` appelée sur le champ (`s.v.push(..)`) donnent `E-CON-FIELD-WRITE`. La lecture reste libre. Toute modification passe donc par une méthode `&mut self`, vérifiée à sa sortie (INV-3). Dans une méthode de `S`, un champ d'une **autre** struct à invariant reste protégé. |
 | INV-8 | Faits T19 : chaque clause est un contrat `S#invariant.<n>` (`kind: invariant`, `verification: runtime-checked`), `exercised_by` = tests qui atteignent une construction de `S` ou une méthode `&mut self` de `S` (arêtes du graphe d'appels vers la méthode synthétique). `test --json` le nomme dans `violated_contracts`. |
 
 ### Limites (déclarées, non cachées)
 
-- **Points d'observation** : seulement INV-2 et INV-3. Une écriture directe
-  d'un champ hors méthode (`r.lo = 9;`), une méthode `self` par valeur qui
-  modifie sa copie, ou une écriture à travers `&mut r.lo` passé à une autre
-  fonction ne sont **pas** vérifiées. Un champ privé limite ces écritures au
-  module de la struct ; c'est la discipline recommandée.
+- **Points d'observation** : INV-2 et INV-3 ; INV-9 ferme les écritures directes. Restent hors de la règle : une méthode `self` par valeur qui modifie sa propre copie (elle ne modifie pas l'objet observé) et la déstructuration d'un `&mut S` par motif (non couverte par INV-9 ; rare en Core 1.0).
 - Pas de vérification à l'entrée des méthodes (l'invariant est supposé tenu,
   il l'était à la dernière observation).
 - Le JIT ne gère que les structs `Copy` (limite existante de l'IR) ; la voie
@@ -96,7 +93,8 @@ struct Range {
 - `invariants_are_contract_facts_and_named_by_failed_tests` (T19).
 - Tests du parseur (désucrage, texte normalisé, cas négatifs) et du
   formateur (disposition, idempotence, sens préservé).
-- Conformance : `run/invariant-holds`, `run/invariant-violated-literal`,
+- `field_writes_outside_the_methods_of_an_invariant_struct_are_refused` (INV-9 : 4 chemins d'écriture refusés, acceptés sans invariant, permis dans les méthodes).
+- Conformance : `types/invariant-field-write`, `run/invariant-holds`, `run/invariant-violated-literal`,
   `run/invariant-violated-method`, `types/invariant-not-bool`,
   `effects/invariant-impure`, `effects/invariant-rt-profile`,
   `parser/invariant-generic-struct`, `lexer/invariant-reserved-name`.

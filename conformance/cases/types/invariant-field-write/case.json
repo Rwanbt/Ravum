@@ -1,0 +1,8 @@
+{
+  "id": "types/invariant-field-write",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CON-FIELD-WRITE"
+  ],
+  "notes": "RFC-INVARIANTS-1 INV-9 (decision V1-C6): outside the methods of a struct with invariants, its fields are never written nor borrowed `&mut`; inside them (`widen`) they are."
+}

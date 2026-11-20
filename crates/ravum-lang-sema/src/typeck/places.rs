@@ -81,6 +81,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 let kind = method_self_kind(&base);
                 match kind.and_then(|k| builtins::builtin_method(k, name)) {
                     Some(sig) => {
+                        if builtins::builtin_method_takes_exclusive_receiver(kind.unwrap(), name) {
+                            self.guard_invariant_write(receiver);
+                        }
                         if builtins::builtin_method_takes_exclusive_receiver(kind.unwrap(), name)
                             && !self.is_mutable_place(receiver)
                         {
@@ -203,6 +206,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         // builtin path already enforces this, the user-method path did not:
         // `P { x: 0 }.set()` and `p.set()` on an immutable binding were
         // accepted and rustc rejected the generated code (E0596/E0594).
+        if matches!(sig.receiver, Some(Receiver::Exclusive)) {
+            self.guard_invariant_write(receiver);
+        }
         if matches!(sig.receiver, Some(Receiver::Exclusive)) && !self.receiver_is_mutable(receiver)
         {
             self.error(
@@ -509,6 +515,9 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             }
             UnOp::Ref | UnOp::RefMut => {
                 let inner_ty = self.check_expr(operand, None);
+                if op == UnOp::RefMut {
+                    self.guard_invariant_write(operand);
+                }
                 // `&mut` of a place needs a mutable place (rustc E0596). A
                 // value that is not a place is a temporary and may be borrowed.
                 if op == UnOp::RefMut
@@ -749,8 +758,53 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         }
     }
 
+    /// RFC-INVARIANTS-1 INV-9: outside the methods of `S`, a field of a
+    /// struct `S` with invariants is never written nor borrowed `&mut`
+    /// (`E-CON-FIELD-WRITE`): every change goes through a `&mut self`
+    /// method, whose exit checks the invariants.
+    pub(super) fn guard_invariant_write(&mut self, place: &Expr) {
+        let mut cur = place;
+        loop {
+            match &cur.kind {
+                ExprKind::Field { base, name } => {
+                    let mut t = self.facts.expr_types.get(&base.id).cloned();
+                    while let Some(Type::Ref { inner, .. }) = t {
+                        t = Some(*inner);
+                    }
+                    if let Some(Type::Nominal {
+                        def, name: sname, ..
+                    }) = &t
+                    {
+                        let guarded = self
+                            .facts
+                            .structs
+                            .get(def)
+                            .is_some_and(|s| !s.invariants.is_empty());
+                        let inside =
+                            matches!(&self.self_ty, Some(Type::Nominal { def: d, .. }) if d == def);
+                        if guarded && !inside {
+                            self.error(
+                                "E-CON-FIELD-WRITE",
+                                cur.span,
+                                format!(
+                                    "field `{}` of `{sname}` cannot be written or borrowed `&mut` outside its methods: `{sname}` has an `invariant` (INV-9); use a `&mut self` method",
+                                    name.name
+                                ),
+                            );
+                            return;
+                        }
+                    }
+                    cur = base;
+                }
+                ExprKind::TupleIndex { base, .. } | ExprKind::Index { base, .. } => cur = base,
+                _ => return,
+            }
+        }
+    }
+
     pub(super) fn check_assign(&mut self, target: &Expr, value: &Expr) -> Type {
         let target_ty = self.check_expr(target, None);
+        self.guard_invariant_write(target);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
         if !Self::compatible(&value_ty, &target_ty) {
             self.error(
@@ -876,6 +930,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         use ast::CompoundOp as B;
         let sym = format!("{}=", op.as_str());
         let target_ty = self.check_expr(target, None);
+        self.guard_invariant_write(target);
         let value_ty = self.check_value_expr(value, Some(&target_ty));
         match op {
             B::Add | B::Sub | B::Mul | B::Div | B::Rem => {

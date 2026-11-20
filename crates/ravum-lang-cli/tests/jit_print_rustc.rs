@@ -257,15 +257,16 @@ fn violation_values_are_the_same_on_rustc_and_jit() {
 
 /// RFC-INVARIANTS-1 on both paths: checked at each struct literal and at the
 /// exit of each `&mut self` method (early `return` included), not inside a
-/// method nor on a direct field write; same output and same message.
+/// method nor in a `&self` method (direct field writes outside the methods
+/// are refused, INV-9); same output and same message.
 #[test]
 fn struct_invariants_behave_the_same_on_rustc_and_jit() {
     let head = "struct Span {\n    lo: i64,\n    hi: i64,\n    on: bool,\n}\n    invariant self.lo <= self.hi\n    invariant self.hi - self.lo < 100\n\nimpl Span {\n    fn new(lo: i64, hi: i64) -> Span effects() {\n        return Span { lo: lo, hi: hi, on: true };\n    }\n\n    fn shift(&mut self, d: i64) -> i64 effects() {\n        self.hi = self.hi + d;\n        if d > 50 {\n            return d;\n        }\n        self.lo = self.lo + d;\n        return self.hi - self.lo;\n    }\n\n    fn width(&self) -> i64 effects() {\n        return self.hi - self.lo;\n    }\n}\n\n";
     let cases = [
         (
-            "fn main() -> () effects(io, alloc) {\n    let mut s = Span::new(1, 4);\n    io::println(&s.shift(3).to_string());\n    s.lo = 90;\n    io::println(&s.width().to_string());\n    s.lo = 0;\n    io::println(&s.shift(127).to_string());\n}\n",
-            "3\n-83\n",
-            "contract violated: invariant self.hi - self.lo < 100 (self.lo = 0, self.hi = 134, on = true)",
+            "fn main() -> () effects(io, alloc) {\n    let mut s = Span::new(1, 4);\n    io::println(&s.shift(3).to_string());\n    io::println(&s.width().to_string());\n    io::println(&s.shift(127).to_string());\n}\n",
+            "3\n3\n",
+            "contract violated: invariant self.hi - self.lo < 100 (self.lo = 4, self.hi = 134, on = true)",
         ),
         (
             "fn main() -> () effects(io, alloc) {\n    io::println(\"go\");\n    let s = Span::new(5, 2);\n    io::println(&s.width().to_string());\n}\n",

@@ -109,3 +109,14 @@ Décisions du responsable, choisies parmi les options présentées :
 - **V1-A1** : hôte audio = une abstraction, une implémentation fichier WAV
   testable dans le conteneur, et une implémentation `cpal` derrière une
   feature désactivée par défaut (à tester sur la machine du responsable).
+
+## V1-C5, V1-C6, V1-C7 (2026-11-20)
+
+- **V1-C5** : [RFC-INVARIANTS-1](../rfc/RFC-INVARIANTS-1.md) est
+  **ratifiée** (`ACCEPTED`). Preuves `TESTED`.
+- **V1-C6** : hors des méthodes d'une struct à invariant, écrire ou
+  emprunter `&mut` un de ses champs est refusé (`E-CON-FIELD-WRITE`,
+  INV-9) : toute modification passe par une méthode `&mut self`.
+- **V1-C7** : T19 est atteint avec un contre-exemple **observé** (valeurs
+  au moment de la violation), non minimisé : les `test fn` n'ont pas
+  d'entrées à réduire. Pas de tests par propriété en V1.
