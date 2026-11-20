@@ -51,7 +51,8 @@ fin vérifiables. Le prompt de lancement est en §6.
 > branche d'intégration `claude/trusting-cerf-4hhv5a` :
 > `docs/rfc/RFC-DETERMINISTIC-PROFILE-1.md`, `docs/rfc/RFC-DSP-ABI-2.md`,
 > `docs/rfc/RFC-ASYNC-NET-1.md`. Ne pas les relancer ; leurs implémentations
-> (L1b, L5b, L7b) attendent la ratification du responsable.
+> (L1b, L5b, L7b) sont **ouvertes** depuis la ratification (V2-R1 à V2-R3,
+> 2026-11-20) : voir §3.
 
 | Id | Gate | Chantier | Dépend de | Parallélisable avec | Taille |
 |---|---|---|---|---|---|
@@ -62,7 +63,9 @@ fin vérifiables. Le prompt de lancement est en §6.
 | L5 | T8 | RFC ABI DSP 2 (état DSP au-delà de `{ z1, z2 }`) | — | tous | S (doc) |
 | L6 | T9 | E2E navigateur : `packages/http-notes` piloté par Chromium réel | — | tous | M |
 | L7 | T6 | RFC `connect` TCP asynchrone + HTTP asynchrone | — | tous | S (doc) |
-| L1b, L5b, L7b | T17/T8/T6 | Implémentations des RFC | ratification du responsable | — | L |
+| L1b | T17 | Profil `det` + record/replay | ratifié (V2-R1) | tous sauf L7b | L |
+| L5b | T8 | ABI DSP 3 | ratifié (V2-R2) | tous | L |
+| L7b | T6 | async `connect` + HTTP | ratifié (V2-R3), après L1b étape 2 | tous sauf L1b | M |
 | INT | — | Intégration : merge des branches, matrice, décisions | chantiers terminés | — | — |
 
 Ordre validé (V2-P1) en cas de capacité limitée : L1 → L2 → L3 → L4 → L7,
@@ -174,6 +177,45 @@ et débloquent la suite : les lancer en premier sur des abonnements « légers �
 - **Travail** : RFC `PROPOSED` : API, effets, annulation, délais, erreurs,
   interaction TSan, tests prévus, alternatives, questions.
 - **Fini quand** : RFC écrite, aucune ligne de code modifiée.
+
+### L1b — T17 : implémenter le profil `det` (RFC-DETERMINISTIC-PROFILE-1)
+
+- **Périmètre** : `crates/ravum-lang-sema/src/effects.rs` et le module des
+  profils, runtime de la voie `rustc` (`crates/ravum-lang-codegen` : prélude
+  runtime de `std::thread`/`std::task`/E/S), `crates/ravum-lang-cli/src/commands/{run,test}.rs`
+  et nouveaux tests `crates/ravum-lang-cli/tests/det_*.rs`,
+  `conformance/cases/**` (préfixe `l1b-`), `spec/language/effects.md`
+  (ajout du profil, sans changer les règles existantes), rapport.
+- **Étapes** : (1) DET-1/DET-2 statiques + conformance ; (2) ordonnanceur et
+  horloge virtuels (DET-3 à DET-6) ; (3) `--record`/`--replay` (DET-9 à DET-15).
+  Chaque étape est un commit poussé avec ses tests DET-T*.
+- **Fini quand** : DET-T1 à DET-T10 verts, workspace + conformance verts.
+
+### L5b — T8 : implémenter l'ABI DSP 3 (RFC-DSP-ABI-2)
+
+- **Périmètre** : `crates/ravum-protocol/src/dsp.rs`, `crates/ravum-patch-host/**`,
+  `crates/ravum-lang-codegen/**` (wrapper `--emit dsp-block`),
+  `crates/ravum-lang-sema` (`E-DSP-STATE-TYPE` étendu), `crates/ravum-dsp-harness/**`,
+  `docs/ffi/UNSAFE-INVENTORY.md` (nouveaux sites), rapport.
+  **Ne pas** toucher `crates/ravum-lang-jit` ni `ravum-lang-audio` (L2, L4).
+- **Fini quand** : DSP3-T1 à DSP3-T6 verts, `tools/unsafe_audit` vert avec les
+  sites inscrits, ABI 2 inchangée (fixtures).
+- **Conflit** : `crates/ravum-lang-codegen` est aussi touché par L1b :
+  L1b n'y modifie que le runtime de `std::thread`/`std::task`/E/S, L5b que
+  le wrapper DSP ; signaler tout autre recouvrement.
+
+### L7b — T6 : implémenter RFC-ASYNC-NET-1
+
+- **Périmètre** : runtime `std::net`/`std::http`/`std::task` de la voie
+  `rustc`, `crates/ravum-lang-sema` (signatures de la stdlib), tests
+  `crates/ravum-lang-cli/tests/async_net*.rs`, `conformance/cases/**`
+  (préfixe `l7b-`), `spec/language/{concurrency,stdlib}.md` (CONC-6.7 révisé,
+  nouvelles fonctions), rapport. **Aucune dépendance nouvelle** (V2-R3) :
+  sockets non bloquants de `std`, sommeil de 1 ms conservé.
+- **Fini quand** : ANET-T1 à ANET-T7 verts (TSan : signaler si non exécutable
+  localement, c'est alors `NOT_RUN`).
+- **Conflit** : runtime `std::task` partagé avec L1b : lancer L7b **après**
+  la fusion de L1b étape 2, ou dans la même session.
 
 ## 4. Conflits connus et parade
 

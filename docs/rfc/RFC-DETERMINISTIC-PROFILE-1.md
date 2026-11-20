@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-DETERMINISTIC-PROFILE-1` |
-| Statut | **PROPOSED** — chantier V2-L1 (décision V2-P1) ; **aucune implémentation avant ratification** |
+| Statut | **ACCEPTED** — ratifiée par le responsable le 2026-11-20 (V2-R1), avec l'enregistrement et le rejeu des E/S (§2.3) ; réponses du §5 : propositions retenues (`det`, `nondet` produit, PRNG écrit dans le runtime) |
 | Date | 2026-11-20 |
 | Auteur | agent de développement |
 | Gate | T17 (« le profil déterministe du langage (horloge, aléa, ordonnancement virtualisés, replay par seed) n'est pas fait ») |

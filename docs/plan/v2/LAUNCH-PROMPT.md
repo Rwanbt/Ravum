@@ -2,7 +2,7 @@
 
 À copier-coller dans une nouvelle session (Claude Code, Codex, DeepSeek, …),
 à la racine d'un clone de `rwanbt/ravum`. Remplacer `<ID>` par l'un de
-`L1`, `L2`, `L3`, `L4`, `L5`, `L6`, `L7`.
+`L2`, `L3`, `L4`, `L6`, `L1b`, `L5b`, `L7b` (L1, L5, L7 sont faites).
 
 ---
 

@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-DSP-ABI-2` |
-| Statut | **PROPOSED** — rédigée sur décision V2-D1 (2026-11-20) ; **aucune implémentation avant ratification** |
+| Statut | **ACCEPTED** — ratifiée par le responsable le 2026-11-20 (V2-R2) ; réponses du §5 : propositions retenues (ABI 3 à état opaque, 64 KiB / alignement 64, migration côté éditeur, ABI 2 gardée) |
 | Date | 2026-11-20 |
 | Auteur | agent de développement (chantier V2-L5) |
 | Gate | T8 (écart « État DSP limité à `{ z1, z2 }` (ABI 2 non ratifiée) ») |

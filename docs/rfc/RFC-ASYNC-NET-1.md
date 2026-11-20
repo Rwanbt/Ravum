@@ -3,7 +3,7 @@
 | Champ | Valeur |
 |---|---|
 | Identifiant | `RFC-ASYNC-NET-1` |
-| Statut | **PROPOSED** — chantier V2-L7 (décision V2-P1) ; **aucune implémentation avant ratification** |
+| Statut | **ACCEPTED** — ratifiée par le responsable le 2026-11-20 (V2-R3) ; réponses du §5 points 1 à 3 retenues ; **point 4 (dépendance `mio`/`polling`) non décidé** : l'implémentation garde le sommeil de 1 ms (ANET-4) tant que le responsable ne l'a pas autorisée |
 | Date | 2026-11-20 |
 | Auteur | agent de développement |
 | Gate | T6 (écart « `connect` bloquant et pas d'HTTP asynchrone ») |
