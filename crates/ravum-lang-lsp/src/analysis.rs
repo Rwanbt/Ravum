@@ -24,6 +24,7 @@ use ravum_lang_syntax::source::SourceMap;
 use ravum_lang_syntax::span::FileId;
 
 use crate::walk::AstIndex;
+use ravum_lang_incr::package::PackageState;
 
 pub const MANIFEST: &str = "ravum.toml";
 
@@ -59,7 +60,33 @@ impl Analysis {
             },
             profile,
             cache,
+            None,
         )
+    }
+
+    /// [`Self::run_with_cache_and_file_ids`] with the package's incremental
+    /// state (T13): function bodies of files whose parse did not change are
+    /// not checked again, and their facts are carried over, so the analysis
+    /// (diagnostics, hover, definitions) is the one a full check gives
+    /// (`ravum-lang-incr/tests/package_cold_warm.rs`).
+    pub fn run_incremental(
+        root: &Path,
+        overrides: BTreeMap<PathBuf, String>,
+        profile: Profile,
+        cache: &mut ParseCache,
+        file_ids: &mut BTreeMap<PathBuf, FileId>,
+        state: &mut Option<PackageState>,
+    ) -> Self {
+        let options = LoadOptions {
+            locked: false,
+            overrides,
+            file_ids: Some(file_ids.clone()),
+        };
+        let analysis = Self::analyse(root, &options, profile, cache, Some(state));
+        for (path, id) in &analysis.package.file_ids {
+            file_ids.insert(path.clone(), *id);
+        }
+        analysis
     }
 
     /// `run_with_cache`, with the append-only `canonical path -> FileId` table
@@ -85,7 +112,7 @@ impl Analysis {
             overrides,
             file_ids: Some(file_ids.clone()),
         };
-        let analysis = Self::analyse(root, &options, profile, cache);
+        let analysis = Self::analyse(root, &options, profile, cache, None);
         for (path, id) in &analysis.package.file_ids {
             file_ids.insert(path.clone(), *id);
         }
@@ -97,6 +124,7 @@ impl Analysis {
         options: &LoadOptions,
         profile: Profile,
         cache: &mut ParseCache,
+        state: Option<&mut Option<PackageState>>,
     ) -> Self {
         let mut package = load_package_with_parse_cache(root, options, cache);
         let mut diags = std::mem::take(&mut package.diags);
@@ -108,7 +136,19 @@ impl Analysis {
                     profile,
                     edition: ravum_lang_syntax::LANGUAGE_EDITION.to_string(),
                 };
-                let result = check(program, &package.sources, &check_options);
+                let result = match state {
+                    Some(state) => {
+                        let (r, next, _) = ravum_lang_incr::package::check_package(
+                            state.as_ref(),
+                            program,
+                            &package.sources,
+                            &check_options,
+                        );
+                        *state = Some(next);
+                        r
+                    }
+                    None => check(program, &package.sources, &check_options),
+                };
                 diags.extend(result.diags);
                 checked = result.checked;
             }

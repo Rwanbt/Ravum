@@ -570,6 +570,102 @@ fn source_file_info(f: &ravum_lang_syntax::span::SourceFile) -> FileInfo {
     }
 }
 
+impl Facts {
+    /// T13 (step 3): copy into `self` the facts of `old` about the nodes
+    /// `keep` accepts (the bodies a driver reused, in files whose parse — and
+    /// so whose `NodeId`s — did not change), where `self` has none.
+    ///
+    /// Item-level facts (signatures, structs, effects, entry points…) always
+    /// come from the new check, which runs those phases on every item. Every
+    /// field is listed: a new field is a compile error here, not a silently
+    /// stale fact.
+    pub fn merge_reused(&mut self, old: &Facts, keep: impl Fn(NodeId) -> bool) {
+        fn copy<V: Clone>(
+            new: &mut BTreeMap<NodeId, V>,
+            old: &BTreeMap<NodeId, V>,
+            keep: &impl Fn(NodeId) -> bool,
+        ) {
+            for (k, v) in old {
+                if keep(*k) {
+                    new.entry(*k).or_insert_with(|| v.clone());
+                }
+            }
+        }
+        fn copy_set(
+            new: &mut BTreeSet<NodeId>,
+            old: &BTreeSet<NodeId>,
+            keep: &impl Fn(NodeId) -> bool,
+        ) {
+            new.extend(old.iter().copied().filter(|k| keep(*k)));
+        }
+        let Facts {
+            reuse_bodies: _,
+            direct_effects: _,
+            fn_used_imports: _,
+            call_graph: _,
+            expr_types,
+            type_nodes,
+            pat_types,
+            resolutions,
+            calls,
+            methods,
+            fn_sigs: _,
+            extern_symbols: _,
+            structs: _,
+            enums: _,
+            consts: _,
+            effects: _,
+            item_paths: _,
+            module_paths: _,
+            static_str_fns: _,
+            spawn_targets,
+            async_fns: _,
+            test_fns: _,
+            main_fn: _,
+            own,
+        } = self;
+        copy(expr_types, &old.expr_types, &keep);
+        copy(type_nodes, &old.type_nodes, &keep);
+        copy(pat_types, &old.pat_types, &keep);
+        copy(resolutions, &old.resolutions, &keep);
+        copy(calls, &old.calls, &keep);
+        copy(methods, &old.methods, &keep);
+        copy(spawn_targets, &old.spawn_targets, &keep);
+        let OwnFacts {
+            use_kind,
+            place,
+            element_reinit,
+            copy_type,
+            owned_position,
+            consumed,
+            binding_identity,
+            bindings: _,
+        } = own;
+        copy(use_kind, &old.own.use_kind, &keep);
+        copy(place, &old.own.place, &keep);
+        copy_set(element_reinit, &old.own.element_reinit, &keep);
+        copy_set(copy_type, &old.own.copy_type, &keep);
+        copy_set(owned_position, &old.own.owned_position, &keep);
+        copy_set(consumed, &old.own.consumed, &keep);
+        // Binding identities are numbered in check order: re-intern each
+        // reused one by its (declaration span, name), which a reused body
+        // keeps (its file did not change).
+        let by_id: BTreeMap<BindingId, &(Span, String)> =
+            old.own.bindings.iter().map(|(k, v)| (*v, k)).collect();
+        let reused: Vec<(NodeId, (Span, String))> = old
+            .own
+            .binding_identity
+            .iter()
+            .filter(|(k, _)| keep(**k) && !binding_identity.contains_key(k))
+            .filter_map(|(k, id)| by_id.get(id).map(|key| (*k, (*key).clone())))
+            .collect();
+        for (node, (span, name)) in reused {
+            let id = own.intern_binding(span, &name);
+            own.binding_identity.insert(node, id);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,3 +830,4 @@ mod tests {
         assert_eq!(infos[0].path, "<unknown>", "a hole has no source file");
     }
 }
+

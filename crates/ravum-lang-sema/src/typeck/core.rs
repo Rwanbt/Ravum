@@ -693,8 +693,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         f: &FnItem,
         impl_ctx: Option<(Type, Vec<String>)>,
     ) {
-        if self.facts.reuse_bodies.contains_key(&item) {
-            return; // T13 step 2: the driver reuses this body's results
+        if let Some(r) = self.facts.reuse_bodies.get(&item) {
+            // T13 step 2: the driver reuses this body's results.
+            let used = r.used_imports.clone();
+            self.facts.fn_used_imports.insert(item, used);
+            return;
         }
         let before = self.import_uses();
         self.fn_var_base = self.vars.len();

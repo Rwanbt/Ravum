@@ -38,6 +38,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 pub mod driver;
+pub mod package;
 
 use ravum_lang_syntax::ast::{Item, ItemKind, Module};
 use ravum_lang_syntax::lexer;

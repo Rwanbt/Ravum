@@ -557,6 +557,7 @@ dependencies = [
 name = "ravum-lang-lsp"
 version = "0.1.0"
 dependencies = [
+ "ravum-lang-incr",
  "ravum-lang-sema",
  "ravum-lang-syntax",
  "serde_json",
