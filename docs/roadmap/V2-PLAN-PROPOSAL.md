@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| Statut | **PROPOSED** — à valider par le responsable avant tout code |
+| Statut | **Validé** par le responsable le 2026-11-20 (V2-P1, V2-D1, V2-E1) — plan d'exécution : `docs/plan/v2/V2-PARALLEL-PLAN.md` |
 | Date | 2026-11-20 |
 | Source | `docs/roadmap/CORE-1.0-GATE-MATRIX.md` au commit `bd5a732` |
 
