@@ -1275,6 +1275,9 @@ impl<'a> FnLower<'a> {
                 let Type::Ref { inner, .. } = t else {
                     return Err(LowerError::MissingFact("deref of a non-reference".into()));
                 };
+                if matches!(*inner, Type::String | Type::Str | Type::Vec(_)) {
+                    return unsupported("explicit dereference of a heap object borrow");
+                }
                 let p = self.expr(expr)?;
                 Ok(Place::Mem {
                     addr: p,

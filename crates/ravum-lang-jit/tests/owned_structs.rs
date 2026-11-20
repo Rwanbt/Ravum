@@ -1,4 +1,5 @@
 use ravum_lang_ir::interp::{run_with_output, DEFAULT_STEPS};
+use ravum_lang_ir::lower::LowerError;
 use ravum_lang_ir::{compile_source, CompileError};
 use ravum_lang_jit::{compile, DEFAULT_FUEL};
 
@@ -55,6 +56,7 @@ fn main() -> () effects(io, alloc) {
     io::println(&moved.label);
     io::println(&payload.label);
 }
+
 "#;
     match compile_source(source) {
         Err(CompileError::Rejected(codes)) => {
@@ -64,5 +66,27 @@ fn main() -> () effects(io, alloc) {
             );
         }
         other => panic!("expected use-after-move refusal, got {other:?}"),
+    }
+}
+
+#[test]
+fn replacing_an_object_through_a_heap_borrow_is_refused() {
+    let source = r#"
+struct Payload { label: String }
+
+fn replace(label: &mut String) -> () effects(alloc) {
+    *label = String::from("new");
+}
+
+fn main() -> () effects(alloc) {
+    let mut payload = Payload { label: String::from("old") };
+    replace(&mut payload.label);
+}
+"#;
+    match compile_source(source) {
+        Err(CompileError::Lower(LowerError::Unsupported(detail))) => {
+            assert_eq!(detail, "explicit dereference of a heap object borrow");
+        }
+        other => panic!("expected an explicit heap borrow refusal, got {other:?}"),
     }
 }
