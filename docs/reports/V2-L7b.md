@@ -29,6 +29,12 @@ chacune une contrainte déjà décidée :
 `read_request_async`, `respond_async` (côté serveur) et `task::timeout`
 (ANET-5) ne sont **pas** bloqués et peuvent être faits sans décision.
 
+## Correction (après V2-N1)
+
+`socket2` ne peut pas servir : le Rust généré est compilé par `rustc` comme
+un fichier unique, sans aucune crate (`pipeline.rs`, pas de `--extern`).
+Le recommander était une erreur de l'agent.
+
 ## Décision demandée
 
 1. Autoriser `socket2` (recommandé : licence déjà permise par `deny.toml`,

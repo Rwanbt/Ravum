@@ -21,6 +21,12 @@
 - **V2-N1** : `socket2` (MIT/Apache-2.0) est autorisé pour `connect_async`
   non bloquant (RFC-ASYNC-NET-1 ANET-1) ; seule exception à « aucune
   dépendance nouvelle » de V2-R3.
+  **Correction (agent, 2026-11-20)** : la question reposait sur une erreur.
+  Le Rust généré est compilé par `rustc` en **un seul fichier autonome**
+  (`crates/ravum-lang-cli/src/pipeline.rs`, aucun `--extern`, F-META-024) :
+  un programme Ravum ne peut lier **aucune** crate, `socket2` compris, sans
+  une nouvelle infrastructure de liaison. V2-N1 est donc **inapplicable**
+  en l'état ; nouvelle question posée au responsable.
 - **V2-S1** : STD-1.1 est appliqué : le checker refuse `io::…` (et tout
   module `std`) sans `use std::…;`. Les cas et exemples qui s'en passaient
   sont corrigés (rupture admise en phase draft, COMPAT-2.1).
