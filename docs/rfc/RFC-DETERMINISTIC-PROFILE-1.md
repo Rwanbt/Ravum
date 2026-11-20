@@ -53,11 +53,25 @@ un refus statique et une exécution virtualisée.
 | DET-7 | Le rapport de profil déclare spécification, profil `det`, graine(s), plateforme, et résultat `PASS`/`FAIL` pour ces graines, jamais `PROVED` (EFF-6.7). Le déterminisme entre plateformes n'est **pas** garanti (flottants `libm`, Q-STD-6). | MUST |
 | DET-8 | Le JIT et l'interpréteur de l'IR, qui n'ont ni threads ni horloge, sont déterministes par construction ; `det` n'y change rien. | MUST |
 
-### 2.3 Extension prévue (hors de cette RFC) : enregistrement d'E/S
+### 2.3 Enregistrement et rejeu des E/S (`--record` / `--replay`)
 
-Un mode `--record <fichier>` / `--replay <fichier>` qui journalise les
-résultats des E/S refusées par DET-1 permettrait de rejouer un serveur. Il
-demande un format de journal et une RFC séparée ; non proposé ici.
+Ajouté à la demande du responsable (2026-11-20) : sans lui, un serveur ou un
+outil qui lit des fichiers ne serait pas rejouable.
+
+```text
+ravum-lang run --profile det --seed 7 --record session.rvlog   # E/S réelles, journalisées
+ravum-lang run --profile det --replay session.rvlog            # E/S servies par le journal
+```
+
+| ID | Règle proposée | Niveau |
+|---|---|---|
+| DET-9 | `--record <f>` : sous `det`, les effets refusés par DET-1 (`fs`, `net`, lecture d'`io`) sont **permis** ; chaque appel d'une fonction de la stdlib à effet externe est exécuté réellement, et son **résultat** (valeur rendue, `Err` compris, octets lus) est ajouté au journal avec son rang, le nom de la fonction et un digest de ses arguments. `ffi` et `unsafe` restent refusés (un appel natif n'est pas journalisable). | MUST |
+| DET-10 | `--replay <f>` : aucune E/S réelle n'a lieu ; chaque appel rend le résultat journalisé au même rang. La graine est lue dans le journal (`--seed` contradictoire : exit 2). | MUST |
+| DET-11 | **Divergence** : au rejeu, un appel dont le rang, le nom ou le digest d'arguments ne correspond pas au journal, ou un journal épuisé, arrête le programme : `panic: replay diverged at #<n>: expected <f>(…), got <g>(…)`, code `1`. Jamais de valeur inventée, jamais de repli sur une E/S réelle (fail-closed). | MUST |
+| DET-12 | Les écritures externes (`fs::write`, `net::write_str`, `http::respond`) sont journalisées à l'enregistrement ; au rejeu elles ne sont **pas** effectuées : leur argument est comparé au journal (DET-11) et le résultat journalisé est rendu. La sortie `io` (stdout/stderr) est réellement écrite dans les deux modes et doit être identique (DET-3). | MUST |
+| DET-13 | Le journal est un fichier texte versionné (`ravum-rvlog-1`), une ligne JSON par événement ; en tête : version de spécification, graine, digest de la source et du binaire, plateforme. Un en-tête qui ne correspond pas au programme rejoué est refusé avant l'exécution (exit 2). | MUST |
+| DET-14 | Le journal peut contenir des données sensibles (fichiers lus, requêtes reçues) : il n'est jamais écrit sans `--record` explicite, et le rapport le signale. | MUST |
+| DET-15 | L'ordonnancement (DET-4) et l'horloge virtuelle sont rejoués depuis la graine, pas journalisés ; le journal ne contient que les E/S. | MUST |
 
 ## 3. Tests prévus
 
@@ -74,6 +88,11 @@ demande un format de journal et une RFC séparée ; non proposé ici.
   `timeout` virtuel se termine en < 1 s réelle.
 - **DET-T6** négatifs : `fs::read` / `net::connect` / `io::read_line` sous
   `det` → `E-EFF-PROFILE` ; graine non numérique → exit 2 (EFF-4.10).
+- **DET-T8** enregistrement puis rejeu d'un serveur `.rv` (requêtes HTTP
+  réelles) : même sortie, aucune socket ouverte au rejeu (vérifié).
+- **DET-T9** divergence : journal modifié (un octet d'argument, un appel
+  supprimé, journal tronqué) → `replay diverged at #n`, code 1.
+- **DET-T10** en-tête d'une autre source → exit 2 avant exécution.
 - **DET-T7** non-régression : tout le corpus de conformance accepté sous
   `core` donne la même sortie sous `det` pour les programmes sans thread.
 
@@ -93,4 +112,4 @@ demande un format de journal et une RFC séparée ; non proposé ici.
    mécanisme propre au profil ?
 3. PRNG : SplitMix64 / xoshiro256** écrits dans le runtime (pas de
    dépendance) ?
-4. Le mode enregistrement d'E/S (§2.3) est-il à planifier en V2 ?
+4. Le mode enregistrement et rejeu (§2.3, DET-9 à DET-15) : règles à valider (ajouté à votre demande).
