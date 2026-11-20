@@ -47,6 +47,43 @@ unsafe impl Send for Counted<'_> {}
 
 const GAIN: &str =
     "fn gain(x: f32) -> f32 effects() {\n    let k: f32 = 0.5;\n    return x * k;\n}\n";
+const GAIN_IIR: &str = include_str!("../../../examples/dsp-gain-iir/audio.rv");
+
+#[test]
+fn gain_iir_wav_keeps_state_across_gain_and_coefficient_edits() {
+    const BLOCK: usize = 64;
+    const EDITS: [usize; 2] = [BLOCK, 2 * BLOCK];
+    let input = [0.25f32; 3 * BLOCK];
+    let v1 = compile_source(GAIN_IIR).unwrap();
+    let gain_edit = GAIN_IIR.replace("return 2.0;", "return 1.0;");
+    let v2 = compile_source(&gain_edit).unwrap();
+    let v3 = compile_source(&gain_edit.replace("return 0.8;", "return 0.6;")).unwrap();
+    let (mut engine, mut runner) = HotEngine::start(&v1, "process_sample").unwrap();
+    let mut host = WavHost::new(StreamConfig::default());
+    assert_eq!(host.config.block, BLOCK);
+
+    let before = allocs();
+    let out = host.render(&mut Counted(&mut runner), &input, |block| match block {
+        0 => assert_eq!(engine.update(&v2).unwrap().recompiled, ["gain"]),
+        1 => assert_eq!(engine.update(&v3).unwrap().recompiled, ["coefficient"]),
+        _ => {}
+    });
+    assert_eq!(allocs() - before, 0, "INV-05: process allocated");
+
+    let mut state = 0.0f32;
+    for (index, (&sample, &actual)) in input.iter().zip(out).enumerate() {
+        let gain = if index < EDITS[0] { 2.0 } else { 1.0 };
+        let coefficient = if index < EDITS[1] { 0.8 } else { 0.6 };
+        state = coefficient * state + 0.2 * (sample * gain);
+        assert_eq!(actual.to_bits(), state.to_bits(), "sample {index}");
+    }
+    let jumps = EDITS.map(|index| (out[index] - out[index - 1]).abs());
+    let maximum = jumps.into_iter().fold(0.0f32, f32::max);
+    assert!(jumps.into_iter().all(|jump| jump > 0.0));
+    eprintln!(
+        "gain/IIR: boundary jumps={jumps:?}, max={maximum}, fade=0 frames, process allocations=0"
+    );
+}
 
 fn ramp(n: usize) -> Vec<f32> {
     (0..n).map(|i| (i as f32 / n as f32) - 0.5).collect()

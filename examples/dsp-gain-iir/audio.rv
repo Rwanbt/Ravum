@@ -1,0 +1,22 @@
+struct State {
+    z1: f32,
+    z2: f32,
+}
+
+fn init() -> State effects() {
+    return State { z1: 0.0, z2: 0.0 };
+}
+
+fn gain() -> f32 effects() {
+    return 2.0;
+}
+
+fn coefficient() -> f32 effects() {
+    return 0.8;
+}
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    let boosted = input * gain();
+    state.z1 = coefficient() * state.z1 + 0.2f32 * boosted;
+    return state.z1;
+}
