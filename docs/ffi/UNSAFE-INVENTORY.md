@@ -46,7 +46,7 @@ quatre crates portent `#![forbid(unsafe_code)]`, le CLI porte
 
 | # | Site | Code | Pourquoi `unsafe` | Argument de sûreté |
 |---|---|---|---|---|
-| 7 | `crates/ravum-lang-jit/src/lib.rs`, `mod exec` (seul `#![allow(unsafe_code)]` du crate, qui porte `#![deny(unsafe_code)]`) | `unsafe { std::mem::transmute::<*const u8, extern "C" fn(*mut Ctx) -> R>(code) }` puis appel | exécuter le code machine produit par Cranelift | `code` vient de `JITModule::get_finalized_function` pour une fonction déclarée avec la signature `(*mut Ctx) -> R` ; `R` est choisi d'après le type de retour déclaré ; le module est finalisé et vit pendant l'appel (`&Compiled`) ; `Ctx` est `#[repr(C)]` et le code n'accède qu'aux décalages 0/4/8 |
+| 7 | `crates/ravum-lang-jit/src/lib.rs`, `mod exec` (seul `#![allow(unsafe_code)]` du crate, qui porte `#![deny(unsafe_code)]`) | `unsafe { std::mem::transmute::<*const u8, extern "C" fn(*mut Ctx) -> R>(code) }` puis appel | exécuter le code machine produit par Cranelift | `code` vient de `JITModule::get_finalized_function` pour une fonction déclarée avec la signature `(*mut Ctx) -> R` ; `R` est choisi d'après le type de retour déclaré ; le module est finalisé et vit pendant l'appel (`&Compiled`) ; `Ctx` est `#[repr(C)]` (décalages 0 à 56 : code, profondeur, carburant, table, sortie, scratch, `stack_floor`, `stack_budget`) ; le code compilé lit/écrit 0..48, `stack_budget` n'est lu que par `exec::arm` ; `arm` fixe `stack_floor` avant chaque appel (garde de pile, 2026-11-20) |
 
 `ravum-lang-ir` et `ravum-lang-incr` portent `#![forbid(unsafe_code)]`. Le code
 **généré** par Cranelift n'est pas couvert par cet argument : sa sûreté repose
