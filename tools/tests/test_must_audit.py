@@ -311,6 +311,22 @@ class RealRepositoryTests(unittest.TestCase):
         code, _ = run([], REPO)
         self.assertEqual(code, 0)
 
+    def test_declarative_list_names_real_unmapped_rules_only(self) -> None:
+        """V2-M1: every id of tools/must_declarative.txt is a MUST rule of the
+        specification that no FeatureId reaches; `--strict` ignores them."""
+        report = must_audit.build_report(REPO)
+        listed = must_audit.read_declarative(REPO)
+        self.assertGreater(len(listed), 0)
+        self.assertFalse(
+            [p for p in report["problems"] if must_audit.DECLARATIVE_LIST in p],
+            "an id of the declarative list is not a rule of the specification",
+        )
+        by_id = {record["id"]: record for record in report["statements"]}
+        for rule_id in listed:
+            self.assertIn(rule_id, by_id, rule_id)
+            self.assertTrue(by_id[rule_id]["declarative"], rule_id)
+            self.assertEqual(by_id[rule_id]["mapping"], [], f"{rule_id} is mapped: drop it from the list")
+
 
 if __name__ == "__main__":
     unittest.main()
