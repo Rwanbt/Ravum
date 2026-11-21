@@ -891,4 +891,81 @@ mod tests {
         assert_eq!(infos[2].line_of(12), 2);
         assert_eq!(infos[0].path, "<unknown>", "a hole has no source file");
     }
+
+    /// T13 step 3: `merge_reused` copies the body facts of the kept nodes
+    /// only, never overwrites a fact the new check already has, and
+    /// re-interns reused binding identities.
+    #[test]
+    fn merge_reused_copies_kept_body_facts_only() {
+        // One `keep` type for every call: one instantiation of the generic
+        // `merge_reused` runs every scenario.
+        const KEEP_ALL: fn(NodeId) -> bool = |_| true;
+        const KEEP_NONE: fn(NodeId) -> bool = |_| false;
+        let src = "fn f(a: i32) -> i32 {\n    let b: i32 = a + 1;\n    return b;\n}\n\n\
+            fn main() {\n    let v: Vec<i32> = Vec::new();\n    let n: usize = v.len();\n    let x: i32 = f(2);\n}\n";
+        let mut sources = SourceMap::new();
+        let file = sources.add("src/main.rv", src);
+        let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+        let old = crate::check(&parsed.program, &sources, &CheckOptions::default())
+            .checked
+            .expect("the fixture must check")
+            .facts;
+        assert!(!old.expr_types.is_empty() && !old.own.binding_identity.is_empty());
+
+        // Keep everything: every body fact is copied.
+        let mut all = Facts::default();
+        all.merge_reused(&old, KEEP_ALL);
+        assert_eq!(all.expr_types, old.expr_types);
+        assert_eq!(all.type_nodes, old.type_nodes);
+        assert_eq!(all.pat_types, old.pat_types);
+        assert_eq!(all.resolutions, old.resolutions);
+        assert_eq!(all.calls, old.calls);
+        assert_eq!(all.methods, old.methods);
+        assert_eq!(all.own.use_kind, old.own.use_kind);
+        assert_eq!(all.own.place, old.own.place);
+        assert_eq!(all.own.copy_type, old.own.copy_type);
+        assert_eq!(all.own.consumed, old.own.consumed);
+        assert_eq!(
+            all.own.binding_identity.len(),
+            old.own.binding_identity.len(),
+            "every reused binding is re-interned"
+        );
+
+        // Keep nothing: nothing is copied.
+        let mut none = Facts::default();
+        none.merge_reused(&old, KEEP_NONE);
+        assert!(none.expr_types.is_empty() && none.own.binding_identity.is_empty());
+
+        // A fact the new check already has is never overwritten.
+        let (&node, _) = old.expr_types.iter().next().unwrap();
+        let mut fresh = Facts::default();
+        fresh.expr_types.insert(node, Type::Bool);
+        let (&bound, _) = old.own.binding_identity.iter().next().unwrap();
+        fresh.own.binding_identity.insert(bound, BindingId(77));
+        fresh.merge_reused(&old, KEEP_ALL);
+        assert_eq!(fresh.expr_types[&node], Type::Bool);
+        assert_eq!(fresh.own.binding_identity[&bound], BindingId(77));
+
+        // A reused identity whose declaration is unknown is not invented.
+        let mut orphan = old.clone();
+        orphan
+            .own
+            .binding_identity
+            .insert(NodeId::MAX, BindingId(u32::MAX));
+        let mut target = Facts::default();
+        target.merge_reused(&orphan, KEEP_ALL);
+        assert!(!target.own.binding_identity.contains_key(&NodeId::MAX));
+    }
+
+    /// The record/replay profile (`DetIo`) refuses only `unsafe` and `ffi`.
+    #[test]
+    fn det_io_allows_the_journaled_inputs() {
+        let set = Profile::DetIo.forbidden().expect("det io forbids effects");
+        assert!(set.contains(Effect::Unsafe) && set.contains(Effect::Ffi));
+        for e in [Effect::Fs, Effect::Net, Effect::Io, Effect::Nondet] {
+            assert!(!set.contains(e), "{e:?}");
+        }
+        assert!(Profile::DetIo.forbidden_calls().is_empty());
+        assert_eq!(Profile::DetIo.name(), "det");
+    }
 }

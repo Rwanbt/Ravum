@@ -726,4 +726,57 @@ mod tests {
             .values()
             .all(|set| set.effects.is_empty()));
     }
+
+    /// Run the whole check of `src` under `profile`: the diagnostics.
+    fn check_under(src: &str, profile: Profile) -> Vec<(String, String)> {
+        let mut sources = SourceMap::new();
+        let file = sources.add("src/main.rv", src);
+        let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+        assert!(parsed.diags.is_empty(), "the fixture must parse");
+        let options = CheckOptions {
+            profile,
+            ..CheckOptions::default()
+        };
+        let result = crate::check(&parsed.program, &sources, &options);
+        result
+            .diags
+            .iter()
+            .map(|d| (d.code.to_string(), d.message.clone()))
+            .collect()
+    }
+
+    /// DET-1: a forbidden *call* (`io::read_line`, whose `io` effect is
+    /// allowed) is refused under `det` with its own message; under the
+    /// record/replay profile it is allowed.
+    #[test]
+    fn det_refuses_a_forbidden_call_by_name_and_det_io_allows_it() {
+        let src = "use std::io;\n\
+            fn main() -> () effects(io, alloc) {\n    let l = io::read_line();\n}\n";
+        let det = check_under(src, Profile::Det);
+        assert!(
+            det.iter().any(|(code, msg)| code == "E-EFF-PROFILE"
+                && msg.contains("cannot replay")
+                && msg.contains("DET-1")),
+            "{det:?}"
+        );
+        let det_io = check_under(src, Profile::DetIo);
+        assert!(
+            det_io.iter().all(|(code, _)| code != "E-EFF-PROFILE"),
+            "{det_io:?}"
+        );
+    }
+
+    /// INV-5: an `invariant` clause is refused under `rt`.
+    #[test]
+    fn an_invariant_clause_is_refused_under_rt() {
+        let src = "struct R {\n    lo: i64,\n}\n    invariant self.lo >= 0\n\n\
+            fn main() -> () effects() {\n}\n";
+        let rt = check_under(src, Profile::Rt);
+        assert!(
+            rt.iter()
+                .any(|(code, msg)| code == "E-EFF-PROFILE" && msg.contains("invariant")),
+            "{rt:?}"
+        );
+        assert!(check_under(src, Profile::Core).is_empty());
+    }
 }
