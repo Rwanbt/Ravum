@@ -240,3 +240,70 @@ fn abi_4_7_check_reports_any_other_allow() {
     let twice = format!("{ABI_4_7_HEADER}\n{ABI_4_7_HEADER}\n");
     assert!(abi_4_7_violation(&twice).is_some(), "two lists");
 }
+
+/// EFF-4.9: a profile never changes the meaning of an accepted program, it
+/// only adds refusals. Every corpus program accepted under `pure` is also
+/// accepted under `core`, and both checks generate byte-identical Rust.
+#[test]
+fn a_profile_only_adds_refusals_and_never_changes_the_generated_program() {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            let scratch =
+                std::env::temp_dir().join(format!("ravum-profile-codegen-{}", std::process::id()));
+            let _ = fs::remove_dir_all(&scratch);
+            let (mut compared, mut failures) = (0usize, Vec::new());
+            for corpus in ["conformance/cases", "examples"] {
+                let copy = scratch.join(corpus);
+                copy_tree(&repo().join(corpus), &copy);
+                let mut found = Vec::new();
+                programs(&copy, &mut found);
+                for program in found {
+                    let loaded = ravum_lang_sema::load_package(&program);
+                    let Some(parsed) = loaded.program else {
+                        continue;
+                    };
+                    if loaded.diags.has_errors() {
+                        continue;
+                    }
+                    let check = |profile| {
+                        let options = CheckOptions {
+                            profile,
+                            ..CheckOptions::default()
+                        };
+                        ravum_lang_sema::check(&parsed, &loaded.sources, &options).checked
+                    };
+                    let Some(pure) = check(Profile::Pure) else {
+                        continue;
+                    };
+                    let label = program.display().to_string();
+                    let Some(core) = check(Profile::Core) else {
+                        failures.push(format!("{label}: accepted under pure, refused under core"));
+                        continue;
+                    };
+                    let options = GenOptions::default();
+                    match (generate(&pure, &options), generate(&core, &options)) {
+                        (Ok(a), Ok(b)) if a == b => compared += 1,
+                        (Ok(_), Ok(_)) => {
+                            failures.push(format!("{label}: pure and core generate different Rust"))
+                        }
+                        (a, b) => failures.push(format!(
+                            "{label}: generation {:?} / {:?}",
+                            a.is_ok(),
+                            b.is_ok()
+                        )),
+                    }
+                }
+            }
+            let _ = fs::remove_dir_all(&scratch);
+            assert!(failures.is_empty(), "{}", failures.join("\n"));
+            assert!(
+                compared >= 20,
+                "only {compared} programs accepted under pure"
+            );
+            eprintln!("EFF-4.9: {compared} programs identical under pure and core");
+        })
+        .expect("the thread starts")
+        .join()
+        .expect("the comparison runs");
+}
