@@ -11,13 +11,12 @@ d'outil ni aucun cas ne peut la faire échouer. Trois familles : **N**
 négation de garantie (« aucun ABI », « pas de deadlock garanti ») ; **P**
 procédure humaine (RFC, revue, journal) ; **D** définition de vocabulaire.
 
-## A. Je propose de les **retirer** de la liste : testables (14)
+## A. Je propose de les **retirer** de la liste : testables (13)
 
 | Règle | Pourquoi testable | Test possible |
 |---|---|---|
 | ABI-2.6 | le backend ne répare aucune erreur | `codegen/tests/backend_fail_closed.rs` existe : à rattacher |
 | ABI-4.1 | `CheckedProgram` invalide = bug interne | même fichier (refus interne, pas d'émission) |
-| ABI-4.7 | Rust généré sans avertissement, `#[allow]` interdit | grep `#[allow` dans `--emit-rust` du corpus + `rustc -D warnings` |
 | EFF-5.2 | le checker refuse une déclaration trop faible | déjà couvert par `E-EFF-UNDECLARED` : à rattacher |
 | MACH-2.2, MACH-6.1, MACH-6.4 | domaine de la machine | la machine refuse ces formes : cas négatifs du corpus machine |
 | MOD-6.5 | aucune macro/attribut fourni par une dépendance | cas `packages/` : macro dans une dépendance → refus |
@@ -28,13 +27,14 @@ procédure humaine (RFC, revue, journal) ; **D** définition de vocabulaire.
 | COMPAT-5.2 | consommateur tolère champs/codes inconnus | pour les consommateurs du dépôt (`tools/json_contract.py`) |
 | FEAT-12.1 | « testée » ⇒ cas exécutable | `features_coverage.py --strict` le vérifie déjà |
 
-## B. **Périmées** : à amender plutôt qu'à classer (3)
+## B. **Périmées ou violées** : à amender plutôt qu'à classer (4)
 
 | Règle | Écart |
 |---|---|
 | MACH-9.1 | « tant que l'interpréteur n'existe pas » : la machine de référence existe (`ravum-core-machine`) |
 | CONC-3.1 | « aucun callback audio en Core 1.0 » : l'ABI DSP 3 et les blocs `rt` existent désormais |
 | ABI-5.1 | « aucun `abi_version` exposé » : l'ABI DSP (1 à 3) expose une version et une signature |
+| ABI-4.7 | **violée** : « `#[allow]` interdit », mais `emit/mod.rs:639` émet un `#![allow(dead_code, unused_*, …, arithmetic_overflow, unconditional_panic)]` global. Il est nécessaire en l'état : les avertissements viendraient du source Ravum de l'utilisateur (variables non utilisées), et `arithmetic_overflow`/`unconditional_panic` sont des lints *deny* de `rustc` qui transformeraient un débordement Ravum (panique à l'exécution) en échec de compilation. Choix du responsable : amender ABI-4.7 (liste fermée de lints permis, justifiés) ou rendre le générateur sans avertissement |
 
 ## C. Déclaratives confirmées (63)
 
@@ -47,5 +47,5 @@ procédure humaine (RFC, revue, journal) ; **D** définition de vocabulaire.
   UNS-9.1, 9.2, 9.4, 9.5.
 - **D** (définitions) : FEAT-1.1, 1.2.
 
-Total : 14 + 3 + 63 = 80. Rien n'est modifié dans
+Total : 13 + 4 + 63 = 80. Rien n'est modifié dans
 `tools/must_declarative.txt` tant que le responsable n'a pas tranché.
