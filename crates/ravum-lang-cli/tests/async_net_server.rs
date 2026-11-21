@@ -125,9 +125,9 @@ fn transact(
     );
     let timeout = Duration::from_secs(5);
     let deadline = Instant::now() + timeout;
-    let mut peer = loop {
+    let (mut peer, accepted) = loop {
         match listener.accept() {
-            Ok((peer, _)) => break peer,
+            Ok((peer, _)) => break (peer, Instant::now()),
             Err(error)
                 if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
             {
@@ -162,9 +162,15 @@ fn transact(
             let (end, marker) = receive.recv_timeout(timeout).unwrap();
             assert_eq!(marker, "socket timeout\n");
             let elapsed = end.duration_since(start);
+            // Lower bound: measured from the accept, which precedes the
+            // timer's creation (the program connects, prints, then starts
+            // the 80 ms timeout). The marker's timestamp is taken by a
+            // reader thread and can be late, which would make a correct
+            // timer look early (74 ms seen on macOS CI).
+            let since_accept = end.duration_since(accepted);
             assert!(
-                elapsed >= Duration::from_millis(75),
-                "80 ms timer fired early: {elapsed:?}"
+                since_accept >= Duration::from_millis(75),
+                "80 ms timer fired early: {since_accept:?} after the accept"
             );
             assert!(
                 elapsed <= Duration::from_millis(90),
