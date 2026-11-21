@@ -1,0 +1,51 @@
+# V2-M1 — Revue des 80 MUST « déclaratifs » (`tools/must_declarative.txt`)
+
+| Champ | Valeur |
+|---|---|
+| Statut | **PROPOSED** — revue de l'agent, à trancher par le responsable |
+| Date | 2026-11-21 |
+| SHA | `078ca20` |
+
+Critère : une règle est **déclarative** si aucun programme, aucune sortie
+d'outil ni aucun cas ne peut la faire échouer. Trois familles : **N**
+négation de garantie (« aucun ABI », « pas de deadlock garanti ») ; **P**
+procédure humaine (RFC, revue, journal) ; **D** définition de vocabulaire.
+
+## A. Je propose de les **retirer** de la liste : testables (14)
+
+| Règle | Pourquoi testable | Test possible |
+|---|---|---|
+| ABI-2.6 | le backend ne répare aucune erreur | `codegen/tests/backend_fail_closed.rs` existe : à rattacher |
+| ABI-4.1 | `CheckedProgram` invalide = bug interne | même fichier (refus interne, pas d'émission) |
+| ABI-4.7 | Rust généré sans avertissement, `#[allow]` interdit | grep `#[allow` dans `--emit-rust` du corpus + `rustc -D warnings` |
+| EFF-5.2 | le checker refuse une déclaration trop faible | déjà couvert par `E-EFF-UNDECLARED` : à rattacher |
+| MACH-2.2, MACH-6.1, MACH-6.4 | domaine de la machine | la machine refuse ces formes : cas négatifs du corpus machine |
+| MOD-6.5 | aucune macro/attribut fourni par une dépendance | cas `packages/` : macro dans une dépendance → refus |
+| STD-1.4 | signatures normatives | test croisé `stdlib.md` ↔ `builtins.rs` (signatures) |
+| UNS-0.1 | absent ⇒ listé ou `E-RES-UNKNOWN` | cas `unsupported/` |
+| UNS-9.3 | `UNSUPPORTED` devenu supporté ⇒ retiré de la table + FeatureId | contrôle d'outil (`unsupported.md` ∩ `features.md` = ∅) |
+| FEAT-12.2 | fonctionnalité acceptée sans ligne = défaut | partiellement `features_coverage.py` |
+| COMPAT-5.2 | consommateur tolère champs/codes inconnus | pour les consommateurs du dépôt (`tools/json_contract.py`) |
+| FEAT-12.1 | « testée » ⇒ cas exécutable | `features_coverage.py --strict` le vérifie déjà |
+
+## B. **Périmées** : à amender plutôt qu'à classer (3)
+
+| Règle | Écart |
+|---|---|
+| MACH-9.1 | « tant que l'interpréteur n'existe pas » : la machine de référence existe (`ravum-core-machine`) |
+| CONC-3.1 | « aucun callback audio en Core 1.0 » : l'ABI DSP 3 et les blocs `rt` existent désormais |
+| ABI-5.1 | « aucun `abi_version` exposé » : l'ABI DSP (1 à 3) expose une version et une signature |
+
+## C. Déclaratives confirmées (63)
+
+- **N** (ce qui n'est pas garanti) : ABI-1.1…1.4, 2.1, 2.9, 2.10, 4.8, 4.9,
+  6.1…6.4 ; CONC-1.4, 2.4, 2.5, 2.7, 3.3 ; MACH-6.6, 7.4, 8.4, 8.5 ;
+  EFF-4.8, 5.1, 6.1, 6.2, 6.3, 6.6 ; MOD-6.6, 8.6 ; STD-1.7, 3.1, 6.8 ;
+  COMPAT-3.4.
+- **P** (procédure, revue, décision) : ABI-5.2, 5.3 ; COMPAT-2.1…2.7,
+  3.1…3.3, 3.5, 6.1…6.3, 6.5, 7.2, 7.3, 7.5 ; CONC-4.1, 4.2, 4.4 ;
+  UNS-9.1, 9.2, 9.4, 9.5.
+- **D** (définitions) : FEAT-1.1, 1.2.
+
+Total : 14 + 3 + 63 = 80. Rien n'est modifié dans
+`tools/must_declarative.txt` tant que le responsable n'a pas tranché.
