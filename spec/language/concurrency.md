@@ -59,7 +59,7 @@ async fn g() -> i64 effects(async) { 1 }
 
 | ID | Règle | Niveau |
 |---|---|---|
-| CONC-3.1 | **INV-05** (thread temps réel) n'est pas applicable à un programme Core 1.0 qui n'a pas de callback audio : aucun appel audio, aucune allocation en callback, aucune activation à chaud (`UNSUPPORTED`, T8). | MUST |
+| CONC-3.1 | **INV-05** s'applique aux blocs `rt` chargés par l'hôte DSP (ABI DSP 1 à 3) : aucun appel bloquant, allocation, compilation, migration ni destruction coûteuse dans `process` ; un programme Core 1.0 sans bloc DSP n'a pas de callback audio. (Réécrite par le responsable le 2026-11-21, V2-M1.) | MUST |
 | CONC-3.2 | Le profil `rt` vérifie l'**absence d'effets interdits** dans le graphe d'appels, pas l'absence de préemption, d'interruption ou de défaut de cache. Un rapport `rt` ne doit jamais contenir `CERTIFIED`. | MUST |
 | CONC-3.3 | Aucun mécanisme de « scheduler annulable » n'existe dans le langage ; l'annulation et le rejet de résultats périmés sont des propriétés du **daemon** (hors périmètre `spec/language/`). | MUST |
 | CONC-3.4 | Un programme sans `thread::spawn`, `env::args`, `env::var`, `io::read_line`, `fs` ni `net` produit la même sortie à chaque exécution. Avec des threads, l'entrelacement n'est pas spécifié : la sortie n'est reproductible que si elle n'en dépend pas. | MUST |

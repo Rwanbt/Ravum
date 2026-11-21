@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| Statut | **ACCEPTED** — tri confirmé par le responsable le 2026-11-21 ; ABI-4.7 amendée (liste fermée) ; réécritures de MACH-9.1, CONC-3.1, ABI-5.1 **PROPOSED** (§D) |
+| Statut | **ACCEPTED** — tri confirmé par le responsable le 2026-11-21 ; ABI-4.7 amendée (liste fermée) ; réécritures de MACH-9.1, CONC-3.1, ABI-5.1 **appliquées** le 2026-11-21 (§D) |
 | Date | 2026-11-21 |
 | SHA | `078ca20` |
 
@@ -51,7 +51,7 @@ Total : 13 + 4 + 63 = 80. Appliqué : `tools/must_declarative.txt` ne garde
 que les 63 du §C ; les 17 autres sont comptées comme testables non
 rattachées par `must_audit.py` (28 au total, travail à faire).
 
-## D. Réécritures proposées (non appliquées, texte normatif)
+## D. Réécritures (appliquées sur décision du responsable, 2026-11-21)
 
 | Règle | Texte proposé |
 |---|---|

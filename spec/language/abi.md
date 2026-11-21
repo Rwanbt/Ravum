@@ -126,7 +126,7 @@ Aucune de ces étapes n'est franchie ; elles sont listées pour que l'absence so
 
 | ID | Règle | Niveau |
 |---|---|---|
-| ABI-5.1 | Tant que les étapes 1–6 ne sont pas faites, aucun `abi_version` n'est exposé et aucun engagement n'est pris. | MUST |
+| ABI-5.1 | Le seul ABI versionné est l'ABI DSP (`DSP_ABI_VERSION`, `DSP3_ABI_VERSION`, signature vérifiée au chargement, refus fail-closed) ; aucun autre `abi_version` n'est exposé ni promis. (Réécrite par le responsable le 2026-11-21, V2-M1.) | MUST |
 | ABI-5.2 | Un futur ABI **MUST** être versionné et refusé (`fail-closed`) en cas d'incompatibilité, jamais « meilleur effort ». | MUST |
 | ABI-5.3 | Un ABI ne peut pas être introduit sans que le layout devienne **observable** et spécifié (contradiction actuelle avec TYP-12). | MUST |
 

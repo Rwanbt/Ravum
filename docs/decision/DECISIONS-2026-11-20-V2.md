@@ -60,3 +60,4 @@
   déclarative passe à 63 règles **ACCEPTED** ; ABI-4.7 amendée (liste
   fermée de lints, « Amender la règle »). Réécritures de MACH-9.1, CONC-3.1,
   ABI-5.1 proposées dans `docs/reports/V2-M1-DECLARATIVE-REVIEW.md` §D.
+- **V2-M1, réécritures (responsable, 2026-11-21)** : MACH-9.1, CONC-3.1 et ABI-5.1 remplacées par les textes du §D de la revue (état actuel : machine de référence, blocs DSP `rt`, ABI DSP versionné).
