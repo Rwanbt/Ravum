@@ -97,6 +97,14 @@ argument d'appel temporaire, permis comme pour `read_line_async`.)
 
 - **Un thread par `connect`** : contredit l'exécuteur mono-thread et
   l'interdiction des primitives partagées (CONC-1.2).
+  **Amendement (responsable, 2026-11-21, V2-N2)** : retenu malgré tout,
+  `socket2`/`mio` étant inapplicables (le Rust généré ne lie aucune crate,
+  correction de V2-N1). Le thread auxiliaire appartient au runtime, ne
+  touche aucune valeur Ravum (seulement l'adresse et une case de résultat
+  protégée par un verrou interne) : l'exécuteur reste mono-thread pour le
+  code Ravum, et CONC-1.2 n'est pas contredit. Test : ANET-T1
+  (`crates/ravum-lang-cli/tests/async_connect_helper.rs`), avec contre-épreuve
+  (l'ancienne version bloque l'exécuteur 30 s et échoue).
 - **Exécuteur multi-thread** : coût et non-déterminisme ; Q-CONC-3
   recommandait le coopératif.
 - **DNS asynchrone** : dépendance et surface supplémentaires ; hors 1.0

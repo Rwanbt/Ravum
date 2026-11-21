@@ -28,7 +28,7 @@
 | `std::fs` | `use std::fs;` | `read_to_string`, `write_string`, `exists` |
 | `std::net` | `use std::net;` | `listen`, `local_port`, `accept`, `connect`, `read_line`, `read_exact`, `write_str` (§17) ; `accept_async`, `connect_async`, `read_line_async`, `read_exact_async`, `write_str_async` ([`concurrency.md`](concurrency.md) CONC-6.7) |
 | `std::task` | `task::…` | `block_on`, `spawn`, `yield_now`, `timeout` ([`concurrency.md`](concurrency.md) §6) |
-| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body`, `read_request_async`, `respond_async` (§19) |
+| `std::http` | `use std::http;` | `read_request`, `method`, `path`, `header`, `body`, `respond`, `get`, `post`, `status`, `response_body`, `read_request_async`, `respond_async`, `get_async`, `post_async` (§19) |
 | `std::thread` | `use std::thread;` | `spawn`, `join` (§18) |
 | `std::sync` | `use std::sync;` | `channel`, `sender`, `clone_sender`, `receiver`, `send`, `recv` (§18) |
 | `std::env` | `use std::env;` | `args`, `var` |
@@ -774,6 +774,8 @@ pub fn header(request: &HttpRequest, name: &str) -> Option<String> effects(alloc
 pub fn body(request: &HttpRequest) -> String effects(alloc)
 pub fn respond(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Result<(), Error> effects(net, alloc)
 pub fn respond_async(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) -> Future<Result<(), Error>> effects(net, async, alloc)   // CONC-6.8
+pub fn get_async(url: &str) -> Future<Result<HttpResponse, Error>> effects(net, async, alloc)   // CONC-6.8
+pub fn post_async(url: &str, content_type: &str, body: &str) -> Future<Result<HttpResponse, Error>> effects(net, async, alloc)   // CONC-6.8
 pub fn get(url: &str) -> Result<HttpResponse, Error> effects(net, alloc)
 pub fn post(url: &str, content_type: &str, body: &str) -> Result<HttpResponse, Error> effects(net, alloc)
 pub fn status(response: &HttpResponse) -> u16

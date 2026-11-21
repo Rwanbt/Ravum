@@ -569,6 +569,21 @@ pub static BUILTIN_FNS: &[BuiltinFnSig] = &[
         ret: "Result<HttpResponse, Error>",
         effects: NET_ALLOC,
     },
+    // ANET-2 / V2-N2: the whole request runs on a runtime helper thread.
+    BuiltinFnSig {
+        path: "std::http::get_async",
+        generics: &[],
+        params: &["&str"],
+        ret: "Future<Result<HttpResponse, Error>>",
+        effects: NET_ASYNC,
+    },
+    BuiltinFnSig {
+        path: "std::http::post_async",
+        generics: &[],
+        params: &["&str", "&str", "&str"],
+        ret: "Future<Result<HttpResponse, Error>>",
+        effects: NET_ASYNC,
+    },
     BuiltinFnSig {
         path: "std::http::status",
         generics: &[],

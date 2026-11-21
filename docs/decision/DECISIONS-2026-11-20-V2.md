@@ -48,3 +48,11 @@
   échec empêche la fusion, pas que Ravum serait limité au navigateur ; ce
   test fait tourner un serveur `.rv` natif servi à un navigateur, pas Ravum
   dans le navigateur (WebAssembly navigateur : non couvert).
+
+- **V2-N2 (responsable, 2026-11-21)** : `connect_async` utilise un thread
+  auxiliaire de runtime (amendement de RFC-ASYNC-NET-1 §4) ; ouvre
+  `http::get_async` / `post_async`.
+- **V2-M1, question (2026-11-21)** : le responsable a demandé pourquoi les
+  80 règles ne sont pas testables ; réponse donnée (négations de garantie,
+  procédures humaines, définitions), avec la réserve que certaines (par ex.
+  MACH-2.2) sont limites. La liste reste **PROPOSED**.

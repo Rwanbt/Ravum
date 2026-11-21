@@ -540,3 +540,27 @@ fn a_recorded_async_server_replays_without_any_socket() {
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("replay diverged"), "{err}");
 }
+
+/// `connect_async` under `--record` journals one event (not also an inner
+/// `net::connect`), so its replay does not diverge.
+#[test]
+fn connect_async_records_one_event_and_replays() {
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = closed.local_addr().unwrap().to_string();
+    drop(closed);
+    let source = format!(
+        "use std::io;\nuse std::net;\nuse std::task;\n\nasync fn go() -> () effects(io, net, async, alloc) {{\n    match net::connect_async(\"{addr}\").await {{\n        Ok(s) => io::println(\"connected\"),\n        Err(e) => io::println(\"refused\"),\n    }}\n}}\n\nfn main() -> () effects(io, net, async, alloc) {{\n    task::block_on(go());\n}}\n"
+    );
+    let dir = package("det-connect-async", &source);
+    let journal = dir.join("c.rvlog");
+    let journal_arg = journal.to_string_lossy().into_owned();
+    let (code, recorded, err) = run_env(&dir, &["--profile", "det", "--record", &journal_arg], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(recorded, "refused\n");
+    let text = fs::read_to_string(&journal).unwrap();
+    assert_eq!(text.lines().count(), 2, "header + one event: {text}");
+    assert!(text.contains("\tnet::connect_async\t"), "{text}");
+    let (code, replayed, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(replayed, recorded);
+}

@@ -1605,9 +1605,115 @@ pub fn rv_net_connect_async(addr: &str) -> Future<Result<TcpStream, Error>> {
     rv_rec_async("net::connect_async", &[addr], || rv_net_connect_async_real(addr), rv_rec::enc_stream, rv_rec::dec_stream)
 }
 
+/// ANET-1 (amended, V2): the connection is established on a short-lived helper
+/// thread, so the executor never blocks while the system connects; the future
+/// polls the helper's result. If the future is dropped first (`timeout`), the
+/// helper finishes alone and its socket is closed. No primitive is shared with
+/// Ravum code: the helper owns only the address and a result slot.
+struct RvConnect {
+    slot: std::sync::Arc<std::sync::Mutex<Option<std::io::Result<std::net::TcpStream>>>>,
+    addr: String,
+}
+
+impl std::future::Future for RvConnect {
+    type Output = Result<TcpStream, Error>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = self.get_mut();
+        let done = match this.slot.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        };
+        match done {
+            Some(Ok(socket)) => std::task::Poll::Ready(Ok(rv_stream(socket))),
+            Some(Err(error)) => std::task::Poll::Ready(Err(rv_net_error(
+                &format!("cannot connect to `{}`", this.addr),
+                error,
+            ))),
+            None => rv_io_wait(context),
+        }
+    }
+}
+
+/// A blocking operation run on a runtime helper thread (V2-N2); the future
+/// polls its result slot and never blocks the executor.
+struct RvHelper<T> {
+    slot: std::sync::Arc<std::sync::Mutex<Option<T>>>,
+}
+
+impl<T> std::future::Future for RvHelper<T> {
+    type Output = T;
+    fn poll(self: std::pin::Pin<&mut Self>, context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+        let done = match self.slot.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        };
+        match done {
+            Some(value) => std::task::Poll::Ready(value),
+            None => rv_io_wait(context),
+        }
+    }
+}
+
+fn rv_on_helper(
+    work: impl FnOnce() -> Result<HttpResponse, Error> + Send + 'static,
+) -> Future<Result<HttpResponse, Error>> {
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let helper_slot = slot.clone();
+    let spawned = std::thread::Builder::new().name("ravum-http".to_string()).spawn(move || {
+        let result = work();
+        match helper_slot.lock() {
+            Ok(mut guard) => *guard = Some(result),
+            Err(poisoned) => *poisoned.into_inner() = Some(result),
+        }
+    });
+    match spawned {
+        Ok(_) => Box::pin(RvHelper { slot }),
+        Err(error) => {
+            let error = rv_net_error("cannot start the HTTP helper", error);
+            Box::pin(async move { Err(error) })
+        }
+    }
+}
+
+/// `http::get_async` / `post_async` (ANET-2): same request, limits and errors
+/// as `get`/`post`, without blocking the other tasks.
+pub fn rv_http_get_async(url: &str) -> Future<Result<HttpResponse, Error>> {
+    rv_rec_async("http::get_async", &[url], || {
+        let url = url.to_string();
+        rv_on_helper(move || rv_http_send(&url, "GET", "text/plain", ""))
+    }, rv_rec::enc_response, rv_rec::dec_response)
+}
+
+pub fn rv_http_post_async(url: &str, content_type: &str, body: &str) -> Future<Result<HttpResponse, Error>> {
+    rv_rec_async("http::post_async", &[url, content_type, body], || {
+        let (url, content_type, body) = (url.to_string(), content_type.to_string(), body.to_string());
+        rv_on_helper(move || rv_http_send(&url, "POST", &content_type, &body))
+    }, rv_rec::enc_response, rv_rec::dec_response)
+}
+
 fn rv_net_connect_async_real(addr: &str) -> Future<Result<TcpStream, Error>> {
-    let addr = addr.to_string();
-    Box::pin(async move { rv_net_connect(&addr) })
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let helper_slot = slot.clone();
+    let target = addr.to_string();
+    let spawned = std::thread::Builder::new()
+        .name("ravum-connect".to_string())
+        .spawn(move || {
+            let result = std::net::TcpStream::connect(&target);
+            match helper_slot.lock() {
+                Ok(mut guard) => *guard = Some(result),
+                Err(poisoned) => *poisoned.into_inner() = Some(result),
+            }
+        });
+    match spawned {
+        Ok(_) => Box::pin(RvConnect { slot, addr: addr.to_string() }),
+        Err(error) => {
+            let error = rv_net_error("cannot start the connection helper", error);
+            Box::pin(async move { Err(error) })
+        }
+    }
 }
 
 fn rv_poll_stream<T>(
