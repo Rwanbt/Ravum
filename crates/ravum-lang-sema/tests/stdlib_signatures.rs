@@ -73,14 +73,11 @@ fn parse(line: &str) -> Option<(String, Vec<String>, String, Vec<String>)> {
     Some((name, params, ret, effects))
 }
 
-/// Divergences found by this test and left to the owner (stdlib.md gives
-/// `io` to these, the checker does not; COMPAT-3.5 makes adding an effect a
-/// break). Each must still diverge exactly as written: fixing one without
-/// removing it here fails the test, and any other mismatch fails too.
-const KNOWN_DIVERGENCES: &[&str] = &[
-    "std::fs::read_to_string: effects [\"alloc\", \"fs\", \"io\"] vs checker [\"alloc\", \"fs\"]",
-    "std::fs::write_string: effects [\"fs\", \"io\"] vs checker [\"fs\"]",
-];
+/// Divergences found by this test and left to the owner. Empty: the two `fs`
+/// effect divergences were resolved on 2026-11-21 by aligning `stdlib.md` on
+/// the checker (owner decision). A divergence listed here must still diverge
+/// exactly as written, and any other mismatch fails the test.
+const KNOWN_DIVERGENCES: &[&str] = &[];
 
 #[test]
 fn stdlib_md_signatures_match_the_checker() {

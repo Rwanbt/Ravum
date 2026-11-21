@@ -61,3 +61,4 @@
   fermée de lints, « Amender la règle »). Réécritures de MACH-9.1, CONC-3.1,
   ABI-5.1 proposées dans `docs/reports/V2-M1-DECLARATIVE-REVIEW.md` §D.
 - **V2-M1, réécritures (responsable, 2026-11-21)** : MACH-9.1, CONC-3.1 et ABI-5.1 remplacées par les textes du §D de la revue (état actuel : machine de référence, blocs DSP `rt`, ABI DSP versionné).
+- **STD-1.4 (responsable, 2026-11-21)** : `fs::read_to_string` et `fs::write_string` n'ont pas l'effet `io` ; `stdlib.md` et `effects.md` alignés sur le checker.

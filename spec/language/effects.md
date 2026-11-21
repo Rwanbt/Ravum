@@ -44,7 +44,7 @@ Dix groupes, exactement ceux du design §3.6 :
 // POSITIF
 fn pure_add(a: i32, b: i32) -> i32 effects() { return a + b; }
 fn affiche(s: &str) effects(io) { io::println(s); }
-fn charge(p: &str) -> Result<String, Error> effects(fs, io, alloc) { return fs::read_to_string(p); }
+fn charge(p: &str) -> Result<String, Error> effects(fs, alloc) { return fs::read_to_string(p); }
 fn reservé() effects(fs, rt) { }          // `rt` déclarable, jamais inféré
 ```
 

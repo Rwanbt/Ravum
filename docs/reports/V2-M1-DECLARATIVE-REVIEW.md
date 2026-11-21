@@ -65,7 +65,7 @@ sur tout le corpus par `corpus_codegen.rs` (`abi_4_7_violation`, avec
 contre-épreuve). Le seul `allow` local superflu du prélude
 (`non_snake_case`, déjà dans la liste) est retiré.
 
-## E. Défaut trouvé en testant STD-1.4 (à décider)
+## E. Défaut trouvé en testant STD-1.4 (résolu le 2026-11-21 : doc alignée sur le checker, décision du responsable)
 
 `crates/ravum-lang-sema/tests/stdlib_signatures.rs` compare chaque `pub fn`
 de `stdlib.md` au checker : 62 lignes, **2 écarts**. `stdlib.md` (et

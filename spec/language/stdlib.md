@@ -108,8 +108,8 @@ fn main() { io::println("x"); }
 ## 3. `std::fs`
 
 ```rv
-pub fn read_to_string(path: &str) -> Result<String, Error> effects(fs, io, alloc)
-pub fn write_string(path: &str, contents: &str) -> Result<(), Error> effects(fs, io)
+pub fn read_to_string(path: &str) -> Result<String, Error> effects(fs, alloc)
+pub fn write_string(path: &str, contents: &str) -> Result<(), Error> effects(fs)
 pub fn exists(path: &str) -> bool effects(fs)
 ```
 
