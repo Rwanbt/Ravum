@@ -136,6 +136,10 @@ fn transact(
             Err(error) => panic!("server connection: {error}"),
         }
     };
+    // On macOS (BSD) an accepted socket inherits the listener's
+    // non-blocking flag: make the peer blocking again, bounded by the
+    // timeouts below, or `read_to_end` returns `WouldBlock` early.
+    peer.set_nonblocking(false).unwrap();
     peer.set_read_timeout(Some(timeout)).unwrap();
     peer.set_write_timeout(Some(timeout)).unwrap();
     if let Some(at) = split {
