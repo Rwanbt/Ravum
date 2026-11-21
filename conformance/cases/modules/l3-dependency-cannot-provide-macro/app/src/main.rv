@@ -1,0 +1,5 @@
+use util;
+
+fn main() {
+    let x: i32 = util::helper();
+}

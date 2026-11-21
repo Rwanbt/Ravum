@@ -1,0 +1,9 @@
+{
+  "id": "modules/l3-dependency-cannot-provide-macro",
+  "mode": "compile-fail",
+  "project": "app",
+  "expect_codes": [
+    "E-UNSUPPORTED-MACRO"
+  ],
+  "notes": "MOD-6.5 (MUST): a dependency cannot provide a macro (no plugins); its macro_rules! is refused like in the root package."
+}

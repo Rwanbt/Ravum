@@ -64,3 +64,14 @@ fichier, plus `allow(unsafe_code)` local des enveloppes FFI/DSP) ; vérifiée
 sur tout le corpus par `corpus_codegen.rs` (`abi_4_7_violation`, avec
 contre-épreuve). Le seul `allow` local superflu du prélude
 (`non_snake_case`, déjà dans la liste) est retiré.
+
+## E. Défaut trouvé en testant STD-1.4 (à décider)
+
+`crates/ravum-lang-sema/tests/stdlib_signatures.rs` compare chaque `pub fn`
+de `stdlib.md` au checker : 62 lignes, **2 écarts**. `stdlib.md` (et
+l'exemple de `effects.md` l. 47) donne `fs::read_to_string` →
+`effects(fs, io, alloc)` et `fs::write_string` → `effects(fs, io)` ; le
+checker ne leur donne pas `io`. Deux voies : retirer `io` de la doc (le
+checker fait foi en pratique, aucun programme ne casse) ou l'ajouter au
+checker (rupture COMPAT-3.5 : programmes `effects(fs)` refusés). Les deux
+écarts sont nommés dans le test, qui échoue sur tout autre écart.
