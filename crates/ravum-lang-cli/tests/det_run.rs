@@ -286,7 +286,7 @@ fn record_then_replay_serves_the_recorded_inputs_and_performs_no_io() {
     );
     let text = fs::read_to_string(&journal).unwrap();
     assert!(
-        text.starts_with("ravum-rvlog-1\tseed=0\tbinary=sha256:"),
+        text.starts_with("ravum-rvlog-1\tseed=0\tbuild=sha256:"),
         "{text}"
     );
     assert_eq!(text.lines().count(), 4, "header + 3 events: {text}");
@@ -328,7 +328,7 @@ fn record_then_replay_serves_the_recorded_inputs_and_performs_no_io() {
     assert!(err.contains("the journal has ended"), "{err}");
 
     // DET-13: a journal of another program is refused before running.
-    let other = text.replacen("binary=sha256:", "binary=sha256:00", 1);
+    let other = text.replacen("build=sha256:", "build=sha256:00", 1);
     fs::write(&journal, other).unwrap();
     let (code, _, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
     assert_eq!(code, 2, "{err}");

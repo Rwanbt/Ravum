@@ -12,6 +12,9 @@ const path = require("path");
 const { runTests } = require("@vscode/test-electron");
 
 const SOURCE = [
+  // STD-1.1: no module is in the prelude.
+  "use std::io;",
+  "",
   "fn add(a: i32, b: i32) -> i32 {",
   "    a + b",
   "}",

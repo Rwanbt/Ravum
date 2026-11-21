@@ -126,3 +126,16 @@
   `respond_async` modifié → divergence. Remplace le négatif
   `record_refuses_the_unjournaled_async_network_functions`, devenu sans
   objet.
+
+## Écart d'implémentation de DET-13 (à valider par le responsable)
+
+DET-13 (RFC ratifiée) prévoit en tête du journal un « digest de la source et
+du binaire ». L'implémentation lie le journal à l'**identité de build**
+(`BuildIdentity.digest` : source, dépendances, crate, options, cible,
+`rustc`, générateur) au lieu du SHA-256 des octets du binaire. Raison
+mesurée en CI (PR #203) : sous macOS et Windows, deux exécutions de `run`
+produisent des binaires aux octets différents pour le même programme, et les
+4 tests de rejeu échouaient sur un refus DET-13. L'identité de build
+contient le digest de la source et tout ce qui détermine le binaire ; un
+journal d'un autre programme reste refusé (test : journal d'un paquet
+modifié → refus). La RFC n'est pas modifiée.

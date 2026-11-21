@@ -256,14 +256,16 @@ fn run_native(
     }
     let mut det_seed = det_seed;
     if let Some(journal) = journal {
-        // DET-13: the header binds a journal to this binary and platform.
-        let binary = match std::fs::read(&artifacts.binary) {
-            Ok(bytes) => ravum_lang_sema::loader::sha256_hex(&bytes),
-            Err(error) => {
-                util::err(format!("run: cannot read the built program: {error}"));
-                return util::EXIT_TOOL;
-            }
-        };
+        // DET-13: the header binds a journal to this program and platform.
+        // The deterministic build identity (source, dependencies, options,
+        // target, rustc, generator) names the program; the bytes of the
+        // binary do not, since a rebuild is not bit-identical on every
+        // linker (macOS, Windows without /Brepro).
+        let build = artifacts
+            .identity
+            .digest
+            .trim_start_matches("sha256:")
+            .to_string();
         let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
         let absolute = |p: &Path| {
             if p.is_absolute() {
@@ -276,7 +278,7 @@ fn run_native(
             crate::args::Journal::Record(path) => {
                 let seed = det_seed.unwrap_or(0);
                 let header = format!(
-                    "ravum-rvlog-1\tseed={seed}\tbinary=sha256:{binary}\tplatform={platform}"
+                    "ravum-rvlog-1\tseed={seed}\tbuild=sha256:{build}\tplatform={platform}"
                 );
                 // DET-14: the journal holds what the program read.
                 eprintln!(
@@ -303,10 +305,10 @@ fn run_native(
                     .iter()
                     .find_map(|f| f.strip_prefix("seed="))
                     .and_then(|s| s.parse::<u64>().ok());
-                let expected_binary = format!("binary=sha256:{binary}");
+                let expected_build = format!("build=sha256:{build}");
                 let expected_platform = format!("platform={platform}");
                 let matches = fields.first() == Some(&"ravum-rvlog-1")
-                    && fields.contains(&expected_binary.as_str())
+                    && fields.contains(&expected_build.as_str())
                     && fields.contains(&expected_platform.as_str());
                 match (seed, matches) {
                     (Some(seed), true) => {
