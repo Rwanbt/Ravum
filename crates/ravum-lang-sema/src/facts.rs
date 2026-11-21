@@ -181,8 +181,8 @@ impl Profile {
                 Effect::Unsafe,
                 Effect::Ffi,
             ])),
-            // `net` too: its blocking functions are journaled (DET-9). The
-            // asynchronous ones are refused by name (`forbidden_calls`).
+            // `net` too: its blocking and asynchronous functions are journaled
+            // (DET-9).
             Profile::DetIo => Some(EffectSet::new([Effect::Unsafe, Effect::Ffi])),
         }
     }
@@ -194,17 +194,6 @@ impl Profile {
     pub fn forbidden_calls(&self) -> &'static [&'static str] {
         match self {
             Profile::Det => &["std::io::read_line", "std::env::var"],
-            // Under `--record`/`--replay`, the asynchronous network functions
-            // are not journaled yet: refused (fail-closed).
-            Profile::DetIo => &[
-                "std::net::accept_async",
-                "std::net::connect_async",
-                "std::net::read_line_async",
-                "std::net::read_exact_async",
-                "std::net::write_str_async",
-                "std::http::read_request_async",
-                "std::http::respond_async",
-            ],
             _ => &[],
         }
     }

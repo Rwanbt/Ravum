@@ -112,3 +112,17 @@
   `record_refuses_the_unjournaled_async_network_functions`.
 - Mesures (SHA parent `7a892b1`) : sema, codegen, cli, ir, jit, core-machine
   0 échec ; conformance 759, 757 PASS, 0 FAIL, 2 SKIP. `TESTED`.
+
+## Suite : formes `*_async` journalisées
+
+- Les 7 fonctions `*_async` de `net`/`http` passent par `rv_rec_async` :
+  à l'enregistrement, le résultat est journalisé quand le futur se termine
+  (ordre de complétion) ; au rejeu, le futur réel n'est jamais construit et
+  ne se termine que quand l'événement suivant est le sien ; au-delà de
+  10^6 sondages sans son tour : `replay diverged`, code 1 (jamais d'attente
+  infinie). Le refus par nom sous `DetIo` est retiré.
+- Test `a_recorded_async_server_replays_without_any_socket` : vrai client à
+  l'enregistrement, rejeu sans client (même sortie), digest de
+  `respond_async` modifié → divergence. Remplace le négatif
+  `record_refuses_the_unjournaled_async_network_functions`, devenu sans
+  objet.

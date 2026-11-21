@@ -508,6 +508,67 @@ mod rv_rec {
         })
     }
 
+    /// 0: off, 1: recording, 2: replaying.
+    pub fn mode_kind() -> u8 {
+        match mode() {
+            Mode::Off => 0,
+            Mode::Record(_) => 1,
+            Mode::Replay(..) => 2,
+        }
+    }
+
+    pub fn digest_of(args: &[&str]) -> String {
+        digest(args)
+    }
+
+    /// Append one completed event (recording only).
+    pub fn record(name: &str, digest_text: &str, result: &str) {
+        if let Mode::Record(state) = mode() {
+            let mut guard = match state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let rank = guard.1;
+            guard.1 += 1;
+            let line = format!("{rank}\t{name}\t{digest_text}\t{result}");
+            if writeln!(guard.0, "{line}").and_then(|_| guard.0.flush()).is_err() {
+                fail("cannot append to the journal".to_string());
+            }
+        }
+    }
+
+    /// Replaying: if the next event is `name(digest)`, consume it and return
+    /// its result; otherwise leave the journal untouched. The journal ended:
+    /// divergence.
+    pub fn take_if_next<T>(name: &str, digest_text: &str, dec: fn(&str) -> Option<T>) -> Option<T> {
+        let Mode::Replay(events, position) = mode() else {
+            return None;
+        };
+        let mut guard = match position.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let rank = *guard;
+        let event = match events.get(rank) {
+            Some(event) => event,
+            None => {
+                drop(guard);
+                fail(format!(
+                    "replay diverged at #{rank}: the journal has ended, got {name}({digest_text})"
+                ))
+            }
+        };
+        if event.name != name || event.digest != digest_text {
+            return None;
+        }
+        *guard += 1;
+        drop(guard);
+        match dec(&event.result) {
+            Some(value) => Some(value),
+            None => fail(format!("replay diverged at #{rank}: unreadable result")),
+        }
+    }
+
     pub fn call<T>(
         name: &str,
         args: &[&str],
@@ -555,6 +616,72 @@ mod rv_rec {
                 }
             }
         }
+    }
+}
+
+// The `*_async` network functions under `--record`/`--replay` (DET-9..DET-11).
+// Recording journals each result when its future completes, so the journal
+// holds the completion order. Replaying never builds the real future: it stays
+// pending until the next journal event is its own (same name and arguments),
+// which reproduces that order; a future that waits too long for its turn means
+// the run diverged, and the program stops (fail-closed, never a hang).
+struct RvRecFuture<T> {
+    name: &'static str,
+    digest: String,
+    inner: Option<Future<T>>,
+    enc: fn(&T) -> String,
+    dec: fn(&str) -> Option<T>,
+    waits: u64,
+}
+
+const RV_REPLAY_MAX_WAITS: u64 = 1_000_000;
+
+impl<T> std::future::Future for RvRecFuture<T> {
+    type Output = T;
+    fn poll(self: std::pin::Pin<&mut Self>, context: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+        let this = self.get_mut();
+        match this.inner.as_mut() {
+            Some(inner) => match inner.as_mut().poll(context) {
+                std::task::Poll::Ready(value) => {
+                    rv_rec::record(this.name, &this.digest, &(this.enc)(&value));
+                    std::task::Poll::Ready(value)
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            },
+            None => match rv_rec::take_if_next(this.name, &this.digest, this.dec) {
+                Some(value) => std::task::Poll::Ready(value),
+                None => {
+                    this.waits += 1;
+                    if this.waits > RV_REPLAY_MAX_WAITS {
+                        panic!(
+                            "replay diverged: {}({}) never became the next journal event",
+                            this.name, this.digest
+                        );
+                    }
+                    rv_io_wait(context)
+                }
+            },
+        }
+    }
+}
+
+fn rv_rec_async<T: 'static>(
+    name: &'static str,
+    args: &[&str],
+    make: impl FnOnce() -> Future<T>,
+    enc: fn(&T) -> String,
+    dec: fn(&str) -> Option<T>,
+) -> Future<T> {
+    match rv_rec::mode_kind() {
+        0 => make(),
+        kind => Box::pin(RvRecFuture {
+            name,
+            digest: rv_rec::digest_of(args),
+            inner: if kind == 1 { Some(make()) } else { None },
+            enc,
+            dec,
+            waits: 0,
+        }),
     }
 }
 
@@ -1462,6 +1589,10 @@ impl std::future::Future for RvAccept {
 
 /// `net::accept_async`: a connection, without blocking the other tasks.
 pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
+    rv_rec_async("net::accept_async", &[], || rv_net_accept_async_real(listener), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_accept_async_real(listener: &TcpListener) -> Future<Result<TcpStream, Error>> {
     Box::pin(RvAccept {
         listener: rv_listener(listener).clone(),
     })
@@ -1471,6 +1602,10 @@ pub fn rv_net_accept_async(listener: &TcpListener) -> Future<Result<TcpStream, E
 /// poll, blocking (no non-blocking `connect` in `std`); reads and writes on the
 /// stream never block the executor.
 pub fn rv_net_connect_async(addr: &str) -> Future<Result<TcpStream, Error>> {
+    rv_rec_async("net::connect_async", &[addr], || rv_net_connect_async_real(addr), rv_rec::enc_stream, rv_rec::dec_stream)
+}
+
+fn rv_net_connect_async_real(addr: &str) -> Future<Result<TcpStream, Error>> {
     let addr = addr.to_string();
     Box::pin(async move { rv_net_connect(&addr) })
 }
@@ -1549,6 +1684,10 @@ impl std::future::Future for RvReadLine {
 
 /// The next line or `None` at end of stream.
 pub fn rv_net_read_line_async(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
+    rv_rec_async("net::read_line_async", &[], || rv_net_read_line_async_real(stream), rv_rec::enc_opt_text, rv_rec::dec_opt_text)
+}
+
+fn rv_net_read_line_async_real(stream: &mut TcpStream) -> Future<Result<Option<String>, Error>> {
     Box::pin(RvReadLine { shared: rv_shared(stream), partial: Vec::new(), http: false })
 }
 
@@ -1601,6 +1740,10 @@ impl std::future::Future for RvReadExact {
 }
 
 pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
+    rv_rec_async("net::read_exact_async", &[&count.to_string()], || rv_net_read_exact_async_real(stream, count), rv_rec::enc_text, rv_rec::dec_text)
+}
+
+fn rv_net_read_exact_async_real(stream: &mut TcpStream, count: usize) -> Future<Result<String, Error>> {
     let read = RvReadExact {
         shared: rv_shared(stream), count, partial: Vec::new(),
         operation: "cannot read from the connection",
@@ -1611,6 +1754,10 @@ pub fn rv_net_read_exact_async(stream: &mut TcpStream, count: usize) -> Future<R
 }
 
 pub fn rv_http_read_request_async(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
+    rv_rec_async("http::read_request_async", &[], || rv_http_read_request_async_real(stream), rv_rec::enc_request, rv_rec::dec_request)
+}
+
+fn rv_http_read_request_async_real(stream: &mut TcpStream) -> Future<Result<HttpRequest, Error>> {
     let shared = rv_shared(stream);
     Box::pin(async move {
         let next_line = || RvReadLine { shared: shared.clone(), partial: Vec::new(), http: true };
@@ -1693,6 +1840,21 @@ pub fn rv_http_respond_async(
     content_type: &str,
     body: &str,
 ) -> Future<Result<(), Error>> {
+    rv_rec_async(
+        "http::respond_async",
+        &[&status.to_string(), content_type, body],
+        || rv_http_respond_async_real(stream, status, content_type, body),
+        rv_rec::enc_unit,
+        rv_rec::dec_unit,
+    )
+}
+
+fn rv_http_respond_async_real(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Future<Result<(), Error>> {
     match rv_http_response_text(status, content_type, body) {
         Ok(text) => Box::pin(RvWrite {
             shared: rv_shared(stream),
@@ -1705,6 +1867,10 @@ pub fn rv_http_respond_async(
 
 /// `net::write_str_async`: the whole text, without blocking the other tasks.
 pub fn rv_net_write_str_async(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
+    rv_rec_async("net::write_str_async", &[text], || rv_net_write_str_async_real(stream, text), rv_rec::enc_unit, rv_rec::dec_unit)
+}
+
+fn rv_net_write_str_async_real(stream: &mut TcpStream, text: &str) -> Future<Result<(), Error>> {
     Box::pin(RvWrite {
         shared: rv_shared(stream),
         data: text.as_bytes().to_vec(),

@@ -457,22 +457,86 @@ fn a_recorded_http_server_replays_without_any_socket() {
     );
 }
 
-/// Fail-closed: the asynchronous network functions are not journaled, so
-/// `--record` refuses them by name instead of running them unrecorded.
+/// DET-9..DET-11 for the `*_async` forms: an asynchronous HTTP server is
+/// recorded with a real client, then replayed with none; a journal whose
+/// response was edited diverges instead of replaying.
+const ASYNC_SERVER: &str = "use std::io;\nuse std::net;\nuse std::http;\nuse std::task;\n\nasync fn serve(listener: TcpListener) -> Result<(), Error> effects(io, net, async, alloc) {\n    let mut stream: TcpStream = net::accept_async(&listener).await?;\n    let request: HttpRequest = http::read_request_async(&mut stream).await?;\n    io::println(&http::path(&request));\n    http::respond_async(&mut stream, 200, \"text/plain\", \"pong\").await\n}\n\nfn main() -> Result<(), Error> effects(io, net, async, alloc) {\n    let listener: TcpListener = net::listen(\"127.0.0.1:0\")?;\n    let mut line: String = String::from(\"listening \");\n    line.push_str(&net::local_port(&listener).to_string());\n    io::println(&line);\n    task::block_on(serve(listener))\n}\n";
+
 #[test]
-fn record_refuses_the_unjournaled_async_network_functions() {
-    let dir = package(
-        "det-net-async",
-        "use std::net;\nuse std::task;\n\nasync fn go() -> () effects(net, async, alloc) {\n    drop(net::connect_async(\"127.0.0.1:9\").await);\n}\n\nfn main() -> () effects(net, async, alloc) {\n    task::block_on(go());\n}\n",
-    );
+fn a_recorded_async_server_replays_without_any_socket() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::process::Stdio;
+    let dir = package("det-net-async", ASYNC_SERVER);
     let journal = dir.join("a.rvlog");
-    let (code, _, err) = run_env(
-        &dir,
-        &["--profile", "det", "--record", &journal.to_string_lossy()],
-        &[],
-    );
+    let journal_arg = journal.to_string_lossy().into_owned();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))
+        .arg("run")
+        .arg(&dir)
+        .args(["--profile", "det", "--record", &journal_arg])
+        .current_dir(&dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("ravum-lang runs");
+    let mut out = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    out.read_line(&mut first).unwrap();
+    let port: u16 = first
+        .trim()
+        .strip_prefix("listening ")
+        .and_then(|p| p.parse().ok())
+        .unwrap_or_else(|| panic!("no port: {first:?}"));
+    let mut client = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    client
+        .write_all(b"GET /async HTTP/1.1\r\nHost: x\r\n\r\n")
+        .unwrap();
+    let mut response = String::new();
+    client.read_to_string(&mut response).unwrap();
+    assert!(response.ends_with("\r\n\r\npong"), "{response}");
+    let mut rest = String::new();
+    out.read_to_string(&mut rest).unwrap();
+    let mut err = String::new();
+    let status = child.wait().unwrap();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    assert!(status.success(), "{err}");
+    assert_eq!(rest, "/async\n");
+    let text = fs::read_to_string(&journal).unwrap();
+    for name in [
+        "net::accept_async",
+        "http::read_request_async",
+        "http::respond_async",
+    ] {
+        assert!(
+            text.contains(&format!("\t{name}\t")),
+            "{name} not journaled: {text}"
+        );
+    }
+
+    let (code, replayed, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(replayed, format!("{first}{rest}"), "same output, no client");
+
+    // An edited respond argument digest: the future never gets its turn.
+    let edited: String = text
+        .lines()
+        .map(|l| {
+            if l.contains("\thttp::respond_async\t") {
+                let f: Vec<&str> = l.splitn(4, '\t').collect();
+                format!("{}\t{}\t0000000000000000\t{}", f[0], f[1], f[3])
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(&journal, edited).unwrap();
+    let (code, _, err) = run_env(&dir, &["--profile", "det", "--replay", &journal_arg], &[]);
     assert_eq!(code, 1, "{err}");
-    assert!(err.contains("E-EFF-PROFILE"), "{err}");
-    assert!(err.contains("connect_async"), "{err}");
-    assert!(!journal.exists(), "nothing ran, no journal");
+    assert!(err.contains("replay diverged"), "{err}");
 }
