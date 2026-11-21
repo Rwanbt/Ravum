@@ -68,6 +68,27 @@ class FeatureTable(unittest.TestCase):
                 problems.append(f"{row['id']}: no compile-fail case expects {sorted(codes)}")
         self.assertEqual(problems, [])
 
+    def test_an_unsupported_row_has_no_passing_case(self) -> None:
+        # UNS-9.3: a form that becomes supported must leave the unsupported
+        # table and get a FeatureId with a case. Mechanical half: an
+        # `unsupported` row cites only refusal cases; a compile-pass or
+        # run-pass case under it means the form is accepted while still
+        # listed as refused.
+        # Two rows keep a passing case on purpose: it shows the *word* is a
+        # valid identifier while the refused form stays refused (Q-UNS-2).
+        word_is_identifier = {"unsupported/dyn-identifier", "unsupported/ref-identifier"}
+        problems = []
+        for row in rows():
+            if row["status"] != "unsupported":
+                continue
+            for case_id in CASE_REF.findall(row["conformance"]):
+                spec = case(case_id)
+                if case_id in word_is_identifier:
+                    continue
+                if spec and spec.get("mode") in {"compile-pass", "run-pass"}:
+                    problems.append(f"{row['id']}: {case_id} passes but the row says unsupported")
+        self.assertEqual(problems, [])
+
     def test_every_cited_code_is_registered(self) -> None:
         # Only the FeatureId rows: the table of renamed codes (section 13)
         # lists old corpus names on purpose. A bare family such as `E-MOD`
