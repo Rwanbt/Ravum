@@ -1,0 +1,15 @@
+use std::io;
+
+fn noisy() -> bool effects(io) {
+    io::println("x");
+    return true;
+}
+
+fn f(a: i64) -> i64 effects(io)
+    requires noisy()
+{
+    return a;
+}
+
+fn main() -> () effects() {
+}

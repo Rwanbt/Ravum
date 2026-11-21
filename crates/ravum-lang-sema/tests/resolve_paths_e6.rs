@@ -354,7 +354,7 @@ fn an_unknown_first_segment_of_a_type_path_is_reported() {
 #[test]
 fn a_builtin_module_exposes_no_such_type() {
     assert_errors(
-        "fn f(r: std::io::X) { }\n\
+        "use std::io;\nfn f(r: std::io::X) { }\n\
          fn g(r: io::X) { }\n\
          fn main() { }",
         &[

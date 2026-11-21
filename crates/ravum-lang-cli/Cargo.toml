@@ -16,6 +16,11 @@ ravum-lang-syntax = { workspace = true }
 ravum-lang-sema = { workspace = true }
 ravum-lang-codegen = { workspace = true }
 ravum-lang-lsp = { workspace = true }
+# T13: incremental package check for `watch`.
+ravum-lang-incr = { path = "../ravum-lang-incr" }
+# Development backend (T15/T16): `watch --backend jit`.
+ravum-lang-ir = { path = "../ravum-lang-ir" }
+ravum-lang-jit = { path = "../ravum-lang-jit" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

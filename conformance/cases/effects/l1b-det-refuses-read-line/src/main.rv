@@ -1,0 +1,9 @@
+use std::io;
+
+fn helper() -> String effects(io, alloc) {
+    io::read_line().unwrap_or(String::new())
+}
+
+fn main() {
+    let l = helper();
+}

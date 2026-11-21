@@ -9,6 +9,7 @@
 
 pub mod builtins;
 pub mod check;
+pub mod contracts;
 pub mod deprecation;
 pub mod effects;
 pub mod facts;

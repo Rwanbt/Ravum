@@ -1,0 +1,20 @@
+use std::io;
+
+struct Range {
+    lo: i64,
+    hi: i64,
+}
+    invariant self.lo <= self.hi
+
+impl Range {
+    fn widen(&mut self, d: i64) -> () effects() {
+        self.lo = self.lo - d;
+        self.hi = self.hi + d;
+    }
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut r = Range { lo: 1, hi: 3 };
+    r.widen(-5);
+    io::println(&r.lo.to_string());
+}

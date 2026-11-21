@@ -49,6 +49,7 @@ pub(crate) fn typecheck_with_world(
 ) -> bool {
     let mut checker = TypeChecker::new(program, facts, world, diags);
     checker.run(sources);
+    checker.mark_reused_imports();
     compute_static_str_fns(program, &mut *checker.facts);
     resolve::emit_unused_import_warnings(world, checker.diags);
     !checker.diags.has_errors()
@@ -80,6 +81,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
             unused_candidates: Vec::new(),
             used_locals: BTreeSet::new(),
             vars: Vec::new(),
+            fn_var_base: 0,
             var_spans: Vec::new(),
             expr_spans: BTreeMap::new(),
         }
@@ -196,6 +198,8 @@ struct TypeChecker<'p, 'w, 'f> {
     used_locals: BTreeSet<String>,
     /// Variables d'inférence (index >= [`VAR_BASE`]), liées par unification.
     vars: Vec<Option<Type>>,
+    /// `vars.len()` when the current function started (display names).
+    fn_var_base: usize,
     var_spans: Vec<Span>,
     /// Span of every checked expression, to place `E-TYP-DEPTH` once the
     /// final types are known (`finalize_inference`).

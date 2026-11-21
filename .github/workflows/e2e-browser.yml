@@ -1,0 +1,40 @@
+name: Browser E2E (T9, http-notes-web)
+
+# V2-L6 : test de bout en bout d'une application `.rv` dans un vrai Chromium
+# (`scripts/e2e-browser/notes.mjs`). Déclenchement **manuel seulement** tant
+# que le responsable ne l'a pas rendu bloquant (plan V2, chantier L6).
+#
+# Portée honnête : un run vert prouve, pour ce commit et ce runner, que la
+# page servie par `packages/http-notes-web` permet d'ajouter, lister et
+# supprimer des notes, que les erreurs sont affichées, que la base SQLite
+# contient ce que la page montre, et que le test échoue sans serveur. Il ne
+# prouve ni la sécurité HTTP, ni d'autres navigateurs, ni la charge.
+#
+# Dépendance installée au run, hors du dépôt : `playwright` (npm, Apache-2.0)
+# et son Chromium. Aucune dépendance n'est ajoutée au dépôt.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (stable pinned to 1.95.0, as rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@1.95.0
+      - name: Build the native SQLite library of packages/sqlite
+        run: python3 tools/build_sqlite_native.py
+      - name: Build ravum-lang
+        run: cargo build -p ravum-lang-cli
+      - name: Install Playwright and Chromium (outside the repository)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          npm install --prefix "$RUNNER_TEMP/pw" --no-save playwright@1.63.0
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Browser E2E
+        run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node scripts/e2e-browser/notes.mjs target/debug/ravum-lang

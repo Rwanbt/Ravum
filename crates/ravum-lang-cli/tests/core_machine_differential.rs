@@ -58,7 +58,7 @@ fn the_backend_agrees_with_the_reference_machine_on_the_pure_corpus() {
         .unwrap();
         fs::write(
             root.join("src/main.rv"),
-            format!("{source}\nfn main() {{\n    io::println(&check().to_string());\n}}\n"),
+            format!("use std::io;\n{source}\nfn main() {{\n    io::println(&check().to_string());\n}}\n"),
         )
         .unwrap();
         let out = Command::new(env!("CARGO_BIN_EXE_ravum-lang"))

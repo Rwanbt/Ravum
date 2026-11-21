@@ -356,6 +356,9 @@ struct Formatter<'a> {
     next_sig: Vec<usize>,
     /// Index of the last emitted significant token.
     last_sig: Option<usize>,
+    /// Inside the `invariant` clauses after a struct (RFC-INVARIANTS-1):
+    /// each clause on its own line, one level deeper than the struct.
+    in_invariant: bool,
 }
 
 impl<'a> Formatter<'a> {
@@ -389,6 +392,7 @@ impl<'a> Formatter<'a> {
             unary,
             next_sig,
             last_sig: None,
+            in_invariant: false,
         }
     }
 
@@ -397,6 +401,9 @@ impl<'a> Formatter<'a> {
         while i < self.tokens.len() {
             if self.tokens[i].is_eof() {
                 break;
+            }
+            if !matches!(self.tokens[i].kind, TokenKind::Comment(_)) {
+                self.invariant_layout(i);
             }
             if i > 0 && self.should_preserve_blank_line(i) {
                 self.blank_line();
@@ -416,6 +423,49 @@ impl<'a> Formatter<'a> {
             }
         }
         self.finish_output()
+    }
+
+    /// RFC-INVARIANTS-1: `invariant` right after a struct's `}` starts an
+    /// indented line; an item keyword (or a closing `}`) ends the clauses.
+    fn invariant_layout(&mut self, i: usize) {
+        let is_inv = matches!(&self.tokens[i].kind, TokenKind::Ident(w) if w == "invariant");
+        let after_brace = self
+            .last_sig
+            .is_some_and(|l| matches!(self.tokens[l].kind, TokenKind::Punct(Punct::RBrace)));
+        if is_inv && (after_brace || self.in_invariant) {
+            self.newline();
+            if !self.in_invariant {
+                self.indent += 1;
+                self.in_invariant = true;
+            }
+            return;
+        }
+        if self.in_invariant && self.at_item_start(i) {
+            self.newline();
+            self.indent = self.indent.saturating_sub(1);
+            self.in_invariant = false;
+        }
+    }
+
+    /// The token starts an item (or closes the enclosing module).
+    fn at_item_start(&self, i: usize) -> bool {
+        use crate::Kw;
+        matches!(
+            self.tokens[i].kind,
+            TokenKind::Kw(
+                Kw::Fn
+                    | Kw::Struct
+                    | Kw::Enum
+                    | Kw::Impl
+                    | Kw::Mod
+                    | Kw::Use
+                    | Kw::Const
+                    | Kw::Pub
+                    | Kw::Test
+                    | Kw::Async
+                    | Kw::Extern
+            ) | TokenKind::Punct(Punct::RBrace)
+        )
     }
 
     fn finish_output(mut self) -> String {
@@ -994,6 +1044,23 @@ mod tests {
         // Idempotence and meaning are checked too.
         assert_eq!(fmt(&out), out);
         assert_meaning_preserved("use std::io;\n\nfn main() {}\n", &out);
+    }
+
+    #[test]
+    fn invariant_clauses_get_their_own_indented_lines() {
+        // RFC-INVARIANTS-1: one clause per line, under the struct; the next
+        // item starts a fresh line.
+        let src = "struct  R {\n lo: i64,\nhi: i64,\n} invariant self.lo<=self.hi\ninvariant   self.hi < 10\n\nimpl R {}\n";
+        let out = fmt(src);
+        assert_eq!(
+            out,
+            "struct R {\n    lo: i64,\n    hi: i64,\n}\n    invariant self.lo <= self.hi\n    invariant self.hi < 10\n\nimpl R {}\n"
+        );
+        assert_eq!(fmt(&out), out);
+        assert_meaning_preserved(src, &out);
+        // `invariant` elsewhere is an ordinary identifier.
+        let other = fmt("fn f() {\nlet invariant = 1;\n}\n");
+        assert_eq!(other, "fn f() {\n    let invariant = 1;\n}\n");
     }
 
     #[test]

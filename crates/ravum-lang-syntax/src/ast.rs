@@ -251,6 +251,28 @@ pub struct FnItem {
     pub is_test: bool,
     /// `async fn` (RFC-E11-CONCURRENCY phase 2): a call yields a `Future<T>`.
     pub is_async: bool,
+    /// `requires`/`ensures` clauses (RFC-CONTRACTS-1), in source order.
+    pub contracts: Vec<Contract>,
+    pub span: Span,
+}
+
+/// Which side of a call a contract clause constrains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContractKind {
+    /// Checked on entry: a violation is the caller's fault.
+    Requires,
+    /// Checked on every return, `result` bound: the function's fault.
+    Ensures,
+}
+
+/// One contract clause (RFC-CONTRACTS-1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contract {
+    pub kind: ContractKind,
+    pub expr: Expr,
+    /// The clause's source text, whitespace-normalized: the violation
+    /// message names it (CON-5/CON-6).
+    pub text: String,
     pub span: Span,
 }
 
@@ -289,8 +311,25 @@ pub struct StructItem {
     pub name: Ident,
     pub generics: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
+    /// `invariant <expr>` clauses (RFC-INVARIANTS-1), in source order. Each
+    /// expression lives in a synthetic method of the item that follows the
+    /// struct (`impl S { pub fn __rv_invariant_<n>(&self) -> bool effects() }`).
+    pub invariants: Vec<Invariant>,
     pub span: Span,
 }
+
+/// One `invariant` clause of a struct (RFC-INVARIANTS-1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Invariant {
+    /// Normalized source text, as in the violation message.
+    pub text: String,
+    /// The synthetic method holding the expression.
+    pub method: String,
+    pub span: Span,
+}
+
+/// Prefix of the synthetic invariant methods: reserved (RFC-INVARIANTS-1).
+pub const INVARIANT_METHOD_PREFIX: &str = "__rv_invariant_";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldDef {

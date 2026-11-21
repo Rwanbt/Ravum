@@ -1,0 +1,11 @@
+{
+  "id": "cli/l3-diag-text-note-prefix",
+  "mode": "cli",
+  "args": [
+    "check",
+    "."
+  ],
+  "exit_code": 1,
+  "stderr_contains": "   = note: ",
+  "notes": "DIAG-6.4 (MUST): a note of a text diagnostic is printed with the `= note: ` prefix. No diagnostic carries a `help` today, so the `= help: ` half has no producer (recorded in docs/reports/V2-L3.md)."
+}

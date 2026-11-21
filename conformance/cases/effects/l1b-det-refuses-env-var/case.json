@@ -1,0 +1,12 @@
+{
+  "id": "effects/l1b-det-refuses-env-var",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "DET-1 (MUST): the environment is an input the det profile cannot replay; env::var is refused (env::args stays allowed)."
+}

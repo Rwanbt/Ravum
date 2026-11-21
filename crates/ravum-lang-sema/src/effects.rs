@@ -35,6 +35,9 @@ struct FnEffects {
     direct: EffectSet,
     sources: Vec<(Effect, String)>,
     edges: Vec<NodeId>,
+    /// RFC-INVARIANTS-1: struct → its synthetic invariant methods. A struct
+    /// literal is a call of each (INV-2), an edge of the call graph.
+    invariants: std::rc::Rc<BTreeMap<NodeId, Vec<NodeId>>>,
 }
 
 /// Compose les effets de toutes les fonctions, vérifie les bornes déclarées et
@@ -53,9 +56,28 @@ pub fn infer_and_check(
     diags: &mut DiagnosticBag,
 ) -> BTreeMap<NodeId, Vec<NodeId>> {
     let fns = collect_fns(program);
+    let (invariants, inv_methods) = invariant_methods(program, facts);
+    let invariants = std::rc::Rc::new(invariants);
     let mut direct: BTreeMap<NodeId, FnEffects> = BTreeMap::new();
     for (id, f) in &fns {
-        let mut effects = FnEffects::default();
+        if let Some(r) = facts.reuse_bodies.get(id) {
+            // T13 step 2: the body is unchanged; its direct effects and calls
+            // are the previous check's.
+            direct.insert(
+                *id,
+                FnEffects {
+                    direct: r.direct.clone(),
+                    sources: Vec::new(),
+                    edges: r.edges.clone(),
+                    invariants: invariants.clone(),
+                },
+            );
+            continue;
+        }
+        let mut effects = FnEffects {
+            invariants: invariants.clone(),
+            ..FnEffects::default()
+        };
         if f.is_async {
             // CONC-6.4: an `async fn` carries the `async` effect.
             effects.direct.insert(Effect::Async);
@@ -65,6 +87,20 @@ pub fn infer_and_check(
         }
         walk_block(&f.body, facts, &mut effects);
         direct.insert(*id, effects);
+    }
+    // INV-3: a `&mut self` method of a struct with invariants calls them on
+    // exit. Recomputed from the program each time (never cached), deduped.
+    for (method, def) in &inv_methods {
+        if let (Some(e), Some(ms)) = (direct.get_mut(method), invariants.get(def)) {
+            e.edges.extend(ms.iter().copied());
+        }
+    }
+    for e in direct.values_mut() {
+        e.edges.sort_unstable();
+        e.edges.dedup();
+    }
+    for (id, e) in &direct {
+        facts.direct_effects.insert(*id, e.direct.clone());
     }
     // Point fixe sur le graphe d'appels (monotone, borné par 10 effets).
     let mut composed: BTreeMap<NodeId, EffectSet> = direct
@@ -89,6 +125,54 @@ pub fn infer_and_check(
         }
         if !changed {
             break;
+        }
+    }
+    // RFC-CONTRACTS-1 CON-2: a clause is pure (its own effects and those of
+    // the functions it calls); CON-7: no clause in profile `rt`, where a
+    // violation would be an implicit trap (RFC-RT-TRAPS-1).
+    for f in fns.values() {
+        // RFC-INVARIANTS-1 INV-5: no `invariant` in profile `rt` either.
+        if profile == Profile::Rt
+            && f.name
+                .name
+                .starts_with(ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX)
+        {
+            diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                "E-EFF-PROFILE",
+                f.span,
+                "`invariant` clauses are not allowed in profile `rt`: a violation is a trap (INV-5)"
+                    .to_string(),
+            ));
+        }
+        for c in &f.contracts {
+            if profile == Profile::Rt {
+                diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                    "E-EFF-PROFILE",
+                    c.span,
+                    "contract clauses are not allowed in profile `rt`: a violation is a trap (CON-7)"
+                        .to_string(),
+                ));
+                continue;
+            }
+            let mut ce = FnEffects::default();
+            walk_expr(&c.expr, facts, &mut ce);
+            let mut set = ce.direct.clone();
+            for callee in &ce.edges {
+                if let Some(callee_set) = composed.get(callee) {
+                    set.extend(callee_set);
+                }
+            }
+            if !set.effects.is_empty() {
+                let names = set.names();
+                diags.push(ravum_lang_syntax::diag::Diagnostic::error(
+                    "E-CON-EFFECT",
+                    c.span,
+                    format!(
+                        "a contract clause must be pure; it has effects {} (CON-2)",
+                        names.join(", ")
+                    ),
+                ));
+            }
         }
     }
     for (id, set) in &composed {
@@ -191,7 +275,9 @@ pub fn infer_and_check(
         .into_iter()
         .filter(|(id, _)| direct.contains_key(id))
     {
-        if let Some((chain, effect, source)) = find_violation(entry, &forbidden, &direct, facts) {
+        if let Some((chain, effect, source)) =
+            find_violation(entry, &forbidden, profile.forbidden_calls(), &direct, facts)
+        {
             let span = fns.get(&entry).map(|f| f.span).unwrap_or(Span::dummy());
             let chain_text: Vec<String> = chain
                 .iter()
@@ -207,11 +293,19 @@ pub fn infer_and_check(
                 ravum_lang_syntax::diag::Diagnostic::error(
                     "E-EFF-PROFILE",
                     span,
-                    format!(
-                        "profile `{}` forbids effect `{}` reachable from `{entry_name}`",
-                        profile.name(),
-                        effect.name()
-                    ),
+                    if forbidden.contains(effect) {
+                        format!(
+                            "profile `{}` forbids effect `{}` reachable from `{entry_name}`",
+                            profile.name(),
+                            effect.name()
+                        )
+                    } else {
+                        format!(
+                            "profile `{}` forbids reading an input it cannot replay \
+                             ({source}) reachable from `{entry_name}` (DET-1)",
+                            profile.name()
+                        )
+                    },
                 )
                 .with_note(format!("call chain: {}", chain_text.join(" -> ")), None)
                 .with_note(format!("offending call: {source}"), None),
@@ -239,6 +333,45 @@ pub fn reachable_from(graph: &BTreeMap<NodeId, Vec<NodeId>>, entry: NodeId) -> B
         }
     }
     reached
+}
+
+/// (struct → invariant methods, `&mut self` method → struct).
+type InvariantMethods = (BTreeMap<NodeId, Vec<NodeId>>, Vec<(NodeId, NodeId)>);
+
+/// RFC-INVARIANTS-1: struct → its synthetic invariant methods (clause
+/// order), and each `&mut self` method of such a struct → the struct.
+fn invariant_methods(program: &Program, facts: &Facts) -> InvariantMethods {
+    let mut inv: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
+    let mut exclusive = Vec::new();
+    let mut items = Vec::new();
+    ravum_lang_syntax::ast::walk_items(&program.root, &mut items);
+    for item in items {
+        let ItemKind::Impl(imp) = &item.kind else {
+            continue;
+        };
+        let Some(crate::types::Type::Nominal { def, .. }) = facts.type_nodes.get(&imp.self_ty.id)
+        else {
+            continue;
+        };
+        for (member, f) in imp.methods() {
+            if f.name
+                .name
+                .starts_with(ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX)
+            {
+                inv.entry(*def).or_default().push(member.id);
+            } else if f.params.iter().any(|p| {
+                matches!(
+                    p.kind,
+                    ravum_lang_syntax::ast::ParamKind::Receiver(
+                        ravum_lang_syntax::ast::Receiver::Exclusive
+                    )
+                )
+            }) {
+                exclusive.push((member.id, *def));
+            }
+        }
+    }
+    (inv, exclusive)
 }
 
 fn collect_fns(program: &Program) -> BTreeMap<NodeId, &FnItem> {
@@ -389,9 +522,15 @@ fn walk_expr(expr: &Expr, facts: &Facts, out: &mut FnEffects) {
             walk_expr(value, facts, out);
             walk_expr(len, facts, out);
         }
-        ExprKind::StructLit { fields, .. } => {
+        ExprKind::StructLit { path, fields } => {
             for field in fields {
                 walk_expr(&field.value, facts, out);
+            }
+            if let Some(crate::facts::Resolution::Item { item }) = facts.resolutions.get(&path.id) {
+                if let Some(ms) = out.invariants.get(item) {
+                    let ms = ms.clone();
+                    out.edges.extend(ms);
+                }
             }
         }
         ExprKind::Range { start, end, .. } => {
@@ -449,6 +588,7 @@ fn add_method_path(path: &str, out: &mut FnEffects) {
 fn find_violation(
     entry: NodeId,
     forbidden: &EffectSet,
+    forbidden_calls: &[&str],
     direct: &BTreeMap<NodeId, FnEffects>,
     facts: &Facts,
 ) -> Option<(Vec<NodeId>, Effect, String)> {
@@ -463,11 +603,12 @@ fn find_violation(
         // test or the `--rt-entry` function), and an edge is followed only
         // when its callee is one.
         let effects = &direct[&node];
-        if let Some((effect, source)) = effects
-            .sources
-            .iter()
-            .find(|(effect, _)| forbidden.contains(*effect))
-        {
+        if let Some((effect, source)) = effects.sources.iter().find(|(effect, source)| {
+            forbidden.contains(*effect)
+                || forbidden_calls
+                    .iter()
+                    .any(|path| *source == format!("call to `{path}`"))
+        }) {
             return Some((chain, *effect, source.clone()));
         }
         for callee in &effects.edges {
@@ -584,5 +725,58 @@ mod tests {
             .effects
             .values()
             .all(|set| set.effects.is_empty()));
+    }
+
+    /// Run the whole check of `src` under `profile`: the diagnostics.
+    fn check_under(src: &str, profile: Profile) -> Vec<(String, String)> {
+        let mut sources = SourceMap::new();
+        let file = sources.add("src/main.rv", src);
+        let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+        assert!(parsed.diags.is_empty(), "the fixture must parse");
+        let options = CheckOptions {
+            profile,
+            ..CheckOptions::default()
+        };
+        let result = crate::check(&parsed.program, &sources, &options);
+        result
+            .diags
+            .iter()
+            .map(|d| (d.code.to_string(), d.message.clone()))
+            .collect()
+    }
+
+    /// DET-1: a forbidden *call* (`io::read_line`, whose `io` effect is
+    /// allowed) is refused under `det` with its own message; under the
+    /// record/replay profile it is allowed.
+    #[test]
+    fn det_refuses_a_forbidden_call_by_name_and_det_io_allows_it() {
+        let src = "use std::io;\n\
+            fn main() -> () effects(io, alloc) {\n    let l = io::read_line();\n}\n";
+        let det = check_under(src, Profile::Det);
+        assert!(
+            det.iter().any(|(code, msg)| code == "E-EFF-PROFILE"
+                && msg.contains("cannot replay")
+                && msg.contains("DET-1")),
+            "{det:?}"
+        );
+        let det_io = check_under(src, Profile::DetIo);
+        assert!(
+            det_io.iter().all(|(code, _)| code != "E-EFF-PROFILE"),
+            "{det_io:?}"
+        );
+    }
+
+    /// INV-5: an `invariant` clause is refused under `rt`.
+    #[test]
+    fn an_invariant_clause_is_refused_under_rt() {
+        let src = "struct R {\n    lo: i64,\n}\n    invariant self.lo >= 0\n\n\
+            fn main() -> () effects() {\n}\n";
+        let rt = check_under(src, Profile::Rt);
+        assert!(
+            rt.iter()
+                .any(|(code, msg)| code == "E-EFF-PROFILE" && msg.contains("invariant")),
+            "{rt:?}"
+        );
+        assert!(check_under(src, Profile::Core).is_empty());
     }
 }

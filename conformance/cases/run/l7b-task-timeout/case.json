@@ -1,0 +1,6 @@
+{
+  "id": "run/l7b-task-timeout",
+  "mode": "run-pass",
+  "stdout_contains": "silent: timed out\n42\n",
+  "notes": "RFC-ASYNC-NET-1 ANET-5 (MUST): task::timeout(ms, f) gives None when f does not complete in time (f is dropped), Some(v) otherwise. It reads the clock: effect nondet (DET-2)."
+}

@@ -1,0 +1,18 @@
+struct Range {
+    lo: i64,
+    hi: i64,
+}
+    invariant self.lo <= self.hi
+
+impl Range {
+    fn widen(&mut self, d: i64) -> () effects() {
+        self.lo = self.lo - d;
+        self.hi = self.hi + d;
+    }
+}
+
+fn main() -> () effects() {
+    let mut r = Range { lo: 1, hi: 3 };
+    r.widen(1);
+    r.lo = 9;
+}

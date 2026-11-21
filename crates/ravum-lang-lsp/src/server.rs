@@ -76,6 +76,8 @@ pub struct Server {
     /// its id — and the `NodeId`s that embed it — when another file is added or
     /// removed between two analyses.
     file_ids: BTreeMap<PathBuf, FileId>,
+    /// Incremental check state per package root (T13).
+    pkg_states: BTreeMap<PathBuf, Option<ravum_lang_incr::package::PackageState>>,
     /// Last diagnostics published per URI, so unchanged sets are not re-sent.
     published: BTreeMap<String, String>,
     initialized: bool,
@@ -98,6 +100,7 @@ impl Server {
             analyses: BTreeMap::new(),
             parse_cache: ravum_lang_sema::loader::ParseCache::new(),
             file_ids: BTreeMap::new(),
+            pkg_states: BTreeMap::new(),
             published: BTreeMap::new(),
             initialized: false,
             shutdown: false,
@@ -479,12 +482,14 @@ impl Server {
                 overrides.insert(override_key(&document.path), document.text.clone());
             }
         }
-        let analysis = Analysis::run_with_cache_and_file_ids(
+        let state = self.pkg_states.entry(root.to_path_buf()).or_default();
+        let analysis = Analysis::run_incremental(
             root,
             overrides,
             self.profile,
             &mut self.parse_cache,
             &mut self.file_ids,
+            state,
         );
         let outgoing = self.publish(&analysis);
         self.analyses.insert(root.to_path_buf(), analysis);

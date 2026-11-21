@@ -1,0 +1,12 @@
+{
+  "id": "effects/l1b-det-refuses-read-line",
+  "mode": "compile-fail",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "expect_codes": [
+    "E-EFF-PROFILE"
+  ],
+  "notes": "DET-1 (MUST): reading stdin is io but not replayable; refused transitively at the det entry point (main -> helper)."
+}

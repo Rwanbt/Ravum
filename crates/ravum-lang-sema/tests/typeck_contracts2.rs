@@ -2393,7 +2393,8 @@ fn implicit_coercions_are_limited_to_the_spec() {
     // position; `&String -> &str` is the other one. EXPR-7.10: the borrow
     // created by the `&s` argument expires at the end of the call.
     accept(
-        r#"
+        r#"use std::io;
+
 fn takes_str(s: &str) { }
 fn takes_slice(s: &[i32]) { }
 fn f() {

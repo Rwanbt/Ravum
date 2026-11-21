@@ -1,3 +1,5 @@
+use std::io;
+
 fn take(a: [([String; 2], i32); 2]) -> String {
     if true {
         let x = a[0].0[1];

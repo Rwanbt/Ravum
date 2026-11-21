@@ -508,7 +508,8 @@ fn string_and_char_escapes_are_re_escaped_for_rust() {
 
 #[test]
 fn io_builtins_map_to_the_runtime_helpers() {
-    let source = r#"
+    let source = r#"use std::io;
+
 fn main() {
     io::println("out");
     io::print("out");
@@ -531,7 +532,9 @@ fn main() {
 
 #[test]
 fn environment_and_file_builtins_map_to_the_runtime_helpers() {
-    let source = r#"
+    let source = r#"use std::fs;
+use std::env;
+
 fn main() {
     let value = env::var("RAVUM_ABSENT_VARIABLE");
     let present = fs::exists("no-such-file.ravum");
@@ -554,7 +557,8 @@ fn main() {
 
 #[test]
 fn free_math_builtins_are_emitted_as_method_calls() {
-    let source = r#"
+    let source = r#"use std::math;
+
 fn main() {
     let a = math::abs(0.0 - 2.0);
     let b = math::sqrt(2.0);
@@ -586,7 +590,10 @@ fn integer_math_builtins_are_refused_by_the_checker() {
     // The Core 1.0 `std::math` surface is `f64` only. The emitter's non-float
     // branch for `math::{min,max}` is therefore unreachable from an accepted
     // program; this contract pins the refusal instead of pretending to cover it.
-    let message = match compile_source("emit", "fn main() {\n    let hi = math::max(1, 2);\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::math;\nfn main() {\n    let hi = math::max(1, 2);\n}\n",
+    ) {
         Ok(_) => panic!("integer `math::max` must be refused by the checker"),
         Err(message) => message,
     };
@@ -598,7 +605,8 @@ fn integer_math_builtins_are_refused_by_the_checker() {
 
 #[test]
 fn float_min_and_max_keep_the_signed_zero_tie() {
-    let source = r#"
+    let source = r#"use std::math;
+
 fn main() {
     let hi = math::max(1.0, 2.0);
     let lo = math::min(1.0, 2.0);
@@ -646,7 +654,10 @@ fn main() {
 #[test]
 fn a_builtin_function_used_as_a_value_is_refused_by_the_checker() {
     // The checker diagnoses a bare builtin before lowering to Rust.
-    let message = match compile_source("emit", "fn main() {\n    let write = io::println;\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::io;\nfn main() {\n    let write = io::println;\n}\n",
+    ) {
         Ok(_) => panic!("a builtin used as a value must be refused by the checker"),
         Err(message) => message,
     };
@@ -725,7 +736,8 @@ fn panic_without_a_message_is_refused_by_the_checker() {
 
 #[test]
 fn parse_builtins_emit_the_result_mapping() {
-    let source = r#"
+    let source = r#"use std::string;
+
 fn main() {
     let n = string::parse_i64("42");
     let f = string::parse_f64("1.5");
@@ -886,7 +898,10 @@ fn prelude_constants_that_the_checker_does_not_expose_are_refused() {
     // `resolve` only produces `ValuePath::BuiltinConst("Option::None")`; the
     // emitter's `math::PI` / `math::E` / primitive `MIN`/`MAX` arms therefore
     // have no accepted program behind them.
-    let message = match compile_source("emit", "fn main() {\n    let pi = math::PI;\n}\n") {
+    let message = match compile_source(
+        "emit",
+        "use std::math;\nfn main() {\n    let pi = math::PI;\n}\n",
+    ) {
         Ok(_) => panic!("`math::PI` must be refused by the resolver"),
         Err(message) => message,
     };
@@ -1067,7 +1082,8 @@ fn the_checker_pins_the_assertion_arities_before_codegen() {
 fn deferred_initialization_emits_an_explicit_type_and_no_placeholder() {
     let rust = compile_source(
         "deferred-init",
-        r#"
+        r#"use std::io;
+
 fn main() {
     let mut count: i32;
     count = 4;

@@ -1,3 +1,5 @@
+use std::io;
+
 fn make() -> [String; 2] {
     return [String::from("x"), String::from("y")];
 }

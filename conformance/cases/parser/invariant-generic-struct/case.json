@@ -1,0 +1,8 @@
+{
+  "id": "parser/invariant-generic-struct",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-CON-UNSUPPORTED"
+  ],
+  "notes": "RFC-INVARIANTS-1 INV-6: an invariant on a generic struct is not supported (V1)."
+}

@@ -1,0 +1,11 @@
+use std::io;
+
+fn set(r: &mut i64) {
+    *r = 7;
+}
+
+fn main() {
+    let mut x: i64 = 1;
+    set(&mut x);
+    io::println(&x.to_string());
+}

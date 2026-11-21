@@ -55,6 +55,8 @@ impl TestStatus {
 struct TestCase {
     name: String,
     status: TestStatus,
+    /// The runner's `panicked: <message>` line for a failed case.
+    message: Option<String>,
 }
 
 /// The tests the checked program declares, before the runner runs anything.
@@ -82,8 +84,16 @@ fn declared_tests(frontend: &pipeline::Frontend) -> DeclaredTests {
     DeclaredTests { total, names }
 }
 
-pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
-    let frontend = pipeline::analyze(path, Profile::Core, false);
+pub fn run(path: &Path, filter: Option<&str>, json_output: bool, det_seeds: Option<u64>) -> i32 {
+    // DET-5: under `det`, the tests are checked under the profile (DET-1) and
+    // the runner is executed once per seed `0..N`; the first failing seed is
+    // reported and its run is the one shown.
+    let profile = if det_seeds.is_some() {
+        Profile::Det
+    } else {
+        Profile::Core
+    };
+    let frontend = pipeline::analyze(path, profile, false);
     if !frontend.success() {
         let declared = declared_tests(&frontend);
         let report = RunReport::not_run(declared.total, util::EXIT_FAIL, "analysis failed");
@@ -124,12 +134,41 @@ pub fn run(path: &Path, filter: Option<&str>, json_output: bool) -> i32 {
         }
     };
 
-    let mut command = Command::new(&artifacts.binary);
-    if let Some(filter) = filter {
-        command.arg("--filter").arg(filter);
-    }
-    command.current_dir(frontend.root());
-    let output = match command.output() {
+    let run_once = |seed: Option<u64>| {
+        let mut command = Command::new(&artifacts.binary);
+        if let Some(filter) = filter {
+            command.arg("--filter").arg(filter);
+        }
+        command.current_dir(frontend.root());
+        match seed {
+            Some(seed) => command.env("RAVUM_DET_SEED", seed.to_string()),
+            None => command.env_remove("RAVUM_DET_SEED"),
+        };
+        command.output()
+    };
+    let outcome = match det_seeds {
+        None => run_once(None),
+        Some(seeds) => {
+            let mut last = None;
+            for seed in 0..seeds {
+                let attempt = run_once(Some(seed));
+                let failed = match &attempt {
+                    Ok(output) => !output.status.success(),
+                    Err(_) => true,
+                };
+                last = Some(attempt);
+                if failed {
+                    eprintln!("profile det: seed={seed} failed (reproduce: `ravum-lang test --profile det --seeds {}`)", seed + 1);
+                    break;
+                }
+                if seed + 1 == seeds {
+                    eprintln!("profile det: {seeds} seed(s) passed (0..{seeds})");
+                }
+            }
+            last.unwrap_or_else(|| run_once(Some(0)))
+        }
+    };
+    let output = match outcome {
         Ok(output) => output,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let message = format!(
@@ -240,7 +279,12 @@ fn report_envelope(
     diagnostics: Vec<json::JsonDiagnostic>,
     cases: &[TestCase],
 ) -> json::JsonEnvelope {
-    let summary = test_summary(report, cases);
+    let contracts = frontend
+        .checked
+        .as_ref()
+        .map(ravum_lang_sema::contracts::contract_facts)
+        .unwrap_or_default();
+    let summary = test_summary(report, cases, &contracts);
     report_with(frontend, path, report, diagnostics, summary)
 }
 
@@ -321,6 +365,15 @@ fn parse_runner_output(text: &str) -> ParsedOutput {
             }
             continue;
         }
+        if let Some(msg) = trimmed.strip_prefix("panicked: ") {
+            // The failure message the runner prints under a failed case.
+            if let Some(case) = parsed.cases.last_mut() {
+                if case.status == TestStatus::Failed && case.message.is_none() {
+                    case.message = Some(msg.to_string());
+                    continue;
+                }
+            }
+        }
         if let Some(rest) = trimmed.strip_prefix("test ") {
             match parse_case_line(rest) {
                 Some(case) => parsed.cases.push(case),
@@ -360,6 +413,7 @@ fn parse_case_line(rest: &str) -> Option<TestCase> {
     Some(TestCase {
         name: name.to_string(),
         status,
+        message: None,
     })
 }
 
@@ -693,14 +747,50 @@ fn validate_run(
     }
 }
 
-fn test_summary(report: &RunReport, cases: &[TestCase]) -> serde_json::Value {
+/// T19: the contracts a failure message names (`contract violated: <kind>
+/// <clause>`, RFC-CONTRACTS-1). Several when two functions share the same
+/// clause text: every candidate is listed, none is guessed.
+fn violated_contracts(
+    message: &str,
+    contracts: &[ravum_lang_sema::contracts::ContractFact],
+) -> Vec<String> {
+    let Some(rest) = message.strip_prefix("contract violated: ") else {
+        return Vec::new();
+    };
+    contracts
+        .iter()
+        .filter(|c| {
+            // Amendment 1: the clause may be followed by ` (values)`.
+            let head = format!("{} {}", c.kind, c.text);
+            rest == head
+                || rest
+                    .strip_prefix(&head)
+                    .is_some_and(|t| t.starts_with(" ("))
+        })
+        .map(|c| c.id.clone())
+        .collect()
+}
+
+fn test_summary(
+    report: &RunReport,
+    cases: &[TestCase],
+    contracts: &[ravum_lang_sema::contracts::ContractFact],
+) -> serde_json::Value {
     let entries = cases
         .iter()
         .map(|case| {
-            json!({
+            let mut entry = json!({
                 "name": case.name,
                 "status": case.status.name(),
-            })
+            });
+            if let Some(message) = &case.message {
+                entry["message"] = json!(message);
+                let violated = violated_contracts(message, contracts);
+                if !violated.is_empty() {
+                    entry["violated_contracts"] = json!(violated);
+                }
+            }
+            entry
         })
         .collect::<Vec<_>>();
     // `diagnostics.md` §7.2 requires `summary` to carry `errors` and `warnings`.

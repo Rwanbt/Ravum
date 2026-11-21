@@ -43,7 +43,6 @@
 //! is invalid (the loop never starts); `3` is *reported* as a build failure when
 //! `rustc` disappears mid-watch, but the loop keeps running.
 
-use ravum_lang_sema::Profile;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write as _;
@@ -85,16 +84,19 @@ pub fn run(path: &Path, run_child: bool, release: bool, max_rebuilds: Option<u64
 
     let mut runner = Runner::new(&root);
     let mut pending_change;
+    // T13: the check of each rebuild reuses the previous one's unchanged
+    // bodies (complete facts; a full check when nothing can be reused).
+    let mut session = pipeline::IncrementalSession::default();
 
     // Initial build: no previous version exists, so a build whose snapshot was
     // already superseded is discarded and retried. If the sources never settle,
     // nothing is started and the poll loop retries on the next change.
-    let mut attempt = build_guarded(path, release, &root);
+    let mut attempt = build_guarded(path, release, &root, &mut session);
     let mut stale = 0u32;
     while needs_rebuild(&attempt) && stale < MAX_STALE_REBUILDS {
         stale += 1;
         say("[ravum] sources changed during the initial build; rebuilding");
-        attempt = build_guarded(path, release, &root);
+        attempt = build_guarded(path, release, &root, &mut session);
     }
     let initial_stable = attempt.stable() && !is_stale(&attempt);
     let mut snapshot = next_snapshot(&attempt, &root);
@@ -148,12 +150,12 @@ pub fn run(path: &Path, run_child: bool, release: bool, max_rebuilds: Option<u64
         say("[ravum] change detected");
 
         // Build first, without touching the running child.
-        let mut attempt = build_guarded(path, release, &root);
+        let mut attempt = build_guarded(path, release, &root, &mut session);
         let mut stale = 0u32;
         while needs_rebuild(&attempt) && stale < MAX_STALE_REBUILDS {
             stale += 1;
             say("[ravum] source changed during the build; discarding that result and rebuilding");
-            attempt = build_guarded(path, release, &root);
+            attempt = build_guarded(path, release, &root, &mut session);
         }
         let stable = attempt.stable() && !is_stale(&attempt);
         // Absorb the build's own side effects (`ravum.lock`) *after* recording
@@ -202,6 +204,17 @@ fn stop_requested() -> bool {
     STOP.load(Ordering::SeqCst)
 }
 
+/// For `run` (decision V2-K1): install the same interrupt handler and report
+/// whether an interrupt arrived, so the launched program can be stopped too.
+pub(crate) fn install_interrupt_handler() {
+    STOP.store(false, Ordering::SeqCst);
+    signal::install();
+}
+
+pub(crate) fn interrupt_requested() -> bool {
+    stop_requested()
+}
+
 enum BuildOutcome {
     Ok(PathBuf),
     /// The pipeline refused to publish because the sources changed while rustc
@@ -237,9 +250,14 @@ impl BuildAttempt {
     }
 }
 
-fn build_guarded(path: &Path, release: bool, root: &Path) -> BuildAttempt {
+fn build_guarded(
+    path: &Path,
+    release: bool,
+    root: &Path,
+    session: &mut pipeline::IncrementalSession,
+) -> BuildAttempt {
     let before = source_snapshot(scan(root));
-    let outcome = build_once(path, release);
+    let outcome = build_once(path, release, session);
     let after = source_snapshot(scan(root));
     BuildAttempt {
         outcome,
@@ -276,8 +294,20 @@ fn merge_lockfile_state(
     snapshot
 }
 
-fn build_once(path: &Path, release: bool) -> BuildOutcome {
-    let frontend = pipeline::analyze(path, Profile::Core, false);
+fn build_once(
+    path: &Path,
+    release: bool,
+    session: &mut pipeline::IncrementalSession,
+) -> BuildOutcome {
+    let (frontend, stats) = pipeline::analyze_incremental(path, session);
+    if let Some(st) = stats {
+        say(&format!(
+            "[ravum] check: {} bodies reused, {} checked{}",
+            st.reused_bodies,
+            st.checked_bodies,
+            st.full.map(|r| format!(" (full: {r})")).unwrap_or_default()
+        ));
+    }
     if !frontend.success() {
         eprint!("{}", pipeline::render_diags(&frontend));
         return BuildOutcome::Failed(util::EXIT_FAIL);
@@ -646,7 +676,7 @@ mod signal {
 
     // SAFETY (declaration): `signal(2)` takes an `int` and a function pointer;
     // passing the pointer as `usize` matches the platform ABI used by this
-    // binding. Only SIGINT (2) is installed.
+    // binding. SIGINT (2) and SIGTERM (15) are installed.
     unsafe extern "C" {
         fn signal(sig: i32, handler: usize) -> usize;
     }
@@ -662,6 +692,7 @@ mod signal {
         // is best-effort and the previous handler's result is ignored.
         unsafe {
             signal(2, handler as *const () as usize); // SIGINT
+            signal(15, handler as *const () as usize); // SIGTERM (V2-K1)
         }
     }
 }

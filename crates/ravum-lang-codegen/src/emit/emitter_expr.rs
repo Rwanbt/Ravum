@@ -164,18 +164,27 @@ impl<'a> Emitter<'a> {
             )),
             ExprKind::StructLit { path, fields } => {
                 let base = self.struct_literal_path(path)?;
-                if fields.is_empty() {
-                    return Ok(format!("{base} {{}}"));
+                let lit = if fields.is_empty() {
+                    format!("{base} {{}}")
+                } else {
+                    let mut rendered = Vec::new();
+                    for field in fields {
+                        rendered.push(format!(
+                            "{}: {}",
+                            mangle_ident(&field.name.name),
+                            self.expr(&field.value, indent)?
+                        ));
+                    }
+                    format!("{base} {{ {} }}", rendered.join(", "))
+                };
+                // RFC-INVARIANTS-1 (INV-2): a constructed value is checked.
+                if let Some(Resolution::Item { item }) = self.facts().resolutions.get(&path.id) {
+                    let checks = self.invariant_checks(*item, "rv_inv_v");
+                    if !checks.is_empty() {
+                        return Ok(format!("{{ let rv_inv_v = {lit}; {checks}rv_inv_v }}"));
+                    }
                 }
-                let mut rendered = Vec::new();
-                for field in fields {
-                    rendered.push(format!(
-                        "{}: {}",
-                        mangle_ident(&field.name.name),
-                        self.expr(&field.value, indent)?
-                    ));
-                }
-                Ok(format!("{base} {{ {} }}", rendered.join(", ")))
+                Ok(lit)
             }
             ExprKind::Range {
                 start,

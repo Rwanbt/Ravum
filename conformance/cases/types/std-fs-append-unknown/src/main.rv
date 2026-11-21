@@ -1,3 +1,5 @@
+use std::fs;
+
 fn main() {
     let _r = fs::append_string("x", "y");
 }

@@ -248,8 +248,11 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         let index = self.vars.len();
         self.vars.push(None);
         self.var_spans.push(span);
+        // The displayed name counts from the function's first variable: a
+        // message never depends on how many bodies were checked before it
+        // (T13 step 2: reused bodies are not checked again).
         Type::Param {
-            name: format!("${index}"),
+            name: format!("${}", index - self.fn_var_base.min(index)),
             index: VAR_BASE + index,
         }
     }
@@ -690,6 +693,61 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         f: &FnItem,
         impl_ctx: Option<(Type, Vec<String>)>,
     ) {
+        if let Some(r) = self.facts.reuse_bodies.get(&item) {
+            // T13 step 2: the driver reuses this body's results.
+            let used = r.used_imports.clone();
+            self.facts.fn_used_imports.insert(item, used);
+            return;
+        }
+        let before = self.import_uses();
+        self.fn_var_base = self.vars.len();
+        self.check_fn_inner(module, item, decl_span, f, impl_ctx);
+        let after = self.import_uses();
+        let used: Vec<String> = after
+            .into_iter()
+            .zip(before)
+            .filter(|((_, a), (_, b))| a > b)
+            .map(|((k, _), _)| k)
+            .collect();
+        self.facts.fn_used_imports.insert(item, used);
+    }
+
+    /// `module index:display` and use count of every import.
+    fn import_uses(&self) -> Vec<(String, u32)> {
+        let mut out = Vec::new();
+        for (m, module) in self.world.modules.iter().enumerate() {
+            for i in &module.imports {
+                out.push((format!("{m}:{}", i.display), i.uses.get()));
+            }
+        }
+        out
+    }
+
+    /// T13 step 2: a reused body's imports count as used again.
+    pub(super) fn mark_reused_imports(&self) {
+        let keys: std::collections::BTreeSet<&String> = self
+            .facts
+            .reuse_bodies
+            .values()
+            .flat_map(|r| r.used_imports.iter())
+            .collect();
+        for (m, module) in self.world.modules.iter().enumerate() {
+            for i in &module.imports {
+                if keys.contains(&format!("{m}:{}", i.display)) {
+                    i.mark_used();
+                }
+            }
+        }
+    }
+
+    fn check_fn_inner(
+        &mut self,
+        module: ModuleId,
+        item: NodeId,
+        decl_span: Span,
+        f: &FnItem,
+        impl_ctx: Option<(Type, Vec<String>)>,
+    ) {
         let Some(sig) = self.facts.fn_sigs.get(&item).cloned() else {
             return;
         };
@@ -747,6 +805,7 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
                 || (param.is_receiver && matches!(sig.receiver, Some(Receiver::Exclusive)));
             self.bind_local(&param.name, param.ty.clone(), mutable, false, decl_span);
         }
+        self.check_contracts(f, &body_ret, &sig.params);
         let body_ty = self.check_block(&f.body, Some(&body_ret));
         // DIAG-1.6: `W-OWN-UNUSED-VARIABLE` is one of the two warnings Core 1.0
         // documents. A binding is unused when no path resolved it inside the
@@ -796,6 +855,71 @@ impl<'p, 'w, 'f> TypeChecker<'p, 'w, 'f> {
         self.current_fn = None;
         self.self_ty = None;
         self.generics.clear();
+    }
+
+    /// RFC-CONTRACTS-1: each clause is a `bool` in the parameters' scope;
+    /// `ensures` also sees `result` (bound to the clause span). Only `Copy`
+    /// parameters and a `Copy` result may be mentioned (CON-3).
+    fn check_contracts(&mut self, f: &ast::FnItem, ret: &Type, params: &[crate::facts::ParamSig]) {
+        if f.is_async && !f.contracts.is_empty() {
+            self.error(
+                "E-CON-UNSUPPORTED",
+                f.contracts[0].span,
+                "contracts on an `async fn` are not supported (RFC-CONTRACTS-1)".to_string(),
+            );
+            return;
+        }
+        let mut used = std::mem::take(&mut self.used_locals);
+        for c in &f.contracts {
+            if c.kind == ast::ContractKind::Ensures && matches!(ret, Type::Never) {
+                self.error(
+                    "E-CON-UNSUPPORTED",
+                    c.span,
+                    "`ensures` on a function returning `!`: it never returns".to_string(),
+                );
+                continue;
+            }
+            self.push_scope();
+            if c.kind == ast::ContractKind::Ensures {
+                if !crate::own::is_copy_type(ret, self.facts) {
+                    self.error(
+                        "E-CON-NONCOPY",
+                        c.span,
+                        format!("`ensures` needs a `Copy` result; `{ret}` is not (CON-3)"),
+                    );
+                }
+                self.bind_local("result", ret.clone(), false, false, c.span);
+            }
+            let ty = self.check_expr(&c.expr, Some(&Type::Bool));
+            let ty = self.resolve_vars(&ty);
+            if !Self::compatible(&ty, &Type::Bool) && !matches!(ty, Type::Error) {
+                self.error(
+                    "E-TYP-MISMATCH",
+                    c.expr.span,
+                    format!("a contract clause is a `bool`, found `{ty}` (CON-1)"),
+                );
+            }
+            self.pop_scope();
+            // CON-3: the names the clause read (the checker records each
+            // resolved local in `used_locals`).
+            let read: Vec<String> = std::mem::take(&mut self.used_locals).into_iter().collect();
+            for name in &read {
+                if let Some(p) = params.iter().find(|p| &p.name == name) {
+                    if !crate::own::is_copy_type(&p.ty, self.facts) {
+                        self.error(
+                            "E-CON-NONCOPY",
+                            c.expr.span,
+                            format!(
+                                "a contract may only read `Copy` parameters; `{name}` is `{}` (CON-3)",
+                                p.ty
+                            ),
+                        );
+                    }
+                }
+            }
+            used.extend(read);
+        }
+        self.used_locals.extend(used);
     }
 
     // ------------------------------------------------------------------

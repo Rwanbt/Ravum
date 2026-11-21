@@ -1,0 +1,8 @@
+struct State { gain: f32 }
+
+fn process_sample(state: &mut State, input: f32) -> f32 effects() {
+    input * state.gain
+}
+
+fn main() -> () effects() {
+}

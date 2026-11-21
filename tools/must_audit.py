@@ -361,8 +361,29 @@ def map_statement(row: dict, link_index: dict) -> tuple[list[str], list[str]]:
     return kinds, sorted(features)
 
 
+DECLARATIVE_LIST = "tools/must_declarative.txt"
+
+
+def read_declarative(repo_root: Path) -> set[str]:
+    """Rule ids the owner-reviewed list marks declarative (V2-M1): they are
+    reported apart and do not fail `--strict`; they stay unmapped."""
+    path = repo_root / DECLARATIVE_LIST
+    if not path.is_file():
+        return set()
+    ids = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            ids.add(line)
+    return ids
+
+
 def build_report(repo_root: Path) -> dict:
     rows, problems = parse_rule_tables(repo_root)
+    declarative = read_declarative(repo_root)
+    known_ids = {row["id"] for row in rows}
+    for rule_id in sorted(declarative - known_ids):
+        problems.append(f"{DECLARATIVE_LIST}: `{rule_id}` is not a rule id of the specification")
     feature_rows, links = build_feature_links(repo_root)
     problems.extend(links["problems"])
 
@@ -410,6 +431,7 @@ def build_report(repo_root: Path) -> dict:
                 "features": features,
                 "case_linked": case_linked,
                 "strict_linked": strict_linked,
+                "declarative": row["id"] in declarative,
             }
         )
 
@@ -499,7 +521,14 @@ def print_summary(report: dict) -> None:
         print()
         print(f"unmapped MUST statements ({len(unmapped)}):")
         for record in unmapped:
-            print(f"  {record['doc']}:{record['line']:<5} {record['id']}")
+            tag = "  (declarative)" if record.get("declarative") else ""
+            print(f"  {record['doc']}:{record['line']:<5} {record['id']}{tag}")
+        testable = [record for record in unmapped if not record.get("declarative")]
+        print()
+        print(
+            f"  of which declarative ({DECLARATIVE_LIST}): {len(unmapped) - len(testable)}; "
+            f"testable and unmapped: {len(testable)}"
+        )
     if report["problems"]:
         print()
         for problem in report["problems"]:
@@ -529,14 +558,20 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     if "--strict" in argv:
         featureid = report["featureid_metric"]
         must = report["must_metric"]
+        # V2-M1: a declarative statement cannot be exercised by a case; it is
+        # reported, not counted as a failure.
         unsatisfied = [
-            record for record in report["statements"] if not record["mapping"]
+            record
+            for record in report["statements"]
+            if not record["mapping"] and not record.get("declarative")
         ]
         featureid_bad = featureid["strict_satisfied"] != featureid["total"]
         if unsatisfied or featureid_bad:
             print()
             if unsatisfied:
-                print(f"strict: {len(unsatisfied)} MUST statement(s) unmapped to any FeatureId")
+                print(
+                    f"strict: {len(unsatisfied)} testable MUST statement(s) unmapped to any FeatureId"
+                )
             if featureid_bad:
                 print(
                     f"strict: FeatureId coverage {featureid['strict_satisfied']}/"

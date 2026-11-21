@@ -7,6 +7,12 @@
 
 ## 1. Résultat en une phrase
 
+> **Mesure du 2026-11-20 (V2-L3, V2-L1b)** : **877 énoncés MUST**, **245
+> FeatureIds** (F-EFF-011 ajouté, profil `det`), couverture stricte
+> **245/245** ; **91** MUST non rattachés (95 avant L3 : G-6.9, LEX-11.5,
+> DIAG-6.4, STD-1.2 rattachés avec des cas réels ; EFF-4.11 ajouté et
+> rattaché). Classement des 91 : [`docs/reports/V2-L3.md`](../reports/V2-L3.md).
+
 > **Mesure du 2026-11-18 (lots T2 `lexical.md` #167, `grammar.md` #168,
 > `diagnostics.md` #169, `compatibility.md` #172, `abi.md` #177, `modules.md` #178,
 > `concurrency.md` #180, `stdlib.md` et `effects.md` #182, `ownership.md` #183, `features.md` et `unsupported.md` #184, `types.md` et `expressions.md` #185, `compatibility.md` (2ᵉ lot) #186, `abi.md` et `concurrency.md` (2ᵉ lot) #187, `core-machine.md`)** : `tools/must_audit.py`

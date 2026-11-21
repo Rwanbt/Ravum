@@ -1,0 +1,8 @@
+{
+  "id": "effects/l3-prelude-effects-not-redeclarable",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-RES-CONFLICT"
+  ],
+  "notes": "EFF-5.4 (MUST): prelude effects are fixed by stdlib.md and cannot be redeclared; a user module `io` redefining `println` with `effects()` collides with the prelude."
+}

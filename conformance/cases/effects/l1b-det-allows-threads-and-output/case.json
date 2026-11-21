@@ -1,0 +1,9 @@
+{
+  "id": "effects/l1b-det-allows-threads-and-output",
+  "mode": "compile-pass",
+  "args": [
+    "--profile",
+    "det"
+  ],
+  "notes": "DET-1 (MUST): under the det profile, thread, alloc, panic and io output are allowed."
+}

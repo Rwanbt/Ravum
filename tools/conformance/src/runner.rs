@@ -1704,6 +1704,23 @@ mod tests {
         );
     }
 
+    /// COMPAT-5.2 / DIAG-7.3: the consumer ignores unknown fields (envelope
+    /// and diagnostic) and tolerates a diagnostic code it has never seen.
+    #[test]
+    fn unknown_fields_and_unknown_codes_are_tolerated() {
+        let stdout = r#"{"schema_version":1,"future_field":{"x":[1,2]},"diagnostics":[
+            {"code":"E-FUTURE-NEVER-SEEN","severity":"error","new_hint":"y","primary":{"z":1}},
+            {"code":"W-FUTURE-WARNING","severity":"warning","extra":null}
+        ],"another":true}"#;
+        let extraction = extract_codes(stdout, "");
+        assert_eq!(extraction.source, "json");
+        assert!(extraction.structured_error.is_none(), "{:?}", extraction);
+        assert_eq!(
+            extraction.codes.into_iter().collect::<Vec<_>>(),
+            vec!["E-FUTURE-NEVER-SEEN".to_string()]
+        );
+    }
+
     #[test]
     fn ndjson_is_rejected_because_one_object_per_command_is_required() {
         let stdout = "{\"schema_version\":1,\"diagnostics\":[]}\n{\"schema_version\":1,\"diagnostics\":[]}\n";

@@ -298,6 +298,7 @@ fn make_fn(
             body,
             is_test,
             is_async: false,
+            contracts: Vec::new(),
             span: span(),
         }),
         span: span(),

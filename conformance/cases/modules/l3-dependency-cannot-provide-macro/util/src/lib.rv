@@ -1,0 +1,7 @@
+macro_rules! one {
+    () => { 1 };
+}
+
+pub fn helper() -> i32 {
+    1
+}

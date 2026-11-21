@@ -195,7 +195,7 @@ fn h(x: f64) -> bool { x != x }    // vrai ssi x est NaN (0.0/0.0)
 
 | ID | Règle | Niveau |
 |---|---|---|
-| MACH-9.1 | Tant que l'interpréteur n'existe pas, aucun document ne doit affirmer qu'une sémantique Ravum est « vérifiée » au-delà de la relecture. | MUST |
+| MACH-9.1 | Une sémantique Ravum n'est dite « vérifiée » que pour les programmes du corpus que la machine de référence (`ravum-core-machine`) exécute avec le résultat attendu : `TESTED` sur ce corpus, jamais `PROVED` (MACH-8.5). (Réécrite par le responsable le 2026-11-21, V2-M1.) | MUST |
 | MACH-9.2 | Le futur interpréteur **MUST** être versionné avec la spécification (`core-1.0-draft.N`) et refuser une version inconnue. | MUST |
 | MACH-9.3 | Le futur interpréteur **MUST** être déterministe et sans dépendance réseau. | MUST |
 

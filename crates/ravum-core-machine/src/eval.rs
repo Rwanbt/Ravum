@@ -1085,7 +1085,8 @@ fn int_method(name: &str, r: &Value, vs: &[Value]) -> Eval<Value> {
                 let neg_b = arg.and_then(as_i128).is_some_and(|v| v < 0);
                 let low = match m {
                     "add" => neg_a && neg_b,
-                    "sub" => neg_a && !neg_b,
+                    // Unsigned `a - b` can only overflow below zero.
+                    "sub" => !ty.signed() || (neg_a && !neg_b),
                     "mul" => neg_a != neg_b,
                     _ => false,
                 };

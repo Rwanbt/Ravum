@@ -31,6 +31,67 @@ impl<'a> Emitter<'a> {
         item: &Item,
         fun: &FnItem,
     ) -> Result<(), CodegenError> {
+        self.emit_fn_as(buf, item, fun, None)
+    }
+
+    /// RFC-INVARIANTS-1: the `invariant` checks of struct `def` on the value
+    /// `var` (an expression of type `S` or `&S`): one `if` per clause, in
+    /// order, the message naming the clause and the shown field values.
+    pub(super) fn invariant_checks(&self, def: NodeId, var: &str) -> String {
+        use ravum_lang_sema::contracts::{shown, Shown};
+        let Some(info) = self.facts().structs.get(&def) else {
+            return String::new();
+        };
+        let mut parts = Vec::new();
+        let mut args = String::new();
+        for f in &info.fields {
+            match shown(&f.ty, true) {
+                Some(Shown::Scalar) => parts.push(format!("self.{} = {{}}", f.name)),
+                Some(Shown::Text) => parts.push(format!("self.{} = \\\"{{}}\\\"", f.name)),
+                None => continue,
+            }
+            args.push_str(&format!(", {var}.{}", f.rust_name));
+        }
+        let fmt = if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", parts.join(", "))
+        };
+        let mut out = String::new();
+        for (method, text) in &info.invariants {
+            let msg = format!("contract violated: invariant {text}");
+            out.push_str(&format!(
+                "if !{var}.{method}() {{ panic!(\"{{}}{fmt}\", {msg:?}{args}); }} "
+            ));
+        }
+        out
+    }
+
+    /// The struct whose invariants a `&mut self` method of `implementation`
+    /// re-establishes on exit.
+    fn invariant_owner(&self, implementation: &ImplItem) -> Option<NodeId> {
+        match self.facts().type_nodes.get(&implementation.self_ty.id) {
+            Some(ravum_lang_sema::types::Type::Nominal { def, .. })
+                if self
+                    .facts()
+                    .structs
+                    .get(def)
+                    .is_some_and(|s| !s.invariants.is_empty()) =>
+            {
+                Some(*def)
+            }
+            _ => None,
+        }
+    }
+
+    /// [`Self::emit_fn`] under another Rust name (`rename`), private.
+    fn emit_fn_as(
+        &self,
+        buf: &mut Buf,
+        item: &Item,
+        fun: &FnItem,
+        rename: Option<&str>,
+    ) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
         // `Index::build` walks the same AST and records every function.
         let entry = &self.index.fns[&item.id];
@@ -39,11 +100,11 @@ impl<'a> Emitter<'a> {
         // `main` and test functions are called from the generated crate-root
         // entry point, so they must be visible outside their Ravum module.
         let is_entry_point = Some(item.id) == self.index.user_main || fun.is_test;
-        if item.vis.is_public() || is_entry_point {
+        if (item.vis.is_public() || is_entry_point) && rename.is_none() {
             signature.push_str("pub ");
         }
         signature.push_str("fn ");
-        signature.push_str(&entry.rust_name);
+        signature.push_str(rename.unwrap_or(&entry.rust_name));
         signature.push_str(&self.generics(&fun.generics));
         signature.push('(');
         let mut params = Vec::new();
@@ -88,13 +149,97 @@ impl<'a> Emitter<'a> {
         // Plan the array-element paths of this body (OWN-5.4) before emitting it:
         // `expr` consults the plan when it reaches a projection or an index.
         *self.array_moves.borrow_mut() = self.plan_array_moves(&fun.body);
-        let body = self.block_text(buf.indent, &fun.body)?;
+        let mut body = self.block_text(buf.indent, &fun.body)?;
+        if !fun.contracts.is_empty() {
+            body = self.contract_body(buf.indent, item.id, fun, &ret, body)?;
+        }
         if fun.is_async {
             buf.line(&format!("{signature}{{ Box::pin(async move {body}) }}"));
         } else {
             buf.line(&format!("{signature}{body}"));
         }
         Ok(())
+    }
+
+    /// RFC-CONTRACTS-1: `requires` checked on entry; with `ensures`, the body
+    /// runs in an immediately called `move` closure (a `return` leaves the
+    /// closure; `Copy` parameters keep their entry value outside it), then
+    /// every `ensures` is checked with `result` bound.
+    fn contract_body(
+        &self,
+        indent: usize,
+        id: ravum_lang_syntax::NodeId,
+        fun: &FnItem,
+        ret: &str,
+        body: String,
+    ) -> Result<String, CodegenError> {
+        use ravum_lang_sema::contracts::{shown, Shown};
+        let mut out = String::from("{ ");
+        let mut ensures = Vec::new();
+        // Amendment 1: the values shown after the clause, by declared type
+        // (the IR lowering applies the same rule: identical messages).
+        let sig = self.checked.facts.fn_sigs.get(&id);
+        let note = |ensures: bool| -> (String, Vec<String>) {
+            let mut parts = Vec::new();
+            let mut args = Vec::new();
+            let mut push = |name: &str, ident: String, s: Shown| match s {
+                Shown::Scalar => {
+                    parts.push(format!("{name} = {{}}"));
+                    args.push(ident);
+                }
+                Shown::Text => {
+                    parts.push(format!("{name} = \\\"{{}}\\\""));
+                    args.push(ident);
+                }
+            };
+            if let Some(sig) = sig {
+                for p in sig.params.iter().filter(|p| !p.is_receiver) {
+                    let owned_ok = !ensures;
+                    if let Some(s) = shown(&p.ty, owned_ok) {
+                        push(&p.name, self.local_ident(&p.name), s);
+                    }
+                }
+                if ensures {
+                    if let Some(s) = shown(&sig.ret, true) {
+                        push("result", self.local_ident("result"), s);
+                    }
+                }
+            }
+            if parts.is_empty() {
+                (String::new(), args)
+            } else {
+                (format!(" ({})", parts.join(", ")), args)
+            }
+        };
+        for c in &fun.contracts {
+            let cond = self.expr(&c.expr, indent + 1)?;
+            let kind = match c.kind {
+                ravum_lang_syntax::ast::ContractKind::Requires => "requires",
+                ravum_lang_syntax::ast::ContractKind::Ensures => "ensures",
+            };
+            let msg = format!("contract violated: {kind} {}", c.text);
+            let (fmt, args) = note(c.kind == ravum_lang_syntax::ast::ContractKind::Ensures);
+            let args: String = args.iter().map(|a| format!(", {a}")).collect();
+            let check = format!("if !({cond}) {{ panic!(\"{{}}{fmt}\", {msg:?}{args}); }} ");
+            match c.kind {
+                ravum_lang_syntax::ast::ContractKind::Requires => out.push_str(&check),
+                ravum_lang_syntax::ast::ContractKind::Ensures => ensures.push(check),
+            }
+        }
+        if ensures.is_empty() {
+            out.push_str(&body);
+        } else {
+            let result = self.local_ident("result");
+            out.push_str(&format!(
+                "let {result}: {ret} = (move || -> {ret} {body})(); "
+            ));
+            for e in ensures {
+                out.push_str(&e);
+            }
+            out.push_str(&result);
+        }
+        out.push_str(" }");
+        Ok(out)
     }
 
     pub(super) fn emit_struct(
@@ -105,6 +250,16 @@ impl<'a> Emitter<'a> {
     ) -> Result<(), CodegenError> {
         self.marker(buf, item.span);
         let entry = self.entry(item.id)?;
+        if self.options.dsp.as_ref().is_some_and(|contract| {
+            contract.init.is_some()
+                && (contract.state.types.contains(&item.id)
+                    || contract
+                        .migrate
+                        .as_ref()
+                        .is_some_and(|(_, old)| old.types.contains(&item.id)))
+        }) {
+            buf.line("#[repr(C)]");
+        }
         buf.line(&self.derive_attribute(item.id));
         let visibility = if item.vis.is_public() { "pub " } else { "" };
         let generics = self.generics(&structure.generics);
@@ -190,11 +345,60 @@ impl<'a> Emitter<'a> {
                 item.id
             )));
         }
+        let owner = self.invariant_owner(implementation);
         for (item, fun) in implementation.methods() {
-            self.emit_fn(buf, item, fun)?;
+            let exclusive = fun.params.iter().any(|p| {
+                matches!(
+                    p.kind,
+                    ParamKind::Receiver(ravum_lang_syntax::ast::Receiver::Exclusive)
+                )
+            });
+            match owner {
+                Some(def) if exclusive => self.emit_invariant_method(buf, item, fun, def)?,
+                _ => self.emit_fn(buf, item, fun)?,
+            }
         }
         buf.indent -= 1;
         buf.line("}");
+        Ok(())
+    }
+
+    /// RFC-INVARIANTS-1 (INV-3): a `&mut self` method of a struct with
+    /// invariants. The body becomes a private inner method; the method calls
+    /// it with a reborrow of `self` and its arguments, then checks every
+    /// invariant before returning (a panic of the body checks nothing).
+    fn emit_invariant_method(
+        &self,
+        buf: &mut Buf,
+        item: &Item,
+        fun: &FnItem,
+        def: NodeId,
+    ) -> Result<(), CodegenError> {
+        let entry = &self.index.fns[&item.id];
+        let inner = format!("rv_inv_body_{}", entry.rust_name.trim_start_matches("r#"));
+        self.emit_fn_as(buf, item, fun, Some(&inner))?;
+        let mut params = vec!["&mut self".to_string()];
+        let mut args = vec!["&mut *self".to_string()];
+        for param in &fun.params {
+            if let ParamKind::Binding { name, ty, .. } = &param.kind {
+                let ident = self.local_ident(&name.name);
+                params.push(format!(
+                    "{ident}: {}",
+                    self.type_node_pos(ty, TypePos::Param)?
+                ));
+                args.push(ident);
+            }
+        }
+        let ret = self.type_node(&fun.ret)?;
+        let vis = if item.vis.is_public() { "pub " } else { "" };
+        let generics = self.generics(&fun.generics);
+        let checks = self.invariant_checks(def, "self");
+        buf.line(&format!(
+            "{vis}fn {}{generics}({}) -> {ret} {{ let rv_inv_r = Self::{inner}({}); {checks}rv_inv_r }}",
+            entry.rust_name,
+            params.join(", "),
+            args.join(", ")
+        ));
         Ok(())
     }
 

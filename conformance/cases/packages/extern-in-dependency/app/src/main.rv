@@ -1,3 +1,5 @@
+use std::io;
+
 fn main() -> () effects(io, alloc, unsafe, ffi) {
     io::println(util::distance(-7).to_string().as_str());
 }

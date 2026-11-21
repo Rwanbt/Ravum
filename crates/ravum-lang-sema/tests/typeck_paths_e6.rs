@@ -869,7 +869,7 @@ fn a_method_of_a_user_type_used_without_a_call_is_not_a_field() {
 #[test]
 fn a_static_text_function_inside_a_module_is_recognised() {
     assert_errors(
-        "mod m { pub fn f() -> &str { \"x\" } }\n\
+        "use std::io;\nmod m { pub fn f() -> &str { \"x\" } }\n\
          fn main() { io::println(m::f()); }",
         &[],
     );
@@ -1219,7 +1219,7 @@ fn the_stdlib_assert_eq_examples_report_their_documented_codes() {
 fn an_open_range_in_a_for_gets_a_dedicated_message() {
     const OPEN: &str = "an open range is not allowed in a `for`; give an upper bound: `start..end`";
     assert_errors(
-        "fn main() { for j in 1.. { io::println(\"x\"); } }",
+        "use std::io;\nfn main() { for j in 1.. { io::println(\"x\"); } }",
         &[("E-TYP-RANGE", OPEN)],
     );
     assert_errors("fn main() { for j in .. { } }", &[("E-TYP-RANGE", OPEN)]);

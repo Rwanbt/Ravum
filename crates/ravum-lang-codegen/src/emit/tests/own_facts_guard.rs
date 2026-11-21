@@ -327,7 +327,7 @@ fn two_array_parameters_and_unreachable_moves_build_and_run() {
         eprintln!("SKIP two_array_parameters_and_unreachable_moves_build_and_run: no rustc");
         return;
     }
-    let source = "fn take(s: String) -> usize { return s.len(); }\n\
+    let source = "use std::io;\nfn take(s: String) -> usize { return s.len(); }\n\
         fn two_arrays(a: [String; 2], b: [String; 2]) -> String {\n\
             let n = b[1].len();\n\
             let x = a[0];\n\

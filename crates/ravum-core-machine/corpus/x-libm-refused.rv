@@ -1,5 +1,6 @@
 // oracle: fault: unsupported-libm
 // MACH-5.5: sin is outside the verifiable core.
+use std::math;
 fn check() -> f64 effects() {
     return math::sin(1.0);
 }

@@ -595,3 +595,47 @@ fn find_rustc() -> Option<PathBuf> {
         None
     }
 }
+
+/// T13: after an edit, the rebuild's check reuses the unchanged bodies (an
+/// untouched module, and the functions before the change in the edited
+/// file), and the rebuilt program is the edited one.
+#[test]
+fn a_rebuild_reuses_the_unchanged_function_bodies() {
+    if skip_without_rustc("a_rebuild_reuses_the_unchanged_function_bodies") {
+        return;
+    }
+    let temp = TempDir::new("incr");
+    let root = package(&temp, "app");
+    fs::write(
+        root.join("src/util.rv"),
+        "pub fn twice(x: i64) -> i64 effects() {\n    return x * 2;\n}\n\npub fn thrice(x: i64) -> i64 effects() {\n    return x * 3;\n}\n",
+    )
+    .unwrap();
+    let main = |v: &str| {
+        format!(
+            "mod util;\nuse std::io;\n\nfn helper(x: i64) -> i64 effects() {{\n    return util::twice(x) + util::thrice(x);\n}}\n\nfn main() {{\n    io::println(\"{v}\");\n    io::println(&helper(1).to_string());\n    let line = io::read_line();\n}}\n"
+        )
+    };
+    write_source(&root, &main("v1"));
+    let mut watch = Watch::spawn(&root, &["watch", ".", "--run", "--max-rebuilds", "1"], &[]);
+    let long = Duration::from_secs(120);
+    watch.wait_line("initial check", long, |l| {
+        l.starts_with("[ravum] check: 0 bodies reused") && l.contains("full: first check")
+    });
+    watch.wait_line("v1 output", long, |l| l == "v1");
+    write_source(&root, &main("v2"));
+    let line = watch.wait_line("incremental check", long, |l| {
+        l.starts_with("[ravum] check:") && !l.contains("first check")
+    });
+    let reused: usize = line
+        .trim_start_matches("[ravum] check: ")
+        .split(' ')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    // `twice`, `thrice` (untouched file) and `helper` (before the change).
+    assert!(reused >= 3, "{line}");
+    assert!(line.contains("1 checked"), "only `main` is checked: {line}");
+    watch.wait_line("v2 output", long, |l| l == "v2");
+}

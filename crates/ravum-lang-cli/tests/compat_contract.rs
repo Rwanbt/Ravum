@@ -80,7 +80,7 @@ fn app_with_util(workspace: &Workspace, util_dir: &str) {
     );
     workspace.write(
         "app/src/main.rv",
-        "fn main() {\n    io::println(&util::v().to_string());\n}\n",
+        "use std::io;\nfn main() {\n    io::println(&util::v().to_string());\n}\n",
     );
 }
 

@@ -1,0 +1,8 @@
+{
+  "id": "types/contract-not-bool",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-TYP-MISMATCH"
+  ],
+  "notes": "RFC-CONTRACTS-1 CON-1: a clause is a `bool`."
+}

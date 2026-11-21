@@ -1,0 +1,8 @@
+{
+  "id": "effects/invariant-impure",
+  "mode": "compile-fail",
+  "expect_codes": [
+    "E-EFF-UNDECLARED"
+  ],
+  "notes": "RFC-INVARIANTS-1 INV-1: a clause is pure (its synthetic method declares `effects()`), callees included."
+}

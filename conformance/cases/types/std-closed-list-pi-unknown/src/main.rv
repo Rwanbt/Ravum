@@ -1,3 +1,5 @@
+use std::math;
+
 fn main() {
     let _x = math::PI;
 }

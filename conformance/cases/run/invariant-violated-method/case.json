@@ -1,0 +1,7 @@
+{
+  "id": "run/invariant-violated-method",
+  "mode": "run-fail",
+  "exit_code": 1,
+  "stderr_contains": "contract violated: invariant self.lo <= self.hi (self.lo = 6, self.hi = -2)",
+  "notes": "RFC-INVARIANTS-1 INV-3: checked at the exit of every `&mut self` method."
+}

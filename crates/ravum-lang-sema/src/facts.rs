@@ -115,6 +115,12 @@ pub enum Profile {
     Core,
     Pure,
     Rt,
+    /// RFC-DETERMINISTIC-PROFILE-1: replayable execution (DET-1).
+    Det,
+    /// `det` with `--record`/`--replay` (DET-9): the journaled inputs (`fs`,
+    /// `io::read_line`, `env::var`) are allowed. Never parsed from the
+    /// command line; reported as `det`.
+    DetIo,
 }
 
 impl Profile {
@@ -123,6 +129,7 @@ impl Profile {
             "core" => Some(Profile::Core),
             "pure" => Some(Profile::Pure),
             "rt" => Some(Profile::Rt),
+            "det" => Some(Profile::Det),
             _ => None,
         }
     }
@@ -132,6 +139,7 @@ impl Profile {
             Profile::Core => "core",
             Profile::Pure => "pure",
             Profile::Rt => "rt",
+            Profile::Det | Profile::DetIo => "det",
         }
     }
 
@@ -164,6 +172,29 @@ impl Profile {
                 Effect::Async,
                 Effect::Rt,
             ])),
+            // DET-1: external inputs and native code are not replayable;
+            // `thread`, `async`, `alloc`, `panic` and `io` output are allowed.
+            // The only nondet producer, task::timeout, uses the DET-2 clock.
+            Profile::Det => Some(EffectSet::new([
+                Effect::Fs,
+                Effect::Net,
+                Effect::Unsafe,
+                Effect::Ffi,
+            ])),
+            // `net` too: its blocking and asynchronous functions are journaled
+            // (DET-9).
+            Profile::DetIo => Some(EffectSet::new([Effect::Unsafe, Effect::Ffi])),
+        }
+    }
+
+    /// Library functions refused at the entry point although their effect is
+    /// allowed: under `det` (DET-1), the `io` functions that *read* an input
+    /// the profile cannot replay. `env::args` stays allowed: the arguments
+    /// are given by the command that runs the program.
+    pub fn forbidden_calls(&self) -> &'static [&'static str] {
+        match self {
+            Profile::Det => &["std::io::read_line", "std::env::var"],
+            _ => &[],
         }
     }
 }
@@ -213,6 +244,8 @@ pub struct StructInfo {
     pub generics: Vec<String>,
     pub fields: Vec<FieldInfo>,
     pub is_copy: bool,
+    /// RFC-INVARIANTS-1: `(synthetic method, clause text)` per `invariant`.
+    pub invariants: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -412,8 +445,33 @@ impl OwnFacts {
     }
 }
 
+/// A function whose body an incremental driver reuses (T13 step 2): the
+/// checker skips its body and assumes these effect facts, taken from the
+/// previous check of the same, unchanged function.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReusedBody {
+    pub direct: EffectSet,
+    pub edges: Vec<NodeId>,
+    /// Imports the body used (`module index:display`), marked used again.
+    pub used_imports: Vec<String>,
+    /// The function was in `Facts::static_str_fns`.
+    pub static_str: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
+    /// T13 step 2, set by an incremental driver **before** checking: bodies
+    /// not to check again. Their facts are absent from the result, which is
+    /// then good for diagnostics only (never for code generation).
+    pub reuse_bodies: BTreeMap<NodeId, ReusedBody>,
+    /// Effects a function's own body produces (without callees), per
+    /// function: what a driver stores to reuse the body later.
+    pub direct_effects: BTreeMap<NodeId, EffectSet>,
+    /// Imports each checked function body used (`module index:display`).
+    pub fn_used_imports: BTreeMap<NodeId, Vec<String>>,
+    /// Function item id → user functions it calls (the effects phase's
+    /// call graph; T19 uses it to link a contract to the tests reaching it).
+    pub call_graph: BTreeMap<NodeId, Vec<NodeId>>,
     /// Type of every expression node id.
     pub expr_types: BTreeMap<NodeId, Type>,
     /// Type of every type syntax node id (resolved `Type`).
@@ -545,6 +603,102 @@ fn source_file_info(f: &ravum_lang_syntax::span::SourceFile) -> FileInfo {
     }
 }
 
+impl Facts {
+    /// T13 (step 3): copy into `self` the facts of `old` about the nodes
+    /// `keep` accepts (the bodies a driver reused, in files whose parse — and
+    /// so whose `NodeId`s — did not change), where `self` has none.
+    ///
+    /// Item-level facts (signatures, structs, effects, entry points…) always
+    /// come from the new check, which runs those phases on every item. Every
+    /// field is listed: a new field is a compile error here, not a silently
+    /// stale fact.
+    pub fn merge_reused(&mut self, old: &Facts, keep: impl Fn(NodeId) -> bool) {
+        fn copy<V: Clone>(
+            new: &mut BTreeMap<NodeId, V>,
+            old: &BTreeMap<NodeId, V>,
+            keep: &impl Fn(NodeId) -> bool,
+        ) {
+            for (k, v) in old {
+                if keep(*k) {
+                    new.entry(*k).or_insert_with(|| v.clone());
+                }
+            }
+        }
+        fn copy_set(
+            new: &mut BTreeSet<NodeId>,
+            old: &BTreeSet<NodeId>,
+            keep: &impl Fn(NodeId) -> bool,
+        ) {
+            new.extend(old.iter().copied().filter(|k| keep(*k)));
+        }
+        let Facts {
+            reuse_bodies: _,
+            direct_effects: _,
+            fn_used_imports: _,
+            call_graph: _,
+            expr_types,
+            type_nodes,
+            pat_types,
+            resolutions,
+            calls,
+            methods,
+            fn_sigs: _,
+            extern_symbols: _,
+            structs: _,
+            enums: _,
+            consts: _,
+            effects: _,
+            item_paths: _,
+            module_paths: _,
+            static_str_fns: _,
+            spawn_targets,
+            async_fns: _,
+            test_fns: _,
+            main_fn: _,
+            own,
+        } = self;
+        copy(expr_types, &old.expr_types, &keep);
+        copy(type_nodes, &old.type_nodes, &keep);
+        copy(pat_types, &old.pat_types, &keep);
+        copy(resolutions, &old.resolutions, &keep);
+        copy(calls, &old.calls, &keep);
+        copy(methods, &old.methods, &keep);
+        copy(spawn_targets, &old.spawn_targets, &keep);
+        let OwnFacts {
+            use_kind,
+            place,
+            element_reinit,
+            copy_type,
+            owned_position,
+            consumed,
+            binding_identity,
+            bindings: _,
+        } = own;
+        copy(use_kind, &old.own.use_kind, &keep);
+        copy(place, &old.own.place, &keep);
+        copy_set(element_reinit, &old.own.element_reinit, &keep);
+        copy_set(copy_type, &old.own.copy_type, &keep);
+        copy_set(owned_position, &old.own.owned_position, &keep);
+        copy_set(consumed, &old.own.consumed, &keep);
+        // Binding identities are numbered in check order: re-intern each
+        // reused one by its (declaration span, name), which a reused body
+        // keeps (its file did not change).
+        let by_id: BTreeMap<BindingId, &(Span, String)> =
+            old.own.bindings.iter().map(|(k, v)| (*v, k)).collect();
+        let reused: Vec<(NodeId, (Span, String))> = old
+            .own
+            .binding_identity
+            .iter()
+            .filter(|(k, _)| keep(**k) && !binding_identity.contains_key(k))
+            .filter_map(|(k, id)| by_id.get(id).map(|key| (*k, (*key).clone())))
+            .collect();
+        for (node, (span, name)) in reused {
+            let id = own.intern_binding(span, &name);
+            own.binding_identity.insert(node, id);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,6 +780,34 @@ mod tests {
         assert_eq!(EffectSet::default().difference(&base), Vec::new());
     }
 
+    /// DET-1: `det` forbids exactly the non-replayable effects, keeps
+    /// `thread`/`async`/`alloc`/`panic`/`io` output, and refuses the `io`
+    /// reads by name; the other profiles refuse no call by name.
+    #[test]
+    fn det_forbids_inputs_it_cannot_replay() {
+        let det = Profile::Det.forbidden().expect("det forbids effects");
+        for e in [Effect::Fs, Effect::Net, Effect::Unsafe, Effect::Ffi] {
+            assert!(det.contains(e), "{e:?}");
+        }
+        for e in [
+            Effect::Io,
+            Effect::Thread,
+            Effect::Async,
+            Effect::Alloc,
+            Effect::Panic,
+            Effect::Nondet,
+        ] {
+            assert!(!det.contains(e), "{e:?}");
+        }
+        assert_eq!(
+            Profile::Det.forbidden_calls(),
+            &["std::io::read_line", "std::env::var"]
+        );
+        for p in [Profile::Core, Profile::Pure, Profile::Rt] {
+            assert!(p.forbidden_calls().is_empty());
+        }
+    }
+
     /// Profile names appear in diagnostics (`profile \`pure\` forbids ...`) and
     /// on the command line; the parser is the only accepted spelling.
     #[test]
@@ -634,6 +816,7 @@ mod tests {
             ("core", Profile::Core),
             ("pure", Profile::Pure),
             ("rt", Profile::Rt),
+            ("det", Profile::Det),
         ] {
             assert_eq!(Profile::parse(text), Some(profile));
             assert_eq!(profile.name(), text);
@@ -707,5 +890,82 @@ mod tests {
         assert_eq!(infos[2].path, "src/late.rv");
         assert_eq!(infos[2].line_of(12), 2);
         assert_eq!(infos[0].path, "<unknown>", "a hole has no source file");
+    }
+
+    /// T13 step 3: `merge_reused` copies the body facts of the kept nodes
+    /// only, never overwrites a fact the new check already has, and
+    /// re-interns reused binding identities.
+    #[test]
+    fn merge_reused_copies_kept_body_facts_only() {
+        // One `keep` type for every call: one instantiation of the generic
+        // `merge_reused` runs every scenario.
+        const KEEP_ALL: fn(NodeId) -> bool = |_| true;
+        const KEEP_NONE: fn(NodeId) -> bool = |_| false;
+        let src = "fn f(a: i32) -> i32 {\n    let b: i32 = a + 1;\n    return b;\n}\n\n\
+            fn main() {\n    let v: Vec<i32> = Vec::new();\n    let n: usize = v.len();\n    let x: i32 = f(2);\n}\n";
+        let mut sources = SourceMap::new();
+        let file = sources.add("src/main.rv", src);
+        let parsed = ravum_lang_syntax::parser::parse_file(file, src);
+        let old = crate::check(&parsed.program, &sources, &CheckOptions::default())
+            .checked
+            .expect("the fixture must check")
+            .facts;
+        assert!(!old.expr_types.is_empty() && !old.own.binding_identity.is_empty());
+
+        // Keep everything: every body fact is copied.
+        let mut all = Facts::default();
+        all.merge_reused(&old, KEEP_ALL);
+        assert_eq!(all.expr_types, old.expr_types);
+        assert_eq!(all.type_nodes, old.type_nodes);
+        assert_eq!(all.pat_types, old.pat_types);
+        assert_eq!(all.resolutions, old.resolutions);
+        assert_eq!(all.calls, old.calls);
+        assert_eq!(all.methods, old.methods);
+        assert_eq!(all.own.use_kind, old.own.use_kind);
+        assert_eq!(all.own.place, old.own.place);
+        assert_eq!(all.own.copy_type, old.own.copy_type);
+        assert_eq!(all.own.consumed, old.own.consumed);
+        assert_eq!(
+            all.own.binding_identity.len(),
+            old.own.binding_identity.len(),
+            "every reused binding is re-interned"
+        );
+
+        // Keep nothing: nothing is copied.
+        let mut none = Facts::default();
+        none.merge_reused(&old, KEEP_NONE);
+        assert!(none.expr_types.is_empty() && none.own.binding_identity.is_empty());
+
+        // A fact the new check already has is never overwritten.
+        let (&node, _) = old.expr_types.iter().next().unwrap();
+        let mut fresh = Facts::default();
+        fresh.expr_types.insert(node, Type::Bool);
+        let (&bound, _) = old.own.binding_identity.iter().next().unwrap();
+        fresh.own.binding_identity.insert(bound, BindingId(77));
+        fresh.merge_reused(&old, KEEP_ALL);
+        assert_eq!(fresh.expr_types[&node], Type::Bool);
+        assert_eq!(fresh.own.binding_identity[&bound], BindingId(77));
+
+        // A reused identity whose declaration is unknown is not invented.
+        let mut orphan = old.clone();
+        orphan
+            .own
+            .binding_identity
+            .insert(NodeId::MAX, BindingId(u32::MAX));
+        let mut target = Facts::default();
+        target.merge_reused(&orphan, KEEP_ALL);
+        assert!(!target.own.binding_identity.contains_key(&NodeId::MAX));
+    }
+
+    /// The record/replay profile (`DetIo`) refuses only `unsafe` and `ffi`.
+    #[test]
+    fn det_io_allows_the_journaled_inputs() {
+        let set = Profile::DetIo.forbidden().expect("det io forbids effects");
+        assert!(set.contains(Effect::Unsafe) && set.contains(Effect::Ffi));
+        for e in [Effect::Fs, Effect::Net, Effect::Io, Effect::Nondet] {
+            assert!(!set.contains(e), "{e:?}");
+        }
+        assert!(Profile::DetIo.forbidden_calls().is_empty());
+        assert_eq!(Profile::DetIo.name(), "det");
     }
 }

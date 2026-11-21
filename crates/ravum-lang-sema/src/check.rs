@@ -13,7 +13,7 @@ use crate::facts::{file_infos, CheckOptions, CheckResult, CheckedProgram, Facts}
 use crate::resolve::World;
 use crate::{effects, own, resolve, typeck};
 use ravum_lang_syntax::ast::Program;
-use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag};
+use ravum_lang_syntax::diag::{Diagnostic, DiagnosticBag, Severity};
 use ravum_lang_syntax::source::SourceMap;
 use ravum_lang_syntax::span::Span;
 use std::time::{Duration, Instant};
@@ -59,11 +59,187 @@ pub fn check_with_timings(
 }
 
 /// `check_with_timings`, with the explicit `rt` entry function of T6.
+/// Spans of the functions (free, in `impl`, in inline modules) that hold an
+/// error of `diags`; `None` when some error lies outside every function.
+fn faulty_functions(program: &Program, diags: &DiagnosticBag) -> Option<Vec<Span>> {
+    use ravum_lang_syntax::ast::{Item, ItemKind};
+    fn collect(items: &[Item], out: &mut Vec<Span>) {
+        for item in items {
+            match &item.kind {
+                ItemKind::Fn(_) => out.push(item.span),
+                ItemKind::Impl(imp) => collect(&imp.items, out),
+                ItemKind::Mod(m) => collect(&m.items, out),
+                _ => {}
+            }
+        }
+    }
+    let mut fns = Vec::new();
+    collect(&program.root.items, &mut fns);
+    let within = |outer: &Span, s: &Span| {
+        outer.file == s.file && outer.start <= s.start && s.end <= outer.end
+    };
+    let mut faulty = Vec::new();
+    for d in diags.iter().filter(|d| d.severity == Severity::Error) {
+        let f = fns.iter().find(|f| within(f, &d.span))?;
+        if !faulty.contains(f) {
+            faulty.push(*f);
+        }
+    }
+    Some(faulty)
+}
+
+/// Move into `diags` the diagnostics of `later` that are not inside one of
+/// the `faulty` functions (DIAG-1.4: an early phase masks the later ones).
+fn keep_outside(diags: &mut DiagnosticBag, later: DiagnosticBag, faulty: &[Span]) {
+    for d in later.into_vec() {
+        let masked = faulty
+            .iter()
+            .any(|f| f.file == d.span.file && f.start <= d.span.start && d.span.end <= f.end);
+        if !masked {
+            diags.push(d);
+        }
+    }
+}
+
+/// Effects, ownership and the `rt` gate on a program whose resolution and
+/// typing hold errors in some functions. Their facts there are partial, so
+/// the phases run under `catch_unwind`: should one fail on such facts, the
+/// later diagnostics are omitted (as before DIAG-1.4 conformance) rather
+/// than the check crashing.
+fn later_phases_on_valid_functions(
+    program: Program,
+    facts: Facts,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> Option<(DiagnosticBag, DriverFacts)> {
+    let files = file_infos(sources);
+    let profile = options.profile;
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let mut bag = DiagnosticBag::new();
+        let mut checked = CheckedProgram {
+            program,
+            facts,
+            files,
+            profile,
+        };
+        let call_graph = effects::infer_and_check(
+            &checked.program,
+            &mut checked.facts,
+            profile,
+            rt_entry,
+            &mut bag,
+        );
+        let own_facts = own::check_ownership(&checked, &mut bag);
+        checked.facts.own = own_facts;
+        if profile == crate::facts::Profile::Rt {
+            let reachable =
+                rt_entry.map(|entry| crate::effects::reachable_from(&call_graph, entry));
+            crate::traps::check_rt_traps(&checked, &mut bag, reachable.as_ref());
+        }
+        let df = DriverFacts {
+            direct_effects: checked.facts.direct_effects.clone(),
+            call_graph,
+            fn_used_imports: checked.facts.fn_used_imports.clone(),
+            static_str_fns: checked.facts.static_str_fns.clone(),
+        };
+        (bag, df)
+    }))
+    .ok()
+}
+
 pub fn check_entry_with_timings(
     program: &Program,
     sources: &SourceMap,
     options: &CheckOptions,
     rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+) -> (CheckResult, PhaseTimings) {
+    let mut out = DriverFacts::default();
+    check_core(
+        program,
+        sources,
+        options,
+        rt_entry,
+        Default::default(),
+        &mut out,
+    )
+}
+
+/// What an incremental driver keeps from a check, whatever its outcome:
+/// per-function direct effects and the call graph (empty when the effects
+/// phase did not run).
+#[derive(Debug, Clone, Default)]
+pub struct DriverFacts {
+    pub direct_effects:
+        std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::EffectSet>,
+    pub call_graph: std::collections::BTreeMap<
+        ravum_lang_syntax::ast::NodeId,
+        Vec<ravum_lang_syntax::ast::NodeId>,
+    >,
+    pub fn_used_imports: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, Vec<String>>,
+    pub static_str_fns: std::collections::BTreeSet<ravum_lang_syntax::ast::NodeId>,
+}
+
+/// T13 step 2: check `program` without re-checking the bodies in `reuse`
+/// (their results come from the driver's cache). The result's diagnostics
+/// cover the other functions and every non-function item; its facts are
+/// incomplete when `reuse` is not empty (diagnostics only, never codegen).
+pub fn check_reusing(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+) -> (CheckResult, DriverFacts) {
+    let mut out = DriverFacts::default();
+    let (r, _) = check_core(program, sources, options, None, reuse, &mut out);
+    (r, out)
+}
+
+fn check_core(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+    driver: &mut DriverFacts,
+) -> (CheckResult, PhaseTimings) {
+    let (mut r, t) = check_core_raw(program, sources, options, rt_entry, reuse, driver);
+    // RFC-INVARIANTS-1: a diagnostic of a synthetic invariant method names
+    // the clause, never the generated method.
+    r.diags.rewrite_text(name_invariants);
+    (r, t)
+}
+
+fn name_invariants(m: &str) -> String {
+    let prefix = ravum_lang_syntax::ast::INVARIANT_METHOD_PREFIX;
+    let mut out = m.to_string();
+    while let Some(at) = out.find(prefix) {
+        let end = at
+            + prefix.len()
+            + out[at + prefix.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .count();
+        let (mut a, mut b) = (at, end);
+        if out[..a].ends_with('`') && out[b..].starts_with('`') {
+            a -= 1;
+            b += 1;
+        }
+        if out[..a].ends_with("function ") {
+            a -= "function ".len();
+        }
+        out.replace_range(a..b, "the `invariant` clause");
+    }
+    out
+}
+
+fn check_core_raw(
+    program: &Program,
+    sources: &SourceMap,
+    options: &CheckOptions,
+    rt_entry: Option<ravum_lang_syntax::ast::NodeId>,
+    reuse: std::collections::BTreeMap<ravum_lang_syntax::ast::NodeId, crate::facts::ReusedBody>,
+    driver: &mut DriverFacts,
 ) -> (CheckResult, PhaseTimings) {
     let mut timings = PhaseTimings::default();
     let mut diags = DiagnosticBag::new();
@@ -83,21 +259,76 @@ pub fn check_entry_with_timings(
 
     let program = program.clone();
     let mut world = World::build(&program);
-    let mut facts = Facts::default();
+    let mut facts = Facts {
+        reuse_bodies: reuse,
+        ..Facts::default()
+    };
 
     let started = Instant::now();
-    let resolved = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
+    // `resolve_with_world`/`typecheck_with_world` return "no error"; where
+    // the errors are is what decides below (DIAG-1.4).
+    let _no_error = resolve::resolve_with_world(&mut world, &mut facts, &mut diags);
     timings.resolve = started.elapsed();
-    if !resolved || diags.has_errors() {
+    // DIAG-1.4 (decision V1-D1): an early-phase error stops the later phases
+    // on the faulty node only. The granularity used is the enclosing
+    // function: later phases still run on the whole program, and their
+    // diagnostics inside a function that already has an error are dropped.
+    let resolve_faulty = faulty_functions(&program, &diags);
+    if diags.has_errors() && resolve_faulty.is_none() {
+        // An error outside any function (a type, an import...): every
+        // function may depend on it; stop as before.
         diags.sort();
         return (CheckResult::failed(diags), timings);
     }
+    let resolve_had_errors = diags.has_errors();
 
     let started = Instant::now();
-    let typed =
-        typeck::typecheck_with_world(&program, &mut facts, &world, Some(sources), &mut diags);
+    let mut typeck_diags = DiagnosticBag::new();
+    let _no_error = if resolve_had_errors {
+        // Facts are partial where resolution failed: never let that crash
+        // the check (fail-closed: on a panic, report the resolution errors).
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            typeck::typecheck_with_world(
+                &program,
+                &mut facts,
+                &world,
+                Some(sources),
+                &mut typeck_diags,
+            )
+        })) {
+            Ok(t) => t,
+            Err(_) => {
+                diags.sort();
+                return (CheckResult::failed(diags), timings);
+            }
+        }
+    } else {
+        typeck::typecheck_with_world(
+            &program,
+            &mut facts,
+            &world,
+            Some(sources),
+            &mut typeck_diags,
+        )
+    };
     timings.typeck = started.elapsed();
-    if !typed || diags.has_errors() {
+    let resolve_faulty = resolve_faulty.unwrap_or_default();
+    keep_outside(&mut diags, typeck_diags, &resolve_faulty);
+    let faulty = faulty_functions(&program, &diags);
+    if diags.has_errors() && faulty.is_none() {
+        diags.sort();
+        return (CheckResult::failed(diags), timings);
+    }
+    if diags.has_errors() {
+        let faulty = faulty.unwrap_or_default();
+        drop(world);
+        let started = Instant::now();
+        let later = later_phases_on_valid_functions(program, facts, sources, options, rt_entry);
+        timings.effects = started.elapsed();
+        if let Some((later, df)) = later {
+            keep_outside(&mut diags, later, &faulty);
+            *driver = df;
+        }
         diags.sort();
         return (CheckResult::failed(diags), timings);
     }
@@ -122,6 +353,11 @@ pub fn check_entry_with_timings(
         &mut diags,
     );
     timings.effects = started.elapsed();
+    checked.facts.call_graph = call_graph.clone();
+    driver.call_graph = call_graph.clone();
+    driver.fn_used_imports = checked.facts.fn_used_imports.clone();
+    driver.static_str_fns = checked.facts.static_str_fns.clone();
+    driver.direct_effects = checked.facts.direct_effects.clone();
 
     let started = Instant::now();
     let own_facts = own::check_ownership(&checked, &mut diags);
@@ -220,7 +456,8 @@ mod tests {
     fn hello_program_is_valid() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn main() {
     io::println("hello");
     return;
@@ -243,7 +480,8 @@ fn main() {
     fn comprehensive_positive_program() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 struct Point { pub x: f64, pub y: f64 }
 enum Shape { Circle(f64), Rect { w: f64, h: f64 }, Empty }
 
@@ -359,7 +597,8 @@ fn main() { }
     fn invalid_try_is_reported() {
         let (result, _) = run(
             "src/main.rv",
-            r#"fn f() { let x = io::read_line()?; }"#,
+            r#"use std::io;
+fn f() { let x = io::read_line()?; }"#,
             Profile::Core,
         );
         error(&result, "E-TYP-TRY");
@@ -369,7 +608,8 @@ fn main() { }
     fn valid_try_is_accepted() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn f() -> Result<(), Error> {
     let x = io::read_line()?;
     return Result::Ok(());
@@ -415,7 +655,8 @@ fn main() -> Result<(), Error> { return f(); }
     /// is refused outside one, and refuses a value that is not a future.
     #[test]
     fn await_is_typed_and_confined_to_async_fns() {
-        let ok = r#"async fn two() -> i64 effects(async) { 2 }
+        let ok = r#"use std::task;
+async fn two() -> i64 effects(async) { 2 }
 async fn four() -> i64 effects(async) { let x: i64 = two().await; x * 2 }
 fn main() -> () effects(async) { let v: i64 = task::block_on(four()); drop(v); }"#;
         let (result, _) = run("src/main.rv", ok, Profile::Core);
@@ -439,7 +680,8 @@ fn main() { }"#;
     /// entry point of `pure` (no effect group is unsupported any more).
     #[test]
     fn async_effect_is_accepted_under_core_and_refused_under_pure() {
-        let source = r#"fn main() -> () effects(async) { drop(task::yield_now()); }"#;
+        let source = r#"use std::task;
+fn main() -> () effects(async) { drop(task::yield_now()); }"#;
         let (core, _) = run("src/main.rv", source, Profile::Core);
         assert!(core.checked.is_some(), "async refused under core");
         let (pure, _) = run("src/main.rv", source, Profile::Pure);
@@ -456,7 +698,9 @@ fn main() { }"#;
             Profile::Core,
         );
         assert!(result.checked.is_some(), "{:?}", result.diags);
-        let src = r#"fn main() -> () effects(io, net, alloc) {
+        let src = r#"use std::io;
+use std::net;
+fn main() -> () effects(io, net, alloc) {
     let r: Result<TcpListener, Error> = net::listen("127.0.0.1:0");
     io::println(if r.is_ok() { "ok" } else { "err" });
 }"#;
@@ -510,7 +754,8 @@ fn main() { }
     fn pure_profile_rejects_io() {
         let (result, _) = run(
             "src/main.rv",
-            r#"fn main() { io::println("x"); }"#,
+            r#"use std::io;
+fn main() { io::println("x"); }"#,
             Profile::Pure,
         );
         error(&result, "E-EFF-PROFILE");
@@ -530,7 +775,8 @@ fn main() { }
     fn recursive_effects_reach_fixpoint_and_are_declared() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn a() -> () effects(io) { b(); }
 fn b() { a(); io::println("x"); }
 fn main() { a(); }
@@ -544,7 +790,8 @@ fn main() { a(); }
         // E-EFF-UNDECLARED.
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn a() -> () effects() { io::println("x"); }
 fn main() { a(); }
 "#,
@@ -564,6 +811,92 @@ fn main() { let s = m::make(); let x = s.secret; }
             Profile::Core,
         );
         error(&result, "E-RES-PRIVATE");
+    }
+
+    fn codes(result: &CheckResult) -> Vec<String> {
+        result.diags.iter().map(|d| d.code.clone()).collect()
+    }
+
+    /// RFC-CONTRACTS-1: accepted clauses, and each refusal rule.
+    #[test]
+    fn contract_clauses_are_checked() {
+        let ok = "fn div(a: i64, b: i64) -> i64 effects()\n    requires b != 0\n    ensures result * b + a % b == a\n{\n    return a / b;\n}\n\nfn main() -> () effects() {\n    let requires: i64 = div(4, 2);\n    drop(requires);\n}\n";
+        let (result, _) = run("src/main.rv", ok, Profile::Core);
+        assert!(result.checked.is_some(), "{:?}", codes(&result));
+        let cases = [
+            // CON-1: not a bool.
+            ("fn f(a: i64) -> i64 effects()\n    requires a + 1\n{\n    return a;\n}\n", "E-TYP-MISMATCH"),
+            // CON-2: not pure.
+            ("use std::io;\nfn noisy() -> bool effects(io) {\n    io::println(\"x\");\n    return true;\n}\n\nfn f(a: i64) -> i64 effects(io)\n    requires noisy()\n{\n    return a;\n}\n", "E-CON-EFFECT"),
+            // CON-3: a non-`Copy` parameter.
+            ("fn f(s: String) -> i64 effects(alloc)\n    requires s.len() > 0\n{\n    drop(s);\n    return 1;\n}\n", "E-CON-NONCOPY"),
+            // CON-3: a non-`Copy` result.
+            ("fn f() -> String effects(alloc)\n    ensures result.len() > 0\n{\n    return String::new();\n}\n", "E-CON-NONCOPY"),
+            // `result` exists only in `ensures` (CON-4).
+            ("fn f(a: i64) -> i64 effects()\n    requires result > 0\n{\n    return a;\n}\n", "E-RES-UNKNOWN"),
+        ];
+        for (src, code) in cases {
+            let src = format!("{src}\nfn main() -> () effects() {{\n}}\n");
+            let (result, _) = run("src/main.rv", &src, Profile::Core);
+            let c = codes(&result);
+            assert!(
+                c.contains(&code.to_string()),
+                "expected {code}, got {c:?} for\n{src}"
+            );
+        }
+        // CON-7: no clause in profile `rt`.
+        let rt = "fn f(a: i64) -> i64 effects()\n    requires a > 0\n{\n    return a;\n}\n\nfn main() -> () effects() {\n}\n";
+        let (result, _) = run("src/main.rv", rt, Profile::Rt);
+        assert!(
+            codes(&result).contains(&"E-EFF-PROFILE".to_string()),
+            "{:?}",
+            codes(&result)
+        );
+    }
+
+    /// DIAG-1.4 (V1-D1): a typing error in one function does not hide an
+    /// ownership error in another.
+    #[test]
+    fn a_type_error_does_not_hide_an_ownership_error_elsewhere() {
+        let src = "fn bad() -> i64 effects() {\n    return true;\n}\n\nfn moved() -> () effects(alloc) {\n    let s = String::new();\n    let t = s;\n    let u = s;\n    drop(t);\n    drop(u);\n}\n\nfn main() -> () effects(alloc) {\n    moved();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(result.checked.is_none());
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(c.contains(&"E-OWN-DOUBLE-MOVE".to_string()), "{c:?}");
+    }
+
+    /// Negative: in the *same* function the early phase still masks the
+    /// later one (DIAG-1.4, F-META-011).
+    #[test]
+    fn a_type_error_still_masks_an_ownership_error_in_the_same_function() {
+        let src = "fn both() -> i64 effects(alloc) {\n    let s = String::new();\n    let t = s;\n    let u = s;\n    drop(t);\n    drop(u);\n    return true;\n}\n\nfn main() -> () effects(alloc) {\n    let _x = both();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(!c.iter().any(|x| x.starts_with("E-OWN")), "{c:?}");
+    }
+
+    /// A resolution error in one function does not hide a typing error in
+    /// another.
+    #[test]
+    fn a_resolution_error_does_not_hide_a_type_error_elsewhere() {
+        let src = "fn a() -> () effects() {\n    inconnu();\n}\n\nfn b() -> i64 effects() {\n    return true;\n}\n\nfn main() -> () effects() {\n    a();\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(c.contains(&"E-RES-UNKNOWN".to_string()), "{c:?}");
+        assert!(c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+    }
+
+    /// Negative: an error outside every function (a field type) still stops
+    /// the later phases for the whole package.
+    #[test]
+    fn an_error_outside_functions_still_stops_everything() {
+        let src = "struct S {\n    x: Inconnu,\n}\n\nfn b() -> i64 effects() {\n    return true;\n}\n\nfn main() -> () effects() {\n}\n";
+        let (result, _) = run("src/main.rv", src, Profile::Core);
+        let c = codes(&result);
+        assert!(!c.contains(&"E-TYP-MISMATCH".to_string()), "{c:?}");
+        assert!(!c.is_empty());
     }
 
     #[test]
@@ -970,7 +1303,8 @@ mod inference_and_rules_tests {
     fn vec_inference_from_push_is_accepted() {
         let (result, _) = run(
             "src/main.rv",
-            r#"
+            r#"use std::io;
+
 fn main() -> Result<(), Error> {
     let mut out = Vec::new();
     let mut i: usize = 0;

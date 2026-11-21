@@ -11,6 +11,13 @@ pub enum CacheAction {
     Clean,
 }
 
+/// I/O journal of a `det` run (RFC-DETERMINISTIC-PROFILE-1 §2.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Journal {
+    Record(PathBuf),
+    Replay(PathBuf),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Init {
@@ -30,6 +37,8 @@ pub enum Command {
         reload: bool,
         /// `--dsp-block`: check the DSP block contract and the `rt` profile.
         dsp_block: bool,
+        /// `--sarif`: SARIF 2.1.0 on stdout instead of the human report (T19).
+        sarif: bool,
     },
     Build {
         path: PathBuf,
@@ -49,6 +58,10 @@ pub enum Command {
         args: Vec<String>,
         target: BuildTarget,
         json: bool,
+        /// `--profile det [--seed N]` (RFC-DETERMINISTIC-PROFILE-1 DET-3).
+        det_seed: Option<u64>,
+        /// `--record FILE` / `--replay FILE` (DET-9, DET-10), with `--profile det`.
+        journal: Option<Journal>,
     },
     Watch {
         path: PathBuf,
@@ -58,11 +71,19 @@ pub enum Command {
         max_rebuilds: Option<u64>,
         /// `--reload`: hot reload with state preservation (RFC-E11-HOT-RELOAD).
         reload: bool,
+        /// `--backend jit`: native development backend with per-function hot
+        /// swap (T15/T16) instead of `rustc`.
+        jit: bool,
+        /// `--entry NAME` (jit backend only): the function run after each
+        /// accepted change.
+        entry: Option<String>,
     },
     Test {
         path: PathBuf,
         filter: Option<String>,
         json: bool,
+        /// `--profile det [--seeds N]`: run every test for seeds `0..N` (DET-5).
+        det_seeds: Option<u64>,
     },
     Fmt {
         path: PathBuf,
@@ -183,11 +204,13 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     let mut rt_entry: Option<String> = None;
     let mut reload = false;
     let mut dsp_block = false;
+    let mut sarif = false;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
+            "--sarif" => sarif = true,
             "--reload" => reload = true,
             "--dsp-block" => dsp_block = true,
             "--locked" => locked = true,
@@ -216,6 +239,9 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
     if rt_entry.is_some() && profile != Profile::Rt {
         return Err("`--rt-entry` requires `--profile rt`".to_string());
     }
+    if sarif && json {
+        return Err("`--sarif` and `--json` are exclusive".to_string());
+    }
     Ok(Command::Check {
         path: path.unwrap_or_else(default_path),
         json,
@@ -225,12 +251,13 @@ fn parse_check(rest: &[String]) -> Result<Command, String> {
         rt_entry,
         reload,
         dsp_block,
+        sarif,
     })
 }
 
 fn parse_profile(value: &str) -> Result<Profile, String> {
     Profile::parse(value)
-        .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure` or `rt`"))
+        .ok_or_else(|| format!("invalid profile `{value}`; expected `core`, `pure`, `rt` or `det`"))
 }
 
 fn parse_target(value: &str, command: &str) -> Result<BuildTarget, String> {
@@ -319,6 +346,9 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
     let mut child: Vec<String> = Vec::new();
     let mut target = BuildTarget::Native;
     let mut json = false;
+    let mut det = false;
+    let mut seed: Option<u64> = None;
+    let mut journal: Option<Journal> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
@@ -327,7 +357,36 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
                 child.extend(rest[i + 1..].iter().cloned());
                 break;
             }
+            "--record" | "--replay" => {
+                let value = option_value(rest, &mut i, arg)?;
+                if journal.is_some() {
+                    return Err("`--record` and `--replay` are exclusive".to_string());
+                }
+                journal = Some(if arg == "--record" {
+                    Journal::Record(PathBuf::from(value))
+                } else {
+                    Journal::Replay(PathBuf::from(value))
+                });
+            }
             "--json" => json = true,
+            "--profile" => {
+                let value = option_value(rest, &mut i, "--profile")?;
+                if parse_profile(&value)? != Profile::Det {
+                    return Err(format!(
+                        "`run --profile {value}`: only `det` changes how a program runs; \
+                         check other profiles with `ravum-lang check --profile {value}`"
+                    ));
+                }
+                det = true;
+            }
+            "--seed" => {
+                let value = option_value(rest, &mut i, "--seed")?;
+                seed = Some(
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| format!("invalid seed `{value}`; expected a u64"))?,
+                );
+            }
             "--target" => {
                 let value = option_value(rest, &mut i, "--target")?;
                 target = parse_target(&value, "run")?;
@@ -344,11 +403,25 @@ fn parse_run(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if seed.is_some() && !det {
+        return Err("`--seed` requires `--profile det`".to_string());
+    }
+    if det && target.is_wasm() {
+        return Err("`--profile det` runs native programs only".to_string());
+    }
+    if journal.is_some() && !det {
+        return Err("`--record`/`--replay` require `--profile det`".to_string());
+    }
+    if matches!(journal, Some(Journal::Replay(_))) && seed.is_some() {
+        return Err("`--replay` reads the seed from the journal; do not pass `--seed`".to_string());
+    }
     Ok(Command::Run {
         path: path.unwrap_or_else(default_path),
         args: child,
         target,
         json,
+        det_seed: det.then(|| seed.unwrap_or(0)),
+        journal,
     })
 }
 
@@ -358,12 +431,25 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
     let mut release = false;
     let mut max_rebuilds: Option<u64> = None;
     let mut reload = false;
+    let mut jit = false;
+    let mut entry: Option<String> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--run" => run = true,
             "--reload" => reload = true,
+            "--backend" => {
+                let value = option_value(rest, &mut i, "--backend")?;
+                jit = parse_backend(&value)?;
+            }
+            other if other.starts_with("--backend=") => {
+                jit = parse_backend(other.trim_start_matches("--backend="))?;
+            }
+            "--entry" => entry = Some(option_value(rest, &mut i, "--entry")?),
+            other if other.starts_with("--entry=") => {
+                entry = Some(other.trim_start_matches("--entry=").to_string());
+            }
             "--release" => release = true,
             "--max-rebuilds" => {
                 let value = option_value(rest, &mut i, "--max-rebuilds")?;
@@ -387,13 +473,34 @@ fn parse_watch(rest: &[String]) -> Result<Command, String> {
                 .to_string(),
         );
     }
+    if jit && (run || reload || release) {
+        return Err(
+            "`--backend jit` runs the program in process; it takes neither `--run`, `--reload` nor `--release`"
+                .to_string(),
+        );
+    }
+    if entry.is_some() && !jit {
+        return Err("`--entry` requires `--backend jit`".to_string());
+    }
     Ok(Command::Watch {
         path: path.unwrap_or_else(default_path),
         run,
         release,
         max_rebuilds,
         reload,
+        jit,
+        entry,
     })
+}
+
+fn parse_backend(value: &str) -> Result<bool, String> {
+    match value {
+        "jit" => Ok(true),
+        "rustc" => Ok(false),
+        other => Err(format!(
+            "unknown backend `{other}` (expected `rustc` or `jit`)"
+        )),
+    }
 }
 
 fn parse_max_rebuilds(value: &str) -> Result<u64, String> {
@@ -406,11 +513,33 @@ fn parse_test(rest: &[String]) -> Result<Command, String> {
     let mut path: Option<PathBuf> = None;
     let mut filter: Option<String> = None;
     let mut json = false;
+    let mut det = false;
+    let mut seeds: Option<u64> = None;
     let mut i = 0;
     while i < rest.len() {
         let arg = rest[i].as_str();
         match arg {
             "--json" => json = true,
+            "--profile" => {
+                let value = option_value(rest, &mut i, "--profile")?;
+                if parse_profile(&value)? != Profile::Det {
+                    return Err(format!(
+                        "`test --profile {value}`: only `det` changes how tests run; \
+                         check other profiles with `ravum-lang check --profile {value}`"
+                    ));
+                }
+                det = true;
+            }
+            "--seeds" => {
+                let value = option_value(rest, &mut i, "--seeds")?;
+                seeds = Some(
+                    value
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|n| (1..=10_000).contains(n))
+                        .ok_or_else(|| format!("invalid `--seeds {value}`; expected 1..=10000"))?,
+                );
+            }
             "--filter" => filter = Some(option_value(rest, &mut i, "--filter")?),
             other if other.starts_with("--filter=") => {
                 filter = Some(other.trim_start_matches("--filter=").to_string());
@@ -422,10 +551,14 @@ fn parse_test(rest: &[String]) -> Result<Command, String> {
         }
         i += 1;
     }
+    if seeds.is_some() && !det {
+        return Err("`--seeds` requires `--profile det`".to_string());
+    }
     Ok(Command::Test {
         path: path.unwrap_or_else(default_path),
         filter,
         json,
+        det_seeds: det.then(|| seeds.unwrap_or(1)),
     })
 }
 
@@ -551,14 +684,15 @@ USAGE:
 
 COMMANDS:
     init <dir> [--lib] [--force]        Create a package (`ravum.toml` + `src/`)
-    check [PATH] [--json] [--profile core|pure|rt] [--rt-entry FN] [--locked] [--timings]
+    check [PATH] [--json|--sarif] [--profile core|pure|rt|det] [--rt-entry FN] [--locked] [--timings]
                                         Load, resolve and check a package or a `.rv` file
     build [PATH] [--release] [--target TRIPLE] [--emit-rust FILE] [--emit-ir] [--rt-entry FN] [--timings]
                                         Check, generate Rust and compile it with `rustc`
-    run [PATH] [--json] [--target TRIPLE] [-- ARGS...]
+    run [PATH] [--json] [--target TRIPLE] [--profile det [--seed N] [--record|--replay FILE]] [-- ARGS...]
                                         Build, then run the binary (args/stdin/stdout/stderr forwarded)
     watch [PATH] [--run|--reload] [--release]  Poll sources and rebuild on change (alias: `dev`)
-    test [PATH] [--filter TEXT] [--json]
+    watch [PATH] --backend jit [--entry NAME]  Native in-process backend, per-function hot swap
+    test [PATH] [--filter TEXT] [--json] [--profile det [--seeds N]]
                                         Build the test runner, run it, parse `test ... ok/FAILED`
     fmt [PATH] [--check]                Format every `.rv` file, or verify with `--check`
     lint [PATH] [--deny CODE]...        Report checker warnings; `--deny` turns one into an error
@@ -608,7 +742,7 @@ pub fn help_for(topic: &str) -> String {
                    Creates `ravum.toml`, `src/main.rv` (or `src/lib.rv` with --lib) and a\n\
                    `.gitignore` that ignores `.ravum/`. Refuses a non-empty directory\n\
                    unless --force is given; --force overwrites only the generated files.\n",
-        "check" => "USAGE: ravum-lang check [PATH] [--json] [--profile core|pure|rt] \
+        "check" => "USAGE: ravum-lang check [PATH] [--json|--sarif] [--profile core|pure|rt|det] \
                     [--rt-entry FN] [--locked] [--timings]\n\n\
                     Loads the package (manifest, dependency graph, modules), validates the\n\
                     lockfile and runs the checker. Exit 0 when there is no error; warnings do\n\
@@ -820,16 +954,44 @@ mod tests {
                     release,
                     max_rebuilds,
                     reload,
+                    jit,
+                    entry,
                 }) => {
                     assert_eq!(path, PathBuf::from("pkg"));
                     assert!(run);
                     assert!(release);
                     assert_eq!(max_rebuilds, Some(2));
                     assert!(!reload);
+                    assert!(!jit, "the default backend stays rustc");
+                    assert_eq!(entry, None);
                 }
                 other => panic!("unexpected {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn watch_backend_jit_parses_and_excludes_rustc_only_flags() {
+        match parse(&args(&[
+            "watch",
+            "--backend",
+            "jit",
+            "--entry",
+            "check",
+            "pkg",
+        ]))
+        .unwrap()
+        {
+            Invocation::Command(Command::Watch { jit, entry, .. }) => {
+                assert!(jit);
+                assert_eq!(entry.as_deref(), Some("check"));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(parse(&args(&["watch", "--backend=jit", "--run"])).is_err());
+        assert!(parse(&args(&["watch", "--backend", "jit", "--reload"])).is_err());
+        assert!(parse(&args(&["watch", "--backend", "gcc"])).is_err());
+        assert!(parse(&args(&["watch", "--entry", "main"])).is_err());
     }
 
     #[test]

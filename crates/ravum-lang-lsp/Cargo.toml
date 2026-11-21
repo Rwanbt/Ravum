@@ -8,6 +8,7 @@ publish.workspace = true
 description = "Ravum Core 1.0 language server (LSP over stdio: diagnostics, hover, navigation, rename, completion, symbols, formatting)."
 
 [dependencies]
+ravum-lang-incr = { path = "../ravum-lang-incr" }
 ravum-lang-syntax = { workspace = true }
 ravum-lang-sema = { workspace = true }
 serde_json = { workspace = true }

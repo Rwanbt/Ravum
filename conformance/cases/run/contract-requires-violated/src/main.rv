@@ -1,0 +1,15 @@
+use std::io;
+
+fn div(a: i64, b: i64) -> i64 effects()
+    requires b != 0
+{
+    return a / b;
+}
+
+fn zero(n: i64) -> i64 effects() {
+    return n - n;
+}
+
+fn main() -> () effects(io, alloc) {
+    io::println(&div(1, zero(5)).to_string());
+}

@@ -1,3 +1,5 @@
+use std::io;
+
 struct Card {
     text: &str,
 }

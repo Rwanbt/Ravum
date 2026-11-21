@@ -1,5 +1,6 @@
 // oracle: value f64 -2
 // MACH-5.4: sqrt correctly rounded, round ties away from zero.
+use std::math;
 fn check() -> f64 effects() {
     let r = math::round(-0.5);
     let s = math::sqrt(4.0);

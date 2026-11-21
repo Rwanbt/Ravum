@@ -1,0 +1,11 @@
+{
+  "id": "types/l5b-dsp3-migrate-invalid",
+  "mode": "compile-fail",
+  "args": [
+    "--dsp-block"
+  ],
+  "expect_codes": [
+    "E-DSP-ENTRY"
+  ],
+  "notes": "RFC-DSP-ABI-2 DSP3-5 (MUST): a DSP `migrate` takes an ABI 3 state type other than `State`; `migrate(old: String)` is refused."
+}

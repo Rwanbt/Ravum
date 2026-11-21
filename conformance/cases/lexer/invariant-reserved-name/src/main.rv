@@ -1,0 +1,5 @@
+fn __rv_invariant_0() -> () effects() {
+}
+
+fn main() -> () effects() {
+}

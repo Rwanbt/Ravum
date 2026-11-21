@@ -1,3 +1,5 @@
+use std::io;
+
 fn main() {
     let a: i64 = 1;
     let s: u8 = 3;

@@ -1,0 +1,6 @@
+{
+  "id": "run/contract-holds",
+  "mode": "run-pass",
+  "stdout_contains": "11\n3\n",
+  "notes": "RFC-CONTRACTS-1 (PROPOSED): `requires`/`ensures` that hold; `ensures` reads a `mut` parameter at its entry value (CON-3); `requires` stays an ordinary identifier elsewhere."
+}

@@ -1,0 +1,164 @@
+// T9 browser vertical (V2-L6): the notes service of `http-notes`, served to a
+// real browser. Usage: `ravum-lang run packages/http-notes-web -- <port> <db>`
+// (port 0 = ephemeral). Prints `listening <port>` once ready, then serves
+// until killed, one connection per request (STD-19.8):
+//   GET  /               -> 200, the HTML page (form + list, plain JS)
+//   GET  /notes          -> 200, one `<id> <text>` per line, oldest first
+//   POST /notes          body = text -> 201 `created <id>`; empty -> 400
+//   POST /notes/delete   body = id   -> 200 `deleted <id>`; bad id -> 400,
+//                                       unknown id -> 404
+//   anything else        -> 404 / 405
+// The notes live in the SQLite file `<db>`, so a test can read them back.
+
+use std::env;
+use std::io;
+use std::string;
+use std::http;
+use std::net;
+
+const PAGE: &str = "<!doctype html>\n<html><head><meta charset='utf-8'><title>Ravum notes</title></head>\n<body>\n<h1>Ravum notes</h1>\n<form id='add'><input id='text' name='text' autocomplete='off'><button id='save' type='submit'>Add</button></form>\n<p id='error' role='alert'></p>\n<ul id='notes'></ul>\n<script>\nconst list = document.getElementById('notes');\nconst error = document.getElementById('error');\nasync function refresh() {\n  const text = await (await fetch('/notes')).text();\n  list.replaceChildren();\n  for (const line of text.split('\\n')) {\n    if (line === '') continue;\n    const space = line.indexOf(' ');\n    const id = line.slice(0, space);\n    const li = document.createElement('li');\n    li.dataset.id = id;\n    const label = document.createElement('span');\n    label.textContent = line.slice(space + 1);\n    const del = document.createElement('button');\n    del.textContent = 'Delete';\n    del.className = 'delete';\n    del.onclick = async () => {\n      const r = await fetch('/notes/delete', { method: 'POST', body: id });\n      error.textContent = r.ok ? '' : await r.text();\n      await refresh();\n    };\n    li.append(label, del);\n    list.append(li);\n  }\n  document.body.dataset.ready = 'yes';\n}\ndocument.getElementById('add').onsubmit = async (event) => {\n  event.preventDefault();\n  const input = document.getElementById('text');\n  const r = await fetch('/notes', { method: 'POST', body: input.value });\n  error.textContent = r.ok ? '' : await r.text();\n  if (r.ok) input.value = '';\n  await refresh();\n};\nrefresh();\n</script>\n</body></html>\n";
+
+fn note_lines(db: &sqlite::Db) -> Result < String, Error > effects(alloc, panic, unsafe, ffi) {
+    let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT id, body FROM notes ORDER BY id DESC", Vec::new())?;
+    let mut rest: Vec<sqlite::Row> = rows;
+    let mut text: String = String::new();
+    let mut done: bool = false;
+    while !done {
+        match rest.pop() {
+            Some(row) => {
+                let mut values: Vec<sqlite::Value> = row.values;
+                let body: sqlite::Value = values.pop().unwrap();
+                let id: sqlite::Value = values.pop().unwrap();
+                match id {
+                    sqlite::Value::Int(n) => text.push_str(n.to_string().as_str()),
+                    _ => text.push_str("?"),
+                }
+                text.push_str(" ");
+                match body {
+                    sqlite::Value::Text(t) => text.push_str(t.as_str()),
+                    _ => text.push_str("?"),
+                }
+                text.push_str("\n");
+            }
+            None => {
+                done = true;
+            }
+        }
+    }
+    Ok(text)
+}
+
+fn last_id(db: &sqlite::Db) -> Result < String, Error > effects(alloc, panic, unsafe, ffi) {
+    let rows: Vec<sqlite::Row> = sqlite::query(db, "SELECT last_insert_rowid()", Vec::new())?;
+    let mut rest: Vec<sqlite::Row> = rows;
+    let mut out: String = String::new();
+    match rest.pop() {
+        Some(row) => {
+            let mut values: Vec<sqlite::Value> = row.values;
+            match values.pop() {
+                Some(sqlite::Value::Int(n)) => out.push_str(n.to_string().as_str()),
+                _ => out.push_str("?"),
+            }
+        }
+        None => out.push_str("?"),
+    }
+    Ok(out)
+}
+
+fn add(db: &sqlite::Db, stream: &mut TcpStream, text: String) -> Result < (), Error > effects(net, alloc, panic, unsafe, ffi) {
+    if text.len() == 0 {
+        return http::respond(stream, 400, "text/plain", "empty note\n");
+    }
+    let mut params: Vec<sqlite::Value> = Vec::new();
+    params.push(sqlite::Value::Text(text));
+    let changed: i64 = sqlite::execute(db, "INSERT INTO notes (body) VALUES (?1)", params)?;
+    drop(changed);
+    let mut reply: String = String::from("created ");
+    reply.push_str(last_id(db)?.as_str());
+    reply.push_str("\n");
+    http::respond(stream, 201, "text/plain", reply.as_str())
+}
+
+fn delete(db: &sqlite::Db, stream: &mut TcpStream, body: String) -> Result < (), Error > effects(net, alloc, panic, unsafe, ffi) {
+    match string::parse_i64(body.as_str()) {
+        Ok(id) => {
+            let mut params: Vec<sqlite::Value> = Vec::new();
+            params.push(sqlite::Value::Int(id));
+            let changed: i64 = sqlite::execute(db, "DELETE FROM notes WHERE id = ?1", params)?;
+            if changed == 0 {
+                return http::respond(stream, 404, "text/plain", "no such note\n");
+            }
+            let mut reply: String = String::from("deleted ");
+            reply.push_str(id.to_string().as_str());
+            reply.push_str("\n");
+            http::respond(stream, 200, "text/plain", reply.as_str())
+        }
+        Err(e) => {
+            drop(e);
+            http::respond(stream, 400, "text/plain", "bad note id\n")
+        }
+    }
+}
+
+fn handle(db: &sqlite::Db, stream: &mut TcpStream) -> Result < (), Error > effects(net, alloc, panic, unsafe, ffi) {
+    let request: HttpRequest = http::read_request(stream)?;
+    let method: String = http::method(&request);
+    let path: String = http::path(&request);
+    if path.as_str() == "/" {
+        if method.as_str() == "GET" {
+            return http::respond(stream, 200, "text/html; charset=utf-8", PAGE);
+        }
+        return http::respond(stream, 405, "text/plain", "method not allowed\n");
+    }
+    if path.as_str() == "/notes" {
+        if method.as_str() == "GET" {
+            let text: String = note_lines(db)?;
+            return http::respond(stream, 200, "text/plain; charset=utf-8", text.as_str());
+        }
+        if method.as_str() == "POST" {
+            return add(db, stream, http::body(&request));
+        }
+        return http::respond(stream, 405, "text/plain", "method not allowed\n");
+    }
+    if path.as_str() == "/notes/delete" {
+        if method.as_str() == "POST" {
+            return delete(db, stream, http::body(&request));
+        }
+        return http::respond(stream, 405, "text/plain", "method not allowed\n");
+    }
+    http::respond(stream, 404, "text/plain", "not found\n")
+}
+
+fn main() -> Result < (), Error > effects(io, net, alloc, panic, unsafe, ffi) {
+    let mut args: Vec<String> = env::args();
+    if args.len() != 3 {
+        return Err(Error::new("usage: http-notes-web <port> <db-path>"));
+    }
+    let db_path: String = args.pop().unwrap();
+    let port: String = args.pop().unwrap();
+    let db: sqlite::Db = sqlite::open(db_path.as_str())?;
+    let made: i64 = sqlite::execute(&db, "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)", Vec::new())?;
+    drop(made);
+    let mut addr: String = String::from("127.0.0.1:");
+    addr.push_str(port.as_str());
+    let listener: TcpListener = net::listen(addr.as_str())?;
+    let mut ready: String = String::from("listening ");
+    ready.push_str(net::local_port(&listener).to_string().as_str());
+    io::println(ready.as_str());
+    // Serves until the process is killed: `running` is never cleared.
+    let running: bool = true;
+    while running {
+        match net::accept(&listener) {
+            Ok(conn) => {
+                let mut stream: TcpStream = conn;
+                let outcome: Result<(), Error> = handle(&db, &mut stream);
+                if outcome.is_err() {
+                    let sent: Result<(), Error> = http::respond(&mut stream, 500, "text/plain", "error\n");
+                    drop(sent);
+                }
+            }
+            Err(e) => drop(e),
+        }
+    }
+    Ok(())
+}

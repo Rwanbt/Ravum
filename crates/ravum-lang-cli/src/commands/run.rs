@@ -166,7 +166,14 @@ impl Report<'_> {
     }
 }
 
-pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output: bool) -> i32 {
+pub fn run(
+    path: &Path,
+    child_args: &[String],
+    target: BuildTarget,
+    json_output: bool,
+    det_seed: Option<u64>,
+    journal: Option<&crate::args::Journal>,
+) -> i32 {
     let report = Report {
         path,
         json: json_output,
@@ -185,7 +192,14 @@ pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output:
         );
     }
 
-    let frontend = pipeline::analyze(path, Profile::Core, false);
+    // `det` (DET-1): the program must not reach an input it cannot replay;
+    // the run itself is scheduled by the seed (DET-3).
+    let profile = match (det_seed, journal) {
+        (Some(_), Some(_)) => Profile::DetIo,
+        (Some(_), None) => Profile::Det,
+        _ => Profile::Core,
+    };
+    let frontend = pipeline::analyze(path, profile, false);
     if !frontend.success() {
         if json_output {
             let diagnostics = json::diagnostics(frontend.diags.as_slice(), &frontend.pkg.sources);
@@ -215,7 +229,9 @@ pub fn run(path: &Path, child_args: &[String], target: BuildTarget, json_output:
     if artifacts.target.is_wasm() {
         run_wasm(&report, &frontend, &artifacts, child_args)
     } else {
-        run_native(&report, &frontend, &artifacts, child_args)
+        run_native(
+            &report, &frontend, &artifacts, child_args, det_seed, journal,
+        )
     }
 }
 
@@ -224,13 +240,126 @@ fn run_native(
     frontend: &pipeline::Frontend,
     artifacts: &Artifacts,
     child_args: &[String],
+    det_seed: Option<u64>,
+    journal: Option<&crate::args::Journal>,
 ) -> i32 {
     eprintln!("running: {}", util::pretty_path(&artifacts.binary));
     let mut command = Command::new(&artifacts.binary);
     command.args(child_args);
+    for var in [
+        "RAVUM_DET_SEED",
+        "RAVUM_DET_RECORD",
+        "RAVUM_DET_REPLAY",
+        "RAVUM_DET_HEADER",
+    ] {
+        command.env_remove(var);
+    }
+    let mut det_seed = det_seed;
+    if let Some(journal) = journal {
+        // DET-13: the header binds a journal to this program and platform.
+        // The deterministic build identity (source, dependencies, options,
+        // target, rustc, generator) names the program; the bytes of the
+        // binary do not, since a rebuild is not bit-identical on every
+        // linker (macOS, Windows without /Brepro).
+        let build = artifacts
+            .identity
+            .digest
+            .trim_start_matches("sha256:")
+            .to_string();
+        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+        let absolute = |p: &Path| {
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                std::env::current_dir().unwrap_or_default().join(p)
+            }
+        };
+        match journal {
+            crate::args::Journal::Record(path) => {
+                let seed = det_seed.unwrap_or(0);
+                let header = format!(
+                    "ravum-rvlog-1\tseed={seed}\tbuild=sha256:{build}\tplatform={platform}"
+                );
+                // DET-14: the journal holds what the program read.
+                eprintln!(
+                    "profile det: recording I/O to {} (it contains the data the program reads)",
+                    util::pretty_path(path)
+                );
+                command.env("RAVUM_DET_RECORD", absolute(path));
+                command.env("RAVUM_DET_HEADER", header);
+            }
+            crate::args::Journal::Replay(path) => {
+                let text = match std::fs::read_to_string(path) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        util::err(format!(
+                            "run: cannot read the journal `{}`: {error}",
+                            util::pretty_path(path)
+                        ));
+                        return util::EXIT_USAGE;
+                    }
+                };
+                let header = text.lines().next().unwrap_or("");
+                let fields: Vec<&str> = header.split('\t').collect();
+                let seed = fields
+                    .iter()
+                    .find_map(|f| f.strip_prefix("seed="))
+                    .and_then(|s| s.parse::<u64>().ok());
+                let expected_build = format!("build=sha256:{build}");
+                let expected_platform = format!("platform={platform}");
+                let matches = fields.first() == Some(&"ravum-rvlog-1")
+                    && fields.contains(&expected_build.as_str())
+                    && fields.contains(&expected_platform.as_str());
+                match (seed, matches) {
+                    (Some(seed), true) => {
+                        det_seed = Some(seed);
+                        eprintln!(
+                            "profile det: replaying I/O from {}",
+                            util::pretty_path(path)
+                        );
+                        command.env("RAVUM_DET_REPLAY", absolute(path));
+                    }
+                    _ => {
+                        util::err(format!(
+                            "run: the journal `{}` was not recorded by this program on this \
+                             platform (header `{header}`); refusing to replay (DET-13)",
+                            util::pretty_path(path)
+                        ));
+                        return util::EXIT_USAGE;
+                    }
+                }
+            }
+        }
+    }
+    if let Some(seed) = det_seed {
+        eprintln!("profile det: seed={seed}");
+        command.env("RAVUM_DET_SEED", seed.to_string());
+    }
     command.current_dir(frontend.root());
     command.stdout(report.program_stdout());
-    match command.status() {
+    // V2-K1: an interrupted `run` (SIGINT/SIGTERM, console Ctrl+C) stops the
+    // program it launched instead of leaving it running. SIGKILL cannot be
+    // caught by any process: the child then survives (documented limit).
+    super::watch::install_interrupt_handler();
+    let status = command.spawn().and_then(|mut child| loop {
+        if let Some(status) = child.try_wait()? {
+            break Ok(status);
+        }
+        if super::watch::interrupt_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            break Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "interrupted; the program was stopped",
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    });
+    match status {
+        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+            util::err("run: interrupted; the program was stopped");
+            130
+        }
         Ok(status) => report.ran(frontend, child_exit_code(status.code()), "run: the program"),
         Err(error) => {
             let exit = if error.kind() == std::io::ErrorKind::NotFound {

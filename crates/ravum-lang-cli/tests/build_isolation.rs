@@ -111,7 +111,7 @@ fn package(temp: &TempDir, name: &str, text: &str) -> PathBuf {
 fn write_source(package: &Path, text: &str) {
     fs::write(
         package.join("src/main.rv"),
-        format!("fn main() {{\n    io::println(\"{text}\");\n}}\n"),
+        format!("use std::io;\nfn main() {{\n    io::println(\"{text}\");\n}}\n"),
     )
     .expect("write source");
 }

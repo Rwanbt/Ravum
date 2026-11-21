@@ -1,0 +1,4 @@
+[package]
+name = "types-l5b-dsp3-migrate-invalid"
+version = "0.1.0"
+edition = "core-1.0"

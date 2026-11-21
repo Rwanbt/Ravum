@@ -342,7 +342,7 @@ fn diagnostics_of(message: &Value) -> &Vec<Value> {
 // Tests
 // ---------------------------------------------------------------------------
 
-const SOURCE: &str = "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {\n    let total: i32 = add(1, 2);\n    io::println(&total.to_string());\n}\n";
+const SOURCE: &str = "use std::io;\nfn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {\n    let total: i32 = add(1, 2);\n    io::println(&total.to_string());\n}\n";
 
 #[test]
 fn initialize_advertises_a_real_language_server() {
@@ -503,8 +503,8 @@ fn definition_and_references_find_the_declaration() {
     assert_eq!(locations.len(), 1, "expected one definition: {locations:?}");
     assert_eq!(
         locations[0]["range"]["start"]["line"].as_u64(),
-        Some(0),
-        "the declaration of `add` is on line 0"
+        Some(1),
+        "the declaration of `add` is on line 1 (after `use std::io;`)"
     );
     assert_eq!(
         locations[0]["range"]["start"]["character"].as_u64(),

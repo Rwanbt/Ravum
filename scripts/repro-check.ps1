@@ -9,6 +9,13 @@
 #   * CARGO_INCREMENTAL=0     — incremental objects embed run-specific state.
 #   * SOURCE_DATE_EPOCH=0     — pins any honoured build timestamp.
 #   * --remap-path-prefix     — without it, absolute paths leak into the binary.
+#                               Both target directories are remapped too: a
+#                               dependency that `include!`s a generated file
+#                               from OUT_DIR (Cranelift, linked since T15)
+#                               embeds a path under the target directory, and
+#                               the two targets differ by name (`-a`, `-b`).
+#                               rustc applies the last matching prefix, so the
+#                               target remaps (longer, under $root) come last.
 #   * -C link-arg=/Brepro     — MSVC writes the wall-clock time into the COFF
 #                               header and the debug directory. Measured: without
 #                               it, two builds differ by exactly 20 bytes, all of
@@ -68,10 +75,10 @@ if ($LASTEXITCODE -ge 8) {
 }
 
 Write-Host "repro-check: build #1 (root A, target A)"
-Invoke-Build -Workdir $root -TargetDir $firstTarget -Remap "--remap-path-prefix=$root=/rv --remap-path-prefix=$clone=/rv"
+Invoke-Build -Workdir $root -TargetDir $firstTarget -Remap "--remap-path-prefix=$root=/rv --remap-path-prefix=$clone=/rv --remap-path-prefix=$firstTarget=/rv-target --remap-path-prefix=$secondTarget=/rv-target"
 
 Write-Host "repro-check: build #2 (root B, target B)"
-Invoke-Build -Workdir $clone -TargetDir $secondTarget -Remap "--remap-path-prefix=$root=/rv --remap-path-prefix=$clone=/rv"
+Invoke-Build -Workdir $clone -TargetDir $secondTarget -Remap "--remap-path-prefix=$root=/rv --remap-path-prefix=$clone=/rv --remap-path-prefix=$firstTarget=/rv-target --remap-path-prefix=$secondTarget=/rv-target"
 
 $first = Join-Path $firstTarget "$Profile\$binaryName"
 $second = Join-Path $secondTarget "$Profile\$binaryName"

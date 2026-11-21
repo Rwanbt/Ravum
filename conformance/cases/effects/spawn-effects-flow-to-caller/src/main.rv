@@ -1,3 +1,6 @@
+use std::io;
+use std::thread;
+
 fn talk(n: i64) -> () effects(io, alloc) {
     io::println(n.to_string().as_str());
 }

@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const MAIN: &str = "extern \"C\" from \"demo\" {\n    fn demo_scale(x: i32) -> i32;\n}\n\n\
+const MAIN: &str = "use std::io;\nextern \"C\" from \"demo\" {\n    fn demo_scale(x: i32) -> i32;\n}\n\n\
 fn main() -> () effects(io, alloc, unsafe, ffi) {\n    let v: i32 = unsafe { demo_scale(14) };\n    io::println(v.to_string().as_str());\n}\n";
 
 fn build_library(root: &Path, factor: i32) -> String {
@@ -128,7 +128,9 @@ const char *nothing(void) { return NULL; }
 const char *bad_utf8(void) { return "\xff\xfe"; }
 "#;
 
-const TEXT_MAIN: &str = r#"extern "C" from "t" {
+const TEXT_MAIN: &str = r#"use std::io;
+use std::ffi;
+extern "C" from "t" {
     fn box_new(v: i32) -> CHandle;
     fn box_get(b: CHandle) -> i32;
     fn box_free(b: CHandle);

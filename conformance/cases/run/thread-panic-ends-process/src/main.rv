@@ -1,3 +1,6 @@
+use std::io;
+use std::thread;
+
 fn boom(n: i64) -> i64 effects(panic) {
     panic("worker failed");
     n

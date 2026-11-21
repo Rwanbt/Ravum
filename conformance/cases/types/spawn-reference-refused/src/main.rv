@@ -1,3 +1,5 @@
+use std::thread;
+
 fn show(s: &String) -> usize effects() {
     s.len()
 }
