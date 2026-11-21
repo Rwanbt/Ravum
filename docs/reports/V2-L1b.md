@@ -127,7 +127,7 @@
   `record_refuses_the_unjournaled_async_network_functions`, devenu sans
   objet.
 
-## Écart d'implémentation de DET-13 (à valider par le responsable)
+## Écart d'implémentation de DET-13 (accepté et amendé par le responsable, 2026-11-21)
 
 DET-13 (RFC ratifiée) prévoit en tête du journal un « digest de la source et
 du binaire ». L'implémentation lie le journal à l'**identité de build**

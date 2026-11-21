@@ -63,3 +63,4 @@
 - **V2-M1, réécritures (responsable, 2026-11-21)** : MACH-9.1, CONC-3.1 et ABI-5.1 remplacées par les textes du §D de la revue (état actuel : machine de référence, blocs DSP `rt`, ABI DSP versionné).
 - **STD-1.4 (responsable, 2026-11-21)** : `fs::read_to_string` et `fs::write_string` n'ont pas l'effet `io` ; `stdlib.md` et `effects.md` alignés sur le checker.
 - **FEAT-1.5 (responsable, 2026-11-21)** : règle réécrite pour décrire le format réel des cas (`case.json` + programme), imposé par `tools/conformance`.
+- **DET-13 (responsable, 2026-11-21)** : l'en-tête du journal `det` porte l'identité de build déterministe au lieu du digest des octets du binaire ; RFC-DETERMINISTIC-PROFILE-1 amendée.
