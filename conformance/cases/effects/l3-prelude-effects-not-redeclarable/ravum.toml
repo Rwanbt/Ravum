@@ -1,0 +1,4 @@
+[package]
+name = "effects-l3-prelude-effects-not-redeclarable"
+version = "0.1.0"
+edition = "core-1.0"
