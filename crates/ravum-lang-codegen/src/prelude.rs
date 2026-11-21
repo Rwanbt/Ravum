@@ -2413,7 +2413,6 @@ macro_rules! rv_canon_tuple {
     ($($name:ident),+) => {
         impl<$($name: RvCanon),+> RvCanon for ($($name,)+) {
             fn rv_put(&self, out: &mut String) {
-                #[allow(non_snake_case)]
                 let ($($name,)+) = self;
                 out.push('(');
                 $( $name.rv_put(out); out.push(';'); )+

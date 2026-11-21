@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| Statut | **PROPOSED** — revue de l'agent, à trancher par le responsable |
+| Statut | **ACCEPTED** — tri confirmé par le responsable le 2026-11-21 ; ABI-4.7 amendée (liste fermée) ; réécritures de MACH-9.1, CONC-3.1, ABI-5.1 **PROPOSED** (§D) |
 | Date | 2026-11-21 |
 | SHA | `078ca20` |
 
@@ -47,5 +47,20 @@ procédure humaine (RFC, revue, journal) ; **D** définition de vocabulaire.
   UNS-9.1, 9.2, 9.4, 9.5.
 - **D** (définitions) : FEAT-1.1, 1.2.
 
-Total : 13 + 4 + 63 = 80. Rien n'est modifié dans
-`tools/must_declarative.txt` tant que le responsable n'a pas tranché.
+Total : 13 + 4 + 63 = 80. Appliqué : `tools/must_declarative.txt` ne garde
+que les 63 du §C ; les 17 autres sont comptées comme testables non
+rattachées par `must_audit.py` (28 au total, travail à faire).
+
+## D. Réécritures proposées (non appliquées, texte normatif)
+
+| Règle | Texte proposé |
+|---|---|
+| MACH-9.1 | « Une sémantique Ravum n'est dite « vérifiée » que pour les programmes du corpus que la machine de référence (`ravum-core-machine`) exécute avec le résultat attendu : `TESTED` sur ce corpus, jamais `PROVED` (MACH-8.5). » |
+| CONC-3.1 | « INV-05 s'applique aux blocs `rt` chargés par l'hôte DSP (ABI DSP 1 à 3) : aucun appel bloquant, allocation, compilation, migration ni destruction coûteuse dans `process` ; un programme Core 1.0 sans bloc DSP n'a pas de callback audio. » |
+| ABI-5.1 | « Le seul ABI versionné est l'ABI DSP (`DSP_ABI_VERSION`, `DSP3_ABI_VERSION`, signature vérifiée au chargement, refus fail-closed) ; aucun autre `abi_version` n'est exposé ni promis. » |
+
+ABI-4.7 : amendée dans `abi.md` (liste fermée de 17 lints au niveau du
+fichier, plus `allow(unsafe_code)` local des enveloppes FFI/DSP) ; vérifiée
+sur tout le corpus par `corpus_codegen.rs` (`abi_4_7_violation`, avec
+contre-épreuve). Le seul `allow` local superflu du prélude
+(`non_snake_case`, déjà dans la liste) est retiré.

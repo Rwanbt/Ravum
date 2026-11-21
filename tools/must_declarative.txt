@@ -1,6 +1,7 @@
 # MUST statements that are declarative: they state what is NOT guaranteed,
 # or a human procedure; no conformance case can exercise them (V2-L3,
-# decision V2-M1). `tools/must_audit.py` counts them apart from the testable
+# decision V2-M1, list ACCEPTED by the owner on 2026-11-21 after the review
+# docs/reports/V2-M1-DECLARATIVE-REVIEW.md). `tools/must_audit.py` counts them apart from the testable
 # unmapped statements. One rule id per line.
 #
 # STATUS: PROPOSED by the agent on 2026-11-20 — to be reviewed by the owner
@@ -11,14 +12,10 @@ ABI-1.2
 ABI-1.3
 ABI-1.4
 ABI-2.1
-ABI-2.6
 ABI-2.9
 ABI-2.10
-ABI-4.1
-ABI-4.7
 ABI-4.8
 ABI-4.9
-ABI-5.1
 ABI-5.2
 ABI-5.3
 ABI-6.1
@@ -37,7 +34,6 @@ COMPAT-3.2
 COMPAT-3.3
 COMPAT-3.4
 COMPAT-3.5
-COMPAT-5.2
 COMPAT-6.1
 COMPAT-6.2
 COMPAT-6.3
@@ -49,40 +45,28 @@ CONC-1.4
 CONC-2.4
 CONC-2.5
 CONC-2.7
-CONC-3.1
 CONC-3.3
 CONC-4.1
 CONC-4.2
 CONC-4.4
-MACH-2.2
-MACH-6.1
-MACH-6.4
 MACH-6.6
 MACH-7.4
 MACH-8.4
 MACH-8.5
-MACH-9.1
 EFF-4.8
 EFF-5.1
-EFF-5.2
 EFF-6.1
 EFF-6.2
 EFF-6.3
 EFF-6.6
 FEAT-1.1
 FEAT-1.2
-FEAT-12.1
-FEAT-12.2
-MOD-6.5
 MOD-6.6
 MOD-8.6
-STD-1.4
 STD-1.7
 STD-3.1
 STD-6.8
-UNS-0.1
 UNS-9.1
 UNS-9.2
-UNS-9.3
 UNS-9.4
 UNS-9.5

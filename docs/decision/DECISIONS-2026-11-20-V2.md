@@ -56,3 +56,7 @@
   80 règles ne sont pas testables ; réponse donnée (négations de garantie,
   procédures humaines, définitions), avec la réserve que certaines (par ex.
   MACH-2.2) sont limites. La liste reste **PROPOSED**.
+- **V2-M1 (responsable, 2026-11-21)** : tri confirmé ; la liste
+  déclarative passe à 63 règles **ACCEPTED** ; ABI-4.7 amendée (liste
+  fermée de lints, « Amender la règle »). Réécritures de MACH-9.1, CONC-3.1,
+  ABI-5.1 proposées dans `docs/reports/V2-M1-DECLARATIVE-REVIEW.md` §D.

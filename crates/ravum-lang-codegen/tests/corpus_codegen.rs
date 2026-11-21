@@ -85,6 +85,30 @@ fn profile_of(program: &Path) -> Profile {
     }
 }
 
+/// ABI-4.7 (amended 2026-11-21): the only `allow`s in generated Rust are the
+/// one file-level closed list and the local `allow(unsafe_code)` of the FFI
+/// and DSP wrappers. Returns the first offending line, if any.
+const ABI_4_7_HEADER: &str = "#![allow(dead_code, unused_variables, unused_mut, unused_assignments, unused_imports, unused_parens, unused_braces, unused_labels, unused_must_use, unused_comparisons, non_snake_case, non_camel_case_types, non_upper_case_globals, unreachable_code, unreachable_patterns, arithmetic_overflow, unconditional_panic)]";
+
+fn abi_4_7_violation(code: &str) -> Option<String> {
+    let mut headers = 0;
+    for line in code.lines() {
+        let t = line.trim();
+        if !(t.starts_with("#[allow") || t.starts_with("#![allow") || t.contains("allow(")) {
+            continue;
+        }
+        if t.starts_with("//") {
+            continue;
+        }
+        if t == ABI_4_7_HEADER {
+            headers += 1;
+        } else if t != "#[allow(unsafe_code)]" {
+            return Some(t.to_string());
+        }
+    }
+    (headers != 1).then(|| format!("{headers} file-level allow lists (expected exactly 1)"))
+}
+
 struct Tally {
     programs: usize,
     generated: usize,
@@ -142,6 +166,11 @@ fn generate_corpus(root: &Path, tally: &mut Tally) {
                             .failures
                             .push(format!("{label}: source markers emitted while disabled"));
                     }
+                    if let Some(line) = abi_4_7_violation(&first) {
+                        tally
+                            .failures
+                            .push(format!("{label} (mode {index}): ABI-4.7 forbids `{line}`"));
+                    }
                     if index == 0 {
                         tally.generated += 1;
                     }
@@ -197,4 +226,17 @@ fn every_checked_program_of_the_corpus_generates_deterministic_rust() {
         .expect("the thread starts")
         .join()
         .expect("the corpus generates");
+}
+
+/// Negative control of the ABI-4.7 check: a lint outside the closed list, a
+/// second list and a missing list are each reported.
+#[test]
+fn abi_4_7_check_reports_any_other_allow() {
+    let ok = format!("{ABI_4_7_HEADER}\nfn main() {{}}\n#[allow(unsafe_code)]\nfn w() {{}}\n");
+    assert_eq!(abi_4_7_violation(&ok), None);
+    let extra = format!("{ok}#[allow(clippy::all)]\n");
+    assert!(abi_4_7_violation(&extra).unwrap().contains("clippy::all"));
+    assert!(abi_4_7_violation("fn main() {}\n").is_some(), "no list");
+    let twice = format!("{ABI_4_7_HEADER}\n{ABI_4_7_HEADER}\n");
+    assert!(abi_4_7_violation(&twice).is_some(), "two lists");
 }
