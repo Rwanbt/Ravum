@@ -619,13 +619,23 @@ pub(super) fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &
         })
         .collect();
 
+    // DIAG-5.5: a diagnostic on a dependency points at its name in the root
+    // `ravum.toml` when the root declares it (a transitive one keeps no span).
+    let declared_span = |name: &str| -> Span {
+        graph
+            .packages
+            .first()
+            .and_then(|root| root.manifest.dependencies.iter().find(|d| d.name == name))
+            .map_or(Span::dummy(), |d| d.span)
+    };
     for package in packages {
         let name = package.manifest.name.clone();
+        let decl_span = declared_span(&name);
         if local_names.contains(&name) {
             err(
                 ctx.diags,
                 "E-MOD-DUPLICATE",
-                Span::dummy(),
+                decl_span,
                 format!(
                     "dependency `{name}` collides with a local module of the same name; \
                      rename one of them"
@@ -655,12 +665,12 @@ pub(super) fn merge_dependencies(program: &mut Program, graph: &DepGraph, ctx: &
             let module_id = next_synthetic(dep_ctx.synthetic);
             let mut module = module;
             module.id = module_id;
-            module.name = Some(Ident::new(name.clone(), Span::dummy()));
+            module.name = Some(Ident::new(name.clone(), decl_span));
             program.root.items.push(Item {
                 id: item_id,
-                vis: Vis::Public(Span::dummy()),
+                vis: Vis::Public(decl_span),
                 kind: ItemKind::Mod(module),
-                span: Span::dummy(),
+                span: decl_span,
             });
         }
     }
