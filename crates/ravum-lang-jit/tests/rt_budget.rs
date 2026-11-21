@@ -18,7 +18,8 @@ use ravum_lang_jit::hot::{HotEngine, RT_FUEL};
 const BLOCK: usize = 64;
 /// 64 frames at 48 kHz.
 const DEADLINE: Duration = Duration::from_micros(1333);
-/// CPU time consumed by the calling thread (Linux/Unix).
+/// CPU time consumed by the calling thread (Unix: `CLOCK_THREAD_CPUTIME_ID`).
+#[cfg(unix)]
 fn thread_cpu() -> Duration {
     let mut ts = libc::timespec {
         tv_sec: 0,
@@ -28,6 +29,40 @@ fn thread_cpu() -> Duration {
     let r = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut ts) };
     assert_eq!(r, 0);
     Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
+}
+
+/// CPU time consumed by the calling thread (Windows: `GetThreadTimes`,
+/// kernel + user time, in 100 ns units). `kernel32` is linked by default.
+#[cfg(windows)]
+fn thread_cpu() -> Duration {
+    #[repr(C)]
+    #[derive(Default, Clone, Copy)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    extern "system" {
+        fn GetCurrentThread() -> *mut core::ffi::c_void;
+        fn GetThreadTimes(
+            thread: *mut core::ffi::c_void,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
+    }
+    let (mut c, mut e, mut k, mut u) = (
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+    );
+    // SAFETY: the pseudo-handle of the current thread is always valid, and
+    // the four out-pointers are valid for the call's duration.
+    let ok = unsafe { GetThreadTimes(GetCurrentThread(), &mut c, &mut e, &mut k, &mut u) };
+    assert_ne!(ok, 0, "GetThreadTimes failed");
+    let ticks = |t: FileTime| ((t.high as u64) << 32) | t.low as u64;
+    Duration::from_nanos((ticks(k) + ticks(u)) * 100)
 }
 
 const OK: &str = "fn gain(x: f32) -> f32 effects() {\n    return x * 0.5;\n}\n";

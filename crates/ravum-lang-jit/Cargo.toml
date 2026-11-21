@@ -21,5 +21,7 @@ sha2 = { workspace = true }
 [dev-dependencies]
 ravum-lang-sema = { workspace = true }
 ravum-core-machine = { path = "../ravum-core-machine" }
+
+[target.'cfg(unix)'.dev-dependencies]
 # rt_budget.rs: per-thread CPU time (tells preemption from work).
 libc = "0.2"
