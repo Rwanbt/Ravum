@@ -737,11 +737,7 @@ impl RtRunner {
         // aarch64: code finalized on the editor thread may sit stale in this
         // core's instruction pipeline; `isb` discards prefetched instructions
         // before the first call into the new version (no allocation, INV-05).
-        #[cfg(target_arch = "aarch64")]
-        // SAFETY: a context synchronization barrier, no memory or register effect.
-        unsafe {
-            std::arch::asm!("isb", options(nostack, preserves_flags));
-        }
+        raw::instruction_barrier();
         // A migrated version brings its own buffers: swap them in (moves of
         // `Box`es, no allocation) and leave ours with the version we quit.
         let left = self.swap_bufs(&mut next);
@@ -1013,6 +1009,18 @@ mod raw {
         }
         let v = unsafe { Box::from_raw(p) };
         Some(v.generation)
+    }
+
+    /// aarch64 `isb`: discard instructions prefetched before a new version
+    /// becomes reachable. No-op elsewhere.
+    #[inline]
+    pub fn instruction_barrier() {
+        #[cfg(target_arch = "aarch64")]
+        // SAFETY: a context synchronization barrier; touches no memory,
+        // stack or flags.
+        unsafe {
+            std::arch::asm!("isb", options(nostack, preserves_flags));
+        }
     }
 
     pub fn free_module(m: JITModule) {
