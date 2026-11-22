@@ -110,6 +110,14 @@ try {
         if ($body -notmatch 'title_empty') { $failures++ }
     }
 
+    # Le serveur n'est plus utile : l'arrêter avant `cargo test`, qui peut
+    # devoir relier `ravum-todo.exe` (Windows refuse de remplacer un binaire
+    # en cours d'exécution).
+    if ($proc -and -not $proc.HasExited) {
+        $proc.Kill()
+        $proc.WaitForExit()
+    }
+
     Write-Host '[5/5] Migration de schéma (test E2E dédié, base v1 -> v2 avec données préservées)'
     & cargo test -q -p ravum-todo --test e2e e2e_migration_from_a_legacy_database -- --exact 2>&1 | Select-Object -Last 3
     if ($LASTEXITCODE -ne 0) {
