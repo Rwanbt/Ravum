@@ -734,6 +734,14 @@ impl RtRunner {
         let Some(mut next) = raw::take(&self.mailbox.pending) else {
             return ev;
         };
+        // aarch64: code finalized on the editor thread may sit stale in this
+        // core's instruction pipeline; `isb` discards prefetched instructions
+        // before the first call into the new version (no allocation, INV-05).
+        #[cfg(target_arch = "aarch64")]
+        // SAFETY: a context synchronization barrier, no memory or register effect.
+        unsafe {
+            std::arch::asm!("isb", options(nostack, preserves_flags));
+        }
         // A migrated version brings its own buffers: swap them in (moves of
         // `Box`es, no allocation) and leave ours with the version we quit.
         let left = self.swap_bufs(&mut next);
