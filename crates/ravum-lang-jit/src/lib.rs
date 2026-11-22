@@ -144,6 +144,14 @@ pub(crate) fn new_jit_module() -> Result<JITModule, JitError> {
         ("opt_level", "none"),
         ("regalloc_algorithm", "single_pass"),
         ("enable_verifier", verifier),
+        // A frame larger than a guard page (4 KiB on x86-64, 16 KiB on
+        // Apple arm64) must touch each page in order, or it can jump past
+        // the OS guard page: an access violation on Windows, SIGBUS on
+        // macOS, instead of the stack guard's trap. Inline probes need no
+        // runtime symbol. Linux maps a thread's whole stack up front, which
+        // is why the missing probe only showed on the other two.
+        ("enable_probestack", "true"),
+        ("probestack_strategy", "inline"),
     ] {
         flags
             .set(k, v)

@@ -31,38 +31,37 @@ fn thread_cpu() -> Duration {
     Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
 }
 
-/// CPU time consumed by the calling thread (Windows: `GetThreadTimes`,
-/// kernel + user time, in 100 ns units). `kernel32` is linked by default.
+/// CPU time consumed by the calling thread (Windows). `GetThreadTimes`
+/// advances by scheduler quanta (~15.6 ms), far coarser than one 1.33 ms
+/// block, so a block would read 0 or 15.6 ms. `QueryThreadCycleTime` counts
+/// the thread's own cycles exactly; they are converted to time with a rate
+/// calibrated once against the monotonic clock while this thread spins (no
+/// preemption expected over 30 ms on a busy core; a preempted calibration
+/// only makes the rate lower, i.e. the measured CPU time longer: stricter).
 #[cfg(windows)]
 fn thread_cpu() -> Duration {
-    #[repr(C)]
-    #[derive(Default, Clone, Copy)]
-    struct FileTime {
-        low: u32,
-        high: u32,
-    }
     extern "system" {
         fn GetCurrentThread() -> *mut core::ffi::c_void;
-        fn GetThreadTimes(
-            thread: *mut core::ffi::c_void,
-            creation: *mut FileTime,
-            exit: *mut FileTime,
-            kernel: *mut FileTime,
-            user: *mut FileTime,
-        ) -> i32;
+        fn QueryThreadCycleTime(thread: *mut core::ffi::c_void, cycles: *mut u64) -> i32;
     }
-    let (mut c, mut e, mut k, mut u) = (
-        FileTime::default(),
-        FileTime::default(),
-        FileTime::default(),
-        FileTime::default(),
-    );
-    // SAFETY: the pseudo-handle of the current thread is always valid, and
-    // the four out-pointers are valid for the call's duration.
-    let ok = unsafe { GetThreadTimes(GetCurrentThread(), &mut c, &mut e, &mut k, &mut u) };
-    assert_ne!(ok, 0, "GetThreadTimes failed");
-    let ticks = |t: FileTime| ((t.high as u64) << 32) | t.low as u64;
-    Duration::from_nanos((ticks(k) + ticks(u)) * 100)
+    fn cycles() -> u64 {
+        let mut c = 0u64;
+        // SAFETY: the pseudo-handle of the current thread is always valid,
+        // and `c` is a valid out-pointer for the call's duration.
+        let ok = unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut c) };
+        assert_ne!(ok, 0, "QueryThreadCycleTime failed");
+        c
+    }
+    static RATE: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
+    let rate = *RATE.get_or_init(|| {
+        let (t0, c0) = (Instant::now(), cycles());
+        while t0.elapsed() < Duration::from_millis(30) {
+            std::hint::spin_loop();
+        }
+        let (dt, dc) = (t0.elapsed(), cycles() - c0);
+        dc as f64 / dt.as_nanos() as f64
+    });
+    Duration::from_nanos((cycles() as f64 / rate) as u64)
 }
 
 const OK: &str = "fn gain(x: f32) -> f32 effects() {\n    return x * 0.5;\n}\n";
