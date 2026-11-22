@@ -11,7 +11,10 @@ publish.workspace = true
 ravum-lang-ir = { path = "../ravum-lang-ir" }
 cranelift-codegen = "0.116"
 cranelift-frontend = "0.116"
-cranelift-jit = "0.116"
+# selinux-fix: JIT pages come from their own anonymous mmap (unmapped on
+# free) instead of the global allocator, so mprotect never touches heap pages
+# malloc may also manage (suspected cause of the macOS arm64 SIGBUS).
+cranelift-jit = { version = "0.116", features = ["selinux-fix"] }
 cranelift-module = "0.116"
 cranelift-native = "0.116"
 serde = { workspace = true }
