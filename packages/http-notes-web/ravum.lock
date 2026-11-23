@@ -5,9 +5,9 @@ lockfile_version = 1
 [[package]]
 name = "http-notes-web"
 version = "0.1.0"
-digest = "sha256:716f246ac9a4905f98505f01d230d6fe8d42ecbf9148e0342a243d2bac9338ab"
+digest = "sha256:4298359a4b93978495f8dac192dd85f3eb388288c4aa256fc60ba6149d1ca8bf"
 
 [[package]]
 name = "sqlite"
 version = "0.1.0"
-digest = "sha256:2cf36c82c58f0c160e66edd269080ab13590601b47e5e66913442ef7686a9ceb"
+digest = "sha256:6bc3236832800d00caf2ab11f24b333c061b8b61cead4cf0f05dc2cf965d88b7"

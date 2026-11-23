@@ -1,8 +1,9 @@
 name: Browser E2E (T9, http-notes-web)
 
 # V2-L6 : test de bout en bout d'une application `.rv` dans un vrai Chromium
-# (`scripts/e2e-browser/notes.mjs`). Déclenchement **manuel seulement** tant
-# que le responsable ne l'a pas rendu bloquant (plan V2, chantier L6).
+# (`scripts/e2e-browser/notes.mjs`). Lancé sur chaque pull request et à la
+# demande (décision du responsable du 2026-11-23 : les gates implémentés et
+# testés passent en `PASS`, ce qui exige que la preuve tourne en CI).
 #
 # Portée honnête : un run vert prouve, pour ce commit et ce runner, que la
 # page servie par `packages/http-notes-web` permet d'ajouter, lister et
@@ -14,6 +15,7 @@ name: Browser E2E (T9, http-notes-web)
 # et son Chromium. Aucune dépendance n'est ajoutée au dépôt.
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
