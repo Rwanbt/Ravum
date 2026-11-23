@@ -143,21 +143,31 @@ impl<'a> Layouts<'a> {
                 let Some(info) = self.checked.facts.enums.get(def) else {
                     return Ok(None);
                 };
-                if !args.is_empty() || !info.generics.is_empty() {
-                    return unsupported("generic enum");
+                if args.len() != info.generics.len() {
+                    return Err(LowerError::MissingFact("generic enum arity".into()));
                 }
-                if !info.is_copy {
-                    return unsupported(format!("non-`Copy` enum `{}`", info.name));
-                }
-                Ok(Some(
-                    info.variants
-                        .iter()
-                        .map(|v| match v.kind {
+                // A generic enum is laid out per instance, like a generic
+                // struct. A non-`Copy` payload (a `String`) is a handle: the
+                // enum is moved word for word and the checker forbids reuse
+                // of a moved value, so the handle has one owner.
+                let subst: crate::mono::Subst = args.iter().cloned().enumerate().collect();
+                let vs: Vec<Vec<Type>> = info
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        let tys: Vec<Type> = match v.kind {
                             VariantKind::Struct => v.fields.iter().map(|f| f.ty.clone()).collect(),
                             _ => v.tuple_types.clone(),
-                        })
-                        .collect(),
-                ))
+                        };
+                        tys.iter()
+                            .map(|t| crate::mono::substitute(t, &subst))
+                            .collect()
+                    })
+                    .collect();
+                if vs.iter().flatten().any(crate::mono::has_param) {
+                    return unsupported("generic enum with an unresolved type argument");
+                }
+                Ok(Some(vs))
             }
             _ => Ok(None),
         }
@@ -365,9 +375,10 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
                 }
             }
             ItemKind::Enum(e) => {
-                let info = checked.facts.enums.get(&item.id);
-                if !info.is_some_and(|i| i.is_copy && i.generics.is_empty()) {
-                    return unsupported(format!("non-`Copy` or generic enum `{}`", e.name.name));
+                // Non-`Copy` and generic enums are laid out per use
+                // (`Layouts::variants`); only the facts must exist.
+                if !checked.facts.enums.contains_key(&item.id) {
+                    return Err(LowerError::MissingFact(format!("enum `{}`", e.name.name)));
                 }
             }
             ItemKind::Const(c) => match checked.facts.consts.get(&item.id) {

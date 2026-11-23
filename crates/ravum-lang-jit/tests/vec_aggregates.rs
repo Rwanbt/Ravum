@@ -256,3 +256,66 @@ fn main_returning_err_reports_it_on_stderr_like_the_rustc_path() {
     let (_, out) = run_with_output(&compile_source(ok).unwrap(), "main", DEFAULT_STEPS);
     assert_eq!((out.stdout.as_str(), out.stderr.as_str()), ("fine\n", ""));
 }
+
+const ENUMS: &str = r#"use std::io;
+
+enum Command {
+    Add(String),
+    Rename { from: String, to: String },
+    Count(i64),
+    Quit,
+}
+
+enum Maybe<T> {
+    Just(T),
+    Nothing,
+}
+
+fn describe(c: Command) -> String effects(alloc) {
+    match c {
+        Command::Add(name) => {
+            let mut s = String::from("add ");
+            s.push_str(&name);
+            return s;
+        }
+        Command::Rename { from, to } => {
+            let mut s = from;
+            s.push_str(" -> ");
+            s.push_str(&to);
+            return s;
+        }
+        Command::Count(n) => return n.to_string(),
+        Command::Quit => return String::from("quit"),
+    }
+}
+
+fn or_zero(m: Maybe<i64>) -> i64 effects() {
+    match m {
+        Maybe::Just(v) => return v,
+        Maybe::Nothing => return 0,
+    }
+}
+
+fn text(m: Maybe<String>) -> String effects(alloc) {
+    match m {
+        Maybe::Just(s) => return s,
+        Maybe::Nothing => return String::from("-"),
+    }
+}
+
+fn main() -> () effects(io, alloc) {
+    io::println(&describe(Command::Add(String::from("milk"))));
+    io::println(&describe(Command::Rename { from: String::from("a"), to: String::from("b") }));
+    io::println(&describe(Command::Count(-7)));
+    io::println(&describe(Command::Quit));
+    io::println(&(or_zero(Maybe::Just(41)) + or_zero(Maybe::Nothing) + 1).to_string());
+    io::println(&text(Maybe::Just(String::from("ravum"))));
+    io::println(&text(Maybe::Nothing));
+}
+"#;
+
+#[test]
+fn non_copy_and_generic_enums_agree_with_the_interpreter() {
+    let (_, out) = agree(ENUMS);
+    assert_eq!(out, "add milk\na -> b\n-7\nquit\n42\nravum\n-\n");
+}
