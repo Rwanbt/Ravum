@@ -80,3 +80,11 @@ Résolu dans la même PR : SIGBUS macOS arm64 de `hot_swap`. La barrière
 (e799910) met le code JIT dans ses propres pages `mmap` : 5/5 sur macOS.
 La cause exacte, liée aux pages du tas protégées par `mprotect`, n'est pas
 établie (`TESTED`, pas expliqué).
+
+Deuxième passage macOS (bb191fa, 2026-11-23) : même test rouge,
+`cpu_misses=1`, un bloc à 3,96 ms de temps CPU (bloc 3523, pas un bloc de
+swap ; p50 13,3 µs, p99.9 83 µs). Sur deux passages, on observe donc 1 à 2
+pics isolés de quelques millisecondes, jamais aux blocs de swap. La cause
+n'est pas identifiée : soit des pics de l'hôte virtualisé, soit un vrai
+coût dans `poll`/`process_sample` sur macOS. Seul un Mac physique peut
+trancher (ADR : seuil inchangé, décision V2-J2).
