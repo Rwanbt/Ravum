@@ -85,7 +85,7 @@ L'évaluation est **de gauche à droite** ; les règles ci-dessous sont des sch�
 | ID | Règle | Niveau |
 |---|---|---|
 | MACH-4.1 | Chaque opérande est réduit **entièrement** avant l'opération ; l'ordre gauche→droite est observable via `panic` (un panic dans `a` empêche l'évaluation de `b`). | MUST |
-| MACH-4.2 | `&&`/`||` court-circuitent : l'opérande droit n'est **pas** réduit si le résultat est déterminé. | MUST |
+| MACH-4.2 | `&&`/`\|\|` court-circuitent : l'opérande droit n'est **pas** réduit si le résultat est déterminé. | MUST |
 | MACH-4.3 | Les arguments d'appel sont réduits de gauche à droite, **avant** l'appel. | MUST |
 | MACH-4.4 | Un `if`/`match` ne réduit **qu'une** branche. | MUST |
 | MACH-4.5 | Un `match` évalue les bras dans l'ordre et sélectionne le premier motif correspondant ; l'échec de tous les motifs est impossible sur un programme accepté (exhaustivité statique). S'il survient, `⟨fault: no-match⟩`. | MUST |
