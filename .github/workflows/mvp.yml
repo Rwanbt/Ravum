@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
@@ -33,7 +33,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@1.95.0
@@ -170,7 +170,7 @@ jobs:
       # growth. The real collection bound is asserted through the policy (max < min).
       AUTO_GC_MAX_DISK_BYTES: '1048576'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@1.95.0

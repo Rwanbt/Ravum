@@ -20,7 +20,7 @@ jobs:
       matrix:
         form: [10, 11, 12, 13]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.95.0
       - name: Replay the inverse in a disposable checkout
         env:
