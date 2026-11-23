@@ -145,6 +145,20 @@ impl Heap {
                 let v = self.vec(a)?.clone();
                 self.alloc(Object::Vec(v))?
             }
+            Replace => {
+                // `b` was moved into the assignment: take its contents
+                // (no new allocation, nothing charged) and leave it empty.
+                let empty = match self.get(b)? {
+                    Object::Str(_) => Object::Str(String::new()),
+                    Object::Vec(_) => Object::Vec(Vec::new()),
+                };
+                if std::mem::discriminant(self.get(a)?) != std::mem::discriminant(&empty) {
+                    return Err(HeapStop::Fault("replace between different kinds"));
+                }
+                let o = std::mem::replace(self.get_mut(b)?, empty);
+                *self.get_mut(a)? = o;
+                0
+            }
         })
     }
 

@@ -195,6 +195,10 @@ pub enum HeapOp {
     /// `a[b]`: traps `index out of bounds`.
     VecGet,
     VecClone,
+    /// `*a = b` through a `&mut String`/`&mut Vec<T>` borrow: `a`'s object
+    /// takes `b`'s contents (`b` is moved, the checker forbids its reuse).
+    /// Both must be of the same kind. Additive in IR v1.4.
+    Replace,
 }
 
 /// Output stream of a [`Inst::Print`] (IR v1.2, `io::print`/`println`/`eprintln`).

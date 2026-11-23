@@ -1,0 +1,6 @@
+{
+  "id": "ownership/l2-deref-mut-replace-heap",
+  "mode": "run-pass",
+  "stdout_contains": "new!\n1\n9\n",
+  "notes": "G-6.9 (MUST) for heap objects: `*r = v` with `r: &mut String` or `r: &mut Vec<T>` replaces the object; the field it borrows sees the new value. Same program and output as the IR/JIT test `replacing_an_object_through_a_heap_borrow_agrees_with_the_interpreter`."
+}

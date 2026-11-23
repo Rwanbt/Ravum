@@ -87,8 +87,11 @@ La conformance finale avec loopback donne 742 cas, dont 740 réussis,
 
 ## Limites, écarts, demandes hors périmètre
 
-- Le déréférencement explicite d’un emprunt de tas, dont le remplacement
-  de l’objet entier via `*emprunt = ...`, reste hors du sous-ensemble IR.
+- Le déréférencement explicite d’un emprunt de tas reste hors du
+  sous-ensemble IR en lecture (`(*emprunt).len()`, test
+  `reading_through_an_explicit_heap_deref_is_still_refused`). Le
+  remplacement de l’objet entier via `*emprunt = ...` est couvert depuis le
+  2026-11-23 (voir la section « Suite (2026-11-23) »).
   Les méthodes sur l’objet emprunté sont utilisables. Le tas est libéré en
   fin d’exécution. Le test ne porte pas sur les structs génériques ou les
   vecteurs d’agrégats.
@@ -143,3 +146,28 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
   test --workspace --no-fail-fast -- --test-threads=1
 cargo run -p ravum-conformance --release -- run
 ```
+
+## Suite (2026-11-23) : `*emprunt = v` sur un objet du tas
+
+- **Modification.** Ajout de `HeapOp::Replace` (ajout dans IR v1.4, sans
+  changement de version). L'objet désigné par l'emprunt prend le contenu
+  de `v`, et `v` est vidé. L'opération n'alloue rien et n'est pas
+  facturée. Deux genres d'objets différents provoquent une faute. Le code
+  de `heap.rs` est commun à l'interpréteur et au JIT. La descente traite
+  `*r = v` quand `r: &mut String` ou `r: &mut Vec<T>`.
+- **Test positif.** `replacing_an_object_through_a_heap_borrow_agrees_with_the_interpreter` :
+  remplacement d'un champ `String` et d'un champ `Vec<i64>` via `&mut`,
+  puis mutation après remplacement. Sortie `new!\n1\n9\n` identique dans
+  l'interpréteur et le JIT. Le cas `ownership/l2-deref-mut-replace-heap`
+  vérifie la même sortie par la voie `rustc`, qui sert d'oracle
+  indépendant.
+- **Test négatif.** `reading_through_an_explicit_heap_deref_is_still_refused`
+  donne un refus explicite `Unsupported`.
+- **Commandes.** `cargo fmt --all -- --check`, `cargo clippy --workspace
+  --all-targets -- -D warnings`, `cargo test -p ravum-lang-ir -p
+  ravum-lang-jit` (tout vert), `features_coverage.py --strict` 248/248,
+  `cargo run -p ravum-conformance --release -- run` : 762 cas, 760 PASS,
+  0 FAIL, 2 SKIP (Windows). `--verify-build` `NOT_RUN`.
+- **Environnement.** Linux x86_64, conteneur cloud, rustc 1.95.0.
+- **État.** `TESTED`. Les autres limites restent ouvertes : structs
+  génériques et vecteurs d'agrégats.

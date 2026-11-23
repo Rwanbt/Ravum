@@ -1258,6 +1258,7 @@ pub(crate) mod exec {
         let sink = unsafe { &mut *(ctx.out as *mut OutputSink) };
         let ops = [
             StrNew, StrClone, StrPush, StrLen, StrEq, VecNew, VecPush, VecLen, VecGet, VecClone,
+            Replace,
         ];
         let r = match op {
             OP_TEXT => match sink.text(a) {

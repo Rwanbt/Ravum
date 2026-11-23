@@ -1505,6 +1505,23 @@ impl<'a> FnLower<'a> {
             },
             ExprKind::Binary { op, lhs, rhs } => self.binary(*op, lhs, rhs),
             ExprKind::Assign { target, value } => {
+                // `*r = v` through a `&mut String`/`&mut Vec<T>`: the borrow
+                // is the object's handle, so the object takes `v`'s contents
+                // in place (every alias of the object sees the new value).
+                if let ExprKind::Unary {
+                    op: ast::UnOp::Deref,
+                    expr: inner,
+                } = &target.kind
+                {
+                    if let Type::Ref { inner: t, .. } = self.type_of(inner)? {
+                        if matches!(*t, Type::String | Type::Vec(_)) {
+                            let v = self.expr(value)?;
+                            let h = self.expr(inner)?;
+                            self.heap(None, HeapOp::Replace, Some(h), Some(v));
+                            return Ok(self.unit());
+                        }
+                    }
+                }
                 // Evaluate the value first (into a private copy for an
                 // aggregate), then write it into the place.
                 let v = self.expr(value)?;

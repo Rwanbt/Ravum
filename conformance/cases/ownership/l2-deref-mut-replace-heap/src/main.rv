@@ -1,0 +1,25 @@
+use std::io;
+
+struct Payload { label: String, values: Vec<i64> }
+
+fn replace(label: &mut String) -> () effects(alloc) {
+    *label = String::from("new");
+}
+
+fn reset(values: &mut Vec<i64>) -> () effects(alloc) {
+    let mut fresh: Vec<i64> = Vec::new();
+    fresh.push(9);
+    *values = fresh;
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut payload = Payload { label: String::from("old"), values: Vec::new() };
+    payload.values.push(1);
+    payload.values.push(2);
+    replace(&mut payload.label);
+    reset(&mut payload.values);
+    payload.label.push_str("!");
+    io::println(&payload.label);
+    io::println(&payload.values.len().to_string());
+    io::println(&payload.values[0].to_string());
+}

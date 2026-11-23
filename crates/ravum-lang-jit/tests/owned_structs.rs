@@ -72,17 +72,56 @@ fn main() -> () effects(io, alloc) {
 }
 
 #[test]
-fn replacing_an_object_through_a_heap_borrow_is_refused() {
-    let source = r#"
-struct Payload { label: String }
+fn replacing_an_object_through_a_heap_borrow_agrees_with_the_interpreter() {
+    // `*r = v` replaces the object in place: the struct field, its alias
+    // and a vector replaced through `&mut Vec<i64>` all see the new value.
+    let source = r#"use std::io;
+
+struct Payload { label: String, values: Vec<i64> }
 
 fn replace(label: &mut String) -> () effects(alloc) {
     *label = String::from("new");
 }
 
-fn main() -> () effects(alloc) {
-    let mut payload = Payload { label: String::from("old") };
+fn reset(values: &mut Vec<i64>) -> () effects(alloc) {
+    let mut fresh: Vec<i64> = Vec::new();
+    fresh.push(9);
+    *values = fresh;
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut payload = Payload { label: String::from("old"), values: Vec::new() };
+    payload.values.push(1);
+    payload.values.push(2);
     replace(&mut payload.label);
+    reset(&mut payload.values);
+    payload.label.push_str("!");
+    io::println(&payload.label);
+    io::println(&payload.values.len().to_string());
+    io::println(&payload.values[0].to_string());
+}
+"#;
+    let ir = compile_source(source).expect("replacement through a borrow lowers");
+    let (interpreted, interpreted_output) = run_with_output(&ir, "main", DEFAULT_STEPS);
+    let (native, native_output) = compile(&ir)
+        .expect("replacement compiles")
+        .run_with_output("main", DEFAULT_FUEL);
+    assert_eq!(native.render(), "value () ()");
+    assert_eq!(native.render(), interpreted.render());
+    assert_eq!(native_output, interpreted_output);
+    assert_eq!(native_output.stdout, "new!\n1\n9\n");
+}
+
+#[test]
+fn reading_through_an_explicit_heap_deref_is_still_refused() {
+    let source = r#"
+fn size(label: &String) -> usize effects() {
+    return (*label).len();
+}
+
+fn main() -> () effects(alloc) {
+    let label = String::from("old");
+    let n = size(&label);
 }
 "#;
     match compile_source(source) {
