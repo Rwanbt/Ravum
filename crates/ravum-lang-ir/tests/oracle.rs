@@ -132,7 +132,9 @@ fn unsupported_constructs_are_refused_not_approximated() {
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",
         "fn check() -> f64 effects() {\n    let a: f64 = -5.0;\n    return a.min(1.0);\n}\n",
-        "fn f(r: &mut i32) -> i32 effects() {\n    return 0;\n}\nfn check() -> i32 effects() {\n    return 0;\n}\n",
+        // `&mut i32` parameters are lowered since 2026-11-23 (positive test
+        // `references_to_scalars_agree_with_the_interpreter`); `i128` is not.
+        "fn check() -> i32 effects() {\n    let x: i128 = 1;\n    return 0;\n}\n",
     ] {
         match compile_source(src) {
             Err(CompileError::Lower(LowerError::Unsupported(_))) => {}

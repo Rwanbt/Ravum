@@ -205,3 +205,54 @@ fn main() -> () effects(io, alloc) {
 "#;
     assert_eq!(agree(src).1, "3\nodd\n");
 }
+
+const SCALAR_REFS: &str = r#"use std::io;
+
+fn bump(x: &mut i64, by: i64) -> () effects() {
+    *x = *x + by;
+}
+
+fn set(f: &mut bool) -> () effects() {
+    *f = true;
+}
+
+fn read(x: &i64) -> i64 effects() {
+    return *x * 2;
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut n = 5i64;
+    bump(&mut n, 3);
+    bump(&mut n, -1);
+    io::println(&n.to_string());
+    io::println(&read(&n).to_string());
+    let mut total = 0i64;
+    for i in 0i64..4i64 {
+        bump(&mut total, i);
+    }
+    io::println(&total.to_string());
+    let mut flag = false;
+    set(&mut flag);
+    io::println(&flag.to_string());
+}
+"#;
+
+#[test]
+fn references_to_scalars_agree_with_the_interpreter() {
+    let (_, out) = agree(SCALAR_REFS);
+    assert_eq!(out, "7\n14\n6\ntrue\n");
+}
+
+#[test]
+fn main_returning_err_reports_it_on_stderr_like_the_rustc_path() {
+    let src = "use std::io;\nfn main() -> Result<(), Error> effects(io, alloc) {\n    io::println(\"before\");\n    return Err(Error::new(\"bad thing\"));\n}\n";
+    let ir = compile_source(src).unwrap();
+    let (_, out) = run_with_output(&ir, "main", DEFAULT_STEPS);
+    let (_, nout) = compile(&ir).unwrap().run_with_output("main", DEFAULT_FUEL);
+    assert_eq!(out, nout);
+    assert_eq!(out.stdout, "before\n");
+    assert_eq!(out.stderr, "error: bad thing\n");
+    let ok = "use std::io;\nfn main() -> Result<(), Error> effects(io) {\n    io::println(\"fine\");\n    Ok(())\n}\n";
+    let (_, out) = run_with_output(&compile_source(ok).unwrap(), "main", DEFAULT_STEPS);
+    assert_eq!((out.stdout.as_str(), out.stderr.as_str()), ("fine\n", ""));
+}

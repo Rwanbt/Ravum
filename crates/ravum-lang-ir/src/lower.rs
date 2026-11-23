@@ -443,6 +443,23 @@ pub fn lower(checked: &CheckedProgram) -> R<Module> {
         let (item, f) = by_id[&item_id];
         functions.push(FnLower::new(checked, &layouts, &table, item, f, subst)?.run(f)?);
     }
+    // STD (stdlib.md §13 table): `main() -> Result<(), Error>` returning
+    // `Err(e)` prints `error: <message>` on stderr. Its body takes a hidden
+    // result address, so the entry `main` becomes a parameterless wrapper
+    // that calls it (renamed `main$body`) and reports an `Err`.
+    if let Some((item, _)) = plain.iter().find(|(_, f)| f.name.name == "main") {
+        let ret = checked
+            .facts
+            .fn_sigs
+            .get(&item.id)
+            .map(|s| s.ret.clone())
+            .ok_or_else(|| LowerError::MissingFact("signature of `main`".into()))?;
+        if matches!(&ret, Type::Result(ok, err) if **ok == Type::Unit && is_error(err)) {
+            let id = table.borrow().plain[&item.id];
+            functions[id as usize].name = "main$body".into();
+            functions.push(main_wrapper(&layouts, &ret, id)?);
+        }
+    }
     let m = Module {
         version: IR_VERSION.to_string(),
         functions,
@@ -517,6 +534,10 @@ struct FnLower<'a> {
     /// (declaration span, name) → (slot, checker type). Aggregate variables
     /// hold the address of their own storage.
     vars: BTreeMap<(Span, String), (Local, Type)>,
+    /// `let` scalars whose address is taken (`&x`, `&mut x`): they live in a
+    /// stack slot from their declaration on, `mem_vars` holds those slots.
+    borrowed: std::collections::BTreeSet<(Span, String)>,
+    mem_vars: std::collections::BTreeSet<Local>,
     loops: Vec<LoopCtx>,
     ret: Type,
     /// Hidden result address when the function returns an aggregate.
@@ -591,6 +612,8 @@ impl<'a> FnLower<'a> {
             }],
             cur: 0,
             vars: BTreeMap::new(),
+            borrowed: std::collections::BTreeSet::new(),
+            mem_vars: std::collections::BTreeSet::new(),
             loops: Vec::new(),
             ret: sig.ret.clone(),
             sret: None,
@@ -611,7 +634,9 @@ impl<'a> FnLower<'a> {
             inv_receiver: None,
         };
         map_ty(&sig.ret)?;
-        if matches!(sig.ret, Type::Ref { .. }) {
+        // Core 1.0 returns only `&'static str` (E-OWN-REF-ESCAPE otherwise):
+        // a heap handle. A pointer return stays refused.
+        if matches!(sig.ret, Type::Ref { .. }) && map_ty(&sig.ret)? != Ty::Obj {
             return unsupported("function returning a reference");
         }
         if Layouts::is_agg(&sig.ret) {
@@ -622,7 +647,7 @@ impl<'a> FnLower<'a> {
             if let Type::Ref { inner, .. } = &p.ty {
                 if map_ty(&p.ty)? == Ty::Obj {
                     // `&String`/`&mut Vec<T>`: the handle itself.
-                } else if !Layouts::is_agg(inner) {
+                } else if !Layouts::is_agg(inner) && !plain_scalar(map_ty(inner)?) {
                     return unsupported("reference to a scalar parameter");
                 } else {
                     layouts.layout(inner)?;
@@ -686,6 +711,7 @@ impl<'a> FnLower<'a> {
         for c in &reqs {
             self.contract_check(c)?;
         }
+        self.borrowed = borrowed_locals(self.checked, &f.body);
         let v = self.block(&f.body)?;
         let term = self.return_term(v)?;
         self.terminate(term);
@@ -699,7 +725,7 @@ impl<'a> FnLower<'a> {
             params,
             ret,
             locals: self.locals,
-            blocks: self.blocks,
+            blocks: prune_unreachable(self.blocks),
             stack: self.stack,
         })
     }
@@ -1301,7 +1327,7 @@ impl<'a> FnLower<'a> {
         match &e.kind {
             ExprKind::Path(p) if self.unit_variant(p).is_none() && self.const_of(p).is_none() => {
                 let (l, t) = self.var_of_path(p)?;
-                if Layouts::is_agg(&t) {
+                if Layouts::is_agg(&t) || self.mem_vars.contains(&l) {
                     Ok(Place::Mem {
                         addr: l,
                         off: 0,
@@ -1581,12 +1607,20 @@ impl<'a> FnLower<'a> {
                     let Some(init) = &l.init else {
                         return unsupported("`let` without initializer");
                     };
-                    if matches!(ty, Type::Ref { .. }) {
+                    // Only a text binding (`let s: &str = "…"`) is a reference
+                    // the checker lets a `let` hold: a heap handle.
+                    if matches!(ty, Type::Ref { .. }) && map_ty(&ty)? != Ty::Obj {
                         return unsupported("`let` binding a reference");
                     }
                     let v = self.expr(init)?;
+                    let key = (l.pat.span, name.name.clone());
                     let slot = if Layouts::is_agg(&ty) {
                         self.snapshot(v, &ty)?
+                    } else if self.borrowed.contains(&key) && plain_scalar(map_ty(&ty)?) {
+                        let addr = self.alloc(&ty)?;
+                        self.store_value(addr, 0, v, &ty)?;
+                        self.mem_vars.insert(addr);
+                        addr
                     } else {
                         let slot = self.new_local(map_ty(&ty)?);
                         self.emit(Inst::Copy { dst: slot, src: v });
@@ -3512,4 +3546,256 @@ impl<'a> FnLower<'a> {
             None => Err(LowerError::MissingFact("call target".into())),
         }
     }
+}
+
+/// An integer, a float or a `bool`: a value with an address of its own.
+fn plain_scalar(t: Ty) -> bool {
+    t.is_int() || t.is_float() || t == Ty::Bool
+}
+
+/// The `let` variables of `body` whose address is taken by `&x`/`&mut x`
+/// (declaration span, name). A form the walk does not visit only leaves its
+/// borrow refused later (fail-closed), never mis-lowered.
+fn borrowed_locals(
+    checked: &CheckedProgram,
+    body: &AstBlock,
+) -> std::collections::BTreeSet<(Span, String)> {
+    fn block(
+        c: &CheckedProgram,
+        b: &AstBlock,
+        out: &mut std::collections::BTreeSet<(Span, String)>,
+    ) {
+        for s in &b.stmts {
+            match &s.kind {
+                StmtKind::Let(l) => {
+                    if let Some(i) = &l.init {
+                        expr(c, i, out);
+                    }
+                }
+                StmtKind::Expr { expr: e, .. } => expr(c, e, out),
+            }
+        }
+        if let Some(t) = &b.tail {
+            expr(c, t, out);
+        }
+    }
+    fn expr(c: &CheckedProgram, e: &Expr, out: &mut std::collections::BTreeSet<(Span, String)>) {
+        match &e.kind {
+            ExprKind::Unary { op, expr: inner } => {
+                if matches!(op, ast::UnOp::Ref | ast::UnOp::RefMut) {
+                    if let ExprKind::Path(p) = &inner.kind {
+                        if let Some(Resolution::Local { name, decl, .. }) =
+                            c.facts.resolutions.get(&p.id)
+                        {
+                            out.insert((*decl, name.clone()));
+                        }
+                    }
+                }
+                expr(c, inner, out);
+            }
+            ExprKind::Await(x) | ExprKind::Try(x) => expr(c, x, out),
+            ExprKind::Return(x) => {
+                if let Some(x) = x {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Call { callee, args } => {
+                expr(c, callee, out);
+                args.iter().for_each(|a| expr(c, a, out));
+            }
+            ExprKind::MethodCall { receiver, args, .. } => {
+                expr(c, receiver, out);
+                args.iter().for_each(|a| expr(c, a, out));
+            }
+            ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => expr(c, base, out),
+            ExprKind::Index { base, index } => {
+                expr(c, base, out);
+                expr(c, index, out);
+            }
+            ExprKind::Binary { lhs, rhs, .. } => {
+                expr(c, lhs, out);
+                expr(c, rhs, out);
+            }
+            ExprKind::Assign { target, value } | ExprKind::AssignOp { target, value, .. } => {
+                expr(c, target, out);
+                expr(c, value, out);
+            }
+            ExprKind::Cast { expr: x, .. } => expr(c, x, out),
+            ExprKind::If {
+                cond,
+                then_block,
+                else_branch,
+            } => {
+                expr(c, cond, out);
+                block(c, then_block, out);
+                if let Some(x) = else_branch {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Match { scrutinee, arms } => {
+                expr(c, scrutinee, out);
+                arms.iter().for_each(|a| expr(c, &a.body, out));
+            }
+            ExprKind::While { cond, body } => {
+                expr(c, cond, out);
+                block(c, body, out);
+            }
+            ExprKind::Loop { body } | ExprKind::Block(body) | ExprKind::Unsafe(body) => {
+                block(c, body, out)
+            }
+            ExprKind::For { iter, body, .. } => {
+                expr(c, iter, out);
+                block(c, body, out);
+            }
+            ExprKind::Tuple(xs) | ExprKind::Array(xs) => xs.iter().for_each(|x| expr(c, x, out)),
+            ExprKind::ArrayRepeat { value, len } => {
+                expr(c, value, out);
+                expr(c, len, out);
+            }
+            ExprKind::StructLit { fields, .. } => {
+                fields.iter().for_each(|f| expr(c, &f.value, out))
+            }
+            ExprKind::Range { start, end, .. } => {
+                for x in [start, end].into_iter().flatten() {
+                    expr(c, x, out);
+                }
+            }
+            ExprKind::Unit
+            | ExprKind::Int { .. }
+            | ExprKind::Float { .. }
+            | ExprKind::Bool(_)
+            | ExprKind::Char(_)
+            | ExprKind::Str(_)
+            | ExprKind::SelfValue
+            | ExprKind::Path(_)
+            | ExprKind::Break
+            | ExprKind::Continue => {}
+        }
+    }
+    let mut out = std::collections::BTreeSet::new();
+    block(checked, body, &mut out);
+    out
+}
+
+fn is_error(t: &Type) -> bool {
+    matches!(t, Type::Nominal { name, .. } if name == "Error")
+}
+
+/// The entry wrapper of a `main() -> Result<(), Error>` whose body is the
+/// function `body`: call it with a result slot; on `Err` print
+/// `error: <message>` and a newline on stderr, as the rustc path does.
+fn main_wrapper(layouts: &Layouts, ret: &Type, body: FuncId) -> R<Function> {
+    let l = layouts.layout(ret)?;
+    let (err_off, _) = layouts
+        .variant_fields(ret, 1)?
+        .first()
+        .cloned()
+        .ok_or_else(|| LowerError::MissingFact("`Err` payload".into()))?;
+    // Locals: 0 slot address, 1 tag, 2 const 1, 3 is_err, 4 message.
+    let locals = vec![Ty::Ptr, Ty::U32, Ty::U32, Ty::Bool, Ty::Obj];
+    let entry = Block {
+        insts: vec![
+            Inst::StackAddr { dst: 0, slot: 0 },
+            Inst::Call {
+                dst: None,
+                func: body,
+                args: vec![0],
+            },
+            Inst::Load {
+                dst: 1,
+                ty: Ty::U32,
+                addr: 0,
+                offset: 0,
+            },
+            Inst::Const {
+                dst: 2,
+                value: Const::Int {
+                    ty: Ty::U32,
+                    value: 1,
+                },
+            },
+            Inst::Bin {
+                dst: 3,
+                op: BinOp::Eq,
+                ty: Ty::U32,
+                lhs: 1,
+                rhs: 2,
+            },
+        ],
+        term: Term::Branch {
+            cond: 3,
+            then_to: 1,
+            else_to: 2,
+        },
+    };
+    let report = Block {
+        insts: vec![
+            Inst::Load {
+                dst: 4,
+                ty: Ty::Obj,
+                addr: 0,
+                offset: err_off,
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Text("error: ".into()),
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Obj(4),
+            },
+            Inst::Print {
+                stream: Stream::Stderr,
+                arg: PrintArg::Text("\n".into()),
+            },
+        ],
+        term: Term::Return(None),
+    };
+    let done = Block {
+        insts: Vec::new(),
+        term: Term::Return(None),
+    };
+    Ok(Function {
+        name: "main".into(),
+        params: 0,
+        ret: Ty::Unit,
+        locals,
+        blocks: vec![entry, report, done],
+        stack: vec![StackSlot {
+            size: l.size.max(1),
+            align: l.align.max(1),
+        }],
+    })
+}
+
+/// Empty every block no path from the entry reaches, ending it with
+/// `Unreachable`. Such a block is never executed, but it may hold a
+/// placeholder of the wrong type (the join after an `if` whose branches all
+/// `return`), which a native backend's verifier rejects.
+fn prune_unreachable(mut blocks: Vec<Block>) -> Vec<Block> {
+    let mut seen = vec![false; blocks.len()];
+    let mut stack = vec![0usize];
+    while let Some(b) = stack.pop() {
+        if b >= blocks.len() || seen[b] {
+            continue;
+        }
+        seen[b] = true;
+        match &blocks[b].term {
+            Term::Jump(t) => stack.push(*t as usize),
+            Term::Branch {
+                then_to, else_to, ..
+            } => {
+                stack.push(*then_to as usize);
+                stack.push(*else_to as usize);
+            }
+            Term::Return(_) | Term::Trap(_) | Term::Unreachable => {}
+        }
+    }
+    for (b, reached) in blocks.iter_mut().zip(seen) {
+        if !reached {
+            b.insts.clear();
+            b.term = Term::Unreachable;
+        }
+    }
+    blocks
 }
