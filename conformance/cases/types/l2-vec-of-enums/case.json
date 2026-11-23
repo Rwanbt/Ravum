@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-vec-of-enums",
+  "mode": "run-pass",
+  "stdout_contains": "19\ninner none\n3\n",
+  "notes": "T14: a `Vec` of a user enum (unit, tuple and struct variants, element assignment, `for`) and a `Vec<Option<i64>>` (`pop` of a nested option, `unwrap_or` on an element). Same program and output as the IR/JIT test `a_vec_of_enums_agrees`, here by the rustc path."
+}

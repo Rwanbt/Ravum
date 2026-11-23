@@ -126,10 +126,10 @@ fn json_round_trip_is_lossless_and_versioned() {
 #[test]
 fn unsupported_constructs_are_refused_not_approximated() {
     for src in [
-        // Generic enums are lowered since 2026-11-23 (positive test
-        // `non_copy_and_generic_enums_agree_with_the_interpreter`); a `Vec`
-        // of enums is not.
-        "enum E {\n    A(i32),\n    B,\n}\nfn check() -> i32 effects(alloc) {\n    let mut v: Vec<E> = Vec::new();\n    v.push(E::B);\n    return 0;\n}\n",
+        // Generic enums and `Vec`s of enums are lowered since 2026-11-23
+        // (`non_copy_and_generic_enums_agree_with_the_interpreter`,
+        // `a_vec_of_enums_agrees`); `&mut v[i]` of an aggregate is not.
+        "struct P {\n    a: i32,\n}\nfn set(p: &mut P) -> () effects() {\n    p.a = 1;\n}\nfn check() -> i32 effects(alloc) {\n    let mut v: Vec<P> = Vec::new();\n    v.push(P { a: 0 });\n    set(&mut v[0]);\n    return 0;\n}\n",
         // IR v1.2 covers `wrapping_*`/`abs`; `round` (ties away from zero)
         // and `min` (NaN rule) still are not.
         "fn check() -> f64 effects() {\n    let x: f64 = 2.5;\n    return x.round();\n}\n",

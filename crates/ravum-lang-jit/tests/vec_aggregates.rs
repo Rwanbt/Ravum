@@ -99,10 +99,6 @@ fn unsupported_vec_aggregate_forms_are_refused() {
             "let mut v: Vec<P> = Vec::new(); v.push(P { a: 1, b: 2 }); bump(&mut v[0]);",
             "`&mut` borrow of an aggregate `Vec` element",
         ),
-        (
-            "let mut v: Vec<Option<i64>> = Vec::new(); v.push(None);",
-            "`Vec` of aggregates holding an enum",
-        ),
     ] {
         let source = format!(
             "struct P {{ a: i64, b: i64 }}\nfn bump(p: &mut P) -> () effects() {{ p.a = 3; }}\nfn main() -> () effects(alloc) {{ {body} }}\n"
@@ -318,4 +314,47 @@ fn main() -> () effects(io, alloc) {
 fn non_copy_and_generic_enums_agree_with_the_interpreter() {
     let (_, out) = agree(ENUMS);
     assert_eq!(out, "add milk\na -> b\n-7\nquit\n42\nravum\n-\n");
+}
+
+#[test]
+fn a_vec_of_enums_agrees() {
+    let src = r#"use std::io;
+
+enum Shape {
+    Dot,
+    Line(i64),
+    Box { w: i64, h: i64 },
+}
+
+fn area(s: Shape) -> i64 effects() {
+    match s {
+        Shape::Dot => return 0,
+        Shape::Line(n) => return n,
+        Shape::Box { w, h } => return w * h,
+    }
+}
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<Shape> = Vec::new();
+    v.push(Shape::Line(4));
+    v.push(Shape::Box { w: 3, h: 5 });
+    v.push(Shape::Dot);
+    v[0] = Shape::Box { w: 2, h: 2 };
+    let mut total = 0i64;
+    for s in v {
+        total = total + area(s);
+    }
+    io::println(&total.to_string());
+    let mut opts: Vec<Option<i64>> = Vec::new();
+    opts.push(Some(3));
+    opts.push(None);
+    match opts.pop() {
+        Some(Some(x)) => io::println(&x.to_string()),
+        Some(None) => io::println("inner none"),
+        None => io::println("empty"),
+    }
+    io::println(&opts[0].unwrap_or(0).to_string());
+}
+"#;
+    assert_eq!(agree(src).1, "19\ninner none\n3\n");
 }

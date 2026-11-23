@@ -1261,14 +1261,11 @@ impl<'a> FnLower<'a> {
     }
 
     /// The scalar leaves (offset, IR type) of a `Vec` element type, in the
-    /// order of its word vector. Enums and references are refused.
+    /// order of its word vector. References are refused.
     fn vec_leaves(&self, t: &Type) -> R<Vec<(u32, Ty)>> {
         if Layouts::is_agg(t) {
-            if matches!(t, Type::Option(_) | Type::Result(..))
-                || self.layouts.variants(t)?.is_some()
-            {
-                return unsupported("`Vec` of aggregates holding an enum");
-            }
+            // An enum (`Option` and `Result` included) is stored as the raw
+            // words that cover it, exactly as it is copied (`Layouts::fields`).
             let mut out = Vec::new();
             for (off, ft) in self.layouts.fields(t)? {
                 for (o, l) in self.vec_leaves(&ft)? {
@@ -1570,6 +1567,19 @@ impl<'a> FnLower<'a> {
             }
             Place::VecAgg { o, base, ty } => self.vec_store(o, base, &ty, v),
         }
+    }
+
+    /// A `Vec` aggregate element read as a private copy in memory (an
+    /// `Option` method or `?` only reads it); other places unchanged.
+    fn in_memory(&mut self, p: Place) -> R<Place> {
+        Ok(match p {
+            Place::VecAgg { o, base, ty } => Place::Mem {
+                addr: self.vec_materialize(o, base, &ty)?,
+                off: 0,
+                ty,
+            },
+            p => p,
+        })
     }
 
     /// Whether `e` is a `Vec<T>` or a borrow of one.
@@ -3116,7 +3126,8 @@ impl<'a> FnLower<'a> {
             Type::Result(..) => (0, 1),
             _ => return Err(LowerError::MissingFact("`?` on a non-Option/Result".into())),
         };
-        let Place::Mem { addr, off, .. } = self.place(inner)? else {
+        let p = self.place(inner)?;
+        let Place::Mem { addr, off, .. } = self.in_memory(p)? else {
             return Err(LowerError::MissingFact("`?` operand in a register".into()));
         };
         let tag = self.new_local(Ty::U32);
@@ -3185,6 +3196,7 @@ impl<'a> FnLower<'a> {
             _ => return unsupported(format!("`{m}` on `{ot}`")),
         };
         let p = self.place(recv)?;
+        let p = self.in_memory(p)?;
         let Place::Mem { addr, off, .. } = p else {
             return Err(LowerError::MissingFact("option in a register".into()));
         };
