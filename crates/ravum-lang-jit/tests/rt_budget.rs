@@ -68,6 +68,7 @@ fn thread_cpu() -> Duration {
 /// virtual machine and its load. In a VM, time the hypervisor takes the vCPU
 /// away while this thread runs is charged to the thread's CPU clock, so a
 /// block can read as "working" past its deadline without doing more work.
+#[cfg(unix)]
 fn host_note() -> String {
     let mut note = String::new();
     #[cfg(target_os = "macos")]
@@ -90,7 +91,6 @@ fn host_note() -> String {
             if r == 0 { v.to_string() } else { "?".into() }
         ));
     }
-    #[cfg(unix)]
     {
         let mut l = [0f64; 3];
         // SAFETY: `l` has room for the 3 averages requested.
@@ -99,6 +99,12 @@ fn host_note() -> String {
         }
     }
     note
+}
+
+/// Windows: no VM or load diagnostic (the cycle counter is used for CPU).
+#[cfg(not(unix))]
+fn host_note() -> String {
+    String::new()
 }
 
 const OK: &str = "fn gain(x: f32) -> f32 effects() {\n    return x * 0.5;\n}\n";
