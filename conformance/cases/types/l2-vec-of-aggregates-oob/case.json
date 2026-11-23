@@ -1,0 +1,6 @@
+{
+  "id": "types/l2-vec-of-aggregates-oob",
+  "mode": "run-fail",
+  "stderr_contains": "index out of bounds: the len is 1 but the index is 1",
+  "notes": "T14: indexing past the end of a `Vec` of structs panics with the element count (not the count of words), as in the IR/JIT test `an_out_of_bounds_aggregate_element_panics_with_the_element_count`."
+}

@@ -1,0 +1,9 @@
+use std::io;
+
+struct P { a: i64, b: i64 }
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<P> = Vec::new();
+    v.push(P { a: 1, b: 2 });
+    io::println(&v[1].b.to_string());
+}

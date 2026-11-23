@@ -190,8 +190,42 @@ cargo run -p ravum-conformance --release -- run
   checker classe non `Copy` toute enum dont la charge contient un
   paramètre, et l'IR copie les enums mot à mot. Lever ce refus demande de
   représenter les enums non `Copy`, ce qui est un chantier distinct.
-  `Vec` d'agrégats : non traité.
+  `Vec` d'agrégats : traité dans la section suivante.
 - **Commandes.** fmt, clippy `-D warnings`, `cargo test -p ravum-lang-ir
   -p ravum-lang-jit` (vert), conformance 763 cas, 761 PASS, 0 FAIL,
   2 SKIP (Windows), `features_coverage.py --strict` 248/248.
+- **État.** `TESTED`.
+
+## Suite (2026-11-23) : `Vec` de structs et de tuples
+
+- **Modification** (`ravum-lang-ir/src/lower.rs` seulement ; IR, interpréteur
+  et JIT inchangés, `IR_VERSION` inchangé). Un `Vec<S>` d'agrégats contient un
+  handle par élément. Chaque handle désigne un vecteur de mots, un mot par
+  feuille scalaire de `S`. Conséquences :
+  - `v.len()`, `is_empty` et `v[i]` ont la longueur et le message de bornes
+    du langage (`the len is N but the index is I`, en nombre d'éléments) ;
+  - `v[i].f = x`, `v[i].a.b`, `v[i].t.1`, `v[i] = s` écrivent en place ;
+  - une lecture par valeur, `&v[i]` et un appel `&self` lisent une copie
+    privée (emprunt partagé sain) ;
+  - `push` construit le vecteur de mots ; `pop` rend `Option<S>`.
+- **Refus explicites (fail-closed).** `&mut v[i]`, un appel `&mut self` sur
+  `v[i]`, `v.clone()`, un élément qui contient une enum (`Option`, `Result`
+  compris) ou une référence, et un tableau à l'intérieur d'un élément.
+- **Tests positifs.** `vec_of_structs_and_tuples_agrees_with_the_interpreter`
+  (`Vec<Point>`, `Vec<Named>` avec `String`, struct et tuple imbriqués,
+  `pop` jusqu'au vide) et
+  `an_out_of_bounds_aggregate_element_panics_with_the_element_count`.
+  L'interpréteur et le JIT donnent le même résultat. Les cas
+  `types/l2-vec-of-aggregates` et `types/l2-vec-of-aggregates-oob` donnent
+  la même sortie, et le même message de panne, par la voie `rustc`.
+  Sans le changement, les trois tests échouent sur
+  `Unsupported("\`Vec\` of aggregates or references")` (vérifié).
+- **Test négatif.** `unsupported_vec_aggregate_forms_are_refused` vérifie le
+  message de refus de `clone`, de `&mut v[i]` et de `Vec<Option<i64>>`.
+- **Limite.** Le coût est d'une allocation par élément poussé. Aucune mesure
+  de performance n'a été faite.
+- **Commandes.** fmt, clippy `-D warnings`, `cargo test -p ravum-lang-ir
+  -p ravum-lang-jit -p ravum-conformance` (vert), conformance 765 cas,
+  763 PASS, 0 FAIL, 2 SKIP (Windows), `features_coverage.py --strict`
+  248/248.
 - **État.** `TESTED`.

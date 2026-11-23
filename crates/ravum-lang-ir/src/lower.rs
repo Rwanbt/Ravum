@@ -483,6 +483,10 @@ enum Place {
     Reg(Local),
     /// IR v1.3: element `i` of the heap vector `h` (scalar elements).
     VecElem { h: Local, i: Local, ty: Ty },
+    /// T14: (part of) an aggregate element of a `Vec`. The vector holds one
+    /// handle per element, to a word vector `o` with one word per scalar
+    /// leaf; this place is the leaves `base..` of type `ty` in `o`.
+    VecAgg { o: Local, base: u32, ty: Type },
     /// Memory at `addr + off`, holding a value of type `ty`.
     Mem { addr: Local, off: u32, ty: Type },
 }
@@ -1153,10 +1157,128 @@ impl<'a> FnLower<'a> {
         }
         match self.place(base)? {
             Place::Mem { addr, off, ty } => Ok((addr, off, ty)),
+            Place::VecAgg { .. } => unsupported("an array inside a `Vec` element"),
             Place::Reg(_) | Place::VecElem { .. } => {
                 Err(LowerError::MissingFact("aggregate in a register".into()))
             }
         }
+    }
+
+    /// Whether `e` denotes (part of) an aggregate element of a `Vec`.
+    fn vec_rooted(&self, e: &Expr) -> R<bool> {
+        Ok(match &e.kind {
+            ExprKind::Index { base, .. } => self.vec_agg_elem(base)?.is_some(),
+            ExprKind::Field { base, .. } | ExprKind::TupleIndex { base, .. } => {
+                Layouts::is_agg(&self.type_of(e)?) && self.vec_rooted(base)?
+            }
+            _ => false,
+        })
+    }
+
+    fn vec_agg_place(&mut self, e: &Expr) -> R<(Local, u32, Type)> {
+        match self.place(e)? {
+            Place::VecAgg { o, base, ty } => Ok((o, base, ty)),
+            _ => Err(LowerError::MissingFact("`Vec` element place".into())),
+        }
+    }
+
+    /// The field at offset `foff` (type `fty`) of the element part `bt`
+    /// starting at leaf `b` of `o`.
+    fn vec_sub(&mut self, o: Local, b: u32, bt: &Type, foff: u32, fty: Type) -> R<Place> {
+        let mut j = b;
+        for (off, t) in self.layouts.fields(bt)? {
+            if off == foff && t == fty {
+                break;
+            }
+            j += self.vec_leaves(&t)?.len() as u32;
+        }
+        if Layouts::is_agg(&fty) {
+            return Ok(Place::VecAgg {
+                o,
+                base: j,
+                ty: fty,
+            });
+        }
+        let ty = map_ty(&fty)?;
+        if ty == Ty::Unit {
+            return unsupported("a unit field of a `Vec` element");
+        }
+        let i = self.u64_const(j as u64);
+        Ok(Place::VecElem { h: o, i, ty })
+    }
+
+    /// The scalar leaves (offset, IR type) of a `Vec` element type, in the
+    /// order of its word vector. Enums and references are refused.
+    fn vec_leaves(&self, t: &Type) -> R<Vec<(u32, Ty)>> {
+        if Layouts::is_agg(t) {
+            if matches!(t, Type::Option(_) | Type::Result(..))
+                || self.layouts.variants(t)?.is_some()
+            {
+                return unsupported("`Vec` of aggregates holding an enum");
+            }
+            let mut out = Vec::new();
+            for (off, ft) in self.layouts.fields(t)? {
+                for (o, l) in self.vec_leaves(&ft)? {
+                    out.push((off + o, l));
+                }
+            }
+            return Ok(out);
+        }
+        Ok(match map_ty(t)? {
+            Ty::Unit => Vec::new(),
+            Ty::Ptr => return unsupported("`Vec` of aggregates holding a reference"),
+            l => vec![(0, l)],
+        })
+    }
+
+    /// The element type of `e` when it is a `Vec` of aggregates.
+    fn vec_agg_elem(&self, e: &Expr) -> R<Option<Type>> {
+        let t = match self.type_of(e)? {
+            Type::Vec(t) => *t,
+            Type::Ref { inner, .. } => match *inner {
+                Type::Vec(t) => *t,
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        if !Layouts::is_agg(&t) {
+            return Ok(None);
+        }
+        self.vec_leaves(&t)?;
+        Ok(Some(t))
+    }
+
+    /// A copy, in a fresh slot, of the element part at leaf `base` of `o`.
+    fn vec_materialize(&mut self, o: Local, base: u32, ty: &Type) -> R<Local> {
+        let dst = self.alloc(ty)?;
+        for (j, (off, lt)) in self.vec_leaves(ty)?.into_iter().enumerate() {
+            let i = self.u64_const(base as u64 + j as u64);
+            let tmp = self.new_local(lt);
+            self.heap(Some(tmp), HeapOp::VecGet, Some(o), Some(i));
+            self.emit(Inst::Store {
+                ty: lt,
+                addr: dst,
+                offset: off,
+                src: tmp,
+            });
+        }
+        Ok(dst)
+    }
+
+    /// Store the aggregate at `src` into the element part at `base` of `o`.
+    fn vec_store(&mut self, o: Local, base: u32, ty: &Type, src: Local) -> R<()> {
+        for (j, (off, lt)) in self.vec_leaves(ty)?.into_iter().enumerate() {
+            let i = self.u64_const(base as u64 + j as u64);
+            let tmp = self.new_local(lt);
+            self.emit(Inst::Load {
+                dst: tmp,
+                ty: lt,
+                addr: src,
+                offset: off,
+            });
+            self.emit(Inst::VecSet { h: o, i, x: tmp });
+        }
+        Ok(())
     }
 
     fn place(&mut self, e: &Expr) -> R<Place> {
@@ -1192,6 +1314,21 @@ impl<'a> FnLower<'a> {
                     Ok(Place::Reg(l))
                 }
             }
+            ExprKind::Field { base, name } if self.vec_rooted(base)? => {
+                let (o, b, bt) = self.vec_agg_place(base)?;
+                let (foff, fty) = self.layouts.named_field(&bt, &name.name)?;
+                self.vec_sub(o, b, &bt, foff, fty)
+            }
+            ExprKind::TupleIndex { base, index } if self.vec_rooted(base)? => {
+                let (o, b, bt) = self.vec_agg_place(base)?;
+                let (foff, fty) = self
+                    .layouts
+                    .fields(&bt)?
+                    .get(*index as usize)
+                    .cloned()
+                    .ok_or_else(|| LowerError::MissingFact("tuple index".into()))?;
+                self.vec_sub(o, b, &bt, foff, fty)
+            }
             ExprKind::Field { base, name } => {
                 let (addr, off, bt) = self.base_mem(base)?;
                 let (foff, fty) = self.layouts.named_field(&bt, &name.name)?;
@@ -1213,6 +1350,24 @@ impl<'a> FnLower<'a> {
                     off: off + foff,
                     ty: fty,
                 })
+            }
+            ExprKind::Index { base, index } if self.vec_agg_elem(base)?.is_some() => {
+                let ty = self.vec_agg_elem(base)?.expect("checked by the guard");
+                let h = self.expr(base)?;
+                let it = self.ty_of(index)?;
+                let iv = self.expr(index)?;
+                let i = self.new_local(Ty::U64);
+                self.emit(Inst::Cast {
+                    dst: i,
+                    from: it,
+                    to: Ty::U64,
+                    src: iv,
+                });
+                // The element's handle: the heap checks the bounds against
+                // the element count, with the language's own message.
+                let o = self.new_local(Ty::Obj);
+                self.heap(Some(o), HeapOp::VecGet, Some(h), Some(i));
+                Ok(Place::VecAgg { o, base: 0, ty })
             }
             ExprKind::Index { base, index } if self.is_vec(base)? => {
                 let elem = self.vec_elem(base)?;
@@ -1317,6 +1472,7 @@ impl<'a> FnLower<'a> {
     fn read(&mut self, p: Place) -> R<Local> {
         match p {
             Place::Reg(l) => Ok(l),
+            Place::VecAgg { o, base, ty } => self.vec_materialize(o, base, &ty),
             Place::VecElem { h, i, ty } => {
                 let dst = self.new_local(ty);
                 self.emit(Inst::Heap {
@@ -1356,6 +1512,7 @@ impl<'a> FnLower<'a> {
                 self.emit(Inst::VecSet { h, i, x: v });
                 Ok(())
             }
+            Place::VecAgg { o, base, ty } => self.vec_store(o, base, &ty, v),
         }
     }
 
@@ -1481,6 +1638,12 @@ impl<'a> FnLower<'a> {
                     Place::Reg(l) if self.locals[l as usize] == Ty::Obj => Ok(l),
                     // `&v[i]` of a `Vec<String>`: the element is the handle.
                     p @ Place::VecElem { ty: Ty::Obj, .. } => self.read(p),
+                    // `&v[i]` of an aggregate element: a private copy is a
+                    // sound shared borrow; `&mut` would need its address.
+                    p @ Place::VecAgg { .. } if *op == ast::UnOp::Ref => self.read(p),
+                    Place::VecAgg { .. } => {
+                        unsupported("`&mut` borrow of an aggregate `Vec` element")
+                    }
                     Place::Reg(_) | Place::VecElem { .. } => {
                         unsupported("reference to a scalar local")
                     }
@@ -1562,6 +1725,11 @@ impl<'a> FnLower<'a> {
                     Place::VecElem { h, i, ty: t } => {
                         let v = self.read(Place::VecElem { h, i, ty: t })?;
                         (v, Place::VecElem { h, i, ty: t })
+                    }
+                    Place::VecAgg { .. } => {
+                        return Err(LowerError::MissingFact(
+                            "compound assignment of an aggregate".into(),
+                        ))
                     }
                 };
                 let rhs = self.expr(value)?;
@@ -1886,6 +2054,11 @@ impl<'a> FnLower<'a> {
                 let v = self.read(p)?;
                 Place::Reg(v)
             }
+            Place::VecAgg { o, base, ty } => Place::Mem {
+                addr: self.vec_materialize(o, base, &ty)?,
+                off: 0,
+                ty,
+            },
         };
         let join = self.new_block();
         for arm in arms {
@@ -1912,7 +2085,7 @@ impl<'a> FnLower<'a> {
                 off: o + off,
                 ty,
             }),
-            Place::Reg(_) | Place::VecElem { .. } => {
+            Place::Reg(_) | Place::VecElem { .. } | Place::VecAgg { .. } => {
                 Err(LowerError::MissingFact("field of a register".into()))
             }
         }
@@ -2038,6 +2211,7 @@ impl<'a> FnLower<'a> {
     fn read_place(&mut self, p: &Place) -> R<Local> {
         match p {
             Place::Reg(l) => Ok(*l),
+            Place::VecAgg { o, base, ty } => self.vec_materialize(*o, *base, ty),
             Place::VecElem { h, i, ty } => self.read(Place::VecElem {
                 h: *h,
                 i: *i,
@@ -2697,6 +2871,9 @@ impl<'a> FnLower<'a> {
                 });
                 d
             }
+            ("Vec::clone", []) if self.vec_agg_elem(recv)?.is_some() => {
+                return unsupported("`clone` of a `Vec` of aggregates");
+            }
             ("String::clone" | "Vec::clone", []) => {
                 let op = if path == "Vec::clone" {
                     HeapOp::VecClone
@@ -2708,11 +2885,57 @@ impl<'a> FnLower<'a> {
                 d
             }
             ("String::as_str" | "str::as_str", []) => h,
+            ("Vec::push", [a]) if self.vec_agg_elem(recv)?.is_some() => {
+                let ty = self.vec_agg_elem(recv)?.expect("checked by the guard");
+                let src = self.expr(a)?;
+                let o = self.new_local(Ty::Obj);
+                self.heap(Some(o), HeapOp::VecNew, None, None);
+                for (off, lt) in self.vec_leaves(&ty)? {
+                    let tmp = self.new_local(lt);
+                    self.emit(Inst::Load {
+                        dst: tmp,
+                        ty: lt,
+                        addr: src,
+                        offset: off,
+                    });
+                    self.heap(None, HeapOp::VecPush, Some(o), Some(tmp));
+                }
+                self.heap(None, HeapOp::VecPush, Some(h), Some(o));
+                self.unit()
+            }
             ("Vec::push", [a]) => {
                 self.vec_elem(recv)?;
                 let x = self.expr(a)?;
                 self.heap(None, HeapOp::VecPush, Some(h), Some(x));
                 self.unit()
+            }
+            ("Vec::pop", []) if self.vec_agg_elem(recv)?.is_some() => {
+                let ty = self.vec_agg_elem(recv)?.expect("checked by the guard");
+                let t = self.type_of(e)?;
+                let (present, o) = (self.new_local(Ty::Bool), self.new_local(Ty::Obj));
+                self.emit(Inst::VecPop {
+                    present,
+                    value: o,
+                    h,
+                });
+                let result = self.alloc(&t)?;
+                let (sb, nb, join) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: present,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(sb);
+                let value = self.vec_materialize(o, 0, &ty)?;
+                let some = self.construct(&t, 1, vec![value])?;
+                self.copy(result, 0, some, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(nb);
+                let none = self.construct(&t, 0, Vec::new())?;
+                self.copy(result, 0, none, 0, &t)?;
+                self.set_term(Term::Jump(join));
+                self.switch_to(join);
+                result
             }
             ("Vec::pop", []) => {
                 let elem = self.vec_elem(recv)?;
@@ -2921,6 +3144,14 @@ impl<'a> FnLower<'a> {
             } else {
                 match self.place(recv)? {
                     Place::Mem { addr, off, .. } => self.offset(addr, off),
+                    Place::VecAgg { o, base, ty }
+                        if matches!(sig.receiver, Some(ast::Receiver::Shared)) =>
+                    {
+                        self.vec_materialize(o, base, &ty)?
+                    }
+                    Place::VecAgg { .. } => {
+                        return unsupported("`&mut self` method on an aggregate `Vec` element")
+                    }
                     Place::Reg(_) | Place::VecElem { .. } => {
                         return unsupported("method on a scalar receiver")
                     }
