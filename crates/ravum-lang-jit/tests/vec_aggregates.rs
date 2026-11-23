@@ -111,3 +111,97 @@ fn unsupported_vec_aggregate_forms_are_refused() {
         assert!(err.contains(why), "{body}: {err}");
     }
 }
+
+const FOR_VEC: &str = r#"use std::io;
+
+struct Point { x: i32, y: i64 }
+
+fn main() -> () effects(io, alloc) {
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..6 {
+        v.push((i * 10) as i64);
+    }
+    let mut sum = 0i64;
+    for x in v {
+        if x == 20 {
+            continue;
+        }
+        if x == 50 {
+            break;
+        }
+        sum = sum + x;
+    }
+    io::println(&sum.to_string());
+    let mut words: Vec<String> = Vec::new();
+    words.push(String::from("ra"));
+    words.push(String::from("vum"));
+    let mut all = String::new();
+    for w in words {
+        all.push_str(&w);
+    }
+    io::println(&all);
+    let mut ps: Vec<Point> = Vec::new();
+    ps.push(Point { x: 1, y: 2 });
+    ps.push(Point { x: -3, y: 40 });
+    for p in ps {
+        io::println(&((p.x as i64) + p.y).to_string());
+    }
+    let empty: Vec<i64> = Vec::new();
+    for x in empty {
+        io::println("never");
+    }
+    io::println("end");
+}
+"#;
+
+#[test]
+fn for_over_an_owned_vec_agrees_with_the_interpreter() {
+    let (_, out) = agree(FOR_VEC);
+    assert_eq!(out, "80\nravum\n3\n37\nend\n");
+}
+
+#[test]
+fn unwrap_agrees_and_panics_with_the_specified_text() {
+    let ok = "use std::io;\nfn main() -> () effects(io, alloc, panic) {\n    let a: Option<i64> = Some(4);\n    let r: Result<i64, Error> = Ok(5);\n    io::println(&(a.unwrap() + r.unwrap()).to_string());\n}\n";
+    assert_eq!(agree(ok).1, "9\n");
+    for (body, text) in [
+        ("let a: Option<i64> = None;\n    let b: i64 = a.unwrap();\n    drop(b);", "called Option::unwrap on None"),
+        ("let a: Result<i64, Error> = Err(Error::new(\"boom\"));\n    let b: i64 = a.unwrap();\n    drop(b);", "called Result::unwrap on an Err value"),
+    ] {
+        let src = format!("fn main() -> () effects(alloc, panic) {{\n    {body}\n}}\n");
+        let (render, out) = agree(&src);
+        assert_eq!(out, "");
+        assert!(render.contains(text), "{render}");
+        assert!(!render.contains("boom"), "the Err content must not be formatted: {render}");
+    }
+}
+
+#[test]
+fn results_with_the_builtin_error_agree() {
+    let src = r#"use std::io;
+
+fn half(n: i64) -> Result<i64, Error> effects(alloc) {
+    if n % 2 != 0 {
+        return Err(Error::new("odd"));
+    }
+    return Ok(n / 2);
+}
+
+fn quarter(n: i64) -> Result<i64, Error> effects(alloc) {
+    let h = half(n)?;
+    return half(h);
+}
+
+fn main() -> () effects(io, alloc) {
+    match quarter(12) {
+        Ok(v) => io::println(&v.to_string()),
+        Err(e) => io::println(&e.message),
+    }
+    match quarter(6) {
+        Ok(v) => io::println(&v.to_string()),
+        Err(e) => io::println(&e.message),
+    }
+}
+"#;
+    assert_eq!(agree(src).1, "3\nodd\n");
+}

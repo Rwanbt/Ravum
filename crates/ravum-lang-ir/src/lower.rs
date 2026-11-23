@@ -223,6 +223,12 @@ impl<'a> Layouts<'a> {
             return Ok((0..l.size / w).map(|i| (i * w, wt.clone())).collect());
         }
         let tys: Vec<Type> = match t {
+            // The builtin `Error` (STD-7.5): `struct Error { message: String }`.
+            Type::Nominal { def, name, .. }
+                if name == "Error" && !self.checked.facts.structs.contains_key(def) =>
+            {
+                vec![Type::String]
+            }
             Type::Nominal { def, args, .. } => {
                 let Some(info) = self.checked.facts.structs.get(def) else {
                     return Err(LowerError::MissingFact("struct info".into()));
@@ -291,7 +297,9 @@ impl<'a> Layouts<'a> {
             });
         }
         match map_ty(t)? {
-            Ty::Unit => unsupported("`()` stored in memory"),
+            // `()` occupies no memory: a `Result<(), E>` payload, a unit
+            // field. Loads and stores of it are elided.
+            Ty::Unit => Ok(Layout { size: 0, align: 1 }),
             Ty::Ptr => unsupported("reference stored in memory"),
             s => Ok(Layout {
                 size: s.size(),
@@ -302,6 +310,11 @@ impl<'a> Layouts<'a> {
 
     /// Offset and type of field `name` of struct type `t`.
     fn named_field(&self, t: &Type, name: &str) -> R<(u32, Type)> {
+        if let Type::Nominal { def, name: n, .. } = t {
+            if n == "Error" && name == "message" && !self.checked.facts.structs.contains_key(def) {
+                return Ok((0, Type::String));
+            }
+        }
         let Type::Nominal { def, .. } = t else {
             return Err(LowerError::MissingFact(format!(
                 "field `{name}` of a non-struct"
@@ -1088,6 +1101,9 @@ impl<'a> FnLower<'a> {
             return Ok(());
         }
         let ty = map_ty(t)?;
+        if ty == Ty::Unit {
+            return Ok(());
+        }
         let tmp = self.new_local(ty);
         self.emit(Inst::Load {
             dst: tmp,
@@ -1488,6 +1504,9 @@ impl<'a> FnLower<'a> {
                     return Ok(self.offset(addr, off));
                 }
                 let t = map_ty(&ty)?;
+                if t == Ty::Unit {
+                    return Ok(self.unit());
+                }
                 let dst = self.new_local(t);
                 self.emit(Inst::Load {
                     dst,
@@ -2494,6 +2513,9 @@ impl<'a> FnLower<'a> {
     }
 
     fn for_range(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
+        if matches!(self.type_of(iter)?, Type::Vec(_)) {
+            return self.for_vec(pat, iter, body);
+        }
         let ExprKind::Range {
             start: Some(start),
             end: Some(end),
@@ -2564,6 +2586,81 @@ impl<'a> FnLower<'a> {
             dst: next,
             op: BinOp::Add,
             ty,
+            lhs: i,
+            rhs: one,
+        });
+        self.emit(Inst::Copy { dst: i, src: next });
+        self.set_term(Term::Jump(head));
+        self.switch_to(exit);
+        Ok(self.unit())
+    }
+
+    /// `for x in v` over an owned `Vec<T>` (EXPR-6.4): the vector is
+    /// consumed, its elements are visited in order by index. The length is
+    /// read once: the body cannot reach `v`, which the loop owns.
+    fn for_vec(&mut self, pat: &ast::Pat, iter: &Expr, body: &AstBlock) -> R<Local> {
+        let name = match &pat.kind {
+            PatKind::Binding { name, .. } => Some(name.name.clone()),
+            PatKind::Wild => None,
+            _ => return unsupported("`for` pattern"),
+        };
+        let Type::Vec(et) = self.type_of(iter)? else {
+            return Err(LowerError::MissingFact("`for` over a non-vector".into()));
+        };
+        let et = *et;
+        let agg = self.vec_agg_elem(iter)?.is_some();
+        let elem = if agg { Ty::Obj } else { self.vec_elem(iter)? };
+        let h = self.expr(iter)?;
+        let len = self.new_local(Ty::U64);
+        self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+        let i = self.u64_const(0);
+        let (head, bodyb, step, exit) = (
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+            self.new_block(),
+        );
+        self.set_term(Term::Jump(head));
+        self.switch_to(head);
+        let c = self.new_local(Ty::Bool);
+        self.emit(Inst::Bin {
+            dst: c,
+            op: BinOp::Lt,
+            ty: Ty::U64,
+            lhs: i,
+            rhs: len,
+        });
+        self.set_term(Term::Branch {
+            cond: c,
+            then_to: bodyb,
+            else_to: exit,
+        });
+        self.switch_to(bodyb);
+        let raw = self.new_local(elem);
+        self.heap(Some(raw), HeapOp::VecGet, Some(h), Some(i));
+        let var = if agg {
+            self.vec_materialize(raw, 0, &et)?
+        } else {
+            raw
+        };
+        if let Some(name) = name {
+            self.vars.insert((pat.span, name), (var, et));
+        }
+        self.loops.push(LoopCtx {
+            break_to: exit,
+            continue_to: step,
+        });
+        self.block(body)?;
+        self.loops.pop();
+        self.set_term(Term::Jump(step));
+        self.switch_to(step);
+        // `i < len <= u64::MAX` holds here, so `i + 1` cannot overflow.
+        let one = self.u64_const(1);
+        let next = self.new_local(Ty::U64);
+        self.emit(Inst::Bin {
+            dst: next,
+            op: BinOp::Add,
+            ty: Ty::U64,
             lhs: i,
             rhs: one,
         });
@@ -3031,8 +3128,8 @@ impl<'a> FnLower<'a> {
         })
     }
 
-    /// `Option::{is_some, is_none, unwrap_or}`. `unwrap` stays `Unsupported`:
-    /// its panic text differs between the spec machine and the rustc path.
+    /// `Option::{is_some, is_none, unwrap, unwrap_or}` (and the `Result`
+    /// forms); `unwrap` panics with the STD-11.2 text, as every engine does.
     fn option_method(&mut self, e: &Expr, recv: &Expr, m: &str, args: &[Expr]) -> R<Local> {
         let ot = self.type_of(recv)?;
         // The "present" variant: `Some` (1) for `Option`, `Ok` (0) for
@@ -3105,6 +3202,29 @@ impl<'a> FnLower<'a> {
                 self.set_term(Term::Jump(join));
                 self.switch_to(join);
                 Ok(result)
+            }
+            ("unwrap", []) => {
+                // STD-11.2 (MUST): fixed texts, `Err` content not formatted.
+                let text = if good == 1 {
+                    "called Option::unwrap on None"
+                } else {
+                    "called Result::unwrap on an Err value"
+                };
+                let (sb, nb) = (self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: some,
+                    then_to: sb,
+                    else_to: nb,
+                });
+                self.switch_to(nb);
+                self.set_term(Term::Trap(text.into()));
+                self.switch_to(sb);
+                let (foff, ft) = self.layouts.variant_fields(&ot, good)?[0].clone();
+                self.read(Place::Mem {
+                    addr,
+                    off: off + foff,
+                    ty: ft,
+                })
             }
             _ => unsupported(format!("`Option::{m}`")),
         }
@@ -3356,6 +3476,16 @@ impl<'a> FnLower<'a> {
                     }
                     _ => return Err(LowerError::MissingFact(format!("arity of `{path}`"))),
                 }
+                Ok(dst)
+            }
+            // `Error::new(text)`: an `Error` holding a copy of the text.
+            Some(CallTarget::BuiltinFn { path }) if path == "Error::new" && args.len() == 1 => {
+                let t = self.type_of(e)?;
+                let text = self.expr(&args[0])?;
+                let msg = self.new_local(Ty::Obj);
+                self.heap(Some(msg), HeapOp::StrClone, Some(text), None);
+                let dst = self.alloc(&t)?;
+                self.store_value(dst, 0, msg, &Type::String)?;
                 Ok(dst)
             }
             // `drop(x)`: the run heap is freed when the run ends (IR v1.3),
