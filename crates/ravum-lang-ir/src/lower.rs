@@ -224,13 +224,24 @@ impl<'a> Layouts<'a> {
         }
         let tys: Vec<Type> = match t {
             Type::Nominal { def, args, .. } => {
-                if !args.is_empty() {
-                    return unsupported("generic struct");
-                }
                 let Some(info) = self.checked.facts.structs.get(def) else {
                     return Err(LowerError::MissingFact("struct info".into()));
                 };
-                info.fields.iter().map(|f| f.ty.clone()).collect()
+                if args.len() != info.generics.len() {
+                    return Err(LowerError::MissingFact("generic struct arity".into()));
+                }
+                // A generic struct is laid out per instance: its fields with
+                // the type arguments substituted (IR v1.2 monomorphization).
+                let subst: crate::mono::Subst = args.iter().cloned().enumerate().collect();
+                let tys: Vec<Type> = info
+                    .fields
+                    .iter()
+                    .map(|f| crate::mono::substitute(&f.ty, &subst))
+                    .collect();
+                if tys.iter().any(crate::mono::has_param) {
+                    return unsupported("generic struct with an unresolved type argument");
+                }
+                tys
             }
             Type::Tuple(items) => items.clone(),
             Type::Array { elem, len } => {

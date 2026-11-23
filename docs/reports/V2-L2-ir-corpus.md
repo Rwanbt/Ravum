@@ -169,5 +169,29 @@ cargo run -p ravum-conformance --release -- run
   `cargo run -p ravum-conformance --release -- run` : 762 cas, 760 PASS,
   0 FAIL, 2 SKIP (Windows). `--verify-build` `NOT_RUN`.
 - **Environnement.** Linux x86_64, conteneur cloud, rustc 1.95.0.
-- **État.** `TESTED`. Les autres limites restent ouvertes : structs
-  génériques et vecteurs d'agrégats.
+- **État.** `TESTED`.
+
+## Suite (2026-11-23) : structs génériques
+
+- **Modification.** Une struct générique est disposée par instance : les
+  types de ses champs reçoivent ses arguments de type (`mono::substitute`),
+  comme pour les fonctions génériques. Une instance qui garde un paramètre
+  non résolu est refusée explicitement.
+- **Tests positifs.** `generic_structs_agree_with_the_interpreter` couvre
+  `Pair<i64>` sur trois couples (dont `i64::MAX`/`i64::MIN`), `Pair<f64>` et
+  `Tagged<Pair<bool>, u8>` imbriqué. `a_generic_struct_holding_a_heap_object_agrees`
+  couvre `Boxed<String>`. L'interpréteur et le JIT donnent la même sortie.
+  Le cas `types/l2-generic-struct-instances` vérifie la même sortie par la
+  voie `rustc`. Sans le changement, les deux tests échouent sur
+  `Unsupported("generic struct")` (vérifié).
+- **Test négatif.** `an_instance_the_ir_cannot_lay_out_is_still_refused` :
+  l'instance `Holder<u128>` est refusée (`type \`u128\``).
+- **Hors périmètre, constaté.** Les enums génériques restent refusées. Le
+  checker classe non `Copy` toute enum dont la charge contient un
+  paramètre, et l'IR copie les enums mot à mot. Lever ce refus demande de
+  représenter les enums non `Copy`, ce qui est un chantier distinct.
+  `Vec` d'agrégats : non traité.
+- **Commandes.** fmt, clippy `-D warnings`, `cargo test -p ravum-lang-ir
+  -p ravum-lang-jit` (vert), conformance 763 cas, 761 PASS, 0 FAIL,
+  2 SKIP (Windows), `features_coverage.py --strict` 248/248.
+- **État.** `TESTED`.
