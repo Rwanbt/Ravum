@@ -1440,6 +1440,59 @@ impl<'a> FnLower<'a> {
                 });
                 Ok(Place::VecElem { h, i, ty: elem })
             }
+            ExprKind::Index { base, index } if self.vec_rooted(base)? => {
+                // `v[i].z[j]`: an array of scalars inside a `Vec` element.
+                let (o, b, bt) = self.vec_agg_place(base)?;
+                let Type::Array { elem, len } = &bt else {
+                    return unsupported("indexing something other than a fixed array");
+                };
+                let (elem, len) = ((**elem).clone(), *len);
+                if Layouts::is_agg(&elem) {
+                    return unsupported("an array of aggregates inside a `Vec` element");
+                }
+                let ty = map_ty(&elem)?;
+                if !plain_scalar(ty) && ty != Ty::Obj {
+                    return unsupported("an array of this type inside a `Vec` element");
+                }
+                let it = self.ty_of(index)?;
+                let iv = self.expr(index)?;
+                let j = self.new_local(Ty::U64);
+                self.emit(Inst::Cast {
+                    dst: j,
+                    from: it,
+                    to: Ty::U64,
+                    src: iv,
+                });
+                // Bounds check (EXPR-7.6) against the array, not the vector.
+                let n = self.u64_const(len as u64);
+                let ok = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: ok,
+                    op: BinOp::Lt,
+                    ty: Ty::U64,
+                    lhs: j,
+                    rhs: n,
+                });
+                let (inb, oob) = (self.new_block(), self.new_block());
+                self.set_term(Term::Branch {
+                    cond: ok,
+                    then_to: inb,
+                    else_to: oob,
+                });
+                self.switch_to(oob);
+                self.set_term(Term::Trap("index out of bounds".into()));
+                self.switch_to(inb);
+                let first = self.u64_const(b as u64);
+                let i = self.new_local(Ty::U64);
+                self.emit(Inst::Bin {
+                    dst: i,
+                    op: BinOp::Add,
+                    ty: Ty::U64,
+                    lhs: first,
+                    rhs: j,
+                });
+                Ok(Place::VecElem { h: o, i, ty })
+            }
             ExprKind::Index { base, index } => {
                 let (addr, off, bt) = self.base_mem(base)?;
                 let Type::Array { elem, len } = &bt else {
@@ -3028,8 +3081,50 @@ impl<'a> FnLower<'a> {
                 });
                 d
             }
+            // `clone` of a `Vec` of aggregates: the checker allows it only for
+            // `Copy` elements, whose words hold no handle, so cloning each
+            // element's word vector is a deep copy.
             ("Vec::clone", []) if self.vec_agg_elem(recv)?.is_some() => {
-                return unsupported("`clone` of a `Vec` of aggregates");
+                let out = self.new_local(Ty::Obj);
+                self.heap(Some(out), HeapOp::VecNew, None, None);
+                let len = self.new_local(Ty::U64);
+                self.heap(Some(len), HeapOp::VecLen, Some(h), None);
+                let i = self.u64_const(0);
+                let (head, body, exit) = (self.new_block(), self.new_block(), self.new_block());
+                self.set_term(Term::Jump(head));
+                self.switch_to(head);
+                let c = self.new_local(Ty::Bool);
+                self.emit(Inst::Bin {
+                    dst: c,
+                    op: BinOp::Lt,
+                    ty: Ty::U64,
+                    lhs: i,
+                    rhs: len,
+                });
+                self.set_term(Term::Branch {
+                    cond: c,
+                    then_to: body,
+                    else_to: exit,
+                });
+                self.switch_to(body);
+                let elem = self.new_local(Ty::Obj);
+                self.heap(Some(elem), HeapOp::VecGet, Some(h), Some(i));
+                let copy = self.new_local(Ty::Obj);
+                self.heap(Some(copy), HeapOp::VecClone, Some(elem), None);
+                self.heap(None, HeapOp::VecPush, Some(out), Some(copy));
+                let one = self.u64_const(1);
+                let next = self.new_local(Ty::U64);
+                self.emit(Inst::Bin {
+                    dst: next,
+                    op: BinOp::Add,
+                    ty: Ty::U64,
+                    lhs: i,
+                    rhs: one,
+                });
+                self.emit(Inst::Copy { dst: i, src: next });
+                self.set_term(Term::Jump(head));
+                self.switch_to(exit);
+                out
             }
             ("String::clone" | "Vec::clone", []) => {
                 let op = if path == "Vec::clone" {

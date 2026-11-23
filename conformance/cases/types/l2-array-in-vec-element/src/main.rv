@@ -1,0 +1,18 @@
+use std::io;
+
+struct Voice { taps: [f32; 3], gain: f32 }
+
+fn main() -> () effects(io, alloc, panic) {
+    let mut v: Vec<Voice> = Vec::new();
+    v.push(Voice { taps: [0.5, 0.25, 0.125], gain: 2.0 });
+    v.push(Voice { taps: [1.0, 0.0, 0.0], gain: 1.0 });
+    v[0].taps[2] = 0.75;
+    let mut sum: f32 = 0.0;
+    for k in 0usize..3usize {
+        sum = sum + v[0].taps[k] * v[0].gain;
+    }
+    io::println(&sum.to_string());
+    io::println(&v[1].taps[0].to_string());
+    let bad: usize = 3;
+    io::println(&v[0].taps[bad].to_string());
+}

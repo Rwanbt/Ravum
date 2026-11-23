@@ -92,16 +92,16 @@ fn main() -> () effects(io, alloc) {
 fn unsupported_vec_aggregate_forms_are_refused() {
     for (body, why) in [
         (
-            "let v: Vec<P> = Vec::new(); let w = v.clone();",
-            "`clone` of a `Vec` of aggregates",
+            "let mut v: Vec<B> = Vec::new(); v.push(B { z: [P { a: 1, b: 2 }] }); v[0].z[0].a = 5;",
+            "an array of aggregates inside a `Vec` element",
         ),
         (
-            "let mut v: Vec<A> = Vec::new(); v.push(A { z: [1, 2] }); let x: i64 = v[0].z[1]; drop(x);",
-            "an array inside a `Vec` element",
+            "let mut v: Vec<C> = Vec::new(); v.push(C { z: [(1, 2)] }); let x: i64 = v[0].z[0].1; drop(x);",
+            "an array of aggregates inside a `Vec` element",
         ),
     ] {
         let source = format!(
-            "struct P {{ a: i64, b: i64 }}\nstruct A {{ z: [i64; 2] }}\nfn bump(p: &mut P) -> () effects() {{ p.a = 3; }}\nfn main() -> () effects(alloc) {{ {body} }}\n"
+            "struct P {{ a: i64, b: i64 }}\nstruct B {{ z: [P; 1] }}\nstruct C {{ z: [(i64, i64); 1] }}\nfn bump(p: &mut P) -> () effects() {{ p.a = 3; }}\nfn main() -> () effects(alloc) {{ {body} }}\n"
         );
         let err = format!("{:?}", compile_source(&source).expect_err(body));
         assert!(err.contains(why), "{body}: {err}");
@@ -393,4 +393,57 @@ fn main() -> () effects(io, alloc) {
 }
 "#;
     assert_eq!(agree(src).1, "12\n1\n100\n8\n");
+}
+
+#[test]
+fn cloning_a_vec_of_copy_structs_is_deep() {
+    let src = r#"use std::io;
+
+struct P { x: i64, y: i64 }
+
+fn main() -> () effects(io, alloc) {
+    let mut a: Vec<P> = Vec::new();
+    a.push(P { x: 1, y: 2 });
+    a.push(P { x: 3, y: 4 });
+    let mut b: Vec<P> = a.clone();
+    b[0].x = 100;
+    b.push(P { x: 5, y: 6 });
+    io::println(&a[0].x.to_string());
+    io::println(&b[0].x.to_string());
+    io::println(&a.len().to_string());
+    io::println(&b.len().to_string());
+    io::println(&b[1].y.to_string());
+}
+"#;
+    assert_eq!(agree(src).1, "1\n100\n2\n3\n4\n");
+}
+
+#[test]
+fn arrays_inside_vec_elements_agree() {
+    let src = r#"use std::io;
+
+struct Voice { taps: [f32; 3], gain: f32 }
+
+fn main() -> () effects(io, alloc, panic) {
+    let mut v: Vec<Voice> = Vec::new();
+    v.push(Voice { taps: [0.5, 0.25, 0.125], gain: 2.0 });
+    v.push(Voice { taps: [1.0, 0.0, 0.0], gain: 1.0 });
+    v[0].taps[2] = 0.75;
+    let mut sum: f32 = 0.0;
+    for k in 0usize..3usize {
+        sum = sum + v[0].taps[k] * v[0].gain;
+    }
+    io::println(&sum.to_string());
+    io::println(&v[1].taps[0].to_string());
+    let bad: usize = 3;
+    io::println(&v[0].taps[bad].to_string());
+}
+"#;
+    let (render, out) = agree(src);
+    assert_eq!(out, "3\n1\n");
+    // The rustc path names length and index (EXPR-7.6, case
+    // types/l2-array-in-vec-element); the IR gives the short form for fixed
+    // arrays, a documented T14 gap: its note would be a write the real-time
+    // validator refuses (INV-05).
+    assert!(render.contains("index out of bounds"), "{render}");
 }
